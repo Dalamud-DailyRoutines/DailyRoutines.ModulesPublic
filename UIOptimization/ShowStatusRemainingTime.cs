@@ -17,7 +17,7 @@ public class ShowStatusRemainingTime : DailyModuleBase
         Title = GetLoc("ShowStatusRemainingTimeTitle"),
         Description = GetLoc("ShowStatusRemainingTimeDescription"),
         Category = ModuleCategories.UIOptimization,
-        Author = ["Due"],
+        Author = ["Due"]
     };
 
     private static readonly string[] StatusAddons = ["_StatusCustom0", "_StatusCustom2"];
@@ -39,13 +39,18 @@ public class ShowStatusRemainingTime : DailyModuleBase
         for (var i = 2; i <= 21; i++)
         {
             var Component = UnitBase->GetComponentByNodeId((uint)i);
+            if (Component == null) return;
             if (!Component->OwnerNode->IsVisible()) return;
 
             var ImageNode = Component->AtkResNode->GetAsAtkImageNode();
-            var TextNode = ImageNode->PrevSiblingNode->GetAsAtkTextNode();
-            var time = SeString.Parse(TextNode->GetText()).ToString();
+            if (ImageNode == null) return;
 
-            if (!time.Contains('h') && !time.Contains("小时")) continue;
+            var TextNode = ImageNode->PrevSiblingNode->GetAsAtkTextNode();
+            if (TextNode == null) return;
+
+            var time = SeString.Parse(TextNode->GetText()).ToString();
+            if (string.IsNullOrEmpty(time) ||
+               (!time.Contains('h') && !time.Contains("小时"))) continue;
 
             var IconID = (uint)0;
             try
@@ -72,16 +77,19 @@ public class ShowStatusRemainingTime : DailyModuleBase
 
     private static unsafe string GetRemainingTime(uint type)
     {
-        if (DService.ClientState.LocalPlayer == null) return string.Empty;
+        if (DService.ClientState.LocalPlayer is not { } localPlayer) return string.Empty;
 
-        var statusManager = ((Character*)DService.ClientState.LocalPlayer.Address)->GetStatusManager();
-        if (!statusManager->HasStatus(type)) return string.Empty;
+        var statusManager = ((Character*)localPlayer.Address)->GetStatusManager();
+        if (statusManager == null) return string.Empty;
+        
+        var index = statusManager->GetStatusIndex(type);
+        if (index == -1) return string.Empty;
 
-        return TimeSpan.FromSeconds(statusManager->GetRemainingTime(statusManager->GetStatusIndex(type)))
-                       .ToString(@"hh\:mm");
+        return TimeSpan.FromSeconds(statusManager->GetRemainingTime(index))
+                       .ToString(@"hhmm");
     }
 
-    private readonly Dictionary<uint, uint> iconStatusPair = new()
+    private static readonly Dictionary<uint, uint> iconStatusPair = new()
     {
         { 16106, 45 },
         { 16006, 46 },
