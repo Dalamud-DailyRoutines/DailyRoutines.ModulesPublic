@@ -31,10 +31,8 @@ public class ShowStatusRemainingTime : DailyModuleBase
     {
         if (DService.Condition[ConditionFlag.InCombat]) return;
 
-        var addon = DService.Gui.GetAddonByName(args.AddonName);
-        if (addon == nint.Zero) return;
-
-        var UnitBase = (AtkUnitBase*)addon;
+        var UnitBase = (AtkUnitBase*)args.Addon;
+        if (UnitBase == null) return;
 
         for (var i = 2; i <= 21; i++)
         {
