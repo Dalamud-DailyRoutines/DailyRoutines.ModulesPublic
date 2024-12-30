@@ -31,45 +31,29 @@ public class ShowStatusRemainingTime : DailyModuleBase
     {
         if (DService.Condition[ConditionFlag.InCombat]) return;
 
-        var UnitBase = (AtkUnitBase*)args.Addon;
-        if (UnitBase == null) return;
+        var atkStage = AtkStage.Instance();
+        if (atkStage == null) return;
 
-        for (var i = 2; i <= 21; i++)
+        var NumberArray = atkStage->GetNumberArrayData(NumberArrayType.Hud);
+        var StringArray = atkStage->GetStringArrayData(StringArrayType.Hud);
+        if (NumberArray == null || StringArray == null) return;
+
+        for (var i = 0; i < 30; i++)
         {
-            var Component = UnitBase->GetComponentByNodeId((uint)i);
-            if (Component == null) return;
-            if (!Component->OwnerNode->IsVisible()) return;
+            var key = NumberArray->IntArray[100 + i];
+            if (key == -1) return;
 
-            var ImageNode = Component->AtkResNode->GetAsAtkImageNode();
-            if (ImageNode == null) return;
+            if (!ArrayStatusPair.TryGetValue(key, out var status)) continue;
 
-            var TextNode = ImageNode->PrevSiblingNode->GetAsAtkTextNode();
-            if (TextNode == null) return;
-
-            var time = SeString.Parse(TextNode->GetText()).ToString();
+            var time = SeString.Parse(StringArray->StringArray[7 + i]).ToString();
             if (string.IsNullOrEmpty(time) ||
-               (!time.Contains('h') && !time.Contains("小时"))) continue;
+               (!time.Contains('h') && !time.Contains("小时") && time.Length <= 3)) continue;
 
-            var IconID = (uint)0;
-            try
-            {
-                IconID = ImageNode->PartsList[0].Parts[0].UldAsset[0].AtkTexture.Resource->IconId;
-            }
-            catch (Exception)
-            {
-                continue;
-            }
+            var remainingTime = GetRemainingTime(status);
+            if (string.IsNullOrEmpty(remainingTime)) continue;
 
-            if (IconID == 0) continue;
-
-            if (iconStatusPair.TryGetValue(IconID, out var value))
-            {
-                var remainingTime = GetRemainingTime(value);
-                if (string.IsNullOrEmpty(remainingTime)) continue;
-
-                time = remainingTime;
-                TextNode->SetText(time);
-            }
+            time = remainingTime;
+            StringArray->SetValue(7 + i, time);
         }
     }
 
@@ -87,18 +71,14 @@ public class ShowStatusRemainingTime : DailyModuleBase
                        .ToString(@"hhmm");
     }
 
-    private static readonly Dictionary<uint, uint> iconStatusPair = new()
-    {
-        { 16106, 45 },
-        { 16006, 46 },
-        { 16202, 48 },
-        { 16203, 49 },
-        { 16513, 1080 },
-        { 216106, 45 },
-        { 216006, 46 },
-        { 216202, 48 },
-        { 216203, 49 },
-        { 216513, 1080 }
+    private static readonly Dictionary<int, uint> ArrayStatusPair = new()
+    {   
+        { 1073957830, 46 },
+        { 1073757830, 46 },
+        { 1073958027, 49 },
+        { 1073758027, 49 },
+        { 1073958337, 1080 },
+        { 1073758337, 1080 }
     };
 
     public override void Uninit()
