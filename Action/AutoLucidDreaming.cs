@@ -12,7 +12,7 @@ public class AutoPLucidDreaming : DailyModuleBase
     public override ModuleInfo Info => new()
     {
         Title       = GetLoc("AutoLucidDreamingTitle"),       // "自动释放醒梦"
-        Description = GetLoc("AutoLucidDreamingDescription"), // "使用指定职业时，自动尝试释放醒梦（仅在蓝量低于8000时）"
+        Description = GetLoc("AutoLucidDreamingDescription"), // "使用指定职业时，自动尝试释放醒梦（仅在蓝量低于设定值时）"
         Category    = ModuleCategories.Action,
         Author      = ["Wotou"]
     };
