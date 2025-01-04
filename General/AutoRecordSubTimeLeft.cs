@@ -20,7 +20,7 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
     };
 
     public override ModulePermission Permission => new() { CNOnly = true };
-    
+
     private static Config        ModuleConfig = null!;
     private static IDtrBarEntry? Entry;
 
@@ -37,35 +37,29 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CharaSelect", OnLobby);
     }
-    
+
     public override void ConfigUI()
     {
-        if (ImGui.Button($"{GetLoc("Reset")}##TL_Reset")) 
+        if (ImGui.Button($"{GetLoc("Reset")}##TL_Reset"))
             ResetConfig();
-        
+
         ImGui.Spacing();
-        
+
         if (ModuleConfig.TimeLeft == TimeSpan.MinValue || ModuleConfig.LastSuccessRecord == DateTime.MinValue)
         {
             ImGui.TextColored(Orange, GetLoc("AutoRecordSubTimeLeft-NoData"));
             return;
         }
 
-        if (ModuleConfig.HasMonthlySub)
-        {
-            ImGui.TextColored(Orange, GetLoc("AutoRecordSubTimeLeft-MonthSubscribe"));
-            return;
-        }
-        
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoRecordSubTimeLeft-LastRecordTime")}:");
-        
+
         ImGui.SameLine();
         ImGui.Text($"{ModuleConfig.LastSuccessRecord}");
-        
+
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoRecordSubTimeLeft-TimeTill")}:");
-        
+
         ImGui.SameLine();
-        ImGui.Text($"{ModuleConfig.TimeLeft:hh\\:mm\\:ss}");
+        ImGui.Text($"{ModuleConfig.TimeLeft:dd\\:hh\\:mm\\:ss}");
     }
 
     public override void Uninit()
@@ -89,14 +83,21 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
             var info = agent->LobbyData.LobbyUIClient.SubscriptionInfo;
             if (info == null) return;
 
-            if (info->DaysRemaining != 0)
+            var time = GetLeftTimeSecond(*info);
+
+            if (time.MonthTime != 0)
             {
-                ModuleConfig.HasMonthlySub = true;
-                ModuleConfig.Save(this);
+                ModuleConfig.TimeLeft = TimeSpan.FromSeconds(time.MonthTime);
+            }
+            else if (time.PointTime != 0)
+            {
+                ModuleConfig.TimeLeft = TimeSpan.FromSeconds(time.PointTime);
+            }
+            else
+            {
                 return;
             }
-
-            ModuleConfig.TimeLeft          = TimeSpan.FromSeconds(GetLeftTimeSecond(*info));
+                
             ModuleConfig.LastSuccessRecord = DateTime.Now;
             ModuleConfig.Save(this);
 
@@ -108,33 +109,33 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
         }
     }
 
-    private static int GetLeftTimeSecond(LobbySubscriptionInfo str)
+    private static (int MonthTime, int PointTime) GetLeftTimeSecond(LobbySubscriptionInfo str)
     {
         var size = Marshal.SizeOf(str);
-        var arr  = new byte[size];
-        var ptr  = IntPtr.Zero;
+        var arr = new byte[size];
+        var ptr = IntPtr.Zero;
 
         try
         {
             ptr = Marshal.AllocHGlobal(size);
             Marshal.StructureToPtr(str, ptr, true);
             Marshal.Copy(ptr, arr, 0, size);
-        } 
+        }
         finally
         {
             Marshal.FreeHGlobal(ptr);
         }
 
-        var ret = string.Join(string.Empty, arr.Skip(24).Take(3).Reverse().Select(x => x.ToString("X2")));
-        return Convert.ToInt32(ret, 16);
+        var month = string.Join(string.Empty, arr.Skip(16).Take(3).Reverse().Select(x => x.ToString("X2")));
+        var point = string.Join(string.Empty, arr.Skip(24).Take(3).Reverse().Select(x => x.ToString("X2")));
+        return (Convert.ToInt32(month, 16), Convert.ToInt32(point, 16));
     }
-    
+
     private void ResetConfig()
     {
         ModuleConfig.LastSuccessRecord = DateTime.MinValue;
         ModuleConfig.TimeLeft          = TimeSpan.MinValue;
-        ModuleConfig.HasMonthlySub     = false;
-        
+
         ModuleConfig.Save(this);
     }
 
@@ -142,6 +143,5 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
     {
         public DateTime LastSuccessRecord = DateTime.MinValue;
         public TimeSpan TimeLeft          = TimeSpan.MinValue;
-        public bool     HasMonthlySub;
     }
 }
