@@ -3,7 +3,6 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
 using System.Collections.Generic;
@@ -27,52 +26,52 @@ public class ShowStatusRemainingTime : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, StatusAddons, OnPostUpdate);
     }
 
-    private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
+    private static unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
     {
-        if (DService.Condition[ConditionFlag.InCombat]) return;
+        var localPlayer = DService.ClientState.LocalPlayer;
+        if (localPlayer is null || DService.Condition[ConditionFlag.InCombat]) return;
 
         var atkStage = AtkStage.Instance();
         if (atkStage == null) return;
 
-        var NumberArray = atkStage->GetNumberArrayData(NumberArrayType.Hud);
-        var StringArray = atkStage->GetStringArrayData(StringArrayType.Hud);
-        if (NumberArray == null || StringArray == null) return;
+        var numberArray = atkStage->GetNumberArrayData(NumberArrayType.Hud);
+        var stringArray = atkStage->GetStringArrayData(StringArrayType.Hud);
+        if (numberArray == null || stringArray == null) return;
 
         for (var i = 0; i < 30; i++)
         {
-            var key = NumberArray->IntArray[100 + i];
+            var key = numberArray->IntArray[100 + i];
             if (key == -1) return;
 
             if (!ArrayStatusPair.TryGetValue(key, out var status)) continue;
 
-            var time = SeString.Parse(StringArray->StringArray[7 + i]).ToString();
+            var time = SeString.Parse(stringArray->StringArray[7 + i]).ToString();
             if (string.IsNullOrEmpty(time) ||
                (!time.Contains('h') && !time.Contains("小时") && time.Length <= 3)) continue;
 
-            var remainingTime = GetRemainingTime(status);
-            if (string.IsNullOrEmpty(remainingTime)) continue;
+            if (!GetRemainingTime(status, out time)) continue;
 
-            time = remainingTime;
-            StringArray->SetValue(7 + i, time);
+            stringArray->SetValue(7 + i, time);
+        }
+
+        return;
+
+        bool GetRemainingTime(uint _type, out string time)
+        {
+            time = string.Empty;
+            var statusManager = localPlayer.ToStruct()->GetStatusManager();
+            if (statusManager == null) return false;
+
+            var index = statusManager->GetStatusIndex(_type);
+            if (index == -1) return false;
+            time = TimeSpan.FromSeconds(statusManager->GetRemainingTime(index))
+                           .ToString(@"hhmm");
+            return true;
         }
     }
 
-    private static unsafe string GetRemainingTime(uint type)
-    {
-        if (DService.ClientState.LocalPlayer is not { } localPlayer) return string.Empty;
-
-        var statusManager = ((Character*)localPlayer.Address)->GetStatusManager();
-        if (statusManager == null) return string.Empty;
-        
-        var index = statusManager->GetStatusIndex(type);
-        if (index == -1) return string.Empty;
-
-        return TimeSpan.FromSeconds(statusManager->GetRemainingTime(index))
-                       .ToString(@"hhmm");
-    }
-
     private static readonly Dictionary<int, uint> ArrayStatusPair = new()
-    {   
+    {
         { 1073957830, 46 },
         { 1073757830, 46 },
         { 1073958027, 49 },
@@ -86,5 +85,4 @@ public class ShowStatusRemainingTime : DailyModuleBase
         DService.AddonLifecycle.UnregisterListener(OnPostUpdate);
         base.Uninit();
     }
-
 }
