@@ -21,7 +21,36 @@ public class ShowStatusRemainingTime : DailyModuleBase
         Author = ["Due"]
     };
 
-    public override void Init() => FrameworkManager.Register(true, OnUpdate);
+    private static Config ModuleConfig = null!;
+
+    public override void Init()
+    {
+        ModuleConfig = LoadConfig<Config>() ?? new();
+        FrameworkManager.Register(true, OnUpdate);
+    }
+
+    public override void ConfigUI()
+    {
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(LightSkyBlue, GetLoc("ShowStatusRemainingTime-ChooseTimeFormat"));
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(100f * GlobalFontScale);
+        using (var combo = ImRaii.Combo(GetLoc("ShowStatusRemainingTime-FormatExample"), FormatHelper(ModuleConfig.TimeFormat)))
+        {
+            if (combo)
+            {
+                foreach (var format in AvailableFormat)
+                {
+                    if (ImGui.Selectable(FormatHelper(format), format == ModuleConfig.TimeFormat))
+                    {
+                        ModuleConfig.TimeFormat = format;
+                        SaveConfig(ModuleConfig);
+                    }
+                }
+            }
+        }
+    }
 
     private static unsafe void OnUpdate(IFramework _)
     {
@@ -68,7 +97,7 @@ public class ShowStatusRemainingTime : DailyModuleBase
 
             if (index == -1) return false;
             time = TimeSpan.FromSeconds(statusManager->GetRemainingTime(index))
-                           .ToString(@"hh\hmm\m");
+                           .ToString(ModuleConfig.TimeFormat);
             return true;
         }
     }
@@ -84,9 +113,26 @@ public class ShowStatusRemainingTime : DailyModuleBase
         { 1073758337, 1080 }
     };
 
+    private static string FormatHelper(string format, double time = 3660)
+    {
+        return TimeSpan.FromSeconds(time).ToString(format);
+    }
+
+    private static readonly string[] AvailableFormat = new[]
+    {
+        @"hh\hmm\m",
+        @"hhmm",
+        @"hh\:mm"
+    };
+
     public override void Uninit()
     {
        FrameworkManager.Unregister(OnUpdate);
        base.Uninit();
+    }
+
+    public class Config : ModuleConfiguration
+    {
+        public string TimeFormat = @"hhmm";
     }
 }
