@@ -1,11 +1,13 @@
 using DailyRoutines.Abstracts;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using DailyRoutines.Infos;
+using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DailyRoutines.Modules;
 
@@ -19,15 +21,12 @@ public class ShowStatusRemainingTime : DailyModuleBase
         Author = ["Due"]
     };
 
-    private static readonly string[] StatusAddons = ["_StatusCustom0", "_StatusCustom2"];
+    public override void Init() => FrameworkManager.Register(true, OnUpdate);
 
-    public override void Init()
+    private static unsafe void OnUpdate(IFramework _)
     {
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, StatusAddons, OnPostUpdate);
-    }
+        if (!Throttler.Throttle("ShowRemainingTimeOnUpdate", 1_000)) return;
 
-    private static unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
-    {
         var localPlayer = DService.ClientState.LocalPlayer;
         if (localPlayer is null || DService.Condition[ConditionFlag.InCombat]) return;
 
@@ -40,32 +39,36 @@ public class ShowStatusRemainingTime : DailyModuleBase
 
         for (var i = 0; i < 30; i++)
         {
-            var key = numberArray->IntArray[100 + i];
-            if (key == -1) return;
+            var text = SeString.Parse(stringArray->StringArray[37 + i]).ToString();
+            var id = PresetData.Statuses.FirstOrDefault(x => x.Value.Name == text.Split("\n")[0]).Key;
 
-            if (!ArrayStatusPair.TryGetValue(key, out var status)) continue;
+            if (id == 0)
+            {
+                var key = numberArray->IntArray[100 + i];
+                if (key == -1 || !ArrayStatusPair.TryGetValue(key, out id)) continue;
+            }
 
             var time = SeString.Parse(stringArray->StringArray[7 + i]).ToString();
             if (string.IsNullOrEmpty(time) ||
                (!time.Contains('h') && !time.Contains("小时") && time.Length <= 3)) continue;
 
-            if (!GetRemainingTime(status, out time)) continue;
+            if (!GetRemainingTime(id, out time)) continue;
 
             stringArray->SetValue(7 + i, time);
         }
 
         return;
 
-        bool GetRemainingTime(uint _type, out string time)
+        bool GetRemainingTime(uint id, out string time)
         {
             time = string.Empty;
             var statusManager = localPlayer.ToStruct()->GetStatusManager();
             if (statusManager == null) return false;
+            var index = statusManager->GetStatusIndex(id);
 
-            var index = statusManager->GetStatusIndex(_type);
             if (index == -1) return false;
             time = TimeSpan.FromSeconds(statusManager->GetRemainingTime(index))
-                           .ToString(@"hhmm");
+                           .ToString(@"hh\hmm\m");
             return true;
         }
     }
@@ -74,6 +77,7 @@ public class ShowStatusRemainingTime : DailyModuleBase
     {
         { 1073957830, 46 },
         { 1073757830, 46 },
+        { 1073758026, 48 }, // 短时间增益之进食
         { 1073958027, 49 },
         { 1073758027, 49 },
         { 1073958337, 1080 },
@@ -82,7 +86,7 @@ public class ShowStatusRemainingTime : DailyModuleBase
 
     public override void Uninit()
     {
-        DService.AddonLifecycle.UnregisterListener(OnPostUpdate);
-        base.Uninit();
+       FrameworkManager.Unregister(OnUpdate);
+       base.Uninit();
     }
 }
