@@ -56,8 +56,8 @@ public class ShowStatusRemainingTime : DailyModuleBase
     {
         if (!Throttler.Throttle("ShowRemainingTimeOnUpdate", 1_000)) return;
 
-        var localPlayer = DService.ClientState.LocalPlayer;
-        if (localPlayer is null || DService.Condition[ConditionFlag.InCombat]) return;
+        if (DService.ClientState.LocalPlayer is not { } localPlayer ||
+            DService.Condition[ConditionFlag.InCombat]) return;
 
         var atkStage = AtkStage.Instance();
         if (atkStage == null) return;
@@ -69,6 +69,8 @@ public class ShowStatusRemainingTime : DailyModuleBase
         for (var i = 0; i < 30; i++)
         {
             var text = SeString.Parse(stringArray->StringArray[37 + i]).ToString();
+            if (string.IsNullOrEmpty(text)) continue;
+
             var id = PresetData.Statuses.FirstOrDefault(x => x.Value.Name == text.Split("\n")[0]).Key;
 
             if (id == 0)
@@ -128,7 +130,6 @@ public class ShowStatusRemainingTime : DailyModuleBase
     public override void Uninit()
     {
        FrameworkManager.Unregister(OnUpdate);
-       base.Uninit();
     }
 
     public class Config : ModuleConfiguration
