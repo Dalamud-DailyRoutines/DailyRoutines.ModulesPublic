@@ -35,7 +35,7 @@ public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
         if (config == null)
         {
             config = new Config();
-            if (LanguageManager.CurrentLanguage == ClientLanguage.ChineseSimplified.ToString())
+            if (LanguageManager.CurrentLanguage == "ChineseSimplified")
                 config.Blacklist.Add(".", "。", "？", "?", "！", "!", "吗", "吧", "呢", "啊", "呗", "呀", "阿", "哦", "嘛", "咯",
                                      "哎", "啦", "哇", "呵", "哈", "奥", "嗷");
             
@@ -132,7 +132,7 @@ public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
 
         if ((!string.IsNullOrWhiteSpace(messageText) && !isCommand) || isTellCommand)
         {
-            if (IsWhitelistChat(messageText))
+            if (IsBlackListChat(messageText) || IsGameItemChat(messageText))
             {
                 ProcessSendedChatHook.Original(module, message, uiModule);
                 return;
@@ -150,8 +150,11 @@ public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
         ProcessSendedChatHook.Original(module, message, uiModule);
     }
 
-    private static bool IsWhitelistChat(string message) 
-        => ModuleConfig?.Blacklist.Any(whiteListChat => !string.IsNullOrEmpty(whiteListChat) && message.EndsWith(whiteListChat)) ?? false;
+    private static bool IsBlackListChat(string message) 
+        => ModuleConfig?.Blacklist.Any(blackListChat => !string.IsNullOrEmpty(blackListChat) && message.EndsWith(blackListChat)) ?? false;
+
+    private static bool IsGameItemChat(string message) 
+        => message.Contains("<item>") || message.Contains("<flag>") || message.Contains("<pfinder>");
 
     private static bool AddPrefixAndSuffixIfNeeded(string original, out string handledMessage, bool isTellCommand = false)
     {
