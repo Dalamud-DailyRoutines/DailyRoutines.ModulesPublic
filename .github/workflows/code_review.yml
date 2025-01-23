@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: anc95/ChatGPT-CodeReview@main
         env:
-          GITHUB_TOKEN: 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
+          GITHUB_TOKEN: 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
           OPENAI_API_KEY: sk-3ff29f9022e5442496d7e8df313d19df
           # Optional
           LANGUAGE: Chinese
