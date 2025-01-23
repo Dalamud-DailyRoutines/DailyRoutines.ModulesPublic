@@ -60,7 +60,7 @@ jobs:
 
           cat code_changes.txt | tee -a prompt.txt
           echo "$PROMPT" > prompt.txt
-          curl -sS https://api.deepseek.com/v1 \
+          curl -sS https://api.deepseek.com/chat/completions \
             -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
