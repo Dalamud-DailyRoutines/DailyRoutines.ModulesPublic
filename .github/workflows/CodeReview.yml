@@ -17,7 +17,7 @@ jobs:
       - uses: anc95/ChatGPT-CodeReview@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.VANILLA_GPT_V }}
+          OPENAI_API_KEY: ${{ vars.VANILLA_GPT_V }}
           # Optional
           LANGUAGE: Chinese
           OPENAI_API_ENDPOINT: https://api.deepseek.com/v1
