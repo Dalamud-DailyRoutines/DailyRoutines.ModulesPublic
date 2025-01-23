@@ -46,12 +46,12 @@ jobs:
                   ],
                   "stream": false
                 }')
+          echo "$response" | jq .
           echo "Response from DeepSeek API: $response"
           echo "::set-output name=response::$response"
       - name: Post comment on PR with review result
         run: |
           response="${{ steps.deepseek_response.outputs.response }}"
-          response=$(echo "$response" | sed 's/^"\(.*\)"$/\1/')
           echo "$response" | jq .
           review_result=$(echo "$response" | jq -r '.choices[0].message.content')
           # Use GitHub API to post the review result as a comment on the PR
