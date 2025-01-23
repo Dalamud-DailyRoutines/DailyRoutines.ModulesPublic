@@ -60,11 +60,11 @@ jobs:
 
           cat code_changes.txt | tee -a prompt.txt
           echo "$PROMPT" > prompt.txt
-          curl -sS https://api.deepseek.com/chat/completions \
+          curl https://api.deepseek.com/chat/completions \
             -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
-              "model": "default",  # 根据 DeepSeek 的 API 文档调整模型名称
+              "model": "deepseek-chat",
               "messages": [
                 { "role": "system", "content": "You are a code reviewer." },
                 { "role": "user", "content": "'$(cat prompt.txt)'" }
