@@ -54,7 +54,7 @@ jobs:
 
       - name: Post comment on PR with review result
         run: |
-          review_result="$(echo ${{ steps.deepseek_response.outputs.response }} | jq -r '.choices[0].message.content')"
+          review_result=$(echo ${{ steps.deepseek_response.outputs.response }} | jq -r '.choices[0].message.content')
           
           # Use GitHub API to post the review result as a comment on the PR
           curl -X POST \
