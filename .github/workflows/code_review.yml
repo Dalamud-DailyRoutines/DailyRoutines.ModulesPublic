@@ -1,4 +1,3 @@
-# https://github.com/anc95/ChatGPT-CodeReview/tree/main
 name: Code Review
 
 permissions:
@@ -6,20 +5,23 @@ permissions:
   pull-requests: write
 
 on:
-  pull_request:
+  pull_request_target:  # 使用 pull_request_target 触发器
     types: [opened, reopened, synchronize]
 
 jobs:
   review:
-    # if: ${{ contains(github.event.*.labels.*.name, 'gpt review') }} # Optional; to run only when a label is attached
     runs-on: ubuntu-latest
     steps:
-      - uses: anc95/ChatGPT-CodeReview@main
+      - name: Checkout the repository
+        uses: actions/checkout@v2
         with:
-          GITHUB_TOKEN: ${{ secrets.VANILLA_PAT }}
+          ref: ${{ github.event.pull_request.base.ref }}  # Checkout the base branch of the PR (target branch)
+
+      - name: Review PR
+        uses: anc95/ChatGPT-CodeReview@main
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: sk-3ff29f9022e5442496d7e8df313d19df
-          # Optional
           LANGUAGE: Chinese
           OPENAI_API_ENDPOINT: https://api.deepseek.com/v1
           MODEL: deepseek-chat
@@ -41,6 +43,3 @@ jobs:
           top_p: 1
           temperature: 1.0
           max_tokens: 8192
-          MAX_PATCH_LENGTH: # if the patch/diff length is large than MAX_PATCH_LENGTH, will be ignored and won't review. By default, with no MAX_PATCH_LENGTH set, there is also no limit for the patch/diff length.
-          IGNORE_PATTERNS: # glob pattern or regex pattern to ignore files, separated by comma
-          INCLUDE_PATTERNS: # glob pattern or regex pattern to include files, separated by comma
