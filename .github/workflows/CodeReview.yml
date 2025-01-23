@@ -53,7 +53,7 @@ jobs:
         run: |
           response="${{ steps.deepseek_response.outputs.response }}"
           echo "$response" | jq .
-          review_result=$(echo "$response" | jq -r '.choices[0].message.content')
+          review_result=$(echo $response | jq -r '.choices[0].message.content')
           # Use GitHub API to post the review result as a comment on the PR
           curl -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
