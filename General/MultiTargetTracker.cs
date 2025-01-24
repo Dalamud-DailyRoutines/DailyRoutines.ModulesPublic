@@ -186,7 +186,7 @@ public class MultiTargetTracker : DailyModuleBase
         PlaceFieldMarkers(validPlayers);
     }
 
-    private void PlaceFieldMarkers(IReadOnlyDictionary<ulong, Vector3> founds)
+    private static void PlaceFieldMarkers(IReadOnlyDictionary<ulong, Vector3> founds)
     {
         var counter = 0U;
         foreach (var found in founds)
