@@ -35,13 +35,14 @@ jobs:
         id: deepseek_response
         run: |
           PR_DIFF_CONTENT=$(cat ${{ env.diff_file }})
+          echo "$PR_DIFF_CONTENT"
           response=$(curl https://api.deepseek.com/chat/completions \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.VANILLA_GPT_KEY }}" \
             -d '{
                   "model": "deepseek-chat",
                   "messages": [
-                    {"role": "system", "content": "我将提供给你一段github pull request的file diff。请你扮演一位专业的开源社区开发者，帮我进行code review。\n\n[[代码审核原则]]\n[代码质量]\n1. 该修改是否有必要，是否相比旧代码有改进或添加了新功能？\n2. 是否有逻辑错误或潜在的运行时错误？\n3. 是否有与其他代码部分的兼容性问题，会不会破坏与修改无关的现有逻辑？\n4. 是否有可以优化的代码结构或逻辑，是否有更简洁或更高效的方式来实现相同功能？\n5. 是否有潜在的性能问题？\n[安全性]\n1. 是否有敏感信息泄露的风险（如硬编码的密钥、密码等）？\n2. 是否有可能运行来路不明的外部代码？\n\n[[结果返回格式]]\n如果发现任何问题或改进建议，请分点详细列出并说明。${PR_DIFF_CONTENT}"},
+                    {"role": "system", "content": "我将提供给你一段github pull request的file diff。请你扮演一位专业的开源社区开发者，帮我进行code review。\n[[代码审核原则]]\n[代码质量]\n1. 该修改是否有必要，是否相比旧代码有改进或添加了新功能？\n2. 是否有逻辑错误或潜在的运行时错误？\n3. 是否有与其他代码部分的兼容性问题，会不会破坏与修改无关的现有逻辑？\n4. 是否有可以优化的代码结构或逻辑，是否有更简洁或更高效的方式来实现相同功能？\n5. 是否有潜在的性能问题？\n[安全性]\n1. 是否有敏感信息泄露的风险（如硬编码的密钥、密码等）？\n2. 是否有可能运行来路不明的外部代码？\n\n[[结果返回格式]]\n如果发现任何问题或改进建议，请分点详细列出并说明。${PR_DIFF_CONTENT}"},
                     {"role": "user", "content": "${PR_DIFF_CONTENT}"}
                   ],
                   "stream": false
