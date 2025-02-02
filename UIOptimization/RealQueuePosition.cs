@@ -20,9 +20,13 @@ public unsafe class RealQueuePosition : DailyModuleBase
     };
 
     private DateTime ETA = DateTime.Now;
-    
+
+    private static readonly CompSig SetStringArrayDataValueAndSig = new("48 83 EC ?? 0F B6 44 24 ?? C6 44 24");
+    private delegate void SetStringArrayDataValueAndUpdateDelegate(StringArrayData* data, int index, byte* content, byte a4, byte a5);
+    private static SetStringArrayDataValueAndUpdateDelegate? SetStringArrayDataValueAndUpdate;
+
     private readonly CompSig AgentWorldTravelUpdaterSig = new("40 53 56 57 41 54 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 4C 8B FA");
-    private delegate bool AgentWorldTravelUpdateDelegate(nint a1, NumberArrayData* a2, StringArrayData* a3, bool a4);
+    private delegate bool AgentWorldTravelUpdateDelegate(nint a1, nint a2, nint a3, bool a4);
     private static Hook<AgentWorldTravelUpdateDelegate> AgentWorldTravelUpdateHook;
 
     private static readonly CompSig UpdateWorldTravelDataSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B FA 0F B6 4A");
@@ -35,6 +39,8 @@ public unsafe class RealQueuePosition : DailyModuleBase
 
     public override void Init()
     {
+        SetStringArrayDataValueAndUpdate ??= SetStringArrayDataValueAndSig.GetDelegate<SetStringArrayDataValueAndUpdateDelegate>();
+
         AgentWorldTravelUpdateHook ??= AgentWorldTravelUpdaterSig.GetHook<AgentWorldTravelUpdateDelegate>(AgentWorldTravelUpdaterDetour);
         AgentWorldTravelUpdateHook.Enable();
 
@@ -74,7 +80,7 @@ public unsafe class RealQueuePosition : DailyModuleBase
         UpdateWorldTravelDataHook.Original(a1, a2);
     }
 
-    private bool AgentWorldTravelUpdaterDetour(nint a1, NumberArrayData* a2, StringArrayData* a3, bool a4)
+    private bool AgentWorldTravelUpdaterDetour(nint a1, nint a2, nint a3, bool a4)
     {
         var agentData = (nint)AgentWorldTravel.Instance();
         if (agentData == nint.Zero || !(*(bool*)(agentData + 0x120)))
@@ -84,19 +90,18 @@ public unsafe class RealQueuePosition : DailyModuleBase
         if (!result) return false;
 
         var index = 5;
-
-        if (a2->IntArray[5] > 0)
-        {
+        if (*(int*)(*(nint*)(a2 + 32) + 20) > 0)
             index = 6;
-        }
 
         var position = *(uint*)(agentData + 0x12c);
         var positionStr = $"{LuminaCache.GetRow<Addon>(10988).Text.ExtractText()}: #{position}";
-        a3->SetValue(index, positionStr);
-        
+        fixed (byte* strPtr = Encoding.UTF8.GetBytes(positionStr))
+            SetStringArrayDataValueAndUpdate((StringArrayData*)a3, index, strPtr, 0, 1);
+
         var queueTime = TimeSpan.FromSeconds(*(int*)(agentData + 0x128));
         var info      = GetLoc("RealQueuePosition-ETA", @$"{queueTime:mm\:ss}", @$"{ETA - DateTime.Now:mm\:ss}");
-        a3->SetValue(index + 1, info);
+        fixed (byte* strBytesPtr = Encoding.UTF8.GetBytes(info))
+            SetStringArrayDataValueAndUpdate((StringArrayData*)a3, index + 1, strBytesPtr, 0, 1);
 
         return true;
     }
