@@ -1,9 +1,9 @@
-using System;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.Command;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using System;
 
 namespace DailyRoutines.Modules;
 

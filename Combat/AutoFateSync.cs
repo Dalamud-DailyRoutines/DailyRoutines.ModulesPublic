@@ -1,5 +1,3 @@
-using System;
-using System.Threading;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
@@ -7,7 +5,8 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
-using ImGuiNET;
+using System;
+using System.Threading;
 
 namespace DailyRoutines.Modules;
 

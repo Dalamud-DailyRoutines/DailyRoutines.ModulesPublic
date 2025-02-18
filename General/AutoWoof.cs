@@ -25,7 +25,7 @@ public unsafe class AutoWoof : DailyModuleBase
         if (!Throttler.Throttle("AutoWoof-OnUpdate", 1_000)) return;
 
         if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
-        if (!DService.Condition[ConditionFlag.Mounted] || localPlayer.CurrentMount.Id != 294) return;
+        if (!DService.Condition[ConditionFlag.Mounted] || localPlayer.CurrentMount?.RowId != 294) return;
         if (ActionManager.Instance()->GetActionStatus(ActionType.Action, 29463) != 0) return;
 
         UseActionManager.UseAction(ActionType.Action, 29463);

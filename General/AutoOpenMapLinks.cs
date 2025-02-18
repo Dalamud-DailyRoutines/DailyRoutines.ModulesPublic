@@ -1,17 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
-using System.Text.RegularExpressions;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface;
+using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using System.Text.RegularExpressions;
 
 namespace DailyRoutines.Modules;
 
@@ -182,7 +182,7 @@ public class AutoOpenMapLinks : DailyModuleBase
         {
             if (payload is PlayerPayload playerPayload)
             {
-                var senderName = $"{playerPayload.PlayerName}@{playerPayload.World.Name.ExtractText()}";
+                var senderName = $"{playerPayload.PlayerName}@{playerPayload.World.Value.Name.ExtractText()}";
                 if (ModuleConfig.WhitelistPlayer.Contains(senderName))
                 {
                     SetFlag(territoryId, mapId, mapPayload.RawX, mapPayload.RawY);
@@ -222,12 +222,12 @@ public class AutoOpenMapLinks : DailyModuleBase
         {
             if (args.Target is not MenuTargetDefault target) return;
             if (target.TargetCharacter == null && string.IsNullOrWhiteSpace(target.TargetName) &&
-                target.TargetHomeWorld.GameData == null) return;
+                target.TargetHomeWorld.ValueNullable == null) return;
 
             var playerName = target.TargetCharacter != null ? target.TargetCharacter.Name : target.TargetName;
             var playerWorld = target.TargetCharacter != null ? target.TargetCharacter.HomeWorld : target.TargetHomeWorld;
 
-            var id = $"{playerName}@{playerWorld.GameData.Name}";
+            var id = $"{playerName}@{playerWorld.ValueNullable?.Name}";
             if(!ModuleConfig.WhitelistPlayer.Add(id))
                 NotificationWarning(GetLoc("AutoOpenMapLinks-AlreadyExistedInList"));
         }
@@ -241,7 +241,7 @@ public class AutoOpenMapLinks : DailyModuleBase
                 null or "LookingForGroup" or "PartyMemberList" or "FriendList" or "FreeCompany" or "SocialList"
                     or "ContactList" or "ChatLog" or "_PartyList" or "LinkShell" or "CrossWorldLinkshell"
                     or "ContentMemberList" or "BeginnerChatList" or "CircleBook" =>
-                    target.TargetName != string.Empty && PresetData.Worlds.ContainsKey(target.TargetHomeWorld.Id),
+                    target.TargetName != string.Empty && PresetData.Worlds.ContainsKey(target.TargetHomeWorld.RowId),
                 "BlackList" or "MuteList" => false,
                 _ => false
             };

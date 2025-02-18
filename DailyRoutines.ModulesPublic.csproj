@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <Authors>AtmoOmen</Authors>
@@ -7,7 +7,7 @@
         <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
         <IsPackable>false</IsPackable>
         <Title>Daily Routines Modules In Public</Title>
-        <Configurations>Debug;Release</Configurations>
+        <Configurations>Debug;Release;ReleaseTest</Configurations>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -38,7 +38,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <DalamudLibPath Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(appdata)\XIVLauncherCN\addon\Hooks\dev\</DalamudLibPath>
+        <DalamudLibPath Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(appdata)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
         <DalamudLibPath Condition="$([MSBuild]::IsOSPlatform('Linux'))">$(HOME)/.xlcore/dalamud/Hooks/dev/</DalamudLibPath>
         <DalamudLibPath Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(HOME)/Library/Application Support/XIV on Mac/dalamud/Hooks/dev/</DalamudLibPath>
         <DalamudLibPath Condition="$(DALAMUD_HOME) != ''">$(DALAMUD_HOME)/</DalamudLibPath>
@@ -114,6 +114,10 @@
       <None Remove=".editorconfig" />
       <None Remove=".gitattributes" />
       <None Remove=".gitignore" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="System.CodeDom" Version="9.0.1" />
     </ItemGroup>
 
 </Project>

@@ -1,9 +1,9 @@
-using System;
-using System.Threading;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Hooking;
 using Dalamud.Interface.Utility.Raii;
+using System;
+using System.Threading;
 
 namespace DailyRoutines.Modules;
 

@@ -1,15 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
-using Dalamud.Game;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using TinyPinyin;
 
 namespace DailyRoutines.Modules;
@@ -127,7 +125,7 @@ public class BaitSwitchCommand : DailyModuleBase
             return false;
         }
 
-        var itemName = LuminaCache.GetRow<Item>(itemID).Name.ExtractText();
+        var itemName = LuminaCache.GetRow<Item>(itemID)?.Name.ExtractText();
 
         if (Baits.ContainsKey(itemID))
         {

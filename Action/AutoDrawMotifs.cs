@@ -5,7 +5,7 @@ using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.JobGauge.Types;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
 
@@ -72,7 +72,7 @@ public class AutoDrawMotifs : DailyModuleBase
     private bool? CheckCurrentJob()
     {
         if (BetweenAreas || OccupiedInEvent) return false;
-        if (DService.ClientState.LocalPlayer is not { ClassJob.Id: 42, Level: >= 30 } || !IsValidPVEDuty())
+        if (DService.ClientState.LocalPlayer is not { ClassJob.RowId: 42, Level: >= 30 } || !IsValidPVEDuty())
         {
             TaskHelper.Abort();
             return true;
@@ -115,7 +115,7 @@ public class AutoDrawMotifs : DailyModuleBase
         var isPVP = GameMain.IsInPvPArea() || GameMain.IsInPvPInstance();
         var contentData = LuminaCache.GetRow<ContentFinderCondition>(GameMain.Instance()->CurrentContentFinderConditionId);
         
-        return !isPVP && (contentData == null || !InvalidContentTypes.Contains(contentData.ContentType.Row));
+        return !isPVP && (contentData == null || !InvalidContentTypes.Contains(contentData.Value.ContentType.RowId));
     }
 
     public override void Uninit()

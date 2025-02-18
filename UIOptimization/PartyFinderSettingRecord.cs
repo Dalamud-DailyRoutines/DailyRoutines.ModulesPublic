@@ -1,15 +1,14 @@
+using DailyRoutines.Abstracts;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
 using Dalamud.Interface;
+using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ImGuiNET;
 using System.Collections.Generic;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using Dalamud.Interface.Utility.Raii;
 
 namespace DailyRoutines.Modules;
 

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
@@ -10,6 +6,10 @@ using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.Shell;
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 
 namespace DailyRoutines.Modules;
 
@@ -122,7 +122,7 @@ public unsafe class BetterCommandInput : DailyModuleBase
         var spaceIndex = command.IndexOf(' ');
         if (spaceIndex == -1)
         {
-            var lower = command.LowerAndHalfWidth();
+            var lower = command.ToLowerAndHalfWidth();
             foreach (var whiteListCommand in ModuleConfig.Whitelist)
             {
                 if (lower.Equals(whiteListCommand, StringComparison.CurrentCultureIgnoreCase)) 
@@ -134,7 +134,7 @@ public unsafe class BetterCommandInput : DailyModuleBase
         }
         else
         {
-            var lower = command[..spaceIndex].LowerAndHalfWidth();
+            var lower = command[..spaceIndex].ToLowerAndHalfWidth();
             foreach (var whiteListCommand in ModuleConfig.Whitelist)
             {
                 if (lower.Equals(whiteListCommand, StringComparison.CurrentCultureIgnoreCase)) 

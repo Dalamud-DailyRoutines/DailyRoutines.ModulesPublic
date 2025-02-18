@@ -28,7 +28,7 @@ public class AutoQuestAccept : DailyModuleBase
         var addon = (AtkUnitBase*)args.Addon;
         if (addon == null) return;
 
-        var questID = addon->AtkValues[266].UInt;
+        var questID = addon->AtkValues[261].UInt;
         if (questID == 0) return;
         
         Callback(addon, true, 3, questID);

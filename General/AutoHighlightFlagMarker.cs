@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
@@ -10,6 +7,9 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using System;
+using System.Linq;
+using System.Numerics;
 
 namespace DailyRoutines.Modules;
 
@@ -23,11 +23,11 @@ public unsafe class AutoHighlightFlagMarker : DailyModuleBase
         ModulesConflict = ["MultiTargetTracker"],
     };
 
-    private static readonly CompSig SetFlagMarkerSig = new("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 48 8B 4B 10 48 85 C9");
+    private static readonly CompSig SetFlagMarkerSig = new("40 56 48 83 EC 40 80 B9 DE 5A 00 00 01");
     private delegate void SetFlagMarkerDelegate(AgentMap* agent, uint zoneID, uint mapID, float worldX, float worldZ, uint iconID = 60561);
     private static Hook<SetFlagMarkerDelegate>? SetFlagMarkerHook;
 
-    private static readonly CompSig AgentMapReceiveEventSig = new("40 55 53 56 57 41 57 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 48 8B BD");
+    private static readonly CompSig AgentMapReceiveEventSig = new("40 53 56 57 41 56 48 83 EC ?? 8B BC 24");
     private static Hook<AgentReceiveEventDelegate>? AgentMapReceiveEventHook;
 
     private static Config ModuleConfig = null!;

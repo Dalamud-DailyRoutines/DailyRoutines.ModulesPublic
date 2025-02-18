@@ -1,9 +1,9 @@
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
+using DailyRoutines.Managers;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using System.Linq;
-using DailyRoutines.Managers;
 
 namespace DailyRoutines.Modules;
 
@@ -50,9 +50,9 @@ public class FriendlistTeleporter : DailyModuleBase
 
         public override bool IsDisplay(IMenuOpenedArgs args) => args.AddonName == "FriendList"
                                                                 && args.Target is MenuTargetDefault target
-                                                                && target.TargetCharacter?.Location.GameData is not null
+                                                                && target.TargetCharacter?.Location.Value is not null
                                                                 && GetAetheryteId(
-                                                                    target.TargetCharacter.Location.GameData.RowId,
+                                                                    target.TargetCharacter.Location.Value.RowId,
                                                                     out aetheryteID);
 
         private static bool GetAetheryteId(uint zoneID, out uint aetheryteID)
@@ -87,7 +87,7 @@ public class FriendlistTeleporter : DailyModuleBase
         {
             try
             {
-                var targetWorld = PresetData.Worlds[targetWorldID].Name.RawString;
+                var targetWorld = PresetData.Worlds[targetWorldID].Name.ExtractText();
                 ChatHelper.Instance.SendMessage($"/pdr worldtravel {targetWorld}");
             }
             catch
@@ -99,8 +99,8 @@ public class FriendlistTeleporter : DailyModuleBase
         {
             if (args.AddonName != "FriendList") return false;
 
-            if (args.Target is MenuTargetDefault { TargetCharacter.CurrentWorld.GameData: { RowId: var _targetWorldID } } &&
-                _targetWorldID != DService.ClientState.LocalPlayer.CurrentWorld.GameData.RowId)
+            if (args.Target is MenuTargetDefault { TargetCharacter.CurrentWorld.Value: { RowId: var _targetWorldID } } &&
+                _targetWorldID != DService.ClientState.LocalPlayer.CurrentWorld.Value.RowId)
             {
                 targetWorldID = _targetWorldID;
                 return true;

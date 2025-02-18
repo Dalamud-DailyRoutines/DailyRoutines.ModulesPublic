@@ -1,12 +1,12 @@
-using System;
-using System.Numerics;
-using System.Timers;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using System;
+using System.Numerics;
+using System.Timers;
 using Timer = System.Timers.Timer;
 
 namespace DailyRoutines.Modules;

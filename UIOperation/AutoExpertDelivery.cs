@@ -1,6 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
-using ClickLib;
 using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
@@ -9,12 +10,11 @@ using DailyRoutines.Managers;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using Lumina.Excel.GeneratedSheets;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Lumina.Excel.Sheets;
 using GrandCompany = FFXIVClientStructs.FFXIV.Client.UI.Agent.GrandCompany;
 
 namespace DailyRoutines.Modules;
@@ -30,18 +30,10 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public bool SkipWhenHQ;
+        public bool SkipWhenHQ         = true;
+        public bool SkipWhenMateria    = true;
         public bool AutoSwitchWhenOpen = true;
     }
-
-    private static readonly List<InventoryType> ValidInventoryTypes =
-    [
-        InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3,
-        InventoryType.Inventory4, InventoryType.ArmoryBody, InventoryType.ArmoryEar, InventoryType.ArmoryFeets,
-        InventoryType.ArmoryHands, InventoryType.ArmoryHead, InventoryType.ArmoryLegs, InventoryType.ArmoryRings,
-        InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings, InventoryType.ArmoryMainHand,
-        InventoryType.ArmoryOffHand,
-    ];
 
     private static readonly Dictionary<uint, uint> ZoneToEventID = new()
     {
@@ -54,9 +46,7 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
     };
 
     private static Config ModuleConfig = null!;
-
-    private static HashSet<uint> HQItems = [];
-
+    
     public override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
@@ -66,10 +56,9 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "GrandCompanySupplyList", OnAddonSupplyList);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "GrandCompanySupplyList", OnAddonSupplyList);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "GrandCompanySupplyReward", OnAddonSupplyReward);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonYesno);
+        if (IsAddonAndNodesReady(GrandCompanySupplyList)) OnAddonSupplyList(AddonEvent.PostSetup, null);
     }
-
+    
     public override void OverlayUI()
     {
         var addon = GrandCompanySupplyList;
@@ -77,23 +66,23 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
 
         using var font = FontManager.UIFont80.Push();
         
-        var pos = new Vector2(addon->GetX(), addon->GetY() - ImGui.GetTextLineHeightWithSpacing());
+        var pos = new Vector2(addon->GetX() - ImGui.GetWindowSize().X, addon->GetY() + 6);
         ImGui.SetWindowPos(pos);
-
-        ImGui.TextColored(ImGuiColors.DalamudYellow, GetLoc("AutoExpertDeliveryTitle"));
+        
+        ImGui.TextColored(LightSkyBlue, GetLoc("AutoExpertDeliveryTitle"));
 
         var playerState = PlayerState.Instance();
         var rank        = playerState->GetGrandCompanyRank();
         var rankText = (GrandCompany)playerState->GrandCompany switch
         {
-            GrandCompany.Maelstrom      => LuminaCache.GetRow<GCRankLimsaMaleText>(rank).Singular.ExtractText(),
-            GrandCompany.TwinAdder      => LuminaCache.GetRow<GCRankGridaniaMaleText>(rank).Singular.ExtractText(),
-            GrandCompany.ImmortalFlames => LuminaCache.GetRow<GCRankUldahMaleText>(rank).Singular.ExtractText(),
+            GrandCompany.Maelstrom      => LuminaCache.GetRow<GCRankLimsaMaleText>(rank)?.Singular.ExtractText(),
+            GrandCompany.TwinAdder      => LuminaCache.GetRow<GCRankGridaniaMaleText>(rank)?.Singular.ExtractText(),
+            GrandCompany.ImmortalFlames => LuminaCache.GetRow<GCRankUldahMaleText>(rank)?.Singular.ExtractText(),
             _                           => string.Empty,
         };
         if (string.IsNullOrEmpty(rankText)) return;
 
-        var rankData = LuminaCache.GetRow<GrandCompanyRank>(rank);
+        if (!LuminaCache.TryGetRow<GrandCompanyRank>(rank, out var rankData)) return;
         var iconID = (GrandCompany)playerState->GrandCompany switch
         {
             GrandCompany.Maelstrom      => rankData.IconMaelstrom,
@@ -126,6 +115,9 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
                 SaveConfig(ModuleConfig);
             
             ImGui.SameLine();
+            if (ImGui.Checkbox(GetLoc("AutoExpertDelivery-SkipMaterias"), ref ModuleConfig.SkipWhenMateria))
+                SaveConfig(ModuleConfig);
+            
             if (ImGui.Checkbox(GetLoc("AutoExpertDelivery-AutoSwitch"), ref ModuleConfig.AutoSwitchWhenOpen))
             {
                 if (ModuleConfig.AutoSwitchWhenOpen)
@@ -137,7 +129,7 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
             if (ImGui.Button(GetLoc("Start")))
-                EnqueueARound();
+                EnqueueDelivery();
         }
 
         ImGui.SameLine();
@@ -150,17 +142,17 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         ImGui.SameLine();
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
-            if (ImGui.Button(LuminaCache.GetRow<Addon>(3280).Text.ExtractText()))
+            if (ImGui.Button(LuminaCache.GetRow<Addon>(3280)!.Value.Text.ExtractText()))
             {
                 if (!ZoneToEventID.TryGetValue(DService.ClientState.TerritoryType, out var eventID)) return;
                 
                 TaskHelper.Enqueue(() =>
                 {
                     if (!OccupiedInEvent) return true;
-                
+                    
                     if (IsAddonAndNodesReady(GrandCompanySupplyList))
                         GrandCompanySupplyList->Close(true);
-                
+                    
                     if (IsAddonAndNodesReady(SelectString))
                         SelectString->Close(true);
 
@@ -174,140 +166,39 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         }
     }
 
-    private void EnqueueARound()
+    private void EnqueueDelivery()
     {
-        TaskHelper.Enqueue(() =>
+        foreach (var item in ExpertDeliveryItem.Parse().Where(x => x.GetIndex() != -1))
         {
-            InterruptByConflictKey(TaskHelper, this);
-            return CheckIfToReachCap();
-        });
-
-        TaskHelper.Enqueue(() =>
-        {
-            InterruptByConflictKey(TaskHelper, this);
-            ClickListUI();
-        });
-
-        TaskHelper.Enqueue(() => !IsAddonAndNodesReady(GrandCompanySupplyList));
-
-        TaskHelper.DelayNext(500);
-        TaskHelper.Enqueue(() =>
-        {
-            InterruptByConflictKey(TaskHelper, this);
-            EnqueueARound();
-        });
-    }
-
-    private bool CheckIfToReachCap()
-    {
-        if (!IsAddonAndNodesReady(GrandCompanySupplyList)) return false;
-
-        var addon = (AddonGrandCompanySupplyList*)GrandCompanySupplyList;
-        if (addon == null) return false;
-
-        if (addon->ExpertDeliveryList->ListLength == 0)
-        {
-            TaskHelper.Abort();
-            MakeSureAddonsClosed();
-            return true;
-        }
-
-        var grandCompany = PlayerState.Instance()->GrandCompany;
-        if ((GrandCompany)grandCompany == GrandCompany.None)
-        {
-            TaskHelper.Abort();
-            MakeSureAddonsClosed();
-            return true;
-        }
-        var companySeals = InventoryManager.Instance()->GetCompanySeals(grandCompany);
-        var capAmount = LuminaCache.GetRow<GrandCompanyRank>(PlayerState.Instance()->GetGrandCompanyRank())?.MaxSeals ?? 0;
-
-        var firstItemAmount = GrandCompanySupplyList->AtkValues[265].UInt;
-        if (firstItemAmount + companySeals > capAmount)
-        {
-            TaskHelper.Abort();
-            MakeSureAddonsClosed();
-            return true;
-        }
-
-        return true;
-    }
-
-    private void ClickListUI()
-    {
-        if (!IsAddonAndNodesReady(GrandCompanySupplyList)) return;
-
-        var addon = (AddonGrandCompanySupplyList*)GrandCompanySupplyList;
-        if (addon == null) return;
-
-        if (addon->ExpertDeliveryList->ListLength == 0)
-        {
-            TaskHelper.Abort();
-            MakeSureAddonsClosed();
-            return;
-        }
-
-        if (ModuleConfig.SkipWhenHQ)
-        {
-            HQItems = InventoryScanner(ValidInventoryTypes);
-
-            var onlyHQLeft = true;
-            for (var i = 0; i < addon->ExpertDeliveryList->ListLength; i++)
+            TaskHelper.Enqueue(() =>
             {
-                var itemID = addon->AtkUnitBase.AtkValues[i + 425].UInt;
-                var isHQItem = HQItems.Contains(itemID);
-                if (isHQItem) continue;
-
-                ClickGrandCompanySupplyList.Using((nint)addon).ItemEntry(i);
-                onlyHQLeft = false;
-                break;
-            }
-
-            if (onlyHQLeft) TaskHelper.Abort();
+                if (item.HandIn())
+                {
+                    if (item.IsHQ() || item.HasMateria())
+                    {
+                        TaskHelper.Enqueue(() => IsAddonAndNodesReady(SelectYesno), null, null, null, 2);
+                        TaskHelper.Enqueue(() => ClickSelectYesNo.Using((nint)SelectYesno).Yes(),
+                                           null, null, null, 2);
+                    }
+                            
+                    TaskHelper.Enqueue(() => IsAddonAndNodesReady(GrandCompanySupplyReward), null, null, null, 2);
+                    TaskHelper.Enqueue(
+                        () => ClickGrandCompanySupplyReward.Using((nint)GrandCompanySupplyReward).Deliver(),
+                        null, null, null, 2);
+                    
+                    TaskHelper.Enqueue(() => ExpertDeliveryItem.IsAddonReady(), null, null, null, 2);
+                    TaskHelper.Enqueue(() => ExpertDeliveryItem.Refresh(),      null, null, null, 2);
+                    TaskHelper.Enqueue(() => ExpertDeliveryItem.IsAddonReady(), null, null, null, 2);
+                    TaskHelper.Enqueue(() => EnqueueDelivery(),                 null, null, null, 2);
+                }
+            });
+            
+            break;
         }
-        else
-            ClickGrandCompanySupplyList.Using((nint)addon).ItemEntry(0);
     }
 
-    private static void MakeSureAddonsClosed()
-    {
-        if (GrandCompanySupplyReward != null)
-            GrandCompanySupplyReward->Close(true);
-
-        if (SelectYesno != null)
-            SelectYesno->Close(true);
-    }
-
-    public static HashSet<uint> InventoryScanner(IEnumerable<InventoryType> inventories)
-    {
-        var inventoryManager = InventoryManager.Instance();
-
-        var list = new HashSet<uint>();
-        if (inventoryManager == null) return list;
-
-        foreach (var inventory in inventories)
-        {
-            var container = inventoryManager->GetInventoryContainer(inventory);
-            if (container == null) continue;
-
-            for (var i = 0; i < container->Size; i++)
-            {
-                var slot = container->GetInventorySlot(i);
-                if (slot == null) continue;
-
-                var item = slot->ItemId;
-                if (item == 0) continue;
-
-                if (!slot->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality)) continue;
-
-                list.Add(item);
-            }
-        }
-
-        return list;
-    }
-
-    private void OnAddonSupplyList(AddonEvent type, AddonArgs args)
+    // 悬浮窗控制
+    private void OnAddonSupplyList(AddonEvent type, AddonArgs? args)
     {
         Overlay.IsOpen = type switch
         {
@@ -317,29 +208,105 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         };
 
         if (ModuleConfig.AutoSwitchWhenOpen && type == AddonEvent.PostSetup)
-            ClickGrandCompanySupplyList.Using(args.Addon).ExpertDelivery();
+            ClickGrandCompanySupplyList.Using((nint)GrandCompanySupplyList).ExpertDelivery();
     }
-
-    private static void OnAddonSupplyReward(AddonEvent type, AddonArgs args)
-    {
-        if (GrandCompanySupplyList != null)
-            GrandCompanySupplyList->Close(false);
-
-        ClickGrandCompanySupplyReward.Using(args.Addon).Deliver();
-    }
-
-    private void OnAddonYesno(AddonEvent type, AddonArgs args)
-    {
-        if (!TaskHelper.IsBusy) return;
-        Click.SendClick(ModuleConfig.SkipWhenHQ ? "select_no" : "select_yes");
-    }
-
+    
     public override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddonSupplyList);
-        DService.AddonLifecycle.UnregisterListener(OnAddonSupplyReward);
-        DService.AddonLifecycle.UnregisterListener(OnAddonYesno);
 
         base.Uninit();
+    }
+
+    private record ExpertDeliveryItem(uint ItemID, InventoryType Container, ushort Slot, uint SealReward)
+    {
+        public static List<ExpertDeliveryItem> Parse()
+        {
+            List<ExpertDeliveryItem> returnValues = [];
+            
+            var agent = AgentGrandCompanySupply.Instance();
+            if (agent == null || agent->ItemArray == null) return returnValues;
+
+            for (var i = 0U; i < agent->NumItems; i++)
+            {
+                var item = agent->ItemArray[i];
+                if (item.ItemId == 0 || item.IsBonusReward || item.ExpReward > 0 || item.SealReward <= 0) continue;
+                returnValues.Add(new(item.ItemId, item.Inventory, item.Slot, (uint)item.SealReward));
+            }
+            
+            return returnValues;
+        }
+
+        public static void Refresh() => AgentGrandCompanySupply.Instance()->Show();
+
+        public static bool IsAddonReady()
+            => GrandCompanySupplyReward                      == null &&
+               AgentGrandCompanySupply.Instance()->ItemArray != null &&
+               GrandCompanySupplyList->AtkValues->UInt       == 2;
+
+        public bool HandIn()
+        {
+            if (IsNeedToSkip()) return false;
+            SendEvent(AgentId.GrandCompanySupply, 0, 1, GetIndex());
+            return true;
+        }
+
+        public bool IsNeedToSkip()
+        {
+            if (GetSlot() == null) return true;
+            if (ModuleConfig.SkipWhenHQ && IsHQ()) return true;
+            if (ModuleConfig.SkipWhenMateria && HasMateria()) return true;
+
+            var grandCompany = PlayerState.Instance()->GrandCompany;
+            if ((GrandCompany)grandCompany == GrandCompany.None) return true;
+
+            if (!LuminaCache.TryGetRow<GrandCompanyRank>(PlayerState.Instance()->GetGrandCompanyRank(), out var rank))
+                return true;
+
+            var companySeals = InventoryManager.Instance()->GetCompanySeals(grandCompany);
+            var capAmount = rank.MaxSeals;
+            if (companySeals + SealReward > capAmount) return true;
+
+            return false;
+        }
+        
+        public int GetIndex()
+        {
+            var agent = AgentGrandCompanySupply.Instance();
+            if (agent == null) return -1;
+
+            var addon = GrandCompanySupplyList;
+            if (!IsAddonAndNodesReady(addon)) return -1;
+
+            var loadState = addon->AtkValues[0].UInt;
+            if (loadState != 2) return -1;
+            
+            var tab = addon->AtkValues[5].UInt;
+            if (tab != 2) return -1;
+            
+            var itemCount = addon->AtkValues[6].UInt;
+            if (itemCount == 0) return -1;
+            
+            for (var i = 0; i < Math.Min(40, itemCount); i++)
+            {
+                var sealReward = addon->AtkValues[265 + i].UInt;
+                var container  = (InventoryType)addon->AtkValues[345 + i].UInt;
+                var slot       = addon->AtkValues[385 + i].UInt;
+                var itemID     = addon->AtkValues[425 + i].UInt;
+                
+                if (itemID != ItemID || slot != Slot || container != Container || sealReward != SealReward) continue;
+                return i;
+            }
+            
+            return -1;
+        }
+
+        public bool HasMateria() => GetSlot()->Materia.ToArray().Count(x => x != 0 && x <= 25) > 0;
+
+        public bool IsHQ() => GetSlot()->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
+        
+        public InventoryItem* GetSlot() => InventoryManager.Instance()->GetInventorySlot(Container, Slot);
+
+        public override string ToString() => $"ExpertDeliveryItem-{ItemID}_{Container}_{Slot}_{SealReward}";
     }
 }

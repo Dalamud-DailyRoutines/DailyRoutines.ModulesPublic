@@ -1,9 +1,8 @@
-using System.Collections.Generic;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using ImGuiNET;
+using System.Collections.Generic;
 
 namespace DailyRoutines.Modules;
 

@@ -1,6 +1,13 @@
 {
   "version": 1,
   "dependencies": {
-    "net8.0-windows7.0": {}
+    "net8.0-windows7.0": {
+      "System.CodeDom": {
+        "type": "Direct",
+        "requested": "[9.0.1, )",
+        "resolved": "9.0.1",
+        "contentHash": "2J5uq+2smnj+u1jlyVJ6BGGqaK9fHcK/EwN7mbsuPqTI6dZr86br8Cg6o/5B+icQ9ANTvTDpJjnhDNtYYZijHQ=="
+      }
+    }
   }
 }

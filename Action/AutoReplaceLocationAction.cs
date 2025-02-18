@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Hooking;
@@ -11,9 +10,8 @@ using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using ImGuiNET;
-using Lumina.Excel.GeneratedSheets;
-using Action = Lumina.Excel.GeneratedSheets.Action;
+using Lumina.Excel.Sheets;
+using Action = Lumina.Excel.Sheets.Action;
 using MapType = FFXIVClientStructs.FFXIV.Client.UI.Agent.MapType;
 
 namespace DailyRoutines.Modules;
@@ -42,7 +40,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
     static AutoReplaceLocationAction()
     {
         LuminaCache.Get<Map>()
-                   .Where(x => x.TerritoryType.Row > 0 && x.TerritoryType.Value.ContentFinderCondition.Row > 0)
+                   .Where(x => x.TerritoryType.RowId > 0 && x.TerritoryType.Value.ContentFinderCondition.RowId > 0)
                    .ForEach(map =>
                    {
                        GetMapMarkers(map.RowId)
@@ -65,7 +63,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         ExecuteCommandManager.Register(OnPreExecuteCommandComplexLocation);
 
         ParseActionCommandArgHook ??=
-            DService.Hook.HookFromSignature<ParseActionCommandArgDelegate>(ParseActionCommandArgSig.Get(), ParseActionCommandArgDetour);
+            ParseActionCommandArgSig.GetHook<ParseActionCommandArgDelegate>(ParseActionCommandArgDetour);
         ParseActionCommandArgHook.Enable();
     }
 
@@ -133,7 +131,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         // 技能启用情况
         foreach (var actionPair in ModuleConfig.EnabledActions)
         {
-            var action = LuminaCache.GetRow<Action>(actionPair.Key);
+            if (!LuminaCache.TryGetRow<Action>(actionPair.Key, out var action)) continue;
             var state = actionPair.Value;
 
             if (ImGui.Checkbox($"###{actionPair.Key}_{action.Name.ExtractText()}", ref state))
@@ -148,7 +146,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
 
         foreach (var actionPair in ModuleConfig.EnabledPetActions)
         {
-            var action = LuminaCache.GetRow<PetAction>(actionPair.Key);
+            if (!LuminaCache.TryGetRow<PetAction>(actionPair.Key, out var action)) continue;
             var state = actionPair.Value;
 
             if (ImGui.Checkbox($"###{actionPair.Key}_{action.Name.ExtractText()}", ref state))
@@ -170,17 +168,17 @@ public class AutoReplaceLocationAction : DailyModuleBase
         ImGui.TextColored(LightSteelBlue1, $"{GetLoc("AutoReplaceLocationAction-CenterPointData")}");
         using var indent = ImRaii.PushIndent();
 
-        var currentMapData = LuminaCache.GetRow<Map>(DService.ClientState.MapId);
-        var isMapValid = currentMapData != null && currentMapData.TerritoryType.Row > 0 &&
-                         currentMapData.TerritoryType.Value.ContentFinderCondition.Row > 0;
-
+        var isMapValid = LuminaCache.TryGetRow<Map>(DService.ClientState.MapId, out var currentMapData) && currentMapData.TerritoryType.RowId > 0 &&
+                         currentMapData.TerritoryType.Value.ContentFinderCondition.RowId > 0;
+        var currentMapPlaceName = isMapValid ? currentMapData.PlaceName.Value.Name.ExtractText() : "";
+        var currentMapPlaceNameSub = isMapValid ? currentMapData.PlaceNameSub.Value.Name.ExtractText() : "";
         using var disabled = ImRaii.Disabled(!isMapValid);
 
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("CurrentMap")}:");
 
         ImGui.SameLine();
-        ImGui.Text($"{currentMapData.PlaceName?.Value?.Name} / {currentMapData.PlaceNameSub?.Value?.Name}");
+        ImGui.Text($"{currentMapPlaceName} / {currentMapPlaceNameSub}");
 
         ImGui.SameLine();
         ImGui.TextDisabled("|");
@@ -188,7 +186,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         ImGui.SameLine();
         if (ImGui.Button($"{GetLoc("OpenMap")}"))
         {
-            agent->OpenMap(currentMapData.RowId, currentMapData.TerritoryType.Row, null, MapType.Teleport);
+            agent->OpenMap(currentMapData.RowId, currentMapData.TerritoryType.RowId, null, MapType.Teleport);
             MarkCenterPoint();
         }
 
@@ -271,7 +269,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
                 });
             }
 
-            agent->OpenMap(currentMapData.RowId, currentMapData.TerritoryType.Row, null, MapType.Teleport);
+            agent->OpenMap(currentMapData.RowId, currentMapData.TerritoryType.RowId, null, MapType.Teleport);
         }
 
         void ClearCenterPoint()
@@ -367,14 +365,15 @@ public class AutoReplaceLocationAction : DailyModuleBase
     }
 
     // 预设场中
-    private static bool HandlePresetCenterLocation(ref Vector3 sourceLocation)
+    private static unsafe bool HandlePresetCenterLocation(ref Vector3 sourceLocation)
     {
-        if (!PresetData.TryGetContent(DService.ClientState.TerritoryType, out var content) ||
-            content.ContentType.Row is not (4 or 5)) return false;
-
-        var map = LuminaCache.GetRow<Map>(DService.ClientState.MapId);
-        var modifiedLocation = MapToWorld(new Vector2(6.125f), map).ToVector3();
-
+        if (!LuminaCache.TryGetRow<ContentFinderCondition>
+                (GameMain.Instance()->CurrentContentFinderConditionId, out var content) ||
+            content.ContentType.RowId is not (4 or 5)                                     ||
+            !LuminaCache.TryGetRow<Map>(DService.ClientState.MapId, out var map))
+            return false;
+        
+        var modifiedLocation = TextureToWorld(new(1024f), map).ToVector3();
         return UpdateLocationIfClose(ref sourceLocation, modifiedLocation);
     }
 

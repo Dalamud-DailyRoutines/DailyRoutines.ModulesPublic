@@ -1,2 +1,39 @@
-# Auto detect text files and perform LF normalization
+# 强制 Git 自动检测文本文件
 * text=auto
+
+# 对代码文件显式设置换行符为 LF
+*.cs text eol=lf
+*.csproj text eol=lf
+*.sln text eol=lf
+*.xaml text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.config text eol=lf
+
+# 对脚本文件显式设置换行符为 LF
+*.sh text eol=lf
+*.bash text eol=lf
+*.ps1 text eol=lf
+
+# 二进制文件（不处理换行符）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.pdf binary
+*.dll binary
+*.exe binary
+*.zip binary
+*.7z binary
+*.tar binary
+*.gz binary
+
+# 常见文档文件
+*.md text eol=lf
+*.txt text eol=lf
+
+# 设置 Windows 专用的批处理文件换行符为 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf

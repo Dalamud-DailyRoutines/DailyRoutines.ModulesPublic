@@ -1,7 +1,5 @@
-using System.Numerics;
 using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -10,7 +8,7 @@ using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ImGuiNET;
+using System.Numerics;
 
 namespace DailyRoutines.Modules;
 

@@ -2,15 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ImGuiNET;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
 
@@ -83,7 +81,7 @@ public unsafe class DisplayTargetHP : DailyModuleBase
 
         ScaledDummy(5f);
         
-        ImGui.TextColored(ImGuiColors.TankBlue, LuminaCache.GetRow<Addon>(1030).Text.ExtractText());
+        ImGui.TextColored(ImGuiColors.TankBlue, LuminaCache.GetRow<Addon>(1030)!.Value.Text.ExtractText());
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
@@ -139,7 +137,7 @@ public unsafe class DisplayTargetHP : DailyModuleBase
         
         ScaledDummy(5f);
         
-        ImGui.TextColored(ImGuiColors.TankBlue, LuminaCache.GetRow<Addon>(1110).Text.ExtractText());
+        ImGui.TextColored(ImGuiColors.TankBlue, LuminaCache.GetRow<Addon>(1110)!.Value.Text.ExtractText());
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
@@ -325,6 +323,7 @@ public unsafe class DisplayTargetHP : DailyModuleBase
     private static string FormatNumber(uint num, DisplayFormat? displayFormat = null)
     {
         displayFormat ??= ModuleConfig.DisplayFormat;
+        var currentLang = LanguageManager.CurrentLanguage;
         switch (displayFormat)
         {
             case DisplayFormat.FullNumber:
@@ -332,38 +331,15 @@ public unsafe class DisplayTargetHP : DailyModuleBase
             case DisplayFormat.FullNumberSeparators:
                 return num.ToString("N0");
             case DisplayFormat.ChineseFull:
-                if (num == 0) return "0";
-
-                var result = new System.Text.StringBuilder();
-                var yi     = num             / 100000000;
-                var wan    = num % 100000000 / 10000;
-                var ge     = num             % 10000;
-
-                if (yi > 0)
-                {
-                    result.Append($"{yi}亿");
-                    if (wan > 0 || ge > 0)
-                        result.Append(wan.ToString("D4"));
-                }
-
-                if (wan > 0)
-                {
-                    if (yi == 0) result.Append($"{wan}万");
-                    else result.Append('万');
-                }
-
-                if (ge > 0 || (yi > 0 && wan == 0))
-                    result.Append(ge.ToString(yi > 0 || wan > 0 ? "D4" : ""));
-
-                return result.ToString();
+                return FormatNumberByChineseNotation((int)num, currentLang)->ToString();
             case DisplayFormat.ChineseZeroPrecision:
             case DisplayFormat.ChineseOnePrecision:
             case DisplayFormat.ChineseTwoPrecision:
                 var (divisor, unit) = num switch
                 {
-                    >= 1_0000_0000 => (1_0000_0000f, "亿"),
-                    >= 1_0000      => (1_0000f, "万"),
-                    _              => (1f, "")
+                    >= 1_0000_0000 => (1_0000_0000f, currentLang is ("ChineseTraditional" or "Japanese") ? "億" : "亿"),
+                    >= 1_0000      => (1_0000f, currentLang == "ChineseTraditional" ? "萬" : "万"),
+                    _              => (1f, string.Empty)
                 };
 
                 var value = num / divisor;

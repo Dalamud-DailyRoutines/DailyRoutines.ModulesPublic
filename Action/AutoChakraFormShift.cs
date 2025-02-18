@@ -4,7 +4,7 @@ using Dalamud.Game.ClientState.JobGauge.Types;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
 
@@ -29,7 +29,7 @@ public class AutoChakraFormShift : DailyModuleBase
     private bool? CheckCurrentJob()
     {
         if (BetweenAreas || OccupiedInEvent) return false;
-        if (DService.ClientState.LocalPlayer is not { ClassJob.Id: 20 } || !IsValidPVEDuty())
+        if (DService.ClientState.LocalPlayer is not { ClassJob.RowId: 20 } || !IsValidPVEDuty())
         {
             TaskHelper.Abort();
             return true;
@@ -46,7 +46,7 @@ public class AutoChakraFormShift : DailyModuleBase
         var isPVP = GameMain.IsInPvPArea() || GameMain.IsInPvPInstance();
         var contentData = LuminaCache.GetRow<ContentFinderCondition>(GameMain.Instance()->CurrentContentFinderConditionId);
         
-        return !isPVP && (contentData == null || !InvalidContentTypes.Contains(contentData.ContentType.Row));
+        return !isPVP && (contentData == null || !InvalidContentTypes.Contains(contentData.Value.ContentType.RowId));
     }
 
     private unsafe bool? UseRelatedActions()
@@ -100,7 +100,7 @@ public class AutoChakraFormShift : DailyModuleBase
     // 进入副本
     private void OnZoneChanged(ushort zone)
     {
-        if (LuminaCache.GetRow<TerritoryType>(zone) is not { ContentFinderCondition.Row: > 0 }) return;
+        if (LuminaCache.GetRow<TerritoryType>(zone) is not { ContentFinderCondition.RowId: > 0 }) return;
 
         TaskHelper.Abort();
         TaskHelper.Enqueue(CheckCurrentJob);

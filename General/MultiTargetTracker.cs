@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
 using DailyRoutines.Infos;
@@ -12,7 +8,11 @@ using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 
 namespace DailyRoutines.Modules;
 
@@ -141,7 +141,7 @@ public class MultiTargetTracker : DailyModuleBase
         if (BetweenAreas || !IsScreenReady() || DService.ClientState.TerritoryType == 0) return;
         if (ModuleConfig.PermanentTrackedPlayers.Count == 0 && TempTrackedPlayers.Count == 0) return;
 
-        var currentZoneData = LuminaCache.GetRow<TerritoryType>(DService.ClientState.TerritoryType);
+        if (!LuminaCache.TryGetRow<TerritoryType>(DService.ClientState.TerritoryType, out var currentZoneData)) return;
 
         Dictionary<ulong, Vector3> validPlayers = [];
 
@@ -186,7 +186,7 @@ public class MultiTargetTracker : DailyModuleBase
         PlaceFieldMarkers(validPlayers);
     }
 
-    private void PlaceFieldMarkers(IReadOnlyDictionary<ulong, Vector3> founds)
+    private static void PlaceFieldMarkers(IReadOnlyDictionary<ulong, Vector3> founds)
     {
         var counter = 0U;
         foreach (var found in founds)
@@ -222,7 +222,7 @@ public class MultiTargetTracker : DailyModuleBase
             var chara = ipc.ToStruct();
             ContentID = chara->ContentId;
             Name      = ipc.Name.TextValue;
-            WorldName = ipc.HomeWorld.GameData.Name.ExtractText();
+            WorldName = ipc.HomeWorld.ValueNullable?.Name.ExtractText();
         }
 
         public TrackPlayer() { }
@@ -260,7 +260,7 @@ public class MultiTargetTracker : DailyModuleBase
             if (args.Target is not MenuTargetDefault target) return;
 
             var data = new TrackPlayer(target.TargetContentId,
-                                       target.TargetName, target.TargetHomeWorld.GameData.Name.ExtractText());
+                                       target.TargetName, target.TargetHomeWorld.ValueNullable?.Name.ExtractText());
             if (!TempTrackedPlayers.Add(data))
             {
                 TempTrackedPlayers.Remove(data);

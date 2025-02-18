@@ -1,14 +1,12 @@
-using System.Numerics;
 using ClickLib;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
-using ImGuiNET;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System.Numerics;
 
 namespace DailyRoutines.Modules;
 
@@ -92,7 +90,7 @@ public unsafe class AutoDeleteLetters : DailyModuleBase
         var addon = ContextMenu;
         if (addon == null || !IsAddonAndNodesReady(addon)) return false;
 
-        if (!ClickContextMenu(LuminaCache.GetRow<Addon>(431).Text.ExtractText())) return false;
+        if (!ClickContextMenu(LuminaCache.GetRow<Addon>(431)!.Value.Text.ExtractText())) return false;
 
         TaskHelper.DelayNext(100, "Delay_ClickDelete");
         TaskHelper.Enqueue(RightClickLetter);

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
@@ -11,7 +7,11 @@ using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 
 namespace DailyRoutines.Modules;
 
@@ -174,7 +174,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
                 SaveConfig(ModuleConfig);
         
             ImGui.SameLine();
-            if (ImGui.Checkbox(Lang.Get("AutoCheckFoodUsage-SendNotice"), ref ModuleConfig.SendNotice))
+            if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotice))
                 SaveConfig(ModuleConfig);
 
             ImGuiOm.HelpMarker(Lang.Get("AutoCheckFoodUsage-RefreshThresholdHelp"));
@@ -219,7 +219,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
                                               var icon = ImageHelper.GetIcon(x.Icon, SelectItemIsHQ);
 
                                               if (ImGuiOm.SelectableImageWithText(icon.ImGuiHandle, ScaledVector2(20f),
-                                                                                  x.Name, x.RowId == SelectedItem,
+                                                                                  x.Name.ExtractText(), x.RowId == SelectedItem,
                                                                                   ImGuiSelectableFlags.DontClosePopups))
                                               {
                                                   SelectedItem = SelectedItem == x.RowId ? 0 : x.RowId;
@@ -272,7 +272,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
 
             ImGui.TableNextColumn();
             ImGui.Selectable(
-                $"{LuminaCache.GetRow<Item>(preset.ItemID).Name.ExtractText()} {(preset.IsHQ ? "(HQ)" : "")}");
+                $"{LuminaCache.GetRow<Item>(preset.ItemID)!.Value.Name.ExtractText()} {(preset.IsHQ ? "(HQ)" : "")}");
 
             using (var context = ImRaii.ContextPopupItem("PresetContextMenu"))
             {
@@ -320,13 +320,13 @@ public class AutoCheckFoodUsage : DailyModuleBase
                                          },
                                          x => () =>
                                          {
-                                             var contentName = x.ContentFinderCondition?.Value?.Name?.ExtractText() ?? "";
+                                             var contentName = x.ContentFinderCondition.Value.Name.ExtractText() ?? "";
                                              ImGui.Text(contentName);
                                          }
                                      ],
                                      [
                                          x => x.ExtractPlaceName(),
-                                         x => x.ContentFinderCondition?.Value?.Name?.ExtractText() ?? ""
+                                         x => x.ContentFinderCondition.Value.Name.ExtractText() ?? ""
                                      ], true))
                 {
                     preset.Zones = zones;
@@ -413,7 +413,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
             remainingTime.TotalMinutes >= 25)
         {
             Chat(Lang.Get("AutoCheckFoodUsage-NoticeMessage",
-                                                   LuminaCache.GetRow<Item>(itemID).Name.ExtractText(),
+                                                   LuminaCache.GetRow<Item>(itemID)!.Value.Name.ExtractText(),
                                                    isHQ ? "HQ" : "NQ"));
             return true;
         }
@@ -444,7 +444,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
     {
         var original = CountdownInitHook.Original(a1, a2);
         if (ModuleConfig.EnabledCheckpoints[FoodCheckpoint.倒计时开始时] && !TaskHelper.IsBusy &&
-            !LuminaCache.GetRow<TerritoryType>(DService.ClientState.TerritoryType).IsPvpZone)
+            !LuminaCache.GetRow<TerritoryType>(DService.ClientState.TerritoryType)!.Value.IsPvpZone)
             TaskHelper.Enqueue(() => EnqueueFoodRefresh());
         return original;
     }
@@ -452,7 +452,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
     private void OnZoneChanged(ushort zone)
     {
         if (!ModuleConfig.EnabledCheckpoints[FoodCheckpoint.区域切换时] || TaskHelper.IsBusy ||
-            LuminaCache.GetRow<TerritoryType>(zone).IsPvpZone) return;
+            LuminaCache.GetRow<TerritoryType>(zone)!.Value.IsPvpZone) return;
 
         TaskHelper.Enqueue(() => EnqueueFoodRefresh(zone));
     }
@@ -462,7 +462,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
         if (!ModuleConfig.EnabledCheckpoints[FoodCheckpoint.条件变更时] || TaskHelper.IsBusy ||
             ((!value || !ModuleConfig.ConditionStart.Contains(flag)) &&
              (value  || !ModuleConfig.ConditionEnd.Contains(flag))) ||
-            LuminaCache.GetRow<TerritoryType>(DService.ClientState.TerritoryType).IsPvpZone) return;
+            LuminaCache.GetRow<TerritoryType>(DService.ClientState.TerritoryType)!.Value.IsPvpZone) return;
         TaskHelper.Enqueue(() => EnqueueFoodRefresh());
     }
 
@@ -490,7 +490,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
                            .Where(x => x.Enabled && 
                                        (zone == -1 || x.Zones.Count == 0 || x.Zones.Contains((uint)zone)) &&
                                        (x.ClassJobs.Count == 0 || 
-                                        x.ClassJobs.Contains(DService.ClientState.LocalPlayer.ClassJob.Id)) &&
+                                        x.ClassJobs.Contains(DService.ClientState.LocalPlayer.ClassJob.RowId)) &&
                                        instance->GetInventoryItemCount(x.ItemID, x.IsHQ) > 0)
                            .OrderByDescending(x => x.Zones.Contains((uint)zone))
                            .ToList();
@@ -536,5 +536,5 @@ public class AutoCheckFoodUsage : DailyModuleBase
         条件变更时,
     }
 
-    private static uint ToFoodRowID(uint id) => LuminaCache.GetRow<ItemFood>(LuminaCache.GetRow<Item>(id)?.ItemAction?.Value?.Data[1] ?? 0)?.RowId ?? 0;
+    private static uint ToFoodRowID(uint id) => LuminaCache.GetRow<ItemFood>(LuminaCache.GetRow<Item>(id)!.Value.ItemAction.Value.Data[1])?.RowId ?? 0;
 }

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
 using ClickLib;
 using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
@@ -13,7 +9,11 @@ using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace DailyRoutines.Modules;
 
@@ -52,7 +52,7 @@ public unsafe class AutoLogin : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        TaskHelper ??= new TaskHelper { TimeLimitMS = 10000 };
+        TaskHelper ??= new TaskHelper { TimeLimitMS = 60_000 };
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "_TitleMenu", OnTitleMenu);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "Dialogue", OnDialogue);
 
@@ -118,7 +118,7 @@ public unsafe class AutoLogin : DailyModuleBase
                 if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, Lang.Get("Add")))
                 {
                     if (SelectedCharaIndex is < 0 or > 7 || SelectedWorld == null) return;
-                    var info = new LoginInfo(SelectedWorld.RowId, SelectedCharaIndex);
+                    var info = new LoginInfo(SelectedWorld.Value.RowId, SelectedCharaIndex);
                     if (!ModuleConfig.LoginInfos.Contains(info))
                     {
                         ModuleConfig.LoginInfos.Add(info);
@@ -134,8 +134,9 @@ public unsafe class AutoLogin : DailyModuleBase
                 for (var i = 0; i < ModuleConfig.LoginInfos.Count; i++)
                 {
                     var info  = ModuleConfig.LoginInfos[i];
-                    var world = LuminaCache.GetRow<World>(info.WorldID);
-
+                    var worldNullable = LuminaCache.GetRow<World>(info.WorldID);
+                    if (worldNullable == null) continue;
+                    var world = worldNullable.Value;
                     using (ImRaii.PushColor(ImGuiCol.Text, i % 2 == 0 ? ImGuiColors.TankBlue : ImGuiColors.DalamudWhite))
                     {
                         ImGui.Selectable(
@@ -238,7 +239,7 @@ public unsafe class AutoLogin : DailyModuleBase
             case 1:
                 if (!int.TryParse(args, out var charaIndex0) || charaIndex0 < 0 || charaIndex0 > 8) return;
 
-                ManualWorldID = (ushort)DService.ClientState.LocalPlayer.HomeWorld.Id;
+                ManualWorldID = (ushort)DService.ClientState.LocalPlayer.HomeWorld.RowId;
                 ManualCharaIndex = charaIndex0;
                 break;
             case 2:
@@ -270,7 +271,7 @@ public unsafe class AutoLogin : DailyModuleBase
 
         var click = new ClickSelectYesNo();
         var title = Marshal.PtrToStringUTF8((nint)SelectYesno->AtkValues[0].String);
-        if (!title.Contains(LuminaCache.GetRow<Addon>(115).Text.ExtractText()))
+        if (!title.Contains(LuminaCache.GetRow<Addon>(115)!.Value.Text.ExtractText()))
         {
             click.No();
             return false;
@@ -299,7 +300,8 @@ public unsafe class AutoLogin : DailyModuleBase
     private void OnDialogue(AddonEvent type, AddonArgs args)
     {
         if (!Throttler.Throttle("AutoLogin-OnDialogue", 5000)) return;
-        
+        if (InterruptByConflictKey(TaskHelper, this)) return;
+
         TaskHelper.Abort();
         TaskHelper.Enqueue(() =>
         {

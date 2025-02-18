@@ -1,9 +1,8 @@
-﻿using System.Collections.Generic;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using System.Collections.Generic;
 
 namespace DailyRoutines.Modules;
 

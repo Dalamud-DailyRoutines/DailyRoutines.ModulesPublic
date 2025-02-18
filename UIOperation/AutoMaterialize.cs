@@ -1,7 +1,4 @@
-using System.Collections.Generic;
-using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
@@ -11,8 +8,9 @@ using Dalamud.Hooking;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using ImGuiNET;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System.Collections.Generic;
+using System.Numerics;
 
 namespace DailyRoutines.Modules;
 
@@ -26,11 +24,11 @@ public unsafe class AutoMaterialize : DailyModuleBase
     };
 
     // 0 - 成功; 3 - 获取 InventoryType 或 InventorySlot 失败; 4 - 物品为空或不符合条件; 34 - 当前状态无法使用; 
-    private static readonly CompSig ExtractMateriaSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 41 0F BF F8");
+    private static readonly CompSig ExtractMateriaSig = new("E8 ?? ?? ?? ?? 83 7E 20 00 75 5A");
     private delegate int ExtractMateriaDelegate(nint a1, InventoryType type, uint slot);
     private static Hook<ExtractMateriaDelegate>? ExtractMateriaHook;
 
-    private static readonly CompSig MaterializeController = new("48 8D 0D ?? ?? ?? ?? 8B 16 E8 ?? ?? ?? ?? 83 7B");
+    private static readonly CompSig MaterializeController = new("48 8D 0D ?? ?? ?? ?? 8B D0 E8 ?? ?? ?? ?? 83 7E");
 
     private static readonly InventoryType[] ArmoryInventories =
     [
@@ -128,8 +126,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
                 if (slot == null || slot->ItemId == 0) continue;
                 if (slot->Spiritbond != 10_000) continue;
 
-                var itemData = LuminaCache.GetRow<Item>(slot->ItemId);
-                if (itemData == null) continue;
+                if (!LuminaCache.TryGetRow<Item>(slot->ItemId, out var itemData)) continue;
 
                 var itemName = itemData.Name.ExtractText();
                 TaskHelper.Enqueue(() => ExtractMateria(type, (uint)i) == 0, $"开始精炼单件装备 {itemName}({slot->ItemId})");

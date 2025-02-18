@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -10,7 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
 
@@ -78,7 +78,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         { 7863, new([new(2, DetectType.Target)]) },
         { 7540, new([new(2, DetectType.Target)]) },
         { 16, new([new(2, DetectType.Target)]) },
-        { 29064, new([new(1343, DetectType.Target)]) },
+        { 29064, new([new(1343, DetectType.Target), new(3054, DetectType.Target), new(3248, DetectType.Target)]) },
         // 真北
         { 7546, new([new(1250, DetectType.Self)]) },
         // 亲疏自行 (战士)
@@ -137,6 +137,14 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         { 29228, new([new(3054, DetectType.Target)]) },
         // 献身
         { 29081, new([new(3054, DetectType.Target)]) },
+        // 均衡
+        { 29258, new([new(3107, DetectType.Self)]) },
+        // 心关
+        { 29264, new([new(2872, DetectType.Target)]) },
+        // 默者的夜曲
+        { 29395, new([new(3054, DetectType.Target), new(3248, DetectType.Target)]) },
+        // 星遁天诛
+        { 29515, new([new(1302, DetectType.Target), new(3039, DetectType.Target)]) },
     };
 
     private static readonly Throttler<uint> NotificationThrottler = new();
@@ -179,64 +187,61 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
 
         ImGui.Spacing();
 
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Action")}:");
-
-        ImGui.SameLine();
-        using var combo = ImRaii.Combo("###ActionCombo",
-                                       $"{ModuleConfig.EnabledActions.Count(x => x.Value)} / {ModuleConfig.EnabledActions.Count}",
-                                       ImGuiComboFlags.HeightLarge);
-        if (!combo) return;
-
-        var tableSize = ImGui.GetContentRegionAvail();
-        using var table = ImRaii.Table("###ActionTable", 3, ImGuiTableFlags.Borders, tableSize);
-        if (!table) return;
-
-        ImGui.TableSetupColumn("名称", ImGuiTableColumnFlags.WidthStretch, 30);
-        ImGui.TableSetupColumn("一层状态", ImGuiTableColumnFlags.WidthStretch, 30);
-        ImGui.TableSetupColumn("二层状态", ImGuiTableColumnFlags.WidthStretch, 30);
-
-        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-
-        ImGui.TableNextColumn();
-        ImGui.Text(GetLoc("Action"));
-
-        ImGui.TableNextColumn();
-        ImGui.Text(GetLoc("AutoPreventDuplicateStatus-RelatedStatus"));
-
-        ImGui.TableNextColumn();
-        ImGui.Text($"{GetLoc("AutoPreventDuplicateStatus-RelatedStatus")} 2");
-
-        foreach (var actionInfo in DuplicateActions)
+        using (var node = ImRaii.TreeNode($"{GetLoc("Action")}: {ModuleConfig.EnabledActions.Count(x => x.Value)} / {ModuleConfig.EnabledActions.Count}"))
         {
-            if (!LuminaCache.TryGetRow<Action>(actionInfo.Key, out var result)) continue;
-            ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            var isActionEnabled = ModuleConfig.EnabledActions[actionInfo.Key];
-            if (ImGui.Checkbox($"###Is{actionInfo.Key}Enabled", ref isActionEnabled))
+            if (node)
             {
-                ModuleConfig.EnabledActions[actionInfo.Key] ^= true;
-                SaveConfig(ModuleConfig);
-            }
+                var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
+                using var table = ImRaii.Table("###ActionTable", 3, ImGuiTableFlags.Borders, tableSize);
+                if (!table) return;
 
-            ImGui.SameLine();
-            ImGui.Spacing();
+                ImGui.TableSetupColumn("名称",   ImGuiTableColumnFlags.WidthStretch, 30);
+                ImGui.TableSetupColumn("一层状态", ImGuiTableColumnFlags.WidthStretch, 30);
+                ImGui.TableSetupColumn("二层状态", ImGuiTableColumnFlags.WidthStretch, 30);
 
-            ImGui.SameLine();
-            ImGuiOm.TextImage(result.Name.ExtractText(), ImageHelper.GetIcon(result.Icon).ImGuiHandle,
-                              ScaledVector2(20f));
+                ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
 
-            ImGui.TableNextColumn();
-            ImGui.Spacing();
-            foreach (var status in actionInfo.Value.Statuses)
-                DrawDuplicateStatus(status);
+                ImGui.TableNextColumn();
+                ImGui.Text(GetLoc("Action"));
 
-            ImGui.TableNextColumn();
-            if (actionInfo.Value.SecondStatuses != null)
-            {
-                ImGui.Spacing();
-                foreach (var status in actionInfo.Value.SecondStatuses)
-                    DrawDuplicateStatus(status);
+                ImGui.TableNextColumn();
+                ImGui.Text(GetLoc("AutoPreventDuplicateStatus-RelatedStatus"));
+
+                ImGui.TableNextColumn();
+                ImGui.Text($"{GetLoc("AutoPreventDuplicateStatus-RelatedStatus")} 2");
+
+                foreach (var actionInfo in DuplicateActions)
+                {
+                    if (!LuminaCache.TryGetRow<Action>(actionInfo.Key, out var result)) continue;
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+                    var isActionEnabled = ModuleConfig.EnabledActions[actionInfo.Key];
+                    if (ImGui.Checkbox($"###Is{actionInfo.Key}Enabled", ref isActionEnabled))
+                    {
+                        ModuleConfig.EnabledActions[actionInfo.Key] ^= true;
+                        SaveConfig(ModuleConfig);
+                    }
+
+                    ImGui.SameLine();
+                    ImGui.Spacing();
+
+                    ImGui.SameLine();
+                    ImGuiOm.TextImage(result.Name.ExtractText(), ImageHelper.GetIcon(result.Icon).ImGuiHandle,
+                                      ScaledVector2(20f));
+                    
+                    ImGui.TableNextColumn();
+                    ImGui.Spacing();
+                    foreach (var status in actionInfo.Value.Statuses)
+                        DrawDuplicateStatus(status);
+
+                    ImGui.TableNextColumn();
+                    if (actionInfo.Value.SecondStatuses != null)
+                    {
+                        ImGui.Spacing();
+                        foreach (var status in actionInfo.Value.SecondStatuses)
+                            DrawDuplicateStatus(status);
+                    }
+                }
             }
         }
     }
@@ -270,7 +275,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         var actionData = LuminaCache.GetRow<Action>(adjustedActionID);
         if (actionData == null) return;
 
-        var canTargetSelf = actionData.CanTargetSelf;
+        var canTargetSelf = actionData.Value.CanTargetSelf;
         // 雪仇
         if (adjustedActionID == 7535) canTargetSelf = false;
 
@@ -284,7 +289,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         {
             if (ModuleConfig.SendNotification && NotificationThrottler.Throttle(adjustedActionID, 1_000))
                 NotificationInfo(GetLoc("AutoPreventDuplicateStatus-PreventedNotification",
-                                                     actionData.Name.ExtractText(), adjustedActionID));
+                                                     actionData.Value.Name.ExtractText(), adjustedActionID));
 
             isPrevented = true;
         }

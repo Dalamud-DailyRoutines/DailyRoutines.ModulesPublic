@@ -28,7 +28,7 @@ public unsafe class AutoEnableAttack : DailyModuleBase
         if (actionType is not ActionType.Action || targetID == 0xE000_0000) return;
         if (DService.ClientState.IsPvP || !DService.Condition[ConditionFlag.InCombat] ||
             DService.Condition[ConditionFlag.Casting]) return;
-        if (UIState.Instance()->WeaponState.IsAutoAttacking) return;
+        if (UIState.Instance()->WeaponState.AutoAttackState.IsAutoAttacking) return;
         
         ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.AutoAttack, 1, (int)targetID);
     }

@@ -1,17 +1,14 @@
+using DailyRoutines.Abstracts;
+using Dalamud.Hooking;
+using Dalamud.Interface;
+using Dalamud.Interface.Utility.Raii;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
-using DailyRoutines.Managers;
-using Dalamud.Hooking;
-using Dalamud.Interface;
-using Dalamud.Interface.Utility.Raii;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using ImGuiNET;
-using Lumina.Excel.GeneratedSheets;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace DailyRoutines.Modules;
@@ -237,8 +234,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
             {
                 foreach (var zone in preset.Zone)
                 {
-                    var zoneData = LuminaCache.GetRow<TerritoryType>(zone);
-                    if (zoneData == null) continue;
+                    if (!LuminaCache.TryGetRow<TerritoryType>(zone, out var zoneData)) continue;
 
                     ImGui.Text($"{zoneData.ExtractPlaceName()}({zoneData.RowId})");
                     ImGui.SameLine();
@@ -280,8 +276,8 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
             using var group = ImRaii.Group();
             foreach (var status in onlineStatus)
             {
-                var row = LuminaCache.GetRow<OnlineStatus>(status);
-                if (row == null || !DService.Texture.TryGetFromGameIcon(new(row.Icon), out var texture)) continue;
+                if (LuminaCache.TryGetRow<OnlineStatus>(status, out var row)) continue;
+                if (!DService.Texture.TryGetFromGameIcon(new(row.Icon), out var texture)) continue;
 
                 using (ImRaii.Group())
                 {

@@ -1,9 +1,9 @@
-using System.Collections.Generic;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System.Collections.Generic;
 
 namespace DailyRoutines.Modules;
 
@@ -28,9 +28,10 @@ public class AutoSortItems : DailyModuleBase
     public override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
-        TaskHelper   ??= new TaskHelper { TimeLimitMS = 30_000 };
+        TaskHelper   ??= new TaskHelper { TimeLimitMS = 15_000 };
         
         DService.ClientState.TerritoryChanged += OnZoneChanged;
+        OnZoneChanged(DService.ClientState.TerritoryType);
     }
     
     public override void ConfigUI()
@@ -53,9 +54,9 @@ public class AutoSortItems : DailyModuleBase
         
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         ImGui.TableNextColumn();
-        ImGui.Text(LuminaCache.GetRow<Addon>(12210).Text.ExtractText());
+        ImGui.Text(LuminaCache.GetRow<Addon>(12210)!.Value.Text.ExtractText());
 
-        var typeText = LuminaCache.GetRow<Addon>(9448).Text.ExtractText();
+        var typeText = LuminaCache.GetRow<Addon>(9448)!.Value.Text.ExtractText();
         
         DrawTableRow("兵装库 ID", "ID", ref ModuleConfig.ArmouryChestId, sortOptions);
         DrawTableRow("兵装库等级", GetLoc("Level"), ref ModuleConfig.ArmouryItemLevel, sortOptions);
@@ -63,7 +64,7 @@ public class AutoSortItems : DailyModuleBase
         
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         ImGui.TableNextColumn();
-        ImGui.Text(LuminaCache.GetRow<Addon>(12209).Text.ExtractText());
+        ImGui.Text(LuminaCache.GetRow<Addon>(12209)!.Value.Text.ExtractText());
         
         DrawTableRow("背包 HQ", "HQ", ref ModuleConfig.InventoryHq, sortOptions);
         DrawTableRow("背包 ID", "ID", ref ModuleConfig.InventoryId, sortOptions);
@@ -100,14 +101,16 @@ public class AutoSortItems : DailyModuleBase
     
     private void OnZoneChanged(ushort zone)
     {
-        if (zone <= 0) return;
         TaskHelper.Abort();
+        
+        if (zone == 0) return;
         TaskHelper.Enqueue(CheckCanSort);
     }
 
     private bool? CheckCanSort()
     {
         if (BetweenAreas || !IsScreenReady() || OccupiedInEvent) return false;
+        
         var isInNormalConditions = DService.Condition[ConditionFlag.NormalConditions] || DService.Condition[ConditionFlag.Mounted];
         if (!isInNormalConditions || !IsInNormalMap())
         {
@@ -121,20 +124,23 @@ public class AutoSortItems : DailyModuleBase
 
     private static unsafe bool IsInNormalMap()
     {
-        var currentMapData = LuminaCache.GetRow<Map>(DService.ClientState.MapId);
-        if (currentMapData == null) return false;
-        if (currentMapData.TerritoryType.Row == 0 ||
-            currentMapData.TerritoryType.Value.ContentFinderCondition.Row != 0) return false;
+        var currentMapDataNullable = LuminaCache.GetRow<Map>(DService.ClientState.MapId);
+        if (currentMapDataNullable == null) return false;
+        var currentMapData = currentMapDataNullable.Value;
+        if (currentMapData.TerritoryType.RowId == 0 ||
+            currentMapData.TerritoryType.Value.ContentFinderCondition.RowId != 0) return false;
 
         var isPVP = GameMain.IsInPvPArea() || GameMain.IsInPvPInstance();
         var contentData =
             LuminaCache.GetRow<ContentFinderCondition>(GameMain.Instance()->CurrentContentFinderConditionId);
 
-        return !isPVP && (contentData == null || !InvalidContentTypes.Contains(contentData.ContentType.Row));
+        return !isPVP && (contentData == null || !InvalidContentTypes.Contains(contentData.Value.ContentType.RowId));
     }
 
-    private void SendSortCommand()
+    private static bool? SendSortCommand()
     {
+        if (BetweenAreas || !IsScreenReady() || OccupiedInEvent) return false;
+        
         SendSortCondition("armourychest", "id", ModuleConfig.ArmouryChestId);
         SendSortCondition("armourychest", "itemlevel", ModuleConfig.ArmouryItemLevel);
         SendSortCondition("armourychest", "category", ModuleConfig.ArmouryCategory);
@@ -155,7 +161,7 @@ public class AutoSortItems : DailyModuleBase
         if (ModuleConfig.SendChat)
             Chat(GetLoc("AutoSortItems-SortMessage"));
 
-        return;
+        return true;
 
         void SendSortCondition(string target, string condition, int setting)
             => ChatHelper.Instance.SendMessage($"/itemsort condition {target} {condition} {sortOptionsCommand[setting]}");

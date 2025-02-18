@@ -1,4 +1,3 @@
-using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
@@ -8,7 +7,8 @@ using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System.Numerics;
 
 namespace DailyRoutines.Modules;
 
@@ -82,12 +82,13 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
             ImGui.SameLine();
             using (ImRaii.Disabled(!buttonNode->NodeFlags.HasFlag(NodeFlags.Enabled)))
             {
-                if (ImGui.Button(LuminaCache.GetRow<Addon>(531).Text.ExtractText()))
+                if (ImGui.Button(LuminaCache.GetRow<Addon>(531)!.Value.Text.ExtractText()))
                     HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
             }
             
             ImGui.SameLine();
-            if (ImGui.Button(LuminaCache.GetRow<InclusionShop>(3801094).Unknown2.ExtractText()))
+            // 这个Unknown2没有extractText
+            if (ImGui.Button(LuminaCache.GetRow<InclusionShop>(3801094)!.Value.Unknown2.ToString()))
             {
                 TaskHelper.Enqueue(() =>
                 {

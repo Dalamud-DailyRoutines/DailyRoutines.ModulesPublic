@@ -14,7 +14,7 @@ public unsafe class AutoRefreshMarketSearchResult : DailyModuleBase
         Category = ModuleCategories.UIOptimization,
     };
 
-    private static readonly CompSig HandlePricesSig = new("E8 ?? ?? ?? ?? 8B 3F 85 FF");
+    private static readonly CompSig HandlePricesSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F9 0F B6 EA");
     private delegate nint HandlePricesDelegate(InfoProxyItemSearch* infoProxy, void* unk1, void* unk2);
     private static Hook<HandlePricesDelegate>? HandlePricesHook;
 

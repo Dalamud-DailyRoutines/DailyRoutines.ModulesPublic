@@ -69,7 +69,7 @@ public class AutoRequestNecessity : DailyModuleBase
         EnqueueRequest(ExecuteCommandFlag.RequestGSLordofVerminion);
     }
     
-    private void OnLogout() => TaskHelper.Abort();
+    private void OnLogout(int type, int code) => TaskHelper?.Abort();
 
     private void EnqueueRequest(ExecuteCommandFlag command, 
                                        int param1 = 0, int param2 = 0, int param3 = 0, int param4 = 0)
@@ -86,7 +86,8 @@ public class AutoRequestNecessity : DailyModuleBase
 
     public override void Uninit()
     {
-        DService.ClientState.Login -= OnLogin;
+        DService.ClientState.Login  -= OnLogin;
+        DService.ClientState.Logout -= OnLogout;
         
         base.Uninit();
     }

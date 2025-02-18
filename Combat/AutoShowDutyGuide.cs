@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using DailyRoutines.Windows;
@@ -34,15 +32,9 @@ public class AutoShowDutyGuide : DailyModuleBase
     private static uint CurrentDuty;
     private static ISharedImmediateTexture? NoviceIcon;
 
-    private static string HintText = string.Empty;
     private static List<string> GuideText = [];
 
     private static bool IsOnDebug;
-
-    private readonly Dictionary<ushort, Func<bool?>> HintsContent = new()
-    {
-        { 1036, GetSastashaHint },
-    };
 
     public override void Init()
     {
@@ -79,7 +71,6 @@ public class AutoShowDutyGuide : DailyModuleBase
                 if (IsOnDebug) OnZoneChange(172);
                 else
                 {
-                    HintText = string.Empty;
                     GuideText.Clear();
                     CurrentDuty = 0;
                 }
@@ -97,7 +88,6 @@ public class AutoShowDutyGuide : DailyModuleBase
         {
             Overlay.IsOpen = false;
             GuideText.Clear();
-            HintText = string.Empty;
             return;
         }
 
@@ -117,14 +107,6 @@ public class AutoShowDutyGuide : DailyModuleBase
 
             using (ImRaii.TextWrapPos(ImGui.GetWindowWidth()))
             {
-                if (!string.IsNullOrWhiteSpace(HintText))
-                {
-                    using (FontManager.GetUIFont(ModuleConfig.FontScale * 0.8f).Push())
-                        ImGui.Text($"{GetLoc("AutoShowDutyGuide-DutyExtraGuide")}:");
-                    ImGui.Text($"{HintText}");
-                    ImGui.Separator();
-                }
-
                 for (var i = 1; i < GuideText.Count; i++)
                 {
                     var       text = GuideText[i];
@@ -152,42 +134,12 @@ public class AutoShowDutyGuide : DailyModuleBase
         if (!PresetData.Contents.TryGetValue(territory, out var content))
         {
             CurrentDuty = 0;
-            HintText = string.Empty;
             GuideText.Clear();
             Overlay.IsOpen = false;
             return;
         }
 
-        if (HintsContent.TryGetValue(territory, out var func))
-        {
-            TaskHelper.DelayNext(500);
-            TaskHelper.Enqueue(func);
-        }
-
-        Task.Run(async () => await GetDutyGuide(content.RowId), CancelSource.Token);
-    }
-
-    private static bool? GetSastashaHint()
-    {
-        if (BetweenAreas) return false;
-        if (!BoundByDuty) return true;
-
-        var blueObj =
-            DService.ObjectTable.FirstOrDefault(x => x.IsValid() && x.IsTargetable && x.DataId == (uint)Sastasha.蓝珊瑚);
-
-        var redObj = DService.ObjectTable.FirstOrDefault(
-            x => x.IsValid() && x.IsTargetable && x.DataId == (uint)Sastasha.红珊瑚);
-
-        var greenObj =
-            DService.ObjectTable.FirstOrDefault(x => x.IsValid() && x.IsTargetable && x.DataId == (uint)Sastasha.绿珊瑚);
-
-        if (blueObj == null && redObj == null && greenObj == null) return false;
-
-        if (blueObj != null) HintText = $"正确机关: {Sastasha.蓝珊瑚}";
-        if (redObj != null) HintText = $"正确机关: {Sastasha.红珊瑚}";
-        if (greenObj != null) HintText = $"正确机关: {Sastasha.绿珊瑚}";
-
-        return true;
+        DService.Framework.RunOnTick(() => GetDutyGuide(content.RowId), default, default, CancelSource.Token);
     }
 
     private async Task GetDutyGuide(uint dutyID)
@@ -219,13 +171,6 @@ public class AutoShowDutyGuide : DailyModuleBase
         CancelSource = null;
         
         base.Uninit();
-    }
-
-    private enum Sastasha
-    {
-        蓝珊瑚 = 2000212,
-        红珊瑚 = 2001548,
-        绿珊瑚 = 2001549,
     }
 
     private class Config : ModuleConfiguration

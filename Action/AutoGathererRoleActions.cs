@@ -39,7 +39,7 @@ public class AutoGathererRoleActions : DailyModuleBase
 
         DService.ClientState.ClassJobChanged += OnJobChanged;
         if (DService.ClientState.LocalPlayer != null)
-            OnJobChanged(DService.ClientState.LocalPlayer.ClassJob.Id);
+            OnJobChanged(DService.ClientState.LocalPlayer.ClassJob.RowId);
     }
 
     private unsafe void OnJobChanged(uint jobID)

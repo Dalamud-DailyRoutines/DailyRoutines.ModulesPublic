@@ -1,12 +1,11 @@
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
 using Dalamud.Hooking;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility.Raii;
-using Action = Lumina.Excel.GeneratedSheets.Action;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.Modules;
 
@@ -109,13 +108,13 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
 
         ImGui.SameLine();
         using (ImRaii.Disabled(SelectedCustomAction == null ||
-                               ModuleConfig.CustomActionName.ContainsKey(SelectedCustomAction.RowId)))
+                               ModuleConfig.CustomActionName.ContainsKey(SelectedCustomAction.Value.RowId)))
         {
             if (ImGuiOm.ButtonIcon("##新增", FontAwesomeIcon.Plus))
             {
                 if (SelectedCustomAction != null)
                 {
-                    ModuleConfig.CustomActionName.TryAdd(SelectedCustomAction.RowId, string.Empty);
+                    ModuleConfig.CustomActionName.TryAdd(SelectedCustomAction.Value.RowId, string.Empty);
                     ModuleConfig.Save(this);
                 }
             }
@@ -132,7 +131,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
             {
                 using var id = ImRaii.PushId($"ActionCustomName_{actionNamePair.Key}");
 
-                var data       = LuminaCache.GetRow<Action>(actionNamePair.Key);
+                if (!LuminaCache.TryGetRow<Action>(actionNamePair.Key, out var data)) continue;
                 var actionIcon = DService.Texture.GetFromGameIcon(new(data.Icon)).GetWrapOrDefault();
                 if (actionIcon == null) continue;
 
@@ -191,7 +190,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
 
             var actionID   = effectHeader->ActionId;
             var actionData = LuminaCache.GetRow<Action>(actionID);
-            if (actionData.ActionCategory.Row == 1) return; // 自动攻击
+            if (actionData == null || actionData.Value.ActionCategory.RowId == 1) return; // 自动攻击
 
             switch (ModuleConfig.WorkMode)
             {
@@ -206,7 +205,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
             var actionName = ModuleConfig.CustomActionName.TryGetValue(actionID, out var customName) &&
                              !string.IsNullOrWhiteSpace(customName)
                                  ? customName
-                                 : actionData.Name.ExtractText();
+                                 : actionData.Value.Name.ExtractText();
 
             var message = effectArray->Param0 switch
             {

@@ -1,5 +1,4 @@
-using DailyRoutines.Helpers;
-using DailyRoutines.Managers;
+using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
@@ -7,14 +6,12 @@ using FFXIVClientStructs.FFXIV.Client.System.Memory;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ImGuiNET;
 using Lumina.Excel;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using DailyRoutines.Abstracts;
 
 namespace DailyRoutines.Modules;
 
@@ -333,7 +330,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
             return;
 
         var mark = (int)(markIndex + 1);
-        if (mark <= 0 || mark > MarkerSheet.RowCount)
+        if (mark <= 0 || mark > MarkerSheet.Count)
         {
             FindMember(entityId, RemoveMemberMark);
             return;

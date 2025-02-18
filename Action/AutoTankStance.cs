@@ -1,11 +1,9 @@
-using System.Collections.Generic;
-using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
-using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using ImGuiNET;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace DailyRoutines.Modules;
 
@@ -86,9 +84,9 @@ public class AutoTankStance : DailyModuleBase
         if (!IsScreenReady()) return false;
 
         var player = DService.ClientState.LocalPlayer;
-        if (player == null || player.ClassJob.Id == 0 || !player.IsTargetable) return false;
+        if (player == null || player.ClassJob.RowId == 0 || !player.IsTargetable) return false;
 
-        var job = player.ClassJob.Id;
+        var job = player.ClassJob.RowId;
         if (!TankStanceActions.TryGetValue(job, out var actionID)) return true;
 
         if (OccupiedInEvent) return false;
@@ -106,7 +104,7 @@ public class AutoTankStance : DailyModuleBase
         HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
 
         return PresetData.Contents.TryGetValue(DService.ClientState.TerritoryType, out var zoneData) &&
-               !DService.ClientState.IsPvP && !zoneData.PvP && !InvalidContentTypes.Contains(zoneData.ContentType.Row);
+               !DService.ClientState.IsPvP && !zoneData.PvP && !InvalidContentTypes.Contains(zoneData.ContentType.RowId);
     }
 
     public override void Uninit()

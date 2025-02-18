@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
@@ -7,7 +5,9 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace DailyRoutines.Modules;
 
@@ -25,7 +25,7 @@ public class AutoPreserveCollectable : DailyModuleBase
 
     public override void Init()
     {
-        PreserveMessage = (LuminaCache.GetRow<Addon>(1463).Text.ToDalamudString().Payloads[0] as TextPayload).Text;
+        PreserveMessage = (LuminaCache.GetRow<Addon>(1463)!.Value.Text.ToDalamudString().Payloads[0] as TextPayload).Text;
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);
     }
@@ -36,7 +36,7 @@ public class AutoPreserveCollectable : DailyModuleBase
         if (addon == null) return;
 
         var localPlayer = DService.ClientState.LocalPlayer;
-        if (localPlayer == null || !GatherJobs.Contains(localPlayer.ClassJob.Id)) return;
+        if (localPlayer == null || !GatherJobs.Contains(localPlayer.ClassJob.RowId)) return;
 
         var title = Marshal.PtrToStringUTF8((nint)addon->AtkValues[0].String);
         if (string.IsNullOrWhiteSpace(title) || !title.Contains(PreserveMessage)) return;

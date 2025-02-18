@@ -130,7 +130,7 @@ public class AutoPeloton : DailyModuleBase
     {
         if (BetweenAreas || !IsScreenReady() || OccupiedInEvent) return Cycle(1_000);
         if (DService.ClientState.LocalPlayer is not { } localPlayer) return Cycle(1_000);
-        if (!s_ClassJobArr.Contains(localPlayer.ClassJob.Id)) return true;
+        if (!s_ClassJobArr.Contains(localPlayer.ClassJob.RowId)) return true;
         if (!IsActionUnlocked(s_PelotoningActionId)) return true;
 
         if (Config.DisableInWalk && Control.Instance()->IsWalking) return Cycle(1_000);

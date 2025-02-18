@@ -1,8 +1,6 @@
-using System;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Hooking;
-using ImGuiNET;
+using System;
 
 namespace DailyRoutines.Modules;
 

@@ -1,8 +1,8 @@
-using System;
-using System.Linq;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using System;
+using System.Linq;
 
 namespace DailyRoutines.Modules;
 

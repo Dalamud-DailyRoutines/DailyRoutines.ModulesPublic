@@ -1,10 +1,11 @@
+using System.Collections.Generic;
 using DailyRoutines.Abstracts;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.Modules;
 
-public class AutoHideNeedlessPopups : DailyModuleBase
+public unsafe class AutoHideNeedlessPopups : DailyModuleBase
 {
     public override ModuleInfo Info => new()
     {
@@ -13,28 +14,32 @@ public class AutoHideNeedlessPopups : DailyModuleBase
         Category = ModuleCategories.UIOptimization,
     };
 
-    private static readonly string[] AddonNames = 
+    private static readonly HashSet<string> AddonNames = 
     [
         "_NotificationCircleBook", "AchievementInfo", "RecommendList", "PlayGuide", "HowTo", "WebLauncher",
         "LicenseViewer"
     ];
 
+    private static readonly CompSig AtkUnitBaseDrawSig = new("48 83 EC ?? F6 81 ?? ?? ?? ?? ?? 4C 8B C1 0F 84");
+    private delegate void AtkUnitBaseDrawDelegate(AtkUnitBase* addon);
+    private static Hook<AtkUnitBaseDrawDelegate>? AtkUnitBaseDrawHook;
+
     public override void Init()
     {
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreDraw, AddonNames, OnAddon);
+        AtkUnitBaseDrawHook ??= AtkUnitBaseDrawSig.GetHook<AtkUnitBaseDrawDelegate>(AtkUnitBaseDrawDetour);
+        AtkUnitBaseDrawHook.Enable();
     }
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs args)
+    private static void AtkUnitBaseDrawDetour(AtkUnitBase* addon)
     {
-        var addon = args.Addon.ToAtkUnitBase();
         if (addon == null) return;
-
+        if (!AddonNames.Contains(addon->NameString))
+        {
+            AtkUnitBaseDrawHook.Original(addon);
+            return;
+        }
+        
         addon->Close(false);
         addon->FireCloseCallback();
-    }
-
-    public override void Uninit()
-    {
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, AddonNames, OnAddon);
     }
 }

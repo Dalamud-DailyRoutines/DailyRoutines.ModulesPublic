@@ -1,12 +1,12 @@
-using System;
-using System.Collections.Generic;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
 
 namespace DailyRoutines.Modules;
 
@@ -44,7 +44,7 @@ public unsafe class AutoMount : DailyModuleBase
         ImGui.SameLine();
         ImGui.Text(ModuleConfig.SelectedMount == 0
                        ? GetLoc("AutoMount-RandomMount")
-                       : LuminaCache.GetRow<Mount>(ModuleConfig.SelectedMount).Singular.ExtractText());
+                       : LuminaCache.GetRow<Mount>(ModuleConfig.SelectedMount)!.Value.Singular.ExtractText());
 
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoMount-SelecteMount")}:");
@@ -53,7 +53,7 @@ public unsafe class AutoMount : DailyModuleBase
         ImGui.SetNextItemWidth(250f * GlobalFontScale);
         if (MountSelectCombo(ref SelectedMountRow, ref MountSearchInput))
         {
-            ModuleConfig.SelectedMount = SelectedMountRow.RowId;
+            ModuleConfig.SelectedMount = SelectedMountRow!.Value.RowId;
             SaveConfig(ModuleConfig);
         }
 

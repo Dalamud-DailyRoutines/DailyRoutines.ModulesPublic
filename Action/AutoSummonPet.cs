@@ -4,7 +4,7 @@ using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
 
@@ -56,7 +56,7 @@ public class AutoSummonPet : DailyModuleBase
         if (BetweenAreas || !IsScreenReady() || DService.Condition[ConditionFlag.Casting] ||
             DService.ClientState.LocalPlayer is not { IsTargetable: true } localPlayer) return false;
 
-        if (!SummonActions.TryGetValue(localPlayer.ClassJob.Id, out var actionID))
+        if (!SummonActions.TryGetValue(localPlayer.ClassJob.RowId, out var actionID))
         {
             TaskHelper.Abort();
             return true;
@@ -81,9 +81,9 @@ public class AutoSummonPet : DailyModuleBase
 
         var isPVP = GameMain.IsInPvPArea() || GameMain.IsInPvPInstance();
         var contentData = LuminaCache.GetRow<ContentFinderCondition>(GameMain.Instance()->CurrentContentFinderConditionId);
-        if (contentData.RowId == 0) return false;
+        if (contentData == null || contentData.Value.RowId == 0) return false;
         
-        return !isPVP && !InvalidContentTypes.Contains(contentData.ContentType.Row);
+        return !isPVP && !InvalidContentTypes.Contains(contentData.Value.ContentType.RowId);
     }
 
     public override void Uninit()

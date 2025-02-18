@@ -34,7 +34,7 @@ public class AutoPetFollow : DailyModuleBase
     {
         if (flag is not ConditionFlag.InCombat || value) return;
 
-        if (DService.ClientState.LocalPlayer is not { ClassJob.Id: 26 or 27 or 28 } player) return;
+        if (DService.ClientState.LocalPlayer is not { ClassJob.RowId: 26 or 27 or 28 } player) return;
 
         var isPetSummoned = CharacterManager.Instance()->LookupPetByOwnerObject((BattleChara*)player.Address) != null;
         if (!isPetSummoned) return;
