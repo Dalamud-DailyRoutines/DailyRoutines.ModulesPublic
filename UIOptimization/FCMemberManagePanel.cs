@@ -543,7 +543,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
                 JobIcon = data.Job == 0 ? null : DService.Texture.GetFromGameIcon(new(62100U + data.Job)),
                 Job     = data.Job == 0 ? string.Empty : LuminaCache.GetRow<ClassJob>(data.Job)?.Abbreviation.ExtractText(),
                 Location = data.Location != 0
-                               ? LuminaCache.TryGetRow<TerritoryType>(data.Location, out var zone) ? zone.Name.ExtractText() : lastOnlineTime
+                               ? LuminaCache.TryGetRow<TerritoryType>(data.Location, out var zone) ? zone.PlaceName.ExtractText() : lastOnlineTime
                                : lastOnlineTime,
             };
         }
