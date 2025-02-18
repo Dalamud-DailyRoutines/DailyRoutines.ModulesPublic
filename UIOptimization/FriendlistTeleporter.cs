@@ -3,7 +3,8 @@ using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using System.Linq;
+using OmenTools.Helpers;
+using static OmenTools.DService;
 
 namespace DailyRoutines.Modules;
 
@@ -23,21 +24,27 @@ public class FriendlistTeleporter : DailyModuleBase
 
     public override void Init()
     {
-        DService.ContextMenu.OnMenuOpened += OnMenuOpen;
+        ContextMenu.OnMenuOpened += OnMenuOpen;
     }
 
     public override void Uninit()
     {
-        DService.ContextMenu.OnMenuOpened -= OnMenuOpen;
+        ContextMenu.OnMenuOpened -= OnMenuOpen;
         base.Uninit();
     }
 
     private static void OnMenuOpen(IMenuOpenedArgs args)
     {
-        if (TeleportItem.IsDisplay(args))
-            args.AddMenuItem(TeleportItem.Get());
-        if (ModuleManager.IsModuleEnabled("WorldTravelCommand") == true && CrossWorldItem.IsDisplay(args))
-            args.AddMenuItem(CrossWorldItem.Get());
+        try
+        {
+            if (TeleportItem.IsDisplay(args))
+                args.AddMenuItem(TeleportItem.Get());
+        }
+        catch (Exception e)
+        {
+            if (ModuleManager.IsModuleEnabled("WorldTravelCommand") == true && CrossWorldItem.IsDisplay(args))
+                args.AddMenuItem(CrossWorldItem.Get());
+        }
     }
 
     private class TeleportMenuItem : MenuItemBase
@@ -46,18 +53,24 @@ public class FriendlistTeleporter : DailyModuleBase
 
         public override string Name { get; protected set; } = GetLoc("FriendlistTeleporter-MenuItemTeleport");
 
-        protected override unsafe void OnClicked(IMenuItemClickedArgs args) => Telepo.Instance()->Teleport(aetheryteID, 0);
+        protected override unsafe void OnClicked(IMenuItemClickedArgs args)
+        {
+            Telepo.Instance()->Teleport(aetheryteID, 0);
+        }
 
-        public override bool IsDisplay(IMenuOpenedArgs args) => args.AddonName == "FriendList"
-                                                                && args.Target is MenuTargetDefault target
-                                                                && target.TargetCharacter?.Location.Value is not null
-                                                                && GetAetheryteId(
-                                                                    target.TargetCharacter.Location.Value.RowId,
-                                                                    out aetheryteID);
+        public override bool IsDisplay(IMenuOpenedArgs args)
+        {
+            return args.AddonName == "FriendList"
+                   && args.Target is MenuTargetDefault target
+                   && target.TargetCharacter is not null
+                   && GetAetheryteId(
+                       target.TargetCharacter.Location.Value.RowId,
+                       out aetheryteID);
+        }
 
         private static bool GetAetheryteId(uint zoneID, out uint aetheryteID)
         {
-            var localZoneID = (uint)DService.ClientState.TerritoryType;
+            var localZoneID = (uint)ClientState.TerritoryType;
             aetheryteID = 0;
             if (zoneID == 0 || zoneID == localZoneID) return false;
             zoneID = zoneID switch
@@ -69,10 +82,10 @@ public class FriendlistTeleporter : DailyModuleBase
                 _ => zoneID
             };
             if (zoneID == localZoneID) return false;
-            aetheryteID = DService.AetheryteList
-                                  .Where(aetheryte => aetheryte.TerritoryId == zoneID)
-                                  .Select(aetheryte => aetheryte.AetheryteId)
-                                  .FirstOrDefault();
+            aetheryteID = AetheryteList
+                .Where(aetheryte => aetheryte.TerritoryId == zoneID)
+                .Select(aetheryte => aetheryte.AetheryteId)
+                .FirstOrDefault();
 
             return aetheryteID > 0;
         }
@@ -95,12 +108,12 @@ public class FriendlistTeleporter : DailyModuleBase
                 // ignored
             }
         }
+
         public override bool IsDisplay(IMenuOpenedArgs args)
         {
             if (args.AddonName != "FriendList") return false;
-
-            if (args.Target is MenuTargetDefault { TargetCharacter.CurrentWorld.Value: { RowId: var _targetWorldID } } &&
-                _targetWorldID != DService.ClientState.LocalPlayer.CurrentWorld.Value.RowId)
+            if (args.Target is MenuTargetDefault { TargetCharacter.CurrentWorld: { RowId: var _targetWorldID } } &&
+                _targetWorldID != ClientState.LocalPlayer.CurrentWorld.RowId)
             {
                 targetWorldID = _targetWorldID;
                 return true;
