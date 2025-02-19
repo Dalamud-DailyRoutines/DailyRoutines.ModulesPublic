@@ -1,10 +1,9 @@
+using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using OmenTools;
-using OmenTools.Helpers;
 
 namespace DailyRoutines.Modules;
 
@@ -39,12 +38,12 @@ public class FriendlistTeleporter : DailyModuleBase
         {
             if (TeleportItem.IsDisplay(args))
                 args.AddMenuItem(TeleportItem.Get());
-        }
-        catch
+        } catch { }
+        try
         {
             if (ModuleManager.IsModuleEnabled("WorldTravelCommand") == true && CrossWorldItem.IsDisplay(args))
                 args.AddMenuItem(CrossWorldItem.Get());
-        }
+        } catch { }
         
     }
 
@@ -108,8 +107,8 @@ public class FriendlistTeleporter : DailyModuleBase
             if (args.AddonName != "FriendList") return false;
             try
             {
-                if (args.Target is MenuTargetDefault { TargetCharacter.CurrentWorld: { RowId: var _targetWorldID } } &&
-                    _targetWorldID !=DService. ClientState.LocalPlayer.CurrentWorld.RowId)
+                if (args.Target is MenuTargetDefault { TargetCharacter.CurrentWorld.RowId: var _targetWorldID } &&
+                    _targetWorldID !=DService.ClientState.LocalPlayer.CurrentWorld.RowId)
                 {
                     targetWorldID = _targetWorldID;
                     return true;
