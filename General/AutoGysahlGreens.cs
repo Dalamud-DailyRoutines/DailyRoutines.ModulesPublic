@@ -30,7 +30,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static Config ModuleConfig = null!;
     private static readonly HashSet<ushort> ValidTerritory;
-    private static DateTime lastUpdateTime = DateTime.MinValue;
+    private static DateTime lastNotificationTime = DateTime.MinValue;
 
     static AutoGysahlGreens()
     {
@@ -58,12 +58,12 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
             SaveConfig(ModuleConfig);
 
-        if (ImGui.SliderFloat(GetLoc("AutoGysahlGreens-Changedelay"), ref ModuleConfig.CheckValue, 0.0f, 60.0f, "%.2f"))
+        if (ImGui.SliderFloat(GetLoc("AutoGysahlGreens-NotificationInterval"), ref ModuleConfig.NotificationInterval, 5.0f, 60.0f, "%.2f"))
         {
             SaveConfig(ModuleConfig);
         }
 
-        ImGui.Text($"{GetLoc("AutoGysahlGreens-ChangedelayText")}: {ModuleConfig.CheckValue}");
+        ImGui.Text($"{GetLoc("AutoGysahlGreens-NotificationIntervalText")}: {ModuleConfig.NotificationInterval} {GetLoc("AutoGysahlGreens-Second")}");
     }
 
     private static void OnZoneChanged(ushort zone)
@@ -76,25 +76,26 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static void OnUpdate(Dalamud.Plugin.Services.IFramework framework)
     {
-        if ((DateTime.Now - lastUpdateTime).TotalMilliseconds < (ModuleConfig.CheckValue * 1000))
-            return;
+        if (!ThrottlerHelper.Throttler.Throttle("AutoGysahlGreens-OnUpdate", 5_000)) return;
 
-        lastUpdateTime = DateTime.Now;
-
-        if (!ThrottlerHelper.Throttler.Throttle("AutoGysahlGreens-OnUpdateCheck", (int)(ModuleConfig.CheckValue * 1000))) return;
         if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
+
+        if (IsChocoboSummoned()) return;
 
         if (!HasGysahlGreens())
         {
-            var notificationMessage = "未检测背包内有基萨尔野菜，请补充";
-            //var notificationMessage = GetLoc("AutoGysahlGreens-Notification");
-            if (ModuleConfig.SendChat) Chat(notificationMessage);
-            if (ModuleConfig.SendNotification) NotificationInfo(notificationMessage);
-            if (ModuleConfig.SendTTS) Speak(notificationMessage);
-            return;
+            if ((DateTime.Now - lastNotificationTime).TotalSeconds >= ModuleConfig.NotificationInterval)
+            {
+                var notificationMessage = GetLoc("AutoGysahlGreens-NotificationMessage");
+
+                if (ModuleConfig.SendChat) Chat(notificationMessage);
+                if (ModuleConfig.SendNotification) NotificationInfo(notificationMessage);
+                if (ModuleConfig.SendTTS) Speak(notificationMessage);
+                lastNotificationTime = DateTime.Now;
+            }
         }
 
-        if (IsChocoboSummoned()) return;
+
 
         UseActionManager.UseActionLocation(ActionType.Item, 4868, 0xE0000000, default, 0xFFFF);
     }
@@ -120,6 +121,6 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         public bool SendChat;
         public bool SendNotification;
         public bool SendTTS;
-        public float CheckValue = 5f;
+        public float NotificationInterval = 5f;
     }
 }
