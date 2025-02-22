@@ -31,7 +31,6 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     private static Config ModuleConfig = null!;
     private static readonly HashSet<ushort> ValidTerritory;
     private static DateTime lastUpdateTime = DateTime.MinValue;
-    private static float checkValue = 5f;
 
     static AutoGysahlGreens()
     {
@@ -59,8 +58,12 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
             SaveConfig(ModuleConfig);
 
-        ImGui.SliderFloat(GetLoc("AutoGysahlGreens-Changedelay"), ref checkValue, 0.0f, 60.0f, "%.2f");
-        ImGui.Text($"{GetLoc("AutoGysahlGreens-ChangedelayText")}: {checkValue}");
+        if (ImGui.SliderFloat(GetLoc("AutoGysahlGreens-Changedelay"), ref ModuleConfig.CheckValue, 0.0f, 60.0f, "%.2f"))
+        {
+            SaveConfig(ModuleConfig);
+        }
+
+        ImGui.Text($"{GetLoc("AutoGysahlGreens-ChangedelayText")}: {ModuleConfig.CheckValue}");
     }
 
     private static void OnZoneChanged(ushort zone)
@@ -73,12 +76,12 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static void OnUpdate(Dalamud.Plugin.Services.IFramework framework)
     {
-        if ((DateTime.Now - lastUpdateTime).TotalMilliseconds < (checkValue * 1000))
+        if ((DateTime.Now - lastUpdateTime).TotalMilliseconds < (ModuleConfig.CheckValue * 1000))
             return;
 
         lastUpdateTime = DateTime.Now;
 
-        if (!ThrottlerHelper.Throttler.Throttle("AutoGysahlGreens-OnUpdateCheck", (int)(checkValue * 1000))) return;
+        if (!ThrottlerHelper.Throttler.Throttle("AutoGysahlGreens-OnUpdateCheck", (int)(ModuleConfig.CheckValue * 1000))) return;
         if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
 
         if (!HasGysahlGreens())
@@ -117,5 +120,6 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         public bool SendChat;
         public bool SendNotification;
         public bool SendTTS;
+        public float CheckValue = 5f;
     }
 }
