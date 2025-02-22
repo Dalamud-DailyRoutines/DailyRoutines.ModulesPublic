@@ -31,7 +31,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     private static Config ModuleConfig = null!;
     private static readonly HashSet<ushort> ValidTerritory;
     private static DateTime lastUpdateTime = DateTime.MinValue;
-    public static float checkValue = 5f;
+    private static float checkValue = 5f;
 
     static AutoGysahlGreens()
     {
