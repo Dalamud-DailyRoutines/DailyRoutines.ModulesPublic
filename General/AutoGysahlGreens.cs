@@ -14,6 +14,7 @@ using ImGuiNET;
 using System;
 using static OmenTools.Helpers.HelpersOm;
 using static DailyRoutines.Helpers.NotifyHelper;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 
 namespace DailyRoutines.Modules;
 
@@ -78,14 +79,11 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     private static void OnUpdate(Dalamud.Plugin.Services.IFramework framework)
     {
         if ((DateTime.Now - lastUpdateTime).TotalMilliseconds < (checkValue * 1000))
-        {
             return;
-        }
 
         lastUpdateTime = DateTime.Now;
 
         if (!ThrottlerHelper.Throttler.Throttle("AutoGysahlGreens-OnUpdateCheck", (int)(checkValue * 1000))) return;
-
         if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
 
         if (!HasGysahlGreens())
@@ -105,16 +103,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static unsafe bool IsChocoboSummoned()
     {
-        var player = DService.ClientState.LocalPlayer;
-
-        foreach (var obj in DService.ObjectTable)
-        {
-            if (obj.DataId == 952 && obj.OwnerId == player.GameObjectId)
-            {
-                return true;
-            }
-        }
-        return false;
+        return UIState.Instance()->Buddy.CompanionInfo.TimeLeft > 0;
     }
 
     private static unsafe bool HasGysahlGreens()
