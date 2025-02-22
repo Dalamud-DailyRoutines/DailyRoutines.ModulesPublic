@@ -22,10 +22,8 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 {
     public override ModuleInfo Info => new()
     {
-        //Title = GetLoc("AutoGysahlGreensTitle"),
-        //Description = GetLoc("AutoGysahlGreensDescription"),
-        Title = "自动使用基萨尔野菜",
-        Description = "在野外时，自动使用基萨尔野菜",
+        Title = GetLoc("AutoGysahlGreensTitle"),
+        Description = GetLoc("AutoGysahlGreensDescription"),
         Category = ModuleCategories.General,
         Author = ["Veever"]
     };
@@ -61,11 +59,8 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
             SaveConfig(ModuleConfig);
 
-        ImGui.SliderFloat("更改检测延迟/秒", ref checkValue, 0.0f, 60.0f, "%.2f");
-        ImGui.Text($"更改检测延迟/秒: {checkValue}");
-
-        //ImGui.SliderFloat(GetLoc("Changedelay"), ref checkValue, 0.0f, 60.0f, "%.2f");
-        //ImGui.Text($"{GetLoc("ChangedelayText")}");
+        ImGui.SliderFloat(GetLoc("AutoGysahlGreens-Changedelay"), ref checkValue, 0.0f, 60.0f, "%.2f");
+        ImGui.Text($"{GetLoc("AutoGysahlGreens-ChangedelayText")}: {checkValue}");
     }
 
     private static void OnZoneChanged(ushort zone)
@@ -105,7 +100,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     {
         return UIState.Instance()->Buddy.CompanionInfo.TimeLeft > 0;
     }
-
+    
     private static unsafe bool HasGysahlGreens()
     {
         return InventoryManager.Instance()->GetInventoryItemCount(4868) > 0;
