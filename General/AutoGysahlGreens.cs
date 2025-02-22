@@ -1,20 +1,11 @@
 using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
 using DailyRoutines.Managers;
-using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using Lumina.Excel.Sheets;
-using System.Collections.Generic;
-using OmenTools;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using System.Linq;
-using OmenTools.Helpers;
-using ImGuiNET;
-using System;
-using static OmenTools.Helpers.HelpersOm;
-using static DailyRoutines.Helpers.NotifyHelper;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using Lumina.Excel.Sheets;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace DailyRoutines.Modules;
 
@@ -76,7 +67,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static void OnUpdate(Dalamud.Plugin.Services.IFramework framework)
     {
-        if (!ThrottlerHelper.Throttler.Throttle("AutoGysahlGreens-OnUpdate", 5_000)) return;
+        if (!Throttler.Throttle("AutoGysahlGreens-OnUpdate", 5_000)) return;
 
         if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
 
@@ -99,15 +90,9 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         UseActionManager.UseActionLocation(ActionType.Item, 4868, 0xE0000000, default, 0xFFFF);
     }
 
-    private static unsafe bool IsChocoboSummoned()
-    {
-        return UIState.Instance()->Buddy.CompanionInfo.TimeLeft > 0;
-    }
-    
-    private static unsafe bool HasGysahlGreens()
-    {
-        return InventoryManager.Instance()->GetInventoryItemCount(4868) > 0;
-    }
+    private static bool IsChocoboSummoned() => UIState.Instance()->Buddy.CompanionInfo.TimeLeft > 0;
+
+    private static bool HasGysahlGreens() => InventoryManager.Instance()->GetInventoryItemCount(4868) > 0;
 
     public override void Uninit()
     {
