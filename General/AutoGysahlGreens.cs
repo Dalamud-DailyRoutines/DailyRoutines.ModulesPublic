@@ -58,7 +58,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
             SaveConfig(ModuleConfig);
 
-        if (ImGui.SliderFloat(GetLoc("AutoGysahlGreens-NotificationInterval"), ref ModuleConfig.NotificationInterval, 5.0f, 60.0f, "%.2f"))
+        if (ImGui.SliderFloat(GetLoc("AutoGysahlGreens-NotificationInterval"), ref ModuleConfig.NotificationInterval, 10.0f, 300.0f, "%.2f"))
         {
             SaveConfig(ModuleConfig);
         }
@@ -80,8 +80,6 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
         if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
 
-        if (IsChocoboSummoned()) return;
-
         if (!HasGysahlGreens())
         {
             if ((DateTime.Now - lastNotificationTime).TotalSeconds >= ModuleConfig.NotificationInterval)
@@ -93,9 +91,10 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
                 if (ModuleConfig.SendTTS) Speak(notificationMessage);
                 lastNotificationTime = DateTime.Now;
             }
+            return;
         }
 
-
+        if (IsChocoboSummoned()) return;
 
         UseActionManager.UseActionLocation(ActionType.Item, 4868, 0xE0000000, default, 0xFFFF);
     }
