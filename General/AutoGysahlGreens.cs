@@ -10,10 +10,10 @@ using OmenTools;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using System.Linq;
 using OmenTools.Helpers;
-using static OmenTools.Helpers.HelpersOm;
 using ImGuiNET;
-using static DailyRoutines.Helpers.NotifyHelper;
 using System;
+using static OmenTools.Helpers.HelpersOm;
+using static DailyRoutines.Helpers.NotifyHelper;
 
 namespace DailyRoutines.Modules;
 
