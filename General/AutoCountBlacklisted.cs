@@ -29,6 +29,7 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
 
     private static Config         ModuleConfig = null!;
     private static IDtrBarEntry?  DtrEntry;
+    private static int            LastCheckNum = 0;
     private static HashSet<ulong> BlacklistHashSet = [];
 
     public override void Init()
@@ -53,6 +54,15 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
             ModuleConfig.CheckRange = Math.Max(1, ModuleConfig.CheckRange);
 
         if (ImGui.IsItemDeactivatedAfterEdit())
+            SaveConfig(ModuleConfig);
+
+        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
+            SaveConfig(ModuleConfig);
+
+        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
+            SaveConfig(ModuleConfig);
+
+        if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
             SaveConfig(ModuleConfig);
     }
     
@@ -117,7 +127,16 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
             }
         }
 
-        DtrEntry.Text = string.Format(GetLoc("AutoCountBlacks-DtrEntry-Text"), blackNum.ToString());
+        if (LastCheckNum < blackNum)
+        {
+            var message = GetLoc("AutoCountBlacks-DtrEntry-Text", tooltip.ToString().Trim());
+            if (ModuleConfig.SendChat) Chat(message);
+            if (ModuleConfig.SendNotification) NotificationInfo(message);
+            if (ModuleConfig.SendTTS) Speak(message);
+        }
+        LastCheckNum = blackNum;
+
+        DtrEntry.Text = GetLoc("AutoCountBlacks-DtrEntry-Text", blackNum.ToString());
         DtrEntry.Tooltip = tooltip.ToString().Trim();
     }
 
@@ -134,5 +153,8 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
     public class Config : ModuleConfiguration
     {
         public int CheckRange = 2;
+        public bool SendChat = true;
+        public bool SendNotification = true;
+        public bool SendTTS = true;
     }
 }
