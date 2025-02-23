@@ -226,7 +226,7 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
                                   : GetGeneralInfoText((int)((float)bc.CurrentHp / bc.MaxHp * 100), enmity));
             
             textNode->GetTextDrawSize(infoWidth, infoHeight);
-            textNode->SetPositionFloat(Math.Max(90f, *castWidth + 28 + ModuleConfig.TextOffset.X),
+            textNode->SetPositionFloat(Math.Max(90f, *castWidth + 28) + ModuleConfig.TextOffset.X,
                                        4 + ModuleConfig.TextOffset.Y);
         }
     }
