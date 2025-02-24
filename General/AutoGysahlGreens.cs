@@ -52,6 +52,11 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
         if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
             SaveConfig(ModuleConfig);
+
+        if (ImGui.Checkbox(GetLoc("AutoGysahlGreens-NoBattleCheckBox"), ref ModuleConfig.isNotBattleJob))
+            SaveConfig(ModuleConfig);
+        
+        ImGuiOm.TooltipHover(GetLoc("AutoGysahlGreens-NoBattleTooltipHover"));
     }
 
     private static void OnZoneChanged(ushort zone)
@@ -68,6 +73,11 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         if (!Throttler.Throttle("AutoGysahlGreens-OnUpdate", 5_000)) return;
         if (DService.ClientState.LocalPlayer is not { IsDead: false }) return;
         if (BetweenAreas || OccupiedInEvent || IsOnMount || !IsScreenReady()) return;
+
+        var currentJobId = DService.ClientState.LocalPlayer.ClassJob.RowId;
+        var classJobData = LuminaCache.GetRow<ClassJob>(currentJobId);
+        if (!ModuleConfig.isNotBattleJob && classJobData != null && classJobData.Value.DohDolJobIndex != -1) return;
+
         if (UIState.Instance()->Buddy.CompanionInfo.TimeLeft > 300) return;
         
         if (InventoryManager.Instance()->GetInventoryItemCount(4868) <= 3)
@@ -98,5 +108,6 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         public bool  SendChat;
         public bool  SendNotification;
         public bool  SendTTS;
+        public bool  isNotBattleJob;
     }
 }
