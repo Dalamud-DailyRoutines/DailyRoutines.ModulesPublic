@@ -29,7 +29,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     static AutoGysahlGreens()
     {
         ValidTerritory = LuminaCache.Get<TerritoryType>()
-                                    .Where(x => x.TerritoryIntendedUse.RowId == 1)
+                                    .Where(x => x.TerritoryIntendedUse.RowId == 1 && x.RowId != 250)        // RowId: 250 = 狼狱停船场
                                     .Select(x => (ushort)x.RowId)
                                     .ToHashSet();
     }
