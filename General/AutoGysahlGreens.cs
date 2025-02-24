@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
+using DailyRoutines.Windows;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -74,8 +75,8 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         if (DService.ClientState.LocalPlayer is not { IsDead: false }) return;
         if (BetweenAreas || OccupiedInEvent || IsOnMount || !IsScreenReady()) return;
 
-        var classJobData = LuminaCache.GetRow<ClassJob>(DService.ClientState.LocalPlayer.ClassJob.RowId);
-        if (!ModuleConfig.isNotBattleJob && classJobData != null && classJobData.Value.DohDolJobIndex != -1) return;
+        if (!LuminaCache.TryGetRow<ClassJob>(DService.ClientState.LocalPlayer.ClassJob.RowId, out var classJobData)) return;
+        if (!ModuleConfig.isNotBattleJob  && classJobData.DohDolJobIndex != -1) return;
 
         if (UIState.Instance()->Buddy.CompanionInfo.TimeLeft > 300) return;
         
