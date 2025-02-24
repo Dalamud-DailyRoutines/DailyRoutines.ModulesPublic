@@ -43,9 +43,7 @@ public class AutoCountPlayers : DailyModuleBase
     public override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-
-        FrameworkManager.Register(false, OnUpdate);
-
+        
         Overlay ??= new(this);
         Overlay.Flags &= ~ImGuiWindowFlags.NoTitleBar;
         Overlay.WindowName = $"{GetLoc("AutoCountPlayers-PlayersAroundInfo")}###AutoCountPlayers-Overlay";
@@ -53,6 +51,8 @@ public class AutoCountPlayers : DailyModuleBase
         Entry ??= DService.DtrBar.Get("DailyRoutines-AutoCountPlayers");
         Entry.Shown = true;
         Entry.OnClick += () => Overlay.IsOpen ^= true;
+        
+        FrameworkManager.Register(false, OnUpdate);
     }
 
     public override void ConfigUI()
