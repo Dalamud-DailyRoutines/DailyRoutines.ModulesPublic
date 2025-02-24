@@ -1,11 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Objects.SubKinds;
-using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
@@ -34,6 +31,10 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
     ];
 
     private static Config ModuleConfig = null!;
+
+    // 添加 Throttler 实例
+    private static readonly Throttler<string> ItemUseThrottler = new();
+    private const int ThrottleMilliseconds = 5000; // 设置固定冷却时间为5秒 (5000毫秒)
 
     static AutoUseCrafterGathererManual()
     {
@@ -114,10 +115,18 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
             if (isCrafter && TryGetFirstValidItem(CrafterManuals, out var crafterManual))
                 itemID = crafterManual;
             if (itemID == 0 || !LuminaCache.TryGetRow<Item>(itemID, out var itemRow)) return true;
+
+            // 检查是否可以再次使用道具
+            var itemName = itemRow.Name.ExtractText();
+            if (!ItemUseThrottler.Throttle(itemName, ThrottleMilliseconds))
+            {
+                // 还在冷却中，不使用道具
+                return false;
+            }
             
             UseActionManager.UseActionLocation(ActionType.Item, itemID, 0xE0000000, default, 0xFFFF);
             if (ModuleConfig.SendNotification)
-                NotificationInfo(GetLoc("AutoUseCrafterGathererManual-Notification", itemRow.Name.ExtractText()));
+                NotificationInfo(GetLoc("AutoUseCrafterGathererManual-Notification", itemName));
             return true;
         });
     }
