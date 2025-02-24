@@ -126,7 +126,7 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
             
             UseActionManager.UseActionLocation(ActionType.Item, itemID, 0xE0000000, default, 0xFFFF);
             if (ModuleConfig.SendNotification)
-                NotificationInfo(GetLoc("AutoUseCrafterGathererManual-Notification", itemName));
+                NotificationInfo(GetLoc("AutoUseCrafterGathererManual-Notification", itemRow.Name.ExtractText()));
             return true;
         });
     }
