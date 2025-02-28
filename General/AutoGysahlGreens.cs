@@ -97,8 +97,12 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         
         UseActionManager.UseActionLocation(ActionType.Item, GysahlGreens, 0xE0000000, default, 0xFFFF);
     }
-    
-    public override void Uninit() => OnZoneChanged(0);
+
+    public override void Uninit()
+    {
+        DService.ClientState.TerritoryChanged -= OnZoneChanged;
+        OnZoneChanged(0);
+    }
 
     private class Config : ModuleConfiguration
     {
