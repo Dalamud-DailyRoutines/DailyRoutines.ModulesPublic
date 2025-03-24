@@ -93,49 +93,49 @@ public unsafe class ScrollableTabs : DailyModuleBase
     {
         if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-Invert"), ref _moduleConfig.Invert))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleArmouryBoard"), ref _moduleConfig.HandleArmouryBoard))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(1370), ref _moduleConfig.HandleArmouryBoard))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleAOZNotebook"), ref _moduleConfig.HandleAOZNotebook))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(12250), ref _moduleConfig.HandleAOZNotebook))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleCharacter"), ref _moduleConfig.HandleCharacter))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(230), ref _moduleConfig.HandleCharacter))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleCharacterClass"), ref _moduleConfig.HandleCharacterClass))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(230) + "->" + LuminaWarpper.GetAddonText(760), ref _moduleConfig.HandleCharacterClass))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleCharacterRepute"), ref _moduleConfig.HandleCharacterRepute))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(230) + "->" + LuminaWarpper.GetAddonText(102512), ref _moduleConfig.HandleCharacterRepute))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleInventoryBuddy"), ref _moduleConfig.HandleInventoryBuddy))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(882), ref _moduleConfig.HandleInventoryBuddy))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleBuddy"), ref _moduleConfig.HandleBuddy))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(3511), ref _moduleConfig.HandleBuddy))
             SaveConfig(_moduleConfig);
-        // if(ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleCurrency"), ref ModuleConfig.HandleCurrency))
+        // if(ImGui.Checkbox(LuminaWarpper.GetAddonText(3660), ref ModuleConfig.HandleCurrency))
         // SaveConfig(ModuleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleOrnamentNoteBook"), ref _moduleConfig.HandleOrnamentNoteBook))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(13671), ref _moduleConfig.HandleOrnamentNoteBook))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleFieldRecord"), ref _moduleConfig.HandleFieldRecord))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(13802), ref _moduleConfig.HandleFieldRecord))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleFishGuide"), ref _moduleConfig.HandleFishGuide))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(3804), ref _moduleConfig.HandleFishGuide))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleMiragePrismPrismBox"), ref _moduleConfig.HandleMiragePrismPrismBox))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(3735), ref _moduleConfig.HandleMiragePrismPrismBox))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleGoldSaucerCardList"), ref _moduleConfig.HandleGoldSaucerCardList))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(9335) + "->" + LuminaWarpper.GetAddonText(9339), ref _moduleConfig.HandleGoldSaucerCardList))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleGoldSaucerCardDeckEdit"), ref _moduleConfig.HandleGoldSaucerCardDeckEdit))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(9335) + "->" + LuminaWarpper.GetAddonText(9340) + "->" + LuminaWarpper.GetAddonText(9425), ref _moduleConfig.HandleGoldSaucerCardDeckEdit))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleLovmPaletteEdit"), ref _moduleConfig.HandleLovmPaletteEdit))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(9335) + "->" + LuminaWarpper.GetAddonText(9550) + "->" + LuminaWarpper.GetAddonText(9594), ref _moduleConfig.HandleLovmPaletteEdit))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleInventory"), ref _moduleConfig.HandleInventory))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(520), ref _moduleConfig.HandleInventory))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleMJIMinionNoteBook"), ref _moduleConfig.HandleMJIMinionNoteBook))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(15321), ref _moduleConfig.HandleMJIMinionNoteBook))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleMinionNoteBook"), ref _moduleConfig.HandleMinionNoteBook))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(7595), ref _moduleConfig.HandleMinionNoteBook))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleMountNoteBook"), ref _moduleConfig.HandleMountNoteBook))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(4964), ref _moduleConfig.HandleMountNoteBook))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleRetainer"), ref _moduleConfig.HandleRetainer))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(6941), ref _moduleConfig.HandleRetainer))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleFateProgress"), ref _moduleConfig.HandleFateProgress))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(3933), ref _moduleConfig.HandleFateProgress))
             SaveConfig(_moduleConfig);
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-HandleAdventureNoteBook"), ref _moduleConfig.HandleAdventureNoteBook))
+        if (ImGui.Checkbox(LuminaWarpper.GetAddonText(8140), ref _moduleConfig.HandleAdventureNoteBook))
             SaveConfig(_moduleConfig);
     }
 
