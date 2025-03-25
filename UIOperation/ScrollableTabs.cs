@@ -61,8 +61,6 @@ public unsafe class ScrollableTabs : DailyModuleBase
     private const int NumBuddyTabs = 3;
 
     private static Config _moduleConfig = null!;
-    private static readonly IGameConfig GameConfig;
-
     private static int _wheelState;
 
     private static AtkCollisionNode* IntersectingCollisionNode =>
@@ -81,17 +79,13 @@ public unsafe class ScrollableTabs : DailyModuleBase
 
     public override void Uninit()
     {
-        if (Initialized)
-        {
-            FrameworkManager.Unregister(OnUpdate);
-        }
-
+        FrameworkManager.Unregister(OnUpdate);
         base.Uninit();
     }
 
     public override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Config-Invert"), ref _moduleConfig.Invert))
+        if (ImGui.Checkbox(GetLoc("ScrollableTabsConfigInvert"), ref _moduleConfig.Invert))
             SaveConfig(_moduleConfig);
         if (ImGui.Checkbox(LuminaWarpper.GetAddonText(1370), ref _moduleConfig.HandleArmouryBoard))
             SaveConfig(_moduleConfig);
@@ -213,7 +207,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
             // used by InventoryLarge or InventoryExpansion
             case "InventoryCrystalGrid":
                 name = "InventoryLarge";
-                if (GameConfig.UiConfig.TryGet("ItemInventryWindowSizeType", out uint itemInventryWindowSizeType) && itemInventryWindowSizeType == 2)
+                if (DService.GameConfig.UiConfig.TryGet("ItemInventryWindowSizeType", out uint itemInventryWindowSizeType) && itemInventryWindowSizeType == 2)
                     name = "InventoryExpansion";
                 break;
 
