@@ -1,3 +1,4 @@
+// Original Author: Asvel
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -12,12 +13,12 @@ using System.Text.RegularExpressions;
 
 namespace DailyRoutines.Modules;
 
-public class BetterCoordsSender : DailyModuleBase
+public class AutoConvertMapLink : DailyModuleBase
 {
     public override ModuleInfo Info => new()
     {
-        Title = GetLoc("BetterCoordsSenderTitle"),
-        Description = GetLoc("BetterCoordsSenderDescription"),
+        Title = GetLoc("AutoConvertMapLinkTitle"),
+        Description = GetLoc("AutoConvertMapLinkDescription"),
         Category = ModuleCategories.System,
         Author = ["KirisameVanilla"],
     };
@@ -84,7 +85,7 @@ public class BetterCoordsSender : DailyModuleBase
 
                 var (territoryId, mapId) = (zone.Value.RowId, zone.Value.Map.RowId);
 
-                if (!PresetSheet.Maps.TryGetValue(mapId, out var map))
+                if (!LuminaGetter.TryGetRow<Lumina.Excel.Sheets.Map>(mapId, out var map))
                 {
                     continue;
                 }
