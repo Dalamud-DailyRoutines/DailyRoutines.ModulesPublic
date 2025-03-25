@@ -85,7 +85,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
 
     public override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("ScrollableTabsConfigInvert"), ref _moduleConfig.Invert))
+        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Invert"), ref _moduleConfig.Invert))
             SaveConfig(_moduleConfig);
         if (ImGui.Checkbox(LuminaWarpper.GetAddonText(1370), ref _moduleConfig.HandleArmouryBoard))
             SaveConfig(_moduleConfig);
