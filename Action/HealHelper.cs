@@ -23,15 +23,15 @@ using LuminaAction = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.Modules;
 
-public class ASTHelper : DailyModuleBase
+public class HealHelper : DailyModuleBase
 {
     #region Core
 
     public override ModuleInfo Info => new()
     {
         Author      = ["HaKu"],
-        Title       = GetLoc("ASTHelperTitle"),
-        Description = GetLoc("ASTHelperDescription"),
+        Title       = GetLoc("HealHelperTitle"),
+        Description = GetLoc("HealHelperDescription"),
         Category    = ModuleCategories.Action
     };
 
@@ -72,8 +72,8 @@ public class ASTHelper : DailyModuleBase
     public override void ConfigUI()
     {
         // auto play card
-        ImGui.TextColored(LightSkyBlue, GetLoc("ASTHelper-AutoPlayCardTitle"));
-        ImGuiOm.HelpMarker(GetLoc("ASTHelper-AutoPlayCardDescription", LuminaGetter.GetRow<LuminaAction>(17055)!.Value.Name.ExtractText()));
+        ImGui.TextColored(LightSkyBlue, GetLoc("HealHelper-AutoPlayCardTitle"));
+        ImGuiOm.HelpMarker(GetLoc("HealHelper-AutoPlayCardDescription", LuminaGetter.GetRow<LuminaAction>(17055)!.Value.Name.ExtractText()));
 
         ImGui.Spacing();
 
@@ -86,14 +86,14 @@ public class ASTHelper : DailyModuleBase
                 SaveConfig(ModuleConfig);
             }
 
-            if (ImGui.RadioButton($"{GetLoc("Common")} ({GetLoc("ASTHelper-AutoPlayCard-CommonDescription")})",
+            if (ImGui.RadioButton($"{GetLoc("Common")} ({GetLoc("HealHelper-AutoPlayCard-CommonDescription")})",
                                   ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Default))
             {
                 ModuleConfig.AutoPlayCard = AutoPlayCardStatus.Default;
                 SaveConfig(ModuleConfig);
             }
 
-            if (ImGui.RadioButton($"{GetLoc("Advance")} ({GetLoc("ASTHelper-AutoPlayCard-AdvanceDescription")})",
+            if (ImGui.RadioButton($"{GetLoc("Advance")} ({GetLoc("HealHelper-AutoPlayCard-AdvanceDescription")})",
                                   ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Advance))
             {
                 ModuleConfig.AutoPlayCard = AutoPlayCardStatus.Advance;
@@ -106,7 +106,7 @@ public class ASTHelper : DailyModuleBase
                 ImGui.Spacing();
 
                 ImGui.AlignTextToFramePadding();
-                ImGui.TextColored(LightYellow, $"{GetLoc("ASTHelper-DuringTestDescription")}");
+                ImGui.TextColored(LightYellow, $"{GetLoc("HealHelper-DuringTestDescription")}");
 
                 ImGui.AlignTextToFramePadding();
                 ImGui.TextColored(LightGoldenrod, "FFLogs V1 API Key");
@@ -132,7 +132,7 @@ public class ASTHelper : DailyModuleBase
                 ImGui.Spacing();
 
                 ImGui.AlignTextToFramePadding();
-                ImGui.Text(GetLoc("ASTHelper-LogsApi-Status"));
+                ImGui.Text(GetLoc("HealHelper-LogsApi-Status"));
 
                 ImGui.SameLine();
                 if (ModuleConfig.KeyValid)
@@ -145,8 +145,8 @@ public class ASTHelper : DailyModuleBase
         ImGui.NewLine();
 
         // easy heal
-        ImGui.TextColored(LightSkyBlue, GetLoc("ASTHelper-EasyHealTitle"));
-        ImGuiOm.HelpMarker(GetLoc("ASTHelper-EasyHealDescription"));
+        ImGui.TextColored(LightSkyBlue, GetLoc("HealHelper-EasyHealTitle"));
+        ImGuiOm.HelpMarker(GetLoc("HealHelper-EasyHealDescription"));
 
         ImGui.Spacing();
 
@@ -159,7 +159,7 @@ public class ASTHelper : DailyModuleBase
                 SaveConfig(ModuleConfig);
             }
 
-            if (ImGui.RadioButton($"{GetLoc("Enable")} ({GetLoc("ASTHelper-EasyHeal-EnableDescription")})",
+            if (ImGui.RadioButton($"{GetLoc("Enable")} ({GetLoc("HealHelper-EasyHeal-EnableDescription")})",
                                   ModuleConfig.EasyHeal == EasyHealStatus.Enable))
             {
                 ModuleConfig.EasyHeal = EasyHealStatus.Enable;
@@ -171,8 +171,8 @@ public class ASTHelper : DailyModuleBase
             {
                 ImGui.Spacing();
 
-                ImGui.TextColored(LightGreen, GetLoc("ASTHelper-EasyHeal-HealThreshold"));
-                ImGuiOm.HelpMarker(GetLoc("ASTHelper-EasyHeal-HealThresholdHelp"));
+                ImGui.TextColored(LightGreen, GetLoc("HealHelper-EasyHeal-HealThreshold"));
+                ImGuiOm.HelpMarker(GetLoc("HealHelper-EasyHeal-HealThresholdHelp"));
 
                 ImGui.Spacing();
 
@@ -183,7 +183,7 @@ public class ASTHelper : DailyModuleBase
                 if (ModuleConfig.NeedHealThreshold > 0.92f)
                 {
                     ImGui.Spacing();
-                    ImGui.TextColored(Orange, GetLoc("ASTHelper-EasyHeal-OverhealWarning"));
+                    ImGui.TextColored(Orange, GetLoc("HealHelper-EasyHeal-OverhealWarning"));
                 }
             }
         }
@@ -198,8 +198,9 @@ public class ASTHelper : DailyModuleBase
             if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
                 SaveConfig(ModuleConfig);
 
-            if (ImGui.Checkbox(GetLoc("ASTHelper-MarkOnPartyList"), ref ModuleConfig.OverlayMark))
+            if (ImGui.Checkbox(GetLoc("HealHelper-MarkOnPartyList"), ref ModuleConfig.OverlayMark))
                 SaveConfig(ModuleConfig);
+            ImGuiOm.HelpMarker(GetLoc("Deprecated"));
 
             if (ModuleConfig.OverlayMark)
             {
@@ -265,9 +266,9 @@ public class ASTHelper : DailyModuleBase
                     };
 
                     if (ModuleConfig.SendChat)
-                        Chat(GetSLoc($"ASTHelper-AutoPlayCard-Message-{locKey}", name, classJobIcon, classJobName));
+                        Chat(GetSLoc($"HealHelper-AutoPlayCard-Message-{locKey}", name, classJobIcon, classJobName));
                     if (ModuleConfig.SendNotification)
-                        NotificationInfo(GetLoc($"ASTHelper-AutoPlayCard-Message-{locKey}", name, string.Empty, classJobName));
+                        NotificationInfo(GetLoc($"HealHelper-AutoPlayCard-Message-{locKey}", name, string.Empty, classJobName));
                 }
             }
 
@@ -412,7 +413,7 @@ public class ASTHelper : DailyModuleBase
         {
             if (NotifyErrorOnce)
             {
-                Chat(GetLoc("ASTHelper-Error"));
+                Chat(GetLoc("HealHelper-Error"));
                 NotifyErrorOnce = false;
             }
         }
@@ -899,6 +900,7 @@ public class ASTHelper : DailyModuleBase
     }
 
     // Dalamud-FFLogs zone match map (ultimates and current savage)
+    // TerritoryType - FFLogs Zone ID
     public static readonly Dictionary<uint, uint> Dal2LogsZoneMap = new()
     {
         // ultimates
@@ -907,11 +909,13 @@ public class ASTHelper : DailyModuleBase
         [887]  = 1075, // Alexander d2az
         [968]  = 1076, // Dragonsong r1fz
         [1122] = 1077, // Omega z3oz
+        [1238] = 1079, // Future Rewritten n4gw
         // m1-4s
         [1226] = 93,
         [1228] = 94,
         [1230] = 95,
         [1232] = 96,
+        // m5-8s (placeholder)
     };
 
     public class LogsRecord
@@ -963,6 +967,7 @@ public class ASTHelper : DailyModuleBase
     // list of target healing actions
     public static readonly uint[] TargetHealActions =
     [
+        // ast
         3594, // benefic 1
         3610, // benefic 2
         3614, // essential dignity
@@ -972,7 +977,34 @@ public class ASTHelper : DailyModuleBase
         // 37027, // bole card (-10% damage)
         37028, // ewer card (200 hot 15s)
         16556, // celestial intersection
-        // 25873  // exaltation
+        // 25873,  // exaltation
+
+        // whm
+        120,   // cure 1
+        135,   // cure 2
+        131,   // cure 3 (600 + nearby)
+        137,   // regen
+        140,   // benediction
+        3570,  // tetragrammaton
+        16531, // afflatus solace
+        // 7432,  // divine benison
+        // 25861, // aquavell
+
+        // sch
+        190,   // physick
+        185,   // adloquium
+        189,   // lustrate
+        7434,  // excogitation
+        7437,  // aetherpact (7869 is cancel this action)
+        37015, // manifestation
+        // 25867, // protraction
+
+        // sage
+        24284, // diagnosis
+        24296, // druochole
+        24303, // taurochole
+        // 24305, // haima
+        24291, // eukrasian diagnosis
     ];
 
     #endregion
