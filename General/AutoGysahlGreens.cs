@@ -30,8 +30,8 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     {
         ValidTerritory = PresetSheet.Zones
                                     .Where(x => 
-                                                     x.Value.TerritoryIntendedUse.RowId == 1 
-                                                     && x.Key != 250)
+                                               x.Value.TerritoryIntendedUse.RowId == 1 
+                                               && x.Key != 250)
                                     .Select(x => (ushort)x.Key)
                                     .ToHashSet();
     }
