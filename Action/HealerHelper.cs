@@ -23,15 +23,15 @@ using LuminaAction = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.Modules;
 
-public class HealHelper : DailyModuleBase
+public class HealerHelper : DailyModuleBase
 {
     #region Core
 
     public override ModuleInfo Info => new()
     {
         Author      = ["HaKu"],
-        Title       = GetLoc("HealHelperTitle"),
-        Description = GetLoc("HealHelperDescription"),
+        Title       = GetLoc("HealerHelperTitle"),
+        Description = GetLoc("HealerHelperDescription"),
         Category    = ModuleCategories.Action
     };
 
@@ -72,8 +72,8 @@ public class HealHelper : DailyModuleBase
     public override void ConfigUI()
     {
         // auto play card
-        ImGui.TextColored(LightSkyBlue, GetLoc("HealHelper-AutoPlayCardTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealHelper-AutoPlayCardDescription", LuminaGetter.GetRow<LuminaAction>(17055)!.Value.Name.ExtractText()));
+        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-AutoPlayCardTitle"));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-AutoPlayCardDescription", LuminaGetter.GetRow<LuminaAction>(17055)!.Value.Name.ExtractText()));
 
         ImGui.Spacing();
 
@@ -86,14 +86,14 @@ public class HealHelper : DailyModuleBase
                 SaveConfig(ModuleConfig);
             }
 
-            if (ImGui.RadioButton($"{GetLoc("Common")} ({GetLoc("HealHelper-AutoPlayCard-CommonDescription")})",
+            if (ImGui.RadioButton($"{GetLoc("Common")} ({GetLoc("HealerHelper-AutoPlayCard-CommonDescription")})",
                                   ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Default))
             {
                 ModuleConfig.AutoPlayCard = AutoPlayCardStatus.Default;
                 SaveConfig(ModuleConfig);
             }
 
-            if (ImGui.RadioButton($"{GetLoc("Advance")} ({GetLoc("HealHelper-AutoPlayCard-AdvanceDescription")})",
+            if (ImGui.RadioButton($"{GetLoc("Advance")} ({GetLoc("HealerHelper-AutoPlayCard-AdvanceDescription")})",
                                   ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Advance))
             {
                 ModuleConfig.AutoPlayCard = AutoPlayCardStatus.Advance;
@@ -106,7 +106,7 @@ public class HealHelper : DailyModuleBase
                 ImGui.Spacing();
 
                 ImGui.AlignTextToFramePadding();
-                ImGui.TextColored(LightYellow, $"{GetLoc("HealHelper-DuringTestDescription")}");
+                ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-DuringTestDescription")}");
 
                 ImGui.AlignTextToFramePadding();
                 ImGui.TextColored(LightGoldenrod, "FFLogs V1 API Key");
@@ -132,7 +132,7 @@ public class HealHelper : DailyModuleBase
                 ImGui.Spacing();
 
                 ImGui.AlignTextToFramePadding();
-                ImGui.Text(GetLoc("HealHelper-LogsApi-Status"));
+                ImGui.Text(GetLoc("HealerHelper-LogsApi-Status"));
 
                 ImGui.SameLine();
                 if (ModuleConfig.KeyValid)
@@ -145,8 +145,8 @@ public class HealHelper : DailyModuleBase
         ImGui.NewLine();
 
         // easy heal
-        ImGui.TextColored(LightSkyBlue, GetLoc("HealHelper-EasyHealTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealHelper-EasyHealDescription"));
+        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyHealTitle"));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyHealDescription"));
 
         ImGui.Spacing();
 
@@ -159,7 +159,7 @@ public class HealHelper : DailyModuleBase
                 SaveConfig(ModuleConfig);
             }
 
-            if (ImGui.RadioButton($"{GetLoc("Enable")} ({GetLoc("HealHelper-EasyHeal-EnableDescription")})",
+            if (ImGui.RadioButton($"{GetLoc("Enable")} ({GetLoc("HealerHelper-EasyHeal-EnableDescription")})",
                                   ModuleConfig.EasyHeal == EasyHealStatus.Enable))
             {
                 ModuleConfig.EasyHeal = EasyHealStatus.Enable;
@@ -171,8 +171,8 @@ public class HealHelper : DailyModuleBase
             {
                 ImGui.Spacing();
 
-                ImGui.TextColored(LightGreen, GetLoc("HealHelper-EasyHeal-HealThreshold"));
-                ImGuiOm.HelpMarker(GetLoc("HealHelper-EasyHeal-HealThresholdHelp"));
+                ImGui.TextColored(LightGreen, GetLoc("HealerHelper-EasyHeal-HealThreshold"));
+                ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyHeal-HealThresholdHelp"));
 
                 ImGui.Spacing();
 
@@ -183,7 +183,7 @@ public class HealHelper : DailyModuleBase
                 if (ModuleConfig.NeedHealThreshold > 0.92f)
                 {
                     ImGui.Spacing();
-                    ImGui.TextColored(Orange, GetLoc("HealHelper-EasyHeal-OverhealWarning"));
+                    ImGui.TextColored(Orange, GetLoc("HealerHelper-EasyHeal-OverhealWarning"));
                 }
             }
         }
@@ -198,7 +198,7 @@ public class HealHelper : DailyModuleBase
             if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
                 SaveConfig(ModuleConfig);
 
-            if (ImGui.Checkbox(GetLoc("HealHelper-MarkOnPartyList"), ref ModuleConfig.OverlayMark))
+            if (ImGui.Checkbox(GetLoc("HealerHelper-MarkOnPartyList"), ref ModuleConfig.OverlayMark))
                 SaveConfig(ModuleConfig);
             ImGuiOm.HelpMarker(GetLoc("Deprecated"));
 
@@ -266,9 +266,9 @@ public class HealHelper : DailyModuleBase
                     };
 
                     if (ModuleConfig.SendChat)
-                        Chat(GetSLoc($"HealHelper-AutoPlayCard-Message-{locKey}", name, classJobIcon, classJobName));
+                        Chat(GetSLoc($"HealerHelper-AutoPlayCard-Message-{locKey}", name, classJobIcon, classJobName));
                     if (ModuleConfig.SendNotification)
-                        NotificationInfo(GetLoc($"HealHelper-AutoPlayCard-Message-{locKey}", name, string.Empty, classJobName));
+                        NotificationInfo(GetLoc($"HealerHelper-AutoPlayCard-Message-{locKey}", name, string.Empty, classJobName));
                 }
             }
 
@@ -413,7 +413,7 @@ public class HealHelper : DailyModuleBase
         {
             if (NotifyErrorOnce)
             {
-                Chat(GetLoc("HealHelper-Error"));
+                Chat(GetLoc("HealerHelper-Error"));
                 NotifyErrorOnce = false;
             }
         }
