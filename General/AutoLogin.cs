@@ -266,7 +266,7 @@ public unsafe class AutoLogin : DailyModuleBase
             return false;
         }
 
-        var title = Marshal.PtrToStringUTF8((nint)SelectYesno->AtkValues[0].String);
+        var title = Marshal.PtrToStringUTF8((nint)SelectYesno->AtkValues[0].String.Value);
         if (!title.Contains(LuminaGetter.GetRow<Addon>(115)!.Value.Text.ExtractText()))
         {
             ClickSelectYesnoNo();

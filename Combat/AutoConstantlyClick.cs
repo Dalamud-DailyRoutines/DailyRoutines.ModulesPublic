@@ -2,6 +2,7 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Hooking;
 using Dalamud.Interface.Utility.Raii;
+using FFXIVClientStructs.FFXIV.Client.System.Input;
 using System;
 using System.Threading;
 
@@ -110,7 +111,7 @@ public class AutoConstantlyClick : DailyModuleBase
 
     private unsafe int GamepadPollDetour(IntPtr gamepadInput)
     {
-        var input = (GamepadInput*)gamepadInput;
+        var input = (PadDevice*)gamepadInput;
         if (DService.Gamepad.Raw(ModuleConfig.GamepadModeTriggerButtons) == 1)
         {
             foreach (var btn in Enum.GetValues<GamepadButtons>())
@@ -120,7 +121,7 @@ public class AutoConstantlyClick : DailyModuleBase
                     if (Environment.TickCount64 >= ThrottleTime)
                     {
                         ThrottleTime = Environment.TickCount64 + ModuleConfig.RepeatInterval;
-                        input->ButtonsRaw -= (ushort)btn;
+                        input->GamepadInputData.Buttons -= (ushort)btn;
                     }
                 }
             }

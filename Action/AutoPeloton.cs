@@ -150,7 +150,7 @@ public class AutoPeloton : DailyModuleBase
         // AlreadyHasPeletonBuff
         if (statusManager.HasStatus(1199) || statusManager.HasStatus(50)) return true;
         // NotMoving
-        if (AgentMap.Instance()->IsPlayerMoving != 1) return true;
+        if (!AgentMap.Instance()->IsPlayerMoving) return true;
 
         TaskHelper.Enqueue(() => UseActionManager.UseAction(ActionType.Action, s_PelotoningActionId),
                            $"UseAction_{s_PelotoningActionId}", 5_000, true, 1);

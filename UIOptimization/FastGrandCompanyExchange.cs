@@ -217,7 +217,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
                 {
                     var offset   = 17 + i;
                     var atkValue = GrandCompanyExchange->AtkValues[offset];
-                    var name     = MemoryHelper.ReadSeStringNullTerminated((nint)atkValue.String);
+                    var name     = MemoryHelper.ReadSeStringNullTerminated((nint)atkValue.String.Value);
                     if (string.IsNullOrWhiteSpace(name.ExtractText()) || name.ExtractText() != result.Item.Value.Name.ExtractText()) continue;
 
                     var listComponent = (AtkComponentList*)listNode->Component;
@@ -231,7 +231,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
                     numericInputNode->SetValue(maxExchangeCount);
                     
                     listComponent->SelectItem(i, true);
-                    listComponent->DispatchItemEvent(i, AtkEventType.ListItemToggle);
+                    listComponent->DispatchItemEvent(i, AtkEventType.ListItemClick);
 
                     if (!isVenture && itemCount == -1)
                         TaskHelper.Enqueue(() => EnqueueByName(itemName, itemCount));

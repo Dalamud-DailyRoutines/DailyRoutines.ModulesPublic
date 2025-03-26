@@ -154,7 +154,7 @@ public unsafe class PartyFinderSettingRecord : DailyModuleBase
                 ModuleConfig.Last.Duty = atkValues[1].UInt;
                 break;
             case 15:
-                ModuleConfig.Last.Description = SeString.Parse(atkValues[1].String).TextValue;
+                ModuleConfig.Last.Description = SeString.Parse(atkValues[1].String.Value).TextValue;
                 break;
         }
 

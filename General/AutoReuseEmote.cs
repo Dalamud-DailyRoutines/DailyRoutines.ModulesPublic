@@ -93,7 +93,7 @@ public class AutoReuseEmote : DailyModuleBase
         {
             unsafe
             {
-                if (AgentMap.Instance()->IsPlayerMoving == 1)
+                if (AgentMap.Instance()->IsPlayerMoving)
                 {
                     CancelTokenAndNullify();
                     return;

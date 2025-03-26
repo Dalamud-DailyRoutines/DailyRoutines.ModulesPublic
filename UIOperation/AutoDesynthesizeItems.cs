@@ -92,7 +92,7 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
 
             for (var i = 0; i < itemAmount; i++)
             {
-                var itemName = MemoryHelper.ReadStringNullTerminated((nint)addon->AtkValues[(i * 8) + 14].String);
+                var itemName = MemoryHelper.ReadStringNullTerminated((nint)addon->AtkValues[(i * 8) + 14].String.Value);
                 if (ConfigSkipWhenHQ)
                 {
                     if (itemName.Contains('')) // HQ 符号

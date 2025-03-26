@@ -179,7 +179,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
                 if (!isEnabled) continue;
                 
                 var name      = string.Empty;
-                try { name = SeString.Parse(VoteMvp->AtkValues[9 + i].String).ExtractText(); }
+                try { name = SeString.Parse(VoteMvp->AtkValues[9 + i].String.Value).ExtractText(); }
                 catch { name = string.Empty; }
                 if (string.IsNullOrWhiteSpace(name) || name != playerName) continue;
                 

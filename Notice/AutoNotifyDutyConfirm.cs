@@ -25,7 +25,7 @@ public class AutoNotifyDutyConfirm : DailyModuleBase
         var addon = (AtkUnitBase*)args.Addon;
         if (addon == null) return;
 
-        var dutyName = MemoryHelper.ReadStringNullTerminated((nint)addon->AtkValues[1].String);
+        var dutyName = MemoryHelper.ReadStringNullTerminated((nint)addon->AtkValues[1].String.Value);
         if (string.IsNullOrWhiteSpace(dutyName)) return;
 
         var loc = Lang.Get("AutoNotifyDutyConfirm-NoticeMessage", dutyName);

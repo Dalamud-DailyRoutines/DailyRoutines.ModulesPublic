@@ -198,7 +198,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoReplaceLocationAction-CustomCenterPoint")}:");
 
-        using (ImRaii.Disabled(agent->IsFlagMarkerSet != 1 || agent->FlagMapMarker.MapId != DService.ClientState.MapId))
+        using (ImRaii.Disabled(!agent->IsFlagMarkerSet || agent->FlagMapMarker.MapId != DService.ClientState.MapId))
         {
             ImGui.SameLine();
             if (ImGui.Button(GetLoc("AutoReplaceLocationAction-AddFlagMarker")))
@@ -207,7 +207,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
                 ModuleConfig.CustomMarkers[DService.ClientState.MapId].Add(new(agent->FlagMapMarker.XFloat, agent->FlagMapMarker.YFloat));
                 SaveConfig(ModuleConfig);
 
-                agent->IsFlagMarkerSet = 0;
+                agent->IsFlagMarkerSet = false;
                 MarkCenterPoint();
             }
         }

@@ -117,7 +117,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
                 SaveConfig(ModuleConfig);
             
             ImGui.SameLine();
-            ImGui.ColorButton("###HighlightColorPreview", UIColorToVector4Color(unitColorRow.UIForeground));
+            ImGui.ColorButton("###HighlightColorPreview", UIColorToVector4Color(unitColorRow.Dark));
         }
         
         var sheet = LuminaGetter.Get<UIColor>();
@@ -133,7 +133,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
                         foreach (var row in sheet)
                         {
                             if (row.RowId        == 0) continue;
-                            if (row.UIForeground == 0) continue;
+                            if (row.Dark == 0) continue;
 
                             if (counter % 5 == 0) ImGui.TableNextRow();
                             ImGui.TableNextColumn();
@@ -142,7 +142,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
 
                             using (ImRaii.Group())
                             {
-                                ImGui.ColorButton($"###ColorButtonTable{row.RowId}", UIColorToVector4Color(row.UIForeground));
+                                ImGui.ColorButton($"###ColorButtonTable{row.RowId}", UIColorToVector4Color(row.Dark));
                                 
                                 ImGui.SameLine();
                                 ImGui.Text($"{row.RowId}");
@@ -167,7 +167,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
             if (managedString == null)
                 return InvokeOriginal();
 
-            var origText = SeString.Parse(managedString);
+            var origText = SeString.Parse(managedString.Value);
             if (origText == null || string.IsNullOrWhiteSpace(origText.TextValue))
                 return InvokeOriginal();
 

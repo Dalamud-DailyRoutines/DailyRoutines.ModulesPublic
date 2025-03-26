@@ -139,7 +139,7 @@ public unsafe class AutoHighlightFlagMarker : DailyModuleBase
         var agent = AgentMap.Instance();
         if (agent == null) return false;
 
-        if (agent->IsFlagMarkerSet != 1) return false;
+        if (!agent->IsFlagMarkerSet) return false;
         if (agent->FlagMapMarker.TerritoryId == 0 || agent->FlagMapMarker.MapId == 0) return false;
         if (agent->FlagMapMarker.MapId != DService.ClientState.MapId) return false;
 

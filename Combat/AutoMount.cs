@@ -125,7 +125,7 @@ public unsafe class AutoMount : DailyModuleBase
     {
         if (!Throttler.Throttle("AutoMount-UseMount")) return false;
         if (BetweenAreas) return false;
-        if (AgentMap.Instance()->IsPlayerMoving == 1) return true;
+        if (AgentMap.Instance()->IsPlayerMoving) return true;
         if (IsCasting) return false;
         if (IsOnMount) return true;
         if (ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 9) != 0) return false;

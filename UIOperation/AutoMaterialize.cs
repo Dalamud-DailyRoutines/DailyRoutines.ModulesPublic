@@ -124,7 +124,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
             {
                 var slot = container->GetInventorySlot(i);
                 if (slot == null || slot->ItemId == 0) continue;
-                if (slot->Spiritbond != 10_000) continue;
+                if (slot->SpiritbondOrCollectability != 10_000) continue;
 
                 if (!LuminaGetter.TryGetRow<Item>(slot->ItemId, out var itemData)) continue;
 
