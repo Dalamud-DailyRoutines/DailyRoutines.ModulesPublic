@@ -78,7 +78,7 @@ public class HealerHelper : DailyModuleBase
     {
         // auto play card
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-AutoPlayCardTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-AutoPlayCardDescription", LuminaGetter.GetRow<LuminaAction>(17055)!.Value.Name.ExtractText()));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaGetter.GetRow<LuminaAction>(17055)!.Value.Name.ExtractText()));
 
         ImGui.Spacing();
 
@@ -151,7 +151,7 @@ public class HealerHelper : DailyModuleBase
 
         // easy heal
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyHealTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyHealDescription"));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", GetLoc("HealerHelper-SingleTargetHeal")));
 
         ImGui.Spacing();
 
@@ -197,7 +197,7 @@ public class HealerHelper : DailyModuleBase
 
         // easy dispel
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyDispelTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyDispelDescription"));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaGetter.GetRow<LuminaAction>(7568)!.Value.Name.ExtractText()));
 
         ImGui.Spacing();
 
