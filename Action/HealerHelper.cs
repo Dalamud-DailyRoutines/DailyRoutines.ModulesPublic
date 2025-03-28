@@ -29,10 +29,10 @@ public class HealerHelper : DailyModuleBase
 
     public override ModuleInfo Info => new()
     {
-        Author = ["HaKu"],
-        Title = GetLoc("HealerHelperTitle"),
+        Author      = ["HaKu"],
+        Title       = GetLoc("HealerHelperTitle"),
         Description = GetLoc("HealerHelperDescription"),
-        Category = ModuleCategories.Action
+        Category    = ModuleCategories.Action
     };
 
     private static Config? ModuleConfig;
@@ -55,8 +55,8 @@ public class HealerHelper : DailyModuleBase
         // life cycle hooks
         UseActionManager.Register(OnPreUseAction);
         DService.ClientState.TerritoryChanged += OnZoneChanged;
-        DService.DutyState.DutyRecommenced += OnDutyRecommenced;
-        DService.Condition.ConditionChange += OnConditionChanged;
+        DService.DutyState.DutyRecommenced    += OnDutyRecommenced;
+        DService.Condition.ConditionChange    += OnConditionChanged;
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_PartyList", OnPartyListPostDraw);
     }
 
@@ -64,8 +64,8 @@ public class HealerHelper : DailyModuleBase
     {
         UseActionManager.Unregister(OnPreUseAction);
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.DutyState.DutyRecommenced -= OnDutyRecommenced;
-        DService.Condition.ConditionChange -= OnConditionChanged;
+        DService.DutyState.DutyRecommenced    -= OnDutyRecommenced;
+        DService.Condition.ConditionChange    -= OnConditionChanged;
         DService.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, OnPartyListPostDraw);
 
         ResetPartyList();
@@ -213,7 +213,7 @@ public class HealerHelper : DailyModuleBase
             if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("Ordered")}] ({GetLoc("HealerHelper-EasyDispel-OrderedDescription")})",
                                   ModuleConfig is { EasyDispel: EasyDispelStatus.Enable, DispelOrder: DispelOrderStatus.Order }))
             {
-                ModuleConfig.EasyDispel = EasyDispelStatus.Enable;
+                ModuleConfig.EasyDispel  = EasyDispelStatus.Enable;
                 ModuleConfig.DispelOrder = DispelOrderStatus.Order;
                 SaveConfig(ModuleConfig);
             }
@@ -221,7 +221,7 @@ public class HealerHelper : DailyModuleBase
             if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("Reversed")}] ({GetLoc("HealerHelper-EasyDispel-ReversedDescription")})",
                                   ModuleConfig is { EasyDispel: EasyDispelStatus.Enable, DispelOrder: DispelOrderStatus.Reverse }))
             {
-                ModuleConfig.EasyDispel = EasyDispelStatus.Enable;
+                ModuleConfig.EasyDispel  = EasyDispelStatus.Enable;
                 ModuleConfig.DispelOrder = DispelOrderStatus.Reverse;
                 SaveConfig(ModuleConfig);
             }
@@ -274,8 +274,8 @@ public class HealerHelper : DailyModuleBase
 
     // hook before play card & target heal
     private static void OnPreUseAction(
-        ref bool isPrevented, ref ActionType type, ref uint actionID,
-        ref ulong targetID, ref Vector3 location, ref uint extraParam)
+        ref bool  isPrevented, ref ActionType type,     ref uint actionID,
+        ref ulong targetID,    ref Vector3    location, ref uint extraParam)
     {
         if (type != ActionType.Action || DService.ClientState.IsPvP || DService.PartyList.Length == 0) return;
 
@@ -294,7 +294,7 @@ public class HealerHelper : DailyModuleBase
                 var member = FetchMember((uint)targetID);
                 if (member != null)
                 {
-                    var name = member.Name.ExtractText();
+                    var name         = member.Name.ExtractText();
                     var classJobIcon = member.ClassJob.ValueNullable.ToBitmapFontIcon();
                     var classJobName = member.ClassJob.Value.Name.ExtractText();
 
@@ -314,7 +314,7 @@ public class HealerHelper : DailyModuleBase
             // mark opener end
             if (actionID is 37026 && IsOpener)
             {
-                IsOpener = false;
+                IsOpener    = false;
                 NeedReorder = true;
             }
         }
@@ -337,7 +337,7 @@ public class HealerHelper : DailyModuleBase
                 var member = FetchMember((uint)targetID);
                 if (member != null)
                 {
-                    var name = member.Name.ExtractText();
+                    var name         = member.Name.ExtractText();
                     var classJobIcon = member.ClassJob.ValueNullable.ToBitmapFontIcon();
                     var classJobName = member.ClassJob.Value.Name.ExtractText();
 
@@ -375,7 +375,7 @@ public class HealerHelper : DailyModuleBase
                 var member = FetchMember((uint)targetID);
                 if (member != null)
                 {
-                    var name = member.Name.ExtractText();
+                    var name         = member.Name.ExtractText();
                     var classJobIcon = member.ClassJob.ValueNullable.ToBitmapFontIcon();
                     var classJobName = member.ClassJob.Value.Name.ExtractText();
 
@@ -405,12 +405,12 @@ public class HealerHelper : DailyModuleBase
     {
         if (flag is ConditionFlag.InCombat)
         {
-            IsOpener = true;
+            IsOpener    = true;
             NeedReorder = false;
         }
         else
         {
-            IsOpener = false;
+            IsOpener    = false;
             NeedReorder = true;
         }
     }
@@ -453,14 +453,14 @@ public class HealerHelper : DailyModuleBase
                     // party member changed, update candidates
                     OrderCandidates();
                     PartyMemberIdsCache = ids;
-                    NeedReorder = false;
+                    NeedReorder         = false;
                 }
 
                 // draw marks
                 if (ModuleConfig.OverlayMark)
                 {
                     // melee
-                    var meleeId = FetchCandidateId("Melee");
+                    var meleeId  = FetchCandidateId("Melee");
                     var meleeIdx = FetchMemberIndex(meleeId) ?? 0;
                     if (meleeIdx != MeleeCandidateIdxCache)
                     {
@@ -470,7 +470,7 @@ public class HealerHelper : DailyModuleBase
                     }
 
                     // range
-                    var rangeId = FetchCandidateId("Range");
+                    var rangeId  = FetchCandidateId("Range");
                     var rangeIdx = FetchMemberIndex(rangeId) ?? 0;
                     if (rangeIdx != RangeCandidateIdxCache)
                     {
@@ -506,8 +506,8 @@ public class HealerHelper : DailyModuleBase
 
     private static readonly List<(uint id, double priority)> MeleeCandidateOrder = new();
     private static readonly List<(uint id, double priority)> RangeCandidateOrder = new();
-    private static uint MeleeCandidateIdxCache;
-    private static uint RangeCandidateIdxCache;
+    private static          uint                             MeleeCandidateIdxCache;
+    private static          uint                             RangeCandidateIdxCache;
 
     private static bool IsOpener;
     private static bool NeedReorder;
@@ -614,13 +614,13 @@ public class HealerHelper : DailyModuleBase
         {
             "Melee" => MeleeCandidateOrder,
             "Range" => RangeCandidateOrder,
-            _ => throw new ArgumentOutOfRangeException(nameof(role))
+            _       => throw new ArgumentOutOfRangeException(nameof(role))
         };
 
         var needResort = false;
         for (var i = 0; i < candidates.Count; i++)
         {
-            var member = candidates[i];
+            var member    = candidates[i];
             var candidate = DService.PartyList.FirstOrDefault(m => m.ObjectId == member.id);
             if (candidate is null) continue;
 
@@ -660,8 +660,8 @@ public class HealerHelper : DailyModuleBase
 
     private static uint TargetNeedHeal()
     {
-        var partyList = DService.PartyList;
-        var lowRatio = 2f;
+        var partyList  = DService.PartyList;
+        var lowRatio   = 2f;
         var needHealId = UnspecificTargetId;
         foreach (var member in partyList)
         {
@@ -671,7 +671,7 @@ public class HealerHelper : DailyModuleBase
             var ratio = member.CurrentHP / (float)member.MaxHP;
             if (ratio < lowRatio && ratio <= ModuleConfig.NeedHealThreshold)
             {
-                lowRatio = ratio;
+                lowRatio   = ratio;
                 needHealId = member.ObjectId;
             }
         }
@@ -681,7 +681,7 @@ public class HealerHelper : DailyModuleBase
 
     private static unsafe uint TargetNeedDispel(bool reverse = false)
     {
-        var partyList = DService.PartyList;
+        var partyList    = DService.PartyList;
         var needDispelId = UnspecificTargetId;
 
         // first dispel local player
@@ -714,8 +714,8 @@ public class HealerHelper : DailyModuleBase
     #region FFLogs
 
     // FFLogs related (auto play card advance mode)
-    private static readonly HttpClient Client = new();
-    private const string FFLogsUri = "https://www.fflogs.com/v1";
+    private static readonly HttpClient Client    = new();
+    private const           string     FFLogsUri = "https://www.fflogs.com/v1";
 
     private static Dictionary<uint, LogsRecord> MemberBestRecords = new Dictionary<uint, LogsRecord>();
 
@@ -726,10 +726,10 @@ public class HealerHelper : DailyModuleBase
     {
         try
         {
-            var uri = $"{FFLogsUri}/classes?api_key={ModuleConfig.FFLogsAPIKey}";
+            var uri      = $"{FFLogsUri}/classes?api_key={ModuleConfig.FFLogsAPIKey}";
             var response = await Client.GetStringAsync(uri);
             ModuleConfig.KeyValid = !string.IsNullOrWhiteSpace(response);
-            FirstTimeFallback = true; // only notify once per exec time
+            FirstTimeFallback     = true; // only notify once per exec time
             SaveConfig(ModuleConfig);
         }
         catch (Exception)
@@ -759,23 +759,23 @@ public class HealerHelper : DailyModuleBase
             return bestRecord;
 
         // get character info
-        var charaName = member.Name;
+        var charaName  = member.Name;
         var serverSlug = member.World.Value.Name.ExtractText();
-        var region = GetRegion();
-        var job = member.ClassJob.Value.NameEnglish.ExtractText();
+        var region     = GetRegion();
+        var job        = member.ClassJob.Value.NameEnglish.ExtractText();
 
         // fetch record
         try
         {
-            var uri = $"{FFLogsUri}/parses/character/{charaName}/{serverSlug}/{region}";
+            var uri   = $"{FFLogsUri}/parses/character/{charaName}/{serverSlug}/{region}";
             var query = HttpUtility.ParseQueryString(string.Empty);
-            query["api_key"] = ModuleConfig.FFLogsAPIKey;
-            query["metric"] = "ndps";
+            query["api_key"]   = ModuleConfig.FFLogsAPIKey;
+            query["metric"]    = "ndps";
             query["encounter"] = Dal2LogsZoneMap[zone].ToString();
 
             // contains all ultimates and current savage in current patch
             var response = await Client.GetStringAsync($"{uri}?{query}");
-            var records = JsonConvert.DeserializeObject<LogsRecord[]>(response);
+            var records  = JsonConvert.DeserializeObject<LogsRecord[]>(response);
             if (records == null || records.Length == 0) return null;
 
             // find best record
@@ -823,7 +823,7 @@ public class HealerHelper : DailyModuleBase
 
     #region ImageNode
 
-    private static readonly ConcurrentDictionary<uint, nint> ImageNodes = new();
+    private static readonly ConcurrentDictionary<uint, nint>   ImageNodes   = new();
     private static readonly ConcurrentDictionary<ushort, uint> MarkedStatus = new();
 
     private static volatile bool MarkIsBuild;
@@ -990,14 +990,14 @@ public class HealerHelper : DailyModuleBase
 
         // FFLogs API Key v1 for fetching records (auto play card advance mode)
         public string FFLogsAPIKey = string.Empty;
-        public bool KeyValid;
+        public bool   KeyValid;
 
         // easy heal
-        public EasyHealStatus EasyHeal = EasyHealStatus.Enable;
-        public float NeedHealThreshold = 0.8f;
+        public EasyHealStatus EasyHeal          = EasyHealStatus.Enable;
+        public float          NeedHealThreshold = 0.8f;
 
         // easy dispel
-        public EasyDispelStatus EasyDispel = EasyDispelStatus.Enable;
+        public EasyDispelStatus  EasyDispel  = EasyDispelStatus.Enable;
         public DispelOrderStatus DispelOrder = DispelOrderStatus.Order;
 
         // notification
@@ -1006,7 +1006,7 @@ public class HealerHelper : DailyModuleBase
         public bool OverlayMark;
 
         // use overlay to mark candidate if OverlayMark is true
-        public float MarkScale = 0.33f;
+        public float   MarkScale  = 0.33f;
         public Vector2 MarkOffset = new(-24, 40);
     }
 
@@ -1015,10 +1015,10 @@ public class HealerHelper : DailyModuleBase
     public static readonly Dictionary<uint, uint> Dal2LogsZoneMap = new()
     {
         // ultimates
-        [733] = 1073,  // Bahamut f1bz
-        [777] = 1074,  // Weapon w1fz
-        [887] = 1075,  // Alexander d2az
-        [968] = 1076,  // Dragonsong r1fz
+        [733]  = 1073, // Bahamut f1bz
+        [777]  = 1074, // Weapon w1fz
+        [887]  = 1075, // Alexander d2az
+        [968]  = 1076, // Dragonsong r1fz
         [1122] = 1077, // Omega z3oz
         [1238] = 1079, // Future Rewritten n4gw
         // m1-4s
@@ -1078,13 +1078,13 @@ public class HealerHelper : DailyModuleBase
     public static readonly Dictionary<string, string[]> MeleeOrder = new()
     {
         ["Opener"] = ["Samurai", "Ninja", "Dragon", "Dark Knight", "Monk", "Reaper", "Viper"],
-        ["2m+"] = ["Samurai", "Ninja", "Viper", "Dragon", "Monk", "Dark Knight", "Reaper"]
+        ["2m+"]    = ["Samurai", "Ninja", "Viper", "Dragon", "Monk", "Dark Knight", "Reaper"]
     };
 
     public static readonly Dictionary<string, string[]> RangeOrder = new()
     {
         ["Opener"] = ["Pictomancer", "Summoner", "Machinist", "Dancer", "Red Mage", "Black Mage", "Bard"],
-        ["2m+"] = ["Pictomancer", "Summoner", "Machinist", "Bard", "Red Mage", "Dancer", "Black Mage"]
+        ["2m+"]    = ["Pictomancer", "Summoner", "Machinist", "Bard", "Red Mage", "Dancer", "Black Mage"]
     };
 
     // list of target healing actions
