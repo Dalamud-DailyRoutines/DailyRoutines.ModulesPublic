@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using ClickLib;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -112,7 +111,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             return true;
         });
         
-        TaskHelper.Enqueue(() => Click.TrySendClick("select_yes"));
+        TaskHelper.Enqueue(() => ClickSelectYesnoYes());
     }
 
     public override void Uninit()

@@ -1,4 +1,3 @@
-using ClickLib;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
@@ -101,7 +100,7 @@ public unsafe class AutoDeleteLetters : DailyModuleBase
     private void AlwaysYes(AddonEvent type, AddonArgs args)
     {
         if (!TaskHelper.IsBusy) return;
-        Click.SendClick("select_yes");
+        ClickSelectYesnoYes();
     }
 
     private void OnAddonLetterList(AddonEvent type, AddonArgs? _)

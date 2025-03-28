@@ -2,11 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using ClickLib;
-using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
-using DailyRoutines.Infos.Clicks;
 using DailyRoutines.Managers;
 using DailyRoutines.ModulesPublic;
 using DailyRoutines.Windows;
@@ -17,6 +14,7 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using GrandCompany = FFXIVClientStructs.FFXIV.Client.UI.Agent.GrandCompany;
@@ -93,7 +91,10 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
             if (ImGui.Checkbox(GetLoc("AutoExpertDelivery-AutoSwitch"), ref ModuleConfig.AutoSwitchWhenOpen))
             {
                 if (ModuleConfig.AutoSwitchWhenOpen)
-                    ClickGrandCompanySupplyList.Using((nint)addon).ExpertDelivery();
+                {
+                    var buttonNode = GrandCompanySupplyList->GetNodeById(13)->GetAsAtkComponentRadioButton();
+                    buttonNode->ClickAddonRadioButton(GrandCompanySupplyList, 4);
+                }
                 SaveConfig(ModuleConfig);
             }
         }
@@ -212,7 +213,7 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         {
             if (!IsAddonAndNodesReady(GrandCompanySupplyReward)) return false;
             
-            ClickGrandCompanySupplyReward.Using((nint)GrandCompanySupplyReward).Deliver();
+            ((AddonGrandCompanySupplyReward*)GrandCompanySupplyReward)->DeliverButton->ClickAddonButton(GrandCompanySupplyReward);
             TaskHelper.Enqueue(EnqueueRefresh);
             TaskHelper.Enqueue(EnqueueDelivery);
             return true;
@@ -221,7 +222,7 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         {
             if (!IsAddonAndNodesReady(SelectYesno)) return false;
             
-            ClickSelectYesNo.Using((nint)SelectYesno).Yes();
+            ClickSelectYesnoYes();
             TaskHelper.Enqueue(EnqueueDelivery);
             return true;
         }
@@ -278,7 +279,10 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         };
 
         if (ModuleConfig.AutoSwitchWhenOpen && type == AddonEvent.PostSetup)
-            ClickGrandCompanySupplyList.Using((nint)GrandCompanySupplyList).ExpertDelivery();
+        {
+            var buttonNode = GrandCompanySupplyList->GetNodeById(13)->GetAsAtkComponentRadioButton();
+            buttonNode->ClickAddonRadioButton(GrandCompanySupplyList, 4);
+        }
     }
     
     public override void Uninit()

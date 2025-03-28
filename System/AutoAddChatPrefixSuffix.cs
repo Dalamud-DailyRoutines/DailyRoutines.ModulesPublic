@@ -1,13 +1,12 @@
-using System.Collections.Generic;
-using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Hooking;
 using Dalamud.Interface;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.Shell;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace DailyRoutines.Modules;
 

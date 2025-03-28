@@ -1,13 +1,11 @@
-using System;
-using System.Linq;
 using DailyRoutines.Abstracts;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.System.String;
-using System.Windows.Forms;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using System;
+using System.Linq;
+using System.Windows.Forms;
 
 namespace DailyRoutines.Modules;
 

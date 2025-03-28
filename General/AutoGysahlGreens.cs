@@ -29,11 +29,11 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     static AutoGysahlGreens()
     {
         ValidTerritory = PresetSheet.Zones
-                                   .Where(x => 
-                                              x.Value.TerritoryIntendedUse.RowId == 1 
-                                              && x.Key != 250)
-                                   .Select(x => (ushort)x.Key)
-                                   .ToHashSet();
+                                    .Where(x => 
+                                               x.Value.TerritoryIntendedUse.RowId == 1 
+                                               && x.Key != 250)
+                                    .Select(x => (ushort)x.Key)
+                                    .ToHashSet();
     }
 
     public override void Init()
@@ -71,6 +71,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     private static void OnUpdate(IFramework framework)
     {
         if (!Throttler.Throttle("AutoGysahlGreens-OnUpdate", 5_000)) return;
+        if (PlayerState.Instance()->IsPlayerStateFlagSet(PlayerStateFlag.IsBuddyInStable)) return;
         if (DService.ClientState.LocalPlayer is not { IsDead: false }) return;
         if (BetweenAreas || OccupiedInEvent || IsOnMount || !IsScreenReady()) return;
 

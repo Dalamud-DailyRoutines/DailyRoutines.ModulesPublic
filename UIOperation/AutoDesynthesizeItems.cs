@@ -1,4 +1,3 @@
-using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
@@ -71,12 +70,11 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
 
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
-        var addon = (AddonSalvageDialog*)args.Addon;
+        var addon = (AddonSalvageDialog*)SalvageDialog;
         if (addon == null) return;
 
-        var handler = new ClickSalvageDialog();
-        handler.CheckBox();
-        handler.Desynthesize();
+        addon->BulkDesynthCheckboxNode->ClickAddonCheckBox(SalvageDialog, 3);
+        addon->DesynthesizeButton->ClickAddonButton(SalvageDialog);
     }
 
     private bool? StartDesynthesize()

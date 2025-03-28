@@ -1,4 +1,3 @@
-using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using Dalamud.Game.Addon.Lifecycle;
@@ -49,7 +48,7 @@ public class AutoInDutySelectYes : DailyModuleBase
         if (string.IsNullOrWhiteSpace(text) || Blacklist.ContainsAny(text))
             return;
         
-        ClickSelectYesNo.Using(args.Addon).Yes();
+        ClickSelectYesnoYes();
     }
 
     public override void Uninit()

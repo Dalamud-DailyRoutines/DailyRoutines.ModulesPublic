@@ -1,5 +1,3 @@
-using ClickLib;
-using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
@@ -268,15 +266,14 @@ public unsafe class AutoLogin : DailyModuleBase
             return false;
         }
 
-        var click = new ClickSelectYesNo();
         var title = Marshal.PtrToStringUTF8((nint)SelectYesno->AtkValues[0].String);
         if (!title.Contains(LuminaGetter.GetRow<Addon>(115)!.Value.Text.ExtractText()))
         {
-            click.No();
+            ClickSelectYesnoNo();
             return false;
         }
 
-        click.Yes();
+        ClickSelectYesnoYes();
         return true;
     }
 
@@ -347,7 +344,7 @@ public unsafe class AutoLogin : DailyModuleBase
         Callback(addon, true, 29, 0, charaIndex);
         Callback(addon, true, 21, charaIndex);
 
-        TaskHelper.Enqueue(() => Click.TrySendClick("select_yes"));
+        TaskHelper.Enqueue(() => ClickSelectYesnoYes());
         TaskHelper.Enqueue(ResetStates);
         return true;
     }

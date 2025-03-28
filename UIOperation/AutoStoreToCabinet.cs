@@ -82,7 +82,7 @@ public class AutoStoreToCabinet : DailyModuleBase
             if (ImGui.Button(Lang.Get("Start")))
             {
                 IsOnTask = true;
-                Task.Run(async () =>
+                DService.Framework.RunOnTick(async () =>
                 {
                     try
                     {
@@ -92,7 +92,7 @@ public class AutoStoreToCabinet : DailyModuleBase
                             foreach (var item in list)
                             {
                                 ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.StoreToCabinet, (int)item);
-                                await Task.Delay(100);
+                                await Task.Delay(100).ConfigureAwait(false);
                             }
                         }
                     }
@@ -100,7 +100,7 @@ public class AutoStoreToCabinet : DailyModuleBase
                     {
                         IsOnTask = false;
                     }
-                }, CancelSource.Token);
+                }, default, default, CancelSource.Token);
             }
 
             ImGui.EndDisabled();

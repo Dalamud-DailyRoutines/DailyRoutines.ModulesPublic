@@ -104,10 +104,6 @@
             <HintPath>$(BaseOutputPath)\$(Configuration)\OmenTools.dll</HintPath>
             <Private>false</Private>
         </Reference>
-        <Reference Include="ClickLib">
-            <HintPath>$(BaseOutputPath)\$(Configuration)\ClickLib.dll</HintPath>
-            <Private>false</Private>
-        </Reference>
         <Reference Include="EdgeTTS">
             <HintPath>$(BaseOutputPath)\$(Configuration)\EdgeTTS.dll</HintPath>
             <Private>false</Private>

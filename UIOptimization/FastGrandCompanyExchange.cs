@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Numerics;
-using ClickLib.Clicks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
@@ -265,12 +264,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
             }, "交换货币");
         }
         
-        TaskHelper.Enqueue(() =>
-        {
-            if (!IsAddonAndNodesReady(SelectYesno)) return false;
-            ClickSelectYesNo.Using((nint)SelectYesno).Yes();
-            return true;
-        });
+        TaskHelper.Enqueue(() => ClickSelectYesnoYes());
     }
 
     private class Config : ModuleConfiguration

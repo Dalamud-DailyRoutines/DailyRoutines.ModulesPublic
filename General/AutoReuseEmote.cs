@@ -53,7 +53,7 @@ public class AutoReuseEmote : DailyModuleBase
         if (!TryParseEmoteByName(emoteName, out var emoteID)) return;
 
         CancelSource = new();
-        Task.Run(() => UseEmoteByID(emoteID, repeatInterval, CancelSource), CancelSource.Token);
+        DService.Framework.RunOnTick(() => UseEmoteByID(emoteID, repeatInterval, CancelSource), default, default, CancelSource.Token);
     }
 
     private static unsafe bool TryParseEmoteByName(string name, out ushort id)

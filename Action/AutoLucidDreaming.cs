@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
+using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -25,9 +26,9 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
     private const int   GcdEndThresholdMs       = 500;
     private const float UseInGcdWindowStart     = 60;
     private const float UseInGcdWindowEnd       = 95;
-    
-    private static readonly HashSet<uint> ClassJobArr     = [6, 7, 15, 19, 20, 21, 23, 24, 26, 27, 28, 33, 35, 36, 40];
-    private static readonly uint          LucidDreamingID = 7562;
+    private const uint  LucidDreamingID         = 7562;
+
+    private static readonly HashSet<uint> ClassJobArr = [6, 7, 15, 19, 20, 21, 23, 24, 26, 27, 28, 33, 35, 36, 40];
 
     private static Configs ModuleConfig = null!;
     
@@ -60,6 +61,11 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
 
         ImGui.SetNextItemWidth(250f * GlobalFontScale);
         if (ImGui.DragInt("##MpThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 3000, 9000, $"{LuminaWarpper.GetAddonText(233)}: %d"))
+            SaveConfig(ModuleConfig);
+        
+        ImGui.Spacing();
+        
+        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
             SaveConfig(ModuleConfig);
     }
 
@@ -204,16 +210,15 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
         var capturedTime = DateTime.Now;
         TaskHelper.Enqueue(() =>
         {
-            // 更新LastPlayerActionTime（原UseAction方法中的逻辑）
-            if (LucidDreamingID != 7562) LastPlayerActionTime = DateTime.Now;
+            if (IsAbilityLocked) return false;
             
-            // 检查技能锁定
-            if (IsAbilityLocked)
-                return false;
-            
-            // 使用UseActionManager
-            var result = UseActionManager.UseAction(ActionType.Action, LucidDreamingID);
-            if (result) LastLucidDreamingUseTime = capturedTime;
+            var result = UseActionManager.UseActionLocation(ActionType.Action, LucidDreamingID);
+            if (result)
+            {
+                LastLucidDreamingUseTime = capturedTime;
+                if (ModuleConfig.SendNotification && Throttler.Throttle("AutoLucidDreaming-Notification", 10_000))
+                    NotificationInfo(GetLoc("AutoLucidDreaming-Notification", localPlayer.CurrentMp));
+            }
             return result;
         }, $"UseAction_{LucidDreamingID}", 5_000, true, 1);
         return true;
@@ -225,5 +230,6 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
     {
         public bool OnlyInDuty;
         public int  MpThreshold = 7000;
+        public bool SendNotification = true;
     }
 }

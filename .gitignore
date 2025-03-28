@@ -3,4 +3,4 @@ obj/
 bin/
 *.user
 .idea/
-DailyRoutines.Modules/General/DevModule.cs
+DevModule.cs

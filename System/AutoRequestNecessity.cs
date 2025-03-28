@@ -1,5 +1,4 @@
 using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 
 namespace DailyRoutines.Modules;

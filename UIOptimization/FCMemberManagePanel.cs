@@ -1,4 +1,3 @@
-using ClickLib;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -341,8 +340,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
                     EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ExtractText(), "SelectYesno",
                                              () =>
                                              {
-                                                 ContextTaskHelper.Enqueue(
-                                                     () => Click.SendClick("select_yes"), null, null, null, 1);
+                                                 ContextTaskHelper.Enqueue(() => ClickSelectYesnoYes(), null, null, null, 1);
                                                  return true;
                                              });
             }
