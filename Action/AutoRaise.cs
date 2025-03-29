@@ -467,7 +467,7 @@ public unsafe class AutoRaise : DailyModuleBase
     }
 
     // 寻找阵亡队友
-    private Character* FindDeadPartyMember()
+    private static Character* FindDeadPartyMember()
     {
         try
         {
@@ -486,12 +486,11 @@ public unsafe class AutoRaise : DailyModuleBase
             // 获取复活技能ID
             var raiseActionId = GetRaiseActionId(localPlayer.ClassJob.RowId);
             
-            // 获取复活技能的最大施法距离（使用默认值）
-            // 由于Lumina.Excel.Sheets.Action类中没有EffectRange属性，直接使用默认值
-            const float maxCastDistance = 30f;
+            // 获取复活技能的最大施法距离
+            var maxCastDistance = ActionManager.GetActionRange(raiseActionId);
             
             // Y轴差异最大允许值（米）- 复活技能的垂直施法范围
-            const float maxYDifference = 5.0f;
+            var maxYDifference = maxCastDistance * 0.15f; // 垂直范围通常约为水平范围的15%
             
             // 检查复活技能是否已解锁
             if (!IsActionUnlocked(raiseActionId)) return null;
