@@ -288,7 +288,7 @@ public class HealerHelper : DailyModuleBase
         var isAST = localPlayer.ClassJob.RowId is 33;
 
         // auto play card
-        if (isAST && !PlayCardActions.Contains(actionID) && ModuleConfig.AutoPlayCard != AutoPlayCardStatus.Disable)
+        if (isAST && PlayCardActions.Contains(actionID) && ModuleConfig.AutoPlayCard != AutoPlayCardStatus.Disable)
             OnPrePlayCard(ref targetID, ref actionID);
 
         // easy heal
