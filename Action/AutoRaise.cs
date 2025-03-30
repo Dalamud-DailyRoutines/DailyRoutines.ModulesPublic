@@ -38,10 +38,8 @@ public unsafe class AutoRaise : DailyModuleBase
         public int RaiseTargetType = 0;  // 0: 所有人, 1: 仅治疗, 2: 仅坦克
         public bool ForceRaiseMode = false;
     }
-    
     private static Config ModuleConfig                    = null!;
 
-    private static readonly HashSet<uint> ClassJobArray = [6, 7, 15, 24, 26, 27, 28, 33, 35, 40];
     private static readonly uint WhiteMageJobId = 24;
     
     private const byte ROLE_TANK = 1;
@@ -160,7 +158,7 @@ public unsafe class AutoRaise : DailyModuleBase
     private void OnClassJobChanged(uint classJobId)
     {
         TaskHelper.Abort();
-        if (!ClassJobArray.Contains(classJobId)) return;
+        if (GetRaiseActionId(classJobId) == 0) return;
         TaskHelper.Enqueue(OneTimeConditionCheck);
     }
 
@@ -198,11 +196,11 @@ public unsafe class AutoRaise : DailyModuleBase
     private bool? MainProcess()
     {
         if (BetweenAreas || !IsScreenReady() || OccupiedInEvent ||
-            DService.ClientState.LocalPlayer is not { } localPlayer ||
+            DService.ClientState.LocalPlayer is null ||
             !DService.Condition[ConditionFlag.InCombat])
             return Cycle(1000);
             
-        if (!ClassJobArray.Contains(localPlayer.ClassJob.RowId) ||
+        if (GetRaiseActionId(localPlayer.ClassJob.RowId) == 0 ||
             !IsActionUnlocked(SwiftcastActionId))
             return true;
 
@@ -234,8 +232,7 @@ public unsafe class AutoRaise : DailyModuleBase
             var checkResult = CheckBasicConditions();
             if (checkResult != null) return checkResult;
             
-            var deadPartyMember = FindDeadPartyMember();
-            if (deadPartyMember is null) return true;
+            if (FindDeadPartyMember() is not { } deadPartyMember) return true;
             
             return ProcessRaiseSequence(deadPartyMember);
         }
@@ -359,7 +356,7 @@ public unsafe class AutoRaise : DailyModuleBase
                 var targetId = (ulong)deadPartyMember->GetGameObjectId();
 
                 var raiseStatusCheck = actionManager->GetActionStatus(ActionType.Action, raiseActionId);
-                if (raiseStatusCheck is not 0)
+                if (raiseStatusCheck != 0)
                     return true;
                 
                 var priority = ModuleConfig.ForceRaiseMode ? 10 : 1;
@@ -398,7 +395,7 @@ public unsafe class AutoRaise : DailyModuleBase
         {
             if (DService.ClientState.LocalPlayer is not { } localPlayer) return null;
 
-            if (DService.PartyList is not { } partyList || partyList.Length <= 1) return null;
+            if (DService.PartyList is not { Length: > 1 } partyList) return null;
 
             var playerPosition = localPlayer.Position;
             
@@ -510,7 +507,7 @@ public unsafe class AutoRaise : DailyModuleBase
                                StatusManager* statusManager)
     {
         var swiftcastStatus = actionManager->GetActionStatus(ActionType.Action, SwiftcastActionId);
-        if (swiftcastStatus is not 0) return true;
+        if (swiftcastStatus != 0) return true;
         
         if (localPlayer.ClassJob.RowId == WhiteMageJobId &&
             ModuleConfig.UseWhiteMageThinAir &&
