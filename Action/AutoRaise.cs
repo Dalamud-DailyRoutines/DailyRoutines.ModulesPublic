@@ -200,6 +200,8 @@ public unsafe class AutoRaise : DailyModuleBase
             !DService.Condition[ConditionFlag.InCombat])
             return Cycle(1000);
             
+        var localPlayer = DService.ClientState.LocalPlayer; 
+        
         if (GetRaiseActionId(localPlayer.ClassJob.RowId) == 0 ||
             !IsActionUnlocked(SwiftcastActionId))
             return true;
@@ -232,7 +234,8 @@ public unsafe class AutoRaise : DailyModuleBase
             var checkResult = CheckBasicConditions();
             if (checkResult != null) return checkResult;
             
-            if (FindDeadPartyMember() is not { } deadPartyMember) return true;
+            var deadPartyMember = FindDeadPartyMember();
+if (deadPartyMember == null) return true;
             
             return ProcessRaiseSequence(deadPartyMember);
         }
