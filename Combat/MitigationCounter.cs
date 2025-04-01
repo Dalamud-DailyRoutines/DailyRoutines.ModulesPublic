@@ -161,8 +161,8 @@ public class MitigationCounter : DailyModuleBase
     {
         return 1f - ModuleConfig.AccumulationMethod switch
         {
-            AccumulationMethodSet.Additive       => mitigations.Aggregate(1f, (acc, m) => acc * (1f - (m / 100f))),
-            AccumulationMethodSet.Multiplicative => 1f - Math.Clamp(mitigations.Sum(m => m / 100f), 0, 1),
+            AccumulationMethodSet.Multiplicative => mitigations.Aggregate(1f, (acc, m) => acc * (1f - (m / 100f))),
+            AccumulationMethodSet.Additive       => 1f - Math.Clamp(mitigations.Sum(m => m / 100f), 0, 1),
             _                                    => 0
         };
     }
