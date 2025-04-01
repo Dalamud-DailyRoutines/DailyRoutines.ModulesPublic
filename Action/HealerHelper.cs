@@ -1123,7 +1123,7 @@ public class HealerHelper : DailyModuleBase
         // whm
         120,   // cure 1
         135,   // cure 2
-        131,   // cure 3 (600 + nearby)
+        // 131, // cure 3 (600 + nearby)
         137,   // regen
         140,   // benediction
         3570,  // tetragrammaton
