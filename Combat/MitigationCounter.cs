@@ -97,10 +97,7 @@ public class MitigationCounter : DailyModuleBase
 
         foreach (var status in localPlayerStatus)
             if (MitigationStatusMap.TryGetValue(status.StatusId, out var mitigation))
-            {
-                Chat($"find mitigation on local {mitigation.Name}");
                 activeMitigation.Add(mitigation);
-            }
 
         // count mitigation on battle npc
         var currentTarget = DService.Targets.Target;
@@ -108,10 +105,7 @@ public class MitigationCounter : DailyModuleBase
         if (currentTarget is IBattleNpc battleNpc)
             foreach (var statusId in MitigationStatusMap.Keys)
                 if (battleNpc.ToBCStruct()->StatusManager.HasStatus(statusId))
-                {
-                    Chat($"find mitigation on NPC {MitigationStatusMap[statusId].Name}");
                     activeMitigation.Add(MitigationStatusMap[statusId]);
-                }
 
         // count mitigation on party members
         var setActiveMitigation = activeMitigation.DistinctBy(m => m.Id).ToList();
