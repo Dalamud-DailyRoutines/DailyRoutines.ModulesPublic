@@ -77,34 +77,34 @@ public unsafe class AutoRaise : DailyModuleBase
             TaskHelper.Enqueue(OneTimeConditionCheck);
         }
 
-        if (ImGui.DragInt("##MpThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 2400, 9000, $"{GetLoc("MpThreshold")}: %d"))
+        if (ImGui.DragInt("##MpThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 2400, 9000, $"{LuminaWarpper.GetAddonText(233)}: %d"))
             SaveConfig(ModuleConfig);
 
-        if (ImGui.Checkbox(GetLoc("UseWhiteMageThinAir"), ref ModuleConfig.UseWhiteMageThinAir))
+        if (ImGui.Checkbox(GetLoc("AutoRaise-UseWhiteMageThinAir"), ref ModuleConfig.UseWhiteMageThinAir))
             SaveConfig(ModuleConfig);
 
-        ImGui.Text(GetLoc("RaiseTargetType"));
+        ImGui.Text(GetLoc("AutoRaise-RaiseTargetType"));
 
         var currentType = ModuleConfig.RaiseTargetType;
-        if (ImGui.RadioButton(GetLoc("RaiseAll"), currentType == 0))
+        if (ImGui.RadioButton(GetLoc("AutoRaise-RaiseAll"), currentType == 0))
         {
             ModuleConfig.RaiseTargetType = 0;
             SaveConfig(ModuleConfig);
         }
 
-        if (ImGui.RadioButton(GetLoc("RaiseOnlyHealers"), currentType == 1))
+        if (ImGui.RadioButton(GetLoc("AutoRaise-RaiseOnlyHealers"), currentType == 1))
         {
             ModuleConfig.RaiseTargetType = 1;
             SaveConfig(ModuleConfig);
         }
 
-        if (ImGui.RadioButton(GetLoc("RaiseOnlyTanks"), currentType == 2))
+        if (ImGui.RadioButton(GetLoc("AutoRaise-RaiseOnlyTanks"), currentType == 2))
         {
             ModuleConfig.RaiseTargetType = 2;
             SaveConfig(ModuleConfig);
         }
 
-        if (ImGui.Checkbox(GetLoc("ForceRaiseMode"), ref ModuleConfig.ForceRaiseMode))
+        if (ImGui.Checkbox(GetLoc("AutoRaise-ForceRaiseMode"), ref ModuleConfig.ForceRaiseMode))
             SaveConfig(ModuleConfig);
     }
 
