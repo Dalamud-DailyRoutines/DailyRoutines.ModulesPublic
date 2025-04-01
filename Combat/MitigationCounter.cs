@@ -90,8 +90,15 @@ public class MitigationCounter : DailyModuleBase
         // lazy load status ids
         MitigationStatusMap ??= MitigationStatuses.ToDictionary(s => s.Id);
 
+        // fetch local player (null when zone changed)
+        var localPlayer = DService.ClientState.LocalPlayer;
+        if (localPlayer == null)
+        {
+            BarEntry.Shown = false;
+            return;
+        }
+
         // count mitigation on local player
-        var                    localPlayer       = DService.ClientState.LocalPlayer;
         var                    localPlayerStatus = localPlayer.StatusList;
         List<MitigationStatus> activeMitigation  = [];
 
