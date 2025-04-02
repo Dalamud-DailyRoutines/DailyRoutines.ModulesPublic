@@ -81,7 +81,7 @@ public class MitigationCounter : DailyModuleBase
         if (!Throttler.Throttle("MitigationCounter-OnFrameworkUpdate", 200)) return;
 
         // only available in combat and not in pvp
-        if (DService.ClientState.IsPvP)
+        if (DService.ClientState.IsPvP || DService.Condition[ConditionFlag.InCombat] is false)
         {
             BarEntry.Shown = false;
             return;
