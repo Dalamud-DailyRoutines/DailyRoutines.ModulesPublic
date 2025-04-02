@@ -23,8 +23,6 @@ public unsafe class AutoRaise : DailyModuleBase
         Author      = ["qingsiweisan"]
     };
 
-    public override ModulePermission Permission => new() { CNPremium = true, GlobalPremium = true };
-
     private static Config ModuleConfig = null!;
 
     private const uint WhiteMageJobID    = 24;
@@ -80,10 +78,8 @@ public unsafe class AutoRaise : DailyModuleBase
         }
 
         ImGui.AlignTextToFramePadding();
-        ImGui.Text("≥");
         
         ImGui.SetNextItemWidth(250f * GlobalFontScale);
-        ImGui.SameLine();
         if (ImGui.DragInt("##MPThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 2400, 9000, $"{LuminaWarpper.GetAddonText(233)}: %d"))
             SaveConfig(ModuleConfig);
 
@@ -116,7 +112,28 @@ public unsafe class AutoRaise : DailyModuleBase
         ImGui.NewLine();
         
         if (ImGui.Checkbox(GetLoc("AutoRaise-ForceRaiseMode"), ref ModuleConfig.ForceRaiseMode))
+        {
             SaveConfig(ModuleConfig);
+            TaskHelper.Abort();
+            TaskHelper.Enqueue(OneTimeConditionCheck);
+        }
+
+        if (ModuleConfig.ForceRaiseMode)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(LightSkyBlue, " (?)");
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                // 设置tooltip宽度，防止文本显示不全
+                ImGui.PushTextWrapPos(ImGui.GetFontSize() * 30.0f);
+                ImGui.TextWrapped(GetLoc("AutoRaise-ForceRaiseMode-Tooltip"));
+                ImGui.PopTextWrapPos();
+                ImGui.EndTooltip();
+            }
+        }
+
+        ImGui.NewLine();
     }
 
     public override void Uninit()
@@ -246,10 +263,21 @@ public unsafe class AutoRaise : DailyModuleBase
 
         if (!IsRaiseSequenceActive)
         {
-            if (!ModuleConfig.ForceRaiseMode &&
-                (timeSinceLastAction < PlayerInputIgnoreTimeMs ||
-                 (hasSwiftcast && timeSinceLastAction < PlayerInputIgnoreTimeMs * 3)))
-                return true;
+            if (!ModuleConfig.ForceRaiseMode)
+            {
+                // 使用GCD检测代替玩家输入检测
+                var gcdRecast = actionManager->GetRecastGroupDetail(58);
+                if (gcdRecast->IsActive != 0)
+                {
+                    var gcdTotal = actionManager->GetRecastTimeForGroup(58);
+                    var gcdElapsed = gcdRecast->Elapsed;
+                    var gcdProgressPercent = gcdElapsed / gcdTotal * 100;
+                    
+                    // 如果GCD刚刚开始（前20%），认为玩家正在手动使用技能
+                    if (gcdProgressPercent < 20)
+                        return true;
+                }
+            }
 
             if (timeSinceLastSwiftcastUse < AbilityLockTimeMs        ||
                 timeSinceLastRaiseUse     < AbilityLockTimeMs        ||
@@ -495,9 +523,9 @@ public unsafe class AutoRaise : DailyModuleBase
                                return true;
                            }, $"UseAction_{SwiftcastActionID}", 5_000, true, (uint)priority);
         
-        TaskHelper.DelayNext(300);
-        
-        TaskHelper.DelayNext(300);
+        // 减少等待时间，100ms + 100ms = 200ms总延迟已足够buff生效
+        TaskHelper.DelayNext(100);
+        TaskHelper.DelayNext(100);
         var hasSwiftcastAfterDelay = statusManager->HasStatus(167);
         if (!hasSwiftcastAfterDelay) return true;
 
@@ -507,9 +535,9 @@ public unsafe class AutoRaise : DailyModuleBase
     private class Config : ModuleConfiguration
     {
         public bool OnlyInDuty          = true;
-        public int  MpThreshold         = 1400; // MP阈值
+        public int  MpThreshold         = 1400;  // MP阈值
         public bool UseWhiteMageThinAir = true;
-        public int  RaiseTargetType; // 0: 所有人, 1: 仅治疗, 2: 仅坦克
+        public int  RaiseTargetType;    // 0: 所有人, 1: 仅治疗, 2: 仅坦克
         public bool ForceRaiseMode;
     }
 }
