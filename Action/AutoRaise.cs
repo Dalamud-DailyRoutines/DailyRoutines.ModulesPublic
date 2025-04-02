@@ -121,16 +121,7 @@ public unsafe class AutoRaise : DailyModuleBase
         if (ModuleConfig.ForceRaiseMode)
         {
             ImGui.SameLine();
-            ImGui.TextColored(LightSkyBlue, " (?)");
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.BeginTooltip();
-                // 设置tooltip宽度，防止文本显示不全
-                ImGui.PushTextWrapPos(ImGui.GetFontSize() * 30.0f);
-                ImGui.TextWrapped(GetLoc("AutoRaise-ForceRaiseMode-Tooltip"));
-                ImGui.PopTextWrapPos();
-                ImGui.EndTooltip();
-            }
+            ImGuiOm.HelpMarker(GetLoc("AutoRaise-ForceRaiseMode-Tooltip"));
         }
 
         ImGui.NewLine();
