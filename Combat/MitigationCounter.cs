@@ -119,12 +119,9 @@ public class MitigationCounter : DailyModuleBase
         if (currentTarget is IBattleNpc battleNpc)
         {
             var statusList = battleNpc.ToBCStruct()->StatusManager.Status;
-            for (var i = 0; i < statusList.Length; i++)
-            {
-                var statusId = statusList[i].StatusId;
-                if (MitigationStatusMap.TryGetValue(statusId, out var mitigation))
+            foreach (var status in statusList)
+                if (MitigationStatusMap.TryGetValue(status.StatusId, out var mitigation))
                     activeMitigation.Add(mitigation);
-            }
         }
 
         // count mitigation on party members
