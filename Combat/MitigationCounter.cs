@@ -29,6 +29,9 @@ public class MitigationCounter : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
+        // init hash map
+        MitigationStatusMap = MitigationStatuses.ToDictionary(s => s.Id);
+
         // status bar
         BarEntry         ??= DService.DtrBar.Get("DailyRoutines-MitigationCounter");
         BarEntry.OnClick =   () => ChatHelper.Instance.SendMessage($"/pdr search {GetType().Name}");
@@ -68,6 +71,14 @@ public class MitigationCounter : DailyModuleBase
                 SaveConfig(ModuleConfig);
             }
         }
+
+        ImGui.NewLine();
+
+        using (ImRaii.PushIndent())
+        {
+            if (ImGui.Checkbox(GetLoc("MitigationCounter-OnlyInCombat"), ref ModuleConfig.OnlyInCombat))
+                SaveConfig(ModuleConfig);
+        }
     }
 
     #endregion
@@ -81,18 +92,14 @@ public class MitigationCounter : DailyModuleBase
         if (!Throttler.Throttle("MitigationCounter-OnFrameworkUpdate", 200)) return;
 
         // only available in combat and not in pvp
-        if (DService.ClientState.IsPvP || !DService.Condition[ConditionFlag.InCombat])
+        if (DService.ClientState.IsPvP || (ModuleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat]))
         {
             BarEntry.Shown = false;
             return;
         }
 
-        // lazy load status ids
-        MitigationStatusMap ??= MitigationStatuses.ToDictionary(s => s.Id);
-
         // fetch local player (null when zone changed)
-        var localPlayer = DService.ClientState.LocalPlayer;
-        if (localPlayer == null)
+        if (DService.ClientState.LocalPlayer is not { } localPlayer)
         {
             BarEntry.Shown = false;
             return;
@@ -110,9 +117,15 @@ public class MitigationCounter : DailyModuleBase
         var currentTarget = DService.Targets.Target;
 
         if (currentTarget is IBattleNpc battleNpc)
-            foreach (var statusId in MitigationStatusMap.Keys)
-                if (battleNpc.ToBCStruct()->StatusManager.HasStatus(statusId))
-                    activeMitigation.Add(MitigationStatusMap[statusId]);
+        {
+            var statusList = battleNpc.ToBCStruct()->StatusManager.Status;
+            for (var i = 0; i < statusList.Length; i++)
+            {
+                var statusId = statusList[i].StatusId;
+                if (MitigationStatusMap.TryGetValue(statusId, out var mitigation))
+                    activeMitigation.Add(mitigation);
+            }
+        }
 
         // count mitigation on party members
         var setActiveMitigation = activeMitigation.DistinctBy(m => m.Id).ToList();
@@ -131,7 +144,7 @@ public class MitigationCounter : DailyModuleBase
 
     private static void RefreshBarEntry(float physical = 0, float magical = 0, float special = 0)
     {
-        if (BarEntry == null)
+        if (BarEntry is null)
             return;
 
         // build mitigation description
@@ -164,15 +177,13 @@ public class MitigationCounter : DailyModuleBase
         BarEntry.Shown = true;
     }
 
-    private static float MitigationReduction(List<float> mitigations)
-    {
-        return 1f - ModuleConfig.AccumulationMethod switch
+    private static float MitigationReduction(List<float> mitigations) =>
+        1f - ModuleConfig.AccumulationMethod switch
         {
             AccumulationMethodSet.Multiplicative => mitigations.Aggregate(1f, (acc, m) => acc * (1f - (m / 100f))),
             AccumulationMethodSet.Additive       => 1f - Math.Clamp(mitigations.Sum(m => m / 100f), 0, 1),
             _                                    => 0
         };
-    }
 
     #endregion
 
@@ -181,6 +192,7 @@ public class MitigationCounter : DailyModuleBase
     private class Config : ModuleConfiguration
     {
         public AccumulationMethodSet AccumulationMethod = AccumulationMethodSet.Multiplicative;
+        public bool                  OnlyInCombat       = true;
     }
 
     public enum AccumulationMethodSet
