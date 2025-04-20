@@ -32,7 +32,7 @@ public class HealerHelper : DailyModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("HealerHelperTitle"),
+        Title       = {GetLoc("HealerHelperTitle")},
         Description = GetLoc("HealerHelperDescription"),
         Category    = ModuleCategories.Action,
         Author      = ["HaKu"]
@@ -47,13 +47,17 @@ public class HealerHelper : DailyModuleBase
         // task helper for select candidates
         TaskHelper ??= new TaskHelper { TimeLimitMS = 20_000 };
 
-        // mark nodes
-        MarkIsBuild = false;
+        // fetch remote resource
+        DService.Framework.RunOnTick(async () => await FetchRemoteVersion());
 
         // build dispellable status dict
         DispellableStatus = LuminaGetter.Get<Lumina.Excel.Sheets.Status>()
                                         .Where(s => s is { CanDispel: true, Name.IsEmpty: false })
                                         .ToDictionary(s => s.RowId, s => s.Name.ExtractText().ToLowerInvariant());
+
+        // build job names mapping
+        JobNameMap = LuminaGetter.Get<ClassJob>()
+                                 .ToDictionary(s => s.NameEnglish, s => s.Name);
 
         // life cycle hooks
         UseActionManager.Register(OnPreUseAction);
@@ -71,17 +75,44 @@ public class HealerHelper : DailyModuleBase
         DService.Condition.ConditionChange    -= OnConditionChanged;
         DService.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, OnPartyListPostDraw);
 
-        ResetPartyList();
-        ReleaseImagesNodes();
-
         base.Uninit();
     }
+
+    #endregion
+
+    #region UI
 
     public override void ConfigUI()
     {
         // auto play card
+        AutoPlayCardUI();
+
+        ImGui.NewLine();
+
+        // easy heal
+        EasyHealUI();
+
+        ImGui.NewLine();
+
+        // easy dispel
+        EasyDispelUI();
+
+        ImGui.NewLine();
+
+        // notifications
+        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
+            SaveConfig(ModuleConfig);
+
+        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
+            SaveConfig(ModuleConfig);
+
+        ImGui.NewLine();
+    }
+
+    private void AutoPlayCardUI()
+    {
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-AutoPlayCardTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(17055)));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWarpper.GetActionName(17055)));
 
         ImGui.Spacing();
 
@@ -148,11 +179,127 @@ public class HealerHelper : DailyModuleBase
                 else
                     ImGui.TextColored(LightPink, GetLoc("Disconnected"));
             }
+
+            if (ImGui.RadioButton($"{GetLoc("Custom")} ({GetLoc("HealerHelper-AutoPlayCard-CustomDescription")})",
+                                  ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Custom))
+            {
+                ModuleConfig.AutoPlayCard = AutoPlayCardStatus.Custom;
+                SaveConfig(ModuleConfig);
+            }
+
+            if (ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Custom)
+            {
+                ImGui.Spacing();
+                CustomCardUI();
+            }
+        }
+    }
+
+    private void CustomCardUI()
+    {
+        // melee opener
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-MeleeOpener")}");
+
+        if (CustomCardOrderUI(ModuleConfig.CustomCardOrder.Melee["opener"]))
+            SaveConfig(ModuleConfig);
+        ImGui.SameLine();
+        ImGui.Dummy(new Vector2(5, 0));
+        ImGui.SameLine();
+        if (ImGui.Button(GetLoc("Reset")))
+            ResetCustomCardOrder("Melee", "opener");
+
+        ImGui.Spacing();
+
+        // melee 2m+
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-Melee2Min")}");
+
+        if (CustomCardOrderUI(ModuleConfig.CustomCardOrder.Melee["2m+"]))
+            SaveConfig(ModuleConfig);
+        ImGui.SameLine();
+        ImGui.Dummy(new Vector2(5, 0));
+        ImGui.SameLine();
+        if (ImGui.Button(GetLoc("Reset")))
+            ResetCustomCardOrder("Melee", "2m+");
+
+        ImGui.Spacing();
+
+        // range opener
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-RangeOpener")}");
+
+        if (CustomCardOrderUI(ModuleConfig.CustomCardOrder.Range["opener"]))
+            SaveConfig(ModuleConfig);
+        ImGui.SameLine();
+        ImGui.Dummy(new Vector2(5, 0));
+        ImGui.SameLine();
+        if (ImGui.Button(GetLoc("Reset")))
+            ResetCustomCardOrder("Range", "opener");
+
+        ImGui.Spacing();
+
+        // range opener
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-Range2Min")}");
+
+        if (CustomCardOrderUI(ModuleConfig.CustomCardOrder.Range["2m+"]))
+            SaveConfig(ModuleConfig);
+        ImGui.SameLine();
+        ImGui.Dummy(new Vector2(5, 0));
+        ImGui.SameLine();
+        if (ImGui.Button(GetLoc("Reset")))
+            ResetCustomCardOrder("Range", "2m+");
+
+        SaveConfig(ModuleConfig);
+    }
+
+    private        int?                                           dargIdx;
+    private static Dictionary<ReadOnlySeString, ReadOnlySeString> JobNameMap = new();
+
+    private bool CustomCardOrderUI(string[] cardOrder)
+    {
+        bool modified = false;
+
+        for (var idx = 0; idx < cardOrder.Length; idx++)
+        {
+            ImGui.PushID(idx);
+
+            // component
+            var jobName  = JobNameMap[cardOrder[idx]].ExtractText();
+            var textSize = ImGui.CalcTextSize(jobName);
+            if (ImGui.Button(jobName, new Vector2(textSize.X + 20, 0))) { }
+
+            if (idx != cardOrder.Length - 1)
+                ImGui.SameLine();
+
+            if (ImGui.BeginDragDropSource())
+            {
+                dargIdx = idx;
+                ImGui.SetDragDropPayload("##CustomCardOrder", IntPtr.Zero, 0);
+                ImGui.EndDragDropSource();
+            }
+
+            if (ImGui.BeginDragDropTarget())
+            {
+                ImGui.AcceptDragDropPayload("##CustomCardOrder");
+                if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && dargIdx.HasValue)
+                {
+                    (cardOrder[idx], cardOrder[dargIdx.Value]) = (cardOrder[dargIdx.Value], cardOrder[idx]);
+                    modified                                   = true;
+                }
+
+                ImGui.EndDragDropTarget();
+            }
+
+            ImGui.PopID();
         }
 
-        ImGui.NewLine();
+        return modified;
+    }
 
-        // easy heal
+    private void EasyHealUI()
+    {
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyHealTitle"));
         ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", GetLoc("HealerHelper-SingleTargetHeal")));
 
@@ -194,13 +341,17 @@ public class HealerHelper : DailyModuleBase
                     ImGui.TextColored(Orange, GetLoc("HealerHelper-EasyHeal-OverhealWarning"));
                 }
             }
+
+            ImGui.Spacing();
+
+            ActiveHealActionsSelect();
         }
+    }
 
-        ImGui.NewLine();
-
-        // easy dispel
+    private void EasyDispelUI()
+    {
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyDispelTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(7568)));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWarpper.GetActionName(7568)));
 
         ImGui.Spacing();
 
@@ -231,46 +382,165 @@ public class HealerHelper : DailyModuleBase
                     SaveConfig(ModuleConfig);
                 }
             }
+
             ImGuiOm.TooltipHover(GetLoc("HealerHelper-EasyDispel-OrderHelp"), 20f * GlobalFontScale);
         }
+    }
 
-        ImGui.NewLine();
+    private static string ActionSearchInput = string.Empty;
 
-        using (ImRaii.PushIndent())
+    private static void ActiveHealActionsSelect()
+    {
+        ImGui.TextColored(LightYellow, $"{GetLoc("Whitelist")}");
+        ImGui.Spacing();
+
+        var actionList = ModuleConfig.TargetHealActions
+                                     .ToDictionary(act => act.Key, act => LuminaGetter.GetRow<LuminaAction>(act.Key).Value);
+        MultiSelectCombo(actionList,
+                         ref ModuleConfig.ActiveHealActions,
+                         ref ActionSearchInput,
+                         [
+                             new(GetLoc("Action"), ImGuiTableColumnFlags.WidthStretch, 0),
+                             new(GetLoc("Job"), ImGuiTableColumnFlags.WidthStretch, 0.2f),
+                         ],
+                         [
+                             x => () =>
+                             {
+                                 if (!DService.Texture.TryGetFromGameIcon((uint)x.Icon, out var actionIcon)) return;
+                                 using var id = ImRaii.PushId($"{x.RowId}");
+
+                                 // icon - action name
+                                 ImGui.TableSetColumnIndex(1);
+                                 if (ImGuiOm.SelectableImageWithText(
+                                                                     actionIcon.GetWrapOrEmpty().ImGuiHandle,
+                                                                     new(ImGui.GetTextLineHeightWithSpacing()),
+                                                                     x.Name.ExtractText(),
+                                                                     ModuleConfig.ActiveHealActions.Contains(x.RowId),
+                                                                     ImGuiSelectableFlags.DontClosePopups))
+                                 {
+                                     if (!ModuleConfig.ActiveHealActions.Remove(x.RowId))
+                                         ModuleConfig.ActiveHealActions.Add(x.RowId);
+                                 }
+
+                                 // TODO: show action description
+                                 // var desc = LuminaGetter.GetRow<ActionTransient>(x.RowId).Value.Description;
+
+                                 // job
+                                 ImGui.TableSetColumnIndex(2);
+                                 ImGui.Text(x.ClassJobCategory.Value.Name.ExtractText());
+                             }
+                         ],
+                         [x => x.Name.ExtractText() + x.ClassJobCategory.Value.Name.ExtractText()]
+                        );
+        ImGui.SameLine();
+        if (ImGui.Button(GetLoc("Reset")))
+            ResetActiveHealActions();
+    }
+
+    #endregion
+
+    #region RemoteCache
+
+    // cache related client setting
+    private static readonly HttpClient Client  = new();
+    private const           string     SuCache = "https://dr-cache.sumemo.dev";
+
+    private async Task FetchRemoteVersion()
+    {
+        try
         {
-            if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-                SaveConfig(ModuleConfig);
-
-            if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
-                SaveConfig(ModuleConfig);
-
-            if (ImGui.Checkbox(GetLoc("HealerHelper-MarkOnPartyList"), ref ModuleConfig.OverlayMark))
-                SaveConfig(ModuleConfig);
-
-            if (ModuleConfig.OverlayMark)
+            var json = await Client.GetStringAsync($"{SuCache}/version");
+            var resp = JsonConvert.DeserializeAnonymousType(json, new { version = "" });
+            if (resp == null || string.IsNullOrWhiteSpace(resp.version))
+                DService.Log.Error($"Deserialize Remote Version Failed: {json}");
+            else
             {
-                ImGui.Spacing();
-
-                ImGui.TextColored(LightSalmon, GetLoc("IconScale"));
-                ImGui.SameLine();
-                if (ImGui.SliderFloat("##MarkScale", ref ModuleConfig.MarkScale, 0.1f, 1.0f, "%.2f"))
+                var remoteCacheVersion = resp.version;
+                if (new Version(ModuleConfig.LocalCacheVersion) < new Version(remoteCacheVersion))
                 {
+                    // update config
+                    ModuleConfig.LocalCacheVersion = resp.version;
                     SaveConfig(ModuleConfig);
-                    NewMark(0, LuminaGetter.GetRow<LuminaAction>(37023)!.Value.Icon);
-                    DService.Framework.RunOnTick(async () => await PreviewTimer(() => DelMark(0), 6000));
-                    RefreshMarks(true);
-                }
 
-                ImGui.TextColored(LightSalmon, GetLoc("IconOffset"));
-                ImGui.SameLine();
-                if (ImGui.SliderFloat2("##MarkMargin", ref ModuleConfig.MarkOffset, -50f, 50f, "%.2f"))
-                {
-                    SaveConfig(ModuleConfig);
-                    NewMark(0, LuminaGetter.GetRow<LuminaAction>(37023)!.Value.Icon);
-                    DService.Framework.RunOnTick(async () => await PreviewTimer(() => DelMark(0), 6000));
-                    RefreshMarks(true);
+                    // update out-date cache
+                    await FetchDefaultCardOrder();
+                    await FetchDefaultHealActions();
+                    await FetchTerritoryMap();
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            DService.Log.Error($"[HealerHelper Hotfix] Fetch Remote Version Failed: {ex}");
+        }
+    }
+
+    private async Task FetchDefaultCardOrder()
+    {
+        try
+        {
+            var json = await Client.GetStringAsync($"{SuCache}/card-order?v={ModuleConfig.LocalCacheVersion}");
+            var resp = JsonConvert.DeserializeObject<PlayCardOrder>(json);
+            if (resp == null)
+                DService.Log.Error($"Deserialize Default Play Card Order Failed: {json}");
+            else
+            {
+                ModuleConfig.DefaultCardOrder = resp;
+                // init custom if empty
+                if (ModuleConfig.CustomCardOrder.Melee.Count is 0)
+                    ResetCustomCardOrder();
+                SaveConfig(ModuleConfig);
+            }
+        }
+        catch (Exception ex)
+        {
+            DService.Log.Error($"Fetch Default Play Card Order Failed: {ex}");
+        }
+    }
+
+    private async Task FetchDefaultHealActions()
+    {
+        try
+        {
+            var json = await Client.GetStringAsync($"{SuCache}/heal-actions?v={ModuleConfig.LocalCacheVersion}");
+            var resp = JsonConvert.DeserializeObject<Dictionary<string, List<HealAction>>>(json);
+            if (resp == null)
+                DService.Log.Error($"Deserialize Default Heal Actions Failed: {json}");
+            else
+            {
+                ModuleConfig.TargetHealActions = resp.SelectMany(kv => kv.Value).ToDictionary(act => act.Id, act => act);
+
+                // when active is empty, set with default on heal actions
+                if (ModuleConfig.ActiveHealActions.Count is 0)
+                    ResetActiveHealActions();
+
+                SaveConfig(ModuleConfig);
+            }
+        }
+        catch (Exception ex)
+        {
+            DService.Log.Error($"Fetch Default Heal Actions Failed: {ex}");
+        }
+    }
+
+    private async Task FetchTerritoryMap()
+    {
+        try
+        {
+            var json = await Client.GetStringAsync($"{SuCache}/territory?v={ModuleConfig.LocalCacheVersion}");
+            var resp = JsonConvert.DeserializeObject<List<TerritoryMap>>(json);
+            if (resp == null)
+                DService.Log.Error($"Deserialize Territory Map Failed: {json}");
+            else
+            {
+                ModuleConfig.TerritoryMaps = resp;
+                UpdateTerritoryMaps();
+                SaveConfig(ModuleConfig);
+            }
+        }
+        catch (Exception ex)
+        {
+            DService.Log.Error($"Fetch Territory Map Failed: {ex}");
         }
     }
 
@@ -293,7 +563,7 @@ public class HealerHelper : DailyModuleBase
             OnPrePlayCard(ref targetID, ref actionID);
 
         // easy heal
-        if (ModuleConfig.EasyHeal == EasyHealStatus.Enable && TargetHealActions.Contains(actionID))
+        if (ModuleConfig.EasyHeal == EasyHealStatus.Enable && ModuleConfig.ActiveHealActions.Contains(actionID))
             OnPreHeal(ref targetID, ref actionID, ref isPrevented);
 
         // easy dispel
@@ -302,12 +572,9 @@ public class HealerHelper : DailyModuleBase
     }
 
     private static void OnZoneChanged(ushort zone)
-    {
-        MemberBestRecords.Clear();
-        ReleaseImagesNodes();
-    }
+        => MemberBestRecords.Clear();
 
-    private void OnConditionChanged(ConditionFlag flag, bool value)
+    private static void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag is ConditionFlag.InCombat)
         {
@@ -334,62 +601,23 @@ public class HealerHelper : DailyModuleBase
 
     private static bool NotifyErrorOnce = true;
 
-    public static unsafe void OnPartyListPostDraw(AddonEvent type, AddonArgs args)
+    private static void OnPartyListPostDraw(AddonEvent type, AddonArgs args)
     {
-        // build marks
-        if (ModuleConfig.OverlayMark && !MarkIsBuild)
-            BuildImagesNodes();
-
-        // clear all marks
-        if (MarkNeedClear && MarkedStatus.Count is 0)
-        {
-            ResetPartyList((AtkUnitBase*)args.Addon);
-            MarkNeedClear = false;
-        }
-
         // party member changed?
         try
         {
-            if (DService.PartyList.Length is not 0 && DService.ClientState.IsPvP is false)
-            {
-                // need to update candidates?
-                var ids = DService.PartyList.Select(m => m.ObjectId).ToHashSet();
-                if (!ids.SetEquals(PartyMemberIdsCache) || NeedReorder)
-                {
-                    // party member changed, update candidates
-                    OrderCandidates();
-                    PartyMemberIdsCache = ids;
-                    NeedReorder         = false;
-                }
+            var inPvEParty = DService.PartyList.Length is not 0 && DService.ClientState.IsPvP is false;
+            if (!inPvEParty)
+                return;
 
-                // draw marks
-                if (ModuleConfig.OverlayMark)
-                {
-                    // melee
-                    var meleeId  = FetchCandidateId("Melee");
-                    var meleeIdx = FetchMemberIndex(meleeId) ?? 0;
-                    if (meleeIdx != MeleeCandidateIdxCache)
-                    {
-                        DelMark(MeleeCandidateIdxCache);
-                        NewMark(meleeIdx, LuminaGetter.GetRow<LuminaAction>(37023)!.Value.Icon);
-                        MeleeCandidateIdxCache = meleeIdx;
-                    }
-
-                    // range
-                    var rangeId  = FetchCandidateId("Range");
-                    var rangeIdx = FetchMemberIndex(rangeId) ?? 0;
-                    if (rangeIdx != RangeCandidateIdxCache)
-                    {
-                        DelMark(RangeCandidateIdxCache);
-                        NewMark(rangeIdx, LuminaGetter.GetRow<LuminaAction>(37026)!.Value.Icon);
-                        RangeCandidateIdxCache = rangeIdx;
-                    }
-                }
-            }
-            else
+            // need to update candidates?
+            var ids = DService.PartyList.Select(m => m.ObjectId).ToHashSet();
+            if (!ids.SetEquals(PartyMemberIdsCache) || NeedReorder)
             {
-                // no party member, clear all marks
-                RefreshMarks();
+                // party member changed, update candidates
+                OrderCandidates();
+                PartyMemberIdsCache = ids;
+                NeedReorder         = false;
             }
         }
         catch (Exception)
@@ -413,11 +641,35 @@ public class HealerHelper : DailyModuleBase
 
     private static readonly List<(uint id, double priority)> MeleeCandidateOrder = [];
     private static readonly List<(uint id, double priority)> RangeCandidateOrder = [];
-    private static          uint                             MeleeCandidateIdxCache;
-    private static          uint                             RangeCandidateIdxCache;
 
     private static bool IsOpener;
     private static bool NeedReorder;
+
+    private static Dictionary<uint, uint> TerritoryMaps = new();
+
+    private static void UpdateTerritoryMaps()
+        => TerritoryMaps = ModuleConfig.TerritoryMaps.ToDictionary(x => x.Id, x => x.LogsZone);
+
+    private static void ResetCustomCardOrder(string role = "All", string section = "All")
+    {
+        // melee opener
+        if (role is "Melee" or "All")
+        {
+            if (section is "opener" or "All")
+                ModuleConfig.CustomCardOrder.Melee["opener"] = ModuleConfig.DefaultCardOrder.Melee["opener"];
+            if (section is "2m+" or "All")
+                ModuleConfig.CustomCardOrder.Melee["2m+"] = ModuleConfig.DefaultCardOrder.Melee["2m+"];
+        }
+
+        // range opener
+        if (role is "Range" or "All")
+        {
+            if (section is "opener" or "All")
+                ModuleConfig.CustomCardOrder.Range["opener"] = ModuleConfig.DefaultCardOrder.Range["opener"];
+            if (section is "2m+" or "All")
+                ModuleConfig.CustomCardOrder.Range["2m+"] = ModuleConfig.DefaultCardOrder.Range["2m+"];
+        }
+    }
 
     private static void OrderCandidates()
     {
@@ -432,7 +684,7 @@ public class HealerHelper : DailyModuleBase
             return;
 
         // advance fallback when no valid zone id or invalid key
-        if (!Dal2LogsZoneMap.ContainsKey(DService.ClientState.TerritoryType) && ModuleConfig is { AutoPlayCard: AutoPlayCardStatus.Advance, KeyValid: false })
+        if (!TerritoryMaps.ContainsKey(DService.ClientState.TerritoryType) && ModuleConfig is { AutoPlayCard: AutoPlayCardStatus.Advance, KeyValid: false })
         {
             if (FirstTimeFallback)
             {
@@ -444,10 +696,17 @@ public class HealerHelper : DailyModuleBase
         }
 
         // is opener or 2m+?
-        var orderLabel = IsOpener ? "Opener" : "2m+";
+        var sectionLabel = IsOpener ? "opener" : "2m+";
 
-        // set candidates priority based on predefined order
-        var meleeOrder = MeleeOrder[orderLabel];
+        // activate config (custom or default)
+        var activateOrder = ModuleConfig.AutoPlayCard switch
+        {
+            AutoPlayCardStatus.Custom => ModuleConfig.CustomCardOrder,
+            _                         => ModuleConfig.DefaultCardOrder
+        };
+
+        // set candidate priority based on predefined order
+        var meleeOrder = activateOrder.Melee[sectionLabel];
         for (var idx = 0; idx < meleeOrder.Length; idx++)
         {
             var member = partyList.FirstOrDefault(m => m.ClassJob.Value.NameEnglish == meleeOrder[idx]);
@@ -455,7 +714,7 @@ public class HealerHelper : DailyModuleBase
                 MeleeCandidateOrder.Add((member.ObjectId, 2 - (idx * 0.1)));
         }
 
-        var rangeOrder = RangeOrder[orderLabel];
+        var rangeOrder = activateOrder.Range[sectionLabel];
         for (var idx = 0; idx < rangeOrder.Length; idx++)
         {
             var member = partyList.FirstOrDefault(m => m.ClassJob.Value.NameEnglish == rangeOrder[idx]);
@@ -463,7 +722,7 @@ public class HealerHelper : DailyModuleBase
                 RangeCandidateOrder.Add((member.ObjectId, 2 - (idx * 0.1)));
         }
 
-        // adjust candidates priority based on FFLogs records (auto play card advance mode)
+        // adjust candidate priority based on FFLogs records (auto play card advance mode)
         if (ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Advance)
         {
             foreach (var member in partyList)
@@ -605,6 +864,9 @@ public class HealerHelper : DailyModuleBase
 
     #region EasyHeal
 
+    private static void ResetActiveHealActions()
+        => ModuleConfig.ActiveHealActions = ModuleConfig.TargetHealActions.Where(act => act.Value.On).Select(act => act.Key).ToHashSet();
+
     private static uint TargetNeedHeal()
     {
         var partyList  = DService.PartyList;
@@ -641,12 +903,12 @@ public class HealerHelper : DailyModuleBase
         // dispel in order (or reverse order)
         var sortedPartyList = reverse
                                   ? partyList.OrderByDescending(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList()
-                                  : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
+                                  : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId)           ?? 0).ToList();
         foreach (var member in sortedPartyList)
         {
             if (member.CurrentHP <= 0 || Vector3.DistanceSquared(member.Position, DService.ClientState.LocalPlayer.Position) > 900)
                 continue;
-            
+
             foreach (var status in member.Statuses)
             {
                 if (DispellableStatus.ContainsKey(status.StatusId))
@@ -681,13 +943,6 @@ public class HealerHelper : DailyModuleBase
                     Chat(GetSLoc("HealerHelper-EasyHeal-Message", name, classJobIcon, classJobName));
                 if (ModuleConfig.SendNotification)
                     NotificationInfo(GetLoc("HealerHelper-EasyHeal-Message", name, string.Empty, classJobName));
-                if (ModuleConfig.OverlayMark)
-                {
-                    var idx = FetchMemberIndex((uint)targetID) ?? 0;
-                    if (!LuminaGetter.TryGetRow<LuminaAction>(actionID, out var actionRow)) return;
-                    NewMark(idx, actionRow.Icon);
-                    DService.Framework.RunOnTick(async () => await MarkTimer(() => DelMark(idx), 6000));
-                }
             }
         }
     }
@@ -717,13 +972,6 @@ public class HealerHelper : DailyModuleBase
                     Chat(GetSLoc("HealerHelper-EasyDispel-Message", name, classJobIcon, classJobName));
                 if (ModuleConfig.SendNotification)
                     NotificationInfo(GetLoc("HealerHelper-EasyDispel-Message", name, string.Empty, classJobName));
-                if (ModuleConfig.OverlayMark)
-                {
-                    var idx = FetchMemberIndex((uint)targetID) ?? 0;
-                    if (!LuminaGetter.TryGetRow<LuminaAction>(actionID, out var actionRow)) return;
-                    NewMark(idx, actionRow.Icon);
-                    DService.Framework.RunOnTick(async () => await MarkTimer(() => DelMark(idx), 6000));
-                }
             }
         }
     }
@@ -733,9 +981,8 @@ public class HealerHelper : DailyModuleBase
     #region FFLogs
 
     // FFLogs related (auto play card advance mode)
-    private const           string     FFLogsUri = "https://www.fflogs.com/v1";
-
-    private static readonly Dictionary<uint, LogsRecord> MemberBestRecords = new();
+    private const  string                       FFLogsUri         = "https://www.fflogs.com/v1";
+    private static Dictionary<uint, LogsRecord> MemberBestRecords = new Dictionary<uint, LogsRecord>();
 
     // warning log
     private static bool FirstTimeFallback = true;
@@ -745,7 +992,7 @@ public class HealerHelper : DailyModuleBase
         try
         {
             var uri      = $"{FFLogsUri}/classes?api_key={ModuleConfig.FFLogsAPIKey}";
-            var response = await HttpClientHelper.Get().GetStringAsync(uri);
+            var response = await Client.GetStringAsync(uri);
             ModuleConfig.KeyValid = !string.IsNullOrWhiteSpace(response);
             FirstTimeFallback     = true; // only notify once per exec time
             SaveConfig(ModuleConfig);
@@ -789,10 +1036,10 @@ public class HealerHelper : DailyModuleBase
             var query = HttpUtility.ParseQueryString(string.Empty);
             query["api_key"]   = ModuleConfig.FFLogsAPIKey;
             query["metric"]    = "ndps";
-            query["encounter"] = Dal2LogsZoneMap[zone].ToString();
+            query["encounter"] = TerritoryMaps[zone].ToString();
 
             // contains all ultimates and current savage in current patch
-            var response = await HttpClientHelper.Get().GetStringAsync($"{uri}?{query}");
+            var response = await Client.GetStringAsync($"{uri}?{query}");
             var records  = JsonConvert.DeserializeObject<LogsRecord[]>(response);
             if (records == null || records.Length == 0) return null;
 
@@ -812,207 +1059,27 @@ public class HealerHelper : DailyModuleBase
 
     #endregion
 
-    #region Timer
 
-    private static CancellationTokenSource CTS = new();
-
-    private static async Task PreviewTimer(Action onElapsed, int delay)
-    {
-        CTS.Cancel();
-        CTS = new CancellationTokenSource();
-        var token = CTS.Token;
-
-        try
-        {
-            await Task.Delay(delay, token);
-            if (!token.IsCancellationRequested)
-                onElapsed();
-        }
-        catch (TaskCanceledException) { }
-    }
-
-    private static async Task MarkTimer(Action onElapsed, int delay)
-    {
-        await Task.Delay(delay);
-        onElapsed();
-    }
-
-    #endregion
-
-    #region ImageNode
-
-    private static readonly ConcurrentDictionary<uint, nint>   ImageNodes   = new();
-    private static readonly ConcurrentDictionary<ushort, uint> MarkedStatus = new();
-
-    private static volatile bool MarkIsBuild;
-    private static volatile bool MarkNeedClear;
-
-    private static unsafe AtkImageNode* CreateImageNode()
-    {
-        if (!TryMakeImageNode(202502, 0, 0, 1, (byte)ImageNodeFlags.AutoFit, out var node))
-            return null;
-
-        if (!TryMakePartsList(202501, out var partsList))
-        {
-            FreeImageNode(node);
-            return null;
-        }
-
-        if (!TryMakePart(0, 0, 50, 50, out var part))
-        {
-            FreeImageNode(node);
-            FreePartsList(partsList);
-            return null;
-        }
-
-        if (!TryMakeAsset(202503, out var asset))
-        {
-            FreeImageNode(node);
-            FreePartsList(partsList);
-            FreePart(part);
-            return null;
-        }
-
-        AddAsset(part, asset);
-        AddPart(partsList, part);
-        AddPartsList(node, partsList);
-
-        node->LoadIconTexture(61201, 0);
-        node->AtkResNode.SetPriority(5);
-        return node;
-    }
-
-    private static unsafe void ShowImageNode(uint idx, ushort iconId)
-    {
-        if (idx > 7 || PartyList is null || ImageNodes.Count <= idx) return;
-
-        if (!ImageNodes.TryGetValue(idx, out var tmp)) return;
-        var node = (AtkImageNode*)tmp;
-
-        var anchor = PartyList->GetNodeById(10 + idx);
-        if (anchor is null) return;
-
-        var pos = new Vector2(anchor->X, anchor->Y) + ModuleConfig.MarkOffset;
-        node->AtkResNode.SetPositionFloat(pos.X, pos.Y);
-
-        var size = (ushort)(anchor->Height * ModuleConfig.MarkScale);
-
-        node->AtkResNode.SetWidth(size);
-        node->AtkResNode.SetHeight(size);
-
-        node->LoadIconTexture(iconId, 0);
-        node->ToggleVisibility(true);
-
-        ModifyPartyMember(PartyList, false);
-    }
-
-    private static unsafe void HideImageNode(uint idx)
-    {
-        if (idx > 7 || PartyList is null || ImageNodes.Count <= idx) return;
-
-        var node = (AtkImageNode*)ImageNodes[idx];
-        if (node is null) return;
-
-        node->ToggleVisibility(false);
-    }
-
-    private static unsafe void BuildImagesNodes()
-    {
-        if (PartyList is null || MarkIsBuild) return;
-
-        foreach (var idx in Enumerable.Range(0, 8))
-        {
-            var node = CreateImageNode();
-            if (node is null) continue;
-
-            ImageNodes[(uint)idx] = (nint)node;
-
-            LinkNodeAtEnd((AtkResNode*)node, PartyList);
-        }
-
-        MarkIsBuild = true;
-    }
-
-    private static unsafe void ReleaseImagesNodes()
-    {
-        if (!MarkIsBuild) return;
-        if (PartyList is null || PartyList->UldManager.LoadedState is not AtkLoadState.Loaded) return;
-
-        foreach (var node in ImageNodes)
-            UnlinkAndFreeImageNode((AtkImageNode*)node.Value, PartyList);
-
-        ImageNodes.Clear();
-        MarkIsBuild = false;
-    }
-
-    private static unsafe void ResetPartyList(AtkUnitBase* partyList = null)
-    {
-        if (partyList is null)
-            partyList = PartyList;
-
-        if (partyList is not null && partyList->UldManager.LoadedState is AtkLoadState.Loaded)
-            ModifyPartyMember(partyList, true);
-    }
-
-    private static unsafe void ModifyPartyMember(AtkUnitBase* partyList, bool visible)
-    {
-        if (partyList is null && !visible) return;
-
-        foreach (var idx in Enumerable.Range(10, 8))
-        {
-            var member = partyList->GetNodeById((uint)idx);
-            if (member is null || member->GetComponent() is null) continue;
-            if (!member->IsVisible()) break;
-
-            var textNode = member->GetComponent()->UldManager.SearchNodeById(15);
-            if (textNode is null && textNode->IsVisible() != visible)
-                textNode->ToggleVisibility(visible);
-        }
-    }
-
-    private static void NewMark(uint idx, ushort iconId)
-    {
-        MarkedStatus[iconId] = idx;
-        ShowImageNode(idx, iconId);
-        MarkNeedClear = false;
-    }
-
-    private static void DelMark(uint idx)
-    {
-        var first = MarkedStatus.FirstOrDefault(x => x.Value == idx);
-        if (first.Key != 0 && MarkedStatus.TryRemove(first.Key, out _))
-            HideImageNode(idx);
-
-        if (MarkedStatus.Count is 0)
-            MarkNeedClear = true;
-    }
-
-    private static void RefreshMarks(bool keptOne = false)
-    {
-        foreach (var (iconId, idx) in MarkedStatus)
-        {
-            DelMark(idx);
-            if (idx < DService.PartyList.Length || (keptOne && DService.PartyList.Length is 0 && idx is 0))
-                NewMark(idx, iconId);
-        }
-    }
-
-    #endregion
-
-    #region Structs
+    #region Config
 
     private class Config : ModuleConfiguration
     {
         // auto play card
-        public AutoPlayCardStatus AutoPlayCard = AutoPlayCardStatus.Default;
+        public AutoPlayCardStatus AutoPlayCard     = AutoPlayCardStatus.Default;
+        public PlayCardOrder      DefaultCardOrder = new();
+        public PlayCardOrder      CustomCardOrder  = new();
+
 
         // FFLogs API Key v1 for fetching records (auto play card advance mode)
-        public string FFLogsAPIKey = string.Empty;
-        public bool   KeyValid;
+        public string             FFLogsAPIKey = string.Empty;
+        public bool               KeyValid;
+        public List<TerritoryMap> TerritoryMaps = new();
 
         // easy heal
-        public EasyHealStatus EasyHeal          = EasyHealStatus.Enable;
-        public float          NeedHealThreshold = 0.8f;
+        public EasyHealStatus               EasyHeal          = EasyHealStatus.Enable;
+        public float                        NeedHealThreshold = 0.92f;
+        public Dictionary<uint, HealAction> TargetHealActions = [];
+        public HashSet<uint>                ActiveHealActions = [];
 
         // easy dispel
         public EasyDispelStatus  EasyDispel  = EasyDispelStatus.Enable;
@@ -1021,135 +1088,109 @@ public class HealerHelper : DailyModuleBase
         // notification
         public bool SendChat;
         public bool SendNotification = true;
-        public bool OverlayMark;
 
-        // use overlay to mark candidate if OverlayMark is true
-        public float   MarkScale  = 0.33f;
-        public Vector2 MarkOffset = new(-24, 40);
+        // remote cache version
+        public string LocalCacheVersion = "0.0.0";
     }
+
+    #endregion
+
+    #region AutoPlayCardStructs
 
     // Dalamud-FFLogs zone match map (ultimates and current savage)
     // TerritoryType - FFLogs Zone ID
-    public static readonly Dictionary<uint, uint> Dal2LogsZoneMap = new()
+    // load from su-cache:territory
+    public class TerritoryMap
     {
-        // ultimates
-        [733]  = 1073, // Bahamut f1bz
-        [777]  = 1074, // Weapon w1fz
-        [887]  = 1075, // Alexander d2az
-        [968]  = 1076, // Dragonsong r1fz
-        [1122] = 1077, // Omega z3oz
-        [1238] = 1079, // Future Rewritten n4gw
-        // m1-4s
-        [1226] = 93,
-        [1228] = 94,
-        [1230] = 95,
-        [1232] = 96,
-        // m5-8s (placeholder)
-    };
+        [JsonProperty("id")]
+        public uint Id { get; private set; }
 
-    public class LogsRecord
+        [JsonProperty("name")]
+        public string Name { get; private set; }
+
+        [JsonProperty("logs_zone")]
+        public uint LogsZone { get; private set; }
+    }
+
+    private class LogsRecord
     {
         // job english name
         [JsonProperty("spec")]
-        public string JobName { get; set; }
+        public string JobName { get; private set; }
 
         // record difficulty
         [JsonProperty("difficulty")]
-        public int Difficulty { get; set; }
+        public int Difficulty { get; private set; }
 
         // DPS
         [JsonProperty("total")]
-        public double DPS { get; set; }
+        public double DPS { get; private set; }
 
         // percentile
         [JsonProperty("percentile")]
-        public double Percentile { get; set; }
+        public double Percentile { get; private set; }
     }
 
-    public enum AutoPlayCardStatus
+    private enum AutoPlayCardStatus
     {
         Disable, // disable auto play card
         Default, // select target based on predefined order when no target selected
-        Advance  // select target based on FFLogs rDPS records when no target selected
+        Advance, // select target based on FFLogs rDPS records when no target selected
+        Custom   // defined by user
     }
 
-    public enum EasyHealStatus
+
+    // predefined card priority, arranged based on the guidance in The Balance
+    // https://www.thebalanceffxiv.com/
+    // load from su-cache:card-order
+    public class PlayCardOrder
+    {
+        [JsonProperty("melee")]
+        public Dictionary<string, string[]> Melee { get; private set; } = new();
+
+        [JsonProperty("range")]
+        public Dictionary<string, string[]> Range { get; private set; } = new();
+    }
+
+    #endregion
+
+    #region EasyHealStructs
+
+    // list of target healing actions
+    // load from su-cache:heal-actions
+    public class HealAction
+    {
+        [JsonProperty("id")]
+        public uint Id { get; private set; }
+
+        [JsonProperty("name")]
+        public string Name { get; private set; }
+
+        [JsonProperty("on")]
+        public bool On { get; private set; }
+    }
+
+    // list of dispellable status
+    public static Dictionary<uint, string> DispellableStatus = new();
+
+    // enums
+    private enum EasyHealStatus
     {
         Disable, // disable easy heal
         Enable   // select target with the lowest HP ratio within range when no target selected
     }
 
-    public enum EasyDispelStatus
+    private enum EasyDispelStatus
     {
         Disable, // disable easy dispel
         Enable   // select target with dispellable status within range when no target selected
     }
 
-    public enum DispelOrderStatus
+    private enum DispelOrderStatus
     {
         Order,  // local -> party list (0 -> 7)
         Reverse // local -> party list (7 -> 0)
     }
-
-    // predefined card priority, arranged based on the guidance in The Balance
-    // https://www.thebalanceffxiv.com/
-    public static readonly Dictionary<string, string[]> MeleeOrder = new()
-    {
-        ["Opener"] = ["Samurai", "Ninja", "Dragon", "Dark Knight", "Monk", "Reaper", "Viper"],
-        ["2m+"]    = ["Samurai", "Ninja", "Viper", "Dragon", "Monk", "Dark Knight", "Reaper"]
-    };
-
-    public static readonly Dictionary<string, string[]> RangeOrder = new()
-    {
-        ["Opener"] = ["Pictomancer", "Summoner", "Machinist", "Dancer", "Red Mage", "Black Mage", "Bard"],
-        ["2m+"]    = ["Pictomancer", "Summoner", "Machinist", "Bard", "Red Mage", "Dancer", "Black Mage"]
-    };
-
-    // list of target healing actions
-    public static readonly uint[] TargetHealActions =
-    [
-        // ast
-        3594, // benefic 1
-        3610, // benefic 2
-        3614, // essential dignity
-        3595, // aspected benefic
-        // 37024, // arrow card (+10% recovery)
-        37025, // spire card (400 barrier)
-        // 37027, // bole card (-10% damage)
-        37028, // ewer card (200 hot 15s)
-        16556, // celestial intersection
-        // 25873,  // exaltation
-
-        // whm
-        120,   // cure 1
-        135,   // cure 2
-        // 131, // cure 3 (600 + nearby)
-        137,   // regen
-        140,   // benediction
-        3570,  // tetragrammaton
-        16531, // afflatus solace
-        // 7432,  // divine benison
-        // 25861, // aquavell
-
-        // sch
-        190,   // physick
-        185,   // adloquium
-        189,   // lustrate
-        7434,  // excogitation
-        7437,  // aetherpact (7869 is cancel this action)
-        37015, // manifestation
-        // 25867, // protraction
-
-        // sage
-        24284, // diagnosis
-        24296, // druochole
-        24303, // taurochole
-        // 24305, // haima
-        24291, // eukrasian diagnosis
-    ];
-
-    // list of dispellable status
-    public static Dictionary<uint, string> DispellableStatus = new();
 
     #endregion
 }
