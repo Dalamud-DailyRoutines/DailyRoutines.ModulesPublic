@@ -32,7 +32,7 @@ public class HealerHelper : DailyModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = {GetLoc("HealerHelperTitle")},
+        Title       = GetLoc("HealerHelperTitle"),
         Description = GetLoc("HealerHelperDescription"),
         Category    = ModuleCategories.Action,
         Author      = ["HaKu"]
