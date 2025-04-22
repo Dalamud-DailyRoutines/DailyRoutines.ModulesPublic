@@ -100,13 +100,16 @@ public class HealerHelper : DailyModuleBase
         ImGui.NewLine();
 
         // notifications
-        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-            SaveConfig(ModuleConfig);
+        ImGui.TextColored(LightSkyBlue, GetLoc("Notification"));
+        ImGui.Spacing();
+        using (ImRaii.PushIndent())
+        {
+            if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
+                SaveConfig(ModuleConfig);
 
-        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
-            SaveConfig(ModuleConfig);
-
-        ImGui.NewLine();
+            if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
+                SaveConfig(ModuleConfig);
+        }
     }
 
     private void AutoPlayCardUI()
@@ -348,45 +351,6 @@ public class HealerHelper : DailyModuleBase
         }
     }
 
-    private void EasyDispelUI()
-    {
-        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyDispelTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWarpper.GetActionName(7568)));
-
-        ImGui.Spacing();
-
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.RadioButton($"{GetLoc("Disable")}##easydispel",
-                                  ModuleConfig.EasyDispel == EasyDispelStatus.Disable))
-            {
-                ModuleConfig.EasyDispel = EasyDispelStatus.Disable;
-                SaveConfig(ModuleConfig);
-            }
-
-            using (ImRaii.Group())
-            {
-                if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("InOrder")}]",
-                                      ModuleConfig is { EasyDispel: EasyDispelStatus.Enable, DispelOrder: DispelOrderStatus.Order }))
-                {
-                    ModuleConfig.EasyDispel  = EasyDispelStatus.Enable;
-                    ModuleConfig.DispelOrder = DispelOrderStatus.Order;
-                    SaveConfig(ModuleConfig);
-                }
-
-                if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("InReverseOrder")}]",
-                                      ModuleConfig is { EasyDispel: EasyDispelStatus.Enable, DispelOrder: DispelOrderStatus.Reverse }))
-                {
-                    ModuleConfig.EasyDispel  = EasyDispelStatus.Enable;
-                    ModuleConfig.DispelOrder = DispelOrderStatus.Reverse;
-                    SaveConfig(ModuleConfig);
-                }
-            }
-
-            ImGuiOm.TooltipHover(GetLoc("HealerHelper-EasyDispel-OrderHelp"), 20f * GlobalFontScale);
-        }
-    }
-
     private static string ActionSearchInput = string.Empty;
 
     private static void ActiveHealActionsSelect()
@@ -435,6 +399,45 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         if (ImGui.Button(GetLoc("Reset")))
             ResetActiveHealActions();
+    }
+
+    private void EasyDispelUI()
+    {
+        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyDispelTitle"));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWarpper.GetActionName(7568)));
+
+        ImGui.Spacing();
+
+        using (ImRaii.PushIndent())
+        {
+            if (ImGui.RadioButton($"{GetLoc("Disable")}##easydispel",
+                                  ModuleConfig.EasyDispel == EasyDispelStatus.Disable))
+            {
+                ModuleConfig.EasyDispel = EasyDispelStatus.Disable;
+                SaveConfig(ModuleConfig);
+            }
+
+            using (ImRaii.Group())
+            {
+                if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("InOrder")}]",
+                                      ModuleConfig is { EasyDispel: EasyDispelStatus.Enable, DispelOrder: DispelOrderStatus.Order }))
+                {
+                    ModuleConfig.EasyDispel  = EasyDispelStatus.Enable;
+                    ModuleConfig.DispelOrder = DispelOrderStatus.Order;
+                    SaveConfig(ModuleConfig);
+                }
+
+                if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("InReverseOrder")}]",
+                                      ModuleConfig is { EasyDispel: EasyDispelStatus.Enable, DispelOrder: DispelOrderStatus.Reverse }))
+                {
+                    ModuleConfig.EasyDispel  = EasyDispelStatus.Enable;
+                    ModuleConfig.DispelOrder = DispelOrderStatus.Reverse;
+                    SaveConfig(ModuleConfig);
+                }
+            }
+
+            ImGuiOm.TooltipHover(GetLoc("HealerHelper-EasyDispel-OrderHelp"), 20f * GlobalFontScale);
+        }
     }
 
     #endregion
