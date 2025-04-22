@@ -447,12 +447,13 @@ public class HealerHelper : DailyModuleBase
 
     private async Task FetchRemoteVersion()
     {
+        // fetch remote data
         try
         {
             var json = await Client.GetStringAsync($"{SuCache}/version");
             var resp = JsonConvert.DeserializeAnonymousType(json, new { version = "" });
             if (resp == null || string.IsNullOrWhiteSpace(resp.version))
-                DService.Log.Error($"Deserialize Remote Version Failed: {json}");
+                DService.Log.Error($"[HealerHelper] Deserialize Remote Version Failed: {json}");
             else
             {
                 var remoteCacheVersion = resp.version;
@@ -471,8 +472,11 @@ public class HealerHelper : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"[HealerHelper Hotfix] Fetch Remote Version Failed: {ex}");
+            DService.Log.Error($"[HealerHelper] Fetch Remote Version Failed: {ex}");
         }
+
+        // build cache
+        UpdateTerritoryMaps();
     }
 
     private async Task FetchDefaultCardOrder()
@@ -482,7 +486,7 @@ public class HealerHelper : DailyModuleBase
             var json = await Client.GetStringAsync($"{SuCache}/card-order?v={ModuleConfig.LocalCacheVersion}");
             var resp = JsonConvert.DeserializeObject<PlayCardOrder>(json);
             if (resp == null)
-                DService.Log.Error($"Deserialize Default Play Card Order Failed: {json}");
+                DService.Log.Error($"[HealerHelper] Deserialize Default Play Card Order Failed: {json}");
             else
             {
                 ModuleConfig.DefaultCardOrder = resp;
@@ -494,7 +498,7 @@ public class HealerHelper : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"Fetch Default Play Card Order Failed: {ex}");
+            DService.Log.Error($"[HealerHelper] Fetch Default Play Card Order Failed: {ex}");
         }
     }
 
@@ -505,7 +509,7 @@ public class HealerHelper : DailyModuleBase
             var json = await Client.GetStringAsync($"{SuCache}/heal-actions?v={ModuleConfig.LocalCacheVersion}");
             var resp = JsonConvert.DeserializeObject<Dictionary<string, List<HealAction>>>(json);
             if (resp == null)
-                DService.Log.Error($"Deserialize Default Heal Actions Failed: {json}");
+                DService.Log.Error($"[HealerHelper] Deserialize Default Heal Actions Failed: {json}");
             else
             {
                 ModuleConfig.TargetHealActions = resp.SelectMany(kv => kv.Value).ToDictionary(act => act.Id, act => act);
@@ -519,7 +523,7 @@ public class HealerHelper : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"Fetch Default Heal Actions Failed: {ex}");
+            DService.Log.Error($"[HealerHelper] Fetch Default Heal Actions Failed: {ex}");
         }
     }
 
@@ -530,17 +534,16 @@ public class HealerHelper : DailyModuleBase
             var json = await Client.GetStringAsync($"{SuCache}/territory?v={ModuleConfig.LocalCacheVersion}");
             var resp = JsonConvert.DeserializeObject<List<TerritoryMap>>(json);
             if (resp == null)
-                DService.Log.Error($"Deserialize Territory Map Failed: {json}");
+                DService.Log.Error($"[HealerHelper] Deserialize Territory Map Failed: {json}");
             else
             {
                 ModuleConfig.TerritoryMaps = resp;
-                UpdateTerritoryMaps();
                 SaveConfig(ModuleConfig);
             }
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"Fetch Territory Map Failed: {ex}");
+            DService.Log.Error($"[HealerHelper] Fetch Territory Map Failed: {ex}");
         }
     }
 
@@ -1068,7 +1071,6 @@ public class HealerHelper : DailyModuleBase
         public AutoPlayCardStatus AutoPlayCard     = AutoPlayCardStatus.Default;
         public PlayCardOrder      DefaultCardOrder = new();
         public PlayCardOrder      CustomCardOrder  = new();
-
 
         // FFLogs API Key v1 for fetching records (auto play card advance mode)
         public string             FFLogsAPIKey = string.Empty;
