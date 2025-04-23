@@ -6,12 +6,9 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
-using System;
-using System.Collections.Generic;
 using System.Numerics;
-using System.Threading.Tasks;
 
 namespace DailyRoutines.Modules;
 
@@ -19,13 +16,13 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoAetherialReductionTitle"),
+        Title       = GetLoc("AutoAetherialReductionTitle"),
         Description = GetLoc("AutoAetherialReductionDescription"),
-        Category = ModuleCategories.UIOperation,
+        Category    = ModuleCategories.UIOperation,
     };
 
-    private static AtkUnitBase* AetherialReductionAddon = null;
-    private static AtkUnitBase* AetherialReductionResultAddon = null;
+    private static unsafe AtkUnitBase* PurifyItemSelector => (AtkUnitBase*)DService.Gui.GetAddonByName("PurifyItemSelector");
+    private static unsafe AtkUnitBase* PurifyResult => (AtkUnitBase*)DService.Gui.GetAddonByName("PurifyResult");
 
     private static readonly InventoryType[] BackpackInventories =
     [
@@ -34,20 +31,24 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
 
     public override void Init()
     {
-        TaskHelper ??= new TaskHelper { TimeLimitMS = 15_000 };
-        Overlay ??= new Overlay(this);
-        Overlay.Flags |= ImGuiWindowFlags.NoMove;
+        TaskHelper ??= new TaskHelper { TimeLimitMS = 10_000 };
+        Overlay    ??= new Overlay(this);
 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "PurifyItemSelector", OnPurifyItemSelectorAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "PurifyItemSelector", OnPurifyItemSelectorAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "PurifyResult", OnPurifyResultAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "PurifyResult", OnPurifyResultAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "PurifyItemSelector", OnAddonList);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "PurifyItemSelector", OnAddonList);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "PurifyResult",       OnAddon);
+        
+        if (IsAddonAndNodesReady(PurifyItemSelector)) OnAddonList(AddonEvent.PostSetup, null);
+        
+        GameResourceManager.AddToBlacklist(typeof(AutoAetherialReduction), "chara/action/normal/item_action.tmb");
     }
 
     public override void Uninit()
     {
-        DService.AddonLifecycle.UnregisterListener(OnPurifyItemSelectorAddon);
-        DService.AddonLifecycle.UnregisterListener(OnPurifyResultAddon);
+        GameResourceManager.RemoveFromBlacklist(typeof(AutoAetherialReduction), "chara/action/normal/item_action.tmb");
+        
+        DService.AddonLifecycle.UnregisterListener(OnAddonList);
+        DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();
     }
 
@@ -58,158 +59,103 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
 
     public override void OverlayUI()
     {
-        var addon = AetherialReductionAddon;
+        var addon = PurifyItemSelector;
         if (addon == null) return;
 
-        var pos = new Vector2(addon->X + 6, addon->Y - ImGui.GetWindowSize().Y + 6);
+        var pos = new Vector2(addon->GetX() - ImGui.GetWindowSize().X, addon->GetY() + 6);
         ImGui.SetWindowPos(pos);
 
-        using (FontManager.UIFont80.Push())
+        ImGui.TextColored(LightSkyBlue, GetLoc("AutoAetherialReductionTitle"));
+
+        ImGui.Separator();
+
+        using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
-            ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(ImGuiColors.DalamudYellow, Lang.Get("AutoAetherialReductionTitle"));
-
-            ImGui.SameLine();
-            using (ImRaii.Disabled(TaskHelper.IsBusy))
-            {
-                if (ImGui.Button(Lang.Get("AutoAetherialReduction-DesynthesizeAll")))
-                    StartAetherialReductionRoundAll();
-            }
-
-            ImGui.SameLine();
-            ImGui.TextDisabled("|");
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Stop")))
-                TaskHelper.Abort();
-
-            ImGui.SameLine();
-            ImGui.TextDisabled("|");
+            if (ImGui.Button(GetLoc("Start")))
+                StartAetherialReduction();
         }
-    }
-
-    private void StartAetherialReductionRoundAll()
-        => TaskHelper.Enqueue(() => StartAetherialReductionRound(BackpackInventories), "开始精选全部物品");
-
-    private bool? StartAetherialReductionRound(IReadOnlyList<InventoryType> types)
-    {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
-        if (!Throttler.Throttle("AutoAetherialReduction")) return false;
-        if (!IsEnvironmentValid()) return false;
-
-        var addon = AetherialReductionAddon;
-        if (addon == null || !addon->IsVisible) return false;
-
-        try
-        {
-            // 获取列表组件
-            var listComponent = addon->UldManager.NodeList[3]->GetAsAtkComponentList();
-            if (listComponent == null) return false;
             
-            // 获取列表长度（可精选物品数量）
-            var listLength = listComponent->ListLength;
-            if (listLength <= 0)
-            {
-                NotificationInfo("没有可精选的物品", "自动精选");
-                return true;
-            }
-
-            TaskHelper.Enqueue(() => SelectFirstItem(addon), "选择物品");
-            TaskHelper.DelayNext(250, "等待选择");
-            TaskHelper.Enqueue(() => HandleResultDialog(), "处理结果");
-            TaskHelper.DelayNext(500, "等待处理");
-            
-            // 进度通知
-            TaskHelper.Enqueue(() => {
-                NotificationInfo("正在精选物品...", "自动精选");
-                return true;
-            }, "通知进度");
-            
-            TaskHelper.Enqueue(() => StartAetherialReductionRound(types), "处理下一个物品");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            DService.Log.Error($"Error accessing reduction item list: {ex}");
+        ImGui.SameLine();
+        if (ImGui.Button(GetLoc("Stop"))) 
             TaskHelper.Abort();
-            return false;
-        }
     }
 
-    private bool? SelectFirstItem(AtkUnitBase* addon)
+    private void StartAetherialReduction()
+        => TaskHelper.Enqueue(ProcessAetherialReduction, "开始精选物品");
+
+    private bool? ProcessAetherialReduction()
     {
-        if (addon == null || !addon->IsVisible) return false;
-        // 等待玩家空闲且结果窗口不可见
-        if (DService.Condition[ConditionFlag.Occupied39] || DService.Condition[ConditionFlag.Casting] || 
-            (AetherialReductionResultAddon != null && AetherialReductionResultAddon->IsVisible)) return false;
-
-        try
-        {
-            var values = stackalloc AtkValue[2];
-            values[0] = new AtkValue { Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int, Int = 12 };
-            values[1] = new AtkValue { Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.UInt, UInt = 0 };
-
-            addon->FireCallback(2, values);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            DService.Log.Error($"SelectFirstItem Error: {ex}");
-            TaskHelper.Abort();
-            return false;
-        }
-    }
-
-    private bool? HandleResultDialog()
-    {
-        var resultAddon = AetherialReductionResultAddon;
-        if (resultAddon == null || !resultAddon->IsVisible) return false;
-        
-        try
-        {
-            // 直接关闭结果对话框
-            resultAddon->Close(true);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            DService.Log.Error($"HandleResultDialog Error: {ex}");
-            TaskHelper.Abort();
-            return false;
-        }
-    }
-
-    private bool IsEnvironmentValid()
-    {
-        if (IsInventoryFull(BackpackInventories))
-        {
-            TaskHelper.Abort();
-            NotificationError("背包已满，无法继续精选", "自动精选");
-            return false;
-        }
-
-        if (DService.Condition[ConditionFlag.Mounted])
-        {
-            TaskHelper.Abort();
-            NotificationError("骑乘状态下无法执行此操作", "自动精选");
-            return false;
-        }
-
+        // 基本检查，与AutoDesynthesizeItems保持一致
         if (OccupiedInEvent) return false;
-        if (DService.Condition[ConditionFlag.InCombat]) return false;
+        if (!IsAddonAndNodesReady(PurifyItemSelector)) return false;
 
+        // 检查环境
+        if (IsEnvironmentBlockingOperation()) return false;
+        
+        // 获取列表组件和项目数量
+        var itemAmount = PurifyItemSelector->AtkValues[9].Int;
+        if (itemAmount == 0)
+        {
+            TaskHelper.Abort();
+            return true;
+        }
+        
+        // 恢复使用原始的Callback方法处理第一个项目，与原版保持一致
+        Callback(PurifyItemSelector, true, 12, 0);
+        
+        // 再次将此方法入队以处理下一个物品
+        TaskHelper.Enqueue(ProcessAetherialReduction);
         return true;
     }
 
-    private static void OnPurifyResultAddon(AddonEvent type, AddonArgs args)
+    // 重命名并简化环境检查方法，减少冗余检查
+    private bool IsEnvironmentBlockingOperation()
     {
-        AetherialReductionResultAddon = type == AddonEvent.PostSetup ? (AtkUnitBase*)args.Addon : null;
+        // 检查背包是否已满
+        if (IsInventoryFull(BackpackInventories))
+        {
+            TaskHelper.Abort();
+            return true;
+        }
+
+        // 检查玩家状态，移除OccupiedInEvent（已在ProcessAetherialReduction中检查）
+        if (DService.Condition[ConditionFlag.Mounted] ||
+            DService.Condition[ConditionFlag.InCombat] ||
+            DService.Condition[ConditionFlag.Occupied39] ||
+            DService.Condition[ConditionFlag.Casting])
+        {
+            TaskHelper.Abort();
+            return true;
+        }
+
+        // 检查结果窗口是否已打开
+        if (PurifyResult != null && PurifyResult->IsVisible)
+        {
+            return true;
+        }
+
+        return false;
     }
 
-    private void OnPurifyItemSelectorAddon(AddonEvent type, AddonArgs args)
+    private void OnAddonList(AddonEvent type, AddonArgs? args)
     {
-        AetherialReductionAddon = type == AddonEvent.PostSetup ? (AtkUnitBase*)args.Addon : null;
-        Overlay.IsOpen = AetherialReductionAddon != null;
-        if (AetherialReductionAddon == null) TaskHelper.Abort(); 
+        Overlay.IsOpen = type switch
+        {
+            AddonEvent.PostSetup   => true,
+            AddonEvent.PreFinalize => false,
+            _                      => Overlay.IsOpen,
+        };
+        
+        if (type == AddonEvent.PreFinalize)
+            TaskHelper.Abort();
+    }
+
+    private static void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        if (!Throttler.Throttle("AutoAetherialReduction", 100)) return;
+        if (!IsAddonAndNodesReady(PurifyResult)) return;
+        
+        // 自动处理结果对话框
+        Callback(PurifyResult, true, 0, 0);
     }
 }
