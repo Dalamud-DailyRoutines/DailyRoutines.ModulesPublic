@@ -421,8 +421,9 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
         if (InfoProxyCrossRealm.Instance()->IsCrossRealm > 0)
         {
+            var myGroup = InfoProxyCrossRealm.GetMemberByEntityId((uint)DService.ClientState.LocalPlayer!.GameObjectId);
             var pGroupMember = InfoProxyCrossRealm.GetMemberByEntityId(entityId);
-            if (pGroupMember is not null && pGroupMember->GroupIndex == 0)
+            if (myGroup is not null && pGroupMember is not null && pGroupMember->GroupIndex == myGroup->GroupIndex)
             {
                 index = pGroupMember->MemberIndex;
                 return true;
