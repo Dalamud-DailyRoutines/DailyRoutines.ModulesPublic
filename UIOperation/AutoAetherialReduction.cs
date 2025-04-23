@@ -31,7 +31,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
 
     public override void Init()
     {
-        TaskHelper ??= new TaskHelper { TimeLimitMS = 10_000 };
+        TaskHelper ??= new TaskHelper { TimeLimitMS = 15_000 };
         Overlay    ??= new Overlay(this);
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "PurifyItemSelector", OnAddonList);
@@ -52,11 +52,6 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         base.Uninit();
     }
 
-    public override void ConfigUI()
-    {
-        ConflictKeyText();
-    }
-
     public override void OverlayUI()
     {
         var addon = PurifyItemSelector;
@@ -72,7 +67,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
             if (ImGui.Button(GetLoc("Start")))
-                StartAetherialReduction();
+                TaskHelper.Enqueue(StartAetherialReduction, "开始精选");
         }
             
         ImGui.SameLine();
@@ -80,57 +75,40 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
             TaskHelper.Abort();
     }
 
-    private void StartAetherialReduction()
-        => TaskHelper.Enqueue(ProcessAetherialReduction, "开始精选");
-
-    private bool? ProcessAetherialReduction()
+    private bool? StartAetherialReduction()
     {
-        // 基本检查，与AutoDesynthesizeItems保持一致
         if (OccupiedInEvent) return false;
         if (!IsAddonAndNodesReady(PurifyItemSelector)) return false;
 
-        // 检查环境
         if (IsEnvironmentBlockingOperation()) return false;
         
-        // 获取列表组件和项目数量
-        var itemAmount = PurifyItemSelector->AtkValues[9].Int;
+        var itemAmount = PurifyItemSelector->AtkValues[3].Int;
         if (itemAmount == 0)
         {
             TaskHelper.Abort();
             return true;
         }
         
-        // 恢复使用原始的Callback方法处理第一个项目，与原版保持一致
         Callback(PurifyItemSelector, true, 12, 0);
         
-        // 再次将此方法入队以处理下一个物品
-        TaskHelper.Enqueue(ProcessAetherialReduction);
+        TaskHelper.Enqueue(StartAetherialReduction);
         return true;
     }
 
-    // 重命名并简化环境检查方法，减少冗余检查
     private bool IsEnvironmentBlockingOperation()
     {
-        // 检查背包是否已满
         if (IsInventoryFull(BackpackInventories))
         {
             TaskHelper.Abort();
             return true;
         }
 
-        // 检查玩家状态，移除OccupiedInEvent（已在ProcessAetherialReduction中检查）
         if (DService.Condition[ConditionFlag.Mounted] ||
             DService.Condition[ConditionFlag.InCombat] ||
             DService.Condition[ConditionFlag.Occupied39] ||
             DService.Condition[ConditionFlag.Casting])
         {
             TaskHelper.Abort();
-            return true;
-        }
-
-        // 检查结果窗口是否已打开
-        if (PurifyResult != null && PurifyResult->IsVisible)
-        {
             return true;
         }
 
@@ -155,7 +133,6 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         if (!Throttler.Throttle("AutoAetherialReduction", 100)) return;
         if (!IsAddonAndNodesReady(PurifyResult)) return;
         
-        // 自动处理结果对话框
         Callback(PurifyResult, true, 0, 0);
     }
 }
