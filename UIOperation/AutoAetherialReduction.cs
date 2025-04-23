@@ -81,7 +81,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
     }
 
     private void StartAetherialReduction()
-        => TaskHelper.Enqueue(ProcessAetherialReduction, "开始精选物品");
+        => TaskHelper.Enqueue(ProcessAetherialReduction, "开始精选");
 
     private bool? ProcessAetherialReduction()
     {
