@@ -11,6 +11,7 @@ using Dalamud.Memory;
 using Dalamud.Plugin.Ipc;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 
@@ -154,9 +155,15 @@ public class FastGrandCompanyExchange : DailyModuleBase
         EnqueueByName(splited[0], itemCount);
     }
 
-    public unsafe void EnqueueByName(string itemName, int itemCount = -1)
+    public unsafe bool? EnqueueByName(string itemName, int itemCount = -1)
     {
-        if (!IsAddonAndNodesReady(GrandCompanyExchange)) return;
+        if (!IsAddonAndNodesReady(GrandCompanyExchange)) return false;
+        if (IsAddonAndNodesReady(SelectYesno))
+        {
+            ClickSelectYesnoYes();
+            return false;
+        }
+        
         if (itemName == "default")
         {
             itemName  = ModuleConfig.ExchangeItemName;
@@ -166,7 +173,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
         var grandCompany = PlayerState.Instance()->GrandCompany;
         var gcRank       = PlayerState.Instance()->GetGrandCompanyRank();
         var seals        = InventoryManager.Instance()->GetCompanySeals(grandCompany);
-        if (seals == 0) return;
+        if (seals == 0) return true;
 
         var result = LuminaGetter.GetSub<GCScripShopItem>()
                                 .SelectMany(x => x)
@@ -176,7 +183,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
                                            .Contains(itemName, StringComparison.OrdinalIgnoreCase))
                                 .OrderBy(x => (x.Item.ValueNullable?.Name.ExtractText() ?? string.Empty).Length)
                                 .FirstOrDefault();
-        if (result.RowId == 0) return;
+        if (result.RowId == 0) return true;
 
         var isVenture = result.Item.RowId == 21072;
 
@@ -187,7 +194,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
         {
             // 不管怎么说 Delay 一下方便其他模块控制
             TaskHelper.DelayNext(100);
-            return;
+            return true;
         }
 
         var categoryData = LuminaGetter.GetRow<GCScripShopCategory>(result.RowId)!.Value;
@@ -220,19 +227,8 @@ public class FastGrandCompanyExchange : DailyModuleBase
                     var name     = MemoryHelper.ReadSeStringNullTerminated((nint)atkValue.String);
                     if (string.IsNullOrWhiteSpace(name.ExtractText()) || name.ExtractText() != result.Item.Value.Name.ExtractText()) continue;
 
-                    var listComponent = (AtkComponentList*)listNode->Component;
-                    if (listComponent->GetItemDisabledState(i)) continue;
-
-                    var numericInputNode = (AtkComponentNumericInput*)listComponent->GetItemRenderer(i)->UldManager.SearchNodeById(6)->GetComponent();
-                    if (numericInputNode == null) continue;
-
-                    var maxExchangeCount = Math.Min(numericInputNode->Data.Max, exchangeCount);
-                    listComponent->SetItemCount(maxExchangeCount);
-                    numericInputNode->SetValue(maxExchangeCount);
+                    SendEvent(AgentId.GrandCompanyExchange, 0, 0, i, exchangeCount, 0, true, false);
                     
-                    listComponent->SelectItem(i, true);
-                    listComponent->DispatchItemEvent(i, AtkEventType.ListItemToggle);
-
                     if (!isVenture && itemCount == -1)
                         TaskHelper.Enqueue(() => EnqueueByName(itemName, itemCount));
 
@@ -264,7 +260,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
             }, "交换货币");
         }
         
-        TaskHelper.Enqueue(() => ClickSelectYesnoYes());
+        return true;
     }
 
     private class Config : ModuleConfiguration

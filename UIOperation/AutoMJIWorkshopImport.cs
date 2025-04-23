@@ -25,7 +25,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
-    public override ModulePermission Permission => new() { CNOnly = true };
+    public override ModulePermission Permission { get; } = new() { CNOnly = true };
 
     private static Assignments Recommendations = new();
     private static readonly Dictionary<uint, MJICraftworksObject> OriginalCraftItemsSheet;

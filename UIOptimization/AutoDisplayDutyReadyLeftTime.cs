@@ -46,7 +46,7 @@ public unsafe class AutoDisplayDutyReadyLeftTime : DailyModuleBase
         var textNode = ContentsFinderReady->GetTextNodeById(3);
         if (textNode == null) return;
         
-        textNode->SetText($"{LuminaWarpper.GetAddonText(2780)} ({second})");
+        textNode->SetText($"{LuminaWrapper.GetAddonText(2780)} ({second})");
     }
 
     public override void Uninit()

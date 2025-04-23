@@ -220,7 +220,8 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
             TaskHelper.Enqueue(EnqueueDelivery);
             return true;
         }
-        else if (SelectYesno != null)
+
+        if (SelectYesno != null)
         {
             var state = ClickSelectYesnoYes();
             if (!state) return false;
@@ -229,7 +230,8 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
             TaskHelper.Enqueue(EnqueueDelivery);
             return true;
         }
-        else if (GrandCompanySupplyList != null)
+
+        if (GrandCompanySupplyList != null)
         {
             if (!IsAddonAndNodesReady(GrandCompanySupplyList)         ||
                 AgentGrandCompanySupply.Instance()->ItemArray == null ||
@@ -239,27 +241,30 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
             var items = ExpertDeliveryItem.Parse().Where(x => x.GetIndex() != -1 && !x.IsNeedToSkip()).ToList();
             if (items.Count > 0)
             {
+                if (IsAboutToReachTheCap(items[0].SealReward))
+                {
+                    TaskHelper.Abort();
+                    return true;
+                }
+                
                 items.First().HandIn();
                 
                 TaskHelper.Abort();
                 TaskHelper.Enqueue(EnqueueDelivery);
                 return true;
             }
-            else
-            {
-                TaskHelper.Abort();
-                return true;
-            }
+
+            TaskHelper.Abort();
+            return true;
         }
-        else if (!DService.Condition[ConditionFlag.OccupiedInQuestEvent])
+
+        if (!DService.Condition[ConditionFlag.OccupiedInQuestEvent])
         {
             TaskHelper.Abort();
             return true;
         }
-        else
-        {
-            return false;
-        }
+
+        return false;
     }
 
     private static bool? EnqueueRefresh()
@@ -271,6 +276,25 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
 
         SendEvent(AgentId.GrandCompanySupply, 0, 0, 2);
         return true;
+    }
+
+    private static bool IsAboutToReachTheCap(uint sealReward)
+    {
+        var grandCompany = PlayerState.Instance()->GrandCompany;
+        if ((GrandCompany)grandCompany == GrandCompany.None) return true;
+
+        if (!LuminaGetter.TryGetRow<GrandCompanyRank>(PlayerState.Instance()->GetGrandCompanyRank(), out var rank))
+            return true;
+
+        var companySeals = InventoryManager.Instance()->GetCompanySeals(grandCompany);
+        var capAmount    = rank.MaxSeals;
+        if (companySeals + sealReward > capAmount)
+        {
+            NotificationInfo(GetLoc("AutoExpertDelivery-ReachdSealCap")); 
+            return true;
+        }
+        
+        return false;
     }
 
     // 悬浮窗控制
@@ -320,21 +344,6 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
             if (GetSlot() == null) return true;
             if (ModuleConfig.SkipWhenHQ && IsHQ()) return true;
             if (ModuleConfig.SkipWhenMateria && HasMateria()) return true;
-
-            var grandCompany = PlayerState.Instance()->GrandCompany;
-            if ((GrandCompany)grandCompany == GrandCompany.None) return true;
-
-            if (!LuminaGetter.TryGetRow<GrandCompanyRank>(PlayerState.Instance()->GetGrandCompanyRank(), out var rank))
-                return true;
-
-            var companySeals = InventoryManager.Instance()->GetCompanySeals(grandCompany);
-            var capAmount = rank.MaxSeals;
-            if (companySeals + SealReward > capAmount)
-            {
-                if (Throttler.Throttle("AutoExpertDelivery-ReachedSealCap", 2_000))
-                    NotificationInfo(GetLoc("AutoExpertDelivery-ReachdSealCap"));
-                return true;
-            }
 
             return false;
         }

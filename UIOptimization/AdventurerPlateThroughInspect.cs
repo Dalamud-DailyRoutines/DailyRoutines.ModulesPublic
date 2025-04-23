@@ -53,7 +53,7 @@ public unsafe class AdventurerPlateThroughInspect : DailyModuleBase
         
         if (ImGui.ImageButton(texture.GetWrapOrEmpty().ImGuiHandle, ScaledVector2(24f)))
             new CharaCardOpenPacket(AgentInspect.Instance()->CurrentEntityId).Send();
-        ImGuiOm.TooltipHover($"{LuminaWarpper.GetAddonText(15083)}");
+        ImGuiOm.TooltipHover($"{LuminaWrapper.GetAddonText(15083)}");
     }
 
     public override void Uninit()

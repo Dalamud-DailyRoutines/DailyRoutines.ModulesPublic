@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
+using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -34,13 +35,11 @@ public class CrossDCPartyFinder : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
-    public override ModulePermission Permission => new() { CNOnly = true };
+    public override ModulePermission Permission { get; } = new() { CNOnly = true };
 
     private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/listings?";
     private const string BASE_DETAIL_URL = "https://xivpf.littlenightmare.top/api/listing/";
     
-    private static readonly HttpClient HttpClient = new();
-
     private static string HomeDataCenter => 
         DService.ClientState.LocalPlayer.HomeWorld.Value.DataCenter.Value.Name.ExtractText();
     
@@ -522,7 +521,7 @@ public class CrossDCPartyFinder : DailyModuleBase
         public List<uint> Jobs       { get; set; } = [];
 
         public async Task<PartyFinderList> Request() 
-            => JsonConvert.DeserializeObject<PartyFinderList>(await HttpClient.GetStringAsync(Format())) ?? new();
+            => JsonConvert.DeserializeObject<PartyFinderList>(await HttpClientHelper.Get().GetStringAsync(Format())) ?? new();
 
         public string Format()
         {
@@ -734,7 +733,7 @@ public class CrossDCPartyFinder : DailyModuleBase
             {
                 if (Detail != null || DetailReuqestTask != null) return;
                 
-                DetailReuqestTask = HttpClient.GetStringAsync($"{BASE_DETAIL_URL}{ID}");
+                DetailReuqestTask = HttpClientHelper.Get().GetStringAsync($"{BASE_DETAIL_URL}{ID}");
                 Detail            = JsonConvert.DeserializeObject<PartyFinderListingDetail>(await DetailReuqestTask.ConfigureAwait(false)) ?? new();
             }
 

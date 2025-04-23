@@ -228,7 +228,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         var tooltipBuilder = new SeStringBuilder();
         foreach (var (status, _) in LastMitigationStatus)
         {
-            tooltipBuilder.Append($"{LuminaWarpper.GetStatusName(status.Id)} ({status.Id}):");
+            tooltipBuilder.Append($"{LuminaWrapper.GetStatusName(status.Id)} ({status.Id}):");
             tooltipBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
             tooltipBuilder.Append($"{status.Mitigation.Physical}% ");
             tooltipBuilder.AddIcon(BitmapFontIcon.DamageMagical);

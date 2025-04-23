@@ -23,7 +23,7 @@ public unsafe class AutoRaise : DailyModuleBase
         Author      = ["qingsiweisan"]
     };
 
-    public override ModulePermission Permission => new() { CNPremium = true, GlobalPremium = true };
+    public override ModulePermission Permission { get; } = new() { CNPremium = true, GlobalPremium = true };
 
     private static Config ModuleConfig = null!;
 
@@ -84,7 +84,7 @@ public unsafe class AutoRaise : DailyModuleBase
         
         ImGui.SetNextItemWidth(250f * GlobalFontScale);
         ImGui.SameLine();
-        if (ImGui.DragInt("##MPThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 2400, 9000, $"{LuminaWarpper.GetAddonText(233)}: %d"))
+        if (ImGui.DragInt("##MPThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 2400, 9000, $"{LuminaWrapper.GetAddonText(233)}: %d"))
             SaveConfig(ModuleConfig);
 
         if (ImGui.Checkbox(GetLoc("AutoRaise-UseThinAir"), ref ModuleConfig.UseWhiteMageThinAir))
@@ -101,13 +101,13 @@ public unsafe class AutoRaise : DailyModuleBase
             SaveConfig(ModuleConfig);
         }
 
-        if (ImGui.RadioButton(GetLoc("AutoRaise-RaiseTargetFilter-OnlySpecificRole", LuminaWarpper.GetAddonText(1083)), currentType == 1))
+        if (ImGui.RadioButton(GetLoc("AutoRaise-RaiseTargetFilter-OnlySpecificRole", LuminaWrapper.GetAddonText(1083)), currentType == 1))
         {
             ModuleConfig.RaiseTargetType = 1;
             SaveConfig(ModuleConfig);
         }
 
-        if (ImGui.RadioButton(GetLoc("AutoRaise-RaiseTargetFilter-OnlySpecificRole", LuminaWarpper.GetAddonText(1082)), currentType == 2))
+        if (ImGui.RadioButton(GetLoc("AutoRaise-RaiseTargetFilter-OnlySpecificRole", LuminaWrapper.GetAddonText(1082)), currentType == 2))
         {
             ModuleConfig.RaiseTargetType = 2;
             SaveConfig(ModuleConfig);

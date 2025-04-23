@@ -60,7 +60,7 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
         }
 
         ImGui.SetNextItemWidth(250f * GlobalFontScale);
-        if (ImGui.DragInt("##MpThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 3000, 9000, $"{LuminaWarpper.GetAddonText(233)}: %d"))
+        if (ImGui.DragInt("##MpThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 3000, 9000, $"{LuminaWrapper.GetAddonText(233)}: %d"))
             SaveConfig(ModuleConfig);
         
         ImGui.Spacing();

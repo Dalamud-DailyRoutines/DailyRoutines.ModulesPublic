@@ -94,7 +94,7 @@ public class PartyFinderFilter : DailyModuleBase
             SaveConfig(ModuleConfig);
 
         ImGui.SetNextItemWidth(60f * GlobalFontScale);
-        ImGui.InputInt3($"{LuminaWarpper.GetAddonText(1084)} / {LuminaWarpper.GetAddonText(1085)} / {LuminaWarpper.GetAddonText(1086)}",
+        ImGui.InputInt3($"{LuminaWrapper.GetAddonText(1084)} / {LuminaWrapper.GetAddonText(1085)} / {LuminaWrapper.GetAddonText(1086)}",
                         ref ModuleConfig.HighEndFilterRoleCountData[3]);
         if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);

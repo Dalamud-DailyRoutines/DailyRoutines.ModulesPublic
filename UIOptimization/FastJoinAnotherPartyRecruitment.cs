@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Gui.PartyFinder.Types;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
 {
@@ -20,7 +18,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
-    private static Dictionary<ulong, uint> CIDToListingID = [];
+    private static readonly Dictionary<ulong, uint> CIDToListingID = [];
     
     public override void Init()
     {
@@ -59,14 +57,9 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         var buttonNode = addon->GetButtonNodeById(109);
         if (buttonNode == null) return;
 
-        if (DService.PartyList.Length < 2)
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        if (!buttonNode->IsEnabled || buttonNode->ButtonTextNode == null ||
-            buttonNode->ButtonTextNode->NodeText.ExtractText()   != LuminaWarpper.GetAddonText(2219))
+        if (DService.PartyList.Length                          < 2     ||
+            buttonNode->ButtonTextNode                         == null ||
+            buttonNode->ButtonTextNode->NodeText.ExtractText() != LuminaWrapper.GetAddonText(2219))
         {
             Overlay.IsOpen = false;
             return;

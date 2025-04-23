@@ -25,8 +25,8 @@ public unsafe class AutoDiscard : DailyModuleBase
 
     private static readonly Dictionary<DiscardBehaviour, string> DiscardBehaviourLoc = new()
     {
-        [DiscardBehaviour.Discard] = LuminaWarpper.GetAddonText(91),
-        [DiscardBehaviour.Sell]    = LuminaWarpper.GetAddonText(93),
+        [DiscardBehaviour.Discard] = LuminaWrapper.GetAddonText(91),
+        [DiscardBehaviour.Sell]    = LuminaWrapper.GetAddonText(93),
     };
 
     private static readonly InventoryType[] InventoryTypes =
@@ -256,7 +256,7 @@ public unsafe class AutoDiscard : DailyModuleBase
             switch (Behaviour)
             {
                 case DiscardBehaviour.Discard:
-                    if (!ClickContextMenu(LuminaWarpper.GetAddonText(91)))
+                    if (!ClickContextMenu(LuminaWrapper.GetAddonText(91)))
                     {
                         ContextMenu->Close(true);
                         break;
@@ -265,8 +265,8 @@ public unsafe class AutoDiscard : DailyModuleBase
                     taskHelper.Enqueue(() => ClickSelectYesnoYes(), "ConfirmDiscard", null, null, 1);
                     break;
                 case DiscardBehaviour.Sell:
-                    if (!ClickContextMenu(LuminaWarpper.GetAddonText(5480)) &&
-                        !ClickContextMenu(LuminaWarpper.GetAddonText(93)))
+                    if (!ClickContextMenu(LuminaWrapper.GetAddonText(5480)) &&
+                        !ClickContextMenu(LuminaWrapper.GetAddonText(93)))
                     {
                         ContextMenu->Close(true);
                         ChatError(GetLoc("AutoDiscard-NoSellPage"));

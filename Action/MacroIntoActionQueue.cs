@@ -2,21 +2,18 @@ using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class MacroIntoActionQueue : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("MacroIntoActionQueueTitle"),
+        Title       = GetLoc("MacroIntoActionQueueTitle"),
         Description = GetLoc("MacroIntoActionQueueDescription"),
-        Category = ModuleCategories.Action,
+        Category    = ModuleCategories.Action,
     };
 
-    public override void Init()
-    {
-        UseActionManager.Register(OnPreUseAction);
-    }
+    public override void Init() => UseActionManager.Register(OnPreUseAction);
 
     private static void OnPreUseAction(
         ref bool isPrevented,
@@ -25,18 +22,15 @@ public unsafe class MacroIntoActionQueue : DailyModuleBase
     {
         queueState = ActionManager.UseActionMode.Queue;
         ActionManager.Instance()->QueueType = ActionManager.UseActionMode.Queue;
-
-        // 冲刺
+        
+        // 冲刺重定向
         if (actionType == ActionType.GeneralAction && actionID == 4)
         {
             actionType = ActionType.Action;
-            actionID = 3;
-            targetID = 0xE000_0000;
+            actionID   = GetAdjustSprintActionID();
+            targetID   = 0xE0000000;
         }
     }
 
-    public override void Uninit()
-    {
-        UseActionManager.Unregister(OnPreUseAction);
-    }
+    public override void Uninit() => UseActionManager.Unregister(OnPreUseAction);
 }

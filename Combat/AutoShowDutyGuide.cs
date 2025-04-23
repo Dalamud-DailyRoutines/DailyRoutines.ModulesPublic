@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
+using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
 using DailyRoutines.Windows;
 using Dalamud.Interface.Textures;
@@ -27,7 +28,6 @@ public class AutoShowDutyGuide : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
-    private static readonly HttpClient client = new();
     private static uint CurrentDuty;
     private static ISharedImmediateTexture? NoviceIcon;
 
@@ -146,7 +146,7 @@ public class AutoShowDutyGuide : DailyModuleBase
         try
         {
             CurrentDuty = dutyID;
-            var originalText = await client.GetStringAsync(string.Format(FF14OrgLinkBase, dutyID));
+            var originalText = await HttpClientHelper.Get().GetStringAsync(string.Format(FF14OrgLinkBase, dutyID));
 
             var plainText = MarkdownToPlainText(originalText);
             if (!string.IsNullOrWhiteSpace(plainText))

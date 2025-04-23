@@ -26,10 +26,10 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : DailyModuleBase
         
         ClickSelectYesnoYes
         ([
-            LuminaWarpper.GetAddonText(1962), 
-            LuminaWarpper.GetAddonText(2436), 
-            LuminaWarpper.GetAddonText(11502), 
-            LuminaWarpper.GetAddonText(11508)
+            LuminaWrapper.GetAddonText(1962), 
+            LuminaWrapper.GetAddonText(2436), 
+            LuminaWrapper.GetAddonText(11502), 
+            LuminaWrapper.GetAddonText(11508)
         ]);
     }
 

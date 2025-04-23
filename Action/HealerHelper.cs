@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using DailyRoutines.Abstracts;
+using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -80,7 +81,7 @@ public class HealerHelper : DailyModuleBase
     {
         // auto play card
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-AutoPlayCardTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWarpper.GetActionName(17055)));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(17055)));
 
         ImGui.Spacing();
 
@@ -199,7 +200,7 @@ public class HealerHelper : DailyModuleBase
 
         // easy dispel
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyDispelTitle"));
-        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWarpper.GetActionName(7568)));
+        ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(7568)));
 
         ImGui.Spacing();
 
@@ -732,10 +733,9 @@ public class HealerHelper : DailyModuleBase
     #region FFLogs
 
     // FFLogs related (auto play card advance mode)
-    private static readonly HttpClient Client    = new();
     private const           string     FFLogsUri = "https://www.fflogs.com/v1";
 
-    private static Dictionary<uint, LogsRecord> MemberBestRecords = new Dictionary<uint, LogsRecord>();
+    private static readonly Dictionary<uint, LogsRecord> MemberBestRecords = new();
 
     // warning log
     private static bool FirstTimeFallback = true;
@@ -745,7 +745,7 @@ public class HealerHelper : DailyModuleBase
         try
         {
             var uri      = $"{FFLogsUri}/classes?api_key={ModuleConfig.FFLogsAPIKey}";
-            var response = await Client.GetStringAsync(uri);
+            var response = await HttpClientHelper.Get().GetStringAsync(uri);
             ModuleConfig.KeyValid = !string.IsNullOrWhiteSpace(response);
             FirstTimeFallback     = true; // only notify once per exec time
             SaveConfig(ModuleConfig);
@@ -792,7 +792,7 @@ public class HealerHelper : DailyModuleBase
             query["encounter"] = Dal2LogsZoneMap[zone].ToString();
 
             // contains all ultimates and current savage in current patch
-            var response = await Client.GetStringAsync($"{uri}?{query}");
+            var response = await HttpClientHelper.Get().GetStringAsync($"{uri}?{query}");
             var records  = JsonConvert.DeserializeObject<LogsRecord[]>(response);
             if (records == null || records.Length == 0) return null;
 

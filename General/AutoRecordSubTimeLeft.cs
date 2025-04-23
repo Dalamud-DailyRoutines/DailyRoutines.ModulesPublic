@@ -22,7 +22,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         Author      = ["Due"]
     };
 
-    public override ModulePermission Permission => new() { CNOnly = true };
+    public override ModulePermission Permission { get; } = new() { CNOnly = true };
 
     private static readonly CompSig AgentLobbyOnLoginSig = new("E8 ?? ?? ?? ?? 41 C6 46 08 01 E9 ?? ?? ?? ?? 83 FB 03");
     private delegate nint AgentLobbyOnLoginDelegate(AgentLobby* agent);
