@@ -82,7 +82,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
 
         if (IsEnvironmentBlockingOperation()) return false;
         
-        var itemAmount = PurifyItemSelector->AtkValues[3].Int;
+        var itemAmount = PurifyItemSelector->UldManager.NodeList[3]->GetAsAtkComponentList()->ListLength;
         if (itemAmount == 0)
         {
             TaskHelper.Abort();
