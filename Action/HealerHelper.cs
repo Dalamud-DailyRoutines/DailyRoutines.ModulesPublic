@@ -209,6 +209,8 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         ImGui.Dummy(new Vector2(5, 0));
         ImGui.SameLine();
+        ImGui.Dummy(new Vector2(5, 0));
+        ImGui.SameLine();
         if (ImGui.Button(GetLoc("Reset")))
             ResetCustomCardOrder("Melee", "opener");
 
@@ -343,6 +345,40 @@ public class HealerHelper : DailyModuleBase
                     ImGui.Spacing();
                     ImGui.TextColored(Orange, GetLoc("HealerHelper-EasyHeal-OverhealWarning"));
                 }
+
+                ImGui.Spacing();
+
+                // target when overheal
+                ImGui.TextColored(LightPink, GetLoc("HealerHelper-EasyHeal-OverhealTargetDescription"));
+
+                ImGui.Spacing();
+
+                if (ImGui.RadioButton($"{GetLoc("HealerHelper-EasyHeal-OverhealTarget-Prevent")}##overhealtarget",
+                                      ModuleConfig.OverhealTarget == OverhealTarget.Prevent))
+                {
+                    ModuleConfig.OverhealTarget = OverhealTarget.Prevent;
+                    SaveConfig(ModuleConfig);
+                }
+
+                ImGui.SameLine();
+                ImGui.Dummy(new Vector2(5, 0));
+                ImGui.SameLine();
+                if (ImGui.RadioButton($"{GetLoc("HealerHelper-EasyHeal-OverhealTarget-Local")}##overhealtarget",
+                                      ModuleConfig.OverhealTarget == OverhealTarget.Local))
+                {
+                    ModuleConfig.OverhealTarget = OverhealTarget.Local;
+                    SaveConfig(ModuleConfig);
+                }
+
+                ImGui.SameLine();
+                ImGui.Dummy(new Vector2(5, 0));
+                ImGui.SameLine();
+                if (ImGui.RadioButton($"{GetLoc("HealerHelper-EasyHeal-OverhealTarget-FirstTank")}##overhealtarget",
+                                      ModuleConfig.OverhealTarget == OverhealTarget.FirstTank))
+                {
+                    ModuleConfig.OverhealTarget = OverhealTarget.FirstTank;
+                    SaveConfig(ModuleConfig);
+                }
             }
 
             ImGui.Spacing();
@@ -397,6 +433,8 @@ public class HealerHelper : DailyModuleBase
                          [x => x.Name.ExtractText() + x.ClassJobCategory.Value.Name.ExtractText()]
                         );
         ImGui.SameLine();
+        ImGui.Dummy(new Vector2(5, 0));
+        ImGui.SameLine();
         if (ImGui.Button(GetLoc("Reset")))
             ResetActiveHealActions();
     }
@@ -445,18 +483,17 @@ public class HealerHelper : DailyModuleBase
     #region RemoteCache
 
     // cache related client setting
-    private static readonly HttpClient Client  = new();
-    private const           string     SuCache = "https://dr-cache.sumemo.dev";
+    private const string SuCache = "https://dr-cache.sumemo.dev";
 
     private async Task FetchRemoteVersion()
     {
         // fetch remote data
         try
         {
-            var json = await Client.GetStringAsync($"{SuCache}/version");
+            var json = await HttpClientHelper.Get().GetStringAsync($"{SuCache}/version");
             var resp = JsonConvert.DeserializeAnonymousType(json, new { version = "" });
             if (resp == null || string.IsNullOrWhiteSpace(resp.version))
-                DService.Log.Error($"[HealerHelper] Deserialize Remote Version Failed: {json}");
+                Error($"[HealerHelper] Deserialize Remote Version Failed: {json}");
             else
             {
                 var remoteCacheVersion = resp.version;
@@ -475,7 +512,7 @@ public class HealerHelper : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"[HealerHelper] Fetch Remote Version Failed: {ex}");
+            Error($"[HealerHelper] Fetch Remote Version Failed: {ex}");
         }
 
         // build cache
@@ -486,10 +523,10 @@ public class HealerHelper : DailyModuleBase
     {
         try
         {
-            var json = await Client.GetStringAsync($"{SuCache}/card-order?v={ModuleConfig.LocalCacheVersion}");
+            var json = await HttpClientHelper.Get().GetStringAsync($"{SuCache}/card-order?v={ModuleConfig.LocalCacheVersion}");
             var resp = JsonConvert.DeserializeObject<PlayCardOrder>(json);
             if (resp == null)
-                DService.Log.Error($"[HealerHelper] Deserialize Default Play Card Order Failed: {json}");
+                Error($"[HealerHelper] Deserialize Default Play Card Order Failed: {json}");
             else
             {
                 ModuleConfig.DefaultCardOrder = resp;
@@ -501,7 +538,7 @@ public class HealerHelper : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"[HealerHelper] Fetch Default Play Card Order Failed: {ex}");
+            Error($"[HealerHelper] Fetch Default Play Card Order Failed: {ex}");
         }
     }
 
@@ -509,10 +546,10 @@ public class HealerHelper : DailyModuleBase
     {
         try
         {
-            var json = await Client.GetStringAsync($"{SuCache}/heal-actions?v={ModuleConfig.LocalCacheVersion}");
+            var json = await HttpClientHelper.Get().GetStringAsync($"{SuCache}/heal-actions?v={ModuleConfig.LocalCacheVersion}");
             var resp = JsonConvert.DeserializeObject<Dictionary<string, List<HealAction>>>(json);
             if (resp == null)
-                DService.Log.Error($"[HealerHelper] Deserialize Default Heal Actions Failed: {json}");
+                Error($"[HealerHelper] Deserialize Default Heal Actions Failed: {json}");
             else
             {
                 ModuleConfig.TargetHealActions = resp.SelectMany(kv => kv.Value).ToDictionary(act => act.Id, act => act);
@@ -526,7 +563,7 @@ public class HealerHelper : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"[HealerHelper] Fetch Default Heal Actions Failed: {ex}");
+            Error($"[HealerHelper] Fetch Default Heal Actions Failed: {ex}");
         }
     }
 
@@ -534,10 +571,10 @@ public class HealerHelper : DailyModuleBase
     {
         try
         {
-            var json = await Client.GetStringAsync($"{SuCache}/territory?v={ModuleConfig.LocalCacheVersion}");
+            var json = await HttpClientHelper.Get().GetStringAsync($"{SuCache}/territory?v={ModuleConfig.LocalCacheVersion}");
             var resp = JsonConvert.DeserializeObject<List<TerritoryMap>>(json);
             if (resp == null)
-                DService.Log.Error($"[HealerHelper] Deserialize Territory Map Failed: {json}");
+                Error($"[HealerHelper] Deserialize Territory Map Failed: {json}");
             else
             {
                 ModuleConfig.TerritoryMaps = resp;
@@ -546,7 +583,7 @@ public class HealerHelper : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"[HealerHelper] Fetch Territory Map Failed: {ex}");
+            Error($"[HealerHelper] Fetch Territory Map Failed: {ex}");
         }
     }
 
@@ -934,8 +971,27 @@ public class HealerHelper : DailyModuleBase
             targetID = TargetNeedHeal();
             if (targetID == UnspecificTargetId)
             {
-                isPrevented = true;
-                return;
+                switch (ModuleConfig.OverhealTarget)
+                {
+                    case OverhealTarget.Prevent:
+                        isPrevented = true;
+                        return;
+
+                    case OverhealTarget.Local:
+                        targetID = DService.ClientState.LocalPlayer.EntityId;
+                        break;
+
+                    case OverhealTarget.FirstTank:
+                        var partyList       = DService.PartyList;
+                        var sortedPartyList = partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
+                        var firstTank       = sortedPartyList.FirstOrDefault(m => m.ClassJob.Value.Role == 1);
+                        targetID = firstTank?.ObjectId ?? DService.ClientState.LocalPlayer.EntityId;
+                        break;
+
+                    default:
+                        targetID = DService.ClientState.LocalPlayer.EntityId;
+                        break;
+                }
             }
 
             var member = FetchMember((uint)targetID);
@@ -998,7 +1054,7 @@ public class HealerHelper : DailyModuleBase
         try
         {
             var uri      = $"{FFLogsUri}/classes?api_key={ModuleConfig.FFLogsAPIKey}";
-            var response = await Client.GetStringAsync(uri);
+            var response = await HttpClientHelper.Get().GetStringAsync(uri);
             ModuleConfig.KeyValid = !string.IsNullOrWhiteSpace(response);
             FirstTimeFallback     = true; // only notify once per exec time
             SaveConfig(ModuleConfig);
@@ -1045,7 +1101,7 @@ public class HealerHelper : DailyModuleBase
             query["encounter"] = TerritoryMaps[zone].ToString();
 
             // contains all ultimates and current savage in current patch
-            var response = await Client.GetStringAsync($"{uri}?{query}");
+            var response = await HttpClientHelper.Get().GetStringAsync($"{uri}?{query}");
             var records  = JsonConvert.DeserializeObject<LogsRecord[]>(response);
             if (records == null || records.Length == 0) return null;
 
@@ -1083,6 +1139,7 @@ public class HealerHelper : DailyModuleBase
         // easy heal
         public EasyHealStatus               EasyHeal          = EasyHealStatus.Enable;
         public float                        NeedHealThreshold = 0.92f;
+        public OverhealTarget               OverhealTarget    = OverhealTarget.Local;
         public Dictionary<uint, HealAction> TargetHealActions = [];
         public HashSet<uint>                ActiveHealActions = [];
 
@@ -1190,6 +1247,17 @@ public class HealerHelper : DailyModuleBase
         Disable, // disable easy dispel
         Enable   // select target with dispellable status within range when no target selected
     }
+
+    private enum OverhealTarget
+    {
+        Local,     // local player
+        FirstTank, // first tank in party list
+        Prevent,   // prevent overheal
+    }
+
+    #endregion
+
+    #region EasyDispelStructs
 
     private enum DispelOrderStatus
     {

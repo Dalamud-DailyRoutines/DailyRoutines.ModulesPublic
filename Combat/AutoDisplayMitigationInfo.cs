@@ -305,18 +305,17 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     #region RemoteCache
 
     // cache related client setting
-    private static readonly HttpClient Client  = new();
-    private const           string     SuCache = "https://dr-cache.sumemo.dev";
+    private const string SuCache = "https://dr-cache.sumemo.dev";
 
     private async Task FetchRemoteVersion()
     {
         // fetch remote data
         try
         {
-            var json = await Client.GetStringAsync($"{SuCache}/version");
+            var json = await HttpClientHelper.Get().GetStringAsync($"{SuCache}/version");
             var resp = JsonConvert.DeserializeAnonymousType(json, new { version = "" });
             if (resp == null || string.IsNullOrWhiteSpace(resp.version))
-                DService.Log.Error($"Deserialize Remote Version Failed: {json}");
+                Error($"Deserialize Remote Version Failed: {json}");
             else
             {
                 // fetch remote data
@@ -334,7 +333,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"[AutoDisplayMitigationInfo] Fetch Remote Version Failed: {ex}");
+            Error($"[AutoDisplayMitigationInfo] Fetch Remote Version Failed: {ex}");
         }
 
         // build cache
@@ -345,10 +344,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     {
         try
         {
-            var json = await Client.GetStringAsync($"{SuCache}/mitigation?v={ModuleConfig.LocalCacheVersion}");
+            var json = await HttpClientHelper.Get().GetStringAsync($"{SuCache}/mitigation?v={ModuleConfig.LocalCacheVersion}");
             var resp = JsonConvert.DeserializeObject<MitigationStatus[]>(json);
             if (resp == null)
-                DService.Log.Error($"[AutoDisplayMitigationInfo] Deserialize Mitigation List Failed: {json}");
+                Error($"[AutoDisplayMitigationInfo] Deserialize Mitigation List Failed: {json}");
             else
             {
                 ModuleConfig.MitigationStatuses = resp;
@@ -357,7 +356,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Error($"[AutoDisplayMitigationInfo] Fetch Mitigation List Failed: {ex}");
+            Error($"[AutoDisplayMitigationInfo] Fetch Mitigation List Failed: {ex}");
         }
     }
 
