@@ -205,8 +205,6 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         ImGui.Dummy(new Vector2(5, 0));
         ImGui.SameLine();
-        ImGui.Dummy(new Vector2(5, 0));
-        ImGui.SameLine();
         if (ImGui.Button(GetLoc("Reset")))
             ResetCustomCardOrder("Melee", "opener");
 
