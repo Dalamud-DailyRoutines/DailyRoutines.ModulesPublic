@@ -27,6 +27,7 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
     private const float UseInGcdWindowStart     = 60;
     private const float UseInGcdWindowEnd       = 95;
     private const uint  LucidDreamingID         = 7562;
+    private const ushort TranscendentStatus     = 418; // 重生后的超越状态ID
 
     private static readonly HashSet<uint> ClassJobArr = [6, 7, 15, 19, 20, 21, 23, 24, 26, 27, 28, 33, 35, 36, 40];
 
@@ -175,13 +176,15 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
         
         var statusManager = character->StatusManager;
         var currentMp = localPlayer.CurrentMp;
-        var timeSinceLastAction = (DateTime.Now - LastPlayerActionTime).TotalMilliseconds;
         var timeSinceLastUse = (DateTime.Now - LastLucidDreamingUseTime).TotalMilliseconds;
         
         // 快速返回条件检查
-        if (timeSinceLastAction < PlayerInputIgnoreTimeMs ||
-            timeSinceLastUse < AbilityLockTimeMs ||
+        if (timeSinceLastUse < AbilityLockTimeMs ||
             currentMp >= ModuleConfig.MpThreshold)
+            return true;
+            
+        // 检查是否在重生后的无敌状态 - 默认行为，不再依赖配置选项
+        if (statusManager.HasStatus(TranscendentStatus))
             return true;
             
         // 检查技能状态
