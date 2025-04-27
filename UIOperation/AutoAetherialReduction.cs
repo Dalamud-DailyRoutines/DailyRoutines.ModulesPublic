@@ -5,6 +5,7 @@ using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Plugin.Ipc;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
@@ -19,6 +20,17 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         Category    = ModuleCategories.UIOperation
     };
     
+    public bool IsReducing => TaskHelper?.IsBusy ?? false;
+
+    public bool StartReduction()
+    {
+        if (TaskHelper == null) return false;
+        TaskHelper.Enqueue(StartAetherialReduction, "开始精选");
+        return true;
+    }
+    
+    private static IPC?  ModuleIPC;
+    
     private static readonly InventoryType[] Inventories =
     [
         InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4
@@ -28,6 +40,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
     {
         TaskHelper ??= new TaskHelper();
         Overlay    ??= new Overlay(this);
+        ModuleIPC  ??= new();
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "PurifyItemSelector", OnAddonList);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "PurifyItemSelector", OnAddonList);
@@ -124,5 +137,23 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
 
         if (type == AddonEvent.PreFinalize)
             TaskHelper.Abort();
+    }
+    
+    public class IPC : DailyModuleIPCBase
+    {
+        private const string IsBusyName = $"DailyRoutines.Modules.AutoAetherialReduction.IsBusy";
+        private static ICallGateProvider<bool>? IsBusyIPC;
+        
+        private const string StartReductionName = $"DailyRoutines.Modules.AutoAetherialReduction.StartReduction";
+        private static ICallGateProvider<bool>? StartReductionIPC;
+        
+        public override void Init()
+        {
+            IsBusyIPC ??= DService.PI.GetIpcProvider<bool>(IsBusyName);
+            IsBusyIPC.RegisterFunc(() => ModuleManager.GetModule<AutoAetherialReduction>().IsReducing);
+            
+            StartReductionIPC ??= DService.PI.GetIpcProvider<bool>(StartReductionName);
+            StartReductionIPC.RegisterFunc(() => ModuleManager.GetModule<AutoAetherialReduction>().StartReduction());
+        }
     }
 }
