@@ -489,7 +489,7 @@ public class HealerHelper : DailyModuleBase
                 }
             }
 
-            ImGuiOm.TooltipHover(GetLoc("HealerHelper-EasyDispel-OrderHelp"), 20f * GlobalFontScale);
+            ImGuiOm.TooltipHover(GetLoc("HealerHelper-OrderHelp"), 20f * GlobalFontScale);
         }
     }
 
@@ -527,7 +527,7 @@ public class HealerHelper : DailyModuleBase
                 }
             }
 
-            ImGuiOm.TooltipHover(GetLoc("HealerHelper-EasyDispel-OrderHelp"), 20f * GlobalFontScale);
+            ImGuiOm.TooltipHover(GetLoc("HealerHelper-OrderHelp"), 20f * GlobalFontScale);
         }
     }
 
