@@ -85,18 +85,30 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         if (IsCurrentEnvironmentInvalid()) return true;
         
         var agent = AgentPurify.Instance();
-        if (agent == null || agent->ReducibleItems.Count == 0) return true;
+        if (agent == null || agent->ReducibleItems.Count == 0)
+        {
+            TaskHelper.Abort();
+            return true;
+        }
 
         var manager = InventoryManager.Instance();
-        if (manager == null) return true;
+        if (manager == null) return false;
         
         if (OccupiedInEvent) return false;
 
         var firstItem = agent->ReducibleItems.First;
-        if (firstItem == null) return true;
+        if (firstItem == null)
+        {
+            TaskHelper.Abort();
+            return true;
+        }
 
         var inventoryItem = manager->GetInventorySlot(firstItem->Inventory, firstItem->Slot);
-        if (inventoryItem == null) return true;
+        if (inventoryItem == null)
+        {
+            TaskHelper.Abort();
+            return true;
+        }
         
         agent->ReduceItem(inventoryItem);
 

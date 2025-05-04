@@ -57,7 +57,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         var buttonNode = addon->GetButtonNodeById(109);
         if (buttonNode == null) return;
 
-        if (DService.PartyList.Length                          < 2     ||
+        if (!IsInAnyParty()                                            ||
             buttonNode->ButtonTextNode                         == null ||
             buttonNode->ButtonTextNode->NodeText.ExtractText() != LuminaWrapper.GetAddonText(2219))
         {
@@ -73,7 +73,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             Enqueue();
     }
 
-    private void OnListing(IPartyFinderListing listing, IPartyFinderListingEventArgs args) 
+    private static void OnListing(IPartyFinderListing listing, IPartyFinderListingEventArgs args) 
         => CIDToListingID[listing.ContentId] = listing.Id;
 
     private void Enqueue()
@@ -85,15 +85,15 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
 
         if (!CIDToListingID.TryGetValue(currentCID, out var currentListingID)) return;
         
-        if (InfoProxyCrossRealm.IsCrossRealmParty() || DService.PartyList.Length >= 2)
+        if (IsInAnyParty())
         {
             TaskHelper.Enqueue(() =>
             {
                 if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task", 100)) return false;
-                if (!InfoProxyCrossRealm.IsCrossRealmParty() && DService.PartyList.Length < 2) return true;
+                if (!IsInAnyParty()) return true;
                 
                 ChatHelper.Instance.SendMessage("/leave");
-                return !InfoProxyCrossRealm.IsCrossRealmParty() && DService.PartyList.Length < 2;
+                return !IsInAnyParty();
             });
         }
         
@@ -119,6 +119,9 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         
         TaskHelper.Enqueue(() => ClickSelectYesnoYes());
     }
+
+    private static bool IsInAnyParty() => 
+        InfoProxyCrossRealm.IsCrossRealmParty() || DService.PartyList.Length >= 2;
 
     public override void Uninit()
     {
