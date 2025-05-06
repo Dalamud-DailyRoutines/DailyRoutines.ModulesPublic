@@ -651,14 +651,13 @@ public class HealerHelper : DailyModuleBase
     {
         if (type != ActionType.Action || DService.ClientState.IsPvP || DService.PartyList.Length < 2) return;
 
-        // precheck
-        var localPlayer = DService.ClientState.LocalPlayer;
-        var isHealer    = localPlayer.ClassJob.Value.Role is 4;
+        // job check
+        var isHealer = GameState.ClassJobData.Role is 4;
 
         // healer related
         if (isHealer)
         {
-            var isAST = localPlayer.ClassJob.RowId is 33;
+            var isAST = GameState.ClassJob is 33;
 
             // auto play card
             if (isAST && PlayCardActions.Contains(actionID) && ModuleConfig.AutoPlayCard != AutoPlayCardStatus.Disable)
@@ -674,7 +673,7 @@ public class HealerHelper : DailyModuleBase
         }
 
         // can raise
-        var canRaise = isHealer || localPlayer.ClassJob.RowId is 27 or 35;
+        var canRaise = isHealer || GameState.ClassJob is 27 or 35;
         if (canRaise)
         {
             // easy raise
@@ -794,7 +793,7 @@ public class HealerHelper : DailyModuleBase
 
         // find card candidates
         var partyList = DService.PartyList; // role [1 tank, 2 melee, 3 range, 4 healer]
-        var isAST     = DService.ClientState.LocalPlayer.ClassJob.RowId is 33;
+        var isAST     = GameState.ClassJob is 33;
         if (partyList.Length is 0 || isAST is false || ModuleConfig.AutoPlayCard == AutoPlayCardStatus.Disable || DService.ClientState.IsPvP)
             return;
 
@@ -935,7 +934,7 @@ public class HealerHelper : DailyModuleBase
         if (needResort)
             candidates.Sort((a, b) => b.priority.CompareTo(a.priority));
 
-        return DService.ClientState.LocalPlayer.EntityId;
+        return GameState.EntityID;
     }
 
     private static void OnPrePlayCard(ref ulong targetID, ref uint actionID)
@@ -1013,11 +1012,10 @@ public class HealerHelper : DailyModuleBase
         var needDispelId = UnspecificTargetId;
 
         // first dispel local player
-        var localPlayer       = DService.ClientState.LocalPlayer;
-        var localPlayerStatus = localPlayer.StatusList;
-        foreach (var status in localPlayerStatus)
+        var localStatus = DService.ClientState.LocalPlayer.StatusList;
+        foreach (var status in localStatus)
             if (DispellableStatus.ContainsKey(status.StatusId))
-                return localPlayer.EntityId;
+                return GameState.EntityID;
 
         // dispel in order (or reverse order)
         var sortedPartyList = reverse
@@ -1073,7 +1071,7 @@ public class HealerHelper : DailyModuleBase
                         return;
 
                     case OverhealTarget.Local:
-                        targetID = DService.ClientState.LocalPlayer.EntityId;
+                        targetID = GameState.EntityID;
                         break;
 
                     case OverhealTarget.FirstTank:
@@ -1083,11 +1081,11 @@ public class HealerHelper : DailyModuleBase
                         var maxDistance     = ActionManager.GetActionRange(actionID);
                         targetID = (firstTank is not null && Vector3.Distance(firstTank.Position, DService.ClientState.LocalPlayer.Position) <= maxDistance)
                                        ? firstTank.ObjectId
-                                       : DService.ClientState.LocalPlayer.EntityId;
+                                       : GameState.EntityID;
                         break;
 
                     default:
-                        targetID = DService.ClientState.LocalPlayer.EntityId;
+                        targetID = GameState.EntityID;
                         break;
                 }
             }
@@ -1195,7 +1193,7 @@ public class HealerHelper : DailyModuleBase
 
     private static string GetRegion()
     {
-        return DService.ClientState.LocalPlayer.CurrentWorld.Value.DataCenter.Value.Region switch
+        return GameState.CurrentDataCenter switch
         {
             1 => "JP",
             2 => "NA",
