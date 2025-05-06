@@ -1080,7 +1080,10 @@ public class HealerHelper : DailyModuleBase
                         var partyList       = DService.PartyList;
                         var sortedPartyList = partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
                         var firstTank       = sortedPartyList.FirstOrDefault(m => m.ClassJob.Value.Role == 1);
-                        targetID = firstTank?.ObjectId ?? DService.ClientState.LocalPlayer.EntityId;
+                        var maxDistance     = ActionManager.GetActionRange(actionID);
+                        targetID = (firstTank is not null && Vector3.Distance(firstTank.Position, DService.ClientState.LocalPlayer.Position) <= maxDistance)
+                                       ? firstTank.ObjectId
+                                       : DService.ClientState.LocalPlayer.EntityId;
                         break;
 
                     default:
