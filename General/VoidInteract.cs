@@ -292,6 +292,7 @@ public unsafe class VoidInteract : DailyModuleBase
             if (!handler.Value->UnkString0.ToString().Contains("ComDefGCSupplyDuty"))
                 return false;
             foreach (var obj in handler.Value->EventObjects)
+                //EObjName表里找不到这个
                 if (obj.Value->NameString.Contains("人事负责人"))
                     return true;
             return false;
@@ -312,6 +313,7 @@ public unsafe class VoidInteract : DailyModuleBase
             if (handler.Value->Info.EventId.ContentId != EventHandlerType.GrandCompanyShop)
                 return false;
             foreach (var obj in handler.Value->EventObjects)
+                //EObjName表里找不到这个
                 if (obj.Value->NameString.Contains("补给负责人"))
                     return true;
             return false;
