@@ -17,8 +17,10 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         Description = GetLoc("FastJoinAnotherPartyRecruitmentDescription"),
         Category    = ModuleCategories.UIOptimization
     };
-
-    private static readonly Dictionary<ulong, uint> CIDToListingID = [];
+    
+    private delegate bool OpenListingByContentIDDelegate(AgentLookingForGroup* agent, ulong contentID);
+    private static readonly OpenListingByContentIDDelegate? OpenListingByContentIDInfo =
+        new CompSig("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 07 C6 83 90 31 00 00 01").GetDelegate<OpenListingByContentIDDelegate>();
     
     public override void Init()
     {
@@ -26,8 +28,6 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMove;
         
-        CIDToListingID.Clear();
-        DService.PartyFinder.ReceiveListing += OnListing;
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroupDetail", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
         if (IsAddonAndNodesReady(LookingForGroupDetail)) OnAddon(AddonEvent.PostDraw, null);
@@ -72,18 +72,13 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         if (ImGui.Button(GetLoc("FastJoinAnotherPartyRecruitment-LeaveAndJoin")))
             Enqueue();
     }
-
-    private static void OnListing(IPartyFinderListing listing, IPartyFinderListingEventArgs args) 
-        => CIDToListingID[listing.ContentId] = listing.Id;
-
+    
     private void Enqueue()
     {
         TaskHelper.Abort();
         
         var currentCID = AgentLookingForGroup.Instance()->ListingContentId;
         if (currentCID == 0) return;
-
-        if (!CIDToListingID.TryGetValue(currentCID, out var currentListingID)) return;
         
         if (IsInAnyParty())
         {
@@ -102,7 +97,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task", 100)) return false;
             if (AgentLookingForGroup.Instance()->ListingContentId == currentCID) return true;
             
-            AgentLookingForGroup.Instance()->OpenListing(currentListingID);
+            OpenListingByContentIDInfo(AgentLookingForGroup.Instance(), currentCID);
             return AgentLookingForGroup.Instance()->ListingContentId == currentCID;
         });
         
@@ -126,8 +121,6 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
     public override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        DService.PartyFinder.ReceiveListing -= OnListing;
-        CIDToListingID.Clear();
         
         base.Uninit();
     }

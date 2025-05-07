@@ -6,22 +6,29 @@ using DailyRoutines.Infos;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoPlayerCommend : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoPlayerCommendTitle"),
+        Title       = GetLoc("AutoPlayerCommendTitle"),
         Description = GetLoc("AutoPlayerCommendDescription"),
-        Category = ModuleCategories.Combat,
+        Category    = ModuleCategories.Combat,
     };
     
     private static readonly AssignPlayerCommendationMenu AssignPlayerCommendationItem = new();
+
+    private static uint MIPDisplayType
+    {
+        get => DService.GameConfig.UiConfig.GetUInt("MipDispType");
+        set => DService.GameConfig.UiConfig.Set("MipDispType", value);
+    }
     
     private static Config ModuleConfig = null!;
     
@@ -35,8 +42,8 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         TaskHelper ??= new TaskHelper { TimeLimitMS = 10_000 };
         
         DService.ClientState.TerritoryChanged += OnZoneChanged;
-        DService.ContextMenu.OnMenuOpened  += OnMenuOpen;
-        DService.DutyState.DutyCompleted   += OnDutyComplete;
+        DService.ContextMenu.OnMenuOpened     += OnMenuOpen;
+        DService.DutyState.DutyCompleted      += OnDutyComplete;
     }
     
     public override void ConfigUI()
@@ -59,7 +66,8 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
     
-    private void OnZoneChanged(ushort zone) => AssignedCommendationContentID = 0;
+    private static void OnZoneChanged(ushort zone) => 
+        AssignedCommendationContentID = 0;
     
     private static void OnMenuOpen(IMenuOpenedArgs args)
     {
@@ -73,11 +81,11 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         if (ModuleConfig.BlacklistContentZones.Contains(dutyZoneID)) return;
         if (DService.PartyList.Length <= 1) return;
 
-        var orig = DService.GameConfig.UiConfig.GetUInt("MipDispType");
-        TaskHelper.Enqueue(() => SetMIPDisplayType(),     "设置最优队员推荐不显示列表");
-        TaskHelper.Enqueue(OpenCommendWindow,             "打开最优队员推荐列表");
-        TaskHelper.Enqueue(EnqueueCommendation,           "给予最优队员推荐");
-        TaskHelper.Enqueue(() => SetMIPDisplayType(orig), "还原原始最优队友推荐设置");
+        var orig = MIPDisplayType;
+        TaskHelper.Enqueue(() => MIPDisplayType = 0,    "设置最优队员推荐不显示列表");
+        TaskHelper.Enqueue(OpenCommendWindow,           "打开最优队员推荐列表");
+        TaskHelper.Enqueue(EnqueueCommendation,         "给予最优队员推荐");
+        TaskHelper.Enqueue(() => MIPDisplayType = orig, "还原原始最优队友推荐设置");
     }
 
     private static bool? OpenCommendWindow()
@@ -85,6 +93,9 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         var notification    = GetAddonByName("_Notification");
         var notificationMvp = GetAddonByName("_NotificationIcMvp");
         if (notification == null && notificationMvp == null) return true;
+
+        if (AssignedCommendationContentID == DService.ClientState.LocalContentId)
+            return true;
 
         Callback(notification, true, 0, 11);
         return true;
@@ -94,26 +105,39 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
     {
         if (!IsAddonAndNodesReady(VoteMvp)) return false;
         if (!AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentsMvp)->IsAgentActive()) return false;
-        if (DService.ClientState.LocalPlayer is not { } localPlayer) return false;
+        
+        if (AssignedCommendationContentID == DService.ClientState.LocalContentId)
+            return true;
+
+        var localPlayer = Control.GetLocalPlayer();
+        if (localPlayer == null) return false;
         
         var hudMembers = AgentHUD.Instance()->PartyMembers.ToArray();
-        Dictionary<(string Name, uint HomeWorld, uint ClassJob, byte RoleRaw, PlayerRole Role, ulong ContentID), int>
-            partyMembers = [];
+        Dictionary<(string Name, uint HomeWorld, uint ClassJob, byte RoleRaw, PlayerRole Role, ulong ContentID), int> partyMembers = [];
         foreach (var member in DService.PartyList)
         {
-            if ((ulong)member.ContentId == localPlayer.ToStruct()->ContentId) continue;
+            if ((ulong)member.ContentId == DService.ClientState.LocalContentId) continue;
 
             var index = Math.Clamp(hudMembers.IndexOf(x => x.ContentId == (ulong)member.ContentId) - 1, 0, 6);
             
             var rawRole = member.ClassJob.Value.Role;
-            partyMembers[
-                (member.Name.ExtractText(), member.World.RowId, member.ClassJob.RowId, rawRole,
-                    GetCharacterJobRole(rawRole), (ulong)member.ContentId)] = index;
+            partyMembers[(member.Name.ExtractText(), member.World.RowId, member.ClassJob.RowId, rawRole, GetCharacterJobRole(rawRole), (ulong)member.ContentId)] =
+                index;
         }
         
         if (partyMembers.Count == 0) return true;
 
         var blacklistPlayers = GetBlacklistPlayerContentIDs();
+        
+        // 获取玩家自身职业和职能信息
+        var selfRole = GetCharacterJobRole(GameState.ClassJobData.Role);
+        var selfClassJob = GameState.ClassJob;
+        
+        // 统计相同职业的数量
+        var jobCounts = partyMembers
+            .GroupBy(x => x.Key.ClassJob)
+            .ToDictionary(g => g.Key, g => g.Count());
+        
         // 优先级排序
         var playersToCommend = partyMembers
                                .Where(x => !ModuleConfig.AutoIgnoreBlacklistPlayers || 
@@ -123,26 +147,55 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
                                {
                                    if (AssignedCommendationContentID != 0 &&
                                        x.Key.ContentID               == AssignedCommendationContentID)
+                                       return 3;
+                                   
+                                   if (selfClassJob == x.Key.ClassJob)
                                        return 2;
-                                   if (localPlayer.ClassJob.RowId            == x.Key.ClassJob ||
-                                       localPlayer.ClassJob.Value.Role == x.Key.RoleRaw)
+                                   
+                                   // 同类型DPS (近战/远程) 有更高优先级
+                                   if (selfRole is PlayerRole.MeleeDPS or PlayerRole.RangedDPS && 
+                                       x.Key.Role is PlayerRole.MeleeDPS or PlayerRole.RangedDPS)
+                                       return selfRole == x.Key.Role ? 1 : 0;
+                                   
+                                   if (GameState.ClassJobData.Role == x.Key.RoleRaw)
                                        return 1;
+                                   
                                    return 0;
                                })
-                               // 计算对位
-                               .ThenByDescending(x => GetCharacterJobRole(localPlayer.ClassJob.Value.Role) switch
+                               // 如果自身是DPS, 且队伍中有两个及以上相同的其他DPS职业，则降低它们的优先级
+                               .ThenByDescending(x =>
+                               {
+                                   if (selfRole is PlayerRole.MeleeDPS or PlayerRole.RangedDPS   &&
+                                       x.Key.Role is PlayerRole.MeleeDPS or PlayerRole.RangedDPS &&
+                                       selfClassJob != x.Key.ClassJob                            &&
+                                       jobCounts.TryGetValue(x.Key.ClassJob, out var count)      && count >= 2)
+                                       return 0;
+                                   
+                                   return 1;
+                               })
+                               // 基于角色职能的优先级
+                               .ThenByDescending(x => selfRole switch
                                {
                                    PlayerRole.Tank or PlayerRole.Healer
                                        => x.Key.Role
                                               is PlayerRole.Tank or PlayerRole.Healer
                                               ? 1
                                               : 0,
-                                   PlayerRole.DPS => x.Key.Role switch
+                                   
+                                   PlayerRole.MeleeDPS => x.Key.Role switch
                                    {
-                                       PlayerRole.DPS    => 3,
-                                       PlayerRole.Healer => 2,
-                                       PlayerRole.Tank   => 1,
-                                       _                 => 0,
+                                       PlayerRole.MeleeDPS  => 3,
+                                       PlayerRole.RangedDPS => 2,
+                                       PlayerRole.Healer    => 1,
+                                       _                    => 0,
+                                   },
+                                   
+                                   PlayerRole.RangedDPS => x.Key.Role switch
+                                   {
+                                       PlayerRole.RangedDPS => 3,
+                                       PlayerRole.MeleeDPS  => 2,
+                                       PlayerRole.Healer    => 1,
+                                       _                    => 0,
                                    },
                                    _ => 0,
                                })
@@ -160,8 +213,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
             if (!LuminaGetter.TryGetRow<ClassJob>(memberInfo.ClassJob, out var job)) continue;
             
             SendEvent(AgentId.ContentsMvp, 0, 0, playerIndex);
-            Chat(GetSLoc("AutoPlayerCommend-NoticeMessage", 
-                         job.ToBitmapFontIcon(), job.Name.ExtractText(), memberInfo.Name));
+            Chat(GetSLoc("AutoPlayerCommend-NoticeMessage", job.ToBitmapFontIcon(), job.Name.ExtractText(), memberInfo.Name));
             return true;
         }
 
@@ -193,18 +245,16 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
             return false;
         }
     }
-
-    private static void SetMIPDisplayType(uint type = 0)
-        => DService.GameConfig.UiConfig.Set("MipDispType", type);
     
     private static HashSet<ulong> GetBlacklistPlayerContentIDs()
-        => InfoProxyBlacklist.Instance()->BlockedCharacters.ToArray().Select(x => x.Id).ToHashSet();
+        => InfoProxyBlacklist.Instance()->BlockedCharacters.ToArray().Select(x => x.Id).ToHashSet() ?? [];
 
     private static PlayerRole GetCharacterJobRole(byte rawRole) =>
         rawRole switch
         {
             1 => PlayerRole.Tank,
-            2 or 3 => PlayerRole.DPS,
+            2 => PlayerRole.MeleeDPS,
+            3 => PlayerRole.RangedDPS,
             4 => PlayerRole.Healer,
             _ => PlayerRole.None,
         };
@@ -224,7 +274,8 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
     {
         Tank,
         Healer,
-        DPS,
+        MeleeDPS,
+        RangedDPS,
         None,
     }
 
@@ -254,12 +305,14 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
             if (args.Target is not MenuTargetDefault target) return;
             if (target.TargetCharacter == null && target.TargetContentId == 0) return;
             
-            var contentID = target.TargetCharacter != null ? target.TargetCharacter.ContentId : target.TargetContentId;
-            var playerName = target.TargetCharacter != null ? target.TargetCharacter.Name : target.TargetName;
-            var playerWorld = target.TargetCharacter != null ? target.TargetCharacter.HomeWorld : target.TargetHomeWorld;
+            var contentID   = target.TargetCharacter?.ContentId ?? target.TargetContentId;
+            var playerName  = target.TargetCharacter != null ? target.TargetCharacter.Name : target.TargetName;
+            var playerWorld = target.TargetCharacter?.HomeWorld ?? target.TargetHomeWorld;
 
-            NotificationInfo(GetLoc("AutoPlayerCommend-AssignPlayerCommendMessage", playerName,
-                                    playerWorld.Value.Name.ExtractText()));
+            NotificationInfo(contentID == DService.ClientState.LocalContentId
+                                 ? GetLoc("AutoPlayerCommend-GiveNobodyCommendMessage")
+                                 : GetLoc("AutoPlayerCommend-AssignPlayerCommendMessage", playerName, playerWorld.Value.Name.ExtractText()));
+            
             AssignedCommendationContentID = contentID;
         }
     }

@@ -1,35 +1,26 @@
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoRequestNecessity : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoRequestNecessityTitle"),
+        Title       = GetLoc("AutoRequestNecessityTitle"),
         Description = GetLoc("AutoRequestNecessityDescription"),
-        Category = ModuleCategories.System,
+        Category    = ModuleCategories.System,
     };
-
-    private static Config ModuleConfig = null!;
     
     public override void Init()
     {
-        ModuleConfig ??= LoadConfig<Config>() ?? new();
-        TaskHelper   ??= new() { TimeLimitMS = 10_000 };
+        TaskHelper ??= new();
 
         DService.ClientState.Login  += OnLogin;
         DService.ClientState.Logout += OnLogout;
         
         if (!DService.ClientState.IsLoggedIn) return;
         OnLogin();
-    }
-
-    public override void ConfigUI()
-    {
-        if (ImGui.Checkbox(Lang.Get("AutoRequestNecessity-ShowNotification"), ref ModuleConfig.ShowNotifications))
-            SaveConfig(ModuleConfig);
     }
 
     private void OnLogin()
@@ -70,17 +61,11 @@ public class AutoRequestNecessity : DailyModuleBase
     
     private void OnLogout(int type, int code) => TaskHelper?.Abort();
 
-    private void EnqueueRequest(ExecuteCommandFlag command, 
-                                       int param1 = 0, int param2 = 0, int param3 = 0, int param4 = 0)
+    private void EnqueueRequest(ExecuteCommandFlag command, int param1 = 0, int param2 = 0, int param3 = 0, int param4 = 0)
     {
-        TaskHelper.Enqueue(() =>
-                           {
-                               if (ModuleConfig.ShowNotifications)
-                                   NotificationInfo(Lang.Get("AutoRequestNecessity-NotificationContent", command));
-                               ExecuteCommandManager.ExecuteCommand(
-                                   command, param1, param2, param3, param4);
-                           }, $"{command}_{param1}_{param2}_{param3}{param4}");
-        TaskHelper.DelayNext(100, $"Delay_{command}_{param1}_{param2}_{param3}{param4}");
+        TaskHelper.Enqueue(() => ExecuteCommandManager.ExecuteCommand(command, param1, param2, param3, param4), 
+                           $"{command}_{param1}_{param2}_{param3}{param4}");
+        TaskHelper.DelayNext(10, $"Delay_{command}_{param1}_{param2}_{param3}{param4}");
     }
 
     public override void Uninit()
@@ -89,10 +74,5 @@ public class AutoRequestNecessity : DailyModuleBase
         DService.ClientState.Logout -= OnLogout;
         
         base.Uninit();
-    }
-
-    private class Config : ModuleConfiguration
-    {
-        public bool ShowNotifications = true;
     }
 }
