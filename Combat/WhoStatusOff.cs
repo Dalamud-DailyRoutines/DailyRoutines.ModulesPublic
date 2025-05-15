@@ -277,9 +277,20 @@ public class WhiStatusOff : DailyModuleBase
                     ImGui.Text($"{status.Name}");
                     ImGui.Text($"ID: {status.RowId}");
                     
+                    // 显示状态效果描述
+                    string description = status.Description.ToString() ?? "";
+                    if (!string.IsNullOrEmpty(description))
+                    {
+                        ImGui.Separator();
+                        ImGui.PushTextWrapPos(300 * GlobalFontScale);
+                        ImGui.TextColored(new Vector4(0.9f, 0.9f, 0.7f, 1.0f), description);
+                        ImGui.PopTextWrapPos();
+                    }
+                    
                     // 如果已在监控列表中，显示提示
                     if (_moduleConfig.MonitoredStatuses.Contains((ushort)status.RowId))
                     {
+                        ImGui.Separator();
                         ImGui.TextColored(new Vector4(0.2f, 0.8f, 0.2f, 1.0f), "已在监控列表中");
                     }
                     
