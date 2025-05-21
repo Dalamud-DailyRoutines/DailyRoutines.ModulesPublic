@@ -61,7 +61,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         StatusBarManager.Enable();
         StatusBarManager.BarEntry.OnClick = () =>
         {
-            if (Overlay == null) return;
+            if (Overlay == null)
+                return;
             Overlay.IsOpen ^= true;
         };
 
@@ -164,20 +165,23 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     public override unsafe void OverlayUI()
     {
-        if (Control.GetLocalPlayer() == null || MitigationService.IsLocalEmpty()) return;
+        if (Control.GetLocalPlayer() == null || MitigationService.IsLocalEmpty())
+            return;
 
         ImGuiHelpers.SeStringWrapped(StatusBarManager.BarEntry?.Text?.Encode() ?? []);
 
         ImGui.Separator();
 
         using var table = ImRaii.Table("StatusTable", 3);
-        if (!table) return;
+        if (!table)
+            return;
 
         ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed, 24f * GlobalFontScale);
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 20);
         ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch, 20);
 
-        if (!DService.Texture.TryGetFromGameIcon(new(210405), out var barrierIcon)) return;
+        if (!DService.Texture.TryGetFromGameIcon(new(210405), out var barrierIcon))
+            return;
 
         // local status
         foreach (var status in MitigationService.LocalActiveStatus)
@@ -243,8 +247,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     private static void DrawStatusRow(KeyValuePair<MitigationManager.Status, float> status)
     {
-        if (!LuminaGetter.TryGetRow<Status>(status.Key.Id, out var row)) return;
-        if (!DService.Texture.TryGetFromGameIcon(new(row.Icon), out var icon)) return;
+        if (!LuminaGetter.TryGetRow<Status>(status.Key.Id, out var row))
+            return;
+        if (!DService.Texture.TryGetFromGameIcon(new(row.Icon), out var icon))
+            return;
 
         ImGui.TableNextRow();
 
@@ -382,7 +388,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
             for (var i = 0; i < values.Length; i++)
             {
-                if (values[i] <= 0) continue;
+                if (values[i] <= 0)
+                    continue;
 
                 var icon = i switch
                 {
@@ -392,7 +399,9 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     _ => BitmapFontIcon.None,
                 };
 
-                if (!firstBarItem) textBuilder.Append(" ");
+                if (!firstBarItem)
+                    textBuilder.Append(" ");
+
                 textBuilder.AddIcon(icon);
                 textBuilder.Append($"{values[i]:0}" + (i != 2 ? "%" : ""));
                 firstBarItem = false;
@@ -407,7 +416,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             // status
             foreach (var (status, _) in MitigationService.LocalActiveStatus)
             {
-                if (!firstTipItem) tipBuilder.Append("\n");
+                if (!firstTipItem)
+                    tipBuilder.Append("\n");
                 tipBuilder.Append($"{LuminaWrapper.GetStatusName(status.Id)}:");
                 tipBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
                 tipBuilder.Append($"{status.Info.Physical}% ");
@@ -419,7 +429,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             // shield
             if (MitigationService.LocalShield > 0)
             {
-                if (!firstTipItem) tipBuilder.Append("\n");
+                if (!firstTipItem)
+                    tipBuilder.Append("\n");
                 tipBuilder.AddIcon(BitmapFontIcon.Tank);
                 tipBuilder.Append($"{GetLoc("Shield")}: {MitigationService.LocalShield}");
                 firstTipItem = false;
@@ -428,7 +439,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             // battle npc
             foreach (var (status, _) in MitigationService.BattleNpcActiveStatus)
             {
-                if (!firstTipItem) tipBuilder.Append("\n");
+                if (!firstTipItem)
+                    tipBuilder.Append("\n");
                 tipBuilder.Append($"{LuminaWrapper.GetStatusName(status.Id)}:");
                 tipBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
                 tipBuilder.Append($"{status.Info.Physical}% ");
@@ -443,7 +455,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static void Clear()
         {
-            if (BarEntry == null) return;
+            if (BarEntry == null)
+                return;
 
             BarEntry.Shown   = false;
             BarEntry.Tooltip = null;
@@ -473,7 +486,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         public static unsafe void Enable()
         {
             var addon = GetAddonByName("_TargetInfoCastBar");
-            if (addon == null) return;
+            if (addon == null)
+                return;
 
             var castBar = addon->GetNodeById(2);
 
@@ -504,10 +518,12 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         public static unsafe void Disable()
         {
             var addon = GetAddonByName("_TargetInfoCastBar");
-            if (addon == null) return;
+            if (addon == null)
+                return;
 
             var node = FetchNode(NodeId, addon);
-            if (node == null) return;
+            if (node == null)
+                return;
             UnlinkAndFreeTextNode((AtkTextNode*)node, addon);
         }
 
@@ -520,10 +536,12 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             }
 
             var addon = GetAddonByName("_TargetInfoCastBar");
-            if (addon == null) return;
+            if (addon == null)
+                return;
 
             var node = (AtkTextNode*)FetchNode(NodeId, addon);
-            if (node == null) return;
+            if (node == null)
+                return;
 
             node->ToggleVisibility(true);
             node->SetText(DamageActionManager.FetchLocalDamage().ToString("N0"));
@@ -532,10 +550,12 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         public static unsafe void Clear()
         {
             var addon = GetAddonByName("_TargetInfoCastBar");
-            if (addon == null) return;
+            if (addon == null)
+                return;
 
             var node = (AtkTextNode*)FetchNode(NodeId, addon);
-            if (node == null) return;
+            if (node == null)
+                return;
 
             node->ToggleVisibility(false);
         }
@@ -570,7 +590,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         public static unsafe void Enable()
         {
             var addon = GetAddonByName("_PartyList");
-            if (addon == null) return;
+            if (addon == null)
+                return;
 
             EnableMitigationNodes(addon);
             EnableShieldNodes(addon);
@@ -644,7 +665,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         public static unsafe void Disable()
         {
             var addon = GetAddonByName("_PartyList");
-            if (addon == null) return;
+            if (addon == null)
+                return;
 
             DisableMitigationNodes(addon);
             DisableShieldNodes(addon);
@@ -657,7 +679,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 var memberNode = addon->GetComponentNodeById(i);
 
                 var node = FetchNode(MitigationNodeId, memberNode->Component);
-                if (node == null) continue;
+                if (node == null)
+                    continue;
 
                 UnlinkAndFreeTextNode((AtkTextNode*)node, memberNode);
             }
@@ -671,7 +694,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 var hpNode     = FetchNode(12, memberNode)->GetAsAtkComponentNode();
 
                 var node = (AtkTextNode*)FetchNode(ShieldNodeId, hpNode->Component);
-                if (node == null) continue;
+                if (node == null)
+                    continue;
 
                 UnlinkAndFreeTextNode(node, hpNode);
             }
@@ -680,7 +704,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         public static unsafe void Update()
         {
             var addon = GetAddonByName("_PartyList");
-            if (addon == null) return;
+            if (addon == null)
+                return;
 
             foreach (var memberStatus in MitigationService.FetchParty())
             {
@@ -698,7 +723,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             var namePlate  = FetchNode(17, plateNode);
 
             var node = (AtkTextNode*)FetchNode(MitigationNodeId, memberNode);
-            if (node == null) return;
+            if (node == null)
+                return;
 
             if (memberStatus[0] == 0 && memberStatus[1] == 0)
             {
@@ -719,7 +745,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             var numNode    = FetchNode(2, hpNode);
 
             var node = (AtkTextNode*)FetchNode(ShieldNodeId, hpNode);
-            if (node == null) return;
+            if (node == null)
+                return;
 
             if (memberStatus[2] == 0)
             {
@@ -983,7 +1010,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     for (var j = 0; j < 8; j++)
                     {
                         ref var effect = ref effectArray[i * 8 + j];
-                        if (effect.EffectType == 0) continue;
+                        if (effect.EffectType == 0)
+                            continue;
 
                         // unzip damage [high8: Flag1, low16: Value]
                         uint damage = effect.Value;
@@ -1024,7 +1052,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 {
                     using var reader = new StreamReader(pipe);
                     var       json   = reader.ReadLine();
-                    if (string.IsNullOrEmpty(json)) continue;
+                    if (string.IsNullOrEmpty(json))
+                        continue;
 
 
                     CurrentAction = JsonConvert.DeserializeObject<DamageAction>(json);
@@ -1044,7 +1073,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static float FetchLocalDamage()
         {
-            if (CurrentAction.ActionId == 0) return 0;
+            if (CurrentAction.ActionId == 0)
+                return 0;
 
             var status = MitigationService.FetchLocal();
             var mitigation = CurrentAction.Type switch
@@ -1098,7 +1128,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     public unsafe class MitigationManager(MitigationManager.Storage config)
     {
         // cache
-        private Dictionary<uint, Status> _statusDict = [];
+        private Dictionary<uint, Status> statusDict = [];
 
         // local player
         public readonly Dictionary<Status, float> LocalActiveStatus = [];
@@ -1115,8 +1145,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 var partyList   = DService.PartyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
 
                 foreach (var member in partyList)
+                {
                     if (DService.ObjectTable.SearchById(member.ObjectId) is ICharacter memberChara)
                         partyShield[member.ObjectId] = ((float)memberChara.ShieldPercentage / 100 * memberChara.CurrentHp);
+                }
 
                 return partyShield;
             }
@@ -1176,7 +1208,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         #region Funcs
 
         public void InitStatusMap()
-            => _statusDict = config.Statuses.ToDictionary(x => x.Id, x => x);
+            => statusDict = config.Statuses.ToDictionary(x => x.Id, x => x);
 
         public void Update()
         {
@@ -1185,12 +1217,15 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
             // local player
             var localPlayer = Control.GetLocalPlayer();
-            if (localPlayer == null) return;
+            if (localPlayer == null)
+                return;
 
             // status
             foreach (var status in localPlayer->StatusManager.Status)
-                if (_statusDict.TryGetValue(status.StatusId, out var mitigation))
+            {
+                if (statusDict.TryGetValue(status.StatusId, out var mitigation))
                     LocalActiveStatus.Add(mitigation, status.RemainingTime);
+            }
 
             // party
             var partyList = DService.PartyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
@@ -1198,8 +1233,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             {
                 var activateStatus = new Dictionary<Status, float>();
                 foreach (var status in member.Statuses)
-                    if (_statusDict.TryGetValue(status.StatusId, out var mitigation))
+                {
+                    if (statusDict.TryGetValue(status.StatusId, out var mitigation))
                         activateStatus.Add(mitigation, status.RemainingTime);
+                }
 
                 PartyActiveStatus[member.ObjectId] = activateStatus;
             }
@@ -1210,8 +1247,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             {
                 var statusList = battleNpc.ToBCStruct()->StatusManager.Status;
                 foreach (var status in statusList)
-                    if (_statusDict.TryGetValue(status.StatusId, out var mitigation))
+                {
+                    if (statusDict.TryGetValue(status.StatusId, out var mitigation))
                         BattleNpcActiveStatus.Add(mitigation, status.RemainingTime);
+                }
             }
         }
 
