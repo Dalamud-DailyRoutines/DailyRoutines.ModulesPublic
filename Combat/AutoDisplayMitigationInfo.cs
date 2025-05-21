@@ -274,10 +274,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #region Hooks
 
-    public static void OnFrameworkUpdate(IFramework _)
+    public static unsafe void OnFrameworkUpdate(IFramework _)
     {
         var combatInactive = ModuleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat];
-        if (DService.ClientState.IsPvP || combatInactive || DService.ClientState.LocalPlayer is null)
+        if (DService.ClientState.IsPvP || combatInactive || Control.GetLocalPlayer() is null)
         {
             StatusBarManager.Clear();
             return;
@@ -288,10 +288,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         PartyListManager.Update();
     }
 
-    public static void OnFrameworkUpdateInterval(IFramework _)
+    public static unsafe void OnFrameworkUpdateInterval(IFramework _)
     {
         var combatInactive = ModuleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat];
-        if (DService.ClientState.IsPvP || combatInactive || DService.ClientState.LocalPlayer is null)
+        if (DService.ClientState.IsPvP || combatInactive || Control.GetLocalPlayer() is null)
         {
             StatusBarManager.Clear();
             return;
@@ -321,14 +321,14 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/mitigation");
                 var resp = JsonConvert.DeserializeObject<MitigationManager.Status[]>(json);
                 if (resp == null)
-                    Error($"[AutoDisplayMitigationInfo] Deserialize Mitigation List Failed: {json}");
+                    Error($"[AutoDisplayMitigationInfo] 远程减伤文件解析失败: {json}");
                 else
                 {
                     ModuleConfig.MitigationStorage.Statuses = resp;
                     MitigationService.InitStatusMap();
                 }
             }
-            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] Fetch Mitigation List Failed: {ex}"); }
+            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 远程减伤文件获取失败: {ex}"); }
         }
 
         // TODO: separate by zone
@@ -341,11 +341,11 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/damage");
                 var resp = JsonConvert.DeserializeObject<DamageActionManager.DamageAction[]>(json);
                 if (resp == null)
-                    Error($"[AutoDisplayMitigationInfo] Deserialize Damage Action List Failed: {json}");
+                    Error($"[AutoDisplayMitigationInfo] 远程技能伤害文件解析失败: {json}");
                 else
                     Actions = resp;
             }
-            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] Fetch Damage Action List Failed: {ex}"); }
+            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 远程技能伤害文件获取失败: {ex}"); }
         }
 
         public static void FetchDamageActions(uint zoneId)
@@ -472,9 +472,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static unsafe void Enable()
         {
-            var addonPtr = DService.Gui.GetAddonByName("_TargetInfoCastBar");
-            if (addonPtr == IntPtr.Zero) return;
-            var addon = (AtkUnitBase*)addonPtr;
+            var addon = GetAddonByName("_TargetInfoCastBar");
+            if (addon == null) return;
 
             var castBar = addon->GetNodeById(2);
 
@@ -504,9 +503,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static unsafe void Disable()
         {
-            var addonPtr = DService.Gui.GetAddonByName("_TargetInfoCastBar");
-            if (addonPtr == IntPtr.Zero) return;
-            var addon = (AtkUnitBase*)addonPtr;
+            var addon = GetAddonByName("_TargetInfoCastBar");
+            if (addon == null) return;
 
             var node = FetchNode(NodeId, addon);
             if (node == null) return;
@@ -521,9 +519,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 return;
             }
 
-            var addonPtr = DService.Gui.GetAddonByName("_TargetInfoCastBar");
-            if (addonPtr == IntPtr.Zero) return;
-            var addon = (AtkUnitBase*)addonPtr;
+            var addon = GetAddonByName("_TargetInfoCastBar");
+            if (addon == null) return;
 
             var node = (AtkTextNode*)FetchNode(NodeId, addon);
             if (node == null) return;
@@ -534,9 +531,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static unsafe void Clear()
         {
-            var addonPtr = DService.Gui.GetAddonByName("_TargetInfoCastBar");
-            if (addonPtr == IntPtr.Zero) return;
-            var addon = (AtkUnitBase*)addonPtr;
+            var addon = GetAddonByName("_TargetInfoCastBar");
+            if (addon == null) return;
 
             var node = (AtkTextNode*)FetchNode(NodeId, addon);
             if (node == null) return;
@@ -573,9 +569,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static unsafe void Enable()
         {
-            var addonPtr = DService.Gui.GetAddonByName("_PartyList");
-            if (addonPtr == IntPtr.Zero) return;
-            var addon = (AtkUnitBase*)addonPtr;
+            var addon = GetAddonByName("_PartyList");
+            if (addon == null) return;
 
             EnableMitigationNodes(addon);
             EnableShieldNodes(addon);
@@ -648,9 +643,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static unsafe void Disable()
         {
-            var addonPtr = DService.Gui.GetAddonByName("_PartyList");
-            if (addonPtr == IntPtr.Zero) return;
-            var addon = (AtkUnitBase*)addonPtr;
+            var addon = GetAddonByName("_PartyList");
+            if (addon == null) return;
 
             DisableMitigationNodes(addon);
             DisableShieldNodes(addon);
@@ -685,9 +679,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static unsafe void Update()
         {
-            var addonPtr = DService.Gui.GetAddonByName("_PartyList");
-            if (addonPtr == IntPtr.Zero) return;
-            var addon = (AtkUnitBase*)addonPtr;
+            var addon = GetAddonByName("_PartyList");
+            if (addon == null) return;
 
             foreach (var memberStatus in MitigationService.FetchParty())
             {
@@ -999,7 +992,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     }
                 }
             }
-            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] OnActionEffect Hook Failed: {ex}"); }
+            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 技能生效回调解析失败: {ex}"); }
         }
 
         #endregion
@@ -1191,9 +1184,11 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             Clear();
 
             // local player
-            if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
+            var localPlayer = Control.GetLocalPlayer();
+            if (localPlayer == null) return;
+
             // status
-            foreach (var status in localPlayer.StatusList)
+            foreach (var status in localPlayer->StatusManager.Status)
                 if (_statusDict.TryGetValue(status.StatusId, out var mitigation))
                     LocalActiveStatus.Add(mitigation, status.RemainingTime);
 
