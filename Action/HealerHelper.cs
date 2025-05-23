@@ -1118,6 +1118,9 @@ public class HealerHelper : DailyModuleBase
 
             foreach (var member in partyList)
             {
+                if (member.ObjectId == 0)
+                    continue;
+
                 var maxDistance = ActionManager.GetActionRange(actionId);
                 var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
                 if (memberDead ||
@@ -1153,6 +1156,9 @@ public class HealerHelper : DailyModuleBase
                                       : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
             foreach (var member in sortedPartyList)
             {
+                if (member.ObjectId == 0)
+                    continue;
+
                 var maxDistance = ActionManager.GetActionRange(7568);
                 var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
                 if (memberDead ||
@@ -1179,6 +1185,9 @@ public class HealerHelper : DailyModuleBase
                                       : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
             foreach (var member in sortedPartyList)
             {
+                if (member.ObjectId == 0)
+                    continue;
+
                 var maxDistance = ActionManager.GetActionRange(actionId);
                 var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
                 if (memberDead &&
