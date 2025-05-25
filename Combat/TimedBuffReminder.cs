@@ -132,13 +132,16 @@ public class TimedBuffReminder : DailyModuleBase
         #region Hooks
 
         // is action highlight
-        private static readonly CompSig                                            isActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 46 41 80 BF ?? ?? ?? ?? ?? ??");
-        private static          Hook<ActionManager.Delegates.IsActionHighlighted>? isActionHighlightedHook;
+        [return: MarshalAs(UnmanagedType.U1)]
+        private unsafe delegate bool IsActionHighlightedDelegate(ActionManager* actionManager, ActionType actionType, uint actionId);
+
+        private static readonly CompSig                            isActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 46 41 80 BF ?? ?? ?? ?? ?? ??");
+        private static          Hook<IsActionHighlightedDelegate>? isActionHighlightedHook;
 
         public static unsafe void Enable()
         {
             isActionHighlightedHook?.Dispose();
-            isActionHighlightedHook = isActionHighlightedSig.GetHook<ActionManager.Delegates.IsActionHighlighted>(IsActionHighlightedDetour);
+            isActionHighlightedHook = isActionHighlightedSig.GetHook<IsActionHighlightedDelegate>(IsActionHighlightedDetour);
             isActionHighlightedHook.Enable();
         }
 
