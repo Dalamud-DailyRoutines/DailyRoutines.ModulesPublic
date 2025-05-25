@@ -47,16 +47,16 @@ public class HealerHelper : DailyModuleBase
     }
 
     // storage
-    private static ModuleStorage? ModuleConfig;
+    private static ModuleStorage? moduleConfig;
 
     // managers
-    public static EasyHealManager     EasyHealService;
-    public static AutoPlayCardManager AutoPlayCardService;
-    public static FFLogsManager       FFLogsService;
+    private static EasyHealManager     easyHealService;
+    private static AutoPlayCardManager autoPlayCardService;
+    private static FFLogsManager       fflogsService;
 
     public override void Init()
     {
-        ModuleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
+        moduleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
 
         // fetch remote hotfix
         Task.Run(async () =>
@@ -65,12 +65,12 @@ public class HealerHelper : DailyModuleBase
             await RemoteRepoManager.FetchHealActions();
             await RemoteRepoManager.FetchTerritoryMap();
         });
-        SaveConfig(ModuleConfig);
+        SaveConfig(moduleConfig);
 
         // managers
-        EasyHealService     = new EasyHealManager(ModuleConfig.EasyHealStorage);
-        AutoPlayCardService = new AutoPlayCardManager(ModuleConfig.AutoPlayCardStorage);
-        FFLogsService       = new FFLogsManager(ModuleConfig.FFLogsStorage);
+        easyHealService     = new EasyHealManager(moduleConfig.EasyHealStorage);
+        autoPlayCardService = new AutoPlayCardManager(moduleConfig.AutoPlayCardStorage);
+        fflogsService       = new FFLogsManager(moduleConfig.FFLogsStorage);
 
         // register hooks
         UseActionManager.RegPreUseActionLocation(OnPreUseAction);
@@ -95,8 +95,8 @@ public class HealerHelper : DailyModuleBase
 
     #region UI
 
-    private static int?   CustomCardOrderDragIndex;
-    private static string ActionSearchInput = string.Empty;
+    private static int?   customCardOrderDragIndex;
+    private static string actionSearchInput = string.Empty;
 
     public override void ConfigUI()
     {
@@ -125,18 +125,18 @@ public class HealerHelper : DailyModuleBase
         ImGui.Spacing();
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-                SaveConfig(ModuleConfig);
+            if (ImGui.Checkbox(GetLoc("SendChat"), ref moduleConfig.SendChat))
+                SaveConfig(moduleConfig);
 
-            if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
-                SaveConfig(ModuleConfig);
+            if (ImGui.Checkbox(GetLoc("SendNotification"), ref moduleConfig.SendNotification))
+                SaveConfig(moduleConfig);
         }
     }
 
     private void AutoPlayCardUI()
     {
-        var cardConfig = ModuleConfig.AutoPlayCardStorage;
-        var logsConfig = ModuleConfig.FFLogsStorage;
+        var cardConfig = moduleConfig.AutoPlayCardStorage;
+        var logsConfig = moduleConfig.FFLogsStorage;
 
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-AutoPlayCardTitle"));
         ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(17055)));
@@ -149,21 +149,21 @@ public class HealerHelper : DailyModuleBase
                                   cardConfig.AutoPlayCard == AutoPlayCardManager.AutoPlayCardStatus.Disable))
             {
                 cardConfig.AutoPlayCard = AutoPlayCardManager.AutoPlayCardStatus.Disable;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             if (ImGui.RadioButton($"{GetLoc("Common")} ({GetLoc("HealerHelper-AutoPlayCard-CommonDescription")})",
                                   cardConfig.AutoPlayCard == AutoPlayCardManager.AutoPlayCardStatus.Default))
             {
                 cardConfig.AutoPlayCard = AutoPlayCardManager.AutoPlayCardStatus.Default;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             if (ImGui.RadioButton($"{GetLoc("Advance")} ({GetLoc("HealerHelper-AutoPlayCard-AdvanceDescription")})",
                                   cardConfig.AutoPlayCard == AutoPlayCardManager.AutoPlayCardStatus.Advance))
             {
                 cardConfig.AutoPlayCard = AutoPlayCardManager.AutoPlayCardStatus.Advance;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             // Api Key [v1] for fetching FFLogs records (auto play card advance mode)
@@ -180,7 +180,7 @@ public class HealerHelper : DailyModuleBase
                 ImGui.Spacing();
 
                 if (ImGui.InputText("##FFLogsAPIKey", ref logsConfig.AuthKey, 32))
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
 
                 ImGui.SameLine();
                 if (ImGui.Button(GetLoc("Save")))
@@ -188,8 +188,8 @@ public class HealerHelper : DailyModuleBase
                     if (string.IsNullOrWhiteSpace(logsConfig.AuthKey) || logsConfig.AuthKey.Length != 32)
                         logsConfig.KeyValid = false;
                     else
-                        DService.Framework.RunOnTick(async () => await FFLogsService.IsKeyValid());
-                    SaveConfig(ModuleConfig);
+                        DService.Framework.RunOnTick(async () => await fflogsService.IsKeyValid());
+                    SaveConfig(moduleConfig);
                 }
 
                 // key status (valid or invalid)
@@ -209,7 +209,7 @@ public class HealerHelper : DailyModuleBase
                                   cardConfig.AutoPlayCard == AutoPlayCardManager.AutoPlayCardStatus.Custom))
             {
                 cardConfig.AutoPlayCard = AutoPlayCardManager.AutoPlayCardStatus.Custom;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             if (cardConfig.AutoPlayCard == AutoPlayCardManager.AutoPlayCardStatus.Custom)
@@ -222,7 +222,7 @@ public class HealerHelper : DailyModuleBase
 
     private void CustomCardUI()
     {
-        var config = ModuleConfig.AutoPlayCardStorage;
+        var config = moduleConfig.AutoPlayCardStorage;
 
         // melee opener
         ImGui.AlignTextToFramePadding();
@@ -230,8 +230,8 @@ public class HealerHelper : DailyModuleBase
 
         if (CustomCardOrderUI(config.CustomCardOrder.Melee["opener"]))
         {
-            SaveConfig(ModuleConfig);
-            AutoPlayCardService.OrderCandidates();
+            SaveConfig(moduleConfig);
+            autoPlayCardService.OrderCandidates();
         }
 
         ImGui.SameLine();
@@ -239,8 +239,8 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         if (ImGui.Button($"{GetLoc("Reset")}##meleeopener"))
         {
-            AutoPlayCardService.InitCustomCardOrder("Melee", "opener");
-            SaveConfig(ModuleConfig);
+            autoPlayCardService.InitCustomCardOrder("Melee", "opener");
+            SaveConfig(moduleConfig);
         }
 
         ImGui.Spacing();
@@ -251,8 +251,8 @@ public class HealerHelper : DailyModuleBase
 
         if (CustomCardOrderUI(config.CustomCardOrder.Melee["2m+"]))
         {
-            SaveConfig(ModuleConfig);
-            AutoPlayCardService.OrderCandidates();
+            SaveConfig(moduleConfig);
+            autoPlayCardService.OrderCandidates();
         }
 
         ImGui.SameLine();
@@ -260,8 +260,8 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         if (ImGui.Button($"{GetLoc("Reset")}##melee2m"))
         {
-            AutoPlayCardService.InitCustomCardOrder("Melee", "2m+");
-            SaveConfig(ModuleConfig);
+            autoPlayCardService.InitCustomCardOrder("Melee", "2m+");
+            SaveConfig(moduleConfig);
         }
 
         ImGui.Spacing();
@@ -272,8 +272,8 @@ public class HealerHelper : DailyModuleBase
 
         if (CustomCardOrderUI(config.CustomCardOrder.Range["opener"]))
         {
-            SaveConfig(ModuleConfig);
-            AutoPlayCardService.OrderCandidates();
+            SaveConfig(moduleConfig);
+            autoPlayCardService.OrderCandidates();
         }
 
         ImGui.SameLine();
@@ -281,8 +281,8 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         if (ImGui.Button($"{GetLoc("Reset")}##rangeopener"))
         {
-            AutoPlayCardService.InitCustomCardOrder("Range", "opener");
-            SaveConfig(ModuleConfig);
+            autoPlayCardService.InitCustomCardOrder("Range", "opener");
+            SaveConfig(moduleConfig);
         }
 
         ImGui.Spacing();
@@ -293,8 +293,8 @@ public class HealerHelper : DailyModuleBase
 
         if (CustomCardOrderUI(config.CustomCardOrder.Range["2m+"]))
         {
-            SaveConfig(ModuleConfig);
-            AutoPlayCardService.OrderCandidates();
+            SaveConfig(moduleConfig);
+            autoPlayCardService.OrderCandidates();
         }
 
         ImGui.SameLine();
@@ -302,11 +302,11 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         if (ImGui.Button($"{GetLoc("Reset")}##range2m"))
         {
-            AutoPlayCardService.InitCustomCardOrder("Range", "2m+");
-            SaveConfig(ModuleConfig);
+            autoPlayCardService.InitCustomCardOrder("Range", "2m+");
+            SaveConfig(moduleConfig);
         }
 
-        SaveConfig(ModuleConfig);
+        SaveConfig(moduleConfig);
     }
 
     private static bool CustomCardOrderUI(string[] cardOrder)
@@ -326,7 +326,7 @@ public class HealerHelper : DailyModuleBase
 
             if (ImGui.BeginDragDropSource())
             {
-                CustomCardOrderDragIndex = index;
+                customCardOrderDragIndex = index;
                 ImGui.SetDragDropPayload("##CustomCardOrder", nint.Zero, 0);
                 ImGui.EndDragDropSource();
             }
@@ -334,9 +334,9 @@ public class HealerHelper : DailyModuleBase
             if (ImGui.BeginDragDropTarget())
             {
                 ImGui.AcceptDragDropPayload("##CustomCardOrder");
-                if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && CustomCardOrderDragIndex.HasValue)
+                if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && customCardOrderDragIndex.HasValue)
                 {
-                    (cardOrder[index], cardOrder[CustomCardOrderDragIndex.Value]) = (cardOrder[CustomCardOrderDragIndex.Value], cardOrder[index]);
+                    (cardOrder[index], cardOrder[customCardOrderDragIndex.Value]) = (cardOrder[customCardOrderDragIndex.Value], cardOrder[index]);
 
                     modified = true;
                 }
@@ -350,7 +350,7 @@ public class HealerHelper : DailyModuleBase
 
     private void EasyHealUI()
     {
-        var config = ModuleConfig.EasyHealStorage;
+        var config = moduleConfig.EasyHealStorage;
 
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyHealTitle"));
         ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", GetLoc("HealerHelper-SingleTargetHeal")));
@@ -363,14 +363,14 @@ public class HealerHelper : DailyModuleBase
                                   config.EasyHeal == EasyHealManager.EasyHealStatus.Disable))
             {
                 config.EasyHeal = EasyHealManager.EasyHealStatus.Disable;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             if (ImGui.RadioButton($"{GetLoc("Enable")} ({GetLoc("HealerHelper-EasyHeal-EnableDescription")})",
                                   config.EasyHeal == EasyHealManager.EasyHealStatus.Enable))
             {
                 config.EasyHeal = EasyHealManager.EasyHealStatus.Enable;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             // heal threshold
@@ -388,7 +388,7 @@ public class HealerHelper : DailyModuleBase
                 ImGui.Spacing();
 
                 if (ImGui.SliderFloat("##HealThreshold", ref config.NeedHealThreshold, 0.0f, 1.0f, "%.2f"))
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
 
                 // all time heal warning
                 if (config.NeedHealThreshold > 0.92f)
@@ -408,7 +408,7 @@ public class HealerHelper : DailyModuleBase
                                       config.OverhealTarget == EasyHealManager.OverhealTarget.Prevent))
                 {
                     config.OverhealTarget = EasyHealManager.OverhealTarget.Prevent;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
                 }
 
                 ImGui.SameLine();
@@ -418,7 +418,7 @@ public class HealerHelper : DailyModuleBase
                                       config.OverhealTarget == EasyHealManager.OverhealTarget.Local))
                 {
                     config.OverhealTarget = EasyHealManager.OverhealTarget.Local;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
                 }
 
                 ImGui.SameLine();
@@ -428,7 +428,7 @@ public class HealerHelper : DailyModuleBase
                                       config.OverhealTarget == EasyHealManager.OverhealTarget.FirstTank))
                 {
                     config.OverhealTarget = EasyHealManager.OverhealTarget.FirstTank;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
                 }
             }
         }
@@ -436,7 +436,7 @@ public class HealerHelper : DailyModuleBase
 
     private void ActiveHealActionsSelect()
     {
-        var config = ModuleConfig.EasyHealStorage;
+        var config = moduleConfig.EasyHealStorage;
 
         ImGui.TextColored(YellowGreen, $"{GetLoc("HealerHelper-EasyHeal-ActiveHealAction")}");
         ImGui.Spacing();
@@ -445,7 +445,7 @@ public class HealerHelper : DailyModuleBase
                                .ToDictionary(act => act.Key, act => LuminaGetter.GetRow<LuminaAction>(act.Key)!.Value);
         MultiSelectCombo(actionList,
                          ref config.ActiveHealActions,
-                         ref ActionSearchInput,
+                         ref actionSearchInput,
                          [
                              new(GetLoc("Action"), ImGuiTableColumnFlags.WidthStretch, 20),
                              new(GetLoc("Job"), ImGuiTableColumnFlags.WidthStretch, 10)
@@ -485,14 +485,14 @@ public class HealerHelper : DailyModuleBase
         ImGui.SameLine();
         if (ImGui.Button($"{GetLoc("Reset")}##activehealactions"))
         {
-            EasyHealService.InitActiveHealActions();
-            SaveConfig(ModuleConfig);
+            easyHealService.InitActiveHealActions();
+            SaveConfig(moduleConfig);
         }
     }
 
     private void EasyDispelUI()
     {
-        var config = ModuleConfig.EasyHealStorage;
+        var config = moduleConfig.EasyHealStorage;
 
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyDispelTitle"));
         ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(7568)));
@@ -505,7 +505,7 @@ public class HealerHelper : DailyModuleBase
                                   config.EasyDispel == EasyHealManager.EasyDispelStatus.Disable))
             {
                 config.EasyDispel = EasyHealManager.EasyDispelStatus.Disable;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             using (ImRaii.Group())
@@ -515,7 +515,7 @@ public class HealerHelper : DailyModuleBase
                 {
                     config.EasyDispel  = EasyHealManager.EasyDispelStatus.Enable;
                     config.DispelOrder = EasyHealManager.DispelOrderStatus.Order;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
                 }
 
                 if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("InReverseOrder")}]##easydispel",
@@ -523,7 +523,7 @@ public class HealerHelper : DailyModuleBase
                 {
                     config.EasyDispel  = EasyHealManager.EasyDispelStatus.Enable;
                     config.DispelOrder = EasyHealManager.DispelOrderStatus.Reverse;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
                 }
             }
 
@@ -533,7 +533,7 @@ public class HealerHelper : DailyModuleBase
 
     private void EasyRaiseUI()
     {
-        var config = ModuleConfig.EasyHealStorage;
+        var config = moduleConfig.EasyHealStorage;
 
         ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyRaiseTitle"));
 
@@ -545,7 +545,7 @@ public class HealerHelper : DailyModuleBase
                                   config.EasyRaise == EasyHealManager.EasyRaiseStatus.Disable))
             {
                 config.EasyRaise = EasyHealManager.EasyRaiseStatus.Disable;
-                SaveConfig(ModuleConfig);
+                SaveConfig(moduleConfig);
             }
 
             using (ImRaii.Group())
@@ -555,7 +555,7 @@ public class HealerHelper : DailyModuleBase
                 {
                     config.EasyRaise  = EasyHealManager.EasyRaiseStatus.Enable;
                     config.RaiseOrder = EasyHealManager.RaiseOrderStatus.Order;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
                 }
 
                 if (ImGui.RadioButton($"{GetLoc("Enable")} [{GetLoc("InReverseOrder")}]##easyraise",
@@ -563,7 +563,7 @@ public class HealerHelper : DailyModuleBase
                 {
                     config.EasyRaise  = EasyHealManager.EasyRaiseStatus.Enable;
                     config.RaiseOrder = EasyHealManager.RaiseOrderStatus.Reverse;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(moduleConfig);
                 }
             }
 
@@ -578,7 +578,8 @@ public class HealerHelper : DailyModuleBase
     // hook before play card and target heal
     private static void OnPreUseAction(
         ref bool  isPrevented, ref ActionType type,     ref uint actionId,
-        ref ulong targetId,    ref Vector3    location, ref uint extraParam)
+        ref ulong targetId,    ref Vector3    location, ref uint extraParam
+    )
     {
         if (type != ActionType.Action || GameState.IsInPVPArea || DService.PartyList.Length < 2)
             return;
@@ -592,18 +593,18 @@ public class HealerHelper : DailyModuleBase
             var isAST = GameState.ClassJob == 33;
 
             // auto play card
-            var cardConfig = ModuleConfig.AutoPlayCardStorage;
+            var cardConfig = moduleConfig.AutoPlayCardStorage;
             if (isAST && AutoPlayCardManager.PlayCardActions.Contains(actionId) && cardConfig.AutoPlayCard != AutoPlayCardManager.AutoPlayCardStatus.Disable)
-                AutoPlayCardService.OnPrePlayCard(ref targetId, ref actionId);
+                autoPlayCardService.OnPrePlayCard(ref targetId, ref actionId);
 
             // easy heal
-            var healConfig = ModuleConfig.EasyHealStorage;
+            var healConfig = moduleConfig.EasyHealStorage;
             if (healConfig.EasyHeal == EasyHealManager.EasyHealStatus.Enable && healConfig.ActiveHealActions.Contains(actionId))
-                EasyHealService.OnPreHeal(ref targetId, ref actionId, ref isPrevented);
+                easyHealService.OnPreHeal(ref targetId, ref actionId, ref isPrevented);
 
             // easy dispel
             if (healConfig.EasyDispel == EasyHealManager.EasyDispelStatus.Enable && actionId is 7568)
-                EasyHealService.OnPreDispel(ref targetId, ref actionId, ref isPrevented);
+                easyHealService.OnPreDispel(ref targetId, ref actionId, ref isPrevented);
         }
 
         // can raise
@@ -611,31 +612,31 @@ public class HealerHelper : DailyModuleBase
         if (canRaise)
         {
             // easy raise
-            var healConfig = ModuleConfig.EasyHealStorage;
+            var healConfig = moduleConfig.EasyHealStorage;
             if (healConfig.EasyRaise == EasyHealManager.EasyRaiseStatus.Enable && EasyHealManager.RaiseActions.Contains(actionId))
-                EasyHealService.OnPreRaise(ref targetId, ref actionId, ref isPrevented);
+                easyHealService.OnPreRaise(ref targetId, ref actionId, ref isPrevented);
         }
     }
 
     private void OnZoneChanged(ushort zone)
-        => FFLogsService.ClearBestRecords();
+        => fflogsService.ClearBestRecords();
 
     private static void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag is ConditionFlag.InCombat)
         {
-            AutoPlayCardService.IsOpener    = true;
-            AutoPlayCardService.NeedReorder = false;
+            autoPlayCardService.IsOpener    = true;
+            autoPlayCardService.NeedReorder = false;
         }
         else
         {
-            AutoPlayCardService.IsOpener    = false;
-            AutoPlayCardService.NeedReorder = true;
+            autoPlayCardService.IsOpener    = false;
+            autoPlayCardService.NeedReorder = true;
         }
     }
 
     private static void OnDutyRecommenced(object? sender, ushort e)
-        => AutoPlayCardService.OrderCandidates();
+        => autoPlayCardService.OrderCandidates();
 
     private static void OnUpdate(IFramework _)
     {
@@ -648,12 +649,12 @@ public class HealerHelper : DailyModuleBase
 
             // need to update candidates?
             var ids = DService.PartyList.Select(m => m.ObjectId).ToHashSet();
-            if (!ids.SetEquals(AutoPlayCardService.PartyMemberIdsCache) || AutoPlayCardService.NeedReorder)
+            if (!ids.SetEquals(autoPlayCardService.PartyMemberIdsCache) || autoPlayCardService.NeedReorder)
             {
                 // party member changed, update candidates
-                AutoPlayCardService.OrderCandidates();
-                AutoPlayCardService.PartyMemberIdsCache = ids;
-                AutoPlayCardService.NeedReorder         = false;
+                autoPlayCardService.OrderCandidates();
+                autoPlayCardService.PartyMemberIdsCache = ids;
+                autoPlayCardService.NeedReorder         = false;
             }
         }
         catch (Exception)
@@ -678,7 +679,7 @@ public class HealerHelper : DailyModuleBase
 
     #region RemoteCache
 
-    public static class RemoteRepoManager
+    private static class RemoteRepoManager
     {
         // const
         private const string Uri = "https://dr-cache.sumemo.dev";
@@ -690,36 +691,36 @@ public class HealerHelper : DailyModuleBase
                 var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/card-order");
                 var resp = JsonConvert.DeserializeObject<AutoPlayCardManager.PlayCardOrder>(json);
                 if (resp == null)
-                    Error($"[HealerHelper] Deserialize Default Play Card Order Failed: {json}");
+                    Error($"[HealerHelper] 远程发卡顺序文件解析失败: {json}");
                 else
                 {
-                    ModuleConfig.AutoPlayCardStorage.DefaultCardOrder = resp;
+                    moduleConfig.AutoPlayCardStorage.DefaultCardOrder = resp;
                     // init custom if empty
-                    if (ModuleConfig.AutoPlayCardStorage.CustomCardOrder.Melee.Count is 0)
-                        AutoPlayCardService.InitCustomCardOrder();
+                    if (moduleConfig.AutoPlayCardStorage.CustomCardOrder.Melee.Count is 0)
+                        autoPlayCardService.InitCustomCardOrder();
                 }
             }
-            catch (Exception ex) { Error($"[HealerHelper] Fetch Default Play Card Order Failed: {ex}"); }
+            catch (Exception ex) { Error($"[HealerHelper] 远程发卡顺序文件获取失败: {ex}"); }
         }
 
         public static async Task FetchHealActions()
         {
             try
             {
-                var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/heal-actions");
+                var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/heal-action");
                 var resp = JsonConvert.DeserializeObject<Dictionary<string, List<EasyHealManager.HealAction>>>(json);
                 if (resp == null)
-                    Error($"[HealerHelper] Deserialize Default Heal Actions Failed: {json}");
+                    Error($"[HealerHelper] 远程治疗技能文件解析失败: {json}");
                 else
                 {
-                    ModuleConfig.EasyHealStorage.TargetHealActions = resp.SelectMany(kv => kv.Value).ToDictionary(act => act.Id, act => act);
+                    moduleConfig.EasyHealStorage.TargetHealActions = resp.SelectMany(kv => kv.Value).ToDictionary(act => act.Id, act => act);
 
                     // when active is empty, set with default on heal actions
-                    if (ModuleConfig.EasyHealStorage.ActiveHealActions.Count is 0)
-                        EasyHealService.InitActiveHealActions();
+                    if (moduleConfig.EasyHealStorage.ActiveHealActions.Count is 0)
+                        easyHealService.InitActiveHealActions();
                 }
             }
-            catch (Exception ex) { Error($"[HealerHelper] Fetch Default Heal Actions Failed: {ex}"); }
+            catch (Exception ex) { Error($"[HealerHelper] 远程治疗技能文件获取失败: {ex}"); }
         }
 
         public static async Task FetchTerritoryMap()
@@ -729,14 +730,14 @@ public class HealerHelper : DailyModuleBase
                 var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/territory");
                 var resp = JsonConvert.DeserializeObject<List<FFLogsManager.TerritoryMap>>(json);
                 if (resp == null)
-                    Error($"[HealerHelper] Deserialize Territory Map Failed: {json}");
+                    Error($"[HealerHelper] 远程区域映射文件解析失败: {json}");
                 else
                 {
-                    ModuleConfig.FFLogsStorage.TerritoryMaps = resp;
-                    FFLogsService.InitTerritoryDict();
+                    moduleConfig.FFLogsStorage.TerritoryMaps = resp;
+                    fflogsService.InitTerritoryDict();
                 }
             }
-            catch (Exception ex) { Error($"[HealerHelper] Fetch Territory Map Failed: {ex}"); }
+            catch (Exception ex) { Error($"[HealerHelper] 远程区域映射文件获取失败: {ex}"); }
         }
     }
 
@@ -744,7 +745,7 @@ public class HealerHelper : DailyModuleBase
 
     #region AutoPlayCard
 
-    public class AutoPlayCardManager(AutoPlayCardManager.Storage config)
+    private class AutoPlayCardManager(AutoPlayCardManager.Storage config)
     {
         // const
         public static readonly HashSet<uint> PlayCardActions = [37023, 37026];
@@ -830,13 +831,13 @@ public class HealerHelper : DailyModuleBase
                 return;
 
             // advance fallback when no valid zone id or invalid key
-            var advance = ModuleConfig is { AutoPlayCardStorage.AutoPlayCard: AutoPlayCardStatus.Advance, FFLogsStorage.KeyValid: false };
-            if (!FFLogsService.TerritoryDict.ContainsKey(GameState.TerritoryType) && advance)
+            var advance = moduleConfig is { AutoPlayCardStorage.AutoPlayCard: AutoPlayCardStatus.Advance, FFLogsStorage.KeyValid: false };
+            if (!fflogsService.TerritoryDict.ContainsKey(GameState.TerritoryType) && advance)
             {
-                if (FFLogsService.FirstTimeFallback)
+                if (fflogsService.FirstTimeFallback)
                 {
                     Chat(GetLoc("HealerHelper-AutoPlayCard-AdvanceFallback"));
-                    FFLogsService.FirstTimeFallback = false;
+                    fflogsService.FirstTimeFallback = false;
                 }
 
                 config.AutoPlayCard = AutoPlayCardStatus.Default;
@@ -874,7 +875,7 @@ public class HealerHelper : DailyModuleBase
             {
                 foreach (var member in partyList)
                 {
-                    var bestRecord = FFLogsService.FetchBestRecord((ushort)GameState.TerritoryType, member).GetAwaiter().GetResult();
+                    var bestRecord = fflogsService.FetchBestRecord((ushort)GameState.TerritoryType, member).GetAwaiter().GetResult();
                     if (bestRecord is null)
                         continue;
 
@@ -1004,9 +1005,9 @@ public class HealerHelper : DailyModuleBase
                         37026 => "Range"
                     };
 
-                    if (ModuleConfig.SendChat)
+                    if (moduleConfig.SendChat)
                         Chat(GetSLoc($"HealerHelper-AutoPlayCard-Message-{locKey}", name, classJobIcon, classJobName));
-                    if (ModuleConfig.SendNotification)
+                    if (moduleConfig.SendNotification)
                         NotificationInfo(GetLoc($"HealerHelper-AutoPlayCard-Message-{locKey}", name, string.Empty, classJobName));
                 }
             }
@@ -1026,7 +1027,7 @@ public class HealerHelper : DailyModuleBase
 
     #region EasyHeal
 
-    public class EasyHealManager(EasyHealManager.Storage config)
+    private class EasyHealManager(EasyHealManager.Storage config)
     {
         // const
         public static readonly HashSet<uint> RaiseActions = [125, 173, 3603, 24287, 7670, 7523];
@@ -1241,9 +1242,9 @@ public class HealerHelper : DailyModuleBase
                     var classJobIcon = member.ClassJob.ValueNullable.ToBitmapFontIcon();
                     var classJobName = member.ClassJob.Value.Name.ExtractText();
 
-                    if (ModuleConfig.SendChat)
+                    if (moduleConfig.SendChat)
                         Chat(GetSLoc("HealerHelper-EasyHeal-Message", name, classJobIcon, classJobName));
-                    if (ModuleConfig.SendNotification)
+                    if (moduleConfig.SendNotification)
                         NotificationInfo(GetLoc("HealerHelper-EasyHeal-Message", name, string.Empty, classJobName));
                 }
             }
@@ -1270,9 +1271,9 @@ public class HealerHelper : DailyModuleBase
                     var classJobIcon = member.ClassJob.ValueNullable.ToBitmapFontIcon();
                     var classJobName = member.ClassJob.Value.Name.ExtractText();
 
-                    if (ModuleConfig.SendChat)
+                    if (moduleConfig.SendChat)
                         Chat(GetSLoc("HealerHelper-EasyDispel-Message", name, classJobIcon, classJobName));
-                    if (ModuleConfig.SendNotification)
+                    if (moduleConfig.SendNotification)
                         NotificationInfo(GetLoc("HealerHelper-EasyDispel-Message", name, string.Empty, classJobName));
                 }
             }
@@ -1299,9 +1300,9 @@ public class HealerHelper : DailyModuleBase
                     var classJobIcon = member.ClassJob.ValueNullable.ToBitmapFontIcon();
                     var classJobName = member.ClassJob.Value.Name.ExtractText();
 
-                    if (ModuleConfig.SendChat)
+                    if (moduleConfig.SendChat)
                         Chat(GetSLoc("HealerHelper-EasyRaise-Message", name, classJobIcon, classJobName));
-                    if (ModuleConfig.SendNotification)
+                    if (moduleConfig.SendNotification)
                         NotificationInfo(GetLoc("HealerHelper-EasyRaise-Message", name, string.Empty, classJobName));
                 }
             }
@@ -1314,7 +1315,7 @@ public class HealerHelper : DailyModuleBase
 
     #region FFLogs
 
-    public class FFLogsManager(FFLogsManager.Storage config)
+    private class FFLogsManager(FFLogsManager.Storage config)
     {
         #region Params
 
