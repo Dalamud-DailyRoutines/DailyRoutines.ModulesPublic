@@ -50,10 +50,10 @@ public class TimedBuffReminder : DailyModuleBase
         // fetch remote resource
         RemoteRepoManager.FetchTimedBuffList().Wait(); // wait for init action select
 
-        // action select combo
+        // status select combo
         StatusSelect ??= new("##StatusSelect", LuminaGetter.Get<Status>().Where(x => StatusMonitor.StatusDict.ContainsKey(x.RowId)));
         if (moduleConfig.StatusStorage.EnabledStatusIds.Count == 0)
-            moduleConfig.StatusStorage.EnabledStatusIds = new HashSet<uint>(StatusMonitor.StatusDict.Select(x => x.Key));
+            moduleConfig.StatusStorage.EnabledStatusIds = StatusMonitor.StatusDict.Keys.ToHashSet();
         StatusSelect.SelectedStatusIDs = moduleConfig.StatusStorage.EnabledStatusIds;
 
         // highlight manager
