@@ -36,6 +36,10 @@ public class TimedBuffReminder : DailyModuleBase
     // managers
     private static StatusMonitor statusService;
 
+    // ui
+    public StatusSelectCombo? StatusSelect;
+
+
     public override void Init()
     {
         moduleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
@@ -44,7 +48,13 @@ public class TimedBuffReminder : DailyModuleBase
         statusService = new StatusMonitor(moduleConfig.StatusStorage);
 
         // fetch remote resource
-        Task.Run(async () => await RemoteRepoManager.FetchTimedBuffList());
+        RemoteRepoManager.FetchTimedBuffList().Wait(); // wait for init action select
+
+        // action select combo
+        StatusSelect ??= new("##StatusSelect", LuminaGetter.Get<Status>().Where(x => StatusMonitor.StatusDict.ContainsKey(x.RowId)));
+        if (moduleConfig.StatusStorage.EnabledStatusIds.Count == 0)
+            moduleConfig.StatusStorage.EnabledStatusIds = new HashSet<uint>(StatusMonitor.StatusDict.Select(x => x.Key));
+        StatusSelect.SelectedStatusIDs = moduleConfig.StatusStorage.EnabledStatusIds;
 
         // highlight manager
         UseActionManager.RegPreUseActionLocation(OnPreUseAction);
@@ -69,6 +79,14 @@ public class TimedBuffReminder : DailyModuleBase
         ImGui.Spacing();
         if (ImGui.SliderFloat("##ReminderThreshold", ref moduleConfig.StatusStorage.Threshold, 2.0f, 10.0f, "%.1f"))
             SaveConfig(moduleConfig);
+
+        ImGui.Spacing();
+
+        if (StatusSelect.DrawCheckbox())
+        {
+            moduleConfig.StatusStorage.EnabledStatusIds = StatusSelect.SelectedStatusIDs;
+            SaveConfig(moduleConfig);
+        }
     }
 
     #endregion
@@ -111,10 +129,7 @@ public class TimedBuffReminder : DailyModuleBase
                 if (resp == null)
                     Error($"[TimedBuffReminder] 远程延续性状态文件解析失败: {json}");
                 else
-                {
-                    moduleConfig.StatusStorage.Statuses = resp.ToArray();
-                    statusService.InitStatusMap();
-                }
+                    StatusMonitor.StatusDict = resp.ToDictionary(x => x.StatusId, x => x);
             }
             catch (Exception ex) { Error($"[TimedBuffReminder] 远程延续性状态文件获取失败: {ex}"); }
         }
@@ -161,21 +176,20 @@ public class TimedBuffReminder : DailyModuleBase
     private unsafe class StatusMonitor(StatusMonitor.Storage config)
     {
         // cache
-        private         Dictionary<uint, Status>  statusDict       = [];
-        public readonly Dictionary<Status, float> ActiveStatusList = [];
+        public static Dictionary<uint, Status> StatusDict = [];
+
+        // params
+        public readonly Dictionary<Status, float> ActiveStatus = [];
         public          uint                      LastActionId;
 
         // config
         public class Storage
         {
-            public Status[] Statuses  = [];
-            public float    Threshold = 3.0f;
+            public float         Threshold        = 3.0f;
+            public HashSet<uint> EnabledStatusIds = [];
         }
 
         #region Funcs
-
-        public void InitStatusMap()
-            => statusDict = config.Statuses.ToDictionary(x => x.StatusId, x => x);
 
         public void Update()
         {
@@ -190,8 +204,8 @@ public class TimedBuffReminder : DailyModuleBase
             // status
             foreach (var status in localPlayer->StatusManager.Status)
             {
-                if (statusDict.TryGetValue(status.StatusId, out var mitigation))
-                    ActiveStatusList.TryAdd(mitigation, status.RemainingTime);
+                if (config.EnabledStatusIds.Contains(status.StatusId) && StatusDict.TryGetValue(status.StatusId, out var mitigation))
+                    ActiveStatus.TryAdd(mitigation, status.RemainingTime);
             }
 
             // battle npc
@@ -200,15 +214,15 @@ public class TimedBuffReminder : DailyModuleBase
             {
                 foreach (var status in battleNpc.ToBCStruct()->StatusManager.Status)
                 {
-                    if (statusDict.TryGetValue(status.StatusId, out var mitigation))
-                        ActiveStatusList.TryAdd(mitigation, status.RemainingTime);
+                    if (config.EnabledStatusIds.Contains(status.StatusId) && StatusDict.TryGetValue(status.StatusId, out var mitigation))
+                        ActiveStatus.TryAdd(mitigation, status.RemainingTime);
                 }
             }
 
             // refresh highlight
             var manager = ActionManager.Instance();
             HighlightManager.HighlightActions.Clear();
-            foreach (var status in ActiveStatusList)
+            foreach (var status in ActiveStatus)
             {
                 foreach (var actionId in status.Key.ActionId)
                 {
@@ -225,7 +239,7 @@ public class TimedBuffReminder : DailyModuleBase
         }
 
         public void Clear()
-            => ActiveStatusList.Clear();
+            => ActiveStatus.Clear();
 
         #endregion
 
