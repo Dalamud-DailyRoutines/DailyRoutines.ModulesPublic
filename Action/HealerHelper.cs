@@ -58,19 +58,18 @@ public class HealerHelper : DailyModuleBase
     {
         moduleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
 
-        // fetch remote hotfix
-        Task.Run(async () =>
-        {
-            await RemoteRepoManager.FetchPlayCardOrder();
-            await RemoteRepoManager.FetchHealActions();
-            await RemoteRepoManager.FetchTerritoryMap();
-        });
-        SaveConfig(moduleConfig);
-
         // managers
         easyHealService     = new EasyHealManager(moduleConfig.EasyHealStorage);
         autoPlayCardService = new AutoPlayCardManager(moduleConfig.AutoPlayCardStorage);
         fflogsService       = new FFLogsManager(moduleConfig.FFLogsStorage);
+
+        // fetch remote hotfix
+        Task.WhenAll(
+            RemoteRepoManager.FetchPlayCardOrder(),
+            RemoteRepoManager.FetchHealActions(),
+            RemoteRepoManager.FetchTerritoryMap()
+        ).Wait();
+        SaveConfig(moduleConfig);
 
         // register hooks
         UseActionManager.RegPreUseActionLocation(OnPreUseAction);
