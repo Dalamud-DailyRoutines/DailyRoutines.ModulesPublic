@@ -5,6 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 namespace DailyRoutines.Modules;
 
@@ -39,13 +40,24 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     public override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-        
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(DService.ClientState.TerritoryType);
     }
 
     public override void ConfigUI()
     {
+        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoGysahlGreens-ChangeStanceInfo")}:");
+        ImGui.NewLine();
+
+        foreach (var checkPoint in Enum.GetValues<StanceCheckpoint>())
+        {
+            ImGui.SameLine();
+            if (ImGui.RadioButton(checkPoint.ToString(), ref ModuleConfig.CommandCheck, (int)checkPoint))
+            {
+                SaveConfig(ModuleConfig);
+            }
+        }
+
         if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
             SaveConfig(ModuleConfig);
 
@@ -78,33 +90,48 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         if (classJobData == null) return;
         if (!ModuleConfig.NotBattleJobUsingGysahl && (classJobData?.DohDolJobIndex ?? 0) != -1) return;
 
+        if (UIState.Instance()->Buddy.CompanionInfo.ActiveCommand != ModuleConfig.CommandCheck)
+        {
+            SwitchCommand((StanceCheckpoint)ModuleConfig.CommandCheck);
+        }
+
         if (UIState.Instance()->Buddy.CompanionInfo.TimeLeft > 300) return;
-        
         if (InventoryManager.Instance()->GetInventoryItemCount(GysahlGreens) <= 3)
         {
             if (!HasNotifiedInCurrentZone)
             {
                 HasNotifiedInCurrentZone = true;
-                
                 var notificationMessage = GetLoc("AutoGysahlGreens-NotificationMessage");
-                if (ModuleConfig.SendChat) 
+                if (ModuleConfig.SendChat)
                     Chat(notificationMessage);
-                if (ModuleConfig.SendNotification) 
+                if (ModuleConfig.SendNotification)
                     NotificationInfo(notificationMessage);
-                if (ModuleConfig.SendTTS) 
+                if (ModuleConfig.SendTTS)
                     Speak(notificationMessage);
             }
 
             return;
         }
-        
         UseActionManager.UseActionLocation(ActionType.Item, GysahlGreens, 0xE0000000, default, 0xFFFF);
     }
-    
+
+    private static void SwitchCommand(StanceCheckpoint command)
+    {
+        UseActionManager.UseAction(ActionType.BuddyAction, (uint)command);
+    }
+
     public override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         OnZoneChanged(0);
+    }
+
+    private enum StanceCheckpoint
+    {
+        自由战术 = 0x04,
+        防护战术 = 0x05,
+        进攻战术 = 0x06,
+        治疗战术 = 0x07
     }
 
     private class Config : ModuleConfiguration
@@ -113,5 +140,6 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         public bool SendNotification = true;
         public bool SendTTS;
         public bool NotBattleJobUsingGysahl;
+        public int  CommandCheck     = 0x04;
     }
 }
