@@ -47,22 +47,30 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     public override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoGysahlGreens-ChangeStanceInfo")}:");
-        ImGui.NewLine();
 
+        bool isFirst = true;
         foreach (var checkPoint in Enum.GetValues<StanceCheckpoint>())
         {
-            ImGui.SameLine();
+            if (!isFirst)
+                ImGui.SameLine();
+            isFirst = false;
+
             string label = checkPoint switch
             {
-                StanceCheckpoint.FreeStance => GetLoc("AutoGysahlGreens-FreeStance"),
+                StanceCheckpoint.FreeStance     => GetLoc("AutoGysahlGreens-FreeStance"),
                 StanceCheckpoint.DefenderStance => GetLoc("AutoGysahlGreens-DefenderStance"),
                 StanceCheckpoint.AttackerStance => GetLoc("AutoGysahlGreens-AttackerStance"),
-                StanceCheckpoint.HealerStance => GetLoc("AutoGysahlGreens-HealerStance"),
-                _ => checkPoint.ToString()
+                StanceCheckpoint.HealerStance   => GetLoc("AutoGysahlGreens-HealerStance"),
+                _                               => checkPoint.ToString()
             };
-            if (ImGui.RadioButton(label, ref ModuleConfig.CommandCheck, (int)checkPoint))
+            bool isSelected = ModuleConfig.CommandCheck == (int)checkPoint;
+            if (ImGui.Checkbox(label, ref isSelected))
             {
-                SaveConfig(ModuleConfig);
+                if (isSelected)
+                {
+                    ModuleConfig.CommandCheck = (int)checkPoint;
+                    SaveConfig(ModuleConfig);
+                }
             }
         }
 
