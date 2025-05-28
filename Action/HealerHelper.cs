@@ -68,16 +68,7 @@ public class HealerHelper : DailyModuleBase
         fflogsService       = new FFLogsManager(moduleConfig.FFLogsStorage);
 
         // fetch remote hotfix
-        Task.WhenAll(
-            RemoteRepoManager.FetchPlayCardOrder(),
-            RemoteRepoManager.FetchHealActions(),
-            RemoteRepoManager.FetchTerritoryMap()
-        ).Wait();
-
-        // action select combo
-        actionSelect ??= new("##ActionSelect", LuminaGetter.Get<LuminaAction>().Where(x => easyHealService.TargetHealActions.ContainsKey(x.RowId)));
-        if (moduleConfig.EasyHealStorage.ActiveHealActions.Count == 0)
-            easyHealService.InitActiveHealActions();
+        Task.Run(async () => await RemoteRepoManager.FetchAll());
 
         // register hooks
         UseActionManager.RegPreUseActionLocation(OnPreUseAction);
@@ -654,6 +645,9 @@ public class HealerHelper : DailyModuleBase
 
     private static class RemoteRepoManager
     {
+        // param
+        public static bool IsLoading = true;
+
         // const
         private const string Uri = "https://dr-cache.sumemo.dev";
 
@@ -708,6 +702,26 @@ public class HealerHelper : DailyModuleBase
                     fflogsService.TerritoryDict = resp.ToDictionary(x => x.Id, x => x.LogsZone);
             }
             catch (Exception ex) { Error($"[HealerHelper] 远程区域映射文件获取失败: {ex}"); }
+        }
+
+        public static async Task FetchAll()
+        {
+            try
+            {
+                await Task.WhenAll(
+                    FetchPlayCardOrder(),
+                    FetchHealActions(),
+                    FetchTerritoryMap()
+                );
+            }
+            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 远程资源获取失败: {ex}"); } finally
+            {
+                // action select combo
+                actionSelect ??= new("##ActionSelect", LuminaGetter.Get<LuminaAction>().Where(x => easyHealService.TargetHealActions.ContainsKey(x.RowId)));
+                if (moduleConfig.EasyHealStorage.ActiveHealActions.Count == 0)
+                    easyHealService.InitActiveHealActions();
+                actionSelect.SelectedActionIDs = moduleConfig.EasyHealStorage.ActiveHealActions;
+            }
         }
     }
 
@@ -1081,10 +1095,7 @@ public class HealerHelper : DailyModuleBase
         #region Funcs
 
         public void InitActiveHealActions()
-        {
-            config.ActiveHealActions       = TargetHealActions.Where(act => act.Value.On).Select(act => act.Key).ToHashSet();
-            actionSelect.SelectedActionIDs = moduleConfig.EasyHealStorage.ActiveHealActions;
-        }
+            => config.ActiveHealActions = TargetHealActions.Where(act => act.Value.On).Select(act => act.Key).ToHashSet();
 
         private uint TargetNeedHeal(uint actionId)
         {

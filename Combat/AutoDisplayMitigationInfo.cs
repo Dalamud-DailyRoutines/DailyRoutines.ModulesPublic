@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,6 +22,7 @@ using Dalamud.Hooking;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Graphics;
@@ -79,10 +81,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         };
 
         // fetch remote resource
-        Task.WhenAll(
-            RemoteRepoManager.FetchMitigationStatuses(),
-            RemoteRepoManager.FetchDamageActions()
-        ).Wait();
+        Task.Run(async () => await RemoteRepoManager.FetchAll());
 
         // zone hook
         DService.ClientState.TerritoryChanged += OnZoneChanged;
@@ -371,6 +370,18 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         public static void FetchDamageActions(uint zoneId)
             => DamageActionManager.Actions = actions.Where(x => x.ZoneId == zoneId).ToDictionary(x => x.ActionId, x => x);
+
+        public static async Task FetchAll()
+        {
+            try
+            {
+                await Task.WhenAll(
+                    FetchMitigationStatuses(),
+                    FetchDamageActions()
+                );
+            }
+            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 远程资源获取失败: {ex}"); }
+        }
     }
 
     #endregion
