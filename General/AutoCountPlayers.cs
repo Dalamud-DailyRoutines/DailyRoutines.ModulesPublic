@@ -138,6 +138,11 @@ public class AutoCountPlayers : DailyModuleBase
     
     private static unsafe void OnDraw()
     {
+    
+        var mainViewPort = ImGui.GetMainViewport();
+        var currentWindowPos = mainViewPort.Pos;
+        var currentWindowSize = mainViewPort.Size;
+        
         if (!ModuleConfig.DisplayLineWhenTargetingMe || TargetingMePlayers.Count == 0) return;
         
         var framework = Framework.Instance();
@@ -184,9 +189,18 @@ public class AutoCountPlayers : DailyModuleBase
         
         foreach (var player in TargetingMePlayers)
         {
-            if (DService.Gui.WorldToScreen(player.Position, out var screenPos) &&
-                DService.Gui.WorldToScreen(localPlayer->Position,  out var localScreenPos))
+            if (DService.Gui.WorldToScreen(player.Position, out var screenPos))
+            {
+                Vector2 localScreenPos;
+                
+                // 检查 localPlayer 世界坐标转换结果，失败时使用屏幕底部中央位置
+                if (!DService.Gui.WorldToScreen(localPlayer->Position, out localScreenPos))
+                {
+                    localScreenPos = new Vector2(currentWindowSize.X / 2, currentWindowSize.Y);
+                }
+                
                 DrawLine(localScreenPos, screenPos, player, LineColorRed);
+            }
         }
     }
 
