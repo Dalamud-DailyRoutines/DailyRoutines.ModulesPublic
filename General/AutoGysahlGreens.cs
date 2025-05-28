@@ -19,13 +19,13 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         Author      = ["Veever"]
     };
 
+    private const  uint     GysahlGreens  = 4868;
+
+    private static Config   ModuleConfig  = null!;
+
     private static readonly HashSet<ushort> ValidTerritory;
 
-    private static Config ModuleConfig = null!;
-
     private static bool HasNotifiedInCurrentZone;
-
-    private const uint GysahlGreens = 4868;
 
     static AutoGysahlGreens()
     {
@@ -52,7 +52,15 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         foreach (var checkPoint in Enum.GetValues<StanceCheckpoint>())
         {
             ImGui.SameLine();
-            if (ImGui.RadioButton(checkPoint.ToString(), ref ModuleConfig.CommandCheck, (int)checkPoint))
+            string label = checkPoint switch
+            {
+                StanceCheckpoint.FreeStance => GetLoc("AutoGysahlGreens-FreeStance"),
+                StanceCheckpoint.DefenderStance => GetLoc("AutoGysahlGreens-DefenderStance"),
+                StanceCheckpoint.AttackerStance => GetLoc("AutoGysahlGreens-AttackerStance"),
+                StanceCheckpoint.HealerStance => GetLoc("AutoGysahlGreens-HealerStance"),
+                _ => checkPoint.ToString()
+            };
+            if (ImGui.RadioButton(label, ref ModuleConfig.CommandCheck, (int)checkPoint))
             {
                 SaveConfig(ModuleConfig);
             }
@@ -128,10 +136,10 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private enum StanceCheckpoint
     {
-        自由战术 = 0x04,
-        防护战术 = 0x05,
-        进攻战术 = 0x06,
-        治疗战术 = 0x07
+        FreeStance     = 0x04,
+        DefenderStance = 0x05,
+        AttackerStance = 0x06,
+        HealerStance   = 0x07
     }
 
     private class Config : ModuleConfiguration
