@@ -37,8 +37,7 @@ public class TimedBuffReminder : DailyModuleBase
     private static StatusMonitor statusService;
 
     // ui
-    public StatusSelectCombo? StatusSelect;
-
+    private static StatusSelectCombo? statusSelect;
 
     public override void Init()
     {
@@ -51,10 +50,10 @@ public class TimedBuffReminder : DailyModuleBase
         RemoteRepoManager.FetchTimedBuffList().Wait(); // wait for init action select
 
         // status select combo
-        StatusSelect ??= new("##StatusSelect", LuminaGetter.Get<Status>().Where(x => StatusMonitor.StatusDict.ContainsKey(x.RowId)));
+        statusSelect ??= new("##StatusSelect", LuminaGetter.Get<Status>().Where(x => StatusMonitor.StatusDict.ContainsKey(x.RowId)));
         if (moduleConfig.StatusStorage.EnabledStatusIds.Count == 0)
             moduleConfig.StatusStorage.EnabledStatusIds = StatusMonitor.StatusDict.Keys.ToHashSet();
-        StatusSelect.SelectedStatusIDs = moduleConfig.StatusStorage.EnabledStatusIds;
+        statusSelect.SelectedStatusIDs = moduleConfig.StatusStorage.EnabledStatusIds;
 
         // highlight manager
         UseActionManager.RegPreUseActionLocation(OnPreUseAction);
@@ -82,9 +81,9 @@ public class TimedBuffReminder : DailyModuleBase
 
         ImGui.Spacing();
 
-        if (StatusSelect.DrawCheckbox())
+        if (statusSelect.DrawCheckbox())
         {
-            moduleConfig.StatusStorage.EnabledStatusIds = StatusSelect.SelectedStatusIDs;
+            moduleConfig.StatusStorage.EnabledStatusIds = statusSelect.SelectedStatusIDs;
             SaveConfig(moduleConfig);
         }
     }

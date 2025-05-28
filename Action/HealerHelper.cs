@@ -8,6 +8,7 @@ using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
+using DailyRoutines.Widgets;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.ClientState.Party;
@@ -38,11 +39,11 @@ public class HealerHelper : DailyModuleBase
     private const uint UnspecificTargetId = 0xE000_0000;
 
     // cache
-    private static readonly Dictionary<ReadOnlySeString, ReadOnlySeString> JobNameMap;
+    private static readonly Dictionary<ReadOnlySeString, ReadOnlySeString> jobNameMap;
 
     static HealerHelper()
     {
-        JobNameMap = LuminaGetter.Get<ClassJob>()
+        jobNameMap = LuminaGetter.Get<ClassJob>()
                                  .ToDictionary(s => s.NameEnglish, s => s.Name);
     }
 
@@ -53,6 +54,9 @@ public class HealerHelper : DailyModuleBase
     private static EasyHealManager     easyHealService;
     private static AutoPlayCardManager autoPlayCardService;
     private static FFLogsManager       fflogsService;
+
+    // ui
+    private static ActionSelectCombo? actionSelect;
 
     public override void Init()
     {
@@ -69,7 +73,11 @@ public class HealerHelper : DailyModuleBase
             RemoteRepoManager.FetchHealActions(),
             RemoteRepoManager.FetchTerritoryMap()
         ).Wait();
-        SaveConfig(moduleConfig);
+
+        // action select combo
+        actionSelect ??= new("##ActionSelect", LuminaGetter.Get<LuminaAction>().Where(x => easyHealService.TargetHealActions.ContainsKey(x.RowId)));
+        if (moduleConfig.EasyHealStorage.ActiveHealActions.Count == 0)
+            easyHealService.InitActiveHealActions();
 
         // register hooks
         UseActionManager.RegPreUseActionLocation(OnPreUseAction);
@@ -94,8 +102,7 @@ public class HealerHelper : DailyModuleBase
 
     #region UI
 
-    private static int?   customCardOrderDragIndex;
-    private static string actionSearchInput = string.Empty;
+    private static int? customCardOrderDragIndex;
 
     public override void ConfigUI()
     {
@@ -316,7 +323,7 @@ public class HealerHelper : DailyModuleBase
         {
             using var id = ImRaii.PushId($"{index}");
             // component
-            var jobName  = JobNameMap[cardOrder[index]].ExtractText();
+            var jobName  = jobNameMap[cardOrder[index]].ExtractText();
             var textSize = ImGui.CalcTextSize(jobName);
             ImGui.Button(jobName, new(textSize.X + 20f, 0));
 
@@ -440,45 +447,12 @@ public class HealerHelper : DailyModuleBase
         ImGui.TextColored(YellowGreen, $"{GetLoc("HealerHelper-EasyHeal-ActiveHealAction")}");
         ImGui.Spacing();
 
-        var actionList = config.TargetHealActions
-                               .ToDictionary(act => act.Key, act => LuminaGetter.GetRow<LuminaAction>(act.Key)!.Value);
-        MultiSelectCombo(actionList,
-                         ref config.ActiveHealActions,
-                         ref actionSearchInput,
-                         [
-                             new(GetLoc("Action"), ImGuiTableColumnFlags.WidthStretch, 20),
-                             new(GetLoc("Job"), ImGuiTableColumnFlags.WidthStretch, 10)
-                         ],
-                         [
-                             x => () =>
-                             {
-                                 if (!DService.Texture.TryGetFromGameIcon((uint)x.Icon, out var actionIcon))
-                                     return;
-                                 using var id = ImRaii.PushId($"{x.RowId}");
+        if (actionSelect.DrawCheckbox())
+        {
+            moduleConfig.EasyHealStorage.ActiveHealActions = actionSelect.SelectedActionIDs;
+            SaveConfig(moduleConfig);
+        }
 
-                                 // icon - action name
-                                 ImGui.TableSetColumnIndex(1);
-                                 if (ImGuiOm.SelectableImageWithText(
-                                         actionIcon.GetWrapOrEmpty().ImGuiHandle,
-                                         new(ImGui.GetTextLineHeightWithSpacing()),
-                                         x.Name.ExtractText(),
-                                         config.ActiveHealActions.Contains(x.RowId),
-                                         ImGuiSelectableFlags.DontClosePopups))
-                                 {
-                                     if (!config.ActiveHealActions.Remove(x.RowId))
-                                         config.ActiveHealActions.Add(x.RowId);
-                                 }
-
-                                 // show action description
-                                 // var desc = LuminaGetter.GetRow<ActionTransient>(x.RowId).Value.Description;
-
-                                 // job
-                                 ImGui.TableSetColumnIndex(2);
-                                 ImGui.Text(x.ClassJobCategory.Value.Name.ExtractText());
-                             }
-                         ],
-                         [x => x.Name.ExtractText() + x.ClassJobCategory.Value.Name.ExtractText()]
-        );
         ImGui.SameLine();
         ScaledDummy(5, 0);
         ImGui.SameLine();
@@ -693,7 +667,7 @@ public class HealerHelper : DailyModuleBase
                     Error($"[HealerHelper] 远程发卡顺序文件解析失败: {json}");
                 else
                 {
-                    moduleConfig.AutoPlayCardStorage.DefaultCardOrder = resp;
+                    autoPlayCardService.DefaultCardOrder = resp;
                     // init custom if empty
                     if (moduleConfig.AutoPlayCardStorage.CustomCardOrder.Melee.Count is 0)
                         autoPlayCardService.InitCustomCardOrder();
@@ -712,7 +686,7 @@ public class HealerHelper : DailyModuleBase
                     Error($"[HealerHelper] 远程治疗技能文件解析失败: {json}");
                 else
                 {
-                    moduleConfig.EasyHealStorage.TargetHealActions = resp.SelectMany(kv => kv.Value).ToDictionary(act => act.Id, act => act);
+                    easyHealService.TargetHealActions = resp.SelectMany(kv => kv.Value).ToDictionary(act => act.Id, act => act);
 
                     // when active is empty, set with default on heal actions
                     if (moduleConfig.EasyHealStorage.ActiveHealActions.Count is 0)
@@ -731,10 +705,7 @@ public class HealerHelper : DailyModuleBase
                 if (resp == null)
                     Error($"[HealerHelper] 远程区域映射文件解析失败: {json}");
                 else
-                {
-                    moduleConfig.FFLogsStorage.TerritoryMaps = resp;
-                    fflogsService.InitTerritoryDict();
-                }
+                    fflogsService.TerritoryDict = resp.ToDictionary(x => x.Id, x => x.LogsZone);
             }
             catch (Exception ex) { Error($"[HealerHelper] 远程区域映射文件获取失败: {ex}"); }
         }
@@ -751,6 +722,7 @@ public class HealerHelper : DailyModuleBase
 
         // cache
         public HashSet<uint> PartyMemberIdsCache = []; // check party member changed or not
+        public PlayCardOrder DefaultCardOrder    = new();
 
         private readonly List<(uint id, double priority)> meleeCandidateOrder = [];
         private readonly List<(uint id, double priority)> rangeCandidateOrder = [];
@@ -761,9 +733,8 @@ public class HealerHelper : DailyModuleBase
         // config
         public class Storage
         {
-            public AutoPlayCardStatus AutoPlayCard     = AutoPlayCardStatus.Default;
-            public PlayCardOrder      DefaultCardOrder = new();
-            public PlayCardOrder      CustomCardOrder  = new();
+            public          AutoPlayCardStatus AutoPlayCard    = AutoPlayCardStatus.Default;
+            public readonly PlayCardOrder      CustomCardOrder = new();
         }
 
         #region Structs
@@ -799,18 +770,18 @@ public class HealerHelper : DailyModuleBase
             if (role is "Melee" or "All")
             {
                 if (section is "opener" or "All")
-                    config.CustomCardOrder.Melee["opener"] = config.DefaultCardOrder.Melee["opener"].ToArray();
+                    config.CustomCardOrder.Melee["opener"] = DefaultCardOrder.Melee["opener"].ToArray();
                 if (section is "2m+" or "All")
-                    config.CustomCardOrder.Melee["2m+"] = config.DefaultCardOrder.Melee["2m+"].ToArray();
+                    config.CustomCardOrder.Melee["2m+"] = DefaultCardOrder.Melee["2m+"].ToArray();
             }
 
             // range opener
             if (role is "Range" or "All")
             {
                 if (section is "opener" or "All")
-                    config.CustomCardOrder.Range["opener"] = config.DefaultCardOrder.Range["opener"].ToArray();
+                    config.CustomCardOrder.Range["opener"] = DefaultCardOrder.Range["opener"].ToArray();
                 if (section is "2m+" or "All")
-                    config.CustomCardOrder.Range["2m+"] = config.DefaultCardOrder.Range["2m+"].ToArray();
+                    config.CustomCardOrder.Range["2m+"] = DefaultCardOrder.Range["2m+"].ToArray();
             }
 
             // reset order
@@ -849,7 +820,7 @@ public class HealerHelper : DailyModuleBase
             var activateOrder = config.AutoPlayCard switch
             {
                 AutoPlayCardStatus.Custom => config.CustomCardOrder,
-                _ => config.DefaultCardOrder
+                _ => DefaultCardOrder
             };
 
             // set candidate priority based on predefined order
@@ -1031,6 +1002,9 @@ public class HealerHelper : DailyModuleBase
         // const
         public static readonly HashSet<uint> RaiseActions = [125, 173, 3603, 24287, 7670, 7523];
 
+        // cache
+        public Dictionary<uint, HealAction> TargetHealActions = [];
+
         // config
         public class Storage
         {
@@ -1039,8 +1013,7 @@ public class HealerHelper : DailyModuleBase
             public float          NeedHealThreshold = 0.92f;
             public OverhealTarget OverhealTarget    = OverhealTarget.Local;
 
-            public Dictionary<uint, HealAction> TargetHealActions = [];
-            public HashSet<uint>                ActiveHealActions = [];
+            public HashSet<uint> ActiveHealActions = [];
 
             // easy dispel
             public EasyDispelStatus  EasyDispel  = EasyDispelStatus.Enable;
@@ -1108,7 +1081,10 @@ public class HealerHelper : DailyModuleBase
         #region Funcs
 
         public void InitActiveHealActions()
-            => config.ActiveHealActions = config.TargetHealActions.Where(act => act.Value.On).Select(act => act.Key).ToHashSet();
+        {
+            config.ActiveHealActions       = TargetHealActions.Where(act => act.Value.On).Select(act => act.Key).ToHashSet();
+            actionSelect.SelectedActionIDs = moduleConfig.EasyHealStorage.ActiveHealActions;
+        }
 
         private uint TargetNeedHeal(uint actionId)
         {
@@ -1330,9 +1306,8 @@ public class HealerHelper : DailyModuleBase
         // config
         public class Storage
         {
-            public string             AuthKey = string.Empty;
-            public bool               KeyValid;
-            public List<TerritoryMap> TerritoryMaps = new();
+            public string AuthKey = string.Empty;
+            public bool   KeyValid;
         }
 
         #endregion
@@ -1419,7 +1394,7 @@ public class HealerHelper : DailyModuleBase
                 var uri   = $"{Uri}/parses/character/{charaName}/{serverSlug}/{FetchRegion()}";
                 var query = HttpUtility.ParseQueryString(string.Empty);
                 query["api_key"]   = config.AuthKey;
-                query["encounter"] = config.TerritoryMaps[zone].ToString();
+                query["encounter"] = TerritoryDict[zone].ToString();
                 query["metric"]    = "ndps";
 
                 // contains all ultimates and current savage in current version
@@ -1441,9 +1416,6 @@ public class HealerHelper : DailyModuleBase
 
         public void ClearBestRecords()
             => MemberBestRecords.Clear();
-
-        public void InitTerritoryDict()
-            => TerritoryDict = config.TerritoryMaps.ToDictionary(x => x.Id, x => x.LogsZone);
 
         #endregion
     }
