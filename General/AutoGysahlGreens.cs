@@ -6,6 +6,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
 
@@ -55,14 +56,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
                 ImGui.SameLine();
             isFirst = false;
 
-            string label = checkPoint switch
-            {
-                StanceCheckpoint.FreeStance     => GetLoc("AutoGysahlGreens-FreeStance"),
-                StanceCheckpoint.DefenderStance => GetLoc("AutoGysahlGreens-DefenderStance"),
-                StanceCheckpoint.AttackerStance => GetLoc("AutoGysahlGreens-AttackerStance"),
-                StanceCheckpoint.HealerStance   => GetLoc("AutoGysahlGreens-HealerStance"),
-                _                               => checkPoint.ToString()
-            };
+            string label = LuminaGetter.GetRow<BuddyAction>((uint)checkPoint)?.Name.ExtractText() ?? checkPoint.ToString();
             bool isSelected = ModuleConfig.CommandCheck == (int)checkPoint;
             if (ImGui.Checkbox(label, ref isSelected))
             {
