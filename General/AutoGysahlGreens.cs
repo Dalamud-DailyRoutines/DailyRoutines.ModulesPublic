@@ -56,8 +56,10 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
                 ImGui.SameLine();
             isFirst = false;
 
-            string label = LuminaGetter.GetRow<BuddyAction>((uint)checkPoint)?.Name.ExtractText() ?? checkPoint.ToString();
-            bool isSelected = ModuleConfig.CommandCheck == (int)checkPoint;
+            if (!LuminaGetter.TryGetRow<BuddyAction>((uint)checkPoint, out var buddyAction)) continue;
+            string label      = buddyAction.Name.ExtractText();
+            bool   isSelected = ModuleConfig.CommandCheck == (int)checkPoint;
+            
             if (ImGui.Checkbox(label, ref isSelected))
             {
                 if (isSelected)
@@ -112,11 +114,11 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
             {
                 HasNotifiedInCurrentZone = true;
                 var notificationMessage = GetLoc("AutoGysahlGreens-NotificationMessage");
-                if (ModuleConfig.SendChat)
+                if (ModuleConfig.SendChat) 
                     Chat(notificationMessage);
-                if (ModuleConfig.SendNotification)
+                if (ModuleConfig.SendNotification) 
                     NotificationInfo(notificationMessage);
-                if (ModuleConfig.SendTTS)
+                if (ModuleConfig.SendTTS) 
                     Speak(notificationMessage);
             }
 
