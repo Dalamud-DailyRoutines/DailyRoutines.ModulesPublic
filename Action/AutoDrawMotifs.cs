@@ -4,6 +4,7 @@ using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.JobGauge.Types;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
@@ -27,9 +28,9 @@ public class AutoDrawMotifs : DailyModuleBase
         TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
 
         DService.ClientState.TerritoryChanged += OnZoneChanged;
-        DService.DutyState.DutyRecommenced += OnDutyRecommenced;
-        DService.Condition.ConditionChange += OnConditionChanged;
-        DService.DutyState.DutyCompleted += OnDutyCompleted;
+        DService.DutyState.DutyRecommenced    += OnDutyRecommenced;
+        DService.Condition.ConditionChange    += OnConditionChanged;
+        DService.DutyState.DutyCompleted      += OnDutyCompleted;
     }
 
     public override void ConfigUI()
@@ -56,15 +57,13 @@ public class AutoDrawMotifs : DailyModuleBase
     }
 
     // 完成副本
-    private void OnDutyCompleted(object? sender, ushort e)
-    {
-        TaskHelper.Abort();
-    }
+    private void OnDutyCompleted(object? sender, ushort e) => TaskHelper.Abort();
 
     // 进入副本
     private void OnZoneChanged(ushort zone)
     {
         TaskHelper.Abort();
+        
         if (!PresetSheet.Contents.ContainsKey(zone)) return;
         TaskHelper.Enqueue(CheckCurrentJob);
     }
@@ -84,9 +83,18 @@ public class AutoDrawMotifs : DailyModuleBase
 
     private unsafe bool? DrawNeededMotif()
     {
-        var gauge         = DService.JobGauges.Get<PCTGauge>();
-        if (DService.ClientState.LocalPlayer is not { } localPlayer) return false;
-        var statusManager = localPlayer.ToBCStruct()->StatusManager;
+        var gauge = DService.JobGauges.Get<PCTGauge>();
+
+        var localPlayer = Control.GetLocalPlayer();
+        if (localPlayer == null || BetweenAreas || DService.Condition[ConditionFlag.Casting]) return false;
+
+        if (DService.Condition.Any(ConditionFlag.InCombat, ConditionFlag.Mounted, ConditionFlag.Mounting, ConditionFlag.InFlight))
+        {
+            TaskHelper.Abort();
+            return true;
+        }
+        
+        var statusManager = localPlayer->StatusManager;
 
         var motifAction = 0U;
         if (!gauge.CreatureMotifDrawn && IsActionUnlocked(34689))
@@ -121,9 +129,9 @@ public class AutoDrawMotifs : DailyModuleBase
     public override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.DutyState.DutyRecommenced -= OnDutyRecommenced;
-        DService.Condition.ConditionChange -= OnConditionChanged;
-        DService.DutyState.DutyCompleted -= OnDutyCompleted;
+        DService.DutyState.DutyRecommenced    -= OnDutyRecommenced;
+        DService.Condition.ConditionChange    -= OnConditionChanged;
+        DService.DutyState.DutyCompleted      -= OnDutyCompleted;
 
         base.Uninit();
     }
