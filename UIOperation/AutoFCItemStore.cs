@@ -1,4 +1,3 @@
-using System.Numerics;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -18,7 +17,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title       = "部队储物柜快速存储",
-        Description = "右键菜单选择存储到部队储物柜，或按住配置的热键+鼠标右键快速存储",
+        Description = "右键菜单选择存储到部队储物柜，或按住Alt+鼠标右键快速存储",
         Category    = ModuleCategories.UIOperation,
     };
 
@@ -37,7 +36,6 @@ public unsafe class AutoFCItemStore : DailyModuleBase
 
     private static readonly SeString DepositString = new(new TextPayload("存储到部队储物柜"));
 
-    private static Config           ModuleConfig = null!;
     private static bool             IsFCChestOpen;
     private        MoveItemDelegate MoveItem     = null!;
 
@@ -45,7 +43,6 @@ public unsafe class AutoFCItemStore : DailyModuleBase
 
     public override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
         
         MoveItem ??= MoveItemSig.GetDelegate<MoveItemDelegate>();
@@ -59,30 +56,11 @@ public unsafe class AutoFCItemStore : DailyModuleBase
 
     public override void ConfigUI()
     {
-        ImGui.TextWrapped("快速存储热键配置：");
-        ImGui.Spacing();
-
-        if (ImGui.Checkbox("Ctrl", ref ModuleConfig.UseCtrl))
-            SaveConfig(ModuleConfig);
-        
-        ImGui.SameLine();
-        if (ImGui.Checkbox("Shift", ref ModuleConfig.UseShift))
-            SaveConfig(ModuleConfig);
-        
-        ImGui.SameLine();
-        if (ImGui.Checkbox("Alt", ref ModuleConfig.UseAlt))
-            SaveConfig(ModuleConfig);
-
-        ImGui.Spacing();
-        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "热键+右键背包物品快速存储");
-        
-        if (!ModuleConfig.UseCtrl && !ModuleConfig.UseShift && !ModuleConfig.UseAlt)
-            ImGui.TextColored(new Vector4(1, 0.5f, 0, 1), "未选择热键，仅右键菜单可用");
+        ImGui.TextWrapped("按住Alt+右键背包物品快速存储到部队储物柜");
     }
 
     public override void Uninit()
     {
-        SaveConfig(ModuleConfig);
         TaskHelper?.Abort();
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
         DService.AddonLifecycle.UnregisterListener(OnFCChestAddon);
@@ -92,7 +70,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
 
     private void CheckInitialState()
     {
-        IsFCChestOpen = DService.Gui.GetAddonByName("FreeCompanyChest") != nint.Zero;
+        IsFCChestOpen = GetAddonByName("FreeCompanyChest") != null;
     }
     
     private void OnFCChestAddon(AddonEvent type, AddonArgs? args)
@@ -109,10 +87,10 @@ public unsafe class AutoFCItemStore : DailyModuleBase
 
         var invItem = ((MenuTargetInventory)args.Target).TargetItem!.Value;
         
-        // 检查是否按下了配置的热键组合
-        if (IsHotkeyPressed())
+        // 检查是否按下了Alt键
+        if (IsAltPressed())
         {
-            var addon = (AtkUnitBase*)DService.Gui.GetAddonByName("FreeCompanyChest");
+            var addon = GetAddonByName("FreeCompanyChest");
             if (addon != null)
             {
                 TaskHelper.Enqueue(() =>
@@ -130,33 +108,19 @@ public unsafe class AutoFCItemStore : DailyModuleBase
             args.AddMenuItem(menuItem);
     }
 
-    private bool IsHotkeyPressed()
+    private bool IsAltPressed()
     {
         var io = ImGui.GetIO();
-        
-        if (!ModuleConfig.UseCtrl && !ModuleConfig.UseShift && !ModuleConfig.UseAlt)
-            return false;
-
-
-        var ctrlMatch  = !ModuleConfig.UseCtrl  || io.KeyCtrl;
-        var shiftMatch = !ModuleConfig.UseShift || io.KeyShift;
-        var altMatch   = !ModuleConfig.UseAlt   || io.KeyAlt;
-
-
-        var anyPressed = (ModuleConfig.UseCtrl && io.KeyCtrl) || 
-                         (ModuleConfig.UseShift && io.KeyShift) || 
-                         (ModuleConfig.UseAlt && io.KeyAlt);
-
-        return ctrlMatch && shiftMatch && altMatch && anyPressed;
+        return io.KeyAlt;
     }
 
     private MenuItem? CheckInventoryItem(uint itemId, bool itemHq, int itemAmount)
     {
-        var addon = (AtkUnitBase*)DService.Gui.GetAddonByName("FreeCompanyChest");
+        var addon = GetAddonByName("FreeCompanyChest");
         if (addon == null || !addon->IsVisible) return null;
         if (addon->UldManager.NodeList[4]->IsVisible() || addon->UldManager.NodeList[7]->IsVisible()) return null;
 
-        if (DService.Data.GetExcelSheet<Item>()!.GetRow(itemId) is { } sheetItem)
+        if (LuminaGetter.TryGetRow<Item>(itemId, out var sheetItem))
         {
             if (sheetItem.IsUntradable) return null;
             
@@ -186,10 +150,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
         // 获取物品的源位置
         var (sourceInventory, sourceSlot, _, _, _) = GetSelectedItem();
         if (sourceInventory == InventoryType.Invalid)
-        {
-            DService.Chat.PrintError("[部队储物柜快速存储] 无法获取物品位置");
             return;
-        }
 
         DepositItem(itemId, addon, itemHq, itemAmount, sourceInventory, sourceSlot);
     }
@@ -229,21 +190,10 @@ public unsafe class AutoFCItemStore : DailyModuleBase
         
         var destSlot = FindFCChestSlot((InventoryType)fcPage, itemId, itemAmount, itemHq);
         if (destSlot == -1)
-        {
-            DService.Chat.PrintError("[部队储物柜快速存储] 找不到合适的存储位置");
             return;
-        }
 
-        try
-        {
-            var agent = UIModule.Instance()->GetAgentModule()->GetAgentByInternalId(AgentId.FreeCompanyChest);
-            MoveItem(agent, sourceInventory, sourceSlot, (InventoryType)fcPage, (uint)destSlot);
-            DService.Chat.Print("[部队储物柜快速存储] 物品存储成功");
-        }
-        catch (System.Exception ex)
-        {
-            DService.Log.Error($"[部队储物柜快速存储] 存储失败: {ex.Message}");
-        }
+        var agent = UIModule.Instance()->GetAgentModule()->GetAgentByInternalId(AgentId.FreeCompanyChest);
+        MoveItem(agent, sourceInventory, sourceSlot, (InventoryType)fcPage, (uint)destSlot);
     }
 
     private uint GetCurrentFCPage(AtkUnitBase* addon)
@@ -278,7 +228,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
         var container = inventoryManager->GetInventoryContainer(fcPage);
         if (container == null || !container->IsLoaded) return -1;
 
-        if (DService.Data.GetExcelSheet<Item>()!.GetRow(itemId) is { } sheetItem)
+        if (LuminaGetter.TryGetRow<Item>(itemId, out var sheetItem))
         {
             // 寻找相同物品的槽位进行堆叠
             for (var i = 0; i < container->Size; i++)
@@ -302,12 +252,5 @@ public unsafe class AutoFCItemStore : DailyModuleBase
         }
 
         return -1;
-    }
-
-    private class Config : ModuleConfiguration
-    {
-        public bool UseCtrl  = true;   // 默认使用Ctrl键
-        public bool UseShift = false;
-        public bool UseAlt   = false;
     }
 } 
