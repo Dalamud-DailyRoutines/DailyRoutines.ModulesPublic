@@ -17,7 +17,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title = "部队储物柜快速存储",
-        Description = "右键菜单选择存储到部队储物柜，或按住Alt+鼠标右键快速存储",
+        Description = "右键菜单选择存储到部队储物柜，或热键+鼠标右键快速存储",
         Category = ModuleCategories.UIOperation,
     };
 
