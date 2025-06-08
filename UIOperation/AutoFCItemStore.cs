@@ -37,6 +37,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
     private static readonly SeString DepositString = new(new TextPayload("存储到部队储物柜"));
 
     private static bool             IsFCChestOpen;
+    private static int              CurrentItemQuantity;
     private        MoveItemDelegate MoveItem     = null!;
 
     public delegate nint MoveItemDelegate(void* agent, InventoryType srcInv, uint srcSlot, InventoryType dstInv, uint dstSlot);
@@ -49,6 +50,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
         
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "FreeCompanyChest", OnFCChestAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "FreeCompanyChest", OnFCChestAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "InputNumeric", OnInputNumericAddon);
         DService.ContextMenu.OnMenuOpened += OnContextMenuOpened;
         
         CheckInitialState();
@@ -56,7 +58,10 @@ public unsafe class AutoFCItemStore : DailyModuleBase
 
     public override void ConfigUI()
     {
-        ImGui.TextWrapped("按住Alt+右键背包物品快速存储到部队储物柜");
+        ConflictKeyText();
+        
+        ImGui.Spacing();
+        ImGui.TextWrapped("按住冲突键+右键背包物品快速存储到部队储物柜");
     }
 
     public override void Uninit()
@@ -64,6 +69,7 @@ public unsafe class AutoFCItemStore : DailyModuleBase
         TaskHelper?.Abort();
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
         DService.AddonLifecycle.UnregisterListener(OnFCChestAddon);
+        DService.AddonLifecycle.UnregisterListener(OnInputNumericAddon);
         
         base.Uninit();
     }
@@ -80,6 +86,20 @@ public unsafe class AutoFCItemStore : DailyModuleBase
             TaskHelper.Abort();
     }
 
+    private void OnInputNumericAddon(AddonEvent type, AddonArgs? args)
+    {
+        if (type != AddonEvent.PostSetup) return;
+        
+        TaskHelper.Enqueue(() =>
+        {
+            var addon = GetAddonByName("InputNumeric");
+            if (addon == null || !IsAddonAndNodesReady(addon)) return false;
+
+            Callback(addon, true, CurrentItemQuantity);
+            return true;
+        }, "自动确认InputNumeric");
+    }
+
     private void OnContextMenuOpened(IMenuOpenedArgs args)
     {
         if (args.AddonName == "ArmouryBoard" || args.MenuType != ContextMenuType.Inventory || !IsFCChestOpen) 
@@ -87,12 +107,14 @@ public unsafe class AutoFCItemStore : DailyModuleBase
 
         var invItem = ((MenuTargetInventory)args.Target).TargetItem!.Value;
         
-        // 检查是否按下了Alt键
-        if (IsAltPressed())
+        if (IsConflictKeyPressed())
         {
             var addon = GetAddonByName("FreeCompanyChest");
             if (addon != null)
             {
+                // 保存当前物品数量
+                CurrentItemQuantity = invItem.Quantity;
+                
                 TaskHelper.Enqueue(() =>
                 {
                     DepositItemDirect(invItem.ItemId, addon, invItem.IsHq, invItem.Quantity);
@@ -106,12 +128,6 @@ public unsafe class AutoFCItemStore : DailyModuleBase
         var menuItem = CheckInventoryItem(invItem.ItemId, invItem.IsHq, invItem.Quantity);
         if (menuItem != null)
             args.AddMenuItem(menuItem);
-    }
-
-    private bool IsAltPressed()
-    {
-        var io = ImGui.GetIO();
-        return io.KeyAlt;
     }
 
     private MenuItem? CheckInventoryItem(uint itemId, bool itemHq, int itemAmount)
@@ -130,6 +146,9 @@ public unsafe class AutoFCItemStore : DailyModuleBase
             };
             menu.OnClicked += _ => 
             {
+                // 保存当前物品数量
+                CurrentItemQuantity = itemAmount;
+                
                 TaskHelper.Enqueue(() =>
                 {
                     var (sourceInventory, sourceSlot, _, _, _) = GetSelectedItem();
