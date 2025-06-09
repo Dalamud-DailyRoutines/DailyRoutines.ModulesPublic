@@ -122,9 +122,6 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         TaskHelper.Enqueue(() => ClickSelectYesnoYes());
     }
 
-    private static bool IsInAnyParty() => 
-        InfoProxyCrossRealm.IsCrossRealmParty() || DService.PartyList.Length >= 2;
-
     public override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
