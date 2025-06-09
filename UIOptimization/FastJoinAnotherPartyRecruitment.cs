@@ -88,8 +88,13 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             {
                 if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task", 100)) return false;
                 if (!IsInAnyParty()) return true;
+
+                ClickSelectYesnoYes();
                 
                 ChatHelper.SendMessage("/leave");
+                ChatHelper.SendMessage("/pcmd breakup");
+                SendEvent(AgentId.PartyMember, 0, 2, 3);
+                
                 return !IsInAnyParty();
             });
         }
