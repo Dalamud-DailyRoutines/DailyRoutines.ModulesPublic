@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
@@ -6,6 +5,7 @@ using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -29,15 +29,6 @@ public unsafe class AutoMaterialize : DailyModuleBase
 
     private static readonly CompSig MaterializeController = new("48 8D 0D ?? ?? ?? ?? 8B D0 E8 ?? ?? ?? ?? 83 7E");
 
-    private static readonly InventoryType[] ArmoryInventories =
-    [
-        InventoryType.EquippedItems, InventoryType.ArmoryOffHand, InventoryType.ArmoryHead, InventoryType.ArmoryBody,
-        InventoryType.ArmoryHands, InventoryType.ArmoryWaist, InventoryType.ArmoryLegs, InventoryType.ArmoryFeets,
-        InventoryType.ArmoryEar, InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings,
-        InventoryType.ArmoryMainHand, InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3,
-        InventoryType.Inventory4
-    ];
-
     private const string Command = "materialize";
 
     private static bool AutoExtractAll;
@@ -50,9 +41,9 @@ public unsafe class AutoMaterialize : DailyModuleBase
         AddConfig(nameof(AutoExtractAll), true);
         AutoExtractAll = GetConfig<bool>(nameof(AutoExtractAll));
 
-        TaskHelper ??= new TaskHelper { TimeLimitMS = 5_000 };
-        Overlay ??= new Overlay(this);
-        Overlay.Flags |= ImGuiWindowFlags.NoMove;
+        TaskHelper    ??= new TaskHelper();
+        Overlay       ??= new Overlay(this);
+        Overlay.Flags |=  ImGuiWindowFlags.NoMove;
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Materialize",       OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Materialize",       OnAddon);
@@ -105,18 +96,20 @@ public unsafe class AutoMaterialize : DailyModuleBase
         }
     }
 
-    private void StartARoundAll() 
-        => TaskHelper.Enqueue(() => StartARound(ArmoryInventories), "开始精炼全部装备");
+    private void StartARoundAll()
+    {
+        if (TaskHelper.IsBusy) return;
+        TaskHelper.Enqueue(StartARound, "开始精炼全部装备");
+    }
 
-    private bool? StartARound(IReadOnlyList<InventoryType> types)
+    private bool? StartARound()
     {
         if (InterruptByConflictKey(TaskHelper, this)) return true;
         if (!Throttler.Throttle("AutoMaterialize")) return false;
-
         if (!IsEnvironmentValid()) return false;
 
         var manager = InventoryManager.Instance();
-        foreach (var type in types)
+        foreach (var type in PlayerArmoryInventories)
         {
             var container = manager->GetInventoryContainer(type);
             if (container == null || !container->IsLoaded) continue;
@@ -125,18 +118,17 @@ public unsafe class AutoMaterialize : DailyModuleBase
             {
                 var slot = container->GetInventorySlot(i);
                 if (slot == null || slot->ItemId == 0) continue;
-                if (slot->Spiritbond != 10_000) continue;
-
-                if (!LuminaGetter.TryGetRow<Item>(slot->ItemId, out var itemData)) continue;
+                if (slot->Spiritbond < 10_000) continue;
+                if (!LuminaGetter.TryGetRow<Item>(slot->ItemId, out var itemData) ||
+                    itemData.EquipSlotCategory.Value.RowId == 0)
+                    continue;
 
                 var itemName = itemData.Name.ExtractText();
-                TaskHelper.Enqueue(() => ExtractMateria(type, (uint)i) == 0,
-                                   $"开始精炼单件装备 {itemName}({slot->ItemId})");
-                TaskHelper.Enqueue(() => Chat(GetLoc("AutoMaterialize-Notice-ExtractNow", itemData.Name.ExtractText())), 
+                TaskHelper.Enqueue(() => ExtractMateria(type, (uint)i) == 0, $"开始精炼单件装备 {itemName}({slot->ItemId})");
+                TaskHelper.Enqueue(() => Chat(GetSLoc("AutoMaterialize-Notice-ExtractNow", SeString.CreateItemLink(itemData, slot->IsHighQuality()))), 
                                    $"通知精制进度 {itemName}({slot->ItemId})");
-                TaskHelper.DelayNext(1_000, 
-                                     $"等待精制完成 {itemName}({slot->ItemId})");
-                TaskHelper.Enqueue(() => StartARound(types), $"开始下一轮精制 本轮: {itemName}({slot->ItemId})");
+                TaskHelper.DelayNext(1_000, $"等待精制完成 {itemName}({slot->ItemId})");
+                TaskHelper.Enqueue(StartARound, $"开始下一轮精制 本轮: {itemName}({slot->ItemId})");
                 return true;
             }
         }
@@ -148,7 +140,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
 
     private bool IsEnvironmentValid()
     {
-        if (IsInventoryFull([InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4]))
+        if (IsInventoryFull(PlayerInventories))
         {
             TaskHelper.Abort();
             return false;
