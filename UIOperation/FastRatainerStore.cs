@@ -1,4 +1,6 @@
 using DailyRoutines.Abstracts;
+using DailyRoutines.Infos;
+using DailyRoutines.Managers;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -81,22 +83,9 @@ public unsafe class FastRatainerStore : DailyModuleBase
         if (!hasPlayer || !hasRetainer) return;
 
         if (args.AddonName != null && IsAddonOfType(args.AddonName, InventoryOwner.Player))
-            args.AddMenuItem(CreateMenuItem(itemId, isHQ, isCollectable, InventoryOwner.Player, "[DR] 全部存入雇员"));
+            args.AddMenuItem(new StoreToRetainerMenu(itemId, isHQ, isCollectable).Get());
         else if (args.AddonName != null && IsAddonOfType(args.AddonName, InventoryOwner.Retainer))
-            args.AddMenuItem(CreateMenuItem(itemId, isHQ, isCollectable, InventoryOwner.Retainer, "[DR] 全部取出到背包"));
-    }
-
-    private MenuItem CreateMenuItem(uint itemId, bool isHQ, bool isCollectable, InventoryOwner sourceOwner, string menuText)
-    {
-        var menu = new MenuItem
-        {
-            Name = new SeString(new TextPayload(menuText))
-        };
-
-        var actionText = sourceOwner == InventoryOwner.Player ? "全部存入雇员" : "全部取出到背包";
-        menu.OnClicked += _ => ExecuteMoveAllTask(itemId, isHQ, isCollectable, sourceOwner, actionText);
-
-        return menu;
+            args.AddMenuItem(new TakeFromRetainerMenu(itemId, isHQ, isCollectable).Get());
     }
 
     private void ExecuteMoveAllTask(uint itemId, bool isHQ, bool isCollectable, InventoryOwner sourceOwner, string taskName)
@@ -299,5 +288,25 @@ public unsafe class FastRatainerStore : DailyModuleBase
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
         
         base.Uninit();
+    }
+
+    private class StoreToRetainerMenu(uint ItemId, bool IsHQ, bool IsCollectable) : MenuItemBase
+    {
+        public override string Name { get; protected set; } = "全部存入雇员";
+
+        protected override bool WithDRPrefix { get; set; } = true;
+
+        protected override void OnClicked(IMenuItemClickedArgs args) => 
+            ModuleManager.GetModule<FastRatainerStore>().ExecuteMoveAllTask(ItemId, IsHQ, IsCollectable, InventoryOwner.Player, "全部存入雇员");
+    }
+
+    private class TakeFromRetainerMenu(uint ItemId, bool IsHQ, bool IsCollectable) : MenuItemBase
+    {
+        public override string Name { get; protected set; } = "全部取出到背包";
+
+        protected override bool WithDRPrefix { get; set; } = true;
+
+        protected override void OnClicked(IMenuItemClickedArgs args) => 
+            ModuleManager.GetModule<FastRatainerStore>().ExecuteMoveAllTask(ItemId, IsHQ, IsCollectable, InventoryOwner.Retainer, "全部取出到背包");
     }
 } 
