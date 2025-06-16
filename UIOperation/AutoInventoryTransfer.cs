@@ -12,8 +12,8 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "物品快速转移",
-        Description = "按住打断热键并右键点击物品时，自动转移物品",
+        Title = GetLoc("AutoInventoryTransfer"),
+        Description = GetLoc("AutoInventoryTransferDescription"),
         Category = ModuleCategories.UIOperation,
         Author = ["Yangdoubao"]
     };
@@ -21,42 +21,43 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
 
     
     // 菜单文本
-    private readonly string[] entrustTexts = ["交给雇员保管", "从雇员处取回", "放入陆行鸟鞍囊", "从陆行鸟鞍囊中取回"];
+    private readonly string[] entrustTexts = [
+        "交给雇员保管", "从雇员处取回", "放入陆行鸟鞍囊", "从陆行鸟鞍囊中取回", 
+        "Entrust to Retainer", "Retrieve from Retainer", "Place in Saddle Bag", "Retrieve from Saddle Bag",
+        "リテイナーに預ける", "リテイナーから取り出す", "チョコボ鞍袋に入れる", "チョコボ鞍袋から取り出す",
+        "집사에게 맡기기", "집사에게서 찾기", "초코보 안장에 넣기", "초코보 안장에서 찾기"
+    ];
 
     public override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 2_000 };
-        
-        // 注册右键菜单打开事件
         DService.ContextMenu.OnMenuOpened += OnContextMenuOpened;
     }
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)
     {
-        // 检查打断热键是否按下
         if (!IsConflictKeyPressed()) return;
-
-        // 检查是否是物品菜单
-        if (!IsValidInventoryMenu(args.AddonName)) return;
-
-        // 处理陆行鸟鞍囊转移 (需要鞍囊窗口和物品栏窗口都打开)
         if (IsInventoryOpen())
         {
             HandleTransfer();
             return;
         }
-    }
 
+        bool IsInventoryOpen()
+            => IsAddonAndNodesReady(Inventory)           ||
+               IsAddonAndNodesReady(InventoryLarge)      ||
+               IsAddonAndNodesReady(InventoryExpansion)  ||
+               IsAddonAndNodesReady(InventoryRetainer)   ||
+               IsAddonAndNodesReady(InventoryRetainerLarge);
+
+    }
 
     private void HandleTransfer()
     {
         TaskHelper.Abort();
         TaskHelper.Enqueue(() => 
         {
-            // 确保上下文菜单已打开
             if (!IsAddonAndNodesReady(InfosOm.ContextMenu)) return false;
-
-            // 尝试查找并点击相关菜单项
             foreach (var text in entrustTexts)
             {
                 if (ClickContextMenu(text))
@@ -66,40 +67,9 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
         }, "点击相关菜单项");
     }
 
-
-
-    private bool IsValidInventoryMenu(string? addonName)
-    {
-        if (addonName == null) return false;
-        
-        // 检查是否是物品相关的菜单
-        return addonName.StartsWith("Inventory") || 
-               addonName == "InventoryGrid" ||
-               addonName == "InventoryLarge" ||
-               addonName == "SaddleBagGrid" ||
-               addonName == "SaddleBag" ||
-               addonName == "RetainerGrid" ||
-               addonName == "RetainerInventoryLarge";
-    }
-
-
-
-    private bool IsInventoryOpen()
-    {
-        // 检查是否有玩家物品栏窗口打开
-        return TryGetAddonByName<AtkUnitBase>("Inventory", out _) ||
-               TryGetAddonByName<AtkUnitBase>("InventoryGrid", out _) ||
-               TryGetAddonByName<AtkUnitBase>("InventoryLarge", out _);
-    }
-
-
-
     public override void Uninit()
     {
-        // 取消注册右键菜单事件
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
-        
-        TaskHelper.Abort();
         base.Uninit();
     }
 }
