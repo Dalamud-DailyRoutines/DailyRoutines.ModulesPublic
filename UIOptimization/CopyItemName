@@ -1,11 +1,11 @@
 using System;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
+using DailyRoutines.Managers;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
-using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
@@ -14,11 +14,11 @@ namespace DailyRoutines.ModuleTemplate;
 
 public class CopyItemNameModule : DailyModuleBase
 {
-    private readonly CopyItemNameMenuItem MenuItem = new ();
+    private static readonly string CopyItemNameString = LuminaGetter.GetRow<Addon>(159)!.Value.Text.ExtractText();
+    private static readonly string GlamoursString     = LuminaGetter.GetRow<CircleActivity>(18)!.Value.Name.ExtractText();
 
-    private readonly string TryOnString         = LuminaGetter.GetRow<Addon>(2426)!.Value.Text.ExtractText();
-    private readonly string SearchForItemString = LuminaGetter.GetRow<Addon>(4379)!.Value.Text.ExtractText();
-    private readonly string CopyItemNameString  = LuminaGetter.GetRow<Addon>(159)!.Value.Text.ExtractText();
+    private readonly CopyItemNameMenuItem MenuItem        = new (CopyItemNameString);
+    private readonly CopyItemNameMenuItem GlamourMenuItem = new ($"{CopyItemNameString} ({GlamoursString})");
 
     public override ModuleInfo Info { get; } = new ()
     {
@@ -51,6 +51,12 @@ public class CopyItemNameModule : DailyModuleBase
                 MenuItem.SetRawItemId(item.ItemId);
 
                 args.AddMenuItem(MenuItem.Get());
+
+                if (item.GlamourId == 0)
+                    return;
+
+                GlamourMenuItem.SetRawItemId(item.GlamourId);
+                args.AddMenuItem(GlamourMenuItem.Get());
             }
 
             return;
@@ -68,8 +74,6 @@ public class CopyItemNameModule : DailyModuleBase
         const int start = 7;
         var       end   = start + contextMenuCounts;
 
-        nint handler = 0;
-
         for (var i = start; i < end; i++)
         {
             var param = contextMenu->EventParams[i];
@@ -77,129 +81,35 @@ public class CopyItemNameModule : DailyModuleBase
 
             if (str.Equals(CopyItemNameString, StringComparison.OrdinalIgnoreCase))
                 return;
-
-            if (handler == nint.Zero &&
-                (str.Equals(TryOnString,         StringComparison.OrdinalIgnoreCase) ||
-                 str.Equals(SearchForItemString, StringComparison.OrdinalIgnoreCase)))
-                handler = (nint)contextMenu->EventHandlers[i].Value;
         }
 
-        var itemId = GetItemIdFromAddonName(args.AddonName, handler);
+        var itemId = ContextMenuItemManager.CurrentItemID;
 
         if (itemId == 0)
             return;
 
         MenuItem.SetRawItemId(itemId);
         args.AddMenuItem(MenuItem.Get());
+
+        var glamourId = ContextMenuItemManager.CurrentGlamourID;
+
+        if (glamourId == 0)
+            return;
+
+        GlamourMenuItem.SetRawItemId(glamourId);
+        args.AddMenuItem(GlamourMenuItem.Get());
     }
 
-    private static unsafe uint GetItemIdFromAddonName(string name, nint eventHandler)
-    {
-        var hovered = DService.Gui.HoveredItem;
-
-        switch (name)
-        {
-            case "ColorantColoring":
-            {
-                var agent = DService.Gui.FindAgentInterface(name);
-
-                return *(uint*)(agent + 0x3C);
-            }
-            case "GrandCompanyExchange":
-            case "ShopExchangeItem":
-            {
-                var agent = DService.Gui.FindAgentInterface(name);
-
-                return *(uint*)(agent + 0x54);
-            }
-            case "ChatLog":
-            {
-                return AgentChatLog.Instance()->ContextItemId;
-            }
-            case "ItemSearch":
-            {
-                return (uint)AgentContext.Instance()->UpdateCheckerParam;
-            }
-            case "CharacterInspect":
-            {
-                var container = InventoryManager.Instance()->GetInventoryContainer(InventoryType.Examine);
-                var agent     = DService.Gui.FindAgentInterface(name);
-
-                var selectedSlot = *(int*)(agent + 0x44C);
-
-                var item = container->GetInventorySlot(selectedSlot);
-
-                return item->GetItemId();
-            }
-            case "MiragePrismPrismBoxCrystallize":
-            {
-                if (hovered != 0)
-                    return (uint)hovered;
-
-                // 48 8B 57 ? 48 85 D2 74 ? 8B 82 ? ? ? ? 3D ? ? ? ? 73 ? 48 69 C8 ? ? ? ? 44 0F B6 84 11
-                var v87 = *(nint*)(eventHandler + 0x28);
-
-                if (v87 == nint.Zero)
-                    return 0;
-
-                var v88 = *(uint*)(v87 + 0x10B458);
-
-                if (v88 < 8000)
-                    return *(uint*)(136 * v88 + v87 + 116);
-
-                return 0;
-            }
-            case "FreeCompanyCreditShop":
-            {
-                var agent = DService.Gui.FindAgentInterface(name);
-
-                return *(uint*)(agent + 0x64);
-            }
-            case "ContentsFinder":
-            {
-                // 48 89 74 24 ? 57 48 83 EC ? 48 83 79 ? ? 48 8B F2 48 8B F9 75 ? C7 02
-                var v11 = *(nint*)(eventHandler + 0x18);
-
-                if (v11 == nint.Zero)
-                    return 0;
-
-                return *(uint*)(v11 + 76);
-            }
-            case "JournalAccept":
-            {
-                // 48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 56 41 57 48 83 EC ? 48 8B BC 24 ? ? ? ? 40 32 F6
-                var v10 = *(nint*)(eventHandler + 0x30) + 24 * *(int*)(eventHandler + 0x4C);
-
-                return *(uint*)(v10 + 12);
-            }
-            case "GuildLeve":
-            {
-                // 48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 41 56 41 57 48 81 EC ? ? ? ? 48 8B BC 24
-                var v10 = *(nint*)(eventHandler + 0x30) + 24 * *(int*)(eventHandler + 0x4C);
-
-                return *(uint*)(v10 + 12);
-            }
-            case "JournalRewardItem":
-            case "Gathering":
-            {
-                // 40 56 57 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4 48 89 84 24 ? ? ? ? 48 8B 84 24
-                return *(uint*)(eventHandler + 0x28);
-            }
-        }
-
-        return (uint)hovered;
-    }
-
-    private class CopyItemNameMenuItem : MenuItemBase
+    private sealed class CopyItemNameMenuItem : MenuItemBase
     {
         private uint ItemId;
 
         private ItemPayload.ItemKind ItemKind;
 
-        public override string Name { get; protected set; } = LuminaGetter.GetRow<Addon>(159)!.Value.Text.ExtractText();
+        public CopyItemNameMenuItem(string name)
+            => Name = name;
 
-        public override bool IsDisplay(IMenuOpenedArgs args)
-            => ItemId != 0;
+        public override string Name { get; protected set; }
 
         protected override unsafe void OnClicked(IMenuItemClickedArgs args)
         {
