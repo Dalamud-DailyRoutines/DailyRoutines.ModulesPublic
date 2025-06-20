@@ -62,7 +62,7 @@ public class CopyItemNameModule : DailyModuleBase
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(args.AddonName))
+        if (string.IsNullOrWhiteSpace(args.AddonName) || args.AddonName == "FreeCompanyExchange")
             return;
 
         var agent = (AgentContext*)args.AgentPtr;
@@ -83,7 +83,9 @@ public class CopyItemNameModule : DailyModuleBase
                 return;
         }
 
-        var itemId = ContextMenuItemManager.CurrentItemID;
+        var prismBoxItem = ContextMenuItemManager.GetPrismBoxItem(args);
+
+        var itemId = prismBoxItem?.RowId ?? ContextMenuItemManager.CurrentItemID;
 
         if (itemId == 0)
             return;
