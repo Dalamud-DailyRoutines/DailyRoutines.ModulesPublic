@@ -9,6 +9,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Lumina.Excel.Sheets;
+using Status = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 

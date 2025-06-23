@@ -110,7 +110,7 @@ public unsafe class AutoHighlightFlagMarker : DailyModuleBase
     private void EnqueuePlaceFieldMarkers()
     {
         TaskHelper.Abort();
-        TaskHelper.Enqueue(() => DService.ClientState.LocalPlayer != null && !DService.Condition[ConditionFlag.BetweenAreas]);
+        TaskHelper.Enqueue(() => DService.ObjectTable.LocalPlayer != null && !DService.Condition[ConditionFlag.BetweenAreas]);
 
         TaskHelper.Enqueue(() =>
         {
@@ -122,7 +122,7 @@ public unsafe class AutoHighlightFlagMarker : DailyModuleBase
         {
             var agent = AgentMap.Instance();
             var flagPos = new Vector2(agent->FlagMapMarker.XFloat, agent->FlagMapMarker.YFloat);
-            var currentY = DService.ClientState.LocalPlayer?.Position.Y ?? 0;
+            var currentY = DService.ObjectTable.LocalPlayer?.Position.Y ?? 0;
             var counter = 0;
 
             foreach (var fieldMarkerPoint in Enum.GetValues<FieldMarkerPoint>())
@@ -138,7 +138,7 @@ public unsafe class AutoHighlightFlagMarker : DailyModuleBase
         var agent = AgentMap.Instance();
         if (agent == null) return false;
 
-        if (agent->IsFlagMarkerSet != 1) return false;
+        if (!agent->IsFlagMarkerSet) return false;
         if (agent->FlagMapMarker.TerritoryId == 0 || agent->FlagMapMarker.MapId == 0) return false;
         if (agent->FlagMapMarker.MapId != DService.ClientState.MapId) return false;
 

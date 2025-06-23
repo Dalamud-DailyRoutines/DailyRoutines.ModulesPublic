@@ -71,7 +71,7 @@ public class AutoDrawMotifs : DailyModuleBase
     private bool? CheckCurrentJob()
     {
         if (BetweenAreas || OccupiedInEvent) return false;
-        if (DService.ClientState.LocalPlayer is not { ClassJob.RowId: 42, Level: >= 30 } || !IsValidPVEDuty())
+        if (DService.ObjectTable.LocalPlayer is not { ClassJob.RowId: 42, Level: >= 30 } || !IsValidPVEDuty())
         {
             TaskHelper.Abort();
             return true;

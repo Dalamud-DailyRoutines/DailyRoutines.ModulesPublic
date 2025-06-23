@@ -206,7 +206,7 @@ public class AutoMovePetPosition : DailyModuleBase
                 if (ImGuiOm.ButtonIcon("当前坐标", FontAwesomeIcon.Crosshairs,
                                        GetLoc("AutoMovePetPosition-GetCurrent")))
                 {
-                    if (DService.ClientState.LocalPlayer is { } localPlayer)
+                    if (DService.ObjectTable.LocalPlayer is { } localPlayer)
                     {
                         schedule.Position = localPlayer.Position.ToVector2();
                         SaveConfig(ModuleConfig);
@@ -349,7 +349,7 @@ public class AutoMovePetPosition : DailyModuleBase
         var zoneID = DService.ClientState.TerritoryType;
         if (!ModuleConfig.PositionSchedules.TryGetValue(zoneID, out var schedulesForThisDuty)) return;
 
-        if (DService.ClientState.LocalPlayer is { } localPlayer)
+        if (DService.ObjectTable.LocalPlayer is { } localPlayer)
         {
             if (!ValidJobs.Contains(localPlayer.ClassJob.RowId)) return;
             
@@ -387,10 +387,10 @@ public class AutoMovePetPosition : DailyModuleBase
     private unsafe void MovePetToLocation(Vector2 position)
     {
         if (!CheckIsEightPlayerDuty()) return;
-        if (DService.ClientState.LocalPlayer is not { } player) return;
+        if (DService.ObjectTable.LocalPlayer is not { } player) return;
         if (!ValidJobs.Contains(player.ClassJob.RowId)) return;
         
-        var pet = CharacterManager.Instance()->LookupPetByOwnerObject(player.ToBCStruct());
+        var pet = CharacterManager.Instance()->LookupPetByOwnerObject(player.ToStruct());
         if (pet == null) return;
 
         var groundY  = pet->Position.Y;

@@ -41,10 +41,6 @@ public class AutoCountPlayers : DailyModuleBase
     private static IDtrBarEntry? Entry;
 
     private static readonly Dictionary<uint, byte[]> JobIcons = [];
-    
-    private static List<IPlayerCharacter> TargetingMePlayers = [];
-    
-    private static HashSet<uint> LastTargetingEntityIDs = [];
 
     private static string SearchInput = string.Empty;
 
@@ -64,6 +60,7 @@ public class AutoCountPlayers : DailyModuleBase
         DService.UiBuilder.Draw += OnDraw;
 
         PlayersManager.ReceivePlayersAround += OnUpdate;
+        PlayersManager.ReceivePlayersTargetingMe += OnPlayersTargetingMeUpdate;
     }
 
     public override void ConfigUI()
@@ -94,7 +91,7 @@ public class AutoCountPlayers : DailyModuleBase
         ImGui.SetNextItemWidth(-1f);
         ImGui.InputText("###Search", ref SearchInput, 128);
 
-        if (BetweenAreas || DService.ClientState.LocalPlayer is not { } localPlayer) return;
+        if (BetweenAreas || DService.ObjectTable.LocalPlayer is not { } localPlayer) return;
 
         var source = PlayersManager.PlayersAround.Where(x => string.IsNullOrWhiteSpace(SearchInput) ||
                                                x.ToString().Contains(SearchInput, StringComparison.OrdinalIgnoreCase))
@@ -138,7 +135,7 @@ public class AutoCountPlayers : DailyModuleBase
     
     private static unsafe void OnDraw()
     {
-        if (!ModuleConfig.DisplayLineWhenTargetingMe || TargetingMePlayers.Count == 0) return;
+        if (!ModuleConfig.DisplayLineWhenTargetingMe || PlayersManager.PlayersTargetingMe.Count == 0) return;
         
         var framework = Framework.Instance();
         if (framework == null || framework->WindowInactive) return;
@@ -162,9 +159,8 @@ public class AutoCountPlayers : DailyModuleBase
                         
                         ImGui.SameLine();
                         ImGui.SetCursorPosY(ImGui.GetCursorPosY() - (1.2f * GlobalFontScale));
-                        ImGuiOm.TextOutlined(Orange, $"{TargetingMePlayers.Count}", Brown4);
+                        ImGuiOm.TextOutlined(Orange, $"{PlayersManager.PlayersTargetingMe.Count}", Brown4);
 
-                        // 副本内有点遮视线
                         if (GameState.ContentFinderCondition == 0)
                         {
                             using (FontManager.UIFont80.Push())
@@ -185,10 +181,10 @@ public class AutoCountPlayers : DailyModuleBase
         var currentWindowSize = ImGui.GetMainViewport().Size;
         if (!DService.Gui.WorldToScreen(localPlayer->Position, out var localScreenPos))
             localScreenPos = currentWindowSize with { X = currentWindowSize.X / 2 };
-        foreach (var player in TargetingMePlayers)
+        foreach (var playerInfo in PlayersManager.PlayersTargetingMe)
         {
-            if (DService.Gui.WorldToScreen(player.Position, out var screenPos))
-                DrawLine(localScreenPos, screenPos, player, LineColorRed);
+            if (DService.Gui.WorldToScreen(playerInfo.Player.Position, out var screenPos))
+                DrawLine(localScreenPos, screenPos, playerInfo.Player, LineColorRed);
         }
     }
 
@@ -196,18 +192,39 @@ public class AutoCountPlayers : DailyModuleBase
     {
         if (Entry == null) return;
 
-        TargetingMePlayers = characters.Where(x => x.TargetObjectId == GameState.EntityID)
-                                       .OrderBy(x => x.EntityId)
-                                       .ToList();
+        Entry.Text = $"{GetLoc("AutoCountPlayers-PlayersAroundCount")}: {PlayersManager.PlayersAroundCount}" +
+                     (PlayersManager.PlayersTargetingMe.Count == 0 ? string.Empty : $" ({PlayersManager.PlayersTargetingMe.Count})");
+
+        if (characters.Count == 0)
+        {
+            Entry.Tooltip = string.Empty;
+            return;
+        }
         
-        var currentTargetingEntityIds = TargetingMePlayers.Select(x => x.EntityId).ToHashSet();
-        if (TargetingMePlayers.Count > 0 &&
+        var tooltip = new StringBuilder();
+
+        if (PlayersManager.PlayersTargetingMe.Count > 0)
+        {
+            tooltip.AppendLine($"{GetLoc("AutoCountPlayers-PlayersTargetingMe")}:");
+            PlayersManager.PlayersTargetingMe.ForEach(info => 
+                tooltip.AppendLine($"{info.Player.Name} ({info.Player.ClassJob.Value.Name.ExtractText()})"));
+            tooltip.AppendLine(string.Empty);
+        }
+        
+        tooltip.AppendLine($"{GetLoc("AutoCountPlayers-PlayersAroundInfo")}:");
+        characters.ForEach(x => tooltip.AppendLine($"{x.Name} ({x.ClassJob.Value.Name.ExtractText()})"));
+        
+        Entry.Tooltip = tooltip.ToString().Trim();
+    }
+
+    private static void OnPlayersTargetingMeUpdate(IReadOnlyList<PlayerTargetingInfo> targetingPlayersInfo)
+    {
+        if (targetingPlayersInfo.Count > 0 &&
             (GameState.ContentFinderCondition == 0 || DService.PartyList.Length < 2))
         {
-            if (TargetingMePlayers.Any(x => Throttler.Throttle($"AutoCountPlayers-Player-{x.EntityId}", 30_000)) &&
-                (currentTargetingEntityIds.Count != LastTargetingEntityIDs.Count || !currentTargetingEntityIds.SetEquals(LastTargetingEntityIDs)))
+            var newTargetingPlayers = targetingPlayersInfo.Where(info => info.IsNew).ToList();
+            if (newTargetingPlayers.Any(info => Throttler.Throttle($"AutoCountPlayers-Player-{info.Player.EntityId}", 30_000)))
             {
-
                 if (ModuleConfig.SendTTS)
                     Speak(GetLoc("AutoCountPlayers-Notification-SomeoneTargetingMe"));
 
@@ -220,12 +237,12 @@ public class AutoCountPlayers : DailyModuleBase
 
                     builder.Append($"{GetLoc("AutoCountPlayers-Notification-SomeoneTargetingMe")}:");
                     builder.Add(new NewLinePayload());
-                    foreach (var player in TargetingMePlayers)
+                    foreach (var info in targetingPlayersInfo)
                     {
-                        builder.Add(new PlayerPayload(player.Name.ExtractText(), player.HomeWorld.RowId))
+                        builder.Add(new PlayerPayload(info.Player.Name.ExtractText(), info.Player.HomeWorld.RowId))
                                .Append(" (")
-                               .AddIcon(player.ClassJob.Value.ToBitmapFontIcon())
-                               .Append($" {player.ClassJob.Value.Name})");
+                               .AddIcon(info.Player.ClassJob.Value.ToBitmapFontIcon())
+                               .Append($" {info.Player.ClassJob.Value.Name})");
                         builder.Add(new NewLinePayload());
                     }
 
@@ -237,31 +254,6 @@ public class AutoCountPlayers : DailyModuleBase
                 }
             }
         }
-
-        LastTargetingEntityIDs = currentTargetingEntityIds;
-        
-        Entry.Text = $"{GetLoc("AutoCountPlayers-PlayersAroundCount")}: {PlayersManager.PlayersAroundCount}" +
-                     (TargetingMePlayers.Count == 0 ? string.Empty : $" ({TargetingMePlayers.Count})");
-
-        if (characters.Count == 0)
-        {
-            Entry.Tooltip = string.Empty;
-            return;
-        }
-        
-        var tooltip = new StringBuilder();
-
-        if (TargetingMePlayers.Count > 0)
-        {
-            tooltip.AppendLine($"{GetLoc("AutoCountPlayers-PlayersTargetingMe")}:");
-            TargetingMePlayers.ForEach(x => tooltip.AppendLine($"{x.Name} ({x.ClassJob.Value.Name.ExtractText()})"));
-            tooltip.AppendLine(string.Empty);
-        }
-        
-        tooltip.AppendLine($"{GetLoc("AutoCountPlayers-PlayersAroundInfo")}:");
-        characters.ForEach(x => tooltip.AppendLine($"{x.Name} ({x.ClassJob.Value.Name.ExtractText()})"));
-        
-        Entry.Tooltip = tooltip.ToString().Trim();
     }
 
     private static void DrawLine(Vector2 startPos, Vector2 endPos, ICharacter chara, uint lineColor = 0)
@@ -298,9 +290,7 @@ public class AutoCountPlayers : DailyModuleBase
     {
         DService.UiBuilder.Draw -= OnDraw;
         PlayersManager.ReceivePlayersAround -= OnUpdate;
-        
-        TargetingMePlayers.Clear();
-        LastTargetingEntityIDs.Clear();
+        PlayersManager.ReceivePlayersTargetingMe -= OnPlayersTargetingMeUpdate;
         
         Entry?.Remove();
         Entry = null;

@@ -56,7 +56,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             return;
         }
 
-        var buttonNode = addon->GetButtonNodeById(109);
+        var buttonNode = addon->GetComponentButtonById(109);
         if (buttonNode == null) return;
 
         if (!IsInAnyParty()                                            ||
@@ -112,7 +112,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         {
             if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task", 100)) return false;
             
-            var buttonNode = LookingForGroupDetail->GetButtonNodeById(109);
+            var buttonNode = LookingForGroupDetail->GetComponentButtonById(109);
             if (buttonNode == null) return false;
 
             buttonNode->ClickAddonButton(LookingForGroupDetail);

@@ -20,7 +20,7 @@ public unsafe class AutoWoof : DailyModuleBase
 
     private static void OnUpdate(IFramework framework)
     {
-        if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
+        if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return;
         if (!DService.Condition[ConditionFlag.Mounted] || localPlayer.CurrentMount?.RowId != 294) return;
         if (ActionManager.Instance()->GetActionStatus(ActionType.Action, 29463) != 0) return;
 

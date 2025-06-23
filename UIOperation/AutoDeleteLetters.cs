@@ -124,7 +124,7 @@ public unsafe class AutoDeleteLetters : DailyModuleBase
 
         for (var i = 6U; i < 9U; i++)
         {
-            var buttonNode = addon->GetButtonNodeById(i);
+            var buttonNode = addon->GetComponentButtonById(i);
             if (buttonNode == null) continue;
 
             if ((buttonNode->Flags & 0x40000) != 0) return (int)(i - 6);

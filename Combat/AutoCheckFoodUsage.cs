@@ -424,13 +424,13 @@ public class AutoCheckFoodUsage : DailyModuleBase
         itemFoodRowID = 0;
         remainingTime = TimeSpan.Zero;
 
-        if (DService.ClientState.LocalPlayer is not { } localPlayer) return false;
+        if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return false;
 
-        var statusManager = localPlayer.ToBCStruct()->GetStatusManager();
-        var statusIndex   = statusManager->GetStatusIndex(48);
+        var statusManager = localPlayer.ToStruct()->StatusManager;
+        var statusIndex   = statusManager.GetStatusIndex(48);
         if (statusIndex == -1) return false;
 
-        var status = statusManager->Status[statusIndex];
+        var status = statusManager.Status[statusIndex];
         itemFoodRowID = (uint)status.Param % 10_000;
         remainingTime = TimeSpan.FromSeconds(status.RemainingTime);
         return true;
@@ -479,7 +479,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
         !BetweenAreas                            &&
         !OccupiedInEvent                         &&
         !IsCasting                               &&
-        DService.ClientState.LocalPlayer != null &&
+        DService.ObjectTable.LocalPlayer != null &&
         IsScreenReady()                          &&
         ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) == 0;
     
@@ -499,7 +499,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
                            .Where(x => x.Enabled                                            && 
                                        (x.Zones.Count == 0 || x.Zones.Contains(zone)) &&
                                        (x.ClassJobs.Count == 0 || 
-                                        x.ClassJobs.Contains(DService.ClientState.LocalPlayer.ClassJob.RowId)) &&
+                                        x.ClassJobs.Contains(DService.ObjectTable.LocalPlayer.ClassJob.RowId)) &&
                                        instance->GetInventoryItemCount(x.ItemID, x.IsHQ) > 0)
                            .OrderByDescending(x => x.Zones.Contains(zone))
                            .ToList();

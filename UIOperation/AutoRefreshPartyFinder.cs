@@ -56,7 +56,7 @@ public class AutoRefreshPartyFinder : DailyModuleBase
             return;
         }
 
-        var refreshButton = LookingForGroup->GetButtonNodeById(47)->OwnerNode;
+        var refreshButton = LookingForGroup->GetComponentButtonById(47)->OwnerNode;
         if (refreshButton == null) return;
 
         ImGui.SetWindowPos(WindowPos);

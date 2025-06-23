@@ -31,7 +31,7 @@ public class AutoConstantlyInspect : DailyModuleBase
         var addon = (AtkUnitBase*)args.Addon;
         if (addon == null) return;
 
-        var nextButton = addon->GetButtonNodeById(74);
+        var nextButton = addon->GetComponentButtonById(74);
         if (nextButton == null || !nextButton->IsEnabled) return;
         
         SendEvent(AgentId.ItemInspection, 3, 0);

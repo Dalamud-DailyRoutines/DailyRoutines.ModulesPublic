@@ -132,7 +132,7 @@ public class AutoPeloton : DailyModuleBase
     private unsafe bool? MainProcess()
     {
         if (BetweenAreas || !IsScreenReady() || OccupiedInEvent) return Cycle(1_000);
-        if (DService.ClientState.LocalPlayer is not { } localPlayer) return Cycle(1_000);
+        if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return Cycle(1_000);
         if (!s_ClassJobArr.Contains(localPlayer.ClassJob.RowId)) return true;
         if (!IsActionUnlocked(s_PelotoningActionId)) return true;
 
@@ -144,16 +144,16 @@ public class AutoPeloton : DailyModuleBase
 
     private unsafe bool? UsePeloton()
     {
-        if (DService.ClientState.LocalPlayer is not { } localPlayer) return false;
+        if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return false;
         var actionManager = ActionManager.Instance();
-        var statusManager = localPlayer.ToBCStruct()->StatusManager;
+        var statusManager = localPlayer.ToStruct()->StatusManager;
 
         // PeletonNotReady
         if (actionManager->GetActionStatus(ActionType.Action, s_PelotoningActionId) != 0) return true;
         // AlreadyHasPeletonBuff
         if (statusManager.HasStatus(1199) || statusManager.HasStatus(50)) return true;
         // NotMoving
-        if (AgentMap.Instance()->IsPlayerMoving != 1) return true;
+        if (!AgentMap.Instance()->IsPlayerMoving) return true;
 
         TaskHelper.Enqueue(() => UseActionManager.UseAction(ActionType.Action, s_PelotoningActionId),
                            $"UseAction_{s_PelotoningActionId}", 5_000, true, 1);

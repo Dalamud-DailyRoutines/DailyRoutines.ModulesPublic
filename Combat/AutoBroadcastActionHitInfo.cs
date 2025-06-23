@@ -189,7 +189,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
             var targets = effectHeader->NumTargets;
             if (targets < 1) return;
 
-            if (DService.ClientState.LocalPlayer is not { } localPlayer) return;
+            if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return;
             if (localPlayer.EntityId != sourceEntityID) return;
 
             var actionID   = effectHeader->ActionId;

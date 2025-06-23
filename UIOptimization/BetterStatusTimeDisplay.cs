@@ -70,7 +70,7 @@ public class BetterStatusTimeDisplay : DailyModuleBase
 
     private static unsafe void OnUpdate(IFramework _)
     {
-        if (DService.ClientState.LocalPlayer is not { } localPlayer ||
+        if (DService.ObjectTable.LocalPlayer is not { } localPlayer ||
             DService.Condition[ConditionFlag.InCombat]) return;
 
         var atkStage = AtkStage.Instance();

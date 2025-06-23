@@ -82,7 +82,7 @@ public class AutoTankStance : DailyModuleBase
         if (BetweenAreas) return false;
         if (!IsScreenReady()) return false;
 
-        var player = DService.ClientState.LocalPlayer;
+        var player = DService.ObjectTable.LocalPlayer;
         if (player == null || player.ClassJob.RowId == 0 || !player.IsTargetable) return false;
 
         var job = player.ClassJob.RowId;

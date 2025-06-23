@@ -148,7 +148,7 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
                 return false;
             });
 
-            TaskHelper.Enqueue(() => new EventStartPackt(DService.ClientState.LocalPlayer.GameObjectId, info.EventID).Send());
+            TaskHelper.Enqueue(() => new EventStartPackt(DService.ObjectTable.LocalPlayer.GameObjectId, info.EventID).Send());
             TaskHelper.Enqueue(() => IsAddonAndNodesReady(GrandCompanyExchange));
 
             if (isAutoExchange && ModuleManager.IsModuleEnabled(typeof(FastGrandCompanyExchange)))

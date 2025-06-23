@@ -43,7 +43,7 @@ public unsafe class ThePraetoriumHelper : DailyModuleBase
             return;
         }
         
-        if (!DService.Condition[ConditionFlag.Mounted] || DService.ClientState.LocalPlayer == null ||
+        if (!DService.Condition[ConditionFlag.Mounted] || DService.ObjectTable.LocalPlayer == null ||
             ActionManager.Instance()->GetActionStatus(ActionType.Action, 1128)             != 0)
             return;
 
@@ -62,7 +62,7 @@ public unsafe class ThePraetoriumHelper : DailyModuleBase
         var preObjectsAoECount = 0;
         foreach (var b in allTargets)
         {
-            if (Vector3.DistanceSquared(DService.ClientState.LocalPlayer.Position, b.Position) - b.HitboxRadius > 900) continue;
+            if (Vector3.DistanceSquared(DService.ObjectTable.LocalPlayer.Position, b.Position) - b.HitboxRadius > 900) continue;
             
             var aoeCount = GetTargetAoECount(b, allTargets);
             if (aoeCount > preObjectsAoECount)
