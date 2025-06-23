@@ -1,10 +1,12 @@
-using DailyRoutines.Abstracts;
+﻿using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using System.Collections.Generic;
+using static FFXIVClientStructs.STD.Helper.IStaticEncoding;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -18,15 +20,29 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
         Author = ["Yangdoubao"]
     };
 
+    private readonly string[] entrustTexts;
+    public AutoInventoryTransfer()
+    {
+        entrustTexts = GetMenuItems();
+    }
+    private string[] GetMenuItems()
+    {
 
-    
-    // 菜单文本
-    private readonly string[] entrustTexts = [
-        "交给雇员保管", "从雇员处取回", "放入陆行鸟鞍囊", "从陆行鸟鞍囊中取回", 
-        "Entrust to Retainer", "Retrieve from Retainer", "Place in Saddle Bag", "Retrieve from Saddle Bag",
-        "リテイナーに預ける", "リテイナーから取り出す", "チョコボ鞍袋に入れる", "チョコボ鞍袋から取り出す",
-        "집사에게 맡기기", "집사에게서 찾기", "초코보 안장에 넣기", "초코보 안장에서 찾기"
-    ];
+        var addonIds = new uint[]
+        {
+            97, 98, 881, 887
+        };
+        var menuTexts = new List<string>();
+        foreach (var id in addonIds)
+        {
+            var text = LuminaWrapper.GetAddonText(id);
+            if (!string.IsNullOrEmpty(text))
+            {
+                menuTexts.Add(text);
+            }
+        }
+        return [.. menuTexts];
+    }
 
     public override void Init()
     {
@@ -42,29 +58,38 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
             HandleTransfer();
             return;
         }
+        return;
 
         bool IsInventoryOpen()
-            => IsAddonAndNodesReady(Inventory)           ||
-               IsAddonAndNodesReady(InventoryLarge)      ||
-               IsAddonAndNodesReady(InventoryExpansion)  ||
-               IsAddonAndNodesReady(InventoryRetainer)   ||
+            => IsAddonAndNodesReady(Inventory) ||
+               IsAddonAndNodesReady(InventoryLarge) ||
+               IsAddonAndNodesReady(InventoryExpansion) ||
+               IsAddonAndNodesReady(InventoryRetainer) ||
                IsAddonAndNodesReady(InventoryRetainerLarge);
 
     }
 
-    private void HandleTransfer()
+    private bool HandleTransfer()
     {
-        TaskHelper.Abort();
-        TaskHelper.Enqueue(() => 
+        if (!IsAddonAndNodesReady(InfosOm.ContextMenu))
         {
-            if (!IsAddonAndNodesReady(InfosOm.ContextMenu)) return false;
             foreach (var text in entrustTexts)
             {
                 if (ClickContextMenu(text))
                     return true;
             }
-            return true;
-        }, "点击相关菜单项");
+        }
+        else
+        {
+            TaskHelper.DelayNext(10);
+            TaskHelper.Enqueue(() =>
+            {
+                HandleTransfer();
+            });
+        }
+            
+
+        return true;
     }
 
     public override void Uninit()
