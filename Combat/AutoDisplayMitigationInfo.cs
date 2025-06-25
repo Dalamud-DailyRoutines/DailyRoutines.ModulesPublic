@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Pipes;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -14,7 +12,6 @@ using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -303,8 +300,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     private static unsafe void OnFrameworkUpdate(IFramework _)
     {
-        var combatInactive = moduleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat];
-        if (DService.ClientState.IsPvP || combatInactive || Control.GetLocalPlayer() is null)
+        if (DService.ClientState.IsPvP || Control.GetLocalPlayer() is null)
             return;
 
         // update party list
@@ -313,15 +309,22 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     private static unsafe void OnFrameworkUpdateInterval(IFramework _)
     {
+        if (DService.ClientState.IsPvP || Control.GetLocalPlayer() is null)
+        {
+            MitigationManager.Clear();
+            StatusBarManager.Clear();
+            return;
+        }
+
+        MitigationManager.Update();
+
         var combatInactive = moduleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat];
-        if (DService.ClientState.IsPvP || combatInactive || Control.GetLocalPlayer() is null)
+        if (combatInactive)
         {
             StatusBarManager.Clear();
             return;
         }
 
-        // update status
-        MitigationManager.Update();
         StatusBarManager.Update();
     }
 
