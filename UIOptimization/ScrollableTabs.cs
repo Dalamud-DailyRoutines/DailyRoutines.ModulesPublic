@@ -61,7 +61,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
                 "MinionNoteBook", "MountNoteBook", "InventoryRetainer", "InventoryRetainerLarge",
                 "FateProgress", "AdventureNoteBook", "MJIMinionNoteBook", "InventoryBuddy",
                 "InventoryBuddy2", "Character", "CharacterClass", "CharacterRepute",
-                "Buddy", "MiragePrismPrismBox", "InventoryEvent" // , "Currency"
+                "Buddy", "MiragePrismPrismBox", "InventoryEvent", "Currency"
             };
 
             foreach (var name in directUseNames)
@@ -145,7 +145,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
             UIHandlerMapping["MiragePrismPrismBox"]  = unitBase => UpdateMiragePrismPrismBox((AddonMiragePrismPrismBox*)unitBase);
 
             // Currency
-            // UiHandlerMapping["Currency"] = unitBase => UpdateCurrency((AddonCurrency*)unitBase);
+            UIHandlerMapping["Currency"] = unitBase => UpdateCurrency((AddonCurrency*)unitBase);
 
             // Character
             UIHandlerMapping["Character"]       = unitBase => UpdateCharacter((AddonCharacter*)unitBase);
@@ -507,48 +507,47 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab((byte)tabIndex);
     }
 
-    // private static void UpdateCurrency(AddonCurrency* addon)
-    // {
-    //     var atkStage = AtkStage.Instance();
-    //     var numberArray = atkStage->GetNumberArrayData(NumberArrayType.Currency);
-    //     var currentTab = numberArray->IntArray[0];
-    //     var newTab = currentTab;
-    //
-    //     var enableStates = new bool[addon->Tabs.Length];
-    //     for (var i = 0; i < addon->Tabs.Length; i++)
-    //     {
-    //         enableStates[i] = addon->Tabs[i].Value != null && addon->Tabs[i].Value->IsEnabled;
-    //     }
-    //
-    //     if (WheelState > 0 && currentTab < enableStates.Length)
-    //     {
-    //         for (var i = currentTab + 1; i < enableStates.Length; i++)
-    //         {
-    //             if (enableStates[i])
-    //             {
-    //                 newTab = i;
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //     else if (currentTab > 0)
-    //     {
-    //         for (var i = currentTab - 1; i >= 0; i--)
-    //         {
-    //             if (enableStates[i])
-    //             {
-    //                 newTab = i;
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //
-    //     if (currentTab == newTab)
-    //         return;
-    //
-    //     numberArray->SetValue(0, newTab);
-    //     addon->AtkUnitBase.OnRequestedUpdate(atkStage->GetNumberArrayData(), atkStage->GetStringArrayData());
-    // }
+    private static void UpdateCurrency(AddonCurrency* addon)
+    {
+        var atkStage = AtkStage.Instance();
+        var numberArray = atkStage->GetNumberArrayData(NumberArrayType.Currency);
+        var currentTab = numberArray->IntArray[0];
+        var newTab = currentTab;
+    
+        var enableStates = new bool[addon->Tabs.Length];
+        for (var i = 0; i < addon->Tabs.Length; i++)
+            enableStates[i] = addon->Tabs[i].Value != null && addon->Tabs[i].Value->IsEnabled;
+        
+    
+        if (WheelState > 0 && currentTab < enableStates.Length)
+        {
+            for (var i = currentTab + 1; i < enableStates.Length; i++)
+            {
+                if (enableStates[i])
+                {
+                    newTab = i;
+                    break;
+                }
+            }
+        }
+        else if (currentTab > 0)
+        {
+            for (var i = currentTab - 1; i >= 0; i--)
+            {
+                if (enableStates[i])
+                {
+                    newTab = i;
+                    break;
+                }
+            }
+        }
+    
+        if (currentTab == newTab)
+            return;
+    
+        numberArray->SetValue(0, newTab);
+        addon->AtkUnitBase.OnRequestedUpdate(atkStage->GetNumberArrayData(), atkStage->GetStringArrayData());
+    }
 
     private static void UpdateBuddy(AddonBuddy* addon)
     {
