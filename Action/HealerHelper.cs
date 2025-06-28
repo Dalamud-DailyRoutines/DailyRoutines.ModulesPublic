@@ -948,10 +948,11 @@ public class HealerHelper : DailyModuleBase
                 }
 
                 // skip member out of range for this action
-                var maxDistance = ActionManager.GetActionRange(37023);
-                var memberDead  = candidate.GameObject.IsDead || candidate.CurrentHP <= 0;
-                if (memberDead ||
-                    Vector3.DistanceSquared(candidate.Position, DService.ObjectTable.LocalPlayer.Position) > maxDistance * maxDistance)
+                var maxDistance    = ActionManager.GetActionRange(37023);
+                var memberDead     = candidate.GameObject.IsDead || candidate.CurrentHP <= 0;
+                var memberWeakness = candidate.Statuses.Any(x => x.StatusId is 43 or 44);
+                var memberDistance = Vector3.DistanceSquared(candidate.Position, DService.ObjectTable.LocalPlayer.Position);
+                if (memberDead || memberWeakness || memberDistance > maxDistance * maxDistance)
                     continue;
 
                 return member.id;

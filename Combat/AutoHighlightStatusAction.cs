@@ -50,7 +50,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         moduleConfig = LoadConfig<Config>() ??
                        new()
                        {
-                           StatusToMonitor = StatusToAction.ToDictionary(x => x.Key, x => x.Value)
+                           StatusToMonitor = statusToAction.ToDictionary(x => x.Key, x => x.Value)
                        };
 
         statusCombo ??= new("StatusCombo", PresetSheet.Statuses.Values);
@@ -165,7 +165,8 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             if (!moduleConfig.StatusToMonitor.TryGetValue(status.StatusId, out var actions))
                 continue;
 
-            actionToHighlight.AddRange(actions.ToDictionary(x => x, _ => status.RemainingTime));
+            foreach (var action in actions)
+                actionToHighlight[action] = status.RemainingTime;
             lastStatusTarget[status.StatusId] = localPlayer->EntityId;
         }
 
@@ -178,7 +179,8 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
                 if (!moduleConfig.StatusToMonitor.TryGetValue(status.StatusId, out var actions))
                     continue;
 
-                actionToHighlight.AddRange(actions.ToDictionary(x => x, _ => status.RemainingTime));
+                foreach (var action in actions)
+                    actionToHighlight[action] = status.RemainingTime;
                 lastStatusTarget[status.StatusId] = battleNpc.EntityId;
             }
         }
@@ -208,7 +210,9 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
                 // manually add action to highlight
                 if (!moduleConfig.StatusToMonitor.TryGetValue(status.Key, out var actions))
                     continue;
-                actionToHighlight.AddRange(actions.ToDictionary(x => x, _ => 0f));
+
+                foreach (var action in actions)
+                    actionToHighlight[action] = 0f;
             }
         }
 
@@ -265,7 +269,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
     }
 
     // Status - Actions
-    private static Dictionary<uint, List<uint>> StatusToAction = new()
+    private static readonly Dictionary<uint, List<uint>> statusToAction = new()
     {
         [1881] = [16554],
         [1871] = [16532],
