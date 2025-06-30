@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,8 +37,11 @@ public class CrossDCPartyFinder : DailyModuleBase
     private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/listings?";
     private const string BASE_DETAIL_URL = "https://xivpf.littlenightmare.top/api/listing/";
 
-    private static string HomeDataCenter =>
-        DService.ObjectTable.LocalPlayer.HomeWorld.Value.DataCenter.Value.Name.ExtractText();
+    /// <summary>
+    /// 当前玩家所在大区
+    /// </summary>
+    private static string LocatedDataCenter =>
+        DService.ObjectTable.LocalPlayer.CurrentWorld.Value.DataCenter.Value.Name.ExtractText();
 
     private static readonly CompSig AgentLookingForGroupReceiveEventSig =
         new("48 89 5C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 45 8B D1");
@@ -57,9 +60,9 @@ public class CrossDCPartyFinder : DailyModuleBase
 
     private static bool IsNeedToDisable;
 
-    private static PartyFinderRequest LastRequest       = new();
-    private static string             CurrentDataCenter = string.Empty;
-    private static string             CurrentSeach      = string.Empty;
+    private static PartyFinderRequest LastRequest        = new();
+    private static string             SelectedDataCenter = string.Empty;
+    private static string             CurrentSeach       = string.Empty;
 
     private static int CurrentPage;
 
@@ -105,16 +108,16 @@ public class CrossDCPartyFinder : DailyModuleBase
         {
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200f * GlobalFontScale);
-            using (var combo = ImRaii.Combo("###DataCenterSelectCombo", CurrentDataCenter, ImGuiComboFlags.HeightLargest))
+            using (var combo = ImRaii.Combo("###DataCenterSelectCombo", SelectedDataCenter, ImGuiComboFlags.HeightLargest))
             {
                 if (combo)
                 {
                     foreach (var dataCenter in DataCenters)
                     {
-                        if (ImGui.Selectable(dataCenter, dataCenter == CurrentDataCenter))
+                        if (ImGui.Selectable(dataCenter, dataCenter == SelectedDataCenter))
                         {
-                            CurrentDataCenter = dataCenter;
-                            if (HomeDataCenter == dataCenter)
+                            SelectedDataCenter = dataCenter;
+                            if (LocatedDataCenter == dataCenter)
                             {
                                 SendEvent(AgentId.LookingForGroup, 1, 17);
                                 return;
@@ -128,7 +131,7 @@ public class CrossDCPartyFinder : DailyModuleBase
             }
         }
 
-        if (CurrentDataCenter == HomeDataCenter) return;
+        if (SelectedDataCenter == LocatedDataCenter) return;
 
         var nodeInfo0  = NodeState.Get(addon->GetNodeById(38));
         var nodeInfo1  = NodeState.Get(addon->GetNodeById(31));
@@ -193,7 +196,7 @@ public class CrossDCPartyFinder : DailyModuleBase
 
                 ImGui.SameLine();
                 if (ImGui.Button("关闭"))
-                    CurrentDataCenter = HomeDataCenter;
+                    SelectedDataCenter = LocatedDataCenter;
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -412,7 +415,7 @@ public class CrossDCPartyFinder : DailyModuleBase
                 unsafe
                 {
                     if (!IsAddonAndNodesReady(LookingForGroup)) return;
-                    LookingForGroup->GetTextNodeById(49)->SetText($"{CurrentDataCenter}: {ListingsDisplay.Count}");
+                    LookingForGroup->GetTextNodeById(49)->SetText($"{SelectedDataCenter}: {ListingsDisplay.Count}");
                 }
             }).ConfigureAwait(false);
         });
@@ -437,7 +440,7 @@ public class CrossDCPartyFinder : DailyModuleBase
     {
         var req = LastRequest.Clone();
 
-        req.DataCenter = CurrentDataCenter;
+        req.DataCenter = SelectedDataCenter;
         req.Category   = PartyFinderRequest.ParseCategory(AgentLookingForGroup.Instance());
 
         SendRequest(req);
@@ -468,11 +471,11 @@ public class CrossDCPartyFinder : DailyModuleBase
         {
             case AddonEvent.PostSetup:
                 Overlay.IsOpen    = true;
-                CurrentDataCenter = DService.ObjectTable.LocalPlayer?.HomeWorld.Value.DataCenter.Value.Name.ExtractText() ?? string.Empty;
+                SelectedDataCenter = DService.ObjectTable.LocalPlayer?.CurrentWorld.Value.DataCenter.Value.Name.ExtractText() ?? string.Empty;
                 break;
             case AddonEvent.PreFinalize:
                 Overlay.IsOpen    = false;
-                CurrentDataCenter = string.Empty;
+                SelectedDataCenter = string.Empty;
                 break;
             default:
                 Overlay.IsOpen = Overlay.IsOpen;
@@ -493,7 +496,7 @@ public class CrossDCPartyFinder : DailyModuleBase
     {
         var ret = InvokeOriginal();
 
-        if (CurrentDataCenter != HomeDataCenter)
+        if (SelectedDataCenter != LocatedDataCenter)
         {
             // 招募类别刷新
             if (eventKind == 1 && valueCount == 3 && values[1].Type == ValueType.UInt)
