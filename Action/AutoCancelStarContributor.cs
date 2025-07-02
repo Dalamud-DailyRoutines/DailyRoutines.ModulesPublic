@@ -1,5 +1,9 @@
 using DailyRoutines.Abstracts;
+using DailyRoutines.Infos;
+using DailyRoutines.Managers;
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+
 
 namespace DailyRoutines.Modules;
 
@@ -14,19 +18,13 @@ public unsafe class AutoCancelStarContributor : DailyModuleBase
     };
     
     private const uint StarContributorBuffId = 4409;
-
-    public override void Init()
-    {
-        DService.Framework.Update += OnFrameworkUpdate;
-    }
-
-    public override void Uninit()
-    {
-        DService.Framework.Update -= OnFrameworkUpdate;
-        base.Uninit();
-    }
-
-    private void OnFrameworkUpdate(object framework)
+    
+    
+    public override void Init() => FrameworkManager.Register(OnUpdate, throttleMS: 1500);
+    
+    public override void Uninit() => FrameworkManager.Unregister(OnUpdate);
+    
+    private static void OnUpdate(IFramework framework)
     {
         if (!IsValidState()) return;
 
@@ -40,9 +38,11 @@ public unsafe class AutoCancelStarContributor : DailyModuleBase
             StatusManager.ExecuteStatusOff(StarContributorBuffId);
     }
 
-    private static unsafe bool IsValidState() =>
-        DService.ObjectTable.LocalPlayer != null &&
-        !BetweenAreas &&
-        !OccupiedInEvent &&
-        IsScreenReady();
+    
+    private static bool IsValidState() =>
+               DService.ObjectTable.LocalPlayer != null && 
+               GameState.TerritoryIntendedUse == 60 &&
+               !BetweenAreas &&
+               !OccupiedInEvent &&
+               IsScreenReady();
 }
