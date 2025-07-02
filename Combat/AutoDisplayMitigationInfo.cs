@@ -2,30 +2,21 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
-using DailyRoutines.Infos;
 using DailyRoutines.Managers;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Hooking;
+using Dalamud.Interface.GameFonts;
+using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using FFXIVClientStructs.FFXIV.Client.Graphics;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using Newtonsoft.Json;
 using Status = Lumina.Excel.Sheets.Status;
 
@@ -52,18 +43,22 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     private static readonly byte[] damagePhysicalStr;
     private static readonly byte[] damageMagicalStr;
 
+    // manager
+    private PartyListManager? partyListManager;
+
     static AutoDisplayMitigationInfo()
     {
         damagePhysicalStr = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
         damageMagicalStr  = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
     }
 
+
     public override void Init()
     {
         moduleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
 
-        // enable cast hook
-        DamageActionManager.Enable();
+        // manager
+        partyListManager = new PartyListManager();
 
         // overlay
         SetOverlay();
@@ -78,56 +73,25 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         };
 
         // fetch remote resource
-        Task.Run(async () => await RemoteRepoManager.FetchAll());
+        Task.Run(async () => await RemoteRepoManager.FetchMitigationStatuses());
 
-        // zone hook
-        DService.ClientState.TerritoryChanged += OnZoneChanged;
-
-        // party list
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "_PartyList", PartyListManager.OnPartyListSetup);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_PartyList", PartyListManager.OnPartyListFinalize);
-
-        // target cast bar
-        // DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_TargetInfoCastBar", CastBarManager.Update);
-        // DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_TargetInfoCastBar", CastBarManager.Disable);
+        // draw on party list
+        DService.UiBuilder.Draw += Draw;
 
         // refresh mitigation status
-        FrameworkManager.Register(OnFrameworkUpdate);
         FrameworkManager.Register(OnFrameworkUpdateInterval, throttleMS: 500);
-
-        UnsafeInit();
-    }
-
-    private static unsafe void UnsafeInit()
-    {
-        // party list
-        if (PartyListManager.PartyList is not null)
-            PartyListManager.Enable(PartyListManager.PartyList);
     }
 
     public override void Uninit()
     {
-        // zone hook
-        DService.ClientState.TerritoryChanged -= OnZoneChanged;
-
-        // party list refresh
-        DService.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, PartyListManager.OnPartyListSetup);
-        DService.AddonLifecycle.UnregisterListener(AddonEvent.PreFinalize, PartyListManager.OnPartyListFinalize);
-
-        // target cast bar refresh
-        // DService.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, CastBarManager.Update);
-
         // refresh mitigation status
-        FrameworkManager.Unregister(OnFrameworkUpdate);
         FrameworkManager.Unregister(OnFrameworkUpdateInterval);
+
+        // draw on party list
+        DService.UiBuilder.Draw -= Draw;
 
         // status bar
         StatusBarManager.Disable();
-
-        // disable cast hook
-        DamageActionManager.Disable();
-
-        base.Uninit();
     }
 
     public override void ConfigUI()
@@ -298,16 +262,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #region Hooks
 
-    private static unsafe void OnFrameworkUpdate(IFramework _)
-    {
-        if (DService.ClientState.IsPvP || Control.GetLocalPlayer() is null)
-            return;
-
-        // update party list
-        PartyListManager.Update();
-    }
-
-    private static unsafe void OnFrameworkUpdateInterval(IFramework _)
+    private unsafe void OnFrameworkUpdateInterval(IFramework _)
     {
         if (DService.ClientState.IsPvP || Control.GetLocalPlayer() is null)
         {
@@ -327,9 +282,6 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         StatusBarManager.Update();
     }
-
-    private static void OnZoneChanged(ushort zoneId)
-        => RemoteRepoManager.FetchDamageActions(zoneId);
 
     #endregion
 
@@ -352,36 +304,6 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     MitigationManager.StatusDict = resp.ToDictionary(x => x.Id, x => x);
             }
             catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 远程减伤技能文件获取失败: {ex}"); }
-        }
-
-        // TODO: separate by zone
-        private static DamageActionManager.DamageAction[] actions = [];
-
-        public static async Task FetchDamageActions()
-        {
-            try
-            {
-                var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/damage");
-                var resp = JsonConvert.DeserializeObject<DamageActionManager.DamageAction[]>(json);
-                if (resp == null)
-                    Error($"[AutoDisplayMitigationInfo] 远程技能伤害文件解析失败: {json}");
-                else
-                    actions = resp;
-            }
-            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 远程技能伤害文件获取失败: {ex}"); }
-        }
-
-        public static void FetchDamageActions(uint zoneId)
-            => DamageActionManager.Actions = actions.Where(x => x.ZoneId == zoneId).ToDictionary(x => x.ActionId, x => x);
-
-        public static async Task FetchAll()
-        {
-            try
-            {
-                var tasks = new[] { FetchMitigationStatuses(), FetchDamageActions() };
-                await Task.WhenAll(tasks);
-            }
-            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 远程资源获取失败: {ex}"); }
         }
     }
 
@@ -500,620 +422,91 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #endregion
 
-    #region CastBar
-
-    private static class CastBarManager
-    {
-        // const
-        private const uint NodeId = 25;
-
-        // params
-        private static bool hasBuilt;
-
-        #region Funcs
-
-        public static unsafe void Enable()
-        {
-            var addon = GetAddonByName("_TargetInfoCastBar");
-            if (addon == null)
-                return;
-
-            var castBar = addon->GetNodeById(2);
-            if (castBar == null)
-                return;
-
-            var node = (AtkTextNode*)FetchNode(NodeId, addon);
-            if (node == null && !TryMakeTextNode(NodeId, out node))
-                return;
-
-            node->FontSize = 10;
-            node->AtkResNode.SetWidth(200);
-            node->AtkResNode.SetHeight(castBar->GetHeight());
-            node->ToggleVisibility(false);
-            node->SetPositionShort(
-                (short)(castBar->GetXShort() + castBar->GetWidth()),
-                castBar->GetYShort()
-            );
-            node->DrawFlags       |= 1;
-            node->TextFlags       =  8;
-            node->TextFlags2      =  0;
-            node->FontType        =  FontType.MiedingerMed;
-            node->TextColor       =  new ByteColor { R = 255, G = 225, B = 255, A = 255 };
-            node->EdgeColor       =  new ByteColor { R = 255, G = 0, B   = 162, A = 157 };
-            node->BackgroundColor =  new ByteColor { R = 0, G   = 0, B   = 0, A   = 0 };
-            node->AlignmentType   =  AlignmentType.BottomLeft;
-
-            LinkNodeAtEnd((AtkResNode*)node, addon);
-            hasBuilt = true;
-        }
-
-        public static unsafe void Disable(AddonEvent type, AddonArgs args)
-        {
-            var addon = GetAddonByName("_TargetInfoCastBar");
-            if (addon == null)
-                return;
-
-            var node = FetchNode(NodeId, addon);
-            if (node == null)
-                return;
-
-            UnlinkAndFreeTextNode((AtkTextNode*)node, addon);
-            hasBuilt = false;
-        }
-
-        public static unsafe void Update(AddonEvent type, AddonArgs args)
-        {
-            if (!hasBuilt)
-                Enable();
-
-            if (DamageActionManager.CurrentAction.ActionId == 0 || !IsScreenReady())
-            {
-                Clear();
-                return;
-            }
-
-            var addon = (AtkUnitBase*)args.Addon;
-            if (addon == null)
-                return;
-
-            var node = (AtkTextNode*)FetchNode(NodeId, addon);
-            if (node == null)
-                return;
-
-            node->ToggleVisibility(true);
-            node->SetText(DamageActionManager.FetchLocalDamage().ToString("N0"));
-        }
-
-        public static unsafe void Clear()
-        {
-            var addon = GetAddonByName("_TargetInfoCastBar");
-            if (addon == null)
-                return;
-
-            var node = (AtkTextNode*)FetchNode(NodeId, addon);
-            if (node == null)
-                return;
-
-            node->ToggleVisibility(false);
-        }
-
-        private static unsafe AtkResNode* FetchNode(uint nodeId, AtkUnitBase* addon)
-        {
-            for (var i = 0; i < addon->UldManager.NodeListCount; i++)
-            {
-                var t = addon->UldManager.NodeList[i];
-                if (t->NodeId == nodeId)
-                    return t;
-            }
-
-            return null;
-        }
-
-        #endregion
-    }
-
-    #endregion
-
     #region PartyList
 
-    private static unsafe class PartyListManager
+    public unsafe void Draw()
     {
-        // const
-        private const uint MitigationNodeId = 100025;
-        private const uint ShieldNodeId     = 200025;
+        var partyListAddon = (AddonPartyList*)DService.Gui.GetAddonByName("_PartyList");
+        if (partyListAddon is null || partyListManager is null || !partyListAddon->IsVisible)
+            return;
 
-        // params
-        private static bool            hasBuilt;
-        public static  AddonPartyList* PartyList => (AddonPartyList*)GetAddonByName("_PartyList");
+        var drawList = ImGui.GetForegroundDrawList();
 
-        // nodes
-        private static readonly nint[] mitigationNodes = new nint[8];
-        private static readonly nint[] shieldNodes     = new nint[8];
-
-        #region Funcs
-
-        public static void OnPartyListSetup(AddonEvent type, AddonArgs args)
-            => Enable((AddonPartyList*)args.Addon);
-
-        public static void Enable(AddonPartyList* addonPartyList)
+        foreach (var memberStatus in MitigationManager.FetchParty())
         {
-            DService.Framework.RunOnFrameworkThread(() =>
+            if (FetchMemberIndex(memberStatus.Key) is { } memberIndex)
             {
-                if (hasBuilt)
-                    return;
-
-                EnableMitigationNodes(addonPartyList);
-                EnableShieldNodes(addonPartyList);
-
-                hasBuilt = true;
-            });
-        }
-
-        private static void EnableMitigationNodes(AddonPartyList* addonPartyList)
-        {
-            foreach (var index in Enumerable.Range(0, 8))
-            {
-                ref var partyMember   = ref addonPartyList->PartyMembers[index];
-                ref var nameContainer = ref partyMember.NameAndBarsContainer;
-
-                if (!TryMakeTextNode(MitigationNodeId, out var node))
+                ref var partyMember = ref partyListAddon->PartyMembers[(int)memberIndex];
+                if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
                     continue;
-                mitigationNodes[index] = (nint)node;
 
-                node->FontSize = 10;
-                node->AtkResNode.SetWidth(nameContainer->GetWidth());
-                node->AtkResNode.SetHeight(nameContainer->GetHeight());
-                node->ToggleVisibility(false);
-                node->SetPositionShort(
-                    (short)(nameContainer->GetXShort() - 5),
-                    (short)(nameContainer->GetYShort() + 3)
-                );
-                node->DrawFlags       |= 1;
-                node->TextFlags       =  8;
-                node->TextFlags2      =  0;
-                node->FontType        =  FontType.MiedingerMed;
-                node->TextColor       =  new ByteColor { R = 255, G = 225, B = 255, A = 255 };
-                node->EdgeColor       =  new ByteColor { R = 255, G = 162, B = 0, A   = 157 };
-                node->BackgroundColor =  new ByteColor { R = 0, G   = 0, B   = 0, A   = 0 };
-                node->AlignmentType   =  AlignmentType.TopRight;
-
-                LinkNodeAtEnd((AtkResNode*)node, partyMember.PartyMemberComponent->OwnerNode->Component);
+                partyListManager.DrawMitigationNode(drawList, ref partyMember, memberStatus.Value);
+                partyListManager.DrawShieldNode(drawList, ref partyMember, memberStatus.Value);
             }
         }
-
-        private static void EnableShieldNodes(AddonPartyList* addonPartyList)
-        {
-            foreach (var index in Enumerable.Range(0, 8))
-            {
-                ref var partyMember = ref addonPartyList->PartyMembers[index];
-                ref var hpComponent = ref partyMember.HPGaugeComponent;
-                var     numNode     = hpComponent->GetTextNodeById(2);
-
-                if (!TryMakeTextNode(ShieldNodeId, out var node))
-                    continue;
-                shieldNodes[index] = (nint)node;
-
-                node->FontSize = 8;
-                node->AtkResNode.SetWidth(numNode->GetWidth());
-                node->AtkResNode.SetHeight(numNode->GetHeight());
-                node->ToggleVisibility(false);
-                node->SetPositionShort(
-                    (short)(numNode->GetXShort() + numNode->GetWidth() + 2),
-                    (short)(numNode->GetYShort() + 3)
-                );
-                node->DrawFlags       |= 1;
-                node->TextFlags       =  8;
-                node->TextFlags2      =  0;
-                node->FontType        =  FontType.MiedingerMed;
-                node->TextColor       =  new ByteColor { R = 255, G = 225, B = 255, A = 255 };
-                node->EdgeColor       =  new ByteColor { R = 255, G = 162, B = 0, A   = 157 };
-                node->BackgroundColor =  new ByteColor { R = 0, G   = 0, B   = 0, A   = 0 };
-                node->AlignmentType   =  AlignmentType.Left;
-
-                LinkNodeAtEnd((AtkResNode*)node, hpComponent->OwnerNode->Component);
-            }
-        }
-
-        public static void OnPartyListFinalize(AddonEvent type, AddonArgs args)
-            => Disable((AddonPartyList*)args.Addon);
-
-        public static void Disable(AddonPartyList* addonPartyList)
-        {
-            DService.Framework.RunOnFrameworkThread(() =>
-            {
-                if (!hasBuilt)
-                    return;
-
-                DisableMitigationNodes(addonPartyList);
-                DisableShieldNodes(addonPartyList);
-
-                hasBuilt = false;
-            });
-        }
-
-        private static void DisableMitigationNodes(AddonPartyList* addonPartyList)
-        {
-            foreach (var index in Enumerable.Range(0, 8))
-            {
-                ref var partyMember = ref addonPartyList->PartyMembers[index];
-                UnlinkAndFreeTextNode((AtkTextNode*)mitigationNodes[index], partyMember.PartyMemberComponent->OwnerNode);
-            }
-        }
-
-        private static void DisableShieldNodes(AddonPartyList* addonPartyList)
-        {
-            foreach (var index in Enumerable.Range(0, 8))
-            {
-                ref var partyMember = ref addonPartyList->PartyMembers[index];
-                ref var hpComponent = ref partyMember.HPGaugeComponent;
-                UnlinkAndFreeTextNode((AtkTextNode*)shieldNodes[index], hpComponent->OwnerNode);
-            }
-        }
-
-        public static void Update()
-        {
-            if (PartyList is null || !hasBuilt)
-                return;
-
-            foreach (uint index in Enumerable.Range(0, 8))
-            {
-                UpdateMitigationNode(index, [0, 0, 0]);
-                UpdateShieldNode(index, [0, 0, 0]);
-            }
-
-            foreach (var memberStatus in MitigationManager.FetchParty())
-            {
-                if (FetchMemberIndex(memberStatus.Key) is { } memberIndex)
-                {
-                    UpdateMitigationNode(memberIndex, memberStatus.Value);
-                    UpdateShieldNode(memberIndex, memberStatus.Value);
-                }
-            }
-        }
-
-        private static void UpdateMitigationNode(uint memberIndex, float[] memberStatus)
-        {
-            var nameNode = PartyList->PartyMembers[(int)memberIndex].Name;
-            var node     = (AtkTextNode*)mitigationNodes[(int)memberIndex];
-
-            if (memberStatus[0] == 0 && memberStatus[1] == 0)
-            {
-                node->ToggleVisibility(false);
-                return;
-            }
-
-            var desc = $"{Math.Max(memberStatus[0], memberStatus[1]):N0}%";
-
-            node->ToggleVisibility(nameNode->IsVisible());
-            node->SetText(desc);
-        }
-
-        private static void UpdateShieldNode(uint memberIndex, float[] memberStatus)
-        {
-            var node = (AtkTextNode*)shieldNodes[(int)memberIndex];
-
-            if (memberStatus[2] == 0)
-            {
-                node->ToggleVisibility(false);
-                return;
-            }
-
-            var desc = $"{memberStatus[2]:F0}";
-
-            node->ToggleVisibility(true);
-            node->SetText(desc);
-        }
-
-        #endregion
     }
 
-    #endregion
-
-    #region DamageMonitor
-
-    private static class DamageActionManager
+    private unsafe class PartyListManager
     {
-        // cache
-        public static Dictionary<uint, DamageAction> Actions       = [];
-        public static DamageAction                   CurrentAction = new() { ActionId = 0 };
+        private static readonly IFontAtlas fontAtlas = DService.PI.UiBuilder.CreateFontAtlas(FontAtlasAutoRebuildMode.OnNewFrame);
 
-        #region Structs
+        private readonly IFontHandle mitigationFont = fontAtlas.NewGameFontHandle(new(GameFontFamilyAndSize.MiedingerMid14));
+        private readonly IFontHandle shieldFont     = fontAtlas.NewGameFontHandle(new(GameFontFamilyAndSize.MiedingerMid12));
 
-        public struct DamageAction
+        public void DrawMitigationNode(ImDrawListPtr drawList, ref AddonPartyList.PartyListMemberStruct partyMember, float[] status)
         {
-            [JsonProperty("zone_id")]
-            public uint ZoneId { get; set; }
-
-            [JsonProperty("entity_id")]
-            public uint EntityId { get; set; }
-
-            [JsonProperty("action_id")]
-            public uint ActionId { get; set; }
-
-            [JsonProperty("name")]
-            public string Name { get; set; }
-
-            [JsonProperty("type")]
-            public string Type { get; set; }
-
-            [JsonProperty("range")]
-            public string Range { get; set; }
-
-            [JsonProperty("damage")]
-            public float Damage { get; set; }
-
-            [JsonProperty("duration")]
-            public float Duration { get; set; }
-        }
-
-        public enum EffectType : byte
-        {
-            Nothing                   = 0,
-            Miss                      = 1,
-            FullResist                = 2,
-            Damage                    = 3,
-            Heal                      = 4,
-            BlockedDamage             = 5,
-            ParriedDamage             = 6,
-            Invulnerable              = 7,
-            NoEffectText              = 8,
-            MpLoss                    = 10,
-            MpGain                    = 11,
-            TpLoss                    = 12,
-            TpGain                    = 13,
-            ApplyStatusEffectTarget   = 14,
-            ApplyStatusEffectSource   = 15,
-            RecoveredFromStatusEffect = 16,
-            LoseStatusEffectTarget    = 17,
-            LoseStatusEffectSource    = 18,
-            StatusNoEffect            = 20,
-            ThreatPosition            = 24,
-            EnmityAmountUp            = 25,
-            EnmityAmountDown          = 26,
-            StartActionCombo          = 27,
-            Knockback                 = 33,
-            Mount                     = 40,
-            FullResistStatus          = 55,
-            Vfx                       = 59,
-            Gauge                     = 60,
-            PartialInvulnerable       = 74,
-            Interrupt                 = 75,
-        }
-
-        public enum EffectDisplayType : byte
-        {
-            HideActionName = 0,
-            ShowActionName = 1,
-            ShowItemName   = 2,
-            MountName      = 13
-        }
-
-
-        [StructLayout(LayoutKind.Sequential, Pack = 1)]
-        public struct EffectHeader
-        {
-            public uint AnimationTargetId;
-
-            public uint Unknown1;
-
-            public uint ActionId;
-
-            public uint GlobalEffectCounter;
-
-            public float AnimationLockTime;
-
-            public uint Unknown2;
-
-            public ushort HiddenAnimation;
-
-            public ushort Rotation;
-
-            public ushort ActionAnimationId;
-
-            public byte Variation;
-
-            public EffectDisplayType EffectDisplayType;
-
-            public byte Unknown3;
-
-            public byte EffectCount;
-
-            public ushort Unknown4;
-        }
-
-
-        [StructLayout(LayoutKind.Sequential, Pack = 1)]
-        public struct Effect
-        {
-            public EffectType EffectType;
-            public byte       Param0;
-            public byte       Param1;
-            public byte       Param2;
-            public byte       Flags1;
-            public byte       Flags2;
-            public ushort     Value;
-        }
-
-        #endregion
-
-        #region Hooks
-
-        // action effect hook
-        private static readonly CompSig                       actionEffectSig = new("E8 ?? ?? ?? ?? 48 8B 8D F0 03 00 00");
-        private static          Hook<OnActionEffectDelegate>? actionEffectHook;
-
-        // action effect delegate
-        private unsafe delegate void OnActionEffectDelegate(int sourceId, BattleChara* player, Vector3* location, EffectHeader* effectHeader, Effect* effectArray, ulong* effectTrail);
-
-        public static unsafe void Enable()
-        {
-            UseActionManager.RegCharacterStartCast(OnStartCast);
-            UseActionManager.RegCharacterCompleteCast(OnCompleteCast);
-
-            actionEffectHook?.Dispose();
-            actionEffectHook = actionEffectSig.GetHook<OnActionEffectDelegate>(OnActionEffect);
-            actionEffectHook.Enable();
-
-            // auto emit from pipe
-            actionPipe = new();
-            Task.Run(ListenAction);
-        }
-
-        public static unsafe void Disable()
-        {
-            UseActionManager.UnregCharacterStartCast(OnStartCast);
-            UseActionManager.UnregCharacterCompleteCast(OnCompleteCast);
-
-            actionEffectHook?.Dispose();
-
-            // auto emit from pipe
-            actionPipe?.Cancel();
-        }
-
-        private static unsafe void OnStartCast(nint a1, BattleChara* player, ActionType type, uint actionId, nint a4, float rotation, float a6)
-        {
-            // auto emit from cache
-            if (CurrentAction.ActionId == 0)
-                FindAction(actionId);
-        }
-
-        private static unsafe void OnCompleteCast(
-            nint     a1,       BattleChara* player,   ActionType type,                   uint actionId,           uint spellId, GameObjectId animationTargetId,
-            Vector3* location, float        rotation, short      lastUsedActionSequence, int  animationVariation, int  ballistaEntityId
-        )
-        {
-            // auto clear (duration = 0)
-            if (CurrentAction.ActionId == actionId && CurrentAction.Duration == 0)
-                ClearAction();
-        }
-
-        private static unsafe void OnActionEffect(int sourceId, BattleChara* player, Vector3* location, EffectHeader* effectHeader, Effect* effectArray, ulong* effectTrail)
-        {
-            actionEffectHook.Original(sourceId, player, location, effectHeader, effectArray, effectTrail);
-
-            try
-            {
-                for (var i = 0; i < effectHeader->EffectCount; i++)
-                {
-                    var targetId = (uint)(effectTrail[i] & uint.MaxValue);
-                    var actionId = effectHeader->EffectDisplayType switch
-                    {
-                        EffectDisplayType.MountName => 0xD_000_000 + effectHeader->ActionId,
-                        EffectDisplayType.ShowItemName => 0x2_000_000 + effectHeader->ActionId,
-                        _ => effectHeader->ActionAnimationId
-                    };
-
-                    for (var j = 0; j < 8; j++)
-                    {
-                        ref var effect = ref effectArray[i * 8 + j];
-                        if (effect.EffectType == 0)
-                            continue;
-
-                        // unzip damage [high8: Flag1, low16: Value]
-                        uint damage = effect.Value;
-                        if ((effect.Flags2 & 0x40) == 0x40)
-                            damage += (uint)effect.Flags1 << 16;
-                    }
-                }
-            }
-            catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] 技能生效回调解析失败: {ex}"); }
-        }
-
-        #endregion
-
-        #region Action
-
-        private static void FindAction(uint actionId)
-        {
-            // match action from cache
-            if (!Actions.TryGetValue(actionId, out CurrentAction))
+            var mitigationValue = Math.Max(status[0], status[1]);
+            if (mitigationValue == 0)
                 return;
 
-            // duration?
-            if (CurrentAction.Duration > 0)
-                Task.Run(async () => await Timer.Emit(ClearAction, (int)(CurrentAction.Duration * 1000)));
+            var nameNode = partyMember.NameAndBarsContainer;
+            if (nameNode is null || !nameNode->IsVisible())
+                return;
+
+            var partyListAddon = (AddonPartyList*)DService.Gui.GetAddonByName("_PartyList");
+            if (partyListAddon is null || !partyListAddon->IsVisible)
+                return;
+            var partyScale = partyListAddon->Scale;
+
+            using var fontPush = mitigationFont.Push();
+
+            var text     = $"{mitigationValue:N0}%";
+            var textSize = ImGui.CalcTextSize(text);
+
+            var posX = nameNode->ScreenX + nameNode->GetWidth() * partyScale - textSize.X - 5 * partyScale;
+            var posY = nameNode->ScreenY + 2 * partyScale;
+
+            drawList.AddText(new Vector2(posX + 1, posY + 1), 0x9D00A2FF, text);
+            drawList.AddText(new Vector2(posX, posY), 0xFFFFFFFF, text);
         }
 
-        private static CancellationTokenSource? actionPipe;
-
-        private static void ListenAction()
+        public void DrawShieldNode(ImDrawListPtr drawList, ref AddonPartyList.PartyListMemberStruct partyMember, float[] status)
         {
-            /*return;
-            while (!actionPipe.IsCancellationRequested)
-            {
-                using var pipe = new NamedPipeServerStream("DR-ADMI", PipeDirection.In, 4);
-                pipe.WaitForConnection();
+            var shieldValue = status[2];
+            if (shieldValue == 0)
+                return;
 
-                try
-                {
-                    using var reader = new StreamReader(pipe);
-                    var       json   = reader.ReadLine();
-                    if (string.IsNullOrEmpty(json))
-                        continue;
+            var hpComponent = partyMember.HPGaugeComponent;
+            if (hpComponent is null || !hpComponent->OwnerNode->IsVisible())
+                return;
+            var numNode = hpComponent->GetTextNodeById(2);
+            if (numNode is null || !numNode->IsVisible())
+                return;
 
+            var partyListAddon = (AddonPartyList*)DService.Gui.GetAddonByName("_PartyList");
+            if (partyListAddon is null || !partyListAddon->IsVisible)
+                return;
+            var partyScale = partyListAddon->Scale;
 
-                    CurrentAction = JsonConvert.DeserializeObject<DamageAction>(json);
-                    if (CurrentAction.Duration > 0)
-                        Task.Run(async () => await Timer.Emit(ClearAction, (int)(CurrentAction.Duration * 1000)));
-                }
-                catch (Exception ex) { Error($"[AutoDisplayMitigationInfo] Damage Action Pipe Listen Failed: {ex}"); }
-            }*/
-        }
+            using var fontPush = shieldFont.Push();
 
-        private static void ClearAction()
-            => CurrentAction = new DamageAction() { ActionId = 0 };
+            var text = $"{shieldValue:F0}";
 
-        #endregion
+            var posX = numNode->ScreenX + numNode->GetWidth() * partyListAddon->Scale + 3 * partyScale;
+            var posY = numNode->ScreenY + numNode->GetHeight() * partyListAddon->Scale / 2 - 1.5f * partyScale;
 
-        #region Funcs
-
-        public static float FetchLocalDamage()
-        {
-            if (CurrentAction.ActionId == 0)
-                return 0;
-
-            var status = MitigationManager.FetchLocal();
-            var mitigation = CurrentAction.Type switch
-            {
-                "Physical" => status[0],
-                "Magical" => status[1],
-                _ => 0
-            };
-            var shield = status[2];
-
-            return CurrentAction.Damage * (1 - (mitigation / 100)) - shield;
-        }
-
-        #endregion
-    }
-
-    #endregion
-
-    #region Timer
-
-    private static class Timer
-    {
-        private static CancellationTokenSource? cts;
-
-        public static async Task Emit(Action onElapsed, int delay)
-        {
-            // cancel previous timer
-            cts?.Cancel();
-            cts?.Dispose();
-
-            // create a new timer
-            cts = new CancellationTokenSource();
-            var token = cts.Token;
-
-            try
-            {
-                await Task.Delay(delay, token);
-
-                // check if the token is not canceled
-                if (!token.IsCancellationRequested)
-                    onElapsed();
-            }
-            catch (TaskCanceledException) { }
+            drawList.AddText(new Vector2(posX + 1, posY + 1), 0x9D00A2FF, text);
+            drawList.AddText(new Vector2(posX, posY), 0xFFFFFFFF, text);
         }
     }
 
