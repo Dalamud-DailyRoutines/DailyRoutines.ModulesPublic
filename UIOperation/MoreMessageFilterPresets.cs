@@ -32,40 +32,20 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private static string InputPresetName = string.Empty;
 
-    // 不知道有没有什么便捷的方法可以获取消息栏实际名称，这里偷个懒先写死
-    private static readonly string[] FilterIndexName =
-    [
-        "第1栏",
-        "第2栏",
-        "第3栏",
-        "第4栏"
-    ];
-    public class FilterPreset
-    {
-        public string Name = string.Empty;
-        public int SelectedFilter = 0;
-        public byte[] PresetValue = new byte[FilterSize];
-    }
-    public class Config : ModuleConfiguration
-    {
-        public List<FilterPreset> Presets = [];
-    }
-
-    public override void Init()
-    {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-    }
+    public override void Init() => ModuleConfig = LoadConfig<Config>() ?? new();
 
     public override void ConfigUI()
     {
-        ImGuiStylePtr style = ImGui.GetStyle();
+        var logTabName = GetLogTabName();
+
+        var style = ImGui.GetStyle();
 
         var tableSize = (ImGui.GetContentRegionAvail() - ScaledVector2(100f)) with { Y = 0 };
         using var table = ImRaii.Table("MessageFilterPreset", 4, ImGuiTableFlags.Borders, tableSize);
         if (!table) return;
 
         ImGui.TableSetupColumn("添加", ImGuiTableColumnFlags.WidthFixed,
-            ImGui.CalcTextSize(FontAwesomeIcon.Plus.ToIconString()).X + style.FramePadding.X * 2f);
+            ImGui.GetTextLineHeightWithSpacing() + style.FramePadding.X * 2f);
         ImGui.TableSetupColumn("名称", ImGuiTableColumnFlags.None, 30);
         ImGui.TableSetupColumn("目标", ImGuiTableColumnFlags.None, 30);
         ImGui.TableSetupColumn("操作", ImGuiTableColumnFlags.WidthFixed,
@@ -80,19 +60,19 @@ public class MoreMessageFilterPresets : DailyModuleBase
         {
             if (popup)
             {
-                using (var combo = ImRaii.Combo("###AddFilterPresetCombo", FilterIndexName[SelectedFilter], ImGuiComboFlags.HeightLarge))
+                using (var combo = ImRaii.Combo("###AddFilterPresetCombo", logTabName[SelectedFilter], ImGuiComboFlags.HeightLarge))
                 {
                     if (combo)
                     {
-                        for (int i = 0; i < FilterIndexName.Length; ++i)
+                        for (int i = 0; i < logTabName.Length; ++i)
                         {
-                            if (ImGui.Selectable(FilterIndexName[i], SelectedFilter == i))
+                            if (ImGui.Selectable(logTabName[i], SelectedFilter == i))
                                 SelectedFilter = i;
                         }
                     }
                 }
                 
-                string defaultName = $"预设{ModuleConfig.Presets.Count + 1}";
+                var defaultName = $"预设{ModuleConfig.Presets.Count + 1}";
                 var name = InputPresetName.IsNullOrEmpty() ? defaultName : InputPresetName;
                 ImGui.SameLine();
                 if (ImGui.InputText("###PresetNameInput", ref name, 128))
@@ -155,13 +135,13 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
             ImGui.TableNextColumn();
             ImGui.SetNextItemWidth(-1f);
-            using (var combo = ImRaii.Combo("###ApplyFilterPresetCombo", FilterIndexName[preset.SelectedFilter], ImGuiComboFlags.HeightLarge))
+            using (var combo = ImRaii.Combo("###ApplyFilterPresetCombo", logTabName[preset.SelectedFilter], ImGuiComboFlags.HeightLarge))
             {
                 if (combo)
                 {
-                    for (int j = 0; j < FilterIndexName.Length; ++j)
+                    for (int j = 0; j < logTabName.Length; ++j)
                     {
-                        if (ImGui.Selectable(FilterIndexName[j], preset.SelectedFilter == j))
+                        if (ImGui.Selectable(logTabName[j], preset.SelectedFilter == j))
                             preset.SelectedFilter = j;
                     }
                 }
@@ -172,9 +152,21 @@ public class MoreMessageFilterPresets : DailyModuleBase
             {
                 ApplyFilterPreset(preset);
                 SaveConfig(ModuleConfig);
-                NotificationSuccess($"以成功将 {preset.Name} 应用到 {FilterIndexName[preset.SelectedFilter]}", "消息过滤设置");
+                NotificationSuccess($"以成功将 {preset.Name} 应用到 {logTabName[preset.SelectedFilter]}", "消息过滤设置");
             }
         }
+    }
+
+    private unsafe string[] GetLogTabName()
+    {
+        var names = new string[4];
+        for (int i = 0; i < names.Length; i++)
+        {
+            var name = RaptureLogModule.Instance()->GetTabName(i)->ToString();
+            names[i] = name.IsNullOrEmpty() ? $"第{i + 1}栏" : name;
+        }
+
+        return names;
     }
 
     private nint GetMessageFilter(nint filters, int index)
@@ -186,7 +178,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
     private unsafe void AddFilterPreset(int index, string name)
     {
         var filters = LogFilterConfig.Instance();
-        nint filter = GetMessageFilter((nint)filters, index);
+        var filter = GetMessageFilter((nint)filters, index);
         FilterPreset preset = new();
         preset.Name = name;
         fixed (byte* dst = preset.PresetValue) 
@@ -199,12 +191,24 @@ public class MoreMessageFilterPresets : DailyModuleBase
     private unsafe void ApplyFilterPreset(FilterPreset preset)
     {
         var filters = LogFilterConfig.Instance();
-        nint filter = GetMessageFilter((nint)filters, preset.SelectedFilter);
+        var filter = GetMessageFilter((nint)filters, preset.SelectedFilter);
         fixed (byte* src = preset.PresetValue)
         {
             Buffer.MemoryCopy(src, (void*)filter, FilterSize, FilterSize);
         }
         filters->SaveFile(true);
         ApplyMessageFilter((nint)filters);
+    }
+
+    private class FilterPreset
+    {
+        public string Name = string.Empty;
+        public int SelectedFilter = 0;
+        public byte[] PresetValue = new byte[FilterSize];
+    }
+
+    private class Config : ModuleConfiguration
+    {
+        public List<FilterPreset> Presets = [];
     }
 }
