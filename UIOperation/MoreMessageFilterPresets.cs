@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using DailyRoutines.Abstracts;
 using Dalamud.Interface;
 using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -16,11 +17,6 @@ public class MoreMessageFilterPresets : DailyModuleBase
         Category = ModuleCategories.UIOperation,
         Author = ["Ponta"]
     };
-
-    // type: 4 - 消息过滤
-    private static readonly CompSig GetSettingsObjectSig = new("40 53 48 83 EC ?? 0F B6 D9 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 8B C0");
-    private delegate nint GetSettingsObjectDelegate(byte type);
-    private static readonly GetSettingsObjectDelegate GetSettingsObject = GetSettingsObjectSig.GetDelegate<GetSettingsObjectDelegate>();
 
     private static readonly CompSig ApplyMessageFilterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 4C 24 ?? 56 57 41 54 41 56 41 57 48 83 EC ?? 45 33 E4");
     private delegate int ApplyMessageFilterDelegate(nint filters);
@@ -183,14 +179,14 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private nint GetMessageFilter(nint filters, int index)
     {
-        nint offset = (nint)(FilterSize * index + 72);
+        nint offset = FilterSize * index + 72;
         return filters + offset;
     }
 
     private unsafe void AddFilterPreset(int index, string name)
     {
-        nint filters = GetSettingsObject(4);
-        nint filter = GetMessageFilter(filters, index);
+        var filters = LogFilterConfig.Instance();
+        nint filter = GetMessageFilter((nint)filters, index);
         FilterPreset preset = new();
         preset.Name = name;
         fixed (byte* dst = preset.PresetValue) 
@@ -202,20 +198,13 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private unsafe void ApplyFilterPreset(FilterPreset preset)
     {
-        nint filters = GetSettingsObject(4);
-        nint filter = GetMessageFilter(filters, preset.SelectedFilter);
+        var filters = LogFilterConfig.Instance();
+        nint filter = GetMessageFilter((nint)filters, preset.SelectedFilter);
         fixed (byte* src = preset.PresetValue)
         {
             Buffer.MemoryCopy(src, (void*)filter, FilterSize, FilterSize);
         }
-        SaveMessageFilter(filters);
-        ApplyMessageFilter(filters);
-    }
-    private unsafe void SaveMessageFilter(nint filters)
-    {
-        nint vtable = *(nint*)filters;
-        nint vfunc = *(nint*)(vtable + 104);
-        var saveMessageFilter = Marshal.GetDelegateForFunctionPointer<SaveMessageFilterDelegate>(vfunc);
-        saveMessageFilter(filters, true);
+        filters->SaveFile(true);
+        ApplyMessageFilter((nint)filters);
     }
 }
