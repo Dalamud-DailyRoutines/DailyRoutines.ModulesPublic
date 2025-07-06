@@ -26,6 +26,8 @@ public class MoreMessageFilterPresets : DailyModuleBase
     private delegate int ApplyMessageFilterDelegate(nint filters);
     private static readonly ApplyMessageFilterDelegate ApplyMessageFilter = ApplyMessageFilterSig.GetDelegate<ApplyMessageFilterDelegate>();
 
+    private delegate int SaveMessageFilterDelegate(nint filters, bool a2);
+
     private static Config ModuleConfig = null!;
 
     private static readonly int FilterSize = 307;
@@ -206,6 +208,14 @@ public class MoreMessageFilterPresets : DailyModuleBase
         {
             Buffer.MemoryCopy(src, (void*)filter, FilterSize, FilterSize);
         }
+        SaveMessageFilter(filters);
         ApplyMessageFilter(filters);
+    }
+    private unsafe void SaveMessageFilter(nint filters)
+    {
+        nint vtable = *(nint*)filters;
+        nint vfunc = *(nint*)(vtable + 104);
+        var saveMessageFilter = Marshal.GetDelegateForFunctionPointer<SaveMessageFilterDelegate>(vfunc);
+        saveMessageFilter(filters, true);
     }
 }
