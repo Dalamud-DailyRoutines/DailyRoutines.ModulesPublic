@@ -107,25 +107,22 @@ public class CrossDCPartyFinder : DailyModuleBase
         {
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200f * GlobalFontScale);
-            using (var combo = ImRaii.Combo("###DataCenterSelectCombo", SelectedDataCenter, ImGuiComboFlags.HeightLargest))
+            var index = 0;
+            foreach (var dataCenter in DataCenters)
             {
-                if (combo)
+                if (index++ > 0)
+                    ImGui.SameLine();
+                if (ImGui.RadioButton(dataCenter, SelectedDataCenter == dataCenter))
                 {
-                    foreach (var dataCenter in DataCenters)
+                    SelectedDataCenter = dataCenter;
+                    if (LocatedDataCenter == dataCenter)
                     {
-                        if (ImGui.Selectable(dataCenter, dataCenter == SelectedDataCenter))
-                        {
-                            SelectedDataCenter = dataCenter;
-                            if (LocatedDataCenter == dataCenter)
-                            {
-                                SendEvent(AgentId.LookingForGroup, 1, 17);
-                                return;
-                            }
-
-                            SendRequestDynamic();
-                            IsNeedToDisable = true;
-                        }
+                        SendEvent(AgentId.LookingForGroup, 1, 17);
+                        return;
                     }
+
+                    SendRequestDynamic();
+                    IsNeedToDisable = true;
                 }
             }
         }
