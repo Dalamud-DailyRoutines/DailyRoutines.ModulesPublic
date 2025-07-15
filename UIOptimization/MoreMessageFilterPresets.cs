@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
+using DailyRoutines.Infos;
+using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface;
 using Dalamud.Memory;
 using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 
@@ -32,8 +35,16 @@ public class MoreMessageFilterPresets : DailyModuleBase
     private static int    SelectedFilter;
     private static string InputPresetName = string.Empty;
 
-    public override void Init() => 
+    private static readonly ApplyLogFilterMenuItem MenuItem = new();
+
+    public override void Init()
+    {
         ModuleConfig = LoadConfig<Config>() ?? new();
+        DService.ContextMenu.OnMenuOpened += OnMenuOpened;
+    }
+
+    public override void Uninit() =>
+        DService.ContextMenu.OnMenuOpened -= OnMenuOpened;
 
     public override void ConfigUI()
     {
@@ -149,10 +160,8 @@ public class MoreMessageFilterPresets : DailyModuleBase
             ImGui.TableNextColumn();
             if (ImGui.Button(GetLoc("Apply")))
             {
-                ApplyFilterPreset(preset);
+                ApplyFilterPresetAndNotify(preset);
                 SaveConfig(ModuleConfig);
-                
-                NotificationSuccess(GetLoc("MoreMessageFilterPresets-Notification-Applied", preset.Name, logTabName[preset.SelectedFilter]));
             }
 
             ImGui.SameLine();
@@ -164,6 +173,11 @@ public class MoreMessageFilterPresets : DailyModuleBase
                 break;
             }
         }
+    }
+    private static unsafe void OnMenuOpened(IMenuOpenedArgs args)
+    {
+        if (!MenuItem.IsDisplay(args)) return;
+        args.AddMenuItem(MenuItem.Get());
     }
 
     private static unsafe string[] GetLogTabName()
@@ -203,10 +217,10 @@ public class MoreMessageFilterPresets : DailyModuleBase
         ModuleConfig.Presets.Add(preset);
     }
 
-    private static unsafe void ApplyFilterPreset(FilterPreset preset)
+    private static unsafe void ApplyFilterPreset(FilterPreset preset, int index)
     {
         var filters = LogFilterConfig.Instance();
-        var filter  = GetMessageFilter((nint)filters, preset.SelectedFilter);
+        var filter  = GetMessageFilter((nint)filters, index);
         
         fixed (byte* src = preset.PresetValue)
         {
@@ -216,7 +230,16 @@ public class MoreMessageFilterPresets : DailyModuleBase
         filters->SaveFile(true);
         ApplyMessageFilter((nint)filters);
     }
-    
+
+    private static void ApplyFilterPresetAndNotify(FilterPreset preset, int index)
+    {
+        ApplyFilterPreset(preset, index);
+        NotificationSuccess(GetLoc("MoreMessageFilterPresets-Notification-Applied", preset.Name, index + 1));
+    }
+
+    private static void ApplyFilterPresetAndNotify(FilterPreset preset)
+        => ApplyFilterPresetAndNotify(preset, preset.SelectedFilter);
+
     private static int ReadCMPImmediateValue(nint instructionAddress)
     {
         var instruction = MemoryHelper.ReadRaw(instructionAddress, 6);
@@ -237,6 +260,53 @@ public class MoreMessageFilterPresets : DailyModuleBase
             }
             default:
                 throw new InvalidOperationException("未知的汇编指令");
+        }
+    }
+
+    private class ApplyLogFilterMenuItem : MenuItemBase
+    {
+        public override string Name { get; protected set; } = GetLoc("ApplyLogFilterPreset");
+        protected override bool IsSubmenu { get; set; } = true;
+        protected override bool WithDRPrefix { get; set; } = true;
+
+        protected override unsafe void OnClicked(IMenuItemClickedArgs args)
+            => args.OpenSubmenu(Name, ProcessMenuItems());
+
+        private unsafe static List<MenuItem> ProcessMenuItems()
+        {
+            var list = new List<MenuItem>();
+
+            var agentChatLog = AgentModule.Instance()->GetAgentChatLog();
+            var selectedTabIndex = MemoryHelper.Read<int>((nint)agentChatLog + 0x130);
+            if (selectedTabIndex > 3)
+                throw new Exception("未知索引");
+
+            foreach (var preset in ModuleConfig.Presets)
+                list.Add(new()
+                {
+                    Name = preset.Name,
+                    OnClicked = _ => ApplyFilterPresetAndNotify(preset, selectedTabIndex)
+                });
+
+            return list;
+        }
+
+        public override unsafe bool IsDisplay(IMenuOpenedArgs args)
+        {
+            if (ModuleConfig.Presets.Count == 0) return false;
+            if (args.MenuType != ContextMenuType.Default) return false;
+            if (args.AddonName != "ChatLog") return false;
+
+            var agent = (AgentContext*)args.AgentPtr;
+            var contextMenu = agent->CurrentContextMenu;
+            var contextMenuCounts = contextMenu->EventParams[0].Int;
+            if (contextMenuCounts == 0) return false;
+
+            var str = contextMenu->EventParams[7].GetValueAsString();
+            if (!str.Equals(LuminaWrapper.GetAddonText(370), StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return true;
         }
     }
 
