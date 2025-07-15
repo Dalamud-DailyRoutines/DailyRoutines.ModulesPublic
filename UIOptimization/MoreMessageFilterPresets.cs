@@ -270,25 +270,10 @@ public class MoreMessageFilterPresets : DailyModuleBase
         protected override bool WithDRPrefix { get; set; } = true;
 
         protected override unsafe void OnClicked(IMenuItemClickedArgs args)
-            => args.OpenSubmenu(Name, ProcessMenuItems());
-
-        private unsafe static List<MenuItem> ProcessMenuItems()
         {
-            var list = new List<MenuItem>();
+            if (GetSelectedTabIndex() > 3) return;
 
-            var agentChatLog = AgentModule.Instance()->GetAgentChatLog();
-            var selectedTabIndex = MemoryHelper.Read<int>((nint)agentChatLog + 0x130);
-            if (selectedTabIndex > 3)
-                throw new Exception("未知索引");
-
-            foreach (var preset in ModuleConfig.Presets)
-                list.Add(new()
-                {
-                    Name = preset.Name,
-                    OnClicked = _ => ApplyFilterPresetAndNotify(preset, selectedTabIndex)
-                });
-
-            return list;
+            args.OpenSubmenu(Name, ProcessMenuItems());
         }
 
         public override unsafe bool IsDisplay(IMenuOpenedArgs args)
@@ -307,6 +292,30 @@ public class MoreMessageFilterPresets : DailyModuleBase
                 return false;
 
             return true;
+        }
+
+        private static unsafe int GetSelectedTabIndex()
+        {
+            var agentChatLog = AgentModule.Instance()->GetAgentChatLog();
+            var selectedTabIndex = MemoryHelper.Read<int>((nint)agentChatLog + 0x130);
+
+            return selectedTabIndex;
+        }
+
+        private static List<MenuItem> ProcessMenuItems()
+        {
+            var list = new List<MenuItem>();
+
+            var selectedTabIndex = GetSelectedTabIndex();
+
+            foreach (var preset in ModuleConfig.Presets)
+                list.Add(new()
+                {
+                    Name = preset.Name,
+                    OnClicked = _ => ApplyFilterPresetAndNotify(preset, selectedTabIndex)
+                });
+
+            return list;
         }
     }
 
