@@ -42,11 +42,11 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     // asset
     private static readonly byte[] DamagePhysicalStr = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
     private static readonly byte[] DamageMagicalStr  = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
-    
+
     public override void Init()
     {
         ModuleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
-        
+
         // overlay
         SetOverlay();
 
@@ -413,7 +413,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     public static unsafe void Draw()
     {
-        if (!IsAddonAndNodesReady(PartyList)) return;
+        if (!IsAddonAndNodesReady(PartyList))
+            return;
 
         var drawList = ImGui.GetBackgroundDrawList();
         var addon    = (AddonPartyList*)PartyList;
@@ -444,8 +445,14 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 return;
 
             var partyListAddon = (AddonPartyList*)PartyList;
-            if (!IsAddonAndNodesReady(PartyList)) return;
-            
+            if (!IsAddonAndNodesReady(PartyList))
+                return;
+
+            // hidden when casting
+            var nameTextNode = partyMember.Name;
+            if (nameTextNode is null || !nameTextNode->IsVisible())
+                return;
+
             var partyScale = partyListAddon->Scale;
 
             using var fontPush = FontManager.MiedingerMidFont120.Push();
@@ -454,38 +461,66 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             var textSize = ImGui.CalcTextSize(text);
 
             var posX = nameNode->ScreenX + (nameNode->GetWidth() * partyScale) - textSize.X - (5 * partyScale);
-            var posY = nameNode->ScreenY                                       + (2              * partyScale);
+            var posY = nameNode->ScreenY + (2 * partyScale);
 
             var pos = new Vector2(posX, posY);
-            
-            drawList.AddText(pos + new Vector2(3, 3), 0x9D00A2FF, text);
-            drawList.AddText(pos,                     0xFFFFFFFF, text);
+
+            drawList.AddText(pos + new Vector2(1, 1), 0x9D00A2FF, text);
+            drawList.AddText(pos, 0xFFFFFFFF, text);
         }
 
         public static void DrawShieldNode(ImDrawListPtr drawList, ref AddonPartyList.PartyListMemberStruct partyMember, float[] status)
         {
             var shieldValue = status[2];
-            if (shieldValue == 0) return;
 
             var hpComponent = partyMember.HPGaugeComponent;
             if (hpComponent is null || !hpComponent->OwnerNode->IsVisible())
                 return;
-            
+
             var numNode = hpComponent->GetTextNodeById(2);
             if (numNode is null || !numNode->IsVisible())
                 return;
 
             var partyListAddon = (AddonPartyList*)PartyList;
-            if (!IsAddonAndNodesReady(PartyList)) return;
-            
+            if (!IsAddonAndNodesReady(PartyList))
+                return;
+
+            // hide mp number
+            var mpNodes = new[]
+            {
+                partyMember.MPGaugeBar->GetTextNodeById(2)->GetAsAtkTextNode(),
+                partyMember.MPGaugeBar->GetTextNodeById(3)->GetAsAtkTextNode()
+            };
+            if (shieldValue >= 1e5)
+            {
+                foreach (var mpNode in mpNodes)
+                {
+                    if (mpNode is null || !mpNode->IsVisible())
+                        continue;
+                    mpNode->SetAlpha(0);
+                }
+            }
+            else
+            {
+                foreach (var mpNode in mpNodes)
+                {
+                    if (mpNode is null || !mpNode->IsVisible())
+                        continue;
+                    mpNode->SetAlpha(255);
+                }
+            }
+
+            if (shieldValue == 0)
+                return;
+
             var partyScale = partyListAddon->Scale;
 
             using var fontPush = FontManager.MiedingerMidFont120.Push();
 
             var text = $"{shieldValue:F0}";
 
-            var posX = numNode->ScreenX + (numNode->GetWidth()                         * partyListAddon->Scale) + (3    * partyScale);
-            var posY = numNode->ScreenY + (numNode->GetHeight() * partyListAddon->Scale / 2)                      - (3f * partyScale);
+            var posX = numNode->ScreenX + (numNode->GetWidth() * partyListAddon->Scale) + (3 * partyScale);
+            var posY = numNode->ScreenY + (numNode->GetHeight() * partyListAddon->Scale / 2) - (3f * partyScale);
 
             drawList.AddText(new Vector2(posX + 1, posY + 1), 0x9D00A2FF, text);
             drawList.AddText(new Vector2(posX, posY), 0xFFFFFFFF, text);
