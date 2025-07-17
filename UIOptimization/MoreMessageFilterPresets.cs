@@ -323,7 +323,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
     {
         public          string Name = string.Empty;
         public          int    SelectedFilter;
-        public readonly byte[] PresetValue = new byte[MessageFilterSize];
+        public          byte[] PresetValue = new byte[MessageFilterSize];
     }
 
     private class Config : ModuleConfiguration
