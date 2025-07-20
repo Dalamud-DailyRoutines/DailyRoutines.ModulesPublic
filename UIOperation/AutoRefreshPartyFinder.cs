@@ -1,24 +1,27 @@
+using System;
+using System.Numerics;
+using System.Timers;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using System;
-using System.Numerics;
-using System.Timers;
 using Timer = System.Timers.Timer;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public class AutoRefreshPartyFinder : DailyModuleBase
+public unsafe class AutoRefreshPartyFinder : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoRefreshPartyFinderTitle"),
+        Title       = GetLoc("AutoRefreshPartyFinderTitle"),
         Description = GetLoc("AutoRefreshPartyFinderDescription"),
-        Category = ModuleCategories.UIOperation,
+        Category    = ModuleCategories.UIOperation,
     };
+
+    private delegate void RefreshPartyFinderDelegate(AgentLookingForGroup* agent);
+    private static readonly RefreshPartyFinderDelegate RefreshPartyFinder =
+        new CompSig("E8 ?? ?? ?? ?? 8B 8B ?? ?? ?? ?? 85 C9 75 12").GetDelegate<RefreshPartyFinderDelegate>();
 
     private static Config ModuleConfig = null!;
 
@@ -27,7 +30,7 @@ public class AutoRefreshPartyFinder : DailyModuleBase
     private static Timer? PFRefreshTimer;
     private static int Cooldown;
 
-    public override unsafe void Init()
+    public override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -48,7 +51,7 @@ public class AutoRefreshPartyFinder : DailyModuleBase
             OnAddonPF(AddonEvent.PostSetup, null);
     }
 
-    public override unsafe void OverlayUI()
+    public override void OverlayUI()
     {
         if (!IsAddonAndNodesReady(LookingForGroup))
         {
@@ -84,8 +87,7 @@ public class AutoRefreshPartyFinder : DailyModuleBase
         }
 
         var framePadding = ImGui.GetStyle().FramePadding;
-        WindowPos = new Vector2(refreshButton->ScreenX - ImGui.GetItemRectSize().X - (4 * framePadding.X),
-                                refreshButton->ScreenY - framePadding.Y);
+        WindowPos = new(refreshButton->ScreenX - ImGui.GetItemRectSize().X - (4 * framePadding.X), refreshButton->ScreenY - framePadding.Y);
     }
 
     // 招募
@@ -126,7 +128,7 @@ public class AutoRefreshPartyFinder : DailyModuleBase
         }
     }
 
-    private unsafe void OnRefreshTimer(object? sender, ElapsedEventArgs e)
+    private void OnRefreshTimer(object? sender, ElapsedEventArgs e)
     {
         if (!IsAddonAndNodesReady(LookingForGroup) || IsAddonAndNodesReady(LookingForGroupDetail))
         {
@@ -142,7 +144,8 @@ public class AutoRefreshPartyFinder : DailyModuleBase
         }
 
         Cooldown = ModuleConfig.RefreshInterval;
-        SendEvent(AgentId.LookingForGroup, 1, 17);
+
+        DService.Framework.Run(() => RefreshPartyFinder(AgentLookingForGroup.Instance()));
     }
 
     public override void Uninit()

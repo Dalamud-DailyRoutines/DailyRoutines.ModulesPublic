@@ -66,10 +66,11 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
             
             TaskHelper.Enqueue(() =>
             {
-                if (!Throttler.Throttle("AutoCheckItemLevel-OpenExamine")) return false;
                 if (CharacterInspect != null && agentInspect->CurrentEntityId == member.EntityId) return true;
+
+                if (Throttler.Throttle("AutoCheckItemLevel-OpenExamine"))
+                    agentInspect->ExamineCharacter(member.EntityId);
                 
-                agentInspect->ExamineCharacter(member.EntityId);
                 return false;
             }, "打开检视界面");
 
@@ -126,7 +127,7 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
                 return false;
             }, "关掉");
             
-            TaskHelper.DelayNext(500, "等待一会");
+            TaskHelper.DelayNext(1000, "等待 1 秒");
             TaskHelper.Enqueue(() => CheckMembersItemLevel(checkedMembers), "进入新循环");
             return true;
         }
