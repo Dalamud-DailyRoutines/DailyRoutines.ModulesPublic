@@ -8,7 +8,8 @@
         <IsPackable>false</IsPackable>
         <Title>Daily Routines Modules In Public</Title>
         <Configurations>Debug;Release;ReleaseTest</Configurations>
-    </PropertyGroup>
+      <UserSecretsId>e5e39168-f201-4edc-8f62-6a255e8df931</UserSecretsId>
+  </PropertyGroup>
 
     <PropertyGroup>
         <Nullable>enable</Nullable>
