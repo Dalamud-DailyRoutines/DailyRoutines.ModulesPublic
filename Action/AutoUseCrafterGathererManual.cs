@@ -94,7 +94,7 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
         TaskHelper.Abort();
         TaskHelper.Enqueue(() =>
         {
-            if (DService.ClientState.LocalPlayer is not { } localPlayer) return false;
+            if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return false;
             if (localPlayer.Level >= PlayerState.Instance()->MaxLevel) return true;
             if (BetweenAreas || OccupiedInEvent || IsCasting || !IsScreenReady() ||
                 ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) != 0)
@@ -104,7 +104,7 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
             var isCrafter  = Crafters.Contains(localPlayer.ClassJob.RowId);
             if (!isGatherer && !isCrafter) return true;
 
-            var statusManager = localPlayer.ToBCStruct()->StatusManager;
+            var statusManager = localPlayer.ToStruct()->StatusManager;
             var statusIndex   = statusManager.GetStatusIndex(isGatherer ? 46U : 45U);
             if (statusIndex != -1) return true;
 

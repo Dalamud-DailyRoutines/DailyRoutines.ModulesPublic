@@ -105,7 +105,7 @@ public class FriendlistTeleporter : DailyModuleBase
             try
             {
                 if (args.Target is MenuTargetDefault { TargetCharacter.CurrentWorld.RowId: var _targetWorldID } &&
-                    _targetWorldID !=DService.ClientState.LocalPlayer.CurrentWorld.RowId)
+                    _targetWorldID !=DService.ObjectTable.LocalPlayer.CurrentWorld.RowId)
                 {
                     targetWorldID = _targetWorldID;
                     return true;

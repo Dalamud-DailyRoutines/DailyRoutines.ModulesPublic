@@ -53,7 +53,7 @@ public class AutoReuseEmote : DailyModuleBase
         if (!TryParseEmoteByName(emoteName, out var emoteID)) return;
 
         CancelSource = new();
-        DService.Framework.RunOnTick(() => UseEmoteByID(emoteID, repeatInterval, CancelSource), default, default, CancelSource.Token);
+        DService.Framework.Run(() => UseEmoteByID(emoteID, repeatInterval, CancelSource), CancelSource.Token);
     }
 
     private static unsafe bool TryParseEmoteByName(string name, out ushort id)
@@ -93,27 +93,24 @@ public class AutoReuseEmote : DailyModuleBase
         {
             unsafe
             {
-                if (AgentMap.Instance()->IsPlayerMoving == 1)
+                if (AgentMap.Instance()->IsPlayerMoving)
                 {
                     CancelTokenAndNullify();
                     return;
                 }
             }
             
-            if (DService.ClientState.LocalPlayer == null ||
+            if (DService.ObjectTable.LocalPlayer == null ||
                 BetweenAreas || OccupiedInEvent || DService.Condition[ConditionFlag.InCombat])
             {
                 CancelTokenAndNullify();
                 return;
             }
             
-            await DService.Framework.RunOnFrameworkThread(() =>
+            unsafe
             {
-                unsafe
-                {
-                    AgentEmote.Instance()->ExecuteEmote(id, default, false, false);
-                }
-            });
+                AgentEmote.Instance()->ExecuteEmote(id, default, false, false);
+            }
             
             await Task.Delay(interval, cts.Token);
         }

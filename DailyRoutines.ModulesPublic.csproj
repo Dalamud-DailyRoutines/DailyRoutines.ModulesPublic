@@ -1,4 +1,4 @@
-﻿<Project Sdk="Dalamud.CN.NET.Sdk/11.3.0">
+﻿<Project Sdk="Dalamud.CN.NET.Sdk/12.0.2">
     
     <PropertyGroup>
         <Authors>AtmoOmen</Authors>
@@ -24,7 +24,6 @@
         <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
         <BaseOutputPath>$(SolutionDir)bin</BaseOutputPath>
         <SatelliteResourceLanguages>xxx</SatelliteResourceLanguages>
-        <Use_Dalamud_CN>true</Use_Dalamud_CN>
         <Use_DalamudPackager>false</Use_DalamudPackager>
     </PropertyGroup>
 

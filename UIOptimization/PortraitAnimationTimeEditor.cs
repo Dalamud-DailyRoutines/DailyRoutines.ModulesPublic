@@ -167,7 +167,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
         if (baseTimeline == null)
             return;
 
-        var timelineKey = (nint)baseTimeline->ActionTimelineKey;
+        var timelineKey = (nint)baseTimeline->ActionTimelineKey.Value;
         var timelineStr = timelineKey != 0 ? Marshal.PtrToStringUTF8(timelineKey) : null;
         if (timelineStr is "normal/idle")
             return;

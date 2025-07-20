@@ -39,8 +39,8 @@ public class AutoGathererRoleActions : DailyModuleBase
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
 
         DService.ClientState.ClassJobChanged += OnJobChanged;
-        if (DService.ClientState.LocalPlayer != null)
-            OnJobChanged(DService.ClientState.LocalPlayer.ClassJob.RowId);
+        if (DService.ObjectTable.LocalPlayer != null)
+            OnJobChanged(DService.ObjectTable.LocalPlayer.ClassJob.RowId);
     }
 
     private unsafe void OnJobChanged(uint jobID)

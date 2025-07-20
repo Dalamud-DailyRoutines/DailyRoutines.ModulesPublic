@@ -77,7 +77,7 @@ public class AutoNotifyBonusFate : DailyModuleBase
             return;
         }
         
-        if (BetweenAreas || DService.ClientState.LocalPlayer == null) return;
+        if (BetweenAreas || DService.ObjectTable.LocalPlayer == null) return;
 
         if (DService.Fate is not { Length: > 0 } fateTable) return;
         if (LastFates.Count != 0 && fateTable.SequenceEqual(LastFates)) return;

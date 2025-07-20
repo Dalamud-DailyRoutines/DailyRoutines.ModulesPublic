@@ -307,7 +307,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
     {
         if (ModuleConfig.NotifiedPlayer.Count == 0) return;
 
-        var localPlayer = DService.ClientState.LocalPlayer;
+        var localPlayer = DService.ObjectTable.LocalPlayer;
         if (!DService.ClientState.IsLoggedIn || localPlayer == null) return;
         if (obj == localPlayer.ToStruct()) return;
 

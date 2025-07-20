@@ -284,7 +284,7 @@ public unsafe class AutoLogin : DailyModuleBase
         var addon = Dialogue;
         if (!IsAddonAndNodesReady(addon)) return;
 
-        var buttonNode = addon->GetButtonNodeById(4);
+        var buttonNode = addon->GetComponentButtonById(4);
         if (buttonNode == null) return;
 
         buttonNode->ClickAddonButton(addon);

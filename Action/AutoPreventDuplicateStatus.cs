@@ -285,7 +285,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
 
         var targetIDDetection = targetID;
         if (canTargetSelf && !ActionManager.CanUseActionOnTarget(adjustedActionID, gameObj))
-            targetIDDetection = DService.ClientState.LocalPlayer.EntityId;
+            targetIDDetection = DService.ObjectTable.LocalPlayer.EntityId;
 
         if (info.ShouldPrevent(targetIDDetection))
         {
@@ -366,9 +366,8 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
                 case DetectType.Self:
                     return HasStatus(&Control.GetLocalPlayer()->StatusManager);
                 case DetectType.Target:
-                    var target = DService.Targets.Target;
-                    if (target == null) return false;
-                    return HasStatus(&target.ToBCStruct()->StatusManager);
+                    if (DService.Targets.Target is not { } target || target is not IBattleChara chara) return false;
+                    return HasStatus(&chara.ToStruct()->StatusManager);
                 case DetectType.Member:
                     if (DService.PartyList.Length <= 0) return false;
                     foreach (var partyMember in DService.PartyList)
@@ -386,7 +385,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
 
         public bool HasStatus(ulong gameObjectID)
         {
-            var localPlayer = DService.ClientState.LocalPlayer;
+            var localPlayer = DService.ObjectTable.LocalPlayer;
             if (localPlayer == null) return false;
             var localPlayerGameObjectID = localPlayer.GameObjectId;
 

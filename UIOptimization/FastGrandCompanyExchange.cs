@@ -221,7 +221,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
                 {
                     var offset   = 17 + i;
                     var atkValue = GrandCompanyExchange->AtkValues[offset];
-                    var name     = MemoryHelper.ReadSeStringNullTerminated((nint)atkValue.String);
+                    var name     = MemoryHelper.ReadSeStringNullTerminated((nint)atkValue.String.Value);
                     if (string.IsNullOrWhiteSpace(name.ExtractText()) || name.ExtractText() != result.Item.Value.Name.ExtractText()) continue;
 
                     SendEvent(AgentId.GrandCompanyExchange, 0, 0, i, exchangeCount, 0, true, false);

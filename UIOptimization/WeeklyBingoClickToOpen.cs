@@ -63,9 +63,9 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
         }
     }
 
-    private static unsafe void OnDutySlotClick(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
+    private static unsafe void OnDutySlotClick(AddonEventType atkEventType, AddonEventData data)
     {
-        var dutyButtonNode = (AtkResNode*)atkResNode;
+        var dutyButtonNode = (AtkResNode*)data.NodeTargetPointer;
         if (dutyButtonNode == null) return;
 
         var agent = AgentContentsFinder.Instance();

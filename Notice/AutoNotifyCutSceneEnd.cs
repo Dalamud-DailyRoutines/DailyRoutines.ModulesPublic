@@ -97,7 +97,7 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         if (IsDutyEnd) return;
         
         // 本地玩家为空, 暂时不检查
-        if (DService.ClientState.LocalPlayer is null) return;
+        if (DService.ObjectTable.LocalPlayer is null) return;
 
         if (DService.Condition[ConditionFlag.InCombat])
         {
