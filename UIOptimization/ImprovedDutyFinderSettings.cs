@@ -15,21 +15,25 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Addon = Lumina.Excel.Sheets.Addon;
 using Condition = Lumina.Excel.Sheets.Condition;
-using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
 namespace DailyRoutines.Modules;
 
 public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title = GetLoc("更好的组队查找设置"),
+        Description = GetLoc("将查找器设置变为按钮。"),
+        Category = ModuleCategories.UIOptimization,
+        Author = ["Mizami"]
+    };
+    
     public delegate void SetContentsFinderSettingsInitDelegate(byte* a1, nint a2);
 
     private static readonly CompSig SetContentsFinderSettingsInitSig = new("E8 ?? ?? ?? ?? 49 8B 06 33 ED");
-    private static readonly IAddonEventHandle?[] EventHandles = new IAddonEventHandle?[20];
-    private static int eventHandleIndex;
-
-    private static readonly List<(nint ImageNodePtr, DutyFinderSetting Setting)> CreatedImageNodes = [];
-    private static AtkResNode* CreatedContainer = null;
     private static Hook<SetContentsFinderSettingsInitDelegate>? setContentsFinderSettingsInitHook;
+    private static readonly IAddonEventHandle?[] EventHandles = new IAddonEventHandle?[20];
+
 
     private static bool languageConfigsAvailable;
     private static bool languageConfigsChecked;
@@ -69,13 +73,38 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         }
     ];
 
-    public override ModuleInfo Info { get; } = new()
+    
+    public override void Init()
     {
-        Title = GetLoc("更好的组队查找设置"),
-        Description = GetLoc("将查找器设置变为按钮。"),
-        Category = ModuleCategories.UIOptimization,
-        Author = ["Mizami"]
-    };
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ContentsFinder", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "ContentsFinder", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RaidFinder", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RaidFinder", OnAddon);
+
+        OnAddon(AddonEvent.PostSetup, null);
+
+        setContentsFinderSettingsInitHook ??=
+            SetContentsFinderSettingsInitSig.GetHook<SetContentsFinderSettingsInitDelegate>(
+                SetContentsFinderSettingsInitDetour);
+        setContentsFinderSettingsInitHook.Enable();
+    }
+
+    public override void Uninit()
+    {
+        CleanupAllEvents();
+        FrameworkManager.Unregister(UpdateIcons);
+
+        DService.AddonLifecycle.UnregisterListener(OnAddon);
+
+        var contentsFinder = ContentsFinder;
+        if (contentsFinder != null)
+            ResetAddon(contentsFinder);
+        var raidFinder = RaidFinder;
+        if (raidFinder != null)
+            ResetAddon(raidFinder);
+
+        base.Uninit();
+    }
 
     private static bool AreLanguageConfigsAvailable()
     {
@@ -93,46 +122,11 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Debug($"Failed to check language config availability: {ex.Message}");
             languageConfigsAvailable = false;
             languageConfigsChecked = true;
         }
 
         return languageConfigsAvailable;
-    }
-
-    public override void Init()
-    {
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ContentsFinder", OnAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "ContentsFinder", OnAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RaidFinder", OnAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RaidFinder", OnAddon);
-
-        if (IsAddonAndNodesReady(InfosOm.ContentsFinder) || IsAddonAndNodesReady(RaidFinder))
-            OnAddon(AddonEvent.PostSetup, null);
-
-        setContentsFinderSettingsInitHook ??=
-            DService.Hook.HookFromSignature<SetContentsFinderSettingsInitDelegate>(
-                SetContentsFinderSettingsInitSig.Get(), SetContentsFinderSettingsInitDetour);
-        setContentsFinderSettingsInitHook.Enable();
-    }
-
-    public override void Uninit()
-    {
-        CleanupAllEvents();
-        CleanupAllNodes();
-        FrameworkManager.Unregister(UpdateIcons);
-
-        DService.AddonLifecycle.UnregisterListener(OnAddon);
-
-        var contentsFinder = GetAddonByName("ContentsFinder");
-        if (contentsFinder != null)
-            ResetAddon(contentsFinder);
-        var raidFinder = GetAddonByName("RaidFinder");
-        if (raidFinder != null)
-            ResetAddon(raidFinder);
-
-        setContentsFinderSettingsInitHook?.Disable();
     }
 
     private List<DutyFinderSettingDisplay> GetLanguageButtons()
@@ -170,7 +164,6 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         if (defaultContainer == null) return;
         defaultContainer->ToggleVisibility(false);
 
-        // 创建容器（可选，如果你想要的话）
         var container = IMemorySpace.GetUISpace()->Create<AtkResNode>();
         container->SetWidth(defaultContainer->GetWidth());
         container->SetHeight(defaultContainer->GetHeight());
@@ -179,7 +172,6 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         container->NodeId = CustomNodes.Get($"{nameof(ImprovedDutyFinderSettings)}_Container");
         container->Type = NodeType.Res;
         container->ToggleVisibility(true);
-        // 直接插入container到defaultContainer之前
         var prev = defaultContainer->PrevSiblingNode;
         container->ParentNode = defaultContainer->ParentNode;
         defaultContainer->PrevSiblingNode = container;
@@ -187,13 +179,8 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
             prev->NextSiblingNode = container;
         container->PrevSiblingNode = prev;
         container->NextSiblingNode = defaultContainer;
-
         unitBase->UldManager.UpdateDrawNodeList();
-        // 保存容器引用
-        CreatedContainer = container;
 
-        // 清理旧的引用
-        CreatedImageNodes.Clear();
 
         foreach (var index in Enumerable.Range(0, EventHandles.Length))
             if (EventHandles[index] is { } handle)
@@ -213,15 +200,12 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
                 MakeImageNode(CustomNodes.Get($"{nameof(ImprovedDutyFinderSettings)}_Icon_{settingDetail.Setting}"),
                               new PartInfo(0, 0, 24, 24));
             LinkNodeToContainer(imgNode, container, unitBase);
-
             imgNode->AtkResNode.SetPositionFloat(basedOn->GetXFloat(), basedOn->GetYFloat());
             imgNode->AtkResNode.SetWidth(basedOn->GetWidth());
             imgNode->AtkResNode.SetHeight(basedOn->GetHeight());
 
             imgNode->AtkResNode.NodeFlags |= NodeFlags.RespondToMouse | NodeFlags.EmitsEvents | NodeFlags.HasCollision;
 
-            // 保存节点引用
-            CreatedImageNodes.Add(((nint)imgNode, settingDetail.Setting));
 
             var handle = DService.AddonEvent.AddEvent((nint)unitBase, (nint)imgNode,
                                                       AddonEventType.MouseClick, ToggleSetting);
@@ -260,115 +244,22 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         UpdateIcons(unitBase);
     }
 
-    private void ToggleSetting(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
-    {
-        if (atkEventType != AddonEventType.MouseClick) return;
-
-        var node = (AtkResNode*)atkResNode;
-
-        // 通过节点指针查找对应的设置
-        var foundSetting = CreatedImageNodes.FirstOrDefault(x => x.ImageNodePtr == atkResNode);
-        if (foundSetting.ImageNodePtr == 0) return;
-
-        var settingDetail = dutyFinderSettingIcons.FirstOrDefault(x => x.Setting == foundSetting.Setting);
-        if (settingDetail == null) return;
-
-        ToggleSetting(settingDetail.Setting);
-
-        if (settingDetail.Setting == DutyFinderSetting.LootRule)
-        {
-            var unitBase = (AtkUnitBase*)atkUnitBase;
-            HideTooltip(unitBase);
-            ShowTooltip(unitBase, node, settingDetail);
-        }
-    }
-
-    private void ToggleLanguageSetting(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
-    {
-        if (atkEventType != AddonEventType.MouseClick) return;
-
-        if (!AreLanguageConfigsAvailable()) return;
-
-        var node = (AtkResNode*)atkResNode;
-        var nodeId = node->NodeId;
-
-        var languageButtons = GetLanguageButtons();
-        for (var i = 0; i < languageButtons.Count; i++)
-            if (nodeId == 17 + (uint)i)
-            {
-                ToggleSetting(languageButtons[i].Setting);
-                break;
-            }
-    }
-
-    private void OnMouseOver(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
-    {
-        if (atkEventType != AddonEventType.MouseOver) return;
-
-        var unitBase = (AtkUnitBase*)atkUnitBase;
-        var node = (AtkResNode*)atkResNode;
-
-        // 通过节点指针查找对应的设置
-        var foundSetting = CreatedImageNodes.FirstOrDefault(x => x.ImageNodePtr == atkResNode);
-        if (foundSetting.ImageNodePtr == 0) return;
-
-        var settingDetail = dutyFinderSettingIcons.FirstOrDefault(x => x.Setting == foundSetting.Setting);
-        if (settingDetail == null) return;
-
-        ShowTooltip(unitBase, node, settingDetail);
-    }
-
-    private void OnLanguageMouseOver(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
-    {
-        if (atkEventType != AddonEventType.MouseOver) return;
-
-        if (!AreLanguageConfigsAvailable()) return;
-
-        var unitBase = (AtkUnitBase*)atkUnitBase;
-        var node = (AtkResNode*)atkResNode;
-        var nodeId = node->NodeId;
-
-        var languageButtons = GetLanguageButtons();
-        for (var i = 0; i < languageButtons.Count; i++)
-            if (nodeId == 17 + (uint)i)
-            {
-                ShowTooltip(unitBase, node, languageButtons[i]);
-                break;
-            }
-    }
-
-    private void OnMouseOut(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
-    {
-        if (atkEventType != AddonEventType.MouseOut) return;
-
-        var unitBase = (AtkUnitBase*)atkUnitBase;
-        HideTooltip(unitBase);
-    }
-
     private void UpdateIcons(IFramework _)
     {
-        var contentsFinder = GetAddonByName("ContentsFinder");
+        var contentsFinder = ContentsFinder;
         if (contentsFinder != null)
             UpdateIcons(contentsFinder);
-        var raidFinder = GetAddonByName("RaidFinder");
+        var raidFinder = RaidFinder;
         if (raidFinder != null)
             UpdateIcons(raidFinder);
-        if (!Throttler.Throttle("ImprovedDutyFinderSettings-StopUpdate", 10))
-            FrameworkManager.Unregister(UpdateIcons);
     }
 
     private void UpdateIcons(AtkUnitBase* unitBase)
     {
-        if (unitBase == null || CreatedImageNodes.Count == 0) return;
-
-        foreach (var (imageNodePtr, setting) in CreatedImageNodes)
+        foreach (var settingDetail in dutyFinderSettingIcons)
         {
-            var imgNode = (AtkImageNode*)imageNodePtr;
-            if (imgNode == null) continue;
-
-            var settingDetail = dutyFinderSettingIcons.FirstOrDefault(x => x.Setting == setting);
-            if (settingDetail?.GetIcon == null) continue;
-
+            var nodeId = CustomNodes.Get($"{nameof(ImprovedDutyFinderSettings)}_Icon_{settingDetail.Setting}");
+            var imgNode = FindImageNode(unitBase, nodeId);
             var icon = settingDetail.GetIcon();
             // Game gets weird sometimes loading Icons using the specific icon function...
             imgNode->LoadTexture($"ui/icon/{icon / 5000 * 5000:000000}/{icon:000000}.tex");
@@ -408,92 +299,44 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
     private void ResetAddon(AtkUnitBase* unitBase)
     {
         CleanupAllEvents();
-        CleanupAllNodes(); // 新增：清理所有节点
         FrameworkManager.Unregister(UpdateIcons);
 
         var vanillaIconContainer = unitBase->GetNodeById(6);
         if (vanillaIconContainer == null) return;
         vanillaIconContainer->ToggleVisibility(true);
 
-        // 如果容器存在，销毁它
-        if (CreatedContainer != null)
-        {
-            CreatedContainer->Destroy(true);
-            CreatedContainer = null;
-        }
-
         unitBase->UldManager.UpdateDrawNodeList();
         unitBase->UpdateCollisionNodeList(false);
     }
 
-    private static void CleanupAllNodes()
+    private void ToggleSetting(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
     {
-        CreatedImageNodes.Clear();
-        CreatedContainer = null;
-    }
+        if (atkEventType != AddonEventType.MouseClick) return;
 
-    private static void SetContentsFinderSettingsInitDetour(byte* a1, nint a2)
-    {
-        setContentsFinderSettingsInitHook?.Original(a1, a2);
-    }
+        var node = (AtkResNode*)atkResNode;
 
-    private static byte GetCurrentSettingValue(DutyFinderSetting dutyFinderSetting)
-    {
-        var contentsFinder = ContentsFinder.Instance();
+        var setting = GetSettingFromNodeId(node->NodeId);
+        if (setting == null) return;
 
-        return dutyFinderSetting switch
+        var settingDetail = dutyFinderSettingIcons.FirstOrDefault(x => x.Setting == setting.Value);
+        if (settingDetail == null) return;
+
+        ToggleSetting(settingDetail.Setting);
+
+        if (settingDetail.Setting == DutyFinderSetting.LootRule)
         {
-            DutyFinderSetting.Ja => AreLanguageConfigsAvailable()
-                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeJA")
-                                        : (byte)0,
-            DutyFinderSetting.En => AreLanguageConfigsAvailable()
-                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeEN")
-                                        : (byte)0,
-            DutyFinderSetting.De => AreLanguageConfigsAvailable()
-                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeDE")
-                                        : (byte)0,
-            DutyFinderSetting.Fr => AreLanguageConfigsAvailable()
-                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeFR")
-                                        : (byte)0,
-            DutyFinderSetting.LootRule => (byte)contentsFinder->LootRules,
-            DutyFinderSetting.JoinPartyInProgress => (byte)DService.GameConfig.UiConfig.GetUInt(
-                "ContentsFinderSupplyEnable"),
-            DutyFinderSetting.UnrestrictedParty => *(byte*)&contentsFinder->IsUnrestrictedParty,
-            DutyFinderSetting.LevelSync => *(byte*)&contentsFinder->IsLevelSync,
-            DutyFinderSetting.MinimumIl => *(byte*)&contentsFinder->IsMinimalIL,
-            DutyFinderSetting.SilenceEcho => *(byte*)&contentsFinder->IsSilenceEcho,
-            DutyFinderSetting.ExplorerMode => *(byte*)&contentsFinder->IsExplorerMode,
-            DutyFinderSetting.LimitedLevelingRoulette => *(byte*)&contentsFinder->IsLimitedLevelingRoulette,
-            _ => 0
-        };
-    }
-
-    private void CleanupAllEvents()
-    {
-        for (var i = 0; i < EventHandles.Length; i++)
-            if (EventHandles[i] is { } handle)
-            {
-                try
-                {
-                    DService.AddonEvent.RemoveEvent(handle);
-                }
-                catch (Exception ex)
-                {
-                    DService.Log.Debug($"Failed to remove event handle {i}: {ex.Message}");
-                }
-
-                EventHandles[i] = null;
-            }
-
-        eventHandleIndex = 0;
+            var unitBase = (AtkUnitBase*)atkUnitBase;
+            HideTooltip(unitBase);
+            ShowTooltip(unitBase, node, settingDetail);
+        }
     }
 
     private void ToggleSetting(DutyFinderSetting setting)
     {
         if (DService.Condition[ConditionFlag.InDutyQueue])
         {
-            var condition = DService.Data.GetExcelSheet<Condition>().GetRow((uint)ConditionFlag.InDutyQueue).LogMessage
-                                    .Value.Text.ToDalamudString();
+            var condition = LuminaGetter.GetRow<Condition>((uint)ConditionFlag.InDutyQueue)?.LogMessage
+                                        .Value.Text.ToDalamudString();
             DService.Toast.ShowError(condition);
             return;
         }
@@ -519,17 +362,129 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
 
         array[(int)setting] = newValue;
 
-        if (!IsSettingArrayValid(array))
-        {
-            DService.Log.Error("It appears to be broken.");
-            return;
-        }
-
         fixed (byte* arrayPtr = array)
         {
             setContentsFinderSettingsInitHook?.Original(arrayPtr, (nint)UIModule.Instance());
         }
     }
+
+    private void ToggleLanguageSetting(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
+    {
+        if (atkEventType != AddonEventType.MouseClick) return;
+
+        if (!AreLanguageConfigsAvailable()) return;
+
+        var node = (AtkResNode*)atkResNode;
+        var nodeId = node->NodeId;
+
+        var languageButtons = GetLanguageButtons();
+        for (var i = 0; i < languageButtons.Count; i++)
+            if (nodeId == 17 + (uint)i)
+            {
+                ToggleSetting(languageButtons[i].Setting);
+                break;
+            }
+    }
+
+    private void OnMouseOver(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
+    {
+        if (atkEventType != AddonEventType.MouseOver) return;
+
+        var unitBase = (AtkUnitBase*)atkUnitBase;
+        var node = (AtkResNode*)atkResNode;
+
+        var setting = GetSettingFromNodeId(node->NodeId);
+        if (setting == null) return;
+
+        var settingDetail = dutyFinderSettingIcons.FirstOrDefault(x => x.Setting == setting.Value);
+        if (settingDetail == null) return;
+
+        ShowTooltip(unitBase, node, settingDetail);
+    }
+
+    private void OnLanguageMouseOver(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
+    {
+        if (atkEventType != AddonEventType.MouseOver) return;
+
+        if (!AreLanguageConfigsAvailable()) return;
+
+        var unitBase = (AtkUnitBase*)atkUnitBase;
+        var node = (AtkResNode*)atkResNode;
+        var nodeId = node->NodeId;
+
+        var languageButtons = GetLanguageButtons();
+        for (var i = 0; i < languageButtons.Count; i++)
+            if (nodeId == 17 + (uint)i)
+            {
+                ShowTooltip(unitBase, node, languageButtons[i]);
+                break;
+            }
+    }
+
+    private void OnMouseOut(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
+    {
+        if (atkEventType != AddonEventType.MouseOut) return;
+
+        var unitBase = (AtkUnitBase*)atkUnitBase;
+        HideTooltip(unitBase);
+    }
+
+    private static DutyFinderSetting? GetSettingFromNodeId(uint nodeId)
+    {
+        // 遍历所有设置，检查节点ID是否匹配
+        foreach (var setting in Enum.GetValues<DutyFinderSetting>())
+        {
+            var expectedNodeId = CustomNodes.Get($"{nameof(ImprovedDutyFinderSettings)}_Icon_{setting}");
+            if (nodeId == expectedNodeId)
+                return setting;
+        }
+
+        return null;
+    }
+
+    private void CleanupAllEvents()
+    {
+        for (var i = 0; i < EventHandles.Length; i++)
+            if (EventHandles[i] is { } handle)
+                DService.AddonEvent.RemoveEvent(handle);
+    }
+
+    private static void SetContentsFinderSettingsInitDetour(byte* a1, nint a2)
+    {
+        setContentsFinderSettingsInitHook?.Original(a1, a2);
+    }
+
+    private static byte GetCurrentSettingValue(DutyFinderSetting dutyFinderSetting)
+    {
+        var option = ContentsFinderOption.Get();
+
+        return dutyFinderSetting switch
+        {
+            DutyFinderSetting.Ja => AreLanguageConfigsAvailable()
+                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeJA")
+                                        : (byte)0,
+            DutyFinderSetting.En => AreLanguageConfigsAvailable()
+                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeEN")
+                                        : (byte)0,
+            DutyFinderSetting.De => AreLanguageConfigsAvailable()
+                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeDE")
+                                        : (byte)0,
+            DutyFinderSetting.Fr => AreLanguageConfigsAvailable()
+                                        ? (byte)DService.GameConfig.UiConfig.GetUInt("ContentsFinderUseLangTypeFR")
+                                        : (byte)0,
+            DutyFinderSetting.JoinPartyInProgress => (byte)DService.GameConfig.UiConfig.GetUInt(
+                "ContentsFinderSupplyEnable"),
+            DutyFinderSetting.LootRule => (byte)option.LootRules,
+            DutyFinderSetting.UnrestrictedParty => option.UnrestrictedParty ? (byte)1 : (byte)0,
+            DutyFinderSetting.LevelSync => option.LevelSync ? (byte)1 : (byte)0,
+            DutyFinderSetting.MinimumIl => option.MinimalIL ? (byte)1 : (byte)0,
+            DutyFinderSetting.SilenceEcho => option.SilenceEcho ? (byte)1 : (byte)0,
+            DutyFinderSetting.ExplorerMode => option.ExplorerMode ? (byte)1 : (byte)0,
+            DutyFinderSetting.LimitedLevelingRoulette => option.IsLimitedLevelingRoulette ? (byte)1 : (byte)0,
+            _ => 0
+        };
+    }
+
 
     private static byte[] GetCurrentSettingArray()
     {
@@ -546,22 +501,6 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         return array;
     }
 
-    private static bool IsSettingArrayValid(IReadOnlyList<byte> array)
-    {
-        var isArrayValid = true;
-        var nbSettings = Enum.GetValues<DutyFinderSetting>().Length;
-        for (var index = 0; index < array.Count; index++)
-            if ((index % nbSettings != (int)DutyFinderSetting.LootRule && array[index] != 0 && array[index] != 1) ||
-                (array[index] != 0 && array[index] != 1 && array[index] != 2))
-            {
-                isArrayValid = false;
-                DService.Log.Error(
-                    $"Invalid setting value ({array[index]}) for: {(DutyFinderSetting)(index % nbSettings)}");
-            }
-
-
-        return isArrayValid;
-    }
 
     private static void HideTooltip(AtkUnitBase* unitBase)
     {
@@ -598,6 +537,24 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         addon->UldManager.UpdateDrawNodeList();
     }
 
+    //用自带的GetNodeById无法获取到，看了一下SimpleTweaks的代码，是自己重写了一个GetNodeByID的方法，我将其复制过来就可以正常获取
+    public static AtkImageNode* FindImageNode(AtkUnitBase* unitBase, uint nodeId, NodeType? type = null)
+    {
+        if (unitBase == null) return null;
+        var uldManager = &unitBase->UldManager;
+        if (uldManager->NodeList == null) return null;
+
+        for (var i = 0; i < uldManager->NodeListCount; i++)
+        {
+            var n = uldManager->NodeList[i];
+            if (n != null && n->NodeId == nodeId && (type == null || n->Type == type.Value))
+                return (AtkImageNode*)n;
+        }
+
+        return null;
+    }
+
+
     private record DutyFinderSettingDisplay(DutyFinderSetting Setting)
     {
         public DutyFinderSettingDisplay(DutyFinderSetting setting, int icon, uint tooltip) : this(setting)
@@ -612,7 +569,7 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         public void ShowTooltip(AtkUnitBase* unitBase, AtkResNode* node)
         {
             var tooltipId = GetTooltip();
-            var tooltip = DService.Data.GetExcelSheet<Addon>().GetRowOrDefault(tooltipId)?.Text.ExtractText() ??
+            var tooltip = LuminaGetter.GetRow<Addon>(tooltipId)?.Text.ExtractText() ??
                           $"{Setting}";
             AtkStage.Instance()->TooltipManager.ShowTooltip(unitBase->Id, node, tooltip);
         }
@@ -633,22 +590,23 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         ExplorerMode = 10,
         LimitedLevelingRoulette = 11
     }
-}
 
-public static class CustomNodes
-{
-    private static readonly Dictionary<string, uint> NodeIds = new();
-    private static uint nextId = 0x53541000;
 
-    public static uint Get(string name, int index = 0)
+    private static class CustomNodes
     {
-        if (NodeIds.TryGetValue($"{name}#{index}", out var id)) return id;
-        lock (NodeIds)
+        private static readonly Dictionary<string, uint> NodeIds = new();
+        private static uint nextId = 114514;
+
+        public static uint Get(string name, int index = 0)
         {
-            id = nextId;
-            nextId += 16;
-            NodeIds.Add($"{name}#{index}", id);
-            return id;
+            if (NodeIds.TryGetValue($"{name}#{index}", out var id)) return id;
+            lock (NodeIds)
+            {
+                id = nextId;
+                nextId += 16;
+                NodeIds.Add($"{name}#{index}", id);
+                return id;
+            }
         }
     }
 }
