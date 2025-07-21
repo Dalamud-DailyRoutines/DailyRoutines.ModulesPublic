@@ -44,7 +44,7 @@ public class AutoCountPlayers : DailyModuleBase
 
     private static string SearchInput = string.Empty;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -63,7 +63,7 @@ public class AutoCountPlayers : DailyModuleBase
         PlayersManager.ReceivePlayersTargetingMe += OnPlayersTargetingMeUpdate;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(120f * GlobalFontScale);
         if (ImGui.InputFloat(GetLoc("Scale"), ref ModuleConfig.ScaleFactor, 0, 0, "%.1f"))
@@ -86,7 +86,7 @@ public class AutoCountPlayers : DailyModuleBase
             ModuleConfig.Save(this);
     }
 
-    public override unsafe void OverlayUI()
+    protected override unsafe void OverlayUI()
     {
         ImGui.SetNextItemWidth(-1f);
         ImGui.InputText("###Search", ref SearchInput, 128);
@@ -286,7 +286,7 @@ public class AutoCountPlayers : DailyModuleBase
         }
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.UiBuilder.Draw -= OnDraw;
         PlayersManager.ReceivePlayersAround -= OnUpdate;

@@ -23,7 +23,7 @@ public unsafe class NoAutoClosePartyFinder : DailyModuleBase
     private static DateTime LastPartyMemberChangeTime;
     private static DateTime LastViewTime;
 
-    public override void Init()
+    protected override void Init()
     {
         LookingForGroupHideHook = LookingForGroupHideSig.GetHook<LookingForGroupHideDelegate>(LookingForGroupHideDetour);
         LookingForGroupHideHook.Enable();
@@ -60,7 +60,7 @@ public unsafe class NoAutoClosePartyFinder : DailyModuleBase
         LookingForGroupHideHook.Original(agent); 
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         LogMessageManager.Unregister(OnPreReceiveMessage);
         base.Uninit();

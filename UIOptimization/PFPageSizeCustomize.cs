@@ -1,9 +1,9 @@
-using DailyRoutines.Abstracts;
-using Dalamud.Hooking;
 using System;
 using System.Runtime.InteropServices;
+using DailyRoutines.Abstracts;
+using Dalamud.Hooking;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class PFPageSizeCustomize : DailyModuleBase
 {
@@ -15,36 +15,38 @@ public class PFPageSizeCustomize : DailyModuleBase
         Author      = ["逆光"]
     };
 
-    private static readonly CompSig PartyFinderDisplayAmountSig = new("48 89 5C 24 ?? 55 56 57 48 ?? ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? 48 89 85 ?? ?? ?? ?? 48 ?? ?? 0F");
-    private delegate byte PartyFinderDisplayAmountDelegate(nint a1, int a2);
-    private static Hook<PartyFinderDisplayAmountDelegate>? PartyFinderDisplayAmountHook;
+    private static readonly CompSig PartyFinderDisplayAmountSig =
+        new("48 89 5C 24 ?? 55 56 57 48 ?? ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? 48 89 85 ?? ?? ?? ?? 48 ?? ?? 0F");
+    private delegate byte                                    PartyFinderDisplayAmountDelegate(nint a1, int a2);
+    private static   Hook<PartyFinderDisplayAmountDelegate>? PartyFinderDisplayAmountHook;
 
-    private static int ConfigDisplayAmount = 100;
+    private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
-        AddConfig("DisplayAmount", 100);
-        ConfigDisplayAmount = GetConfig<int>("DisplayAmount");
+        ModuleConfig = LoadConfig<Config>() ?? new();
 
-        PartyFinderDisplayAmountHook ??= DService.Hook.HookFromSignature<PartyFinderDisplayAmountDelegate>(
-            PartyFinderDisplayAmountSig.Get(), PartyFinderDisplayAmountDetour);
+        PartyFinderDisplayAmountHook ??= PartyFinderDisplayAmountSig.GetHook<PartyFinderDisplayAmountDelegate>(PartyFinderDisplayAmountDetour);
         PartyFinderDisplayAmountHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.InputInt(Lang.Get("PFPageSizeCustomize-DisplayAmount"), ref ConfigDisplayAmount, 10, 10,
-                           ImGuiInputTextFlags.EnterReturnsTrue))
-        {
-            ConfigDisplayAmount = Math.Clamp(ConfigDisplayAmount, 1, 100);
-            UpdateConfig("DisplayAmount", ConfigDisplayAmount);
-        }
+        if (ImGuiOm.InputShort(GetLoc("PFPageSizeCustomize-DisplayAmount"), ref ModuleConfig.PageSize, 1, 10))
+            ModuleConfig.PageSize = Math.Clamp(ModuleConfig.PageSize, (short)1, (short)100);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            SaveConfig(ModuleConfig);
     }
 
     private static byte PartyFinderDisplayAmountDetour(nint a1, int a2)
     {
-        Marshal.WriteInt16(a1 + 1128, (short)ConfigDisplayAmount);
+        Marshal.WriteInt16(a1 + 1128, ModuleConfig.PageSize);
         return PartyFinderDisplayAmountHook.Original(a1, a2);
+    }
+
+    private class Config : ModuleConfiguration
+    {
+        public short PageSize = 100;
     }
 }

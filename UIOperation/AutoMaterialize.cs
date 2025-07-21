@@ -23,26 +23,25 @@ public unsafe class AutoMaterialize : DailyModuleBase
     };
 
     // 0 - 成功; 3 - 获取 InventoryType 或 InventorySlot 失败; 4 - 物品为空或不符合条件; 34 - 当前状态无法使用; 
-    private static readonly CompSig ExtractMateriaSig = new("E8 ?? ?? ?? ?? 83 7E 20 00 75 5A");
-    private delegate int ExtractMateriaDelegate(nint a1, InventoryType type, uint slot);
-    private static Hook<ExtractMateriaDelegate>? ExtractMateriaHook;
+    private static readonly CompSig                       ExtractMateriaSig = new("E8 ?? ?? ?? ?? 83 7E 20 00 75 5A");
+    private delegate        int                           ExtractMateriaDelegate(nint a1, InventoryType type, uint slot);
+    private static          Hook<ExtractMateriaDelegate>? ExtractMateriaHook;
 
-    private static readonly CompSig MaterializeController = new("48 8D 0D ?? ?? ?? ?? 8B D0 E8 ?? ?? ?? ?? 83 7E");
+    private static readonly CompSig MaterializeControllerSig = new("48 8D 0D ?? ?? ?? ?? 8B D0 E8 ?? ?? ?? ?? 83 7E");
 
     private const string Command = "materialize";
+    
+    private static Config ModuleConfig = null!;
 
-    private static bool AutoExtractAll;
-
-    public override void Init()
+    protected override void Init()
     {
+        ModuleConfig = LoadConfig<Config>() ?? new();
+        
         ExtractMateriaHook ??= ExtractMateriaSig.GetHook<ExtractMateriaDelegate>(ExtractMateriaDetour);
         ExtractMateriaHook.Enable();
 
-        AddConfig(nameof(AutoExtractAll), true);
-        AutoExtractAll = GetConfig<bool>(nameof(AutoExtractAll));
-
-        TaskHelper    ??= new TaskHelper();
-        Overlay       ??= new Overlay(this);
+        TaskHelper    ??= new();
+        Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoMove;
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Materialize",       OnAddon);
@@ -57,9 +56,9 @@ public unsafe class AutoMaterialize : DailyModuleBase
         CommandManager.AddSubCommand(Command, new((_, _) => StartARoundAll()) { HelpMessage = GetLoc("AutoMaterialize-AutoExtractAll") });
     }
 
-    public override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ConflictKeyText();
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = Materialize;
         if (addon == null) return;
@@ -79,19 +78,19 @@ public unsafe class AutoMaterialize : DailyModuleBase
                     StartARoundAll();
             }
 
-            ImGui.SameLine();
+            ImGui.SameLine(0, 8f * GlobalFontScale);
             ImGui.TextDisabled("|");
 
-            ImGui.SameLine();
+            ImGui.SameLine(0, 8f * GlobalFontScale);
             if (ImGui.Button(GetLoc("Stop")))
                 TaskHelper.Abort();
 
-            ImGui.SameLine();
+            ImGui.SameLine(0, 8f * GlobalFontScale);
             ImGui.TextDisabled("|");
 
-            ImGui.SameLine();
-            if (ImGui.Checkbox(GetLoc("AutoMaterialize-AutoExtractAll"), ref AutoExtractAll))
-                UpdateConfig(nameof(AutoExtractAll), AutoExtractAll);
+            ImGui.SameLine(0, 8f * GlobalFontScale);
+            if (ImGui.Checkbox(GetLoc("AutoMaterialize-AutoExtractAll"), ref ModuleConfig.AutoExtractAll))
+                SaveConfig(ModuleConfig);
             ImGuiOm.HelpMarker(GetLoc("AutoMaterialize-AutoExtractAllHelp"));
         }
     }
@@ -99,13 +98,15 @@ public unsafe class AutoMaterialize : DailyModuleBase
     private void StartARoundAll()
     {
         if (TaskHelper.IsBusy) return;
+        
         TaskHelper.Enqueue(StartARound, "开始精炼全部装备");
     }
 
     private bool? StartARound()
     {
         if (InterruptByConflictKey(TaskHelper, this)) return true;
-        if (!Throttler.Throttle("AutoMaterialize")) return false;
+        
+        if (!Throttler.Throttle("AutoMaterialize-Execute")) return false;
         if (!IsEnvironmentValid()) return false;
 
         var manager = InventoryManager.Instance();
@@ -134,6 +135,8 @@ public unsafe class AutoMaterialize : DailyModuleBase
         }
 
         NotificationInfo(GetLoc("AutoMaterialize-Notice-ExtractFinish"));
+        Chat(GetLoc("AutoMaterialize-Notice-ExtractFinish"));
+        
         TaskHelper.Abort();
         return true;
     }
@@ -160,13 +163,15 @@ public unsafe class AutoMaterialize : DailyModuleBase
     }
 
     private static int ExtractMateria(InventoryType type, uint slot) =>
-        ExtractMateriaHook.Original(MaterializeController.GetStatic(), type, slot);
+        ExtractMateriaHook.Original(MaterializeControllerSig.GetStatic(), type, slot);
 
     private int ExtractMateriaDetour(nint a1, InventoryType type, uint slot)
     {
         var original = ExtractMateriaHook.Original(a1, type, slot);
-        if (AutoExtractAll && !TaskHelper.IsBusy) 
+        
+        if (ModuleConfig.AutoExtractAll && !TaskHelper.IsBusy) 
             StartARoundAll();
+        
         return original;
     }
 
@@ -186,7 +191,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
         Callback(addon, true, 0);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         CommandManager.RemoveSubCommand(Command);
         
@@ -194,5 +199,10 @@ public unsafe class AutoMaterialize : DailyModuleBase
         DService.AddonLifecycle.UnregisterListener(OnDialogAddon);
 
         base.Uninit();
+    }
+
+    private class Config : ModuleConfiguration
+    {
+        public bool AutoExtractAll = true;
     }
 }

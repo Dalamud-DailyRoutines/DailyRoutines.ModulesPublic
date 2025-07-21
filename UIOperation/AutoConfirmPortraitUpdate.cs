@@ -2,7 +2,7 @@
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoConfirmPortraitUpdate : DailyModuleBase
 {
@@ -13,31 +13,41 @@ public class AutoConfirmPortraitUpdate : DailyModuleBase
         Category    = ModuleCategories.UIOperation
     };
 
-    private static bool SendNotification = true;
-    
-    public override unsafe void Init()
+    private static Config ModuleConfig = null!;
+
+    protected override unsafe void Init()
     {
-        AddConfig(nameof(SendNotification), true);
-        SendNotification = GetConfig<bool>(nameof(SendNotification));
+        ModuleConfig = LoadConfig<Config>() ?? new();
         
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "BannerPreview", OnAddon);
         if (BannerPreview != null) 
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("SendNotification"), ref SendNotification))
-            UpdateConfig(nameof(SendNotification), SendNotification);
+        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
+            SaveConfig(ModuleConfig);
+        
+        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
+            SaveConfig(ModuleConfig);
     }
 
     private static unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
         Callback(BannerPreview, true, 0);
         
-        if (SendNotification) 
+        if (ModuleConfig.SendNotification) 
             NotificationSuccess(GetLoc("AutoConfirmPortraitUpdate-Notification"));
+        if (ModuleConfig.SendChat)
+            Chat(GetLoc("AutoConfirmPortraitUpdate-Notification"));
     }
-    
-    public override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
+
+    protected override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
+
+    private class Config : ModuleConfiguration
+    {
+        public bool SendNotification = true;
+        public bool SendChat         = true;
+    }
 }

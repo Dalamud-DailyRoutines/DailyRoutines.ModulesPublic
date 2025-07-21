@@ -21,7 +21,7 @@ public unsafe class Alphascape3Helper : DailyModuleBase
         Category    = ModuleCategories.Assist
     };
 
-    public override void Init()
+    protected override void Init()
     {
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(DService.ClientState.TerritoryType);
@@ -51,7 +51,7 @@ public unsafe class Alphascape3Helper : DailyModuleBase
         new UseActionPacket(ActionType.Action, 12911, obj.EntityId, Control.GetLocalPlayer()->Rotation).Send();
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         FrameworkManager.Unregister(OnUpdate);

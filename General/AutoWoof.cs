@@ -16,7 +16,7 @@ public unsafe class AutoWoof : DailyModuleBase
         Author      = ["逆光"]
     };
 
-    public override void Init() => FrameworkManager.Register(OnUpdate, throttleMS: 1500);
+    protected override void Init() => FrameworkManager.Register(OnUpdate, throttleMS: 1500);
 
     private static void OnUpdate(IFramework framework)
     {
@@ -27,5 +27,5 @@ public unsafe class AutoWoof : DailyModuleBase
         UseActionManager.UseAction(ActionType.Action, 29463);
     }
 
-    public override void Uninit() => FrameworkManager.Unregister(OnUpdate);
+    protected override void Uninit() => FrameworkManager.Unregister(OnUpdate);
 }

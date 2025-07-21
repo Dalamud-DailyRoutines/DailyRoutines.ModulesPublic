@@ -31,7 +31,7 @@ public unsafe class BetterCommandInput : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = new Config().Load(this);
         ProcessSendedChatHook ??=
@@ -40,7 +40,7 @@ public unsafe class BetterCommandInput : DailyModuleBase
         ProcessSendedChatHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if(ImGui.Checkbox(GetLoc("BetterCommandInput-DeleteSpaceBeforeCommand"), ref ModuleConfig.IsAvoidingSpace))
             ModuleConfig.Save(this);

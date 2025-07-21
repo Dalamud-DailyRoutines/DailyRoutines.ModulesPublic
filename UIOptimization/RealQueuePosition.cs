@@ -33,7 +33,7 @@ public unsafe class RealQueuePosition : DailyModuleBase
     private delegate byte ContentFinderQueuePositionDataDelegate(nint a1, uint a2, nint a3);
     private static Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
 
-    public override void Init()
+    protected override void Init()
     {
         AgentWorldTravelUpdateHook ??= AgentWorldTravelUpdaterSig.GetHook<AgentWorldTravelUpdateDelegate>(AgentWorldTravelUpdaterDetour);
         AgentWorldTravelUpdateHook.Enable();

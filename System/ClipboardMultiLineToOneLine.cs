@@ -25,7 +25,7 @@ public unsafe class ClipboardMultiLineToOneLine : DailyModuleBase
 
     private static readonly string[] BlacklistAddons = ["Macro"];
 
-    public override void Init()
+    protected override void Init()
     {
         GetClipboardDataHook ??= GetClipboardDataSig.GetHook<GetClipboardDataDelegate>(GetClipboardDataDetour);
         GetClipboardDataHook.Enable();

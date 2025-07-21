@@ -24,7 +24,7 @@ public class AutoChakraFormShift : DailyModuleBase
     private const uint SteeledMeditation = 36940;
     private const uint FormShift         = 4262;
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
 
@@ -110,7 +110,7 @@ public class AutoChakraFormShift : DailyModuleBase
         TaskHelper.Enqueue(CheckCurrentJob);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.DutyState.DutyRecommenced -= OnDutyRecommenced;

@@ -20,7 +20,7 @@ public class SoundEffectThrottler : DailyModuleBase
 
     private static Config? ModuleConfig;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -28,7 +28,7 @@ public class SoundEffectThrottler : DailyModuleBase
         PlaySoundEffectHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
         ImGui.InputInt(GetLoc("SoundEffectThrottler-Throttle"), ref ModuleConfig.Throttle, 0, 0);

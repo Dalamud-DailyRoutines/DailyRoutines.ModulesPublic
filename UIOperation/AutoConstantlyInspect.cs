@@ -15,10 +15,10 @@ public class AutoConstantlyInspect : DailyModuleBase
         Category = ModuleCategories.UIOperation,
     };
 
-    public override void Init() => 
+    protected override void Init() => 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ItemInspectionResult", OnAddon);
 
-    public override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ConflictKeyText();
 
     private static unsafe void OnAddon(AddonEvent type, AddonArgs args)
     {
@@ -38,6 +38,6 @@ public class AutoConstantlyInspect : DailyModuleBase
         addon->Close(true);
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         DService.AddonLifecycle.UnregisterListener(OnAddon);
 }

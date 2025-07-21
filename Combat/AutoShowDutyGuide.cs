@@ -35,7 +35,7 @@ public class AutoShowDutyGuide : DailyModuleBase
 
     private static bool IsOnDebug;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
         CancelSource ??= new();
@@ -53,7 +53,7 @@ public class AutoShowDutyGuide : DailyModuleBase
             OnZoneChange(DService.ClientState.TerritoryType);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("WorkTheory")}:");
         ImGuiOm.HelpMarker(GetLoc("AutoShowDutyGuide-TheoryHelp"), 30f);
@@ -80,9 +80,9 @@ public class AutoShowDutyGuide : DailyModuleBase
         ImGuiOm.TooltipHover(GetLoc("AutoShowDutyGuide-DebugModeHelp"));
     }
 
-    public override void OverlayOnOpen() => ImGui.SetScrollHereY();
+    protected override void OverlayOnOpen() => ImGui.SetScrollHereY();
 
-    public override void OverlayPreDraw()
+    protected override void OverlayPreDraw()
     {
         if (!IsOnDebug && (!BoundByDuty || GuideText.Count <= 0))
         {
@@ -95,7 +95,7 @@ public class AutoShowDutyGuide : DailyModuleBase
             Overlay.WindowName = $"{GuideText[0]}###AutoShowDutyGuide-GuideWindow";
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         using (FontManager.GetUIFont(ModuleConfig.FontScale).Push())
         {
@@ -162,7 +162,7 @@ public class AutoShowDutyGuide : DailyModuleBase
         }
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChange;
         

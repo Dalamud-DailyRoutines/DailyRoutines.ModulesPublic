@@ -32,8 +32,8 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
     
     private static DateTime LastLucidDreamingUseTime = DateTime.MinValue;
     private static bool     IsAbilityLocked;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         TaskHelper   ??= new() { TimeLimitMS = 30_000 };
         ModuleConfig =   LoadConfig<Config>() ?? new();
@@ -43,7 +43,7 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
         CheckAndEnqueue();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("OnlyInDuty"), ref ModuleConfig.OnlyInDuty))
         {
@@ -61,7 +61,7 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.Condition.ConditionChange -= OnConditionChanged;
         

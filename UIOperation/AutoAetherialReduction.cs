@@ -28,7 +28,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4
     ];
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new TaskHelper();
         Overlay    ??= new Overlay(this);
@@ -40,8 +40,8 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
 
         GameResourceManager.AddToBlacklist(typeof(AutoAetherialReduction), "chara/action/normal/item_action.tmb");
     }
-    
-    public override void OverlayUI()
+
+    protected override void OverlayUI()
     {
         var addon = PurifyItemSelector;
         if (addon == null)
@@ -69,7 +69,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
             TaskHelper.Abort();
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         GameResourceManager.RemoveFromBlacklist(typeof(AutoAetherialReduction), "chara/action/normal/item_action.tmb");
 

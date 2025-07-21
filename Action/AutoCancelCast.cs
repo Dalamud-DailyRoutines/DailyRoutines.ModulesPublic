@@ -35,7 +35,7 @@ public unsafe class AutoCancelCast : DailyModuleBase
                                                                           .Select(x => x.RowId).ToHashSet();
     private static bool IsOnCasting;
 
-    public override void Init()
+    protected override void Init()
     {
         DService.Condition.ConditionChange += OnConditionChanged;
         FrameworkManager.Register(OnUpdate);
@@ -80,7 +80,7 @@ public unsafe class AutoCancelCast : DailyModuleBase
         ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CancelCast);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.Condition.ConditionChange -= OnConditionChanged;
         FrameworkManager.Unregister(OnUpdate);

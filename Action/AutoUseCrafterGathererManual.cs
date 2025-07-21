@@ -47,8 +47,8 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
                               .Select(x => x.RowId)
                               .ToHashSet();
     }
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new TaskHelper { TimeLimitMS = 15_000 };
@@ -61,13 +61,13 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
         EnqueueCheck();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
             SaveConfig(ModuleConfig);
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         DService.Condition.ConditionChange    -= OnConditionChanged;
         DService.ClientState.TerritoryChanged -= OnZoneChanged;

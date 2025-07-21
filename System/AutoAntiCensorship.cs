@@ -1,19 +1,21 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
+using Dalamud.Interface;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Component.Shell;
 using Lumina.Excel.Sheets;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using System.Text;
 using TinyPinyin;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoAntiCensorship : DailyModuleBase
 {
@@ -55,8 +57,8 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     private static Hook<LookingForGroupConditionReceiveEventDelegate>? LookingForGroupConditionReceiveEventHook;
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig ??= LoadConfig<Config>() ?? new();
         
@@ -77,12 +79,12 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         LookingForGroupConditionReceiveEventHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         using (ImRaii.Group())
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.Text($"屏蔽词处理分隔符:");
+            ImGui.Text("屏蔽词处理分隔符:");
             
             ImGui.AlignTextToFramePadding();
             ImGui.Text("屏蔽词显示高亮颜色:");
@@ -125,36 +127,112 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         {
             if (node)
             {
-                using (var table = ImRaii.Table("###ColorTable", 6))
+                using var table = ImRaii.Table("###ColorTable", 6);
+                if (!table) return;
+                
+                var counter = 0;
+                foreach (var row in sheet)
                 {
-                    if (table)
-                    {
-                        var counter = 0;
-                        foreach (var row in sheet)
-                        {
-                            if (row.RowId        == 0) continue;
-                            if (row.Dark == 0) continue;
+                    if (row.RowId == 0) continue;
+                    if (row.Dark  == 0) continue;
 
-                            if (counter % 5 == 0) 
-                                ImGui.TableNextRow();
-                            ImGui.TableNextColumn();
+                    if (counter % 5 == 0) 
+                        ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
                             
-                            counter++;
+                    counter++;
 
-                            using (ImRaii.Group())
-                            {
-                                ImGui.ColorButton($"###ColorButtonTable{row.RowId}", UIColorToVector4Color(row.Dark));
+                    using (ImRaii.Group())
+                    {
+                        ImGui.ColorButton($"###ColorButtonTable{row.RowId}", UIColorToVector4Color(row.Dark));
                                 
-                                ImGui.SameLine();
-                                ImGui.Text($"{row.RowId}");
-                            }
-                        }
+                        ImGui.SameLine();
+                        ImGui.Text($"{row.RowId}");
+                    }
+                }
+            }
+        }
+        
+        ImGui.NewLine();
+        
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(LightSkyBlue, "自定义替换规则:");
+        
+        ImGui.SameLine();
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, "添加"))
+        {
+            ModuleConfig.CustomReplacements[string.Empty] = string.Empty;
+            ModuleConfig.Save(this);
+        }
+        
+        ImGui.Spacing();
+        
+        if (ModuleConfig.CustomReplacements.Count > 0)
+        {
+            using var table = ImRaii.Table("###CustomReplacementsTable", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg);
+            if (table)
+            {
+                ImGui.TableSetupColumn("原词",  ImGuiTableColumnFlags.WidthStretch, 0.3f);
+                ImGui.TableSetupColumn("替换词", ImGuiTableColumnFlags.WidthStretch, 0.3f);
+                ImGui.TableSetupColumn("状态",  ImGuiTableColumnFlags.WidthStretch, 0.2f);
+                ImGui.TableSetupColumn("操作",  ImGuiTableColumnFlags.WidthFixed,   80f * GlobalFontScale);
+                ImGui.TableHeadersRow();
+
+                var counter = 0;
+                foreach (var (originalWord, replacement) in ModuleConfig.CustomReplacements.ToList())
+                {
+                    using var id = ImRaii.PushId(counter);
+                    counter++;
+                    
+                    ImGui.TableNextRow();
+                    
+                    ImGui.TableNextColumn();
+                    var originalWordInput = originalWord;
+                    ImGui.SetNextItemWidth(-1);
+                    ImGui.InputText("###Original", ref originalWordInput, 256);
+                    if (ImGui.IsItemDeactivatedAfterEdit())
+                    {
+                        if (string.IsNullOrWhiteSpace(originalWord))
+                            ModuleConfig.CustomReplacements.Remove(originalWord);
+                        ModuleConfig.CustomReplacements[originalWordInput] = replacement;
+                        ModuleConfig.Save(this);
+                    }
+                    
+                    ImGui.TableNextColumn();
+                    var replacementInput = replacement;
+                    ImGui.SetNextItemWidth(-1);
+                    ImGui.InputText("###Replacement", ref replacementInput, 256);
+                    if (ImGui.IsItemDeactivatedAfterEdit())
+                    {
+                        ModuleConfig.CustomReplacements[originalWord] = replacementInput;
+                        ModuleConfig.Save(this);
+                    }
+
+                    ImGui.TableNextColumn();
+                    switch (string.IsNullOrWhiteSpace(replacement))
+                    {
+                        case false when ValidateCustomReplacement(replacement):
+                            ImGui.TextColored(Green, "有效");
+                            break;
+                        case false:
+                            ImGui.TextColored(Red, "存在屏蔽词");
+                            ImGuiOm.TooltipHover($"替换词包含屏蔽内容:\n{replacement}: {GetFilteredString(replacement)}");
+                            break;
+                        default:
+                            ImGui.TextColored(Grey, "无");
+                            break;
+                    }
+                    
+                    ImGui.TableNextColumn();
+                    if (ImGuiOm.ButtonIcon($"Delete_{originalWord.GetHashCode()}", FontAwesomeIcon.TrashAlt, "删除"))
+                    {
+                        ModuleConfig.CustomReplacements.Remove(originalWord);
+                        ModuleConfig.Save(this);
                     }
                 }
             }
         }
     }
-    
     
     // 编辑招募
     private static byte LookingForGroupConditionReceiveEventDetour(nint a1, AtkValue* values)
@@ -296,7 +374,6 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         return Utf8StringCopy((Utf8String*)(a1 + 11288), source);
     }
     
-    
     private static void BypassCensorshipByTextPayload(ref TextPayload payload)
     {
         // 非国服或只有星号
@@ -313,12 +390,11 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     {
         if (string.IsNullOrEmpty(originalText)) return originalText;
 
-        var result   = originalText;
+        var result   = ApplyCustomReplacements(originalText);
         var filtered = GetFilteredString(result);
 
         // 记录已处理过的文本, 防止无限循环
         var processedTexts = new HashSet<string>();
-
         while (filtered != result && !processedTexts.Contains(result))
         {
             processedTexts.Add(result);
@@ -352,7 +428,6 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
 
                     // 截取被屏蔽的词
                     var censoredWord = result.Substring(startPos, i - startPos + 1);
-
                     if (censoredWord.Length == 1 && IsChineseCharacter(censoredWord[0]))
                         newResult.Append(PinyinHelper.GetPinyin(censoredWord).ToLowerInvariant());
                     else if (IsChineseString(censoredWord))
@@ -457,9 +532,39 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         return result;
     }
 
+    private static string ApplyCustomReplacements(string text)
+    {
+        if (string.IsNullOrEmpty(text) || ModuleConfig.CustomReplacements.Count == 0) 
+            return text;
+
+        var result = text;
+        
+        var sortedReplacements = ModuleConfig.CustomReplacements
+            .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
+            .Where(kvp => ValidateCustomReplacement(kvp.Value)) // 只使用有效的替换词
+            .OrderByDescending(kvp => kvp.Key.Length);
+
+        foreach (var (originalWord, replacement) in sortedReplacements)
+        {
+            if (result.Contains(originalWord))
+                result = result.Replace(originalWord, replacement);
+        }
+
+        return result;
+    }
+    
+    private static bool ValidateCustomReplacement(string replacement)
+    {
+        if (string.IsNullOrWhiteSpace(replacement)) return false;
+        
+        var filtered = GetFilteredString(replacement);
+        return filtered == replacement;
+    }
+
     private class Config : ModuleConfiguration
     {
         public char Seperator = '.';
         public uint HighlightColor   = 17;
+        public Dictionary<string, string> CustomReplacements = new();
     }
 }

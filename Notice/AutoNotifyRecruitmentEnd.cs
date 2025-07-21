@@ -1,10 +1,10 @@
+using System;
+using System.Linq;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
-using System;
-using System.Linq;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyRecruitmentEnd : DailyModuleBase
 {
@@ -22,10 +22,8 @@ public class AutoNotifyRecruitmentEnd : DailyModuleBase
         "パーティ募集の人数を満たしたため終了します。"
     ];
 
-    public override void Init()
-    {
+    protected override void Init() => 
         DService.Chat.ChatMessage += OnChatMessage;
-    }
 
     private static void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
     {
@@ -52,8 +50,6 @@ public class AutoNotifyRecruitmentEnd : DailyModuleBase
         Speak(content);
     }
 
-    public override void Uninit()
-    {
+    protected override void Uninit() => 
         DService.Chat.ChatMessage -= OnChatMessage;
-    }
 }

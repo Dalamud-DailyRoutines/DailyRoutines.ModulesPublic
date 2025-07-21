@@ -30,8 +30,8 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
     
     private static Config        ModuleConfig = null!;
     private static IDtrBarEntry? Entry;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
         TaskHelper   ??= new();
@@ -50,7 +50,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         FrameworkManager.Register(OnUpdate, throttleMS: 5_000);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         var contentID = LocalPlayerState.ContentID;
         if (contentID == 0) return;
@@ -78,7 +78,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         ImGui.Text(FormatTimeSpan(info.LeftTime));
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         FrameworkManager.Unregister(OnUpdate);
         

@@ -10,7 +10,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRecommendFauxHollows : DailyModuleBase
 {
@@ -26,7 +26,7 @@ public unsafe class AutoRecommendFauxHollows : DailyModuleBase
     private static readonly BoardState Board        = new();
     private static readonly Solver     FauxSolver   = new();
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -38,7 +38,7 @@ public unsafe class AutoRecommendFauxHollows : DailyModuleBase
             OnWeeklyPuzzleEvent(AddonEvent.PostSetup, null);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("AutoRecommendFauxHollows-PrioritizeSwords"), ref ModuleConfig.PrioritizeSwords))
         {
@@ -47,7 +47,7 @@ public unsafe class AutoRecommendFauxHollows : DailyModuleBase
         }
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         if (!IsAddonAndNodesReady(WeeklyPuzzle))
         {
@@ -64,8 +64,8 @@ public unsafe class AutoRecommendFauxHollows : DailyModuleBase
 
         ConfigUI();
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnWeeklyPuzzleEvent);
         FrameworkManager.Unregister(OnUpdate);

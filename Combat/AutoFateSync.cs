@@ -1,19 +1,16 @@
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
-using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Hooking;
-using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using DailyRoutines.Abstracts;
+using DailyRoutines.Managers;
+using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using Lumina.Excel.Sheets;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoFateSync : DailyModuleBase
 {
@@ -24,12 +21,7 @@ public class AutoFateSync : DailyModuleBase
         Category    = ModuleCategories.Combat,
     };
 
-    private static readonly Throttler<string> Throttler = new();
     private static Config ModuleConfig = null!;
-
-    private static readonly CompSig FateDirectorSetupSig = new("E8 ?? ?? ?? ?? 48 39 37");
-    private delegate nint FateDirectorSetupDelegate(uint rowID, nint a2, nint a3);
-    private static Hook<FateDirectorSetupDelegate>? FateDirectorSetupHook;
 
     private static CancellationTokenSource? CancelSource;
 
@@ -47,19 +39,19 @@ public class AutoFateSync : DailyModuleBase
         // 绝枪战士
         { 37, 16142 }
     };
-    
-    public override void Init()
+
+    protected override void Init()
     {
-        TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
-        ModuleConfig = LoadConfig<Config>() ?? new();
-        CancelSource ??= new();
+        TaskHelper ??= new() { TimeLimitMS = 30_000 };
         
-        FateDirectorSetupHook ??= 
-            DService.Hook.HookFromSignature<FateDirectorSetupDelegate>(FateDirectorSetupSig.Get(), FateDirectorSetupDetour);
-        FateDirectorSetupHook.Enable();
+        ModuleConfig = LoadConfig<Config>() ?? new();
+        
+        CancelSource ??= new();
+
+        GameState.EnterFate += OnEnterFate;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(50f * GlobalFontScale);
         if (ImGui.InputFloat(GetLoc("AutoFateSync-Delay"), ref ModuleConfig.Delay, 0, 0, "%.1f"))
@@ -78,14 +70,8 @@ public class AutoFateSync : DailyModuleBase
         if (ImGui.Checkbox(GetLoc("AutoFateSync-AutoTankStance"), ref ModuleConfig.AutoTankStance))
             SaveConfig(ModuleConfig);
     }
-
-    private unsafe nint FateDirectorSetupDetour(uint rowID, nint a2, nint a3)
-    {
-        var original = FateDirectorSetupHook.Original(rowID, a2, a3);
-        if (rowID == 102401 && FateManager.Instance()->CurrentFate != null) 
-            HandleFateEnter();
-        return original;
-    }
+    
+    private void OnEnterFate(uint fateID) => HandleFateEnter();
 
     private unsafe void HandleFateEnter()
     {
@@ -150,8 +136,10 @@ public class AutoFateSync : DailyModuleBase
         }
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
+        GameState.EnterFate -= OnEnterFate;
+        
         CancelSource?.Cancel();
         CancelSource?.Dispose();
         CancelSource = null;

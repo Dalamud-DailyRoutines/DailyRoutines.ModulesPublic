@@ -24,7 +24,7 @@ public class AutoNotifyMessages : DailyModuleBase
     private static string SearchChatTypesContent = string.Empty;
     private static string KeywordInput = string.Empty;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -33,7 +33,7 @@ public class AutoNotifyMessages : DailyModuleBase
         DService.Chat.ChatMessage += OnChatMessage;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("OnlyNotifyWhenBackground"), ref ModuleConfig.OnlyNotifyWhenBackground))
             SaveConfig(ModuleConfig);
@@ -139,7 +139,7 @@ public class AutoNotifyMessages : DailyModuleBase
         Speak($"{sender.TextValue}{GetLoc("AutoNotifyMessages-SomeoneSay")}: {content}");
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.Chat.ChatMessage -= OnChatMessage;
     }

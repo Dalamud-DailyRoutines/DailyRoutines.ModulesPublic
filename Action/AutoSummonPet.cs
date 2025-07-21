@@ -26,7 +26,7 @@ public class AutoSummonPet : DailyModuleBase
         { 27, 25798 },
     };
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
 
@@ -86,7 +86,7 @@ public class AutoSummonPet : DailyModuleBase
         return !isPVP && !InvalidContentTypes.Contains(contentData.Value.ContentType.RowId);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.DutyState.DutyRecommenced -= OnDutyRecommenced;
         DService.ClientState.TerritoryChanged -= OnZoneChanged;

@@ -22,8 +22,8 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
 
     private static readonly HashSet<uint> ValidContentJobCategories = [108, 142, 146];
     private static readonly HashSet<uint> HaveOffHandJobCategories  = [2, 7, 8, 20];
-    
-    public override void Init()
+
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 20_000 };
 
@@ -66,10 +66,11 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
             
             TaskHelper.Enqueue(() =>
             {
-                if (!Throttler.Throttle("AutoCheckItemLevel-OpenExamine")) return false;
                 if (CharacterInspect != null && agentInspect->CurrentEntityId == member.EntityId) return true;
+
+                if (Throttler.Throttle("AutoCheckItemLevel-OpenExamine"))
+                    agentInspect->ExamineCharacter(member.EntityId);
                 
-                agentInspect->ExamineCharacter(member.EntityId);
                 return false;
             }, "打开检视界面");
 
@@ -126,7 +127,7 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
                 return false;
             }, "关掉");
             
-            TaskHelper.DelayNext(500, "等待一会");
+            TaskHelper.DelayNext(1000, "等待 1 秒");
             TaskHelper.Enqueue(() => CheckMembersItemLevel(checkedMembers), "进入新循环");
             return true;
         }
@@ -167,7 +168,7 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
         Chat(ssb.Build());
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
 

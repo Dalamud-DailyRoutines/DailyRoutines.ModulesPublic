@@ -21,7 +21,7 @@ public class FastResetAllSDEnmity : DailyModuleBase
     
     private const string Command = "resetallsd";
 
-    public override void Init()
+    protected override void Init()
     {
         CancelSource ??= new();
 
@@ -32,7 +32,7 @@ public class FastResetAllSDEnmity : DailyModuleBase
         });
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
 
@@ -66,7 +66,7 @@ public class FastResetAllSDEnmity : DailyModuleBase
             ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.ResetStrikingDummy, targetID.EntityId);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         ExecuteCommandManager.Unregister(OnResetStrikingDummies);
         CommandManager.RemoveSubCommand(Command);

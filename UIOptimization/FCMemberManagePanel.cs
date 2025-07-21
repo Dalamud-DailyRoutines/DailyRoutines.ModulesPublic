@@ -49,8 +49,8 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
     
     private static bool   IsReverse;
     private static string FilterMemberName = string.Empty;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ContextTaskHelper ??= new() { TimeLimitMS = 3000 };
 
@@ -73,7 +73,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonYesno);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddonMember);
         DService.AddonLifecycle.UnregisterListener(OnAddonYesno);
@@ -86,7 +86,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
         ResetAllExistedData();
     }
 
-    public override void OverlayPreDraw()
+    protected override void OverlayPreDraw()
     {
         if (!DService.ClientState.IsLoggedIn) return;
         
@@ -131,8 +131,8 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
             }
         }
     }
-    
-    public override void OverlayUI()
+
+    protected override void OverlayUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{Lang.Get("FCMemberManagePanel-CurrentPage")}:");

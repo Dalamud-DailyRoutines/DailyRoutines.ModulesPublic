@@ -26,14 +26,14 @@ public unsafe class DisplayTargetHP : DailyModuleBase
 
     private static int NumberPreview = 5555555;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
         FrameworkManager.Register(OnUpdate, throttleMS: 100);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("DisplayTargetHP-DisplayFormat")}:");
@@ -371,7 +371,7 @@ public unsafe class DisplayTargetHP : DailyModuleBase
         }
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         if (Initialized)
         {

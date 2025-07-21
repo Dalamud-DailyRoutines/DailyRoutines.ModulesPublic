@@ -31,8 +31,8 @@ public class AutoNotifyChaoticRaidBonus : DailyModuleBase
     private const string BaseUrl = "https://api.ff14.xin/status?data_center={0}";
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -45,7 +45,7 @@ public class AutoNotifyChaoticRaidBonus : DailyModuleBase
         RunCheck(true);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
             SaveConfig(ModuleConfig);
@@ -155,7 +155,7 @@ public class AutoNotifyChaoticRaidBonus : DailyModuleBase
             Speak(text);
     }
 
-    public override void Uninit() => FrameworkManager.Unregister(OnUpdate);
+    protected override void Uninit() => FrameworkManager.Unregister(OnUpdate);
 
     private class Config : ModuleConfiguration
     {

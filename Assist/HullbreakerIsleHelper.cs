@@ -43,7 +43,7 @@ public class HullbreakerIsleHelper : DailyModuleBase
         };
     }
 
-    public override void Init()
+    protected override void Init()
     {
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(DService.ClientState.TerritoryType);
@@ -104,7 +104,7 @@ public class HullbreakerIsleHelper : DailyModuleBase
         FakeTreasurePositions = fakeTreasureCollect;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         OnZoneChanged(0);

@@ -22,7 +22,7 @@ public class AutoLockGameWindow : DailyModuleBase
     private static         bool   IsLocked;
     private static readonly object ObjectLock = new();
 
-    public override void Init() => DService.Condition.ConditionChange += OnConditionChange;
+    protected override void Init() => DService.Condition.ConditionChange += OnConditionChange;
     
     private static void OnConditionChange(ConditionFlag flag, bool value)
     {
@@ -47,7 +47,7 @@ public class AutoLockGameWindow : DailyModuleBase
         });
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.Condition.ConditionChange -= OnConditionChange;
         WindowLock.Cleanup();

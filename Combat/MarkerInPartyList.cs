@@ -40,7 +40,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
     
     private static readonly object Lock = new();
 
-    public override void Init()
+    protected override void Init()
     {
         IsBuilt = false;
         ModuleConfig = LoadConfig<Config>() ?? new();
@@ -56,7 +56,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_PartyList", PartyListFinalizeHandle);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, PartyListDrawHandle);
         DService.AddonLifecycle.UnregisterListener(AddonEvent.PreFinalize, PartyListFinalizeHandle);
@@ -68,7 +68,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
         base.Uninit();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
         ImGui.InputFloat2(Lang.Get("MarkerInPartyList-IconOffset"), ref ModuleConfig.IconOffset, "%d");

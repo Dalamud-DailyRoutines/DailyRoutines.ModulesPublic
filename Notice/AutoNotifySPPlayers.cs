@@ -53,7 +53,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
         ObjThrottler = new();
     }
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -62,7 +62,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
         IsReadyToDrawHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("WorkTheory")}:");
 

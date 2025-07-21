@@ -15,7 +15,7 @@ public unsafe class AutoEnableAttack : DailyModuleBase
         Category    = ModuleCategories.Combat,
     };
 
-    public override void Init() => 
+    protected override void Init() => 
         UseActionManager.RegUseAction(OnPostUseAction);
 
     private static void OnPostUseAction(
@@ -30,6 +30,6 @@ public unsafe class AutoEnableAttack : DailyModuleBase
         ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.AutoAttack, 1, (uint)targetID);
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         UseActionManager.UnregUseAction(OnPostUseAction);
 }

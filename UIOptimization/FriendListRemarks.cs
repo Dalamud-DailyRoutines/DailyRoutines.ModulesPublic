@@ -38,7 +38,7 @@ public unsafe class FriendListRemarks : DailyModuleBase
     private static string NicknameInput = string.Empty;
     private static string RemarkInput   = string.Empty;
 
-    public override void Init()
+    protected override void Init()
     {
         Overlay        ??= new(this);
         Overlay.IsOpen =   true;
@@ -57,7 +57,7 @@ public unsafe class FriendListRemarks : DailyModuleBase
         DService.ContextMenu.OnMenuOpened += OnContextMenu;
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         if (IsNeedToOpen)
         {
@@ -227,7 +227,7 @@ public unsafe class FriendListRemarks : DailyModuleBase
             }, TimeSpan.FromMilliseconds(100));
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnContextMenu;
         DService.AddonLifecycle.UnregisterListener(OnAddon);

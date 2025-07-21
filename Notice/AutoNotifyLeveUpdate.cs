@@ -21,13 +21,13 @@ public unsafe class AutoNotifyLeveUpdate : DailyModuleBase
     private static int lastLeve;
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         FrameworkManager.Register(OnUpdate, throttleMS: 60_000);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.Text($"{Lang.Get("AutoNotifyLeveUpdate-NumText")}{lastLeve}");
         ImGui.Text($"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{finishTime.ToLocalTime():g}");
@@ -83,7 +83,7 @@ public unsafe class AutoNotifyLeveUpdate : DailyModuleBase
         return lastIncrementTimeUtc.AddHours(12 * requiredPeriods);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         FrameworkManager.Unregister(OnUpdate);
     }

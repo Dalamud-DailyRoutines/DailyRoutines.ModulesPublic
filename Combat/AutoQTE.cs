@@ -16,7 +16,7 @@ public class AutoQTE : DailyModuleBase
 
     private static readonly string[] QTETypes = ["_QTEKeep", "_QTEMash", "_QTEKeepTime", "_QTEButton"];
 
-    public override void Init()
+    protected override void Init()
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, QTETypes, OnQTEAddon);
     }
@@ -26,7 +26,7 @@ public class AutoQTE : DailyModuleBase
         SendKeypress(Keys.Space);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnQTEAddon);
     }

@@ -23,7 +23,7 @@ public unsafe class AutoThrottleTenChiJin : DailyModuleBase
     
     private static readonly HashSet<uint> UsedShinobiActions = [];
 
-    public override void Init() => GamePacketManager.Register(OnPreSendActionPacket);
+    protected override void Init() => GamePacketManager.Register(OnPreSendActionPacket);
     
     private static void OnPreSendActionPacket(ref bool isPrevented, int opcode, ref byte* packet, ref ushort priority)
     {
@@ -47,5 +47,5 @@ public unsafe class AutoThrottleTenChiJin : DailyModuleBase
             UsedShinobiActions.Clear();
     }
 
-    public override void Uninit() => GamePacketManager.Unregister(OnPreSendActionPacket);
+    protected override void Uninit() => GamePacketManager.Unregister(OnPreSendActionPacket);
 }

@@ -21,7 +21,7 @@ public unsafe class AutoStellarSprint : DailyModuleBase
     private const uint StellarSprint = 43357;
     private const uint SprintStatus  = 4398;
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new();
 
@@ -64,7 +64,7 @@ public unsafe class AutoStellarSprint : DailyModuleBase
         return UseActionManager.UseActionLocation(ActionType.Action, StellarSprint);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         FrameworkManager.Unregister(OnFrameworkUpdate);
         DService.ClientState.TerritoryChanged -= OnTerritoryChange;

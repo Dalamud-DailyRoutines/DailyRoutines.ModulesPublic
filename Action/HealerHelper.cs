@@ -59,7 +59,7 @@ public class HealerHelper : DailyModuleBase
     // ui
     private static ActionSelectCombo? actionSelect;
 
-    public override void Init()
+    protected override void Init()
     {
         moduleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
 
@@ -79,7 +79,7 @@ public class HealerHelper : DailyModuleBase
         FrameworkManager.Register(OnUpdate, throttleMS: 5_000);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         UseActionManager.UnregPreUseActionLocation(OnPreUseAction);
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
@@ -96,7 +96,7 @@ public class HealerHelper : DailyModuleBase
 
     private static int? customCardOrderDragIndex;
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         // auto play card
         AutoPlayCardUI();

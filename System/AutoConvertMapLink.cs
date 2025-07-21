@@ -32,8 +32,8 @@ public class AutoConvertMapLink : DailyModuleBase
         new(@"\uE0BB(?<map>.+?)(?<instance>[\ue0b1-\ue0b9])? \( (?<x>\d{1,2}\.\d)  , (?<y>\d{1,2}\.\d) \)", RegexOptions.Compiled);
     
     private static readonly Random random = new();
-    
-    public override void Init()
+
+    protected override void Init()
     {
         MessageParseHook ??= MessageParseSig.GetHook<MessageParseDelegate>(ParseMessageDetour);
         MessageParseHook.Enable();

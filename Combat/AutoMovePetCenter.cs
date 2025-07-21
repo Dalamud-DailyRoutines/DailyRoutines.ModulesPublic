@@ -22,8 +22,8 @@ public unsafe class AutoMovePetCenter : DailyModuleBase
         "48 89 5C 24 08 57 48 81 EC 30 04 00 00 48 8B DA 8B F9 E8 ?? ?? ?? ?? 3C 01 75 21 E8 ?? ?? ?? ?? 3C 01 75 18 80 BB 82 00 00 00 02 75 0F 8B 05 ?? ?? ?? ?? 39 43 54 0F 85 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 44 24 28 C7 44 24 20 02 00 00 00");
     private delegate void ProcessPacketSpawnNPCDelegate(nint a1, byte* packetData);
     private static Hook<ProcessPacketSpawnNPCDelegate>? ProcessPacketSpawnNPCHook;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ProcessPacketSpawnNPCHook ??= ProcessPacketSpawnNPCSig.GetHook<ProcessPacketSpawnNPCDelegate>(ProcessPacketSpawnNPCDetour);
         ProcessPacketSpawnNPCHook.Enable();
@@ -31,7 +31,7 @@ public unsafe class AutoMovePetCenter : DailyModuleBase
         DService.DutyState.DutyStarted += OnDutyStarted;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.DutyState.DutyStarted -= OnDutyStarted;
         base.Uninit();

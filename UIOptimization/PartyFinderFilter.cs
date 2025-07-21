@@ -31,7 +31,7 @@ public class PartyFinderFilter : DailyModuleBase
     private static readonly HashSet<(ushort, string)> descriptionSet = [];
     private static bool ManualMode;
 
-    public override unsafe void Init()
+    protected override unsafe void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new Config();
         Overlay ??= new Overlay(this);
@@ -44,7 +44,7 @@ public class PartyFinderFilter : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("PartyFinderFilter-FilterDuplicate"), ref ModuleConfig.FilterSameDescription))
             SaveConfig(ModuleConfig);
@@ -320,7 +320,7 @@ public class PartyFinderFilter : DailyModuleBase
     private void OnAddon(AddonEvent type, AddonArgs? args) =>
         ToggleOverlayConfig(type == AddonEvent.PostSetup);
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         DService.PartyFinder.ReceiveListing -= OnReceiveListing;

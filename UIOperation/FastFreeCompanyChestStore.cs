@@ -26,8 +26,8 @@ public unsafe class FastFreeCompanyChestStore : DailyModuleBase
     private static readonly MoveItemDelegate MoveItem = new CompSig("40 53 55 56 57 41 57 48 83 EC ?? 45 33 FF").GetDelegate<MoveItemDelegate>();
     
     private static int CurrentItemQuantity;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
         
@@ -37,7 +37,7 @@ public unsafe class FastFreeCompanyChestStore : DailyModuleBase
         DService.ContextMenu.OnMenuOpened += OnContextMenuOpened;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
         

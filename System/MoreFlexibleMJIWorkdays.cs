@@ -17,7 +17,7 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
         Category    = ModuleCategories.System
     };
 
-    public override void Init()
+    protected override void Init()
     {
         Overlay ??= new(this);
         
@@ -27,7 +27,7 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var agent = AgentMJICraftSchedule.Instance();
         var addon = MJICraftSchedule;
@@ -140,7 +140,7 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
         return restDays;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();

@@ -13,7 +13,7 @@ public unsafe class AutoHolmgangSelf : DailyModuleBase
         Category = ModuleCategories.Action,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         UseActionManager.RegPreUseAction(OnPreUseAction);
     }
@@ -27,7 +27,7 @@ public unsafe class AutoHolmgangSelf : DailyModuleBase
             targetID = 0xE0000000UL;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         UseActionManager.UnregPreUseAction(OnPreUseAction);
     }

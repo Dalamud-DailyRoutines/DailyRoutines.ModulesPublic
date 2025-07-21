@@ -23,7 +23,7 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
 
     private static readonly IAddonEventHandle?[] eventHandles = new IAddonEventHandle?[16];
 
-    public override unsafe void Init()
+    protected override unsafe void Init()
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "WeeklyBingo", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "WeeklyBingo", OnAddon);
@@ -32,7 +32,7 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         OnAddon(AddonEvent.PreFinalize, null);

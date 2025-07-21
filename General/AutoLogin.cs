@@ -46,7 +46,7 @@ public unsafe class AutoLogin : DailyModuleBase
     private static ushort ManualWorldID;
     private static int    ManualCharaIndex = -1;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
         TaskHelper   ??= new TaskHelper { TimeLimitMS = 180_000 };
@@ -62,7 +62,7 @@ public unsafe class AutoLogin : DailyModuleBase
         });
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ConflictKeyText();
 
@@ -395,7 +395,7 @@ public unsafe class AutoLogin : DailyModuleBase
         TaskHelper.Enqueue(() => SaveConfig(ModuleConfig));
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnTitleMenu);
         DService.AddonLifecycle.UnregisterListener(OnDialogue);

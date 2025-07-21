@@ -55,8 +55,8 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
             ImGui.ColorConvertFloat4ToU32(LightYellow)
         )
     ];
-    
-    public override void Init()
+
+    protected override void Init()
     {
         Overlay       ??= new(this);
         Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
@@ -69,7 +69,7 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = LookingForGroupDetail;
         if (addon == null)
@@ -105,7 +105,7 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
         };
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();

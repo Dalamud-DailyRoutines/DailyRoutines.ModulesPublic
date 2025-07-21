@@ -22,7 +22,7 @@ public unsafe class AutoUseEarthsReply : DailyModuleBase
     
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig ??= new Config();
         TaskHelper   ??= new TaskHelper { TimeLimitMS = 8_000 };
@@ -48,7 +48,7 @@ public unsafe class AutoUseEarthsReply : DailyModuleBase
                            }, $"UseAction_{EarthsReplyAction}", 500, true, 1);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("AutoUseEarthsReply-UseWhenGuard"), ref ModuleConfig.UseWhenSprint))
             SaveConfig(ModuleConfig);
@@ -57,7 +57,7 @@ public unsafe class AutoUseEarthsReply : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         base.Uninit();
         

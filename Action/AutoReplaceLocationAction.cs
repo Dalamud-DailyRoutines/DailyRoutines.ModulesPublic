@@ -54,7 +54,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
                    });
     }
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -65,7 +65,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         ParseActionCommandArgHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ModuleConfig == null) return;
 
@@ -408,7 +408,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
             NotificationSuccess(message);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         UseActionManager.UnregPreUseActionLocation(OnPreUseActionLocation);
         ExecuteCommandManager.Unregister(OnPreExecuteCommandComplexLocation);

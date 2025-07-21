@@ -18,14 +18,14 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
-    public override void Init()
+    protected override void Init()
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "ScenarioTree", OnAddon);
         if (IsAddonAndNodesReady(InfosOm.ScenarioTree))
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
+    protected override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
 
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {

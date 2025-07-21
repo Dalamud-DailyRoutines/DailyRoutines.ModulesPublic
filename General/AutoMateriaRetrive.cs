@@ -38,7 +38,7 @@ public unsafe class AutoMateriaRetrive : DailyModuleBase
     private static string ItemSearchInput = string.Empty;
     private static Item? SelectedItem;
 
-    public override void Init()
+    protected override void Init()
     {
         ItemNames ??= LuminaGetter.Get<Item>()
                                  .Where(x => x.MateriaSlotCount > 0 && !string.IsNullOrEmpty(x.Name.ExtractText()))
@@ -53,7 +53,7 @@ public unsafe class AutoMateriaRetrive : DailyModuleBase
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ConflictKeyText();
 

@@ -17,8 +17,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         Description = GetLoc("FastJoinAnotherPartyRecruitmentDescription"),
         Category    = ModuleCategories.UIOptimization
     };
-    
-    public override void Init()
+
+    protected override void Init()
     {
         TaskHelper    ??= new() { TimeLimitMS = 10_000 };
         Overlay       ??= new(this);
@@ -34,8 +34,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonYesno);
     }
-    
-    public override void OverlayUI()
+
+    protected override void OverlayUI()
     {
         var addon = LookingForGroupDetail;
         if (addon == null)
@@ -128,7 +128,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         TaskHelper.DelayNext(500);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         DService.AddonLifecycle.UnregisterListener(OnAddonYesno);

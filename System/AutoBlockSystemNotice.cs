@@ -13,7 +13,7 @@ public class AutoBlockSystemNotice : DailyModuleBase
         Category = ModuleCategories.System,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         DService.Chat.CheckMessageHandled += OnChat;
     }
@@ -24,7 +24,7 @@ public class AutoBlockSystemNotice : DailyModuleBase
         ishandled = true;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.Chat.CheckMessageHandled -= OnChat;
     }

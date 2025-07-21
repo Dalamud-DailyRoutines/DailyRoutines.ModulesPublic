@@ -1,9 +1,8 @@
-﻿using System;
-using DailyRoutines.Abstracts;
+﻿using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : DailyModuleBase
 {
@@ -14,7 +13,7 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : DailyModuleBase
         Category    = ModuleCategories.UIOperation
     };
 
-    public override void Init()
+    protected override void Init()
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);
         if (IsAddonAndNodesReady(SelectYesno)) 
@@ -34,5 +33,5 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : DailyModuleBase
         ]);
     }
 
-    public override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
+    protected override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
 }

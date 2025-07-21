@@ -37,10 +37,10 @@ public class BaitSwitchCommand : DailyModuleBase
                                                                  PinyinHelper.GetPinyin(x.Name.ExtractText(), "")));
     }
 
-    public override void Init() => 
+    protected override void Init() => 
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("BaitSwitchCommand-CommandHelp") });
 
-    public override void ConfigUI() => 
+    protected override void ConfigUI() => 
         ImGui.TextWrapped(GetLoc("BaitSwitchCommand-CommandHelpDetailed"));
 
     public static void OnCommand(string command, string arguments)
@@ -158,6 +158,6 @@ public class BaitSwitchCommand : DailyModuleBase
         return [itemArray[0], itemArray[1], itemArray[2]];
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         CommandManager.RemoveSubCommand(Command);
 }

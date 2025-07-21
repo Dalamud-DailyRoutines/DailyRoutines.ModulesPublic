@@ -25,12 +25,12 @@ public class AutoReuseEmote : DailyModuleBase
 
     private static CancellationTokenSource? CancelSource;
 
-    public override void Init()
+    protected override void Init()
     {
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("AutoReuseEmote-CommandHelp") });
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         CommandManager.RemoveSubCommand(Command);
         CancelTokenAndNullify();

@@ -21,7 +21,7 @@ public unsafe class NoHideHotbars : DailyModuleBase
     private delegate bool ToggleUI2Delegate(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true);
     private static Hook<ToggleUI2Delegate>? ToggleUI2Hook;
 
-    public override void Init()
+    protected override void Init()
     {
         ToggleUIHook ??= ToggleUISig.GetHook<ToggleUIDelegate>(ToggleUIDetour);
         ToggleUIHook.Enable();

@@ -1,16 +1,15 @@
+using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
-using System.Numerics;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCollectableExchange : DailyModuleBase
 {
@@ -26,7 +25,7 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
     private delegate nint HandInCollectablesDelegate(AgentInterface* agentCollectablesShop);
     private static HandInCollectablesDelegate? HandInCollectables;
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new();
         Overlay ??= new(this);
@@ -39,7 +38,7 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = InfosOm.CollectablesShop;
         if (addon == null)
@@ -153,7 +152,7 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
         };
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
 

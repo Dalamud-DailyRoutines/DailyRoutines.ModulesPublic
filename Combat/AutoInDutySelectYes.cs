@@ -22,8 +22,8 @@ public class AutoInDutySelectYes : DailyModuleBase
         "Party", "Teleport Offer", "Raise", "Arise", "Incapacitated ", "Return", "Starting Point", "Ready Check", "Timer", "Countdown",
         "パーティ", "テレポ勧誘", "テレポの勧誘", "蘇生", "アレイズ", "ホームポイント", "戦闘不能", "開始地点", "復帰地点", "レディチェック", "カウント"
     ]);
-    
-    public override void Init()
+
+    protected override void Init()
     {
         var currentZone = DService.ClientState.TerritoryType;
 
@@ -52,7 +52,7 @@ public class AutoInDutySelectYes : DailyModuleBase
         ClickSelectYesnoYes();
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.AddonLifecycle.UnregisterListener(OnAddonSelectYesno);

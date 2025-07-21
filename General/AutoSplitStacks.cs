@@ -40,7 +40,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
 
     private static bool IsNeedToOpen;
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper   = new();
         ModuleConfig = LoadConfig<Config>() ?? new();
@@ -95,7 +95,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
         }
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightBlue, $"{GetLoc("Command")}:");
 
@@ -372,7 +372,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
         }, null, null, null, 2);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.UiBuilder.Draw -= OnDraw;
         
