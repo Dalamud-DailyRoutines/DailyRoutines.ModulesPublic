@@ -448,10 +448,8 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         EventHandles.Clear();
     }
 
-    private static void SetContentsFinderSettingsInitDetour(byte* a1, nint a2)
-    {
+    private static void SetContentsFinderSettingsInitDetour(byte* a1, nint a2) => 
         setContentsFinderSettingsInitHook?.Original(a1, a2);
-    }
 
     private static byte GetCurrentSettingValue(DutyFinderSetting dutyFinderSetting)
     {
