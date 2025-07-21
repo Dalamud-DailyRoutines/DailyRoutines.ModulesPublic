@@ -54,11 +54,12 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
     {
         var contentID = LocalPlayerState.ContentID;
         if (contentID == 0) return;
-        
-        if (!ModuleConfig.Infos.TryGetValue(contentID, out var info) || info.Record == DateTime.MinValue ||
+
+        if (!ModuleConfig.Infos.TryGetValue(contentID, out var info) ||
+            info.Record == DateTime.MinValue                         ||
             (info.LeftMonth == TimeSpan.MinValue && info.LeftTime == TimeSpan.MinValue))
         {
-            ImGui.TextColored(Orange, "暂无数据, 请重新登录游戏以记录");
+            ImGui.TextColored(Orange, "当前角色暂无数据, 请重新登录游戏以记录");
             return;
         }
 
@@ -66,13 +67,15 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
 
         ImGui.SameLine();
         ImGui.Text($"{info.Record}");
+        
+        ImGui.NewLine();
 
-        ImGui.TextColored(LightSkyBlue, "月卡 剩余时间:");
+        ImGui.TextColored(LightSkyBlue, "月卡剩余时间:");
 
         ImGui.SameLine();
-        ImGui.Text(FormatTimeSpan(info.LeftMonth));
+        ImGui.Text(FormatTimeSpan(info.LeftMonth == TimeSpan.MinValue ? TimeSpan.Zero : info.LeftMonth));
         
-        ImGui.TextColored(LightSkyBlue, "点卡 剩余时间:");
+        ImGui.TextColored(LightSkyBlue, "点卡剩余时间:");
 
         ImGui.SameLine();
         ImGui.Text(FormatTimeSpan(info.LeftTime));
@@ -95,7 +98,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
     {
         TaskHelper.Enqueue(() =>
         {
-            var contentID = DService.ClientState.LocalContentId;
+            var contentID = LocalPlayerState.ContentID;
             if (contentID == 0) return false;
             
             RefreshEntry(contentID);
@@ -172,9 +175,12 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         if (Entry == null) return;
         
         if (contentID == 0) 
-            contentID = DService.ClientState.LocalContentId;
-        if (contentID == 0                             ||
-            DService.Condition[ConditionFlag.InCombat] || !ModuleConfig.Infos.TryGetValue(contentID, out var info) || info.Record == DateTime.MinValue ||
+            contentID = LocalPlayerState.ContentID;
+        
+        if (contentID == 0                                           ||
+            DService.Condition[ConditionFlag.InCombat]               ||
+            !ModuleConfig.Infos.TryGetValue(contentID, out var info) ||
+            info.Record == DateTime.MinValue                         ||
             (info.LeftMonth == TimeSpan.MinValue && info.LeftTime == TimeSpan.MinValue))
         {
             Entry.Shown = false;

@@ -25,6 +25,7 @@ public unsafe class AutoSharpenInterfaceText : DailyModuleBase
             new(3, 16) { TextFlags1 = 224, TextFlags2 = 1 },
             new(2, 16) { TextFlags1 = 224, TextFlags2 = 1 }
         ],
+        ["HousingEditMessage"] = [new(2, 16) { TextFlags1 = 224, TextFlags2 = 1 },],
         ["HousingSignBoard"]   = [new(28)],
         ["FreeCompanyProfile"] = [new(30)],
         ["ConfigSystem"]       = [new(516) { TextFlags1 = 32, TextFlags2 = 0 }]
