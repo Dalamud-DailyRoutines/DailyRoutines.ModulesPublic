@@ -499,15 +499,11 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
     }
 
 
-    private static void HideTooltip(AtkUnitBase* unitBase)
-    {
+    private static void HideTooltip(AtkUnitBase* unitBase) => 
         AtkStage.Instance()->TooltipManager.HideTooltip(unitBase->Id);
-    }
 
-    private static void ShowTooltip(AtkUnitBase* unitBase, AtkResNode* node, DutyFinderSettingDisplay settingDetail)
-    {
+    private static void ShowTooltip(AtkUnitBase* unitBase, AtkResNode* node, DutyFinderSettingDisplay settingDetail) => 
         settingDetail.ShowTooltip(unitBase, node);
-    }
 
 
     public static void LinkNodeToContainer(AtkImageNode* atkNode, AtkResNode* parentNode, AtkUnitBase* addon)
