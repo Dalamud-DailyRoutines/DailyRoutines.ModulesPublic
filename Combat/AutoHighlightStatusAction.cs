@@ -45,7 +45,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
     private static          uint                     lastActionId;
     private static readonly Dictionary<ushort, uint> lastStatusTarget = new();
 
-    public override void Init()
+    protected override void Init()
     {
         moduleConfig = LoadConfig<Config>() ??
                        new()
@@ -63,7 +63,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         FrameworkManager.Register(OnUpdate, throttleMS: 200);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         UseActionManager.UnregPreUseActionLocation(OnPreUseActionLocation);
         FrameworkManager.Unregister(OnUpdate);
@@ -71,7 +71,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         base.Uninit();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
         if (ImGui.SliderFloat($"{GetLoc("Threshold")} (s)##ReminderThreshold", ref moduleConfig.Threshold, 2.0f, 10.0f, "%.1f"))

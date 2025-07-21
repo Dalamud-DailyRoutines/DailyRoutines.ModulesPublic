@@ -31,7 +31,7 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
     private static int            LastCheckNum = 0;
     private static HashSet<ulong> BlacklistHashSet = [];
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -46,7 +46,7 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
         FrameworkManager.Register(OnUpdate, throttleMS: 500);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(150f * GlobalFontScale);
         if (ImGui.InputInt(GetLoc("Radius"), ref ModuleConfig.CheckRange))
@@ -136,7 +136,7 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
         DtrEntry.Tooltip = tooltip.ToString().Trim();
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         FrameworkManager.Unregister(OnUpdate);
 

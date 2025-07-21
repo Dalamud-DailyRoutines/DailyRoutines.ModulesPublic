@@ -30,8 +30,8 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
 
     private static Action? SelectedCustomAction;
     private static string  ActionSearchInput = string.Empty;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -40,7 +40,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ProcessPacketActionEffectHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoBroadcastActionHitInfo-DHHint")}:");

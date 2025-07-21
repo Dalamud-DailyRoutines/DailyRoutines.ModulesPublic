@@ -14,12 +14,12 @@ public class AutoQuestAccept : DailyModuleBase
         Category = ModuleCategories.UIOperation,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "JournalAccept", OnAddonSetup);
     }
 
-    public override void ConfigUI() { ConflictKeyText(); }
+    protected override void ConfigUI() { ConflictKeyText(); }
 
     private unsafe void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
@@ -34,7 +34,7 @@ public class AutoQuestAccept : DailyModuleBase
         Callback(addon, true, 3, questID);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddonSetup);
     }

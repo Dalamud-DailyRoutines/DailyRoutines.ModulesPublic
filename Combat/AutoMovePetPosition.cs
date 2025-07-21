@@ -40,7 +40,7 @@ public class AutoMovePetPosition : DailyModuleBase
         Category = ModuleCategories.Combat
     };
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
@@ -52,7 +52,7 @@ public class AutoMovePetPosition : DailyModuleBase
         TaskHelper.Enqueue(SchedulePetMovements);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         var tableWidth = (ImGui.GetContentRegionAvail() * 0.9f) with { Y = 0 };
         
@@ -416,7 +416,7 @@ public class AutoMovePetPosition : DailyModuleBase
         return contentData.ContentMemberType.RowId == 3;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnTerritoryChanged;
         DService.DutyState.DutyRecommenced -= OnDutyRecommenced;

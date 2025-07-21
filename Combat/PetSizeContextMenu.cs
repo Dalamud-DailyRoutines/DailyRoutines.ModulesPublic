@@ -17,7 +17,7 @@ public unsafe class PetSizeContextMenu : DailyModuleBase
 
     private static readonly UpperContainerItem ContainerItem = new();
 
-    public override void Init() => 
+    protected override void Init() => 
         DService.ContextMenu.OnMenuOpened += OnMenuOpened;
 
     private static void OnMenuOpened(IMenuOpenedArgs args)
@@ -25,8 +25,8 @@ public unsafe class PetSizeContextMenu : DailyModuleBase
         if (!ContainerItem.IsDisplay(args)) return;
         args.AddMenuItem(ContainerItem.Get());
     }
-    
-    public override void Uninit() => 
+
+    protected override void Uninit() => 
         DService.ContextMenu.OnMenuOpened -= OnMenuOpened;
 
     private class UpperContainerItem : MenuItemBase

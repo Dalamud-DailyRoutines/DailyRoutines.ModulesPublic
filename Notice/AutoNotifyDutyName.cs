@@ -15,15 +15,15 @@ public class AutoNotifyDutyName : DailyModuleBase
     };
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
         DService.ClientState.TerritoryChanged += OnZoneChange;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
             SaveConfig(ModuleConfig);
@@ -65,7 +65,8 @@ public class AutoNotifyDutyName : DailyModuleBase
             NotificationInfo(message);
     }
 
-    public override void Uninit() => DService.ClientState.TerritoryChanged -= OnZoneChange;
+    protected override void Uninit() => 
+        DService.ClientState.TerritoryChanged -= OnZoneChange;
 
     private class Config : ModuleConfiguration
     {

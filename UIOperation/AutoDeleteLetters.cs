@@ -18,7 +18,7 @@ public unsafe class AutoDeleteLetters : DailyModuleBase
         Category = ModuleCategories.UIOperation,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new TaskHelper();
         Overlay ??= new Overlay(this);
@@ -31,7 +31,7 @@ public unsafe class AutoDeleteLetters : DailyModuleBase
             OnAddonLetterList(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = LetterList;
         if (addon == null) return;
@@ -133,7 +133,7 @@ public unsafe class AutoDeleteLetters : DailyModuleBase
         return -1;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddonLetterList);
         DService.AddonLifecycle.UnregisterListener(AlwaysYes);

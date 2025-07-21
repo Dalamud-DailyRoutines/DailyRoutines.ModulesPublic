@@ -31,8 +31,8 @@ public class FastGrandCompanyExchange : DailyModuleBase
     private const string Command = "gce";
     
     private static Config ModuleConfig = null!;
-    
-    public override unsafe void Init()
+
+    protected override unsafe void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -46,8 +46,8 @@ public class FastGrandCompanyExchange : DailyModuleBase
 
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("FastGrandCompanyExchange-CommandHelp") });
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         CommandManager.RemoveSubCommand(Command);
         DService.AddonLifecycle.UnregisterListener(OnAddon);
@@ -55,7 +55,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
         base.Uninit();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
         
@@ -63,7 +63,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
         ImGui.TextWrapped($"/pdr {Command} {GetLoc("FastGrandCompanyExchange-CommandHelp")}");
     }
 
-    public override unsafe void OverlayUI()
+    protected override unsafe void OverlayUI()
     {
         if (!IsAddonAndNodesReady(GrandCompanyExchange))
         {

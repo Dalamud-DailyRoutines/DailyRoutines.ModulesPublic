@@ -16,7 +16,7 @@ public class AutoSoulsow : DailyModuleBase
         Category = ModuleCategories.Action,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
 
@@ -95,7 +95,7 @@ public class AutoSoulsow : DailyModuleBase
         return !isPVP && (contentData == null || !InvalidContentTypes.Contains(contentData.Value.ContentType.RowId));
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.DutyState.DutyRecommenced    -= OnDutyRecommenced;

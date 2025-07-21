@@ -8,15 +8,15 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Lumina.Excel.Sheets;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoNotifyCutSceneEndTitle"),
+        Title       = GetLoc("AutoNotifyCutSceneEndTitle"),
         Description = GetLoc("AutoNotifyCutSceneEndDescription"),
-        Category = ModuleCategories.Notice,
+        Category    = ModuleCategories.Notice,
     };
 
     private static Config ModuleConfig = null!;
@@ -24,7 +24,7 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
     private static bool IsDutyEnd;
     private static Stopwatch? Stopwatch;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -35,7 +35,7 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         OnZoneChanged(DService.ClientState.TerritoryType);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
             SaveConfig(ModuleConfig);
@@ -47,7 +47,7 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         OnZoneChanged(0);
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
@@ -82,7 +82,8 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         FrameworkManager.Register(OnUpdate, throttleMS: 500);
     }
     
-    private static void OnDutyComplete(object? sender, ushort zone) => IsDutyEnd = true;
+    private static void OnDutyComplete(object? sender, ushort zone) => 
+        IsDutyEnd = true;
 
     private void OnUpdate(IFramework _)
     {
@@ -113,7 +114,7 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         {
             // 副本还未开始 → 先检查是否有玩家没加载出来 → 如有, 不继续检查
             if (!DService.DutyState.IsDutyStarted &&
-                DService.PartyList.Any(x => x.GameObject == null || !x.GameObject.IsTargetable))
+                DService.PartyList.Any(x => x.GameObject is not { IsTargetable: true }))
                 return;
             
             // 检查是否任一玩家仍在剧情状态
@@ -144,13 +145,13 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         // 小于四秒 → 不播报
         if (elapsedTime < TimeSpan.FromSeconds(4)) return;
         
-        var message = GetLoc("AutoNotifyCutSceneEnd-NotificationMessage", $"{elapsedTime.TotalSeconds:F0}");
+        var message = $"{GetLoc("AutoNotifyCutSceneEnd-NotificationMessage")}";
         if (ModuleConfig.SendChat) 
             Chat(message);
         if (ModuleConfig.SendNotification) 
             NotificationInfo(message);
         if (ModuleConfig.SendTTS) 
-            Speak(message);
+            Speak($"{message} {GetLoc("AutoNotifyCutSceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
     }
 
     private class Config : ModuleConfiguration

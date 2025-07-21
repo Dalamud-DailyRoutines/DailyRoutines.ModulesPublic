@@ -29,8 +29,8 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
     private static Dictionary<uint, int> HaterInfo = [];
 
     private static string CastInfoTargetBlacklistInput = string.Empty;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -41,7 +41,7 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,           "_EnemyList", OnAddon);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, GetLoc("Offset"));
@@ -411,7 +411,7 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
         return nodes.Count > 0;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         FreeNodes();

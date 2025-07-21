@@ -18,7 +18,7 @@ public unsafe class AutoDance : DailyModuleBase
 
     private static HashSet<uint> DanceActions = [15997, 15998];
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new TaskHelper { TimeLimitMS = 5_000 };
 
@@ -60,7 +60,7 @@ public unsafe class AutoDance : DailyModuleBase
         return false;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         UseActionManager.UnregUseActionLocation(OnPostUseAction);
 

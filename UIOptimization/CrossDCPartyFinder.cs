@@ -66,7 +66,7 @@ public class CrossDCPartyFinder : DailyModuleBase
 
     private static int CurrentPage;
 
-    public override unsafe void Init()
+    protected override unsafe void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
         Overlay      ??= new(this);
@@ -80,7 +80,7 @@ public class CrossDCPartyFinder : DailyModuleBase
         AgentLookingForGroupReceiveEventHook.Enable();
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
 
@@ -89,7 +89,7 @@ public class CrossDCPartyFinder : DailyModuleBase
         base.Uninit();
     }
 
-    public override unsafe void OverlayUI()
+    protected override unsafe void OverlayUI()
     {
         var addon = LookingForGroup;
         if (addon == null)

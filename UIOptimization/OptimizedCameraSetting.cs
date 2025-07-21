@@ -23,7 +23,7 @@ public unsafe class OptimizedCameraSetting : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -38,13 +38,13 @@ public unsafe class OptimizedCameraSetting : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(5972));
 

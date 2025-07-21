@@ -5,28 +5,26 @@ using DailyRoutines.Managers;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class FriendlistTeleporter : DailyModuleBase
 {
-    private static readonly TeleportMenuItem TeleportItem = new();
-    private static readonly CrossWorldMenuItem CrossWorldItem = new();
-
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("FriendlistTeleporterTitle"),
-        Description = GetLoc("FriendlistTeleporterDescription"),
-        Category = ModuleCategories.UIOptimization,
-        Author = ["Xww", "KirisameVanilla"],
+        Title               = GetLoc("FriendlistTeleporterTitle"),
+        Description         = GetLoc("FriendlistTeleporterDescription"),
+        Category            = ModuleCategories.UIOptimization,
+        Author              = ["Xww", "KirisameVanilla"],
         ModulesPrerequisite = ["WorldTravelCommand"]
     };
+    
+    private static readonly TeleportMenuItem   TeleportItem   = new();
+    private static readonly CrossWorldMenuItem CrossWorldItem = new();
 
-    public override void Init()
-    {
+    protected override void Init() => 
         DService.ContextMenu.OnMenuOpened += OnMenuOpen;
-    }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnMenuOpen;
         base.Uninit();
@@ -38,12 +36,21 @@ public class FriendlistTeleporter : DailyModuleBase
         {
             if (TeleportItem.IsDisplay(args))
                 args.AddMenuItem(TeleportItem.Get());
-        } catch { }
+        }
+        catch
+        {
+            // ignored
+        }
+
         try
         {
             if (ModuleManager.IsModuleEnabled("WorldTravelCommand") == true && CrossWorldItem.IsDisplay(args))
                 args.AddMenuItem(CrossWorldItem.Get());
-        } catch { }
+        }
+        catch
+        {
+            // ignored
+        }
         
     }
 

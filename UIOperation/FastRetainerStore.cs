@@ -21,14 +21,14 @@ public unsafe class FastRetainerStore : DailyModuleBase
     private static readonly HashSet<string> PlayerAddonNames   = ["Inventory", "InventoryLarge", "InventoryExpansion"];
     private static readonly HashSet<string> RetainerAddonNames = ["InventoryRetainer", "InventoryRetainerLarge"];
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new();
 
         DService.ContextMenu.OnMenuOpened += OnContextMenuOpened;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
         base.Uninit();

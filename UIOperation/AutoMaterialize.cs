@@ -33,7 +33,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
     
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -56,9 +56,9 @@ public unsafe class AutoMaterialize : DailyModuleBase
         CommandManager.AddSubCommand(Command, new((_, _) => StartARoundAll()) { HelpMessage = GetLoc("AutoMaterialize-AutoExtractAll") });
     }
 
-    public override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ConflictKeyText();
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = Materialize;
         if (addon == null) return;
@@ -191,7 +191,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
         Callback(addon, true, 0);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         CommandManager.RemoveSubCommand(Command);
         

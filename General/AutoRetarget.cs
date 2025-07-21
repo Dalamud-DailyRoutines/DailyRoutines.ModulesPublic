@@ -30,7 +30,7 @@ public class AutoRetarget : DailyModuleBase
         public bool PrioritizeForlorn;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("AutoRetarget-PrioritizeForlorn"), ref ModuleConfig.PrioritizeForlorn)) 
             ModuleConfig.Save(this);
@@ -55,7 +55,7 @@ public class AutoRetarget : DailyModuleBase
             ClearMarkers();
     }
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
         TaskHelper   ??= new() { TimeLimitMS = 15_000 };
@@ -63,7 +63,7 @@ public class AutoRetarget : DailyModuleBase
         FrameworkManager.Register(OnUpdate, true, 1000);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         FrameworkManager.Unregister(OnUpdate);
         base.Uninit();

@@ -151,7 +151,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
     private static readonly Throttler<uint> NotificationThrottler = new();
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -166,7 +166,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         UseActionManager.RegPreUseAction(OnPreUseAction);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoPreventDuplicateStatus-OverlapThreshold")}:");
@@ -297,7 +297,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         }
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         UseActionManager.UnregPreUseAction(OnPreUseAction);
         NotificationThrottler.Clear();

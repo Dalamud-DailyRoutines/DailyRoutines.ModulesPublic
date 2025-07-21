@@ -19,7 +19,7 @@ public unsafe class BlockInputWhenFishing : DailyModuleBase
     private delegate bool IsKeyDownDelegate(UIInputData* data, int id);
     private static Hook<IsKeyDownDelegate>? IsKeyDownHook;
 
-    public override void Init()
+    protected override void Init()
     {
         IsKeyDownHook ??= DService.Hook.HookFromSignature<IsKeyDownDelegate>(IsKeyDownSig.Get(), IsKeyDownDetour);
         DService.Condition.ConditionChange += OnConditionChanged;
@@ -28,7 +28,7 @@ public unsafe class BlockInputWhenFishing : DailyModuleBase
             IsKeyDownHook.Enable();
     }
 
-    public override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ConflictKeyText();
 
     private static void OnConditionChanged(ConditionFlag flag, bool isSet)
     {
@@ -43,7 +43,7 @@ public unsafe class BlockInputWhenFishing : DailyModuleBase
     private static bool IsKeyDownDetour(UIInputData* data, int id) 
         => IsConflictKeyPressed() && IsKeyDownHook.Original(data, id);
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.Condition.ConditionChange -= OnConditionChanged;
 

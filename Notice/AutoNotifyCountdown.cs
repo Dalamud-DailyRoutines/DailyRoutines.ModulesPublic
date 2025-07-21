@@ -24,15 +24,15 @@ public class AutoNotifyCountdown : DailyModuleBase
                                                                  .Select(text => text.ToString() ?? string.Empty).ToList();
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
         DService.Chat.ChatMessage += OnChatMessage;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("OnlyNotifyWhenBackground"), ref ModuleConfig.OnlyNotifyWhenBackground))
             SaveConfig(ModuleConfig);
@@ -51,7 +51,7 @@ public class AutoNotifyCountdown : DailyModuleBase
         }
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         DService.Chat.ChatMessage -= OnChatMessage;
 
     private class Config : ModuleConfiguration

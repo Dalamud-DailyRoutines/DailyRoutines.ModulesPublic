@@ -25,14 +25,16 @@ public unsafe class AutoSharpenInterfaceText : DailyModuleBase
             new(3, 16) { TextFlags1 = 224, TextFlags2 = 1 },
             new(2, 16) { TextFlags1 = 224, TextFlags2 = 1 }
         ],
+        ["HousingEditMessage"] = [new(2, 16) { TextFlags1 = 224, TextFlags2 = 1 },],
         ["HousingSignBoard"]   = [new(28)],
-        ["FreeCompanyProfile"] = [new(30)]
+        ["FreeCompanyProfile"] = [new(30)],
+        ["ConfigSystem"]       = [new(516) { TextFlags1 = 32, TextFlags2 = 0 }]
     };
-    
-    public override void Init() => 
+
+    protected override void Init() => 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, TextWindows.Keys, OnTextAddon);
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnTextAddon);
 

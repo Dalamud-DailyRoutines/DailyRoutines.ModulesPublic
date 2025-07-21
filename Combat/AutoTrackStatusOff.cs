@@ -29,9 +29,9 @@ public unsafe class AutoTrackStatusOff : DailyModuleBase
     private static StatusSelectCombo? StatusSelectCombo;
     
     private static readonly Dictionary<uint, (float Duration, ulong SourceID, DateTime GainTime, uint TargetID)> Records = [];
-    
-    
-    public override void Init()
+
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -43,8 +43,8 @@ public unsafe class AutoTrackStatusOff : DailyModuleBase
         PlayerStatusManager.RegGainStatus(OnGainStatus);
         PlayerStatusManager.RegLoseStatus(OnLoseStatus);
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
             SaveConfig(ModuleConfig);
@@ -127,8 +127,8 @@ public unsafe class AutoTrackStatusOff : DailyModuleBase
             Records.Remove(statusID);
         }
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         PlayerStatusManager.Unreg(OnGainStatus);
         PlayerStatusManager.Unreg(OnLoseStatus);

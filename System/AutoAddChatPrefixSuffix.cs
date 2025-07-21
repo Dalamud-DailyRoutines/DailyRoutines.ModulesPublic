@@ -28,7 +28,7 @@ public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
 
     private static Config? ModuleConfig;
 
-    public override void Init()
+    protected override void Init()
     {
         var config = LoadConfig<Config>();
         if (config == null)
@@ -47,7 +47,7 @@ public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
         ProcessSendedChatHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("Prefix"), ref ModuleConfig.IsAddPrefix)) 
             SaveConfig(ModuleConfig);

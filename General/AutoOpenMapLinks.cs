@@ -37,7 +37,7 @@ public class AutoOpenMapLinks : DailyModuleBase
         public bool                 IsFlagCentered;
     }
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = new Config().Load(this);
 
@@ -45,7 +45,7 @@ public class AutoOpenMapLinks : DailyModuleBase
         DService.ContextMenu.OnMenuOpened += OnMenuOpen;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.Chat.ChatMessage -= HandleChatMessage;
         DService.ContextMenu.OnMenuOpened -= OnMenuOpen;
@@ -57,7 +57,7 @@ public class AutoOpenMapLinks : DailyModuleBase
         args.AddMenuItem(AutoOpenMapLinksItem.Get());
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(Lang.Get("AutoOpenMapLinks-AutoFocusFlag"), ref ModuleConfig.IsFlagCentered))
             ModuleConfig.Save(this);

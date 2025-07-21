@@ -43,7 +43,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
                                                            StringComparer.OrdinalIgnoreCase);
     }
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -60,7 +60,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         if (MJICraftSchedule == null)
         {
@@ -335,7 +335,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
             _                      => Overlay.IsOpen
         };
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();

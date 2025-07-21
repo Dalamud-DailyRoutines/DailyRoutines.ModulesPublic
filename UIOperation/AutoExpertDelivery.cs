@@ -49,8 +49,8 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
     };
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -63,7 +63,7 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
             OnAddonSupplyList(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = GrandCompanySupplyList;
         if (!IsAddonAndNodesReady(addon) || addon->AtkValues[5].UInt != 2) return;
@@ -312,8 +312,8 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         if (ModuleConfig.AutoSwitchWhenOpen && type == AddonEvent.PostSetup && GrandCompanySupplyList != null)
             Callback(GrandCompanySupplyList, true, 0, 2);
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddonSupplyList);
 

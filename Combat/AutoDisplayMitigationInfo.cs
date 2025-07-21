@@ -43,7 +43,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     private static readonly byte[] DamagePhysicalStr = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
     private static readonly byte[] DamageMagicalStr  = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<ModuleStorage>() ?? new ModuleStorage();
 
@@ -69,7 +69,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         FrameworkManager.Register(OnFrameworkUpdateInterval, throttleMS: 500);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         // refresh mitigation status
         FrameworkManager.Unregister(OnFrameworkUpdateInterval);
@@ -81,7 +81,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         StatusBarManager.Disable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("OnlyInCombat"), ref ModuleConfig.OnlyInCombat))
             SaveConfig(ModuleConfig);
@@ -133,7 +133,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #region Overlay
 
-    public override unsafe void OverlayUI()
+    protected override unsafe void OverlayUI()
     {
         if (Control.GetLocalPlayer() == null || MitigationManager.IsLocalEmpty())
             return;

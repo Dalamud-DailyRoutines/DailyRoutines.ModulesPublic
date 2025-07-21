@@ -42,13 +42,13 @@ public class BetterStatusTimeDisplay : DailyModuleBase
     
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         FrameworkManager.Register(OnUpdate, throttleMS: 1000);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("BetterStatusTimeDisplay-ChooseTimeFormat")}:");
@@ -120,7 +120,7 @@ public class BetterStatusTimeDisplay : DailyModuleBase
         }
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
        FrameworkManager.Unregister(OnUpdate);
     }

@@ -17,7 +17,7 @@ public unsafe class GlamourPlateApplyCommand : DailyModuleBase
 
     private const string Command = "gpapply";
 
-    public override void Init()
+    protected override void Init()
     {
         CommandManager.AddSubCommand(Command,
                                              new CommandInfo(OnCommand)
@@ -49,5 +49,5 @@ public unsafe class GlamourPlateApplyCommand : DailyModuleBase
         ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.EnterGlamourPlateState, 0, 1);
     }
 
-    public override void Uninit() => CommandManager.RemoveSubCommand(Command);
+    protected override void Uninit() => CommandManager.RemoveSubCommand(Command);
 }

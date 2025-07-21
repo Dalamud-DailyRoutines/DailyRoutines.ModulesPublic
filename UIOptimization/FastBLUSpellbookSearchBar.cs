@@ -1,11 +1,10 @@
 ﻿using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
 {
@@ -17,8 +16,8 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
     };
 
     private static string SearchBarInput = string.Empty;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         TaskHelper    ??= new();
         Overlay       ??= new(this);
@@ -31,7 +30,7 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = GetAddonByName("AOZNotebook");
         if (addon == null)
@@ -115,7 +114,7 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
         });
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();

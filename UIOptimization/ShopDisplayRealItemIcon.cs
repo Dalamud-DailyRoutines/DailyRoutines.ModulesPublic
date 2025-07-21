@@ -7,11 +7,10 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ShopDisplayRealItemIcon : DailyModuleBase
 {
@@ -23,8 +22,8 @@ public unsafe class ShopDisplayRealItemIcon : DailyModuleBase
     };
 
     private static List<(uint ID, uint IconID, string Name)> CollectablesShopItemDatas = [];
-    
-    public override void Init()
+
+    protected override void Init()
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Shop", OnShop);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "Shop", OnShop);
@@ -218,7 +217,7 @@ public unsafe class ShopDisplayRealItemIcon : DailyModuleBase
         addon->OnRefresh(addon->AtkValuesCount, addon->AtkValues);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnShop);
         DService.AddonLifecycle.UnregisterListener(OnInclusionShop);

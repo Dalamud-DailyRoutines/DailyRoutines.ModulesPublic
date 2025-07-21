@@ -33,8 +33,8 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
     private static float Duration;
     private static int   FrameCount;
     private static float CurrentFrame;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         Overlay       ??= new(this);
         Overlay.Flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize |
@@ -46,7 +46,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = BannerEditor;
         if (addon == null)
@@ -124,7 +124,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
         UpdateDuration(PortraitChara);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();

@@ -21,8 +21,8 @@ public class PFPageSizeCustomize : DailyModuleBase
     private static   Hook<PartyFinderDisplayAmountDelegate>? PartyFinderDisplayAmountHook;
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -30,7 +30,7 @@ public class PFPageSizeCustomize : DailyModuleBase
         PartyFinderDisplayAmountHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
         if (ImGuiOm.InputShort(GetLoc("PFPageSizeCustomize-DisplayAmount"), ref ModuleConfig.PageSize, 1, 10))

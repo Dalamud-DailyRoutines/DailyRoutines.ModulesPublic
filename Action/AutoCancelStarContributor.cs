@@ -16,14 +16,14 @@ public unsafe class AutoCancelStarContributor : DailyModuleBase
     };
     
     private const uint StarContributorBuffID = 4409;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.ClientState.ClassJobChanged  -= OnClassJobChanged;

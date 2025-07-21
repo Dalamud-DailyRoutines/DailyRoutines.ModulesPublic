@@ -41,8 +41,8 @@ public class AutoConstantlyClick : DailyModuleBase
     private                 long             ThrottleTime { get; set; } = Environment.TickCount64;
     private static          Config           ModuleConfig = null!;
     private static readonly GamepadButtons[] Triggers     = [GamepadButtons.L2, GamepadButtons.R2];
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -62,7 +62,7 @@ public class AutoConstantlyClick : DailyModuleBase
             GamepadPollHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.Text($"{GetLoc("Interval")}:");

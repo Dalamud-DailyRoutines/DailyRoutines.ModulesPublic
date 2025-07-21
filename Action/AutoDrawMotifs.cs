@@ -19,8 +19,8 @@ public class AutoDrawMotifs : DailyModuleBase
     private static readonly HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
     
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -32,7 +32,7 @@ public class AutoDrawMotifs : DailyModuleBase
         DService.DutyState.DutyCompleted      += OnDutyCompleted;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("AutoDrawMotifs-DrawWhenOutOfCombat"), ref ModuleConfig.DrawWhenOutOfCombat))
             SaveConfig(ModuleConfig);
@@ -120,7 +120,7 @@ public class AutoDrawMotifs : DailyModuleBase
         return !isPVP && (GameState.ContentFinderConditionData.RowId == 0 || !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId));
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.DutyState.DutyRecommenced    -= OnDutyRecommenced;

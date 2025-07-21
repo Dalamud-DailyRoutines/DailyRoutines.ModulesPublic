@@ -15,7 +15,7 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
         Category    = ModuleCategories.Combat
     };
 
-    public override void Init()
+    protected override void Init()
     {
         Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoTitleBar;
@@ -25,7 +25,7 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
             OnEnterFate(0);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         GameState.EnterFate -= OnEnterFate;
         
@@ -34,7 +34,7 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
 
     private void OnEnterFate(uint _) => Overlay.IsOpen = true;
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var currentFate = FateManager.Instance()->CurrentFate;
         if (currentFate == null                                                  ||

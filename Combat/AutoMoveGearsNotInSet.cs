@@ -30,13 +30,13 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
         InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4
     ];
 
-    public override void Init()
+    protected override void Init()
     {
         CommandManager.AddSubCommand(
             Command, new(OnCommand) { HelpMessage = GetLoc("AutoMoveGearsNotInSet-CommandHelp") });
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
         

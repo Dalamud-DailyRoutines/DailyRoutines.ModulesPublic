@@ -18,7 +18,7 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
     
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 10_000 };
         Overlay    ??= new(this);
@@ -32,7 +32,7 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
             OnAddonList(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = SalvageItemSelector;
         if (addon == null) return;
@@ -109,7 +109,7 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         return true;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddonList);
         DService.AddonLifecycle.UnregisterListener(OnAddon);

@@ -22,14 +22,14 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
         LuminaWrapper.GetAddonText(887)
     ];
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 2_000 };
 
         DService.ContextMenu.OnMenuOpened += OnContextMenuOpened;
     }
 
-    public override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ConflictKeyText();
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)
     {
@@ -48,7 +48,7 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
                IsAddonAndNodesReady(InventoryRetainerLarge);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
         

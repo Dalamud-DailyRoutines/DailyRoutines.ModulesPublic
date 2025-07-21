@@ -16,7 +16,7 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
         Overlay    ??= new(this);
@@ -27,7 +27,7 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();
@@ -43,7 +43,7 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
         };
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = PvpReward;
         if (addon == null)

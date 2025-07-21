@@ -31,13 +31,13 @@ public unsafe class AutoAcceptInvitation : DailyModuleBase
 
     private static string Pattern { get; } = BuildPattern(LuminaGetter.GetRow<Addon>(120).GetValueOrDefault().Text.ToDalamudString().Payloads);
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnSelectYesno);
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.Text($"{GetLoc("Mode")}:");
@@ -128,7 +128,7 @@ public unsafe class AutoAcceptInvitation : DailyModuleBase
         return pattern.ToString();
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         DService.AddonLifecycle.UnregisterListener(OnSelectYesno);
     
     private class Config : ModuleConfiguration

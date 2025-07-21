@@ -34,7 +34,7 @@ public class AutoGathererRoleActions : DailyModuleBase
         [7911] = 1173,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
 
@@ -69,7 +69,7 @@ public class AutoGathererRoleActions : DailyModuleBase
         });
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.ClassJobChanged -= OnJobChanged;
 

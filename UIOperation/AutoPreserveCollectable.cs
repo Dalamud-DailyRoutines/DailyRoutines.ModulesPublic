@@ -18,11 +18,11 @@ public class AutoPreserveCollectable : DailyModuleBase
         Description = GetLoc("AutoPreserveCollectableDescription"),
         Category    = ModuleCategories.UIOperation,
     };
-    
-    public override void Init() => DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);
+
+    protected override void Init() => DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);
 
     private static void OnAddon(AddonEvent type, AddonArgs args) =>
         ClickSelectYesnoYes((LuminaGetter.GetRow<Addon>(1463)!.Value.Text.ToDalamudString().Payloads[0] as TextPayload).Text);
 
-    public override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
+    protected override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
 }

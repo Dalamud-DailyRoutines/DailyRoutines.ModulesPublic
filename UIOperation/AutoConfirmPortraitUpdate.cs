@@ -14,8 +14,8 @@ public class AutoConfirmPortraitUpdate : DailyModuleBase
     };
 
     private static Config ModuleConfig = null!;
-    
-    public override unsafe void Init()
+
+    protected override unsafe void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -24,7 +24,7 @@ public class AutoConfirmPortraitUpdate : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
             SaveConfig(ModuleConfig);
@@ -42,8 +42,8 @@ public class AutoConfirmPortraitUpdate : DailyModuleBase
         if (ModuleConfig.SendChat)
             Chat(GetLoc("AutoConfirmPortraitUpdate-Notification"));
     }
-    
-    public override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
+
+    protected override void Uninit() => DService.AddonLifecycle.UnregisterListener(OnAddon);
 
     private class Config : ModuleConfiguration
     {

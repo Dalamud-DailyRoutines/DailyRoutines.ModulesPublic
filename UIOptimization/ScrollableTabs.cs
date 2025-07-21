@@ -154,20 +154,20 @@ public unsafe class ScrollableTabs : DailyModuleBase
         }
     }
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new Config();
 
         FrameworkManager.Register(OnUpdate);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("ScrollableTabs-Invert"), ref ModuleConfig.Invert))
             SaveConfig(ModuleConfig);
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         FrameworkManager.Unregister(OnUpdate);
         base.Uninit();

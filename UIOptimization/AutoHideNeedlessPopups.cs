@@ -24,7 +24,7 @@ public unsafe class AutoHideNeedlessPopups : DailyModuleBase
     private delegate void AtkUnitBaseDrawDelegate(AtkUnitBase* addon);
     private static Hook<AtkUnitBaseDrawDelegate>? AtkUnitBaseDrawHook;
 
-    public override void Init()
+    protected override void Init()
     {
         AtkUnitBaseDrawHook ??= AtkUnitBaseDrawSig.GetHook<AtkUnitBaseDrawDelegate>(AtkUnitBaseDrawDetour);
         AtkUnitBaseDrawHook.Enable();

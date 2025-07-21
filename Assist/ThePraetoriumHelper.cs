@@ -20,7 +20,7 @@ public unsafe class ThePraetoriumHelper : DailyModuleBase
         Author      = ["逆光"]
     };
 
-    public override void Init()
+    protected override void Init()
     {
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(DService.ClientState.TerritoryType);
@@ -86,7 +86,7 @@ public unsafe class ThePraetoriumHelper : DailyModuleBase
         return count;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         FrameworkManager.Unregister(OnUpdate);

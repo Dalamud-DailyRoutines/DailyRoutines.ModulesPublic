@@ -33,8 +33,8 @@ public class AutoNotifyBonusFate : DailyModuleBase
                                     .Select(x => (ushort)x.RowId)
                                     .ToHashSet();
     }
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -42,7 +42,7 @@ public class AutoNotifyBonusFate : DailyModuleBase
         OnZoneChanged(DService.ClientState.TerritoryType);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
             SaveConfig(ModuleConfig);
@@ -119,7 +119,7 @@ public class AutoNotifyBonusFate : DailyModuleBase
         LastFates = [.. fateTable];
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         FrameworkManager.Unregister(OnUpdate);

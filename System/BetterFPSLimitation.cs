@@ -40,7 +40,7 @@ public class BetterFPSLimitation : DailyModuleBase
 
     private static ushort NewThresholdInput = 120;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new()
         {
@@ -67,8 +67,8 @@ public class BetterFPSLimitation : DailyModuleBase
 
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("BetterFPSLimitation-CommandHelp") }); 
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, GetLoc("Command"));
         
@@ -157,8 +157,8 @@ public class BetterFPSLimitation : DailyModuleBase
                 break;
         }
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         CommandManager.RemoveSubCommand(Command); 
         

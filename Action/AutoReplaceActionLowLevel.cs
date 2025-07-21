@@ -55,7 +55,7 @@ public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
         [16481] = 7496
     };
 
-    public override void Init()
+    protected override void Init()
     {
         IsActionReplaceableHook ??= IsActionReplaceableSig.GetHook<IsActionReplaceableDelegate>(IsActionReplaceableDetour);
         IsActionReplaceableHook.Enable();
@@ -67,7 +67,7 @@ public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
         GetIconIDForSlotHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         var tableSize = new Vector2(ImGui.GetContentRegionAvail().X / 2, 0);
         using var table = ImRaii.Table("ActionReplacementDisplayTable", 3, ImGuiTableFlags.None, tableSize);

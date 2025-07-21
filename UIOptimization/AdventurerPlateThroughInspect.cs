@@ -16,7 +16,7 @@ public unsafe class AdventurerPlateThroughInspect : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
-    public override void Init()
+    protected override void Init()
     {
         Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoBackground;
@@ -35,7 +35,7 @@ public unsafe class AdventurerPlateThroughInspect : DailyModuleBase
             _                      => Overlay.IsOpen
         };
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = CharacterInspect;
         if (addon == null)
@@ -57,7 +57,7 @@ public unsafe class AdventurerPlateThroughInspect : DailyModuleBase
         ImGuiOm.TooltipHover($"{LuminaWrapper.GetAddonText(15083)}");
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         base.Uninit();

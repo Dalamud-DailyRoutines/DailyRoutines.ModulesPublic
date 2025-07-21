@@ -25,7 +25,7 @@ public class AutoPeloton : DailyModuleBase
 
     private Configs Config = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
         Config     =   LoadConfig<Configs>() ?? new();
@@ -38,8 +38,8 @@ public class AutoPeloton : DailyModuleBase
 
         TaskHelper.Enqueue(OneTimeConditionCheck);
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("OnlyInDuty"), ref Config.OnlyInDuty)) // "只在副本中使用"
         {
@@ -53,7 +53,7 @@ public class AutoPeloton : DailyModuleBase
             SaveConfig(Config);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnTerritoryChanged;
         DService.DutyState.DutyRecommenced    -= OnDutyRecommenced;

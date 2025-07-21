@@ -28,7 +28,7 @@ public unsafe class ExtraBlueSet : DailyModuleBase
 
     private static string NewPresetNameInput = string.Empty;
 
-    public override void Init()
+    protected override void Init()
     {
         Overlay ??= new(this);
 
@@ -43,7 +43,7 @@ public unsafe class ExtraBlueSet : DailyModuleBase
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("ExtraBlueSet-CommandHelp") });
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         var addon = AOZNotebook;
         if (addon == null)
@@ -211,7 +211,7 @@ public unsafe class ExtraBlueSet : DailyModuleBase
         ApplyCustomPreset(preset);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         CommandManager.RemoveSubCommand(Command);
         DService.AddonLifecycle.UnregisterListener(OnAddon);

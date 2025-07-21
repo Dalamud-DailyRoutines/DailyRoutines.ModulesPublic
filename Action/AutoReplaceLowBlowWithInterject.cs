@@ -16,9 +16,8 @@ public unsafe class AutoReplaceLowBlowWithInterject : DailyModuleBase
         Category    = ModuleCategories.Action
     };
 
-    private static readonly CompSig IsActionReplaceableSig =
-        new("40 53 48 83 EC ?? 8B D9 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 10 48 8B C8 FF 92 ?? ?? ?? ?? 8B D3");
-    private delegate        bool IsActionReplaceableDelegate(uint actionID);
+    private static readonly CompSig                           IsActionReplaceableSig = new("E8 ?? ?? ?? ?? 84 C0 74 68 8B D3");
+    private delegate        bool                              IsActionReplaceableDelegate(uint actionID);
     private static          Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
 
     private static readonly CompSig GetAdjustedActionIDSig = new("E8 ?? ?? ?? ?? 89 03 8B 03");
@@ -26,11 +25,12 @@ public unsafe class AutoReplaceLowBlowWithInterject : DailyModuleBase
     private static          Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
 
     private static readonly CompSig GetIconIDForSlotSig = new("40 57 48 83 EC ?? 0F B6 C2 41 8B F8");
-    private delegate uint GetIconIDForSlotDelegate(
-        RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
-    private static Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
-    
-    public override void Init()
+    private delegate        uint GetIconIDForSlotDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
+    private static          Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
+
+    private const uint LowBlowAction = 7540;
+
+    protected override void Init()
     {
         IsActionReplaceableHook ??= IsActionReplaceableSig.GetHook<IsActionReplaceableDelegate>(IsActionReplaceableDetour);
         IsActionReplaceableHook.Enable();
@@ -42,18 +42,21 @@ public unsafe class AutoReplaceLowBlowWithInterject : DailyModuleBase
         GetIconIDForSlotHook.Enable();
     }
     
-    private static uint GetAdjustedActionIDDetour(ActionManager* manager, uint actionID) 
-        => actionID == 7540 && IsReplaceNeeded() ? 7538 : GetAdjustedActionIDHook.Original(manager, actionID);
+    private static bool IsActionReplaceableDetour(uint actionID) => 
+        actionID == LowBlowAction || IsActionReplaceableHook.Original(actionID);
+    
+    private static uint GetAdjustedActionIDDetour(ActionManager* manager, uint actionID) => 
+        actionID == LowBlowAction && IsReplaceNeeded() ? 
+            7538 : 
+            GetAdjustedActionIDHook.Original(manager, actionID);
 
     private static uint GetIconIDForSlotDetour(
         RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID) =>
-        type == RaptureHotbarModule.HotbarSlotType.Action && IsReplaceNeeded()
-            ? 808
-            : GetIconIDForSlotHook.Original(slot, type, actionID);
-
-    private static bool IsActionReplaceableDetour(uint actionID) => true;
-
-    private static bool IsReplaceNeeded() => ActionManager.Instance()->IsActionOffCooldown(ActionType.Action, 7538) &&
-                                             (DService.Targets.Target is IBattleChara { IsCastInterruptible: true } ||
-                                              DService.Targets.Target is IBattleNpc { IsCastInterruptible  : true });
+        type == RaptureHotbarModule.HotbarSlotType.Action && actionID == LowBlowAction && IsReplaceNeeded() ? 
+            808 : 
+            GetIconIDForSlotHook.Original(slot, type, actionID);
+    
+    private static bool IsReplaceNeeded() =>
+        ActionManager.Instance()->IsActionOffCooldown(ActionType.Action, 7538) &&
+        DService.Targets.Target is IBattleChara { IsCastInterruptible: true };
 }

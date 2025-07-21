@@ -32,7 +32,7 @@ public class AutoTankStance : DailyModuleBase
     
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -42,7 +42,7 @@ public class AutoTankStance : DailyModuleBase
         DService.DutyState.DutyRecommenced    += OnDutyRecommenced;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("AutoTankStance-OnlyAutoStanceWhenOneTank"), ref ModuleConfig.OnlyAutoStanceWhenOneTank))
             SaveConfig(ModuleConfig);
@@ -86,7 +86,7 @@ public class AutoTankStance : DailyModuleBase
         !GameState.ContentFinderConditionData.PvP &&
         !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId);
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.DutyState.DutyRecommenced -= OnDutyRecommenced;

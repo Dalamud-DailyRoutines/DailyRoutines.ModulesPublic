@@ -20,8 +20,8 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         ModulesPrerequisite = ["ContentFinderCommand"]
     };
-    
-    public override void Init()
+
+    protected override void Init()
     {
         Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoBackground;
@@ -32,7 +32,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         if (ContentsFinder == null)
         {
@@ -157,8 +157,8 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
             // ignored
         }
     }
-    
-    public override void Uninit()
+
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         

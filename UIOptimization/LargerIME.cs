@@ -20,16 +20,16 @@ public unsafe class LargerIME : DailyModuleBase
     private static   Hook<TextInputReceiveEventDelegate>? TextInputReceiveEventHook;
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
         TextInputReceiveEventHook ??= TextInputReceiveEventSig.GetHook<TextInputReceiveEventDelegate>(TextInputReceiveEventDetour);
         TextInputReceiveEventHook.Enable();
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
         if (ImGui.InputFloat($"{GetLoc("Scale")}###FontScaleInput", ref ModuleConfig.Scale, 0.1f, 1, "%.1f"))

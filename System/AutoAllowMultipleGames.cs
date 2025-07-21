@@ -30,7 +30,7 @@ public unsafe class AutoAllowMultipleGames : DailyModuleBase
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(ulong Handle);
 
-    public override void Init()
+    protected override void Init()
     {
         foreach (var handle in EnumHandles())
         {

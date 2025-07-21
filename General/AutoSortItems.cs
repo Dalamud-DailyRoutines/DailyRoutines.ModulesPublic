@@ -25,7 +25,7 @@ public class AutoSortItems : DailyModuleBase
         Category = ModuleCategories.General,
     };
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
         TaskHelper   ??= new TaskHelper { TimeLimitMS = 15_000 };
@@ -33,8 +33,8 @@ public class AutoSortItems : DailyModuleBase
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(DService.ClientState.TerritoryType);
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
             SaveConfig(ModuleConfig);
@@ -73,7 +73,7 @@ public class AutoSortItems : DailyModuleBase
         DrawTableRow("背包分栏", GetLoc("AutoSortItems-Splited"), ref ModuleConfig.InventoryTab, tabOptions, GetLoc("AutoSortItems-InventoryTabDesc"));
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         TaskHelper?.Abort();

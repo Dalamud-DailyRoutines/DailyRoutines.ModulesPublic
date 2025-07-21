@@ -20,15 +20,15 @@ public class AutoPetFollow : DailyModuleBase
     private static readonly HashSet<uint> ValidClassJobs = [26, 27, 28];
     
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
         DService.Condition.ConditionChange += OnConditionChanged;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
             SaveConfig(ModuleConfig);
@@ -55,7 +55,7 @@ public class AutoPetFollow : DailyModuleBase
             NotificationInfo(GetLoc("AutoPetFollow-Notification"));
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         DService.Condition.ConditionChange -= OnConditionChanged;
 
     public class Config : ModuleConfiguration

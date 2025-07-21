@@ -32,7 +32,7 @@ public unsafe class AutoHighlightFlagMarker : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new() { TimeLimitMS = 15_000 };
@@ -47,13 +47,13 @@ public unsafe class AutoHighlightFlagMarker : DailyModuleBase
         FrameworkManager.Register(OnUpdate, throttleMS: 1_000);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("AutoHighlightFlagMarker-ConstantlyUpdate"), ref ModuleConfig.ConstantlyUpdate))
             ModuleConfig.Save(this);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         FrameworkManager.Unregister(OnUpdate);
         DService.ClientState.TerritoryChanged -= OnZoneChanged;

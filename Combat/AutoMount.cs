@@ -25,7 +25,7 @@ public unsafe class AutoMount : DailyModuleBase
     private static string MountSearchInput = string.Empty;
     private static string ZoneSearchInput = string.Empty;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         if (ModuleConfig.SelectedMount != 0)
@@ -37,7 +37,7 @@ public unsafe class AutoMount : DailyModuleBase
         DService.ClientState.TerritoryChanged += OnZoneChanged;
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoMount-CurrentMount")}:");
 
@@ -150,7 +150,7 @@ public unsafe class AutoMount : DailyModuleBase
         return zoneData is { Mount: true };
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.Condition.ConditionChange -= OnConditionChanged;

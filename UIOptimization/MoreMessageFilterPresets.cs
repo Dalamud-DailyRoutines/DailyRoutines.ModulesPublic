@@ -37,16 +37,16 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private static readonly ApplyLogFilterMenuItem MenuItem = new();
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         DService.ContextMenu.OnMenuOpened += OnMenuOpened;
     }
 
-    public override void Uninit() =>
+    protected override void Uninit() =>
         DService.ContextMenu.OnMenuOpened -= OnMenuOpened;
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         var logTabName = GetLogTabName();
 

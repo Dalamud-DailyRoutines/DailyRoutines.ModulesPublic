@@ -34,7 +34,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static bool HasNotifiedInCurrentZone;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -42,7 +42,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         OnZoneChanged((ushort)GameState.TerritoryType);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("AutoGysahlGreens-AutoSwitchStance"), ref ModuleConfig.AutoSwitchStance))
             SaveConfig(ModuleConfig);
@@ -140,7 +140,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     private static void SwitchCommand(ChocoboStance command) =>
         UseActionManager.UseAction(ActionType.BuddyAction, (uint)command);
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         OnZoneChanged(0);

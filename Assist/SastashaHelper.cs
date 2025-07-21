@@ -33,7 +33,7 @@ public class SastashaHelper : DailyModuleBase
     private static ulong CorrectCoralDataID;
     private static ObjectHighlightColor CorrectCoralHighlightColor;
 
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 30_000 };
         
@@ -86,7 +86,7 @@ public class SastashaHelper : DailyModuleBase
         return true;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         OnZoneChanged(0);

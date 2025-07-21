@@ -18,14 +18,14 @@ public unsafe class NameplateIconAdjustment : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = new Config().Load(this);
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "NamePlate", OnAddon);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         if (ImGui.SliderFloat(GetLoc("Scale"), ref ModuleConfig.Scale, 0f, 2f, "%.2f"))
             ModuleConfig.Save(this);
@@ -70,7 +70,7 @@ public unsafe class NameplateIconAdjustment : DailyModuleBase
         }
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         DService.AddonLifecycle.UnregisterListener(OnAddon);
 
     public class Config : ModuleConfiguration

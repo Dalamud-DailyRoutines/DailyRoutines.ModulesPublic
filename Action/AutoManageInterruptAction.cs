@@ -16,8 +16,8 @@ public unsafe class AutoManageInterruptAction : DailyModuleBase
     };
 
     private static readonly HashSet<uint> InterruptActions = [7538, 7551];
-    
-    public override void Init()
+
+    protected override void Init()
     {
         UseActionManager.RegPreUseAction(OnPreUseAction);
     }
@@ -33,7 +33,7 @@ public unsafe class AutoManageInterruptAction : DailyModuleBase
         isPrevented = true;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         UseActionManager.UnregPreUseAction(OnPreUseAction);
     }

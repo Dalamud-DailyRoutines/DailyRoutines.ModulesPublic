@@ -25,10 +25,10 @@ public class CopyItemNameContextMenu : DailyModuleBase
     private static readonly CopyItemNameMenuItem MenuItem        = new(CopyItemNameString);
     private static readonly CopyItemNameMenuItem GlamourMenuItem = new($"{CopyItemNameString} ({GlamoursString})");
 
-    public override void Init() => 
+    protected override void Init() => 
         DService.ContextMenu.OnMenuOpened += OnContextMenuOpened;
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 

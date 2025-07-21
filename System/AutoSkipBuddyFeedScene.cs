@@ -18,7 +18,7 @@ public unsafe class AutoSkipBuddyFeedScene : DailyModuleBase
     private delegate void PlayFeedBuddySceneDelegate(HousingManager* manager);
     private static Hook<PlayFeedBuddySceneDelegate>? PlayFeedBuddySceneHook;
 
-    public override void Init()
+    protected override void Init()
     {
         PlayFeedBuddySceneHook ??= PlayFeedBuddySceneSig.GetHook<PlayFeedBuddySceneDelegate>(PlayFeedBuddySceneDetour);
         PlayFeedBuddySceneHook.Enable();

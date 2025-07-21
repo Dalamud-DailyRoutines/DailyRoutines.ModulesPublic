@@ -57,8 +57,8 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     private static Hook<LookingForGroupConditionReceiveEventDelegate>? LookingForGroupConditionReceiveEventHook;
 
     private static Config ModuleConfig = null!;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig ??= LoadConfig<Config>() ?? new();
         
@@ -79,7 +79,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         LookingForGroupConditionReceiveEventHook.Enable();
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         using (ImRaii.Group())
         {

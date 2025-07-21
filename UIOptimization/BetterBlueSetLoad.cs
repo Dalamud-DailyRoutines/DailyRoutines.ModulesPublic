@@ -26,7 +26,7 @@ public unsafe class BetterBlueSetLoad : DailyModuleBase
 
     private const string Command = "blueset";
 
-    public override void Init()
+    protected override void Init()
     {
         AgentAozNotebookReceiveEventHook ??= AgentAozNotebookReceiveEventSig.GetHook<AgentReceiveEventDelegate>(AgentAozNotebookReceiveEventDetour);
         AgentAozNotebookReceiveEventHook.Enable();
@@ -34,7 +34,7 @@ public unsafe class BetterBlueSetLoad : DailyModuleBase
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("BetterBlueSetLoad-CommandHelp") });
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
         

@@ -12,7 +12,7 @@ public class BanEscToCancelCast : DailyModuleBase
         Category    = ModuleCategories.Action,
     };
 
-    public override void Init() => 
+    protected override void Init() => 
         ExecuteCommandManager.Register(OnPreUseCommand);
 
     private static void OnPreUseCommand(
@@ -22,6 +22,6 @@ public class BanEscToCancelCast : DailyModuleBase
         isPrevented = true;
     }
 
-    public override void Uninit() => 
+    protected override void Uninit() => 
         ExecuteCommandManager.Unregister(OnPreUseCommand);
 }

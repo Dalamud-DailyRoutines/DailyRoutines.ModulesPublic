@@ -39,8 +39,8 @@ public class AutoFateSync : DailyModuleBase
         // 绝枪战士
         { 37, 16142 }
     };
-    
-    public override void Init()
+
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 30_000 };
         
@@ -50,8 +50,8 @@ public class AutoFateSync : DailyModuleBase
 
         GameState.EnterFate += OnEnterFate;
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(50f * GlobalFontScale);
         if (ImGui.InputFloat(GetLoc("AutoFateSync-Delay"), ref ModuleConfig.Delay, 0, 0, "%.1f"))
@@ -136,7 +136,7 @@ public class AutoFateSync : DailyModuleBase
         }
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         GameState.EnterFate -= OnEnterFate;
         

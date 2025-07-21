@@ -41,7 +41,7 @@ public class MultiTargetTracker : DailyModuleBase
         public List<TrackPlayer> PermanentTrackedPlayers = [];
     }
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
@@ -50,7 +50,7 @@ public class MultiTargetTracker : DailyModuleBase
         DService.ContextMenu.OnMenuOpened     += OnMenuOpen;
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnMenuOpen;
         FrameworkManager.Unregister(OnUpdate);
@@ -63,7 +63,7 @@ public class MultiTargetTracker : DailyModuleBase
 
     #region UI
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.Text(GetLoc("MultiTargetTracker-TempTrackHelp"));
         

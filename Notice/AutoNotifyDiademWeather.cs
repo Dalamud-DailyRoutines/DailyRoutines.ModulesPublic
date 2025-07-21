@@ -23,8 +23,8 @@ public class AutoNotifyDiademWeather : DailyModuleBase
     private static Config ModuleConfig = null!;
 
     private static uint LastWeather;
-    
-    public override void Init()
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
@@ -32,7 +32,7 @@ public class AutoNotifyDiademWeather : DailyModuleBase
         OnZoneChanged(DService.ClientState.TerritoryType);
     }
 
-    public override void ConfigUI()
+    protected override void ConfigUI()
     {
         ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(8555));
         
@@ -91,7 +91,7 @@ public class AutoNotifyDiademWeather : DailyModuleBase
         NotificationInfo(message);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         FrameworkManager.Unregister(OnUpdate);

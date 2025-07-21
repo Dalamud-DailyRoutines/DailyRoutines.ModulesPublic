@@ -42,7 +42,7 @@ public class AutoStoreToCabinet : DailyModuleBase
 
     private static unsafe AtkUnitBase* Cabinet => (AtkUnitBase*)DService.Gui.GetAddonByName("Cabinet");
 
-    public override void Init()
+    protected override void Init()
     {
         CabinetItems ??= LuminaGetter.Get<Cabinet>()
                                     .Where(x => x.Item.RowId > 0)
@@ -55,13 +55,13 @@ public class AutoStoreToCabinet : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Cabinet", OnAddon);
     }
 
-    public override unsafe void OverlayPreDraw()
+    protected override unsafe void OverlayPreDraw()
     {
         if (Cabinet == null)
             Overlay.IsOpen = false;
     }
 
-    public override void OverlayUI()
+    protected override void OverlayUI()
     {
         using (FontManager.UIFont.Push())
         {
@@ -156,7 +156,7 @@ public class AutoStoreToCabinet : DailyModuleBase
         };
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         CancelSource?.Cancel();
         CancelSource?.Dispose();

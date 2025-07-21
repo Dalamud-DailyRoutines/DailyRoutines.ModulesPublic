@@ -22,7 +22,7 @@ public unsafe class AutoRefocus : DailyModuleBase
     private static ulong FocusTarget;
     private static bool IsNeedToRefocus;
 
-    public override void Init()
+    protected override void Init()
     {
         SetFocusTargetByObjectIDHook ??=
             DService.Hook.HookFromSignature<SetFocusTargetByObjectIDDelegate>(
@@ -55,7 +55,7 @@ public unsafe class AutoRefocus : DailyModuleBase
         SetFocusTargetByObjectIDHook.Original(targetSystem, objectID);
     }
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChange;
 

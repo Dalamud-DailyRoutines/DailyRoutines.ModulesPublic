@@ -36,7 +36,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
 
     private static ulong AssignedCommendationContentID;
 
-    public override void Init()
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new TaskHelper { TimeLimitMS = 10_000 };
@@ -45,8 +45,8 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         DService.ContextMenu.OnMenuOpened     += OnMenuOpen;
         DService.DutyState.DutyCompleted      += OnDutyComplete;
     }
-    
-    public override void ConfigUI()
+
+    protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoPlayerCommend-BlacklistContents")}:");
@@ -259,7 +259,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
             _ => PlayerRole.None,
         };
 
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.ContextMenu.OnMenuOpened -= OnMenuOpen;

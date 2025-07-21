@@ -13,7 +13,7 @@ public unsafe class MacroIntoActionQueue : DailyModuleBase
         Category    = ModuleCategories.Action,
     };
 
-    public override void Init() => UseActionManager.RegPreUseAction(OnPreUseAction);
+    protected override void Init() => UseActionManager.RegPreUseAction(OnPreUseAction);
 
     private static void OnPreUseAction(
         ref bool isPrevented,
@@ -32,5 +32,5 @@ public unsafe class MacroIntoActionQueue : DailyModuleBase
         }
     }
 
-    public override void Uninit() => UseActionManager.UnregPreUseAction(OnPreUseAction);
+    protected override void Uninit() => UseActionManager.UnregPreUseAction(OnPreUseAction);
 }
