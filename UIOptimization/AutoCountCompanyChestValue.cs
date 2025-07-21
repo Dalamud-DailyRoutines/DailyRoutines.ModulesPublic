@@ -1,9 +1,11 @@
 ﻿using System.Numerics;
 using DailyRoutines.Abstracts;
+using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -16,75 +18,69 @@ public class AutoCountCompanyChestValue : DailyModuleBase
         Category = ModuleCategories.UIOptimization,
         Author = ["采购"]
     };
-    private bool showWindow;     // 控制窗口显示
-    private nint fcChestPtr = nint.Zero; // 缓存部队箱界面指针
-
+    
     public override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "FreeCompanyChest", OnFCChestAddon);
-        DService.UiBuilder.Draw += DrawUi; // 注册ImGui绘制
+        Overlay    ??= new Overlay(this);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "FreeCompanyChest", CheckFcChestAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "FreeCompanyChest", CheckFcChestAddon);
     }
+    
     public override void Uninit()
     {
-        DService.AddonLifecycle.UnregisterListener(OnFCChestAddon);
-        DService.UiBuilder.Draw -= DrawUi; // 注销ImGui绘制
+        DService.AddonLifecycle.UnregisterListener(CheckFcChestAddon);
         base.Uninit();
     }
-
-    private void OnFCChestAddon(AddonEvent type, AddonArgs? args)
+    
+    private void CheckFcChestAddon(AddonEvent type, AddonArgs? args)
     {
-        TaskHelper.Abort();
-        showWindow = false;
-        fcChestPtr = nint.Zero;
-    }
-    //画UI
-    private unsafe void DrawUi()
-    {   
-        
-            // 查找部队箱界面
-        var companyChestUi = DService.Gui.GetAddonByName("FreeCompanyChest");
-        var addon = (AtkUnitBase*)companyChestUi;
-        showWindow = companyChestUi != nint.Zero;
-        fcChestPtr = companyChestUi;
-
-        if (!showWindow) return;
-
-        ImGui.SetNextWindowSize(new Vector2(ImGui.GetWindowSize().Y/2f, ImGui.GetWindowSize().Y/6f), ImGuiCond.Always);
-        ImGui.SetNextWindowPos(new Vector2(addon->GetX() ,addon->GetY()- ImGui.GetWindowSize().Y/7f));
-        //绘制界面并调用Check方法
-        if (ImGui.Begin("部队箱价值统计", ImGuiWindowFlags.NoResize|ImGuiWindowFlags.NoCollapse|ImGuiWindowFlags.NoTitleBar))
+        Overlay.IsOpen = type switch
         {
-            if (ImGui.Button("统计在聊天框",new (-0.1f, -0.1f)))
-                Check((AtkUnitBase*)fcChestPtr);
-        } 
-        ImGui.End();
+            AddonEvent.PostSetup   => true,
+            AddonEvent.PreFinalize => false,
+            _                      => Overlay.IsOpen
+        };
+        if (type == AddonEvent.PreFinalize)
+            TaskHelper.Abort();
     }
-    //计算当前界面的首饰价值并输出
-    private unsafe void Check(AtkUnitBase* addon)
+    
+    public override unsafe void OverlayUI()
+    {   
+        var checkCompanyChestUi = OmenTools.Helpers.HelpersOm.TryGetAddonByName("FreeCompanyChest",out AtkUnitBase* addon);
+        if (!checkCompanyChestUi) return;
+        ImGui.AlignTextToFramePadding();
+        ImGui.SetWindowPos(new Vector2(addon->GetX() ,addon->GetY()- ImGui.GetWindowSize().Y));
+        ImGui.Text($"");
+        ImGui.SameLine();
+        if (ImGui.Button("点我统计在聊天框",new (ImGui.GetItemRectSize().X, ImGui.GetItemRectSize().Y+15)))
+            Check(addon);
+    }
+    
+    // 检查部队箱中的沉船首饰数量和价值
+    private static unsafe void Check(AtkUnitBase* addon)
     {
-        var fcPage   = GetCurrentFcPage(addon);
+        var fcPage = GetCurrentFcPage(addon);
         var manager = InventoryManager.Instance();
+        var itemIds = new uint[] { 22500, 22501, 22502, 22503, 22504, 22505, 22506, 22507 };
+        var totalPrice = 0;
         if (manager == null) return;
-        var id22500 = manager->GetItemCountInContainer(22500, fcPage);
-        var id22501 = manager->GetItemCountInContainer(22501, fcPage);
-        var id22502 = manager->GetItemCountInContainer(22502, fcPage);
-        var id22503 = manager->GetItemCountInContainer(22503, fcPage);
-        var id22504 = manager->GetItemCountInContainer(22504, fcPage);
-        var id22505 = manager->GetItemCountInContainer(22505, fcPage);
-        var id22506 = manager->GetItemCountInContainer(22506, fcPage);
-        var id22507 = manager->GetItemCountInContainer(22507, fcPage);
-        var total =id22500*8000 + id22501*9000 + id22502*10000 + id22503*13000 + id22504*27000 + id22505*28500 + id22506*30000 + id22507*34500;
-        DService.Chat.Print("上等沉船戒指(2w7)数量:"+id22504);
-        DService.Chat.Print("上等沉船手镯(2w85)数量:"+id22505);
-        DService.Chat.Print("上等沉船耳饰(3w)数量:"+id22506);
-        DService.Chat.Print("上等沉船项链(3w45)数量:"+id22507);
-        DService.Chat.Print("沉船戒指(8k)数量:"+id22500);
-        DService.Chat.Print("沉船手镯(9k)数量:"+id22501);
-        DService.Chat.Print("沉船手镯(1w)数量:"+id22502);
-        DService.Chat.Print("沉船手镯(1w3)数量:"+id22503);
-        DService.Chat.Print("当前页面的所有首饰价值为:"+total);
+        foreach (var item in itemIds)
+        {
+            var itemInfo = LuminaGetter.GetRow<Item>(item);
+            if (itemInfo == null) continue;
+            var itemCount = manager->GetItemCountInContainer(item, fcPage);
+            var price = itemInfo.Value.PriceLow;
+            if (itemCount == 0) continue;
+            DService.Chat.Print("物品" + itemInfo.Value.Name.ToString() + "的数量为:" + itemCount + " 单个物品价值为:" + price +
+                                " 单个物品总价值为:" + (itemCount * price)+ " Gil");
+            totalPrice += (int)(itemCount * price);
+        }
+        DService.Chat.Print(totalPrice > 0
+                                ? $"部队箱中沉船首饰的总价值为: {totalPrice} Gil"
+                                : "部队箱中没有沉船首饰");
     }
+
     //获取当前部队箱的InventoryType
     private static unsafe InventoryType GetCurrentFcPage(AtkUnitBase* addon) => 
         addon == null ? InventoryType.FreeCompanyPage1 : (InventoryType)(20000 + addon->AtkValues[2].UInt);
