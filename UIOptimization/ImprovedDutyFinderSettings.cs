@@ -81,8 +81,6 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RaidFinder", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RaidFinder", OnAddon);
 
-        OnAddon(AddonEvent.PostSetup, null);
-
         setContentsFinderSettingsInitHook ??=
             SetContentsFinderSettingsInitSig.GetHook<SetContentsFinderSettingsInitDelegate>(
                 SetContentsFinderSettingsInitDetour);
@@ -183,11 +181,13 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
 
 
         foreach (var index in Enumerable.Range(0, EventHandles.Length))
+        {
             if (EventHandles[index] is { } handle)
             {
                 DService.AddonEvent.RemoveEvent(handle);
                 EventHandles[index] = null;
             }
+        }
 
         for (var i = 0; i < dutyFinderSettingIcons.Count; i++)
         {
@@ -333,14 +333,6 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
 
     private void ToggleSetting(DutyFinderSetting setting)
     {
-        if (DService.Condition[ConditionFlag.InDutyQueue])
-        {
-            var condition = LuminaGetter.GetRow<Condition>((uint)ConditionFlag.InDutyQueue)?.LogMessage
-                                        .Value.Text.ToDalamudString();
-            DService.Toast.ShowError(condition);
-            return;
-        }
-
         if (AreLanguageConfigsAvailable() && setting is DutyFinderSetting.Ja or DutyFinderSetting.En
                 or DutyFinderSetting.De or DutyFinderSetting.Fr)
         {
@@ -379,11 +371,13 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
 
         var languageButtons = GetLanguageButtons();
         for (var i = 0; i < languageButtons.Count; i++)
+        {
             if (nodeId == 17 + (uint)i)
             {
                 ToggleSetting(languageButtons[i].Setting);
                 break;
             }
+        }
     }
 
     private void OnMouseOver(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
@@ -414,11 +408,13 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
 
         var languageButtons = GetLanguageButtons();
         for (var i = 0; i < languageButtons.Count; i++)
+        {
             if (nodeId == 17 + (uint)i)
             {
                 ShowTooltip(unitBase, node, languageButtons[i]);
                 break;
             }
+        }
     }
 
     private void OnMouseOut(AddonEventType atkEventType, nint atkUnitBase, nint atkResNode)
@@ -445,8 +441,10 @@ public unsafe class ImprovedDutyFinderSettings : DailyModuleBase
     private void CleanupAllEvents()
     {
         for (var i = 0; i < EventHandles.Length; i++)
+        {
             if (EventHandles[i] is { } handle)
                 DService.AddonEvent.RemoveEvent(handle);
+        }
     }
 
     private static void SetContentsFinderSettingsInitDetour(byte* a1, nint a2)
