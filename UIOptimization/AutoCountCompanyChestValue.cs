@@ -19,7 +19,7 @@ public class AutoCountCompanyChestValue : DailyModuleBase
         Author = ["采购"]
     };
     
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
         Overlay    ??= new Overlay(this);
@@ -27,7 +27,7 @@ public class AutoCountCompanyChestValue : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "FreeCompanyChest", CheckFcChestAddon);
     }
     
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(CheckFcChestAddon);
         base.Uninit();
