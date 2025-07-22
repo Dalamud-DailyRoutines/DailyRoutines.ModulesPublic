@@ -23,7 +23,7 @@ public class AutoCountCompanyChestValue : DailyModuleBase
     //获取当前部队箱的InventoryType
     private static unsafe InventoryType GetCurrentFcPage(AtkUnitBase* addon) => 
         addon == null ? InventoryType.FreeCompanyPage1 : (InventoryType)(20000 + addon->AtkValues[2].UInt);
-    public override void Init()
+    protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
         Overlay    ??= new Overlay(this);
@@ -31,7 +31,7 @@ public class AutoCountCompanyChestValue : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "FreeCompanyChest", CheckFcChestAddon);
     }
     
-    public override void Uninit()
+    protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(CheckFcChestAddon);
         base.Uninit();
