@@ -84,8 +84,6 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
         };
 
         node.CurrentTextNode.FontSize =  14;
-        node.BackgroundNode.IsVisible =  true;
-        node.BackgroundNode.Color     =  Black;
         node.CurrentTextNode.Position += new Vector2(0, 3);
         return node;
     }

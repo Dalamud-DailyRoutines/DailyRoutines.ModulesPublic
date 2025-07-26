@@ -10,23 +10,24 @@ using Dalamud.Interface.Components;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
-using Action = Lumina.Excel.Sheets.Action;
+using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimiziedEnemyList : DailyModuleBase
+public unsafe class OptimizedEnemyList : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("OptimiziedEnemyListTitle"),
-        Description = GetLoc("OptimiziedEnemyListDescription"),
+        Title       = GetLoc("OptimizedEnemyListTitle"),
+        Description = GetLoc("OptimizedEnemyListDescription"),
         Category    = ModuleCategories.UIOptimization
     };
 
     private static Config ModuleConfig = null!;
 
     private static Dictionary<uint, int> HaterInfo = [];
+    
+    private static readonly List<(nint ComponentPtr, TextNode TextNode, NineGridNode BackgroundNode)> TextNodes = [];
 
     private static string CastInfoTargetBlacklistInput = string.Empty;
 
@@ -57,7 +58,7 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
         
         ImGui.Spacing();
 
-        if (ImGui.Checkbox(GetLoc("OptimiziedEnemyList-UseCustomColor"), ref ModuleConfig.UseCustomizeTextColor))
+        if (ImGui.Checkbox(GetLoc("OptimizedEnemyList-UseCustomColor"), ref ModuleConfig.UseCustomizeTextColor))
         {
             ModuleConfig.Save(this);
             UpdateTextNodes();
@@ -116,7 +117,7 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
         
         ImGui.Spacing();
 
-        if (ImGui.Checkbox(GetLoc("OptimiziedEnemyList-UseCustomGeneralInfo"), ref ModuleConfig.UseCustomizeText))
+        if (ImGui.Checkbox(GetLoc("OptimizedEnemyList-UseCustomGeneralInfo"), ref ModuleConfig.UseCustomizeText))
         {
             ModuleConfig.Save(this);
             UpdateTextNodes();
@@ -150,8 +151,8 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, GetLoc("OptimiziedEnemyList-CastInfoDisplayTargetBlacklist"));
-        ImGuiOm.HelpMarker(GetLoc("OptimiziedEnemyList-CastInfoDisplayTargetBlacklistHelp"));
+        ImGui.TextColored(LightSkyBlue, GetLoc("OptimizedEnemyList-CastInfoDisplayTargetBlacklist"));
+        ImGuiOm.HelpMarker(GetLoc("OptimizedEnemyList-CastInfoDisplayTargetBlacklistHelp"));
         
         ImGui.SameLine();
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
@@ -207,10 +208,11 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
                 MakeTextNodesAndLink();
                 break;
             case AddonEvent.PreRequestedUpdate:
+                MakeTextNodesAndLink();
                 UpdateTextNodes();
                 break;
             case AddonEvent.PostDraw:
-                if (!Throttler.Throttle("OptimiziedEnemyList-OnPostDraw")) break;
+                if (!Throttler.Throttle("OptimizedEnemyList-OnPostDraw")) break;
                 UpdateTextNodes();
                 break;
         }
@@ -218,48 +220,49 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
 
     private static void UpdateTextNodes()
     {
-        if (!TryFindMadeTextNodes(out var nodes)) return;
-
+        var nodes = TextNodes;
+        
         var numberArray = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.EnemyList);
         if (numberArray == null) return;
 
-        if (Throttler.Throttle("OptimiziedEnemyList-UpdateHaterInfo"))
+        if (Throttler.Throttle("OptimizedEnemyList-UpdateHaterInfo"))
         {
             HaterInfo = UIState.Instance()->Hater.Haters.ToArray()
                                                 .Where(x => x.EntityId != 0 && x.EntityId != 0xE0000000)
                                                 .DistinctBy(x => x.EntityId)
                                                 .ToDictionary(x => x.EntityId, x => x.Enmity);
         }
-
+        
         var castWidth  = stackalloc ushort[1];
         var castHeight = stackalloc ushort[1];
-        
-        var infoWidth = stackalloc ushort[1];
-        var infoHeight = stackalloc ushort[1];
-        
+
         for (var i = 0; i < nodes.Count; i++)
         {
-            var offset       = 8 + (i * 6);
+            var offset = 8 + (i * 6);
             
             var gameObjectID = (ulong)numberArray->IntArray[offset];
             if (gameObjectID is 0 or 0xE0000000) continue;
-            
-            var textNode      = (AtkTextNode*)nodes[i].TextNodePtr;
+
+            var textNode       = nodes[i].TextNode;
+            var backgroundNode = nodes[i].BackgroundNode;
             
             var gameObj = DService.ObjectTable.SearchById(gameObjectID);
             if (gameObj is not IBattleChara bc || !HaterInfo.TryGetValue(gameObj.EntityId, out var enmity))
             {
-                textNode->SetText(string.Empty);
+                textNode.Text            = string.Empty;
+                backgroundNode.IsVisible = false;
                 continue;
             }
             
-            var componentNode = (AtkComponentNode*)nodes[i].ComponentNodePtr;
+            var componentNode = (AtkComponentNode*)nodes[i].ComponentPtr;
             
             var castTextNode = componentNode->Component->UldManager.SearchNodeById(4)->GetAsAtkTextNode();
             if (castTextNode == null) continue;
 
             var targetNameTextNode = componentNode->Component->UldManager.SearchNodeById(6)->GetAsAtkTextNode();
             if (targetNameTextNode == null) continue;
+            
+            targetNameTextNode->GetTextDrawSize(castWidth, castHeight);
             
             if (bc.IsCasting)
             {
@@ -271,36 +274,50 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
             }
 
             var targetName = SanitizeSeIcon(targetNameTextNode->NodeText.ExtractText());
-            targetNameTextNode->GetTextDrawSize(castWidth, castHeight);
             
-            textNode->TextColor = ModuleConfig.UseCustomizeTextColor
-                                      ? ConvertVector4ToByteColor(ModuleConfig.TextColor)
-                                      : castTextNode->TextColor;
-            textNode->EdgeColor = ModuleConfig.UseCustomizeTextColor
-                                      ? ConvertVector4ToByteColor(ModuleConfig.EdgeColor)
-                                      : castTextNode->EdgeColor;
-            textNode->BackgroundColor = ModuleConfig.UseCustomizeTextColor
-                                            ? ConvertVector4ToByteColor(ModuleConfig.BackgroundColor)
-                                            : castTextNode->BackgroundColor;
+            textNode.TextColor = ModuleConfig.UseCustomizeTextColor
+                                      ? ModuleConfig.TextColor
+                                      : ConvertByteColorToVector4(castTextNode->TextColor);
+            textNode.TextOutlineColor = ModuleConfig.UseCustomizeTextColor
+                                     ? ModuleConfig.EdgeColor
+                                     : ConvertByteColorToVector4(castTextNode->EdgeColor);
+            textNode.BackgroundColor = ModuleConfig.UseCustomizeTextColor
+                                            ? ModuleConfig.BackgroundColor
+                                            : ConvertByteColorToVector4(castTextNode->BackgroundColor);
             
-            textNode->FontSize = ModuleConfig.FontSize;
+            textNode.FontSize = ModuleConfig.FontSize;
             
-            if (bc.IsCasting && bc.CurrentCastTime != bc.TotalCastTime && !ModuleConfig.CastInfoTargetBlacklist.Contains(targetName))
-                textNode->SetText($"{GetCastInfoText(bc.CastActionType, bc.CastActionId)}: {bc.TotalCastTime - bc.CurrentCastTime:F1}");
+            if (bc.IsCasting && !ModuleConfig.CastInfoTargetBlacklist.Contains(targetName))
+            {
+                var castTimeLeft = MathF.Max(bc.TotalCastTime - bc.CurrentCastTime, 0f);
+                
+                textNode.Text            = $"{GetCastInfoText(bc.CastActionType, bc.CastActionId)}: " + (castTimeLeft != 0 ? $"{castTimeLeft:F1}" : "\ue07f\ue07b");
+                backgroundNode.IsVisible = true;
+            }            
             else if (!bc.IsTargetable && bc.CurrentHp == bc.MaxHp)
-                textNode->SetText(string.Empty);
+            {
+                textNode.Text            = string.Empty;
+                backgroundNode.IsVisible = false;
+            }
             else
-                textNode->SetText(GetGeneralInfoText((float)bc.CurrentHp / bc.MaxHp * 100, enmity));
+            {
+                textNode.Text            = GetGeneralInfoText((float)bc.CurrentHp / bc.MaxHp * 100, enmity);
+                backgroundNode.IsVisible = true;
+            }
             
-            textNode->GetTextDrawSize(infoWidth, infoHeight);
-            textNode->SetPositionFloat(Math.Max(90f, *castWidth + 28) + ModuleConfig.TextOffset.X, 4 + ModuleConfig.TextOffset.Y);
+            textNode.Position = new(Math.Max(95, *castWidth + 28) + ModuleConfig.TextOffset.X, 4 + ModuleConfig.TextOffset.Y);
+
+            var textSize = textNode.GetTextDrawSize(textNode.Text);
+            
+            backgroundNode.Position = new(Math.Max(68, *castWidth + 1) + (bc.IsCasting ? 12.5f : 0) + ModuleConfig.TextOffset.X, 6 + ModuleConfig.TextOffset.Y);
+            backgroundNode.Size     = new(textSize.X                   + 47                     + (bc.IsCasting ? -18 : 0), textSize.Y * 0.7f);
         }
     }
     
     private static void MakeTextNodesAndLink()
     {
         if (EnemyList == null) return;
-        if (!TryFindButtonNodes(out var buttonNodesPtr) || TryFindMadeTextNodes(out _)) return;
+        if (!TryFindButtonNodes(out var buttonNodesPtr) || TextNodes.Count == buttonNodesPtr.Count) return;
 
         foreach (var nodePtr in buttonNodesPtr)
         {
@@ -308,48 +325,45 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
             
             var castTextNode = node->Component->UldManager.SearchNodeById(4)->GetAsAtkTextNode();
             if (castTextNode == null) continue;
+
+            var textNode = new TextNode
+            {
+                Text            = string.Empty,
+                FontSize        = ModuleConfig.FontSize,
+                IsVisible       = true,
+                Size            = new(160f, 25f),
+                AlignmentType   = AlignmentType.TopLeft,
+                Position        = new(100, 5),
+                TextFlags       = TextFlags.Edge    | TextFlags.Emboss,
+                NodeFlags       = NodeFlags.Visible | NodeFlags.Enabled | NodeFlags.AnchorTop | NodeFlags.AnchorLeft,
+                LineSpacing     = 20,
+            };
+
+            // 需要把 STP 显示 UVWH 都除以 2
+            var backgroundNode = new SimpleNineGridNode
+            {
+                TexturePath        = "ui/uld/TextInputA.tex",
+                TextureCoordinates = new(24, 0),
+                TextureSize        = new(24, 24),
+                Size               = new(160, 10),
+                IsVisible          = true,
+                Color              = Black,
+                Position           = new(75, 6),
+                Alpha              = 0.6f,
+
+            };
             
-            var textNode = MakeTextNode(10001);
+            TextNodes.Add(new((nint)node, textNode, backgroundNode));
             
-            textNode->NodeFlags   = NodeFlags.Visible | NodeFlags.Enabled | NodeFlags.AnchorTop | NodeFlags.AnchorLeft;
-            textNode->DrawFlags   = castTextNode->DrawFlags;
-            textNode->Alpha_2     = 255;
-            textNode->LineSpacing = 20;
-            textNode->FontSize    = ModuleConfig.FontSize;
-            textNode->TextFlags   = (byte)(TextFlags.AutoAdjustNodeSize | TextFlags.Edge | TextFlags.Bold | TextFlags.Emboss);
-            
-            textNode->SetPositionFloat(80, 5);
-            textNode->SetAlignment(AlignmentType.TopLeft);
-            
-            LinkNodeAtEnd((AtkResNode*)textNode, node->Component);
+            Service.AddonController.AttachNode(backgroundNode, node);
+            Service.AddonController.AttachNode(textNode, node);
         }
     }
-
-    private static void FreeNodes()
-    {
-        if (EnemyList == null) return;
-        if (!TryFindMadeTextNodes(out var nodes)) return;
-        
-        foreach (var node in nodes)
-        {
-            var textNode      = (AtkTextNode*)node.TextNodePtr;
-            var componentNode = (AtkComponentNode*)node.ComponentNodePtr;
-            UnlinkAndFreeTextNode(textNode, componentNode);
-            
-            var castTextNode = componentNode->Component->UldManager.SearchNodeById(4);
-            if (castTextNode != null) 
-                castTextNode->SetAlpha(255);
-            
-            var castBackgroundNode = componentNode->Component->UldManager.SearchNodeById(5);
-            if (castBackgroundNode != null) 
-                castBackgroundNode->SetAlpha(255);
-        }
-    }
-
+    
     private static string GetGeneralInfoText(float percentage, int enmity) =>
         ModuleConfig.UseCustomizeText
             ? string.Format(ModuleConfig.CustomizeTextPattern, percentage.ToString("F1"), enmity)
-            : $"{LuminaGetter.GetRow<Addon>(232)!.Value.Text.ExtractText()}: {percentage:F1}% / {LuminaGetter.GetRow<Addon>(721)!.Value.Text.ExtractText()}: {enmity}%";
+            : $"{LuminaWrapper.GetAddonText(232)}: {percentage:F1}% / {LuminaWrapper.GetAddonText(721)}: {enmity}%";
 
     private static string GetCastInfoText(ActionType type, uint actionID)
     {
@@ -358,37 +372,14 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
         switch (type)
         {
             case ActionType.Action:
-                if (!LuminaGetter.TryGetRow<Action>(actionID, out var row)) break;
-                result = row.Name.ExtractText();
+                result = LuminaWrapper.GetActionName(actionID);
                 break;
         }
 
         if (string.IsNullOrWhiteSpace(result))
-            result = LuminaGetter.GetRow<Addon>(1032)!.Value.Text.ExtractText();
+            result = LuminaWrapper.GetAddonText(1032);
         
         return result;
-    }
-    
-    /// <returns>键: Component Node, 值: TextNode</returns>
-    private static bool TryFindMadeTextNodes(out List<(nint ComponentNodePtr, nint TextNodePtr)> nodes)
-    {
-        nodes = [];
-        if (!TryFindButtonNodes(out var buttonNodesPtr)) return false;
-        
-        foreach (var ptr in buttonNodesPtr)
-        {
-            var buttonNode = (AtkComponentNode*)ptr;
-            if (buttonNode == null) continue;
-
-            for (var d = 0; d < buttonNode->Component->UldManager.NodeListCount; d++)
-            {
-                var nodeInternal = buttonNode->Component->UldManager.NodeList[d];
-                if (nodeInternal->NodeId == 10001)
-                    nodes.Add((ptr, (nint)nodeInternal));
-            }
-        }
-        
-        return nodes.Count > 0;
     }
     
     private static bool TryFindButtonNodes(out List<nint> nodes)
@@ -414,7 +405,13 @@ public unsafe class OptimiziedEnemyList : DailyModuleBase
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        FreeNodes();
+
+        foreach (var (_, textNode, backgroundNode) in TextNodes)
+        {
+            Service.AddonController.DetachNode(textNode);
+            Service.AddonController.DetachNode(backgroundNode);
+        }
+        TextNodes.Clear();
         
         HaterInfo.Clear();
     }
