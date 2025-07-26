@@ -1,11 +1,12 @@
-using System;
-using System.Numerics;
 using System.Timers;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Windows;
+using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Classes;
+using KamiToolKit.Nodes;
 using Timer = System.Timers.Timer;
 
 namespace DailyRoutines.ModulesPublic;
@@ -24,128 +25,180 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
         new CompSig("E8 ?? ?? ?? ?? 8B 8B ?? ?? ?? ?? 85 C9 75 12").GetDelegate<RefreshPartyFinderDelegate>();
 
     private static Config ModuleConfig = null!;
-
-    private static Vector2 WindowPos = new(512); // 防止在屏幕外直接不渲染了
-
+    
     private static Timer? PFRefreshTimer;
+    
     private static int Cooldown;
+
+    private static NumericInputNode?   RefreshIntervalNode;
+    private static CheckboxNode?       OnlyInactiveNode;
+    private static TextNode?           LeftTimeNode;
+    private static HorizontalListNode? LayoutNode;
 
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-
-        Overlay ??= new Overlay(this);
-
-        PFRefreshTimer ??= new Timer(1_000);
-        PFRefreshTimer.AutoReset = true;
-        PFRefreshTimer.Elapsed += OnRefreshTimer;
+        
+        PFRefreshTimer           ??= new(1_000);
+        PFRefreshTimer.AutoReset =   true;
+        PFRefreshTimer.Elapsed   +=  OnRefreshTimer;
+        
         Cooldown = ModuleConfig.RefreshInterval;
 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "LookingForGroup", OnAddonPF);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "LookingForGroup", OnAddonPF);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroup", OnAddonPF);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "LookingForGroupDetail", OnAddonLFGD);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "LookingForGroup",       OnAddonPF);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "LookingForGroup",       OnAddonPF);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroup",       OnAddonPF);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "LookingForGroupDetail", OnAddonLFGD);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddonLFGD);
 
         if (LookingForGroup != null) 
             OnAddonPF(AddonEvent.PostSetup, null);
     }
-
-    protected override void OverlayUI()
-    {
-        if (!IsAddonAndNodesReady(LookingForGroup))
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        var refreshButton = LookingForGroup->GetComponentButtonById(47)->OwnerNode;
-        if (refreshButton == null) return;
-
-        ImGui.SetWindowPos(WindowPos);
-
-        using (ImRaii.Group())
-        {
-            ImGui.SetNextItemWidth(50f * GlobalFontScale);
-            if (ImGui.InputInt("###RefreshIntervalInput", ref ModuleConfig.RefreshInterval, 0, 0))
-                ModuleConfig.RefreshInterval = Math.Max(5, ModuleConfig.RefreshInterval);
-
-            if (ImGui.IsItemDeactivatedAfterEdit())
-            {
-                SaveConfig(ModuleConfig);
-
-                Cooldown = ModuleConfig.RefreshInterval;
-                PFRefreshTimer.Restart();
-            }
-
-            ImGui.SameLine();
-            ImGui.Text(GetLoc("AutoRefreshPartyFinder-RefreshInterval", Cooldown));
-
-            ImGui.SameLine();
-            if (ImGui.Checkbox(GetLoc("AutoRefreshPartyFinder-OnlyInactive"), ref ModuleConfig.OnlyInactive))
-                SaveConfig(ModuleConfig);
-        }
-
-        var framePadding = ImGui.GetStyle().FramePadding;
-        WindowPos = new(refreshButton->ScreenX - ImGui.GetItemRectSize().X - (4 * framePadding.X), refreshButton->ScreenY - framePadding.Y);
-    }
-
+    
     // 招募
-    private void OnAddonPF(AddonEvent type, AddonArgs? args)
+    private static void OnAddonPF(AddonEvent type, AddonArgs? args)
     {
         switch (type)
         {
             case AddonEvent.PostSetup:
                 Cooldown = ModuleConfig.RefreshInterval;
+                
+                CreateRefreshIntervalNode();
+                
                 PFRefreshTimer.Restart();
-                Overlay.IsOpen = true;
                 break;
             case AddonEvent.PostRefresh when ModuleConfig.OnlyInactive:
                 Cooldown = ModuleConfig.RefreshInterval;
+                UpdateNextRefreshTime(Cooldown);
                 PFRefreshTimer.Restart();
                 break;
             case AddonEvent.PreFinalize:
                 PFRefreshTimer.Stop();
-                Overlay.IsOpen = false;
+                CleanNodes();
                 break;
         }
     }
 
     // 招募详情
-    private void OnAddonLFGD(AddonEvent type, AddonArgs? args)
+    private static void OnAddonLFGD(AddonEvent type, AddonArgs? args)
     {
         switch (type)
         {
             case AddonEvent.PostSetup:
                 PFRefreshTimer.Stop();
-                Overlay.IsOpen = false;
                 break;
             case AddonEvent.PreFinalize:
                 Cooldown = ModuleConfig.RefreshInterval;
                 PFRefreshTimer.Restart();
-                Overlay.IsOpen = true;
                 break;
         }
     }
 
-    private void OnRefreshTimer(object? sender, ElapsedEventArgs e)
+    private static void OnRefreshTimer(object? sender, ElapsedEventArgs e)
     {
         if (!IsAddonAndNodesReady(LookingForGroup) || IsAddonAndNodesReady(LookingForGroupDetail))
         {
             PFRefreshTimer.Stop();
-            Overlay.IsOpen = false;
             return;
         }
 
         if (Cooldown > 1)
         {
             Cooldown--;
+            UpdateNextRefreshTime(Cooldown);
             return;
         }
 
         Cooldown = ModuleConfig.RefreshInterval;
+        UpdateNextRefreshTime(Cooldown);
 
         DService.Framework.Run(() => RefreshPartyFinder(AgentLookingForGroup.Instance()));
+    }
+
+    private static void CleanNodes()
+    {
+        Service.AddonController.DetachNode(RefreshIntervalNode);
+        RefreshIntervalNode = null;
+        
+        Service.AddonController.DetachNode(OnlyInactiveNode);
+        OnlyInactiveNode = null;
+        
+        Service.AddonController.DetachNode(LayoutNode);
+        LayoutNode = null;
+        
+        Service.AddonController.DetachNode(LeftTimeNode);
+        LeftTimeNode = null;
+    }
+
+    private static void CreateRefreshIntervalNode()
+    {
+        if (LookingForGroup == null) return;
+        
+        RefreshIntervalNode ??= new() 
+        {
+            Size      = new(150.0f, 28f),
+            IsVisible = true,
+            Min       = 5,
+            Max       = 10000,
+            Step      = 5,
+            OnValueUpdate = newValue =>
+            {
+                ModuleConfig.RefreshInterval = newValue;
+                ModuleConfig.Save(ModuleManager.GetModule<AutoRefreshPartyFinder>());
+                
+                Cooldown = ModuleConfig.RefreshInterval;
+                PFRefreshTimer.Restart();
+            },
+            Value   = ModuleConfig.RefreshInterval
+        };
+
+        RefreshIntervalNode.Value = ModuleConfig.RefreshInterval;
+        RefreshIntervalNode.ValueTextNode.SetNumber(ModuleConfig.RefreshInterval);
+        
+        OnlyInactiveNode ??= new()
+        {
+            Size      = new(150.0f, 28.0f),
+            IsVisible = true,
+            IsChecked = ModuleConfig.OnlyInactive,
+            IsEnabled = true,
+            LabelText = GetLoc("AutoRefreshPartyFinder-OnlyInactive"),
+            OnClick = newState =>
+            {
+                ModuleConfig.OnlyInactive = newState;
+                ModuleConfig.Save(ModuleManager.GetModule<AutoRefreshPartyFinder>());
+            },
+            Position = new(0, 3)
+        };
+
+        LeftTimeNode ??= new TextNode()
+        {
+            Text             = $"({ModuleConfig.RefreshInterval})  ",
+            FontSize         = 12,
+            IsVisible        = true,
+            Size             = new(0, 28f),
+            AlignmentType    = AlignmentType.Right,
+            Position         = new(10, 0),
+            TextColor        = ColorHelper.GetColor(8),
+            TextOutlineColor = ColorHelper.GetColor(7),
+        };
+
+        LayoutNode = new HorizontalListNode()
+        {
+            Width     = 280,
+            IsVisible = true,
+            Position  = new(500, 630),
+            Alignment = HorizontalListAnchor.Right
+        };
+        LayoutNode.AddNode(OnlyInactiveNode, RefreshIntervalNode, LeftTimeNode);
+        
+        Service.AddonController.AttachNode(LayoutNode, LookingForGroup->RootNode);
+    }
+
+    private static void UpdateNextRefreshTime(int leftTime)
+    {
+        if (LeftTimeNode == null) return;
+
+        LeftTimeNode.Text = $"({leftTime})  ";
     }
 
     protected override void Uninit()
@@ -160,6 +213,8 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
             PFRefreshTimer.Dispose();
         }
         PFRefreshTimer = null;
+        
+        CleanNodes();
 
         base.Uninit();
     }

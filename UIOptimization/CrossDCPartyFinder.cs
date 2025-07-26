@@ -17,6 +17,7 @@ using Dalamud.Interface.Colors;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
@@ -61,15 +62,20 @@ public class CrossDCPartyFinder : DailyModuleBase
     private static bool IsNeedToDisable;
 
     private static PartyFinderRequest LastRequest        = new();
-    private static string             SelectedDataCenter = string.Empty;
     private static string             CurrentSeach       = string.Empty;
 
     private static int CurrentPage;
 
+    private static string SelectedDataCenter = string.Empty;
+
+    private static Dictionary<string, CheckboxNode> CheckboxNodes = [];
+    private static HorizontalListNode?              LayoutNode;
+
     protected override unsafe void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
-        Overlay      ??= new(this);
+        ModuleConfig  =   LoadConfig<Config>() ?? new();
+        Overlay       ??= new(this);
+        Overlay.Flags |=  ImGuiWindowFlags.NoBackground;
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "LookingForGroup", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroup", OnAddon);
@@ -86,6 +92,8 @@ public class CrossDCPartyFinder : DailyModuleBase
 
         ClearResources();
 
+        ClearNodes();
+
         base.Uninit();
     }
 
@@ -96,35 +104,6 @@ public class CrossDCPartyFinder : DailyModuleBase
         {
             Overlay.IsOpen = false;
             return;
-        }
-
-        ImGui.SetWindowPos(new(addon->GetNodeById(31)->ScreenX - 4f, addon->GetY() - ImGui.GetWindowSize().Y));
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.Text("招募信息大区:");
-
-        using (ImRaii.Disabled(IsNeedToDisable))
-        {
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(200f * GlobalFontScale);
-            var index = 0;
-            foreach (var dataCenter in DataCenters)
-            {
-                if (index++ > 0)
-                    ImGui.SameLine();
-                if (ImGui.RadioButton(dataCenter, SelectedDataCenter == dataCenter))
-                {
-                    SelectedDataCenter = dataCenter;
-                    if (LocatedDataCenter == dataCenter)
-                    {
-                        SendEvent(AgentId.LookingForGroup, 1, 17);
-                        return;
-                    }
-
-                    SendRequestDynamic();
-                    IsNeedToDisable = true;
-                }
-            }
         }
 
         if (SelectedDataCenter == LocatedDataCenter) return;
@@ -458,32 +437,78 @@ public class CrossDCPartyFinder : DailyModuleBase
         LastUpdate  = DateTime.MinValue;
         LastRequest = new();
     }
+    
+    private static void ClearNodes()
+    {
+        Service.AddonController.DetachNode(LayoutNode);
+        LayoutNode = null;
+                
+        CheckboxNodes.Values.ForEach(x => Service.AddonController.DetachNode(x));
+        CheckboxNodes.Clear();
+    }
 
-    private void OnAddon(AddonEvent type, AddonArgs? args)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
         ClearResources();
-
-        switch (type)
-        {
-            case AddonEvent.PostSetup:
-                Overlay.IsOpen    = true;
-                SelectedDataCenter = DService.ObjectTable.LocalPlayer?.CurrentWorld.Value.DataCenter.Value.Name.ExtractText() ?? string.Empty;
-                break;
-            case AddonEvent.PreFinalize:
-                Overlay.IsOpen    = false;
-                SelectedDataCenter = string.Empty;
-                break;
-            default:
-                Overlay.IsOpen = Overlay.IsOpen;
-                break;
-        }
-
+        
         if (DService.ObjectTable.LocalPlayer is { } localPlayer)
         {
             DataCenters = LuminaGetter.Get<WorldDCGroupType>()
                                       .Where(x => x.Region == localPlayer.HomeWorld.Value.DataCenter.Value.Region)
                                       .Select(x => x.Name.ExtractText())
                                       .ToList();
+            SelectedDataCenter = GameState.CurrentDataCenterData.Name.ExtractText();
+        }
+
+        switch (type)
+        {
+            case AddonEvent.PostSetup:
+                Overlay.IsOpen = true;
+
+                LayoutNode = new()
+                {
+                    IsVisible = true,
+                    Position  = new(85, 12)
+                };
+                
+                foreach (var dataCenter in DataCenters)
+                {
+                    var node = new CheckboxNode()
+                    {
+                        Size      = new(100.0f, 28f),
+                        IsVisible = true,
+                        IsChecked = dataCenter == SelectedDataCenter,
+                        IsEnabled = true,
+                        LabelText = dataCenter,
+                        OnClick = _ =>
+                        {
+                            SelectedDataCenter = dataCenter;
+
+                            foreach (var x in CheckboxNodes)
+                                x.Value.IsChecked = x.Key == dataCenter;
+
+                            if (LocatedDataCenter == dataCenter)
+                            {
+                                SendEvent(AgentId.LookingForGroup, 1, 17);
+                                return;
+                            }
+
+                            SendRequestDynamic();
+                            IsNeedToDisable = true;
+                        },
+                    };
+
+                    CheckboxNodes[dataCenter] = node;
+                
+                    LayoutNode.AddNode(node);
+                }
+            
+                Service.AddonController.AttachNode(LayoutNode, LookingForGroup->GetComponentNodeById(51));
+                break;
+            case AddonEvent.PreFinalize:
+                Overlay.IsOpen = false;
+                ClearNodes();
+                break;
         }
     }
 
@@ -513,7 +538,7 @@ public class CrossDCPartyFinder : DailyModuleBase
         public          bool OrderByDescending = true;
         public readonly int  PageSize          = 50;
     }
-
+    
     private class PartyFinderRequest : IEquatable<PartyFinderRequest>
     {
         public uint       Page       { get; set; } = 1;

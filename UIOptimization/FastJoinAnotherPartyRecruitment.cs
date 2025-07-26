@@ -3,9 +3,11 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Gui.PartyFinder.Types;
+using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -17,14 +19,14 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         Description = GetLoc("FastJoinAnotherPartyRecruitmentDescription"),
         Category    = ModuleCategories.UIOptimization
     };
+    
+    private static TextButtonNode? Button;
 
     protected override void Init()
     {
-        TaskHelper    ??= new() { TimeLimitMS = 10_000 };
-        Overlay       ??= new(this);
-        Overlay.Flags |=  ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMove;
-        
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroupDetail", OnAddon);
+        TaskHelper ??= new() { TimeLimitMS = 10_000 };
+
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreDraw,     "LookingForGroupDetail", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
         if (IsAddonAndNodesReady(LookingForGroupDetail)) 
             OnAddon(AddonEvent.PostDraw, null);
@@ -34,35 +36,6 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonYesno);
     }
-
-    protected override void OverlayUI()
-    {
-        var addon = LookingForGroupDetail;
-        if (addon == null)
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        var buttonNode = addon->GetComponentButtonById(109);
-        if (buttonNode == null) return;
-
-        if (!IsInAnyParty()                                            ||
-            buttonNode->ButtonTextNode                         == null ||
-            buttonNode->ButtonTextNode->NodeText.ExtractText() != LuminaWrapper.GetAddonText(2219))
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        var windowSize = ImGui.GetWindowSize();
-        var nodeState  = NodeState.Get((AtkResNode*)buttonNode->OwnerNode);
-        
-        ImGui.SetWindowPos(new(nodeState.Position.X + ((nodeState.Size.X - windowSize.X) / 2), nodeState.Position.Y - windowSize.Y + 4f));
-        if (ImGui.Button(GetLoc("FastJoinAnotherPartyRecruitment-LeaveAndJoin")))
-            Enqueue();
-    }
-
     private void OnAddonYesno(AddonEvent type, AddonArgs args)
     {
         if (!TaskHelper.IsBusy) return;
@@ -71,24 +44,61 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
 
     private void OnAddon(AddonEvent type, AddonArgs? args)
     {
-        Overlay.IsOpen = type switch
+        switch (type)
         {
-            AddonEvent.PostDraw    => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
-        };
+            case AddonEvent.PreDraw:
+                CreateOrUpdateButton(LookingForGroupDetail, TaskHelper);
+                break;
+            case AddonEvent.PreFinalize:
+                Service.AddonController.DetachNode(Button);
+                Button = null;
+                break;
+        }
+    }
+
+    private static void CreateOrUpdateButton(AtkUnitBase* addon, TaskHelper taskHelper)
+    {
+        if (addon == null) return;
+
+        var resNode = addon->GetNodeById(108);
+        if (resNode == null) return;
+        
+        if (Button == null)
+        {
+            Button = new()
+            {
+                Size      = new(140, 28),
+                Position  = new(100, 0),
+                IsVisible = true,
+                Label     = GetLoc("FastJoinAnotherPartyRecruitment-LeaveAndJoin"),
+                OnClick   = () => Enqueue(taskHelper),
+            };
+
+            Service.AddonController.AttachNode(Button, resNode);
+        }
+        
+        resNode->SetPositionFloat(35, 56);
+        
+        var button0 = addon->GetComponentButtonById(109);
+        var button1 = addon->GetComponentButtonById(110);
+        var button2 = addon->GetComponentButtonById(111);
+        if (button0 == null || button1 == null || button2 == null) return;
+        
+        button0->OwnerNode->SetPositionFloat(-50, 0);
+        button1->OwnerNode->SetPositionFloat(250, 0);
+        button2->OwnerNode->SetPositionFloat(400, 0);
     }
     
-    private void Enqueue()
+    private static void Enqueue(TaskHelper taskHelper)
     {
-        TaskHelper.Abort();
+        taskHelper.Abort();
         
         var currentCID = AgentLookingForGroup.Instance()->ListingContentId;
         if (currentCID == 0) return;
         
         if (IsInAnyParty())
         {
-            TaskHelper.Enqueue(() =>
+            taskHelper.Enqueue(() =>
             {
                 if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task", 100)) return false;
                 if (!IsInAnyParty()) return true;
@@ -101,7 +111,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             });
         }
         
-        TaskHelper.Enqueue(() =>
+        taskHelper.Enqueue(() =>
         {
             if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task")) return false;
             
@@ -112,7 +122,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             return instance->ListingContentId == currentCID;
         });
         
-        TaskHelper.Enqueue(() =>
+        taskHelper.Enqueue(() =>
         {
             if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task")) return false;
             if (!IsAddonAndNodesReady(LookingForGroupDetail)) return false;
@@ -125,13 +135,16 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         });
         
         // 滞留 500 毫秒避免点不了
-        TaskHelper.DelayNext(500);
+        taskHelper.DelayNext(500);
     }
 
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         DService.AddonLifecycle.UnregisterListener(OnAddonYesno);
+        
+        Service.AddonController.DetachNode(Button);
+        Button = null;
         
         base.Uninit();
     }
