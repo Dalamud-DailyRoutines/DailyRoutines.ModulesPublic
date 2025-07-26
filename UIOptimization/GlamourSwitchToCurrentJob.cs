@@ -37,10 +37,10 @@ public class GlamourSwitchToCurrentJob : DailyModuleBase
         {
             counter++;
             var currentLabel = addon->JobDropdown->List->GetItemLabel(counter).ToString();
-            DService.Log.Debug(currentLabel);
             if (pattern.IsMatch(currentLabel))
                 addon->JobDropdown->SelectItem(counter);
-
+            
+            // 防止意外情况，理论不会发生
             if (currentLabel.IsNullOrEmpty()) return;
         }
     }
