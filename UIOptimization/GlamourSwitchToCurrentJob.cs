@@ -27,21 +27,16 @@ public class GlamourSwitchToCurrentJob : DailyModuleBase
         LuminaGetter.TryGetRow<Lumina.Excel.Sheets.ClassJob>(DService.ObjectTable.LocalPlayer.ClassJob.RowId,
                                                              out var job);
         var addon = (AddonMiragePrismPrismBox*)args.Addon;
-
         var currentJob = job.Name.ToString();
 
         // 一种基于暴力循环实现的匹配
-        var counter = 0;
+        var jobDropdownLength = addon->JobDropdown->List->ListLength;
         var pattern = new Regex(@"\b" + currentJob + @"\b");
-        while (true)
+        for (var i = 1; i < jobDropdownLength; i++)
         {
-            counter++;
-            var currentLabel = addon->JobDropdown->List->GetItemLabel(counter).ToString();
+            var currentLabel = addon->JobDropdown->List->GetItemLabel(i).ToString();
             if (pattern.IsMatch(currentLabel))
-                addon->JobDropdown->SelectItem(counter);
-            
-            // 防止意外情况，理论不会发生
-            if (currentLabel.IsNullOrEmpty()) return;
+                addon->JobDropdown->SelectItem(i);
         }
     }
 
