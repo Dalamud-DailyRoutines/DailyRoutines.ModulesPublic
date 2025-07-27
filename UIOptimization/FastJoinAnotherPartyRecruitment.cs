@@ -1,11 +1,7 @@
-﻿using System.Collections.Generic;
-using DailyRoutines.Abstracts;
+﻿using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Gui.PartyFinder.Types;
-using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 
@@ -26,7 +22,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
     {
         TaskHelper ??= new() { TimeLimitMS = 10_000 };
 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreDraw,     "LookingForGroupDetail", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroupDetail", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
         if (IsAddonAndNodesReady(LookingForGroupDetail)) 
             OnAddon(AddonEvent.PostDraw, null);
@@ -46,7 +42,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
     {
         switch (type)
         {
-            case AddonEvent.PreDraw:
+            case AddonEvent.PostDraw:
                 CreateOrUpdateButton(LookingForGroupDetail, TaskHelper);
                 break;
             case AddonEvent.PreFinalize:
@@ -60,6 +56,13 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
     {
         if (addon == null) return;
 
+        // 团队招募
+        var partyCount = addon->AtkValues[19].UInt;
+        if (partyCount != 1) return;
+        
+        // 自己开的招募
+        if (AgentLookingForGroup.Instance()->ListingContentId == LocalPlayerState.ContentID) return;
+        
         var resNode = addon->GetNodeById(108);
         if (resNode == null) return;
         
