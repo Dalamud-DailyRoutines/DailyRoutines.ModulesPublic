@@ -75,8 +75,8 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
                 {
                     Button = new TextButtonNode
                     {
-                        Size      = new(180, 28f),
-                        Position  = new(105, 567),
+                        Size      = new(240, 28f),
+                        Position  = new(72, 20),
                         IsVisible = true,
                         Label     = GetLoc("AutoMoveGearsNotInSet-Button"),
                         OnClick   = () => ChatHelper.SendMessage($"/pdr {Command}"),

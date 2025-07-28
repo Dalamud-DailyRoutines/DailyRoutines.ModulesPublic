@@ -28,15 +28,13 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
     private static Dictionary<uint, int> HaterInfo = [];
     
-    private static readonly List<(nint ComponentPtr, TextNode TextNode, NineGridNode BackgroundNode)> TextNodes = [];
+    private static readonly List<(uint ComponentNodeID, TextNode TextNode, NineGridNode BackgroundNode)> TextNodes = [];
 
     private static string CastInfoTargetBlacklistInput = string.Empty;
 
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-        
-        MakeTextNodesAndLink();
         
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,          "_EnemyList", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "_EnemyList", OnAddon);
@@ -206,10 +204,10 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         switch (type)
         {
             case AddonEvent.PostSetup:
-                MakeTextNodesAndLink();
+                CreateTextNodes();
                 break;
             case AddonEvent.PreRequestedUpdate:
-                MakeTextNodesAndLink();
+                UpdateHaterInfo();
                 UpdateTextNodes();
                 break;
             case AddonEvent.PostDraw:
@@ -222,17 +220,17 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
     private static void UpdateTextNodes()
     {
         var nodes = TextNodes;
+        if (nodes is not { Count: > 0 })
+        {
+            CreateTextNodes();
+            return;
+        }
         
         var numberArray = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.EnemyList);
         if (numberArray == null) return;
 
         if (Throttler.Throttle("OptimizedEnemyList-UpdateHaterInfo"))
-        {
-            HaterInfo = UIState.Instance()->Hater.Haters.ToArray()
-                                                .Where(x => x.EntityId != 0 && x.EntityId != 0xE0000000)
-                                                .DistinctBy(x => x.EntityId)
-                                                .ToDictionary(x => x.EntityId, x => x.Enmity);
-        }
+            UpdateHaterInfo();
         
         var castWidth  = stackalloc ushort[1];
         var castHeight = stackalloc ushort[1];
@@ -255,7 +253,8 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                 continue;
             }
             
-            var componentNode = (AtkComponentNode*)nodes[i].ComponentPtr;
+            var componentNode = EnemyList->GetComponentNodeById(nodes[i].ComponentNodeID);
+            if (componentNode == null) continue;
             
             var castTextNode = componentNode->Component->UldManager.SearchNodeById(4)->GetAsAtkTextNode();
             if (castTextNode == null) continue;
@@ -315,11 +314,13 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         }
     }
     
-    private static void MakeTextNodesAndLink()
+    private static void CreateTextNodes()
     {
         if (EnemyList == null) return;
-        if (!TryFindButtonNodes(out var buttonNodesPtr) || TextNodes.Count == buttonNodesPtr.Count) return;
+        if (!TryFindButtonNodes(out var buttonNodesPtr)) return;
 
+        ClearTextNodes();
+        
         foreach (var nodePtr in buttonNodesPtr)
         {
             var node = (AtkComponentNode*)nodePtr;
@@ -354,11 +355,30 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             };
             
-            TextNodes.Add(new((nint)node, textNode, backgroundNode));
+            TextNodes.Add(new(node->NodeId, textNode, backgroundNode));
             
             Service.AddonController.AttachNode(backgroundNode, node);
             Service.AddonController.AttachNode(textNode, node);
         }
+    }
+
+    private static void ClearTextNodes()
+    {
+        foreach (var (_, textNode, backgroundNode) in TextNodes)
+        {
+            Service.AddonController.DetachNode(textNode);
+            Service.AddonController.DetachNode(backgroundNode);
+        }
+        
+        TextNodes.Clear();
+    }
+
+    private static void UpdateHaterInfo()
+    {
+        HaterInfo = UIState.Instance()->Hater.Haters.ToArray()
+                                             .Where(x => x.EntityId != 0 && x.EntityId != 0xE0000000)
+                                             .DistinctBy(x => x.EntityId)
+                                             .ToDictionary(x => x.EntityId, x => x.Enmity);
     }
     
     private static string GetGeneralInfoText(float percentage, int enmity) =>
@@ -407,12 +427,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
 
-        foreach (var (_, textNode, backgroundNode) in TextNodes)
-        {
-            Service.AddonController.DetachNode(textNode);
-            Service.AddonController.DetachNode(backgroundNode);
-        }
-        TextNodes.Clear();
+        ClearTextNodes();
         
         HaterInfo.Clear();
     }

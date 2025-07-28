@@ -19,11 +19,6 @@ public unsafe class LargerIME : DailyModuleBase
     private delegate void TextInputReceiveEventDelegate(AtkComponentTextInput* component, AtkEventType eventType, int i, AtkEvent* atkEvent, AtkEventData* eventData);
     private static   Hook<TextInputReceiveEventDelegate>? TextInputReceiveEventHook;
 
-    private const float ReferenceWidth  = 135.0f;
-    private const float ReferenceHeight = 200.0f;
-
-    private const float Aggressiveness = 3.0f; 
-
     private static Config ModuleConfig = null!;
 
     protected override void Init()
@@ -52,8 +47,7 @@ public unsafe class LargerIME : DailyModuleBase
     {
         TextInputReceiveEventHook.Original(component, eventType, i, atkEvent, eventData);
         
-        if (eventType == AtkEventType.FocusStart)
-            ModifyTextInputComponent(component);
+        ModifyTextInputComponent(component);
     }
 
     private static void ModifyTextInputComponent(AtkComponentTextInput* component)
@@ -63,33 +57,8 @@ public unsafe class LargerIME : DailyModuleBase
         var imeBackground = component->AtkComponentInputBase.AtkComponentBase.UldManager.SearchNodeById(4);
         if (imeBackground == null) return;
 
-        var baseScale = ModuleConfig.Scale;
-
-        imeBackground->SetScale(1.0f, 1.0f); 
-        if (baseScale <= 1.0f) return;
-        
-        float currentWidth  = imeBackground->Width;
-        float currentHeight = imeBackground->Height;
-
-        if (currentWidth <= 0 || currentHeight <= 0) return;
-
-        var widthRatio    = currentWidth  / ReferenceWidth;
-        var heightRatio   = currentHeight / ReferenceHeight;
-        var combinedRatio = (float)Math.Sqrt(widthRatio * heightRatio);
-
-        var deviation           = Math.Abs(1.0f - combinedRatio);
-        var interpolationFactor = 1.0f - (float)Math.Exp(-Aggressiveness * deviation);
-
-        var simpleScaledWidth = currentWidth   * baseScale;
-        var goalWidth         = ReferenceWidth * baseScale;
-        var finalWidth        = (simpleScaledWidth * (1 - interpolationFactor)) + (goalWidth * interpolationFactor);
-
-        var dynamicScale = finalWidth / currentWidth;
-    
-        if (baseScale > 1.0f) 
-            dynamicScale = Math.Max(1.0f, dynamicScale);
-
-        imeBackground->SetScale(dynamicScale, dynamicScale);
+        imeBackground->ScaleX = ModuleConfig.Scale;
+        imeBackground->ScaleY = ModuleConfig.Scale;
     }
 
     private class Config : ModuleConfiguration

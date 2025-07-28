@@ -1,9 +1,9 @@
-using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -16,12 +16,13 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
+    private static TextButtonNode? Button;
+
     protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
-        Overlay    ??= new(this);
         
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "PvpReward", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,   "PvpReward", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "PvpReward", OnAddon);
         if (PvpReward != null) 
             OnAddon(AddonEvent.PostSetup, null);
@@ -30,73 +31,74 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        base.Uninit();
+        
+        Service.AddonController.DetachNode(Button);
+        Button = null;
     }
 
     private void OnAddon(AddonEvent type, AddonArgs? args)
     {
-        Overlay.IsOpen = type switch
+
+        switch (type)
         {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
-        };
-    }
+            case AddonEvent.PostDraw:
+                if (PvpReward == null) return;
 
-    protected override void OverlayUI()
-    {
-        var addon = PvpReward;
-        if (addon == null)
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-        
-        if (!IsAddonAndNodesReady(addon)) return;
-        
-        var pos   = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight());
-        ImGui.SetWindowPos(pos);
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, GetLoc("AutoClaimPVPRewardsTitle"));
-
-        ImGui.SameLine();
-        ImGui.Spacing();
-        
-        ImGui.SameLine();
-        using (ImRaii.Disabled(TaskHelper.IsBusy))
-        {
-            if (ImGui.Button(GetLoc("Start")))
-            {
-                var currentRank = PvpReward->AtkValues[7].UInt;
-                if (currentRank <= 1 || IsTrophyCrystalAboutToReachLimit()) return;
-
-                for (var i = 0; i < currentRank; i++)
+                var closeButton = PvpReward->GetComponentButtonById(124);
+                if (closeButton != null && closeButton->OwnerNode->IsVisible())
+                    closeButton->OwnerNode->ToggleVisibility(false);
+                
+                if (Button == null)
                 {
-                    TaskHelper.Enqueue(() =>
-                                       {
-                                           if (IsTrophyCrystalAboutToReachLimit())
-                                               TaskHelper.Abort();
-                                       }, $"CheckTCAmount_Rank{i}");
-
-                    TaskHelper.Enqueue(
-                        () =>
+                    var resNode = PvpReward->RootNode;
+                    if (resNode == null) return;
+                    
+                    Button = new()
+                    {
+                        Size      = new(280, 28),
+                        Position  = new(370, 500),
+                        IsVisible = true,
+                        Label     = GetLoc("AutoClaimPVPRewards-Button"),
+                        OnClick = () =>
                         {
-                            ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal);
-                            ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal, 1);
+                            var currentRank = PvpReward->AtkValues[7].UInt;
+                            if (currentRank <= 1 || IsTrophyCrystalAboutToReachLimit()) return;
+
+                            for (var i = 0; i < currentRank; i++)
+                            {
+                                TaskHelper.Enqueue(() =>
+                                                   {
+                                                       if (!IsTrophyCrystalAboutToReachLimit()) return;
+                                                       TaskHelper.Abort();
+                                                   }, $"CheckTCAmount_Rank{i}");
+
+                                TaskHelper.Enqueue(
+                                    () =>
+                                    {
+                                        ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal);
+                                        ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal, 1);
+                                    },
+                                    $"ClaimTC_Rank{i}");
+
+                                TaskHelper.DelayNext(10, $"Delay_Rank{i}");
+                            }
                         },
-                        $"ClaimTC_Rank{i}");
-
-                    TaskHelper.DelayNext(10, $"Delay_Rank{i}");
+                        NodeId = 10001
+                    };
+                    
+                    Service.AddonController.AttachNode(Button, resNode);
                 }
-            }
-        }
-       
-        ImGui.SameLine();
-        if (ImGui.Button(GetLoc("Stop")))
-            TaskHelper.Abort();
-    }
 
+                Button.IsEnabled = !TaskHelper.IsBusy;
+                
+                break;
+            case AddonEvent.PreFinalize:
+                Service.AddonController.DetachNode(Button);
+                Button = null;
+                break;
+        }
+    }
+    
     private static bool IsTrophyCrystalAboutToReachLimit() 
         => InventoryManager.Instance()->GetInventoryItemCount(36656) > 1_9000;
 }

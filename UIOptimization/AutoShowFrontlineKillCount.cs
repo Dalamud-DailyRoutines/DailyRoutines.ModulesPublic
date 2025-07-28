@@ -24,7 +24,16 @@ public unsafe class AutoShowFrontlineKillCount : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "PvPFrontlineGauge", OnAddon);
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         if (IsAddonAndNodesReady(PvPFrontlineGauge))
-            LastKillCount = PvPFrontlineGauge->AtkValues[6].UInt;
+        {
+            try
+            {
+                LastKillCount = PvPFrontlineGauge->AtkValues[6].UInt;
+            }
+            catch
+            {
+                // ignored
+            }
+        }
     }
 
     protected override void ConfigUI()
@@ -46,8 +55,19 @@ public unsafe class AutoShowFrontlineKillCount : DailyModuleBase
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
         if (PvPFrontlineGauge == null) return;
+        if (!Throttler.Throttle("AutoShowFrontlineKillCount-OnUpdate", 100)) return;
 
-        var killCount = PvPFrontlineGauge->AtkValues[6].UInt;
+        var killCount = 0U;
+        
+        try
+        {
+            killCount = PvPFrontlineGauge->AtkValues[6].UInt;
+        }
+        catch
+        {
+            killCount = LastKillCount;
+        }
+        
         if (LastKillCount != killCount)
         {
             DisplayKillCount(killCount);

@@ -40,7 +40,6 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
             return;
         
         TaskHelper.Enqueue(() => !BetweenAreas && DService.ObjectTable.LocalPlayer != null, "WaitForEnteringDuty");
-        TaskHelper.DelayNext(2000);
         TaskHelper.Enqueue(() => CheckMembersItemLevel([LocalPlayerState.EntityID]));
     }
 
