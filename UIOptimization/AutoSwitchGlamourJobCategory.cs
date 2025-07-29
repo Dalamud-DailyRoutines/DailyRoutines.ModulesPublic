@@ -21,9 +21,9 @@ public class AutoSwitchGlamourJobCategory : DailyModuleBase
     private static unsafe void OnMiragePrismPrismBox(AddonEvent type, AddonArgs args)
     {
         // 获取当前职业和幻化台 Addon
-        var job = DService.ClientState.LocalPlayer.ClassJob;
+        var job = LocalPlayerState.ClassJob;
         var addon = (AddonMiragePrismPrismBox*)args.Addon;
-        addon->Param = (int)job.RowId;
+        addon->Param = (int)job;
     }
 
     protected override void Uninit() =>
