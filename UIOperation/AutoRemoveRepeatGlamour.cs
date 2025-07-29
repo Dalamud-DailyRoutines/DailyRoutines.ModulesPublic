@@ -8,9 +8,9 @@ public class AutoRemoveRepeatGlamour : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoRemoveRepeatGlamourTitle"),
+        Title       = GetLoc("AutoRemoveRepeatGlamourTitle"),
         Description = GetLoc("AutoRemoveRepeatGlamourDescription"),
-        Author = ["ECSS11"]
+        Author      = ["ECSS11"]
     };
 
     protected override void Init() => TaskHelper ??= new TaskHelper { TimeLimitMS = 30_000 };
@@ -20,8 +20,8 @@ public class AutoRemoveRepeatGlamour : DailyModuleBase
         var instance = MirageManager.Instance();
         if (instance == null) return;
 
-        List<uint> itemIndexToRemove = [];
-        HashSet<uint> itemIndexHash = [];
+        List<uint>    itemIndexToRemove = [];
+        HashSet<uint> itemIndexHash     = [];
         for (var i = 0U; i < 800; i++)
         {
             var item = instance->PrismBoxItemIds[(int)i];
