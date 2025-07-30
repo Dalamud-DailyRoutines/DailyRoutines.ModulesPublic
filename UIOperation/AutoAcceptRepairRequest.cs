@@ -35,10 +35,11 @@ public class AutoAcceptRepairRequest : DailyModuleBase
     private unsafe void OnRepairRequest(AddonEvent type, AddonArgs args)
     {
         var addon = (AtkUnitBase*)args.Addon;
+        if (addon is null) return;
 
-        var repairButton = addon->GetComponentButtonById(33);
+        var button = addon->GetComponentButtonById(33);
         TaskHelper.DelayNext(ModuleConfig.Delay);
-        TaskHelper.Enqueue(() => repairButton->ClickAddonButton(addon));
+        TaskHelper.Enqueue(() => button->ClickAddonButton(addon));
     }
 
     protected override void Uninit()
