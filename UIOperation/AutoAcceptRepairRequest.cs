@@ -27,7 +27,7 @@ public class AutoAcceptRepairRequest : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(150f * GlobalFontScale);
+        ImGui.SetNextItemWidth(100f * GlobalFontScale);
         if (ImGui.SliderInt(GetLoc("AutoAcceptRepairRequest-Slider"), ref ModuleConfig.Delay, 500, 3_000))
             SaveConfig(ModuleConfig);
     }
