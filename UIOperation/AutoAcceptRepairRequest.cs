@@ -15,42 +15,23 @@ public class AutoAcceptRepairRequest : DailyModuleBase
         Author      = ["ECSS11"]
     };
 
-    private static Config ModuleConfig;
-
     protected override void Init()
     {
-        TaskHelper   ??= new() { TimeLimitMS = 30_000 };
-        ModuleConfig =   LoadConfig<Config>() ?? new();
-
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RepairRequest", OnRepairRequest);
     }
-
-    protected override void ConfigUI()
+    
+    protected override void Uninit()
     {
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.SliderInt(GetLoc("AutoAcceptRepairRequest-Slider"), ref ModuleConfig.Delay, 500, 3_000))
-            SaveConfig(ModuleConfig);
+        DService.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "RepairRequest");
     }
 
     private unsafe void OnRepairRequest(AddonEvent type, AddonArgs args)
     {
         var addon = (AtkUnitBase*)args.Addon;
-        if (addon is null) return;
+        if (!IsAddonAndNodesReady(addon)) return;
 
         var button = addon->GetComponentButtonById(33);
-        TaskHelper.DelayNext(ModuleConfig.Delay);
-        TaskHelper.Enqueue(() => button->ClickAddonButton(addon));
-    }
-
-    protected override void Uninit()
-    {
-        TaskHelper.Dispose();
-
-        DService.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "RepairRequest");
-    }
-
-    private class Config : ModuleConfiguration
-    {
-        public int Delay = 500;
+        if (button is null) return;
+        button->ClickAddonButton(addon);
     }
 }
