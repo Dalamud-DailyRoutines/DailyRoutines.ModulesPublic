@@ -653,7 +653,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
                 switch (memberStatus.StatusId)
                 {
-                    case 2675: // 骑士的坚守
+                    case 2675:
                     {
                         var mitValue = memberStatus.SourceId == targetId ? 15 : 10;
                         mitigation.Info.Magical  = mitValue;
