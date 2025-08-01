@@ -10,15 +10,13 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Interface.GameFonts;
-using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Newtonsoft.Json;
-using Status = Lumina.Excel.Sheets.Status;
+using LuminaStatus = Lumina.Excel.Sheets.Status;
 
 
 namespace DailyRoutines.ModulesPublic;
@@ -215,9 +213,9 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
     }
 
-    private static void DrawStatusRow(KeyValuePair<MitigationManager.Status, float> status)
+    private static void DrawStatusRow(KeyValuePair<MitigationManager.MMStatus, float> status)
     {
-        if (!LuminaGetter.TryGetRow<Status>(status.Key.Id, out var row))
+        if (!LuminaGetter.TryGetRow<LuminaStatus>(status.Key.Id, out var row))
             return;
         if (!DService.Texture.TryGetFromGameIcon(new(row.Icon), out var icon))
             return;
@@ -277,14 +275,14 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     private static class RemoteRepoManager
     {
         // const
-        private const string Uri = "https://dr-cache.sumemo.dev";
+        private const string Uri = "https://assets.sumemo.dev";
 
         public static async Task FetchMitigationStatuses()
         {
             try
             {
                 var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/mitigation");
-                var resp = JsonConvert.DeserializeObject<MitigationManager.Status[]>(json);
+                var resp = JsonConvert.DeserializeObject<MitigationManager.MMStatus[]>(json);
                 if (resp == null)
                     Error($"[AutoDisplayMitigationInfo] 远程减伤技能文件解析失败: {json}");
                 else
@@ -534,10 +532,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     private static unsafe class MitigationManager
     {
         // cache
-        public static Dictionary<uint, Status> StatusDict = [];
+        public static Dictionary<uint, MMStatus> StatusDict = [];
 
         // local player
-        public static readonly Dictionary<Status, float> LocalActiveStatus = [];
+        public static readonly Dictionary<MMStatus, float> LocalActiveStatus = [];
 
         public static float LocalShield
         {
@@ -552,7 +550,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
 
         // party member
-        public static readonly Dictionary<uint, Dictionary<Status, float>> PartyActiveStatus = [];
+        public static readonly Dictionary<uint, Dictionary<MMStatus, float>> PartyActiveStatus = [];
 
         public static Dictionary<uint, float> PartyShield
         {
@@ -578,20 +576,20 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
 
         // battle npc
-        public static readonly Dictionary<Status, float> BattleNpcActiveStatus = [];
+        public static readonly Dictionary<MMStatus, float> BattleNpcActiveStatus = [];
 
         #region Structs
 
-        public struct StatusInfo
+        public class StatusInfo
         {
             [JsonProperty("physical")]
-            public float Physical { get; private set; }
+            public float Physical { get; set; }
 
             [JsonProperty("magical")]
-            public float Magical { get; private set; }
+            public float Magical { get; set; }
         }
 
-        public struct Status : IEquatable<Status>
+        public class MMStatus : IEquatable<MMStatus>
         {
             [JsonProperty("id")]
             public uint Id { get; private set; }
@@ -600,29 +598,83 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             public string Name { get; private set; }
 
             [JsonProperty("mitigation")]
-            public StatusInfo Info { get; private set; }
+            public StatusInfo Info { get; set; }
 
             [JsonProperty("on_member")]
             public bool OnMember { get; private set; }
 
             #region Equals
 
-            public bool Equals(Status other) => Id == other.Id;
+            public bool Equals(MMStatus other) => Id == other.Id;
 
-            public override bool Equals(object? obj) => obj is Status other && Equals(other);
+            public override bool Equals(object? obj) => obj is MMStatus other && Equals(other);
 
             public override int GetHashCode() => (int)Id;
 
-            public static bool operator ==(Status left, Status right) => left.Equals(right);
+            public static bool operator ==(MMStatus left, MMStatus right) => left.Equals(right);
 
-            public static bool operator !=(Status left, Status right) => !left.Equals(right);
+            public static bool operator !=(MMStatus left, MMStatus right) => !left.Equals(right);
 
             #endregion
+        }
+
+        public readonly struct MemberStatus
+        {
+            public uint StatusId { get; }
+            public uint SourceId { get; }
+
+            private MemberStatus(uint statusId, uint sourceId)
+                => (StatusId, SourceId) = (statusId, sourceId);
+
+            public static MemberStatus From(Dalamud.Game.ClientState.Statuses.Status s)
+                => new MemberStatus(
+                    s.StatusId,
+                    s.SourceId
+                );
+
+            public static MemberStatus From(FFXIVClientStructs.FFXIV.Client.Game.Status s)
+                => new MemberStatus(
+                    s.StatusId,
+                    s.SourceObject.ObjectId
+                );
         }
 
         #endregion
 
         #region Funcs
+
+        public static bool TryGetMitigation(uint targetId, MemberStatus memberStatus, out MMStatus? mitigation)
+        {
+            mitigation = null;
+
+            if (StatusDict.TryGetValue(memberStatus.StatusId, out var defaultMitigation))
+            {
+                mitigation = defaultMitigation;
+
+                switch (memberStatus.StatusId)
+                {
+                    case 2675: // 骑士的坚守
+                    {
+                        var mitValue = memberStatus.SourceId == targetId ? 15 : 10;
+                        mitigation.Info.Magical  = mitValue;
+                        mitigation.Info.Physical = mitValue;
+                        break;
+                    }
+                    case 1174 when DService.ObjectTable.SearchById(targetId) is IBattleChara sourceChara:
+                    {
+                        var sourceStatusIds = sourceChara.StatusList.Select(x => x.StatusId).ToHashSet();
+                        var mitValue        = sourceStatusIds.Contains(1191) || sourceStatusIds.Contains(3829) ? 20 : 10;
+                        mitigation.Info.Magical  = mitValue;
+                        mitigation.Info.Physical = mitValue;
+                        break;
+                    }
+                }
+
+                return true;
+            }
+
+            return false;
+        }
 
         public static void Update()
         {
@@ -637,7 +689,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             // status
             foreach (var status in localPlayer->StatusManager.Status)
             {
-                if (StatusDict.TryGetValue(status.StatusId, out var mitigation))
+                if (TryGetMitigation(localPlayer->EntityId, MemberStatus.From(status), out var mitigation) && mitigation is not null)
                     LocalActiveStatus.TryAdd(mitigation, status.RemainingTime);
             }
 
@@ -650,11 +702,11 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     if (member.ObjectId == 0)
                         continue;
 
-                    var activeStatus = new Dictionary<Status, float>();
+                    var activeStatus = new Dictionary<MMStatus, float>();
                     foreach (var status in member.Statuses)
                     {
-                        if (StatusDict.TryGetValue(status.StatusId, out var mitigation))
-                            activeStatus.TryAdd(mitigation, status.RemainingTime);
+                        if (TryGetMitigation(localPlayer->EntityId, MemberStatus.From(status), out var mitigation) && mitigation is not null)
+                            LocalActiveStatus.TryAdd(mitigation, status.RemainingTime);
                     }
 
                     PartyActiveStatus[member.ObjectId] = activeStatus;
