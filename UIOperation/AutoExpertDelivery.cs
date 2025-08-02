@@ -288,8 +288,10 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
         if (!LuminaGetter.TryGetRow<GrandCompanyRank>(PlayerState.Instance()->GetGrandCompanyRank(), out var rank))
             return true;
 
-        var buffMultiplier = LocalPlayerState.HasStatus(1078, out _) ? 1.15 :
-                             LocalPlayerState.HasStatus(414,  out _) ? 1.1 : 1.0;
+        var buffMultiplier = 1;
+        if (LocalPlayerState.HasStatus(1078, out var index) || LocalPlayerState.HasStatus(414, out index))
+            buffMultiplier += DService.ClientState.LocalPlayer.StatusList[index].Param / 100;
+        
         var companySeals   = InventoryManager.Instance()->GetCompanySeals(grandCompany);
         var capAmount      = rank.MaxSeals;
         if (companySeals + (uint)(sealReward * buffMultiplier) > capAmount)
