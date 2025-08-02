@@ -720,7 +720,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     {
                         if (status.StatusId == 0)
                             continue;
-                        if (TryGetMitigation(localPlayer->EntityId, MemberStatus.From(status), out var mitigation) && mitigation is not null)
+                        if (TryGetMitigation(member.ObjectId, MemberStatus.From(status), out var mitigation) && mitigation is not null)
                             activeStatus.TryAdd(mitigation, status.RemainingTime);
                     }
 
