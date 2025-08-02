@@ -18,6 +18,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Newtonsoft.Json;
 using LuminaStatus = Lumina.Excel.Sheets.Status;
 
+
 namespace DailyRoutines.ModulesPublic;
 
 public class AutoDisplayMitigationInfo : DailyModuleBase
@@ -255,6 +256,11 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             return;
         }
 
+        PartyMemberIndexCache.Clear();
+        var partyMembers = AgentHUD.Instance()->PartyMembers.ToArray();
+        foreach (var member in partyMembers)
+            PartyMemberIndexCache[member.EntityId] = (uint)member.Index;
+
         MitigationManager.Update();
 
         var combatInactive = ModuleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat];
@@ -408,45 +414,29 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #region PartyList
 
-    private static Dictionary<uint, (float[] Info, int Index)> CachedPartyInfo = [];
-
     private static bool IsNeedToDrawOnPartyList;
-    
 
     public static unsafe void Draw()
     {
         if (Throttler.Throttle("AutoDisplayMitigationInfo-OnUpdatePartyDrawCondition"))
             IsNeedToDrawOnPartyList = IsAddonAndNodesReady(PartyList) && !GameState.IsInPVPArea;
-        
-        if (!IsNeedToDrawOnPartyList) return;
 
-        if (Throttler.Throttle("AutoDisplayMitigationInfo-OnUpdateParty"))
-        {
-            CachedPartyInfo = MitigationManager.FetchParty()
-                                               .Select(x => new
-                                               {
-                                                   ID = x.Key,
-                                                   Detail = new
-                                                   {
-                                                       Info  = x.Value,
-                                                       Index = (int?)FetchMemberIndex(x.Key) ?? -1
-                                                   }
-                                               })
-                                               .ToDictionary(x => x.ID, x => (x.Detail.Info, x.Detail.Index));
-        }
+        if (!IsNeedToDrawOnPartyList)
+            return;
 
         var drawList = ImGui.GetBackgroundDrawList();
         var addon    = (AddonPartyList*)PartyList;
-        foreach (var (_, (info, index)) in CachedPartyInfo)
+        foreach (var memberStatus in MitigationManager.FetchParty())
         {
-            if (index == -1) continue;
-            
-            ref var partyMember = ref addon->PartyMembers[index];
-            if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
-                continue;
+            if (FetchMemberIndex(memberStatus.Key) is { } memberIndex)
+            {
+                ref var partyMember = ref addon->PartyMembers[(int)memberIndex];
+                if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
+                    continue;
 
-            PartyListManager.DrawMitigationNode(drawList, ref partyMember, info);
-            PartyListManager.DrawShieldNode(drawList, ref partyMember, info);
+                PartyListManager.DrawMitigationNode(drawList, ref partyMember, memberStatus.Value);
+                PartyListManager.DrawShieldNode(drawList, ref partyMember, memberStatus.Value);
+            }
         }
     }
 
@@ -552,7 +542,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     private static unsafe class MitigationManager
     {
         // cache
-        public static Dictionary<uint, MMStatus> StatusDict = [];
+        public static          Dictionary<uint, MMStatus> StatusDict           = [];
+        public static readonly Dictionary<uint, float[]>  PartyMitigationCache = [];
 
         // local player
         public static readonly Dictionary<MMStatus, float> LocalActiveStatus = [];
@@ -709,6 +700,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             // status
             foreach (var status in localPlayer->StatusManager.Status)
             {
+                if (status.StatusId == 0)
+                    continue;
                 if (TryGetMitigation(localPlayer->EntityId, MemberStatus.From(status), out var mitigation) && mitigation is not null)
                     LocalActiveStatus.TryAdd(mitigation, status.RemainingTime);
             }
@@ -725,8 +718,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     var activeStatus = new Dictionary<MMStatus, float>();
                     foreach (var status in member.Statuses)
                     {
-                        if (TryGetMitigation(localPlayer->EntityId, MemberStatus.From(status), out var mitigation) && mitigation is not null)
-                            LocalActiveStatus.TryAdd(mitigation, status.RemainingTime);
+                        if (status.StatusId == 0)
+                            continue;
+                        if (TryGetMitigation(member.ObjectId, MemberStatus.From(status), out var mitigation) && mitigation is not null)
+                            activeStatus.TryAdd(mitigation, status.RemainingTime);
                     }
 
                     PartyActiveStatus[member.ObjectId] = activeStatus;
@@ -744,6 +739,21 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                         BattleNpcActiveStatus.TryAdd(mitigation, status.RemainingTime);
                 }
             }
+
+            var partyShieldCache = PartyShield;
+            foreach (var memberActiveStatus in PartyActiveStatus)
+            {
+                var activeStatus = memberActiveStatus.Value.Concat(BattleNpcActiveStatus).ToDictionary(kv => kv.Key, kv => kv.Value);
+                PartyMitigationCache[memberActiveStatus.Key] =
+                [
+                    Reduction(activeStatus.Keys.Select(x => x.Info.Physical)),
+                    Reduction(activeStatus.Keys.Select(x => x.Info.Magical)),
+                    partyShieldCache.GetValueOrDefault(memberActiveStatus.Key, 0)
+                ];
+            }
+
+            if (DService.PartyList.Count == 0 && Control.GetLocalPlayer()->EntityId is { } id)
+                PartyMitigationCache[id] = FetchLocal();
         }
 
         public static void Clear()
@@ -751,6 +761,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             LocalActiveStatus.Clear();
             PartyActiveStatus.Clear();
             BattleNpcActiveStatus.Clear();
+            PartyMitigationCache.Clear();
         }
 
         public static bool IsLocalEmpty()
@@ -768,24 +779,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
 
         public static Dictionary<uint, float[]> FetchParty()
-        {
-            if (DService.PartyList.Count == 0)
-                return new Dictionary<uint, float[]> { { LocalPlayerState.EntityID, FetchLocal() } };
-
-            var partyValues = new Dictionary<uint, float[]>();
-            foreach (var memberActiveStatus in PartyActiveStatus)
-            {
-                var activeStatus = memberActiveStatus.Value.Concat(BattleNpcActiveStatus).ToDictionary(kv => kv.Key, kv => kv.Value);
-                partyValues[memberActiveStatus.Key] =
-                [
-                    Reduction(activeStatus.Keys.Select(x => x.Info.Physical)),
-                    Reduction(activeStatus.Keys.Select(x => x.Info.Magical)),
-                    PartyShield.GetValueOrDefault(memberActiveStatus.Key, 0)
-                ];
-            }
-
-            return partyValues;
-        }
+            => PartyMitigationCache;
 
 
         public static float Reduction(IEnumerable<float> mitigations) =>
@@ -798,10 +792,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #region Utils
 
-    private static unsafe uint? FetchMemberIndex(uint entityId) =>
-        AgentHUD.Instance()->PartyMembers.ToArray()
-                                         .Select((m, i) => (Member: m, Index: (uint)i))
-                                         .FirstOrDefault(t => t.Member.EntityId == entityId).Index;
+    private static readonly Dictionary<uint, uint> PartyMemberIndexCache = [];
+
+    private static uint? FetchMemberIndex(uint entityId) =>
+        PartyMemberIndexCache.TryGetValue(entityId, out var index) ? index : null;
 
     #endregion
 
