@@ -1,25 +1,6 @@
-﻿global using static DailyRoutines.Infos.Widgets;
-global using static OmenTools.Helpers.HelpersOm;
-global using static DailyRoutines.Infos.Extensions;
-global using static OmenTools.Infos.InfosOm;
-global using static OmenTools.Helpers.ThrottlerHelper;
-global using static DailyRoutines.Managers.Configuration;
-global using static DailyRoutines.Managers.LanguageManagerExtensions;
-global using static DailyRoutines.Helpers.NotifyHelper;
-global using static OmenTools.Helpers.ContentsFinderHelper;
-global using Dalamud.Interface.Utility.Raii;
-global using OmenTools.Infos;
-global using OmenTools.ImGuiOm;
-global using OmenTools.Helpers;
-global using OmenTools;
-global using ImGuiNET;
-global using ImPlotNET;
-global using Dalamud.Game;
-
-using DailyRoutines.Abstracts;
+﻿using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -33,25 +14,26 @@ public class AutoAcceptRepairRequest : DailyModuleBase
         Author      = ["ECSS11"]
     };
 
-    protected override void Init()
+    protected override unsafe void Init()
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RepairRequest", OnRepairRequest);
-    }
-    
-    protected override void Uninit()
-    {
-        DService.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "RepairRequest");
+        if (RepairRequest is not null)
+            OnRepairRequest(AddonEvent.PostSetup, null);
     }
 
-    private unsafe void OnRepairRequest(AddonEvent type, AddonArgs args)
+    protected override void Uninit() => DService.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "RepairRequest");
+
+    private static unsafe void OnRepairRequest(AddonEvent type, AddonArgs args)
     {
-        // TODO: Determine who open the request window
-        
-        var addon = (AtkUnitBase*)args.Addon;
+        var addon = RepairRequest;
         if (!IsAddonAndNodesReady(addon)) return;
 
-        var button = addon->GetComponentButtonById(33);
-        if (button is null) return;
-        button->ClickAddonButton(addon);
+        var fullSelect = addon->GetComponentButtonById(6);
+        if (fullSelect is not null) return;
+
+        var repair = addon->GetComponentButtonById(33);
+        if (repair is null) return;
+
+        repair->ClickAddonButton(addon);
     }
 }
