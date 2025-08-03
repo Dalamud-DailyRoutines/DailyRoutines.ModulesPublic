@@ -1,5 +1,4 @@
-﻿using System.Text.RegularExpressions;
-using DailyRoutines.Abstracts;
+﻿using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -17,23 +16,16 @@ public class AutoSwitchGlamourJobCategory : DailyModuleBase
     };
 
     protected override void Init() => 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "MiragePrismPrismBox", OnMiragePrismPrismBox);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreSetup, "MiragePrismPrismBox", OnMiragePrismPrismBox);
 
     private static unsafe void OnMiragePrismPrismBox(AddonEvent type, AddonArgs args)
     {
-        var addon      = (AddonMiragePrismPrismBox*)args.Addon;
-        var currentJob = LocalPlayerState.ClassJobData.Name.ExtractText();
-
-        var jobDropdownLength = addon->JobDropdown->List->ListLength;
-        var pattern           = new Regex(@"\b" + currentJob + @"\b", RegexOptions.IgnoreCase);
-        for (var i = 1; i < jobDropdownLength; i++)
-        {
-            var currentLabel = addon->JobDropdown->List->GetItemLabel(i).ToString();
-            if (pattern.IsMatch(currentLabel))
-                addon->JobDropdown->SelectItem(i);
-        }
+        var addon = (AddonMiragePrismPrismBox*)MiragePrismPrismBox;
+        if (addon == null) return;
+        
+        addon->Param = (int)LocalPlayerState.ClassJob;
     }
 
     protected override void Uninit() =>
-        DService.AddonLifecycle.UnregisterListener(AddonEvent.PostRequestedUpdate, "MiragePrismPrismBox");
+        DService.AddonLifecycle.UnregisterListener(AddonEvent.PreSetup, "MiragePrismPrismBox");
 }

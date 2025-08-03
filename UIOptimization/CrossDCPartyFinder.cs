@@ -535,8 +535,8 @@ public class CrossDCPartyFinder : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public          bool OrderByDescending = true;
-        public readonly int  PageSize          = 50;
+        public bool OrderByDescending = true;
+        public int  PageSize          = 50;
     }
     
     private class PartyFinderRequest : IEquatable<PartyFinderRequest>

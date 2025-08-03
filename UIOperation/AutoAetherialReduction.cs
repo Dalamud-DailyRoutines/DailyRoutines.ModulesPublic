@@ -1,13 +1,12 @@
-using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Plugin.Ipc;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -20,64 +19,35 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
         Author      = ["YLCHEN"]
     };
-    
-    public bool IsReducing => TaskHelper?.IsBusy ?? false;
-    
-    private static readonly InventoryType[] Inventories =
-    [
-        InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4
-    ];
 
+    private static TextNode       LableNode;
+    private static TextButtonNode StartButtonNode;
+    private static TextButtonNode StopButtonNode;
+    
     protected override void Init()
     {
-        TaskHelper ??= new TaskHelper();
+        TaskHelper ??= new();
         Overlay    ??= new Overlay(this);
 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "PurifyItemSelector", OnAddonList);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,   "PurifyItemSelector", OnAddonList);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "PurifyItemSelector", OnAddonList);
-        if (IsAddonAndNodesReady(PurifyItemSelector)) 
-            OnAddonList(AddonEvent.PostSetup, null);
 
-        GameResourceManager.AddToBlacklist(typeof(AutoAetherialReduction), "chara/action/normal/item_action.tmb");
-    }
-
-    protected override void OverlayUI()
-    {
-        var addon = PurifyItemSelector;
-        if (addon == null)
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-        if (!IsAddonAndNodesReady(addon)) return;
-
-        var pos = new Vector2(addon->GetX() - ImGui.GetWindowSize().X, addon->GetY() + 6);
-        ImGui.SetWindowPos(pos);
-
-        ImGui.TextColored(LightSkyBlue, GetLoc("AutoAetherialReductionTitle"));
-
-        ImGui.Separator();
-
-        using (ImRaii.Disabled(TaskHelper.IsBusy))
-        {
-            if (ImGui.Button(GetLoc("Start")))
-                TaskHelper.Enqueue(StartAetherialReduction, "开始精选");
-        }
-
-        ImGui.SameLine();
-        if (ImGui.Button(GetLoc("Stop")))
-            TaskHelper.Abort();
     }
 
     protected override void Uninit()
     {
-        GameResourceManager.RemoveFromBlacklist(typeof(AutoAetherialReduction), "chara/action/normal/item_action.tmb");
-
         DService.AddonLifecycle.UnregisterListener(OnAddonList);
-        
-        base.Uninit();
+        ClearNodes();
     }
 
+    private bool StartReduction()
+    {
+        if (TaskHelper == null) return false;
+        
+        TaskHelper.Enqueue(StartAetherialReduction);
+        return true;
+    }
+    
     private bool? StartAetherialReduction()
     {
         if (IsCurrentEnvironmentInvalid()) return true;
@@ -115,10 +85,69 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         return true;
     }
 
+    private void OnAddonList(AddonEvent type, AddonArgs? args)
+    {
+        switch (type)
+        {
+            case AddonEvent.PostDraw:
+                if (PurifyItemSelector == null) return;
+
+                if (LableNode == null)
+                {
+                    LableNode = new()
+                    {
+                        IsVisible     = true,
+                        Position      = new(135, 8),
+                        Size          = new(150, 28),
+                        Text          = $"{Info.Title}",
+                        FontSize      = 14,
+                        AlignmentType = AlignmentType.Right,
+                        TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
+                    };
+                    Service.AddonController.AttachNode(LableNode, PurifyItemSelector->RootNode);
+                }
+
+                if (StartButtonNode == null)
+                {
+                    StartButtonNode = new()
+                    {
+                        Position  = new(295, 10),
+                        Size      = new(100, 28),
+                        IsVisible = true,
+                        Label     = GetLoc("Start"),
+                        OnClick   = () => StartReduction()
+                    };
+                    Service.AddonController.AttachNode(StartButtonNode, PurifyItemSelector->RootNode);
+                }
+
+                StartButtonNode.IsEnabled = !TaskHelper.IsBusy;
+                
+                if (StopButtonNode == null)
+                {
+                    StopButtonNode = new()
+                    {
+                        Position  = new(400, 10),
+                        Size      = new(100, 28),
+                        IsVisible = true,
+                        Label     = GetLoc("Stop"),
+                        OnClick   = () => TaskHelper.Abort()
+                    };
+                    Service.AddonController.AttachNode(StopButtonNode, PurifyItemSelector->RootNode);
+                }
+                
+                break;
+            
+            case AddonEvent.PreFinalize:
+                ClearNodes();
+                TaskHelper.Abort();
+                break;
+        }
+    }
+    
     private bool IsCurrentEnvironmentInvalid()
     {
-        if (IsInventoryFull(Inventories)               ||
-            DService.Condition[ConditionFlag.Mounted]  ||
+        if (IsInventoryFull(PlayerInventories)        ||
+            DService.Condition[ConditionFlag.Mounted] ||
             DService.Condition[ConditionFlag.InCombat])
         {
             TaskHelper.Abort();
@@ -128,28 +157,21 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         return false;
     }
     
-    public bool StartReduction()
+    
+    private static void ClearNodes()
     {
-        if (TaskHelper == null) return false;
-        TaskHelper.Enqueue(StartAetherialReduction, "开始精选");
-        return true;
-    }
-
-    private void OnAddonList(AddonEvent type, AddonArgs? args)
-    {
-        Overlay.IsOpen = type switch
-        {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
-        };
-
-        if (type == AddonEvent.PreFinalize)
-            TaskHelper.Abort();
+        Service.AddonController.DetachNode(LableNode);
+        LableNode = null;
+        
+        Service.AddonController.DetachNode(StartButtonNode);
+        StartButtonNode = null;
+        
+        Service.AddonController.DetachNode(StopButtonNode);
+        StopButtonNode = null;
     }
     
     [IPCProvider("DailyRoutines.Modules.AutoAetherialReduction.IsBusy")]
-    public bool IsCurrentlyBusy => IsReducing;
+    public bool IsCurrentlyBusy => TaskHelper?.IsBusy ?? false;
 
     [IPCProvider("DailyRoutines.Modules.AutoAetherialReduction.StartReduction")]
     public bool StartReductionIPC() => StartReduction();

@@ -321,13 +321,13 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private class FilterPreset
     {
-        public          string Name = string.Empty;
-        public          int    SelectedFilter;
-        public          byte[] PresetValue = new byte[MessageFilterSize];
+        public string Name = string.Empty;
+        public int    SelectedFilter;
+        public byte[] PresetValue = new byte[MessageFilterSize];
     }
 
     private class Config : ModuleConfiguration
     {
-        public readonly List<FilterPreset> Presets = [];
+        public List<FilterPreset> Presets = [];
     }
 }

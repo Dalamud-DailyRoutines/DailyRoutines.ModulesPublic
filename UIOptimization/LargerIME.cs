@@ -56,9 +56,8 @@ public unsafe class LargerIME : DailyModuleBase
 
         var imeBackground = component->AtkComponentInputBase.AtkComponentBase.UldManager.SearchNodeById(4);
         if (imeBackground == null) return;
-
-        imeBackground->ScaleX = ModuleConfig.Scale;
-        imeBackground->ScaleY = ModuleConfig.Scale;
+        
+        imeBackground->SetScale(ModuleConfig.Scale, ModuleConfig.Scale);
     }
 
     private class Config : ModuleConfiguration

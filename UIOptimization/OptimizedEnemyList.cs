@@ -254,7 +254,11 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             }
             
             var componentNode = EnemyList->GetComponentNodeById(nodes[i].ComponentNodeID);
-            if (componentNode == null) continue;
+            if (componentNode == null)
+            {
+                CreateTextNodes();
+                return;
+            }
             
             var castTextNode = componentNode->Component->UldManager.SearchNodeById(4)->GetAsAtkTextNode();
             if (castTextNode == null) continue;

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Hooking;
@@ -5,10 +7,8 @@ using Dalamud.Interface;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.Shell;
-using System.Collections.Generic;
-using System.Linq;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
 {
@@ -184,10 +184,10 @@ public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
     
     public class Config : ModuleConfiguration
     {
-        public bool IsAddPrefix;
-        public bool IsAddSuffix;
-        public string PrefixString = "";
-        public string SuffixString = "";
-        public readonly HashSet<string> Blacklist = [];
+        public bool            IsAddPrefix;
+        public bool            IsAddSuffix;
+        public string          PrefixString = string.Empty;
+        public string          SuffixString = string.Empty;
+        public HashSet<string> Blacklist    = [];
     }
 }
