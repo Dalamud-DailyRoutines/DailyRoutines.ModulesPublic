@@ -290,7 +290,10 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
 
         var buffMultiplier = 1.0;
         if (LocalPlayerState.HasStatus(1078, out var index) || LocalPlayerState.HasStatus(414, out index))
-            buffMultiplier += DService.ObjectTable.LocalPlayer.StatusList[index].Param / 100.0;
+        {
+            DService.Log.Debug("Current Param is " + DService.ClientState.LocalPlayer.StatusList[index].Param);
+            buffMultiplier += DService.ClientState.LocalPlayer.StatusList[index].Param / 100.0;
+        }
         
         var companySeals   = InventoryManager.Instance()->GetCompanySeals(grandCompany);
         var capAmount      = rank.MaxSeals;
