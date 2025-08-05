@@ -192,12 +192,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                     
                     AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->StringArray[3 + (5 * index)] = onlineStatusString->StringPtr;
 
-                    taskHelper.Abort();
-                    taskHelper.Enqueue(() =>
-                    {
-                        if (FriendList == null) return;
-                        FriendList->OnRequestedUpdate(AtkStage.Instance()->GetNumberArrayData(), AtkStage.Instance()->GetStringArrayData());
-                    });
+                    RequestInfoUpdate(taskHelper);
                 });
                 InfoTokens.Add(token);
             }
@@ -237,7 +232,15 @@ public unsafe class OptimizedFriendList : DailyModuleBase
         
         if (!isAnyUpdate) return;
 
+        RequestInfoUpdate(taskHelper);
+    }
+
+    private static void RequestInfoUpdate(TaskHelper taskHelper)
+    {
         taskHelper.Abort();
+        
+        if (FriendList == null) return;
+        
         taskHelper.Enqueue(() =>
         {
             if (FriendList == null) return;

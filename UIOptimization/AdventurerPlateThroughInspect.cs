@@ -3,7 +3,7 @@ using DailyRoutines.Infos;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -16,50 +16,49 @@ public unsafe class AdventurerPlateThroughInspect : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
+    private static IconButtonNode? OpenButton;
+
     protected override void Init()
     {
-        Overlay       ??= new(this);
-        Overlay.Flags |=  ImGuiWindowFlags.NoBackground;
-        
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CharacterInspect", OnAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CharacterInspect", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "CharacterInspect", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CharacterInspect", OnAddon);
         if (IsAddonAndNodesReady(CharacterInspect)) 
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    private void OnAddon(AddonEvent type, AddonArgs? args) =>
-        Overlay.IsOpen = type switch
-        {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
-        };
-
-    protected override void OverlayUI()
+    private static void OnAddon(AddonEvent type, AddonArgs? args)
     {
-        var addon = CharacterInspect;
-        if (addon == null)
+        switch (type)
         {
-            Overlay.IsOpen = false;
-            return;
+            case AddonEvent.PostDraw:
+                if (CharacterInspect == null) return;
+
+                if (OpenButton == null)
+                {
+                    OpenButton = new()
+                    {
+                        Size      = new(36f),
+                        IsVisible = true,
+                        IsEnabled = true,
+                        IconId    = 66469,
+                        OnClick   = () => new CharaCardOpenPacket(AgentInspect.Instance()->CurrentEntityId).Send(),
+                        Tooltip   = LuminaWrapper.GetAddonText(15083),
+                        Position  = new(298, 86)
+                    };
+                    Service.AddonController.AttachNode(OpenButton, CharacterInspect->RootNode);
+                }
+                
+                break;
+            case AddonEvent.PreFinalize:
+                Service.AddonController.DetachNode(OpenButton);
+                OpenButton = null;
+                break;
         }
-
-        var baseNode = addon->GetNodeById(21);
-        if (baseNode == null) return;
-
-        var nodeState = NodeState.Get(baseNode);
-        ImGui.SetWindowPos(nodeState.Position2 - ImGui.GetWindowSize());
-        
-        if (!DService.Texture.TryGetFromGameIcon(new(66469), out var texture)) return;
-        
-        if (ImGui.ImageButton(texture.GetWrapOrEmpty().ImGuiHandle, ScaledVector2(24f)))
-            new CharaCardOpenPacket(AgentInspect.Instance()->CurrentEntityId).Send();
-        ImGuiOm.TooltipHover($"{LuminaWrapper.GetAddonText(15083)}");
     }
-
+    
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        base.Uninit();
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 }

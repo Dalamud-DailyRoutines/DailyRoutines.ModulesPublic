@@ -1,14 +1,13 @@
-using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
-using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
-using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
@@ -29,27 +28,23 @@ public unsafe class AutoMaterialize : DailyModuleBase
 
     private static readonly CompSig MaterializeControllerSig = new("48 8D 0D ?? ?? ?? ?? 8B D0 E8 ?? ?? ?? ?? 83 7E");
 
+    private static TextNode       LableNode;
+    private static TextButtonNode StartButtonNode;
+    private static TextButtonNode StopButtonNode;
+    
     private const string Command = "materialize";
     
-    private static Config ModuleConfig = null!;
-
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-        
         ExtractMateriaHook ??= ExtractMateriaSig.GetHook<ExtractMateriaDelegate>(ExtractMateriaDetour);
         ExtractMateriaHook.Enable();
 
-        TaskHelper    ??= new();
-        Overlay       ??= new(this);
-        Overlay.Flags |=  ImGuiWindowFlags.NoMove;
+        TaskHelper ??= new();
 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Materialize",       OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "Materialize",       OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Materialize",       OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "MaterializeDialog", OnDialogAddon);
 
-        if (Materialize != null) 
-            OnAddon(AddonEvent.PostSetup, null);
         if (MaterializeDialog != null) 
             OnDialogAddon(AddonEvent.PostSetup, null);
 
@@ -57,44 +52,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
     }
 
     protected override void ConfigUI() => ConflictKeyText();
-
-    protected override void OverlayUI()
-    {
-        var addon = Materialize;
-        if (addon == null) return;
-
-        var pos = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowSize().Y + 6);
-        ImGui.SetWindowPos(pos);
-
-        using (FontManager.UIFont80.Push())
-        {
-            ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(ImGuiColors.DalamudYellow, GetLoc("AutoMaterializeTitle"));
-
-            ImGui.SameLine();
-            using (ImRaii.Disabled(TaskHelper.IsBusy))
-            {
-                if (ImGui.Button(GetLoc("AutoMaterialize-ExtractAll")))
-                    StartARoundAll();
-            }
-
-            ImGui.SameLine(0, 8f * GlobalFontScale);
-            ImGui.TextDisabled("|");
-
-            ImGui.SameLine(0, 8f * GlobalFontScale);
-            if (ImGui.Button(GetLoc("Stop")))
-                TaskHelper.Abort();
-
-            ImGui.SameLine(0, 8f * GlobalFontScale);
-            ImGui.TextDisabled("|");
-
-            ImGui.SameLine(0, 8f * GlobalFontScale);
-            if (ImGui.Checkbox(GetLoc("AutoMaterialize-AutoExtractAll"), ref ModuleConfig.AutoExtractAll))
-                SaveConfig(ModuleConfig);
-            ImGuiOm.HelpMarker(GetLoc("AutoMaterialize-AutoExtractAllHelp"));
-        }
-    }
-
+    
     private void StartARoundAll()
     {
         if (TaskHelper.IsBusy) return;
@@ -169,19 +127,76 @@ public unsafe class AutoMaterialize : DailyModuleBase
     {
         var original = ExtractMateriaHook.Original(a1, type, slot);
         
-        if (ModuleConfig.AutoExtractAll && !TaskHelper.IsBusy) 
+        if (!TaskHelper.IsBusy) 
             StartARoundAll();
         
         return original;
     }
 
-    private void OnAddon(AddonEvent type, AddonArgs args) =>
-        Overlay.IsOpen = type switch
+    private void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        switch (type)
         {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen,
-        };
+            case AddonEvent.PostDraw:
+                if (Materialize == null) return;
+                
+                if (LableNode == null)
+                {
+                    LableNode = new()
+                    {
+                        IsVisible     = true,
+                        Position      = new(135, 8),
+                        Size          = new(150, 28),
+                        Text          = $"{Info.Title}",
+                        FontSize      = 14,
+                        AlignmentType = AlignmentType.Right,
+                        TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
+                    };
+                    Service.AddonController.AttachNode(LableNode, Materialize->RootNode);
+                }
+
+                if (StartButtonNode == null)
+                {
+                    StartButtonNode = new()
+                    {
+                        Position  = new(295, 10),
+                        Size      = new(100, 28),
+                        IsVisible = true,
+                        Label     = GetLoc("Start"),
+                        OnClick   = StartARoundAll
+                    };
+                    Service.AddonController.AttachNode(StartButtonNode, Materialize->RootNode);
+                }
+
+                StartButtonNode.IsEnabled = !TaskHelper.IsBusy;
+                
+                if (StopButtonNode == null)
+                {
+                    StopButtonNode = new()
+                    {
+                        Position  = new(400, 10),
+                        Size      = new(100, 28),
+                        IsVisible = true,
+                        Label     = GetLoc("Stop"),
+                        OnClick   = () => TaskHelper.Abort()
+                    };
+                    Service.AddonController.AttachNode(StopButtonNode, Materialize->RootNode);
+                }
+                break;
+            case AddonEvent.PreFinalize:
+                Service.AddonController.DetachNode(LableNode);
+                LableNode = null;
+        
+                Service.AddonController.DetachNode(StartButtonNode);
+                StartButtonNode = null;
+        
+                Service.AddonController.DetachNode(StopButtonNode);
+                StopButtonNode = null;
+                
+                TaskHelper.Abort();
+                break;
+        }
+    }
 
     private static void OnDialogAddon(AddonEvent type, AddonArgs args)
     {
@@ -196,13 +211,10 @@ public unsafe class AutoMaterialize : DailyModuleBase
         CommandManager.RemoveSubCommand(Command);
         
         DService.AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+        
         DService.AddonLifecycle.UnregisterListener(OnDialogAddon);
 
         base.Uninit();
-    }
-
-    private class Config : ModuleConfiguration
-    {
-        public bool AutoExtractAll = true;
     }
 }

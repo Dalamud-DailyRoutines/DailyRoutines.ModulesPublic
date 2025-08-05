@@ -5,13 +5,11 @@ using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
-using DailyRoutines.ModulesPublic;
 using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -19,7 +17,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using GrandCompany = FFXIVClientStructs.FFXIV.Client.UI.Agent.GrandCompany;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoExpertDelivery : DailyModuleBase
 {
@@ -54,7 +52,7 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        TaskHelper ??= new() { TimeLimitMS = int.MaxValue };
+        TaskHelper ??= new() { TimeLimitMS = int.MaxValue, ShowDebug = true };
         Overlay ??= new Overlay(this);
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "GrandCompanySupplyList", OnAddonSupplyList);
@@ -130,6 +128,8 @@ public unsafe class AutoExpertDelivery : DailyModuleBase
             ],
             GetLoc("DisableZoneHeader"));
         }
+
+        return;
 
         void EnqueueGrandCompanyExchangeOpen(bool isAutoExchange)
         {
