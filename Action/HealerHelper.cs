@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using System.Web;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
@@ -13,10 +12,12 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Party;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using Newtonsoft.Json;
+using Buddy = FFXIVClientStructs.FFXIV.Client.Game.UI.Buddy;
 using LuminaAction = Lumina.Excel.Sheets.Action;
 
 
@@ -490,7 +491,7 @@ public class HealerHelper : DailyModuleBase
         ref ulong targetId,    ref Vector3    location, ref uint extraParam
     )
     {
-        if (type != ActionType.Action || GameState.IsInPVPArea || DService.PartyList.Length < 2)
+        if (type != ActionType.Action || GameState.IsInPVPArea || FetchMemberLength() < 2)
             return;
 
         // job check
@@ -553,7 +554,7 @@ public class HealerHelper : DailyModuleBase
         // party member changed?
         try
         {
-            var inPvEParty = DService.PartyList.Length > 1 && !GameState.IsInPVPArea;
+            var inPvEParty = FetchMemberLength() > 1 && !GameState.IsInPVPArea;
             if (!inPvEParty)
                 return;
 
@@ -576,6 +577,12 @@ public class HealerHelper : DailyModuleBase
     #endregion
 
     #region Utils
+
+    private static unsafe List<Buddy.BuddyMember> FetchBuddyList()
+        => UIState.Instance()->Buddy.BattleBuddies.ToArray().Where(x => DService.ObjectTable.SearchByEntityId(x.EntityId) is not null).ToList();
+
+    private static int FetchMemberLength()
+        => DService.PartyList.Length + FetchBuddyList().Count;
 
     private static IPartyMember? FetchMember(uint id)
         => DService.PartyList.FirstOrDefault(m => m.ObjectId == id);
@@ -820,6 +827,9 @@ public class HealerHelper : DailyModuleBase
                 "Range" => rangeCandidateOrder
             };
 
+            var fallbackId       = LocalPlayerState.EntityID;
+            var fallbackPriority = 0.0;
+
             foreach (var member in candidates)
             {
                 var candidate = DService.PartyList.FirstOrDefault(m => m.ObjectId == member.id);
@@ -829,15 +839,24 @@ public class HealerHelper : DailyModuleBase
                 // member skip conditions: out of range, dead, or weakened
                 var maxDistance    = ActionManager.GetActionRange(37023);
                 var memberDead     = candidate.GameObject.IsDead || candidate.CurrentHP <= 0;
-                var memberWeakness = candidate.Statuses.Any(x => x.StatusId is 43 or 44);
                 var memberDistance = Vector3.DistanceSquared(candidate.Position, DService.ObjectTable.LocalPlayer.Position);
-                if (memberDead || memberWeakness || memberDistance > maxDistance * maxDistance)
+                if (memberDead || memberDistance > maxDistance * maxDistance)
                     continue;
 
-                return member.id;
+                // weakness: use as fallback
+                if (candidate.Statuses.Any(x => x.StatusId is 43 or 44))
+                {
+                    fallbackId       = member.id;
+                    fallbackPriority = member.priority;
+                    continue;
+                }
+
+                // candidate vs fallback
+                if (member.priority >= fallbackPriority - 2)
+                    return member.id;
             }
 
-            return LocalPlayerState.EntityID;
+            return fallbackId;
         }
 
         public void OnPrePlayCard(ref ulong targetId, ref uint actionId)
@@ -966,6 +985,65 @@ public class HealerHelper : DailyModuleBase
 
         #endregion
 
+        #region SelectableObject
+
+        public interface ISelectableMember
+        {
+            string?             Name        { get; }
+            uint?               ObjectId    { get; }
+            uint                CurrentHP   { get; }
+            uint                MaxHP       { get; }
+            bool                IsDead      { get; }
+            Vector3             Position    { get; }
+            IReadOnlyList<uint> StatusesIds { get; }
+        }
+
+        public class PartyMemberSelectable(IPartyMember member) : ISelectableMember
+        {
+            public string? Name      => member.Name.ExtractText();
+            public uint?   ObjectId  => member.ObjectId;
+            public uint    CurrentHP => member.CurrentHP;
+            public uint    MaxHP     => member.MaxHP;
+            public bool    IsDead    => (member.GameObject?.IsDead ?? false) || member.CurrentHP <= 0;
+
+            public Vector3             Position    => member.Position;
+            public IReadOnlyList<uint> StatusesIds => member.Statuses.Select(s => s.StatusId).ToList();
+        }
+
+        public class BuddyMemberSelectable(Buddy.BuddyMember buddy) : ISelectableMember
+        {
+            private IGameObject? BuddyObject => DService.ObjectTable.FirstOrDefault(x => x.EntityId == buddy.EntityId);
+
+            public string? Name => BuddyObject?.Name.ExtractText();
+
+            public uint?               ObjectId    => (uint?)BuddyObject?.GameObjectId;
+            public uint                CurrentHP   => buddy.CurrentHealth;
+            public uint                MaxHP       => buddy.MaxHealth;
+            public bool                IsDead      => (BuddyObject?.IsDead ?? false) || CurrentHP <= 0;
+            public Vector3             Position    => BuddyObject?.Position ?? Vector3.Zero;
+            public IReadOnlyList<uint> StatusesIds => buddy.StatusManager.Status.ToArray().Select(x => (uint)x.StatusId).ToList();
+        }
+
+        private static unsafe List<ISelectableMember> SelectableMembers(bool reverse)
+        {
+            // party members
+            var partyList = DService.PartyList;
+            var sortedPartyList = reverse
+                                      ? partyList.OrderByDescending(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList()
+                                      : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
+            var partySelectable = sortedPartyList.Select(x => new PartyMemberSelectable(x));
+
+            // buddy members
+            var buddyList       = FetchBuddyList();
+            var buddySelectable = buddyList.Select(x => new BuddyMemberSelectable(x));
+
+            // all selectable members
+            var memberList = partySelectable.Concat<ISelectableMember>(buddySelectable).ToList();
+            return memberList;
+        }
+
+        #endregion
+
         #region Funcs
 
         public void InitTargetHealActions(Dictionary<uint, HealAction> actions)
@@ -974,28 +1052,29 @@ public class HealerHelper : DailyModuleBase
         public void InitActiveHealActions()
             => config.ActiveHealActions = config.TargetHealActions.Where(act => act.Value.On).Select(act => act.Key).ToHashSet();
 
-        private uint TargetNeedHeal(uint actionId)
+        private unsafe uint TargetNeedHeal(uint actionId)
         {
-            var partyList  = DService.PartyList;
+            // all selectable members
+            var memberList = SelectableMembers(false);
+
             var lowRatio   = 2f;
             var needHealId = UnspecificTargetId;
 
-            foreach (var member in partyList)
+            foreach (var member in memberList)
             {
-                if (member.ObjectId == 0)
+                if (member.ObjectId is null or 0)
                     continue;
 
                 var maxDistance = ActionManager.GetActionRange(actionId);
-                var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
-                if (memberDead ||
-                    Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) > maxDistance * maxDistance)
+                var withinRange = Vector3.DistanceSquared(member.Position, member.Position) <= maxDistance * maxDistance;
+                if (member.IsDead || !withinRange)
                     continue;
 
                 var ratio = member.CurrentHP / (float)member.MaxHP;
                 if (ratio < lowRatio && ratio <= config.NeedHealThreshold)
                 {
                     lowRatio   = ratio;
-                    needHealId = member.ObjectId;
+                    needHealId = member.ObjectId ?? UnspecificTargetId;
                 }
             }
 
@@ -1004,35 +1083,23 @@ public class HealerHelper : DailyModuleBase
 
         private static uint TargetNeedDispel(bool reverse = false)
         {
-            var partyList = DService.PartyList;
+            // all selectable members
+            var memberList = SelectableMembers(reverse);
 
-            // first dispel local player
-            var localStatus = DService.ObjectTable.LocalPlayer.StatusList;
-            foreach (var status in localStatus)
+            foreach (var member in memberList)
             {
-                if (PresetSheet.DispellableStatuses.ContainsKey(status.StatusId))
-                    return LocalPlayerState.EntityID;
-            }
-
-            // dispel in order (or reverse order)
-            var sortedPartyList = reverse
-                                      ? partyList.OrderByDescending(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList()
-                                      : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
-            foreach (var member in sortedPartyList)
-            {
-                if (member.ObjectId == 0)
+                if (member.ObjectId is null or 0)
                     continue;
 
                 var maxDistance = ActionManager.GetActionRange(7568);
-                var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
-                if (memberDead ||
-                    Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) > maxDistance * maxDistance)
+                var withinRange = Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance;
+                if (member.IsDead || !withinRange)
                     continue;
 
-                foreach (var status in member.Statuses)
+                foreach (var statusId in member.StatusesIds)
                 {
-                    if (PresetSheet.DispellableStatuses.ContainsKey(status.StatusId))
-                        return member.ObjectId;
+                    if (PresetSheet.DispellableStatuses.ContainsKey(statusId))
+                        return member.ObjectId ?? UnspecificTargetId;
                 }
             }
 
@@ -1041,33 +1108,51 @@ public class HealerHelper : DailyModuleBase
 
         private static uint TargetNeedRaise(uint actionId, bool reverse = false)
         {
-            var partyList = DService.PartyList;
+            // all selectable members
+            var memberList = SelectableMembers(reverse);
 
-            // raise in order (or reverse order)
-            var sortedPartyList = reverse
-                                      ? partyList.OrderByDescending(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList()
-                                      : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
-            foreach (var member in sortedPartyList)
+            foreach (var member in memberList)
             {
                 if (member.ObjectId == 0)
                     continue;
 
-                var maxDistance = ActionManager.GetActionRange(actionId);
-                var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
-                if (memberDead &&
-                    Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance)
-                    return member.ObjectId;
+                var maxDistance  = ActionManager.GetActionRange(actionId);
+                var withinRange  = Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance;
+                var memberRaised = member.StatusesIds.Contains((uint)148);
+                if (member.IsDead && !memberRaised && withinRange)
+                    return member.ObjectId ?? UnspecificTargetId;
             }
 
             return UnspecificTargetId;
         }
 
-        public bool IsHostile(IGameObject? gameObject)
+        private bool IsHostile(IGameObject? gameObject)
         {
             if (gameObject is not IBattleChara battleChara)
                 return false;
 
             return battleChara.SubKind == (byte)BattleNpcSubKind.Enemy;
+        }
+
+        private static uint FirstTankId(float range)
+        {
+            // first tank in party list
+            var partyList       = DService.PartyList;
+            var sortedPartyList = partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
+            var firstTank       = sortedPartyList.FirstOrDefault(m => m.ClassJob.Value.Role == 1);
+            if (firstTank is not null && Vector3.DistanceSquared(firstTank.Position, DService.ObjectTable.LocalPlayer.Position) <= range * range)
+                return firstTank.ObjectId;
+
+            // highest maxHP in buddy list
+            var buddyList = FetchBuddyList().OrderByDescending(x => x.MaxHealth).ToList();
+            if (buddyList.Count > 0)
+            {
+                var buddy = new BuddyMemberSelectable(buddyList[0]);
+                if (buddy.ObjectId is not null && buddy.ObjectId != 0 && Vector3.DistanceSquared(buddy.Position, DService.ObjectTable.LocalPlayer.Position) <= range * range)
+                    return buddy.ObjectId ?? LocalPlayerState.EntityID;
+            }
+
+            return LocalPlayerState.EntityID;
         }
 
         public void OnPreHeal(ref ulong targetId, ref uint actionId, ref bool isPrevented)
@@ -1090,14 +1175,8 @@ public class HealerHelper : DailyModuleBase
                             break;
 
                         case OverhealTarget.FirstTank:
-                            var partyList       = DService.PartyList;
-                            var sortedPartyList = partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
-                            var firstTank       = sortedPartyList.FirstOrDefault(m => m.ClassJob.Value.Role == 1);
-                            var maxDistance     = ActionManager.GetActionRange(actionId);
-                            targetId = firstTank is not null &&
-                                       Vector3.DistanceSquared(firstTank.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance
-                                           ? firstTank.ObjectId
-                                           : LocalPlayerState.EntityID;
+                            var maxDistance = ActionManager.GetActionRange(actionId);
+                            targetId = FirstTankId(maxDistance);
                             break;
 
                         default:
