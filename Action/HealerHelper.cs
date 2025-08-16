@@ -3,23 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using System.Web;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
 using DailyRoutines.Widgets;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Party;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using Newtonsoft.Json;
 using LuminaAction = Lumina.Excel.Sheets.Action;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
 
 
 namespace DailyRoutines.ModulesPublic;
@@ -1068,7 +1066,7 @@ public class HealerHelper : DailyModuleBase
 
                 var maxDistance  = ActionManager.GetActionRange(actionId);
                 var withinRange  = Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance;
-                var memberRaised = member.Statuses.Any(x => x.StatusId == 148);
+                var memberRaised = member.Statuses.Any(x => x.StatusId is 148);
                 var memberDead   = member.GameObject.IsDead || member.CurrentHP <= 0;
                 if (memberDead && !memberRaised && withinRange)
                     return member.ObjectId;
