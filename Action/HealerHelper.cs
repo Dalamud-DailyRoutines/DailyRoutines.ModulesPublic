@@ -13,11 +13,13 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Party;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using Newtonsoft.Json;
 using LuminaAction = Lumina.Excel.Sheets.Action;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 
 
 namespace DailyRoutines.ModulesPublic;
@@ -820,6 +822,9 @@ public class HealerHelper : DailyModuleBase
                 "Range" => rangeCandidateOrder
             };
 
+            var fallbackId       = LocalPlayerState.EntityID;
+            var fallbackPriority = 0.0;
+
             foreach (var member in candidates)
             {
                 var candidate = DService.PartyList.FirstOrDefault(m => m.ObjectId == member.id);
@@ -829,15 +834,24 @@ public class HealerHelper : DailyModuleBase
                 // member skip conditions: out of range, dead, or weakened
                 var maxDistance    = ActionManager.GetActionRange(37023);
                 var memberDead     = candidate.GameObject.IsDead || candidate.CurrentHP <= 0;
-                var memberWeakness = candidate.Statuses.Any(x => x.StatusId is 43 or 44);
                 var memberDistance = Vector3.DistanceSquared(candidate.Position, DService.ObjectTable.LocalPlayer.Position);
-                if (memberDead || memberWeakness || memberDistance > maxDistance * maxDistance)
+                if (memberDead || memberDistance > maxDistance * maxDistance)
                     continue;
 
-                return member.id;
+                // weakness: use as fallback
+                if (candidate.Statuses.Any(x => x.StatusId is 43 or 44))
+                {
+                    fallbackId       = member.id;
+                    fallbackPriority = member.priority;
+                    continue;
+                }
+
+                // candidate vs fallback
+                if (member.priority >= fallbackPriority - 2)
+                    return member.id;
             }
 
-            return LocalPlayerState.EntityID;
+            return fallbackId;
         }
 
         public void OnPrePlayCard(ref ulong targetId, ref uint actionId)
@@ -986,9 +1000,9 @@ public class HealerHelper : DailyModuleBase
                     continue;
 
                 var maxDistance = ActionManager.GetActionRange(actionId);
+                var withinRange = Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance;
                 var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
-                if (memberDead ||
-                    Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) > maxDistance * maxDistance)
+                if (memberDead || !withinRange)
                     continue;
 
                 var ratio = member.CurrentHP / (float)member.MaxHP;
@@ -1024,9 +1038,9 @@ public class HealerHelper : DailyModuleBase
                     continue;
 
                 var maxDistance = ActionManager.GetActionRange(7568);
+                var withinRange = Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance;
                 var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
-                if (memberDead ||
-                    Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) > maxDistance * maxDistance)
+                if (memberDead || !withinRange)
                     continue;
 
                 foreach (var status in member.Statuses)
@@ -1052,28 +1066,27 @@ public class HealerHelper : DailyModuleBase
                 if (member.ObjectId == 0)
                     continue;
 
-                var maxDistance = ActionManager.GetActionRange(actionId);
-                var memberDead  = member.GameObject.IsDead || member.CurrentHP <= 0;
-                if (memberDead &&
-                    Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance)
+                var maxDistance  = ActionManager.GetActionRange(actionId);
+                var withinRange  = Vector3.DistanceSquared(member.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance;
+                var memberRaised = member.Statuses.Any(x => x.StatusId == 148);
+                var memberDead   = member.GameObject.IsDead || member.CurrentHP <= 0;
+                if (memberDead && !memberRaised && withinRange)
                     return member.ObjectId;
             }
 
             return UnspecificTargetId;
         }
 
-        public bool IsHostile(IGameObject? gameObject)
+        public static unsafe bool IsHealable(IGameObject? gameObject)
         {
-            if (gameObject is not IBattleChara battleChara)
-                return false;
-
-            return battleChara.SubKind == (byte)BattleNpcSubKind.Enemy;
+            var battleChara = CharacterManager.Instance()->LookupBattleCharaByEntityId(gameObject.EntityId);
+            return battleChara is not null && ActionManager.CanUseActionOnTarget(835, (GameObject*)battleChara);
         }
 
         public void OnPreHeal(ref ulong targetId, ref uint actionId, ref bool isPrevented)
         {
             var currentTarget = DService.ObjectTable.SearchById(targetId);
-            if (IsHostile(currentTarget) || targetId == UnspecificTargetId)
+            if (targetId == UnspecificTargetId || !IsHealable(currentTarget))
             {
                 // find the target with the lowest HP ratio within range and satisfy the threshold
                 targetId = TargetNeedHeal(actionId);
