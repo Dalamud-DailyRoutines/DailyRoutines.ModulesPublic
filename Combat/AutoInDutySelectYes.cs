@@ -22,25 +22,13 @@ public class AutoInDutySelectYes : DailyModuleBase
         "パーティ", "テレポ勧誘", "テレポの勧誘", "蘇生", "アレイズ", "ホームポイント", "戦闘不能", "開始地点", "復帰地点", "レディチェック", "カウント"
     ]);
 
-    protected override void Init()
-    {
-        var currentZone = DService.ClientState.TerritoryType;
-
-        DService.ClientState.TerritoryChanged += OnZoneChanged;
-        if (GameState.ContentFinderCondition > 0) 
-            OnZoneChanged(currentZone);
-    }
-
-    private static void OnZoneChanged(ushort zone)
-    {
-        if (GameState.ContentFinderCondition > 0)
-            DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonSelectYesno);
-        else
-            DService.AddonLifecycle.UnregisterListener(OnAddonSelectYesno);
-    }
+    protected override void Init() => 
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonSelectYesno);
 
     private static unsafe void OnAddonSelectYesno(AddonEvent type, AddonArgs args)
     {
+        if (GameState.ContentFinderCondition == 0) return;
+        
         var addon = (AddonSelectYesno*)args.Addon;
         if (addon == null) return;
         
@@ -51,9 +39,6 @@ public class AutoInDutySelectYes : DailyModuleBase
         ClickSelectYesnoYes();
     }
 
-    protected override void Uninit()
-    {
-        DService.ClientState.TerritoryChanged -= OnZoneChanged;
+    protected override void Uninit() => 
         DService.AddonLifecycle.UnregisterListener(OnAddonSelectYesno);
-    }
 }

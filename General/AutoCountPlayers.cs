@@ -13,14 +13,19 @@ using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Hooking;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Info;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoCountPlayers : DailyModuleBase
+public unsafe class AutoCountPlayers : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -37,6 +42,10 @@ public class AutoCountPlayers : DailyModuleBase
     private static readonly uint LineColorBlue = ImGui.ColorConvertFloat4ToU32(LightSkyBlue);
     private static readonly uint LineColorRed  = ImGui.ColorConvertFloat4ToU32(Red);
     private static readonly uint DotColor      = ImGui.ColorConvertFloat4ToU32(RoyalBlue);
+    
+    private static readonly CompSig             InfoProxy24EndRequestSig = new("40 53 48 83 EC 20 44 0F B6 81 ?? ?? ?? ?? 48 8B D9 8B 91 ?? ?? ?? ??");
+    private delegate        void                InfoProxy24EndRequestDelegate(InfoProxy24* proxy);
+    private static          Hook<InfoProxy24EndRequestDelegate> InfoProxy24EndRequestHook;
 
     private static Config        ModuleConfig = null!;
     private static IDtrBarEntry? Entry;
@@ -44,7 +53,7 @@ public class AutoCountPlayers : DailyModuleBase
     private static readonly Dictionary<uint, byte[]> JobIcons = [];
 
     private static string SearchInput = string.Empty;
-
+    
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
@@ -62,6 +71,24 @@ public class AutoCountPlayers : DailyModuleBase
 
         PlayersManager.ReceivePlayersAround += OnUpdate;
         PlayersManager.ReceivePlayersTargetingMe += OnPlayersTargetingMeUpdate;
+        
+        InfoProxy24EndRequestHook ??= InfoProxy24EndRequestSig.GetHook<InfoProxy24EndRequestDelegate>(InfoProxy24EndRequestDetour);
+        InfoProxy24EndRequestHook.Enable();
+
+        FrameworkManager.Register(OnFrameworkUpdate, throttleMS: 10_000);
+        OnFrameworkUpdate(DService.Framework);
+    }
+
+    private static void OnFrameworkUpdate(IFramework framework)
+    {
+        if (GameState.TerritoryIntendedUse != 61 ||
+            AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentMemberList)->IsAgentActive())
+            return;
+
+        var proxy = (InfoProxy24*)InfoModule.Instance()->GetInfoProxyById((InfoProxyId)24);
+        if (proxy == null) return;
+
+        SendEvent(AgentId.ContentMemberList, 0, 1);
     }
 
     protected override void ConfigUI()
@@ -87,7 +114,7 @@ public class AutoCountPlayers : DailyModuleBase
             ModuleConfig.Save(this);
     }
 
-    protected override unsafe void OverlayUI()
+    protected override void OverlayUI()
     {
         ImGui.SetNextItemWidth(-1f);
         ImGui.InputText("###Search", ref SearchInput, 128);
@@ -134,7 +161,7 @@ public class AutoCountPlayers : DailyModuleBase
         }
     }
     
-    private static unsafe void OnDraw()
+    private static void OnDraw()
     {
         if (!ModuleConfig.DisplayLineWhenTargetingMe || PlayersManager.PlayersTargetingMe.Count == 0) return;
         
@@ -193,7 +220,12 @@ public class AutoCountPlayers : DailyModuleBase
     {
         if (Entry == null) return;
 
-        Entry.Shown = !DService.Condition[ConditionFlag.InCombat];
+        // 新月岛
+        if (GameState.TerritoryIntendedUse == 61)
+            Entry.Shown = true;
+        else
+            Entry.Shown = !DService.Condition[ConditionFlag.InCombat];
+        
         if (!Entry.Shown)
         {
             Overlay.IsOpen = false;
@@ -202,6 +234,11 @@ public class AutoCountPlayers : DailyModuleBase
 
         Entry.Text = $"{GetLoc("AutoCountPlayers-PlayersAroundCount")}: {PlayersManager.PlayersAroundCount}" +
                      (PlayersManager.PlayersTargetingMe.Count == 0 ? string.Empty : $" ({PlayersManager.PlayersTargetingMe.Count})");
+
+        // 新月岛
+        if (GameState.TerritoryIntendedUse == 61)
+            Entry.Text.Append($" / {GetLoc("AutoCountPlayers-PlayersZoneCount")}: " +
+                              $"{((InfoProxy24*)InfoModule.Instance()->GetInfoProxyById((InfoProxyId)24))->EntryCount}");
 
         if (characters.Count == 0)
         {
@@ -263,6 +300,13 @@ public class AutoCountPlayers : DailyModuleBase
             }
         }
     }
+    
+    private void InfoProxy24EndRequestDetour(InfoProxy24* proxy)
+    {
+        InfoProxy24EndRequestHook.Original(proxy);
+        
+        OnUpdate(PlayersManager.PlayersAround);
+    }
 
     private static void DrawLine(Vector2 startPos, Vector2 endPos, ICharacter chara, uint lineColor = 0)
     {
@@ -296,6 +340,8 @@ public class AutoCountPlayers : DailyModuleBase
 
     protected override void Uninit()
     {
+        FrameworkManager.Unregister(OnFrameworkUpdate);
+        
         DService.UiBuilder.Draw -= OnDraw;
         PlayersManager.ReceivePlayersAround -= OnUpdate;
         PlayersManager.ReceivePlayersTargetingMe -= OnPlayersTargetingMeUpdate;
