@@ -882,7 +882,7 @@ public class HealerHelper : DailyModuleBase
     private class EasyHealManager(EasyHealManager.Storage config)
     {
         // const
-        public static readonly HashSet<uint> RaiseActions = [125, 173, 3603, 24287, 7670, 7523];
+        public static readonly HashSet<uint> RaiseActions = [125, 173, 3603, 24287, 7670, 7523, 64556];
 
         // heal action status
         public bool TargetHealActionsLoaded => config.TargetHealActions.Count > 0;
