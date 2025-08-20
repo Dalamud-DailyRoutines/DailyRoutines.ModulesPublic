@@ -29,9 +29,9 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
 
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "SalvageItemSelector", OnAddonList);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "SalvageItemSelector", OnAddonList);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "SalvageItemSelector", OnAddonList);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "SalvageDialog",       OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "SalvageDialog",       OnAddon);
         if (IsAddonAndNodesReady(SalvageItemSelector))
             OnAddonList(AddonEvent.PostSetup, null);
     }
