@@ -1078,7 +1078,7 @@ public class HealerHelper : DailyModuleBase
         public static unsafe bool IsHealable(IGameObject? gameObject)
         {
             var battleChara = CharacterManager.Instance()->LookupBattleCharaByEntityId(gameObject.EntityId);
-            return battleChara is not null && ActionManager.CanUseActionOnTarget(835, (GameObject*)battleChara);
+            return battleChara is not null && ActionManager.CanUseActionOnTarget(3595, (GameObject*)battleChara);
         }
 
         public void OnPreHeal(ref ulong targetId, ref uint actionId, ref bool isPrevented)
