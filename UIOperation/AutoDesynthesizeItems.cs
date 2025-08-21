@@ -5,6 +5,7 @@ using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
+using KamiToolKit.Classes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -17,11 +18,12 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
-    private static Config ModuleConfig = null!;
-    private static TextNode LableNode;
-    private static CheckboxNode CheckboxNode;
-    private static TextButtonNode StartButtonNode;
-    private static TextButtonNode StopButtonNode;
+    private static Config             ModuleConfig = null!;
+    private static HorizontalListNode LayoutNode;
+    private static TextNode           LableNode;
+    private static CheckboxNode       CheckboxNode;
+    private static TextButtonNode     StartButtonNode;
+    private static TextButtonNode     StopButtonNode;
 
     protected override void Init()
     {
@@ -29,11 +31,11 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
 
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,   "SalvageItemSelector", OnAddonList);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "SalvageItemSelector", OnAddonList);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "SalvageItemSelector", OnAddonList);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "SalvageDialog",       OnAddon);
         if (IsAddonAndNodesReady(SalvageItemSelector))
-            OnAddonList(AddonEvent.PostSetup, null);
+            OnAddonList(AddonEvent.PostDraw, null);
     }
 
     private void OnAddonList(AddonEvent type, AddonArgs? args)
@@ -42,20 +44,18 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         {
             case AddonEvent.PostDraw:
                 if (SalvageItemSelector == null) return;
-
+                
                 if (LableNode == null)
                 {
                     LableNode = new()
                     {
                         IsVisible = true,
-                        Position = new(150, 8),
-                        Size = new(150, 28),
-                        Text = $"{Info.Title}",
+                        Position = new(0,2),
+                        Text = $"{Info.Title}  ",
                         FontSize = 14,
-                        AlignmentType = AlignmentType.Left,
+                        AlignmentType = AlignmentType.TopRight,
                         TextFlags = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
                     };
-                    Service.AddonController.AttachNode(LableNode, SalvageItemSelector->RootNode);
                 }
 
                 if (CheckboxNode == null)
@@ -63,8 +63,8 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                     CheckboxNode = new()
                     {
                         IsVisible = true,
-                        Position = new(240, 12),
-                        Size = new(75, 20),
+                        Position = new(0,2),
+                        Size = new(16, 16),
                         IsChecked = ModuleConfig.SkipWhenHQ,
                         LabelText = GetLoc("AutoDesynthesizeItems-SkipHQ"),
                         OnClick = newState =>
@@ -73,7 +73,6 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                             SaveConfig(ModuleConfig);
                         }
                     };
-                    Service.AddonController.AttachNode(CheckboxNode, SalvageItemSelector->RootNode);
                 }
 
                 if (StartButtonNode == null)
@@ -81,12 +80,10 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                     StartButtonNode = new()
                     {
                         IsVisible = true,
-                        Position = new(355, 10),
                         Size = new(100, 28),
                         Label = GetLoc("Start"),
                         OnClick = StartDesynthesizeAll
                     };
-                    Service.AddonController.AttachNode(StartButtonNode, SalvageItemSelector->RootNode);
                 }
 
                 StartButtonNode.IsEnabled = !TaskHelper.IsBusy;
@@ -96,15 +93,26 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                     StopButtonNode = new()
                     {
                         IsVisible = true,
-                        Position = new(460, 10),
                         Size = new(100, 28),
                         Label = GetLoc("Stop"),
                         OnClick = () => TaskHelper.Abort(),
                     };
-                    Service.AddonController.AttachNode(StopButtonNode, SalvageItemSelector->RootNode);
                 }
-
+                
+                if (LayoutNode == null)
+                {
+                    LayoutNode = new()
+                    {
+                        Width     = SalvageItemSelector->GetScaledWidth(true),
+                        IsVisible = true,
+                        Position  = new(-30, 8),
+                        Alignment = HorizontalListAnchor.Right
+                    };
+                    LayoutNode.AddNode(StopButtonNode, StartButtonNode, CheckboxNode, LableNode);
+                    Service.AddonController.AttachNode(LayoutNode, SalvageItemSelector->RootNode);
+                }
                 break;
+            
             case AddonEvent.PreFinalize:
                 Service.AddonController.DetachNode(LableNode);
                 LableNode = null;
@@ -118,6 +126,9 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                 Service.AddonController.DetachNode(StopButtonNode);
                 StopButtonNode = null;
 
+                Service.AddonController.DetachNode(LayoutNode);
+                LayoutNode = null;
+                
                 TaskHelper.Abort();
                 break;
         }
