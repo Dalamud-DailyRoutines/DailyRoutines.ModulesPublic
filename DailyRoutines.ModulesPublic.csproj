@@ -24,20 +24,13 @@
         <BaseOutputPath>$(SolutionDir)bin</BaseOutputPath>
         <SatelliteResourceLanguages>xxx</SatelliteResourceLanguages>
         <Use_DalamudPackager>false</Use_DalamudPackager>
+        <NoWarn>1701;1702;CS0414;CS8601;CS8602;CS8604;CS8603;IDE1006;IDE0300;MSB3270;MSB324;CS0649;CA2211;CS8509;CS8625;MSB3305;CS8618;CS8600;CS8605;CS8620</NoWarn>
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-        <NoWarn>1701;1702;CS0414;CS8601;CS8602;CS8604;CS8603;IDE1006;IDE0300;MSB3270;MSB324;CS0649;CA2211;CS8509;CS8625;MSB3305;CS8618;CS8600;CS8605;CS8620</NoWarn>
-        <DebugType>none</DebugType>
         <Optimize>True</Optimize>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-        <NoWarn>1701;1702;CS0414;CS8601;CS8602;CS8604;CS8603;IDE1006;IDE0300;MSB3270;MSB324;CS0649;CA2211;CS8509;CS8625;MSB3305;CS8618;CS8600;CS8605;CS8620</NoWarn>
-        <DebugType>none</DebugType>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTest|AnyCPU'">
-        <NoWarn>1701;1702;CS0414;CS8601;CS8602;CS8604;CS8603;IDE1006;IDE0300;MSB3270;MSB324;CS0649;CA2211;CS8509;CS8625;MSB3305;CS8618;CS8600;CS8605;CS8620</NoWarn>
-        <DebugType>none</DebugType>
     </PropertyGroup>
 
     <ItemGroup>
@@ -46,7 +39,7 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="System.CodeDom" Version="9.0.1" />
-        <PackageReference Include="TimeAgo" Version="1.0.8" />
+        <PackageReference Include="TimeAgo.Core" Version="1.1.0" />
     </ItemGroup>
 
     <ItemGroup>

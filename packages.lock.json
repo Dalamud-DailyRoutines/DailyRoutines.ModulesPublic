@@ -20,11 +20,11 @@
         "resolved": "9.0.1",
         "contentHash": "2J5uq+2smnj+u1jlyVJ6BGGqaK9fHcK/EwN7mbsuPqTI6dZr86br8Cg6o/5B+icQ9ANTvTDpJjnhDNtYYZijHQ=="
       },
-      "TimeAgo": {
+      "TimeAgo.Core": {
         "type": "Direct",
-        "requested": "[1.0.8, )",
-        "resolved": "1.0.8",
-        "contentHash": "sXT3CxKDXyoG1/JxClqBBTfHjDENhsqJSVbhseW08lc/rSsMjOnhOh6YTrqIXtm9eTcbWEo4DEtn57KDlIxZaA=="
+        "requested": "[1.1.0, )",
+        "resolved": "1.1.0",
+        "contentHash": "vECozrzeWThMPPXtBdpATwfh+5eGqboZILOYYckSVZSn54JC6L+fdfB307Xu2UDtPvB4kx/tfwGy5+1VgkATfA=="
       }
     }
   }
