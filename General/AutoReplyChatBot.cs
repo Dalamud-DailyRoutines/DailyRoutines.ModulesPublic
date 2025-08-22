@@ -203,7 +203,7 @@ public class AutoReplyChatBot : DailyModuleBase
     private static async Task<string?> GenerateReplyAsync(string userText, Config cfg, CancellationToken ct)
     {
         if (cfg.ApiKey.IsNullOrEmpty() || cfg.BaseUrl.IsNullOrEmpty() || cfg.Model.IsNullOrEmpty())
-            throw new InvalidOperationException(GetLoc("AutoReplyChatBot-AiNotConfigured"));
+            return null;
 
         var url = cfg.BaseUrl!.TrimEnd('/') + "/chat/completions";
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
