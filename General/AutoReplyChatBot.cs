@@ -197,13 +197,13 @@ public class AutoReplyChatBot : DailyModuleBase
 
         ChatHelper.SendMessage($"/tell {target} {reply}");
         SetCooldown();
-        NotificationInfo(GetLoc("AiRepliedTo", target), reply);
+        NotificationInfo(GetLoc("AutoReplyChatBot-AiRepliedTo", target), reply);
     }
 
     private static async Task<string?> GenerateReplyAsync(string userText, Config cfg, CancellationToken ct)
     {
         if (cfg.ApiKey.IsNullOrEmpty() || cfg.BaseUrl.IsNullOrEmpty() || cfg.Model.IsNullOrEmpty())
-            throw new InvalidOperationException(GetLoc("AiNotConfigured"));
+            throw new InvalidOperationException(GetLoc("AutoReplyChatBot-AiNotConfigured"));
 
         var url = cfg.BaseUrl!.TrimEnd('/') + "/chat/completions";
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
