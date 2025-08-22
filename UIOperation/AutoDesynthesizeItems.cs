@@ -3,7 +3,6 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using KamiToolKit.Classes;
 
@@ -20,10 +19,8 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
 
     private static Config             ModuleConfig = null!;
     private static HorizontalListNode LayoutNode;
-    private static TextNode           LableNode;
     private static CheckboxNode       CheckboxNode;
-    private static TextButtonNode     StartButtonNode;
-    private static TextButtonNode     StopButtonNode;
+    private static TextButtonNode     ButtonNode;
 
     protected override void Init()
     {
@@ -44,19 +41,6 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         {
             case AddonEvent.PostDraw:
                 if (SalvageItemSelector == null) return;
-                
-                if (LableNode == null)
-                {
-                    LableNode = new()
-                    {
-                        IsVisible = true,
-                        Position = new(0,2),
-                        Text = $"{Info.Title}  ",
-                        FontSize = 14,
-                        AlignmentType = AlignmentType.TopRight,
-                        TextFlags = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
-                    };
-                }
 
                 if (CheckboxNode == null)
                 {
@@ -75,27 +59,18 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                     };
                 }
 
-                if (StartButtonNode == null)
+                if (ButtonNode == null)
                 {
-                    StartButtonNode = new()
+                    ButtonNode = new()
                     {
                         IsVisible = true,
-                        Size = new(100, 28),
-                        Label = GetLoc("Start"),
-                        OnClick = StartDesynthesizeAll
-                    };
-                }
-
-                StartButtonNode.IsEnabled = !TaskHelper.IsBusy;
-
-                if (StopButtonNode == null)
-                {
-                    StopButtonNode = new()
-                    {
-                        IsVisible = true,
-                        Size = new(100, 28),
-                        Label = GetLoc("Stop"),
-                        OnClick = () => TaskHelper.Abort(),
+                        Size = new (200, 28),
+                        Label = $"{Info.Title}",
+                        OnClick = () =>
+                        {
+                            StartDesynthesizeAll();
+                            ToggleButtonNode(true);
+                        },
                     };
                 }
                 
@@ -108,24 +83,16 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                         Position  = new(-30, 8),
                         Alignment = HorizontalListAnchor.Right
                     };
-                    LayoutNode.AddNode(StopButtonNode, StartButtonNode, CheckboxNode, LableNode);
+                    LayoutNode.AddNode(ButtonNode, CheckboxNode);
                     Service.AddonController.AttachNode(LayoutNode, SalvageItemSelector->RootNode);
                 }
                 break;
             
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(LableNode);
-                LableNode = null;
-
                 Service.AddonController.DetachNode(CheckboxNode);
                 CheckboxNode = null;
-
-                Service.AddonController.DetachNode(StartButtonNode);
-                StartButtonNode = null;
-
-                Service.AddonController.DetachNode(StopButtonNode);
-                StopButtonNode = null;
-
+                Service.AddonController.DetachNode(ButtonNode);
+                ButtonNode = null;
                 Service.AddonController.DetachNode(LayoutNode);
                 LayoutNode = null;
                 
@@ -142,10 +109,31 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         Callback(SalvageDialog, true, 0, 0);
     }
 
+    private void ToggleButtonNode(bool toStop)
+    {
+        if (toStop)
+        {
+            ButtonNode.Label = GetLoc("Stop");
+            ButtonNode.OnClick = () =>
+            {
+                TaskHelper.Abort();
+                ToggleButtonNode(false);
+            };
+        }
+        else
+        {
+            ButtonNode.Label = $"{Info.Title}";
+            ButtonNode.OnClick = () =>
+            {
+                StartDesynthesizeAll();
+                ToggleButtonNode(true);
+            };
+        }
+    }
+
     private void StartDesynthesizeAll()
     {
         if (TaskHelper.IsBusy) return;
-
         TaskHelper.Enqueue(StartDesynthesize, "开始分解全部装备");
     }
 
@@ -158,6 +146,7 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         if (itemAmount == 0)
         {
             TaskHelper.Abort();
+            ToggleButtonNode(false);
             return true;
         }
 
