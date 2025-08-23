@@ -162,7 +162,6 @@ public class AutoReplyChatBot : DailyModuleBase
         using (ImRaii.PushIndent())
         {
             var keys = Histories.Keys.ToArray();
-            Array.Sort(keys, StringComparer.OrdinalIgnoreCase);
 
             var noneLabel = GetLoc("None");
             var displayKeys = new List<string>(keys.Length + 1) { string.Empty };
@@ -174,16 +173,18 @@ public class AutoReplyChatBot : DailyModuleBase
             var currentLabel = HistKeyIndex == 0 ? noneLabel : displayKeys[HistKeyIndex];
 
             ImGui.SetNextItemWidth(fieldW);
-            if (ImGui.BeginCombo(GetLoc("AutoReplyChatBot-UserKey"), currentLabel))
+            using (var combo = ImRaii.Combo(GetLoc("AutoReplyChatBot-UserKey"), currentLabel))
             {
-                for (var i = 0; i < displayKeys.Count; i++)
+                if (combo)
                 {
-                    var label = i == 0 ? noneLabel : displayKeys[i];
-                    var selected = (i == HistKeyIndex);
-                    if (ImGui.Selectable(label, selected))
-                        HistKeyIndex = i;
+                    for (var i = 0; i < displayKeys.Count; i++)
+                    {
+                        var label    = i == 0 ? noneLabel : displayKeys[i];
+                        var selected = (i == HistKeyIndex);
+                        if (ImGui.Selectable(label, selected))
+                            HistKeyIndex = i;
+                    }
                 }
-                ImGui.EndCombo();
             }
 
             if (HistKeyIndex > 0)
@@ -191,22 +192,23 @@ public class AutoReplyChatBot : DailyModuleBase
                 var currentKey = displayKeys[HistKeyIndex];
                 var entries = Histories.TryGetValue(currentKey, out var list) ? list.ToList() : [];
 
-                ImGui.BeginChild("##histViewer", new System.Numerics.Vector2(promptW, promptH), true);
-
-                var isAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 2f;
-                foreach (var (role, text) in entries)
+                using (ImRaii.Child("##histViewer", new System.Numerics.Vector2(promptW, promptH), true))
                 {
-                    var isUser = role.Equals("user", StringComparison.OrdinalIgnoreCase);
-                    ImGui.PushStyleColor(ImGuiCol.Text, isUser
-                        ? new System.Numerics.Vector4(0.85f, 0.90f, 1f, 1f)
-                        : new System.Numerics.Vector4(0.90f, 0.85f, 1f, 1f));
-                    ImGui.TextWrapped($"[{role}] {text}");
-                    ImGui.PopStyleColor();
-                    ImGui.Separator();
+                    var isAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 2f;
+
+                    foreach (var (role, text) in entries)
+                    {
+                        var isUser = role.Equals("user", StringComparison.OrdinalIgnoreCase);
+                        var color  = isUser
+                                         ? new System.Numerics.Vector4(0.85f, 0.90f, 1f, 1f)
+                                         : new System.Numerics.Vector4(0.90f, 0.85f, 1f, 1f);
+                        using (ImRaii.PushColor(ImGuiCol.Text, color))
+                            ImGui.TextWrapped($"[{role}] {text}");
+                        ImGui.Separator();
+                    }
+                    if (isAtBottom)
+                        ImGui.SetScrollHereY(1f); // 自动滚到底
                 }
-                if (isAtBottom)
-                    ImGui.SetScrollHereY(1f);
-                ImGui.EndChild();
             }
         }
     }
