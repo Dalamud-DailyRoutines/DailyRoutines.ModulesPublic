@@ -102,7 +102,7 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null || localPlayer->IsDead()) return;
         
-        if (OccupiedInEvent || IsOnMount) return;
+        if (OccupiedInEvent || IsOnMount || !IsScreenReady() || IsInDuty()) return;
 
         if (!LuminaGetter.TryGetRow<ClassJob>(localPlayer->ClassJob, out var classJob)) return;
         if (!ModuleConfig.NotBattleJobUsingGysahl && classJob.DohDolJobIndex != -1) return;
@@ -139,6 +139,8 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static void SwitchCommand(ChocoboStance command) =>
         UseActionManager.UseAction(ActionType.BuddyAction, (uint)command);
+
+    private static bool IsInDuty() => GameState.ContentFinderCondition != 0;
 
     protected override void Uninit()
     {
