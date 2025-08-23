@@ -67,7 +67,7 @@ public class AutoReplyChatBot : DailyModuleBase
         {
             // API Key
             ImGui.SetNextItemWidth(fieldW);
-            if (ImGui.InputText("API Key", ref ModuleConfig.APIKey, 256))
+            if (ImGui.InputText("API Key", ref ModuleConfig.APIKey, 256, ImGuiInputTextFlags.Password))
                 SaveConfig(ModuleConfig);
             ImGuiOm.TooltipHover(ModuleConfig.APIKey);
 
