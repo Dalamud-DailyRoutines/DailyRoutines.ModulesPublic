@@ -231,7 +231,7 @@ public class AutoReplyChatBot : DailyModuleBase
 
         var sys  = string.IsNullOrWhiteSpace(cfg.SystemPrompt) ? DefaultSystemPrompt : cfg.SystemPrompt;
         var context = BuildContextSummary(); 
-        var hist = SnapshotHistory(historyKey);
+        var hist = Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
         
         var messages = new List<object>
         {
@@ -291,12 +291,9 @@ public class AutoReplyChatBot : DailyModuleBase
         {
             list.Add((role, text));
             if (list.Count > ModuleConfig.MaxHistory)
-                list.RemoveRange(0, list.Count - ModuleConfig.MaxHistory);
+                list.RemoveAt(0);
         }
     }
-
-    private static List<(string role, string text)> SnapshotHistory(string key) => 
-        !Histories.TryGetValue(key, out var list) ? [] : list.ToList();
 
     private static string BuildContextSummary()
     {
