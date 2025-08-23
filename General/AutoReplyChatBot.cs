@@ -193,6 +193,7 @@ public class AutoReplyChatBot : DailyModuleBase
         for (var i = 0u; i < proxy->EntryCount; i++)
         {
             var entry = proxy->GetEntry(i);
+            if (entry == null) continue;
             var fName = SeString.Parse(entry->Name).TextValue;
             var fWorld = entry->HomeWorld;
             if (fWorld == worldId && fName == name)
