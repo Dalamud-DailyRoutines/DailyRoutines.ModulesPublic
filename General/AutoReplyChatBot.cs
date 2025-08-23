@@ -207,7 +207,7 @@ public class AutoReplyChatBot : DailyModuleBase
                         ImGui.Separator();
                     }
                     if (isAtBottom)
-                        ImGui.SetScrollHereY(1f); // 自动滚到底
+                        ImGui.SetScrollHereY(1f);
                 }
             }
         }
