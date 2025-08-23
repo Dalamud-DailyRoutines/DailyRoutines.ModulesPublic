@@ -46,12 +46,6 @@ public class AutoReplyChatBot : DailyModuleBase
         var promptH    = 200f * GlobalFontScale;
         var promptW    = ImGui.GetContentRegionAvail().X * 0.9f;
         
-        /* 暂时只开放私聊
-           ImGui.TextUnformatted(GetLoc("Channels"));
-           if (ImGui.Checkbox(GetLoc("EnableTell"), ref ModuleConfig.EnableTell))
-               SaveConfig(ModuleConfig);
-        */
-        
         if (ImGui.Checkbox(GetLoc("AutoReplyChatBot-OnlyReplyNonFriendTell"), ref ModuleConfig.OnlyReplyNonFriendTell))
             SaveConfig(ModuleConfig);
 
@@ -118,7 +112,6 @@ public class AutoReplyChatBot : DailyModuleBase
     {
         try
         {
-            // if (!ModuleConfig.EnableTell) return; 暂时只处理私聊
             if (type != XivChatType.TellIncoming) return;
             if (!IsCooldownReady()) return;
             
@@ -231,13 +224,11 @@ public class AutoReplyChatBot : DailyModuleBase
     
     private class Config : ModuleConfiguration
     {
-        // public bool   EnableTell            = true;暂时只处理私聊
         public bool   OnlyReplyNonFriendTell = true;
-        public int    CooldownSeconds       = 5;
-
-        public string ApiKey       = string.Empty;
-        public string BaseUrl      = "https://api.deepseek.com/v1";
-        public string Model        = "deepseek-chat";
-        public string SystemPrompt = string.Empty;
+        public int    CooldownSeconds        = 5;
+        public string ApiKey                 = string.Empty;
+        public string BaseUrl                = "https://api.deepseek.com/v1";
+        public string Model                  = "deepseek-chat";
+        public string SystemPrompt           = string.Empty;
     }
 }
