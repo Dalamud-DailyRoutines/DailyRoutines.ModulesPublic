@@ -67,7 +67,7 @@ public class AutoReplyChatBot : DailyModuleBase
         {
             // API Key
             ImGui.SetNextItemWidth(fieldW);
-            if (ImGui.InputText("API Key", ref ModuleConfig.APIKey, 256, ImGuiInputTextFlags.Password))
+            if (ImGui.InputText("API Key", ref ModuleConfig.APIKey, 256))
                 SaveConfig(ModuleConfig);
             ImGuiOm.TooltipHover(ModuleConfig.APIKey);
 
@@ -114,7 +114,10 @@ public class AutoReplyChatBot : DailyModuleBase
             {
                 var reply = string.Empty;
                 AppendHistory(histKey, "user", text);
-                try { reply = await GenerateReplyAsync(ModuleConfig, histKey, CancellationToken.None); }
+                try
+                {
+                    reply = await GenerateReplyAsync(ModuleConfig, histKey, CancellationToken.None);
+                }
                 catch (Exception ex)
                 {
                     NotificationError(GetLoc("AutoReplyChatBot-ErrorTitle"));
@@ -285,7 +288,6 @@ public class AutoReplyChatBot : DailyModuleBase
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         var list = Histories.GetOrAdd(key, _ => new());
-        lock (list)
         {
             list.Add((role, text));
             if (list.Count > ModuleConfig.MaxHistory)
@@ -298,26 +300,15 @@ public class AutoReplyChatBot : DailyModuleBase
 
     private static string BuildContextSummary()
     {
-        try
-        {
-            var me = DService.ClientState.LocalPlayer;
-            var jobText  = me?.ClassJob.Value.Name.ExtractText() ?? string.Empty;
-            var level  = me?.Level ?? 1;
-            var myName   = me?.Name.ExtractText() ?? string.Empty;
-
-            var myWorld = me?.HomeWorld.Value.Name.ExtractText() ?? string.Empty;
-
-            var terrId = DService.ClientState.TerritoryType;
-            var terrName = LuminaWrapper.GetZonePlaceName(terrId);
-            
-            return $"[GAME CONTEXT] [ABOUT YOU] \n" +
-                   $"YourName:{myName}, YourJob:{jobText}, Level:{level}, HomeWorld:{myWorld}\n" +
-                   $"CurrentTerritory:{terrName}";
-        }
-        catch
-        {
-            return "[GAME CONTEXT]\nUnavailable";
-        }
+        var jobText  = LocalPlayerState.ClassJobData.Name;
+        var level  = LocalPlayerState.CurrentLevel;
+        var myName   = LocalPlayerState.Name;
+        var myWorld = GameState.CurrentWorldData.Name;
+        var terrName = LuminaWrapper.GetZonePlaceName(GameState.TerritoryType);
+        
+        return $"[GAME CONTEXT] [ABOUT YOU] \n" +
+               $"YourName:{myName}, YourJob:{jobText}, Level:{level}, HomeWorld:{myWorld}\n" +
+               $"CurrentTerritory:{terrName}";
     }
     
     private static readonly ConcurrentDictionary<string, List<(string role, string text)>> Histories =
