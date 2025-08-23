@@ -29,16 +29,20 @@ public class AutoReplyChatBot : DailyModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private static Config       ModuleConfig = null!;
-    private static readonly HttpClient Http  = HttpClientHelper.Get();
-
+    private static Config ModuleConfig = null!;
+    private static string TestChatInput = "";
+    
+    private static DateTime LastTs = DateTime.MinValue;
+    
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
+        
         DService.Chat.ChatMessage += OnChat;
     }
 
-    protected override void Uninit() => DService.Chat.ChatMessage -= OnChat;
+    protected override void Uninit() => 
+        DService.Chat.ChatMessage -= OnChat;
 
     protected override void ConfigUI()
     {
@@ -55,40 +59,94 @@ public class AutoReplyChatBot : DailyModuleBase
             SaveConfig(ModuleConfig);
 
         ImGui.NewLine();
-        ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-ApiConfig"));
-
-        // ApiKey
-        ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText(GetLoc("AutoReplyChatBot-ApiKey"), ref ModuleConfig.ApiKey, 256, ImGuiInputTextFlags.Password))
-            SaveConfig(ModuleConfig);
-        ImGui.SameLine();
-        if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-HowToGetApiKey")))
-            Util.OpenLink(GetLoc("AutoReplyChatBot-HowToGetApiKeyUrl"));
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(GetLoc("AutoReplyChatBot-HowToGetApiKeyDesc"));
-
-        // BaseUrl
-        ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText(GetLoc("AutoReplyChatBot-BaseUrl"), ref  ModuleConfig.BaseUrl, 256))
-            SaveConfig(ModuleConfig);
         
-        // Model
-        ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText(GetLoc("AutoReplyChatBot-Model"), ref ModuleConfig.Model, 128))
-            SaveConfig(ModuleConfig);
-        
-        ImGui.NewLine();
-        ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-SystemPrompt"));
+        ImGui.TextColored(LightSkyBlue, GetLoc("AutoReplyChatBot-APIConfig"));
+
+        using (ImRaii.PushIndent())
         {
-            if (ImGui.InputTextMultiline("##sysPrompt", ref ModuleConfig.SystemPrompt, 4096, new Vector2(promptW, promptH)))
+            // API Key
+            ImGui.SetNextItemWidth(fieldW);
+            if (ImGui.InputText("API Key", ref ModuleConfig.APIKey, 256))
                 SaveConfig(ModuleConfig);
-            if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-RestoreDefaultPrompt")))
-            {
-                ModuleConfig.SystemPrompt = DefaultSystemPrompt;
+            ImGuiOm.TooltipHover(ModuleConfig.APIKey);
+
+            // Base Url
+            ImGui.SetNextItemWidth(fieldW);
+            if (ImGui.InputText("Base URL", ref ModuleConfig.BaseUrl, 256))
                 SaveConfig(ModuleConfig);
-            }
+
+            // Model
+            ImGui.SetNextItemWidth(fieldW);
+            if (ImGui.InputText(GetLoc("AutoReplyChatBot-Model"), ref ModuleConfig.Model, 128))
+                SaveConfig(ModuleConfig);
         }
         
+        ImGui.NewLine();
+        
+        ImGui.TextColored(LightSkyBlue, GetLoc("AutoReplyChatBot-SystemPrompt"));
+        
+        ImGui.SameLine();
+        if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-RestoreDefaultPrompt")))
+        {
+            ModuleConfig.SystemPrompt = DefaultSystemPrompt;
+            SaveConfig(ModuleConfig);
+        }
+        
+        using (ImRaii.PushIndent())
+        {
+            if (ImGui.InputTextMultiline("##sysPrompt", ref ModuleConfig.SystemPrompt, 4096, new(promptW, promptH)))
+                SaveConfig(ModuleConfig);
+        }
+        
+        ImGui.NewLine();
+        
+        ImGui.TextColored(LightSkyBlue, GetLoc("AutoReplyChatBot-TestChat"));
+        
+        ImGui.SameLine();
+        if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-Send")))
+        {
+            if (string.IsNullOrWhiteSpace(TestChatInput)) return;
+
+            var text = TestChatInput;
+            Task.Run(async () =>
+            {
+                var reply = string.Empty;
+                try { reply = await GenerateReplyAsync(text, ModuleConfig, CancellationToken.None); }
+                catch (Exception ex)
+                {
+                    NotificationError(GetLoc("AutoReplyChatBot-ErrorTitle"));
+                    Error($"{GetLoc("AutoReplyChatBot-ErrorTitle")}:", ex);
+
+                    reply = string.Empty;
+                }
+
+                if (string.IsNullOrWhiteSpace(reply)) return;
+
+                var builder = new SeStringBuilder();
+
+                builder.AddUiForeground(25)
+                       .AddText($"[{Info.Title}]")
+                       .AddUiForegroundOff()
+                       .Add(NewLinePayload.Payload)
+                       .AddUiForeground(537)
+                       .AddText($">> {ModuleConfig.Model}: ")
+                       .AddText(text)
+                       .AddUiForegroundOff()
+                       .Add(NewLinePayload.Payload)
+                       .AddUiForeground(537)
+                       .AddText($"{ModuleConfig.Model} >> ")
+                       .AddText(reply)
+                       .AddUiForegroundOff();
+                
+                Chat(builder.Build());
+            });
+        }
+
+        using (ImRaii.PushIndent())
+        {
+            ImGui.SetNextItemWidth(promptW);
+            ImGui.InputText("##TestInput", ref TestChatInput, 1024);
+        }
     }
     
     private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
@@ -129,32 +187,38 @@ public class AutoReplyChatBot : DailyModuleBase
     {
         var target = $"{name}@{world}";
         var reply = string.Empty;
+        
         try
         {
             reply = await GenerateReplyAsync(userText, ModuleConfig, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            NotificationError(ex.Message, GetLoc("AutoReplyChatBot-ErrorTitle"));
-            Error("Send auto reply failed:", ex);
+            NotificationError(GetLoc("AutoReplyChatBot-ErrorTitle"));
+            Error($"{GetLoc("AutoReplyChatBot-ErrorTitle")}:", ex);
+
+            reply = string.Empty;
         }
-        if (string.IsNullOrWhiteSpace(reply)) return;
+        
+        if (string.IsNullOrWhiteSpace(reply)) 
+            return;
 
         SetCooldown();
+        
         ChatHelper.SendMessage($"/tell {target} {reply}");
         NotificationInfo(reply, $"{GetLoc("AutoReplyChatBot-AutoRepliedTo")}{target}");
     }
 
     private static async Task<string?> GenerateReplyAsync(string userText, Config cfg, CancellationToken ct)
     {
-        if (cfg.ApiKey.IsNullOrWhitespace() || cfg.BaseUrl.IsNullOrWhitespace() || cfg.Model.IsNullOrWhitespace())
+        if (cfg.APIKey.IsNullOrWhitespace() || cfg.BaseUrl.IsNullOrWhitespace() || cfg.Model.IsNullOrWhitespace())
             return null;
 
-        var url = cfg.BaseUrl!.TrimEnd('/') + "/chat/completions";
+        var       url = cfg.BaseUrl.TrimEnd('/') + "/chat/completions";
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.ApiKey);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.APIKey);
 
-        var sys  = string.IsNullOrWhiteSpace(cfg.SystemPrompt) ? DefaultSystemPrompt : cfg.SystemPrompt!;
+        var sys  = string.IsNullOrWhiteSpace(cfg.SystemPrompt) ? DefaultSystemPrompt : cfg.SystemPrompt;
         var body = new
         {
             model       = cfg.Model,
@@ -170,7 +234,7 @@ public class AutoReplyChatBot : DailyModuleBase
         var json = JsonSerializer.Serialize(body);
         req.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        using var resp = await Http.SendAsync(req, ct).ConfigureAwait(false);
+        using var resp = await HttpClientHelper.Get().SendAsync(req, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
 
         await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
@@ -210,7 +274,6 @@ public class AutoReplyChatBot : DailyModuleBase
             .Replace("\\n", "\n")
             .Replace("\\r", "\n");
     
-    private static DateTime LastTs = DateTime.MinValue;
 
     private static bool IsCooldownReady()
     {
@@ -224,7 +287,7 @@ public class AutoReplyChatBot : DailyModuleBase
     {
         public bool   OnlyReplyNonFriendTell = true;
         public int    CooldownSeconds        = 5;
-        public string ApiKey                 = string.Empty;
+        public string APIKey                 = string.Empty;
         public string BaseUrl                = "https://api.deepseek.com/v1";
         public string Model                  = "deepseek-chat";
         public string SystemPrompt           = DefaultSystemPrompt;
