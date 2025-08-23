@@ -164,35 +164,42 @@ public class AutoReplyChatBot : DailyModuleBase
             var keys = Histories.Keys.ToArray();
             Array.Sort(keys, StringComparer.OrdinalIgnoreCase);
 
-            if (keys.Length == 0)
-                ImGui.TextDisabled($"{GetLoc("None")}{GetLoc("AutoReplyChatBot-ChatHistory")}");
-            else
+            var noneLabel = GetLoc("None");
+            var displayKeys = new List<string>(keys.Length + 1) { string.Empty };
+            displayKeys.AddRange(keys);
+            
+            if (HistKeyIndex < 0 || HistKeyIndex >= displayKeys.Count)
+                HistKeyIndex = 0;
+            
+            var currentLabel = HistKeyIndex == 0 ? noneLabel : displayKeys[HistKeyIndex];
+
+            ImGui.SetNextItemWidth(fieldW);
+            if (ImGui.BeginCombo(GetLoc("AutoReplyChatBot-UserKey"), currentLabel))
             {
-                var currentKey = keys[HistKeyIndex];
-                
-                ImGui.SetNextItemWidth(fieldW);
-                if (ImGui.BeginCombo(GetLoc("AutoReplyChatBot-UserKey"), currentKey))
+                for (var i = 0; i < displayKeys.Count; i++)
                 {
-                    for (var i = 0; i < keys.Length; i++)
-                    {
-                        var selected = (i == HistKeyIndex);
-                        if (ImGui.Selectable(keys[i], selected))
-                            HistKeyIndex = i;
-                    }
-                    ImGui.EndCombo();
+                    var label = i == 0 ? noneLabel : displayKeys[i];
+                    var selected = (i == HistKeyIndex);
+                    if (ImGui.Selectable(label, selected))
+                        HistKeyIndex = i;
                 }
-                
+                ImGui.EndCombo();
+            }
+
+            if (HistKeyIndex > 0)
+            {
+                var currentKey = displayKeys[HistKeyIndex];
                 var entries = Histories.TryGetValue(currentKey, out var list) ? list.ToList() : [];
-                
+
                 ImGui.BeginChild("##histViewer", new System.Numerics.Vector2(promptW, promptH), true);
-                
+
                 var isAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 2f;
                 foreach (var (role, text) in entries)
                 {
                     var isUser = role.Equals("user", StringComparison.OrdinalIgnoreCase);
                     ImGui.PushStyleColor(ImGuiCol.Text, isUser
-                                                            ? new System.Numerics.Vector4(0.85f, 0.90f, 1f, 1f)
-                                                            : new System.Numerics.Vector4(0.90f, 0.85f, 1f, 1f));
+                        ? new System.Numerics.Vector4(0.85f, 0.90f, 1f, 1f)
+                        : new System.Numerics.Vector4(0.90f, 0.85f, 1f, 1f));
                     ImGui.TextWrapped($"[{role}] {text}");
                     ImGui.PopStyleColor();
                     ImGui.Separator();
