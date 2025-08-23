@@ -106,14 +106,6 @@ public class AutoReplyChatBot : DailyModuleBase
         
     }
     
-    private static string DefaultSystemPrompt { get; } =
-        GetLoc("AutoReplyChatBot-DefaultPrompt")
-            .Replace("\r\n", "\n")
-            .Replace("\r", "\n")
-            .Replace("\\r\\n", "\n")
-            .Replace("\\n", "\n")
-            .Replace("\\r", "\n");
-    
     private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
         try
@@ -217,6 +209,14 @@ public class AutoReplyChatBot : DailyModuleBase
         }
         return false;
     }
+    
+    private static string DefaultSystemPrompt { get; } =
+        GetLoc("AutoReplyChatBot-DefaultPrompt")
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n")
+            .Replace("\\r\\n", "\n")
+            .Replace("\\n", "\n")
+            .Replace("\\r", "\n");
     
     private static DateTime LastTs = DateTime.MinValue;
 
