@@ -58,13 +58,9 @@ public class AutoReplyChatBot : DailyModuleBase
         ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-ApiConfig"));
 
         // ApiKey
-        var apiKey = ModuleConfig.ApiKey;
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText(GetLoc("AutoReplyChatBot-ApiKey"), ref apiKey, 256, ImGuiInputTextFlags.Password))
-        {
-            ModuleConfig.ApiKey = apiKey;
+        if (ImGui.InputText(GetLoc("AutoReplyChatBot-ApiKey"), ref ModuleConfig.ApiKey, 256, ImGuiInputTextFlags.Password))
             SaveConfig(ModuleConfig);
-        }
         ImGui.SameLine();
         if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-HowToGetApiKey")))
             Util.OpenLink(GetLoc("AutoReplyChatBot-HowToGetApiKeyUrl"));
@@ -72,31 +68,20 @@ public class AutoReplyChatBot : DailyModuleBase
             ImGui.SetTooltip(GetLoc("AutoReplyChatBot-HowToGetApiKeyDesc"));
 
         // BaseUrl
-        var baseUrl = ModuleConfig.BaseUrl;
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText(GetLoc("AutoReplyChatBot-BaseUrl"), ref baseUrl, 256))
-        {
-            ModuleConfig.BaseUrl = baseUrl;
+        if (ImGui.InputText(GetLoc("AutoReplyChatBot-BaseUrl"), ref  ModuleConfig.BaseUrl, 256))
             SaveConfig(ModuleConfig);
-        }
         
         // Model
-        var model = ModuleConfig.Model;
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText(GetLoc("AutoReplyChatBot-Model"), ref model, 128))
-        {
-            ModuleConfig.Model = model;
+        if (ImGui.InputText(GetLoc("AutoReplyChatBot-Model"), ref ModuleConfig.Model, 128))
             SaveConfig(ModuleConfig);
-        }
         
+        ImGui.NewLine();
         ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-SystemPrompt"));
         {
-            var prompt = string.IsNullOrEmpty(ModuleConfig.SystemPrompt) ? DefaultSystemPrompt : ModuleConfig.SystemPrompt;
-            if (ImGui.InputTextMultiline("##sysPrompt", ref prompt, 4096, new Vector2(promptW, promptH)))
-            {
-                ModuleConfig.SystemPrompt = prompt;
+            if (ImGui.InputTextMultiline("##sysPrompt", ref ModuleConfig.SystemPrompt, 4096, new Vector2(promptW, promptH)))
                 SaveConfig(ModuleConfig);
-            }
             if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-RestoreDefaultPrompt")))
             {
                 ModuleConfig.SystemPrompt = DefaultSystemPrompt;
@@ -108,56 +93,61 @@ public class AutoReplyChatBot : DailyModuleBase
     
     private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
-        try
-        {
-            if (type != XivChatType.TellIncoming) return;
-            if (!IsCooldownReady()) return;
-            
-            var (name, world) = ExtractNameWorld(ref sender);
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(world)) return;
-            if (ModuleConfig.OnlyReplyNonFriendTell && IsFriend(name, world)) return;
-            
-            var userText = message.TextValue;
-            if (string.IsNullOrWhiteSpace(userText)) return;
+        if (type != XivChatType.TellIncoming) return;
+        if (!IsCooldownReady()) return;
+        
+        var (name, worldId, worldName) = ExtractNameWorld(ref sender);
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(worldName)) return;
+        if (ModuleConfig.OnlyReplyNonFriendTell && IsFriend(name, worldId)) return;
+        
+        var userText = message.TextValue;
+        if (string.IsNullOrWhiteSpace(userText)) return;
 
-            _ = GenerateAndReplyAsync(name, world, userText);
-        }
-        catch (Exception ex)
-        {
-            DService.Log.Error(ex, "[AutoReplyChatBot] Chat handler error.");
-            NotificationError(ex.Message, GetLoc("AutoReplyChatBot-ErrorTitle"));
-        }
+        _ = GenerateAndReplyAsync(name, worldName, userText);
     }
 
-    private static (string name, string? world) ExtractNameWorld(ref SeString sender)
+    private static (string name, ushort worldId, string? worldName) ExtractNameWorld(ref SeString sender)
     {
         var p = sender.Payloads?.OfType<PlayerPayload>().FirstOrDefault();
         if (p != null)
         {
-            var name  = p.PlayerName;
-            var world = p.World.Value.Name.ExtractText();
+            var name     = p.PlayerName;
+            var worldId  = (ushort)p.World.RowId;
+            var worldStr = p.World.Value.Name.ExtractText();
             if (!string.IsNullOrEmpty(name))
-                return (name, world);
+                return (name, worldId, worldStr);
         }
+        
         var text = sender.TextValue?.Trim() ?? string.Empty;
         var idx  = text.IndexOf('@');
-        return idx < 0 ? (text, null) : (text[..idx].Trim(), text[(idx + 1)..].Trim());
+        var nm   = idx < 0 ? text : text[..idx].Trim();
+        var wn   = idx < 0 ? null : text[(idx + 1)..].Trim();
+        return (nm, 0, wn);
     }
     
     private static async Task GenerateAndReplyAsync(string name, string world, string userText)
     {
         var target = $"{name}@{world}";
-        var reply = await GenerateReplyAsync(userText, ModuleConfig, CancellationToken.None);
+        var reply = string.Empty;
+        try
+        {
+            reply = await GenerateReplyAsync(userText, ModuleConfig, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            NotificationError(ex.Message, GetLoc("AutoReplyChatBot-ErrorTitle"));
+            Error("Send auto reply failed:", ex);
+        }
         if (string.IsNullOrWhiteSpace(reply)) return;
 
-        ChatHelper.SendMessage($"/tell {target} {reply}");
         SetCooldown();
-        NotificationInfo(GetLoc("AutoReplyChatBot-AiRepliedTo", target), reply);
+        ChatHelper.SendMessage($"/tell {target} {reply}");
+        NotificationInfo(reply, $"{GetLoc("AutoReplyChatBot-AutoRepliedTo")}{target}");
     }
 
     private static async Task<string?> GenerateReplyAsync(string userText, Config cfg, CancellationToken ct)
     {
-        if (cfg.ApiKey.IsNullOrEmpty() || cfg.BaseUrl.IsNullOrEmpty() || cfg.Model.IsNullOrEmpty())
+        if (cfg.ApiKey.IsNullOrWhitespace() || cfg.BaseUrl.IsNullOrWhitespace() || cfg.Model.IsNullOrWhitespace())
             return null;
 
         var url = cfg.BaseUrl!.TrimEnd('/') + "/chat/completions";
@@ -193,18 +183,19 @@ public class AutoReplyChatBot : DailyModuleBase
         return msg.TryGetProperty("content", out var content) ? content.GetString() : null;
     }
 
-    private static unsafe bool IsFriend(string name, string? world)
+    private static unsafe bool IsFriend(string name, ushort worldId)
     {
-        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(world)) return false;
+        if (string.IsNullOrEmpty(name)) return false;
 
         var proxy = InfoProxyFriendList.Instance();
         if (proxy == null) return false;
 
         for (var i = 0u; i < proxy->EntryCount; i++)
         {
-            var entryName          = SeString.Parse(proxy->GetEntry(i)->Name).TextValue;
-            var entryHomeWorldName = LuminaWrapper.GetWorldName(proxy->GetEntry(i)->HomeWorld);
-            if (entryHomeWorldName == world && entryName == name)
+            var entry = proxy->GetEntry(i);
+            var fName = SeString.Parse(entry->Name).TextValue;
+            var fWorld = entry->HomeWorld;
+            if (fWorld == worldId && fName == name)
                 return true;
         }
         return false;
