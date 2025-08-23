@@ -106,7 +106,7 @@ public class AutoReplyChatBot : DailyModuleBase
         
     }
     
-    private static string DefaultSystemPrompt { get; } = GetLoc("AutoReplyChatBot-DefaultPrompt");
+    private static readonly string DefaultSystemPrompt = GetLoc("AutoReplyChatBot-DefaultPrompt");
     
     private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
@@ -229,6 +229,6 @@ public class AutoReplyChatBot : DailyModuleBase
         public string ApiKey                 = string.Empty;
         public string BaseUrl                = "https://api.deepseek.com/v1";
         public string Model                  = "deepseek-chat";
-        public string SystemPrompt           = string.Empty;
+        public string SystemPrompt           = DefaultSystemPrompt;
     }
 }
