@@ -108,12 +108,13 @@ public class AutoReplyChatBot : DailyModuleBase
         {
             if (string.IsNullOrWhiteSpace(TestChatInput)) return;
 
+            const string histKey = "testKey";
             var text = TestChatInput;
             Task.Run(async () =>
             {
                 var reply = string.Empty;
-                AppendHistory("testKey", "user", text);
-                try { reply = await GenerateReplyAsync(ModuleConfig, "testKey", CancellationToken.None); }
+                AppendHistory(histKey, "user", text);
+                try { reply = await GenerateReplyAsync(ModuleConfig, histKey, CancellationToken.None); }
                 catch (Exception ex)
                 {
                     NotificationError(GetLoc("AutoReplyChatBot-ErrorTitle"));
@@ -124,7 +125,7 @@ public class AutoReplyChatBot : DailyModuleBase
 
                 if (string.IsNullOrWhiteSpace(reply)) return;
 
-                AppendHistory("testKey", "assistant", reply);
+                AppendHistory(histKey, "assistant", reply);
                 var builder = new SeStringBuilder();
 
                 builder.AddUiForeground(25)
