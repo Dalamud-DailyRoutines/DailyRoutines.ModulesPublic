@@ -91,10 +91,10 @@ public class AutoReplyChatBot : DailyModuleBase
         
         ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-SystemPrompt"));
         {
-            var v = string.IsNullOrEmpty(ModuleConfig.SystemPrompt) ? DefaultSystemPrompt : ModuleConfig.SystemPrompt;
-            if (ImGui.InputTextMultiline("##sysPrompt", ref v, 4096, new Vector2(promptW, promptH)))
+            var prompt = string.IsNullOrEmpty(ModuleConfig.SystemPrompt) ? DefaultSystemPrompt : ModuleConfig.SystemPrompt;
+            if (ImGui.InputTextMultiline("##sysPrompt", ref prompt, 4096, new Vector2(promptW, promptH)))
             {
-                ModuleConfig.SystemPrompt = v;
+                ModuleConfig.SystemPrompt = prompt;
                 SaveConfig(ModuleConfig);
             }
             if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-RestoreDefaultPrompt")))
@@ -106,7 +106,13 @@ public class AutoReplyChatBot : DailyModuleBase
         
     }
     
-    private static readonly string DefaultSystemPrompt = GetLoc("AutoReplyChatBot-DefaultPrompt");
+    private static string DefaultSystemPrompt { get; } =
+        GetLoc("AutoReplyChatBot-DefaultPrompt")
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n")
+            .Replace("\\r\\n", "\n")
+            .Replace("\\n", "\n")
+            .Replace("\\r", "\n");
     
     private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
