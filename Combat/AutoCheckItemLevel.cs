@@ -35,8 +35,9 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
         TaskHelper.Abort();
         
         if (GameState.IsInPVPArea || GameState.ContentFinderCondition == 0) return;
-        if (GameState.ContentFinderConditionData.PvP || 
-            !ValidContentJobCategories.Contains(GameState.ContentFinderConditionData.AcceptClassJobCategory.RowId)) 
+        if (GameState.ContentFinderConditionData.PvP                                                               ||
+            !ValidContentJobCategories.Contains(GameState.ContentFinderConditionData.AcceptClassJobCategory.RowId) ||
+            GameState.ContentFinderConditionData.ContentMemberType.Value.MeleesPerParty == 0)
             return;
         
         TaskHelper.Enqueue(() => !BetweenAreas && DService.ObjectTable.LocalPlayer != null, "WaitForEnteringDuty");
