@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -10,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
+using DailyRoutines.Managers;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -34,9 +34,7 @@ public class AutoReplyChatBot : DailyModuleBase
 
     private static Config ModuleConfig = null!;
     
-    private static string   TestChatInput   = string.Empty;
-    private static DateTime LastTs          = DateTime.MinValue;
-    private static int      HistoryKeyIndex;
+    private static DateTime LastTs = DateTime.MinValue;
 
     protected override void Init()
     {
@@ -48,6 +46,9 @@ public class AutoReplyChatBot : DailyModuleBase
             ModuleConfig.SystemPrompts       = [new()];
             ModuleConfig.SelectedPromptIndex = 0;
         }
+
+        foreach (var contextType in Enum.GetValues<GameContextType>())
+            ModuleConfig.GameContextSettings.TryAdd(contextType, true);
 
         ModuleConfig.SystemPrompts = ModuleConfig.SystemPrompts.DistinctBy(x => x.Name).ToList();
         SaveConfig(ModuleConfig);
@@ -93,13 +94,17 @@ public class AutoReplyChatBot : DailyModuleBase
                 if (ModuleConfig.ValidChatTypes.Contains(XivChatType.TellIncoming) &&
                     ImGui.Checkbox(GetLoc("AutoReplyChatBot-OnlyReplyNonFriendTell"), ref ModuleConfig.OnlyReplyNonFriendTell))
                     SaveConfig(ModuleConfig);
+                
+                ImGui.NewLine();
 
                 // 冷却秒
                 ImGui.SetNextItemWidth(fieldW);
                 if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-CooldownSeconds"), ref ModuleConfig.CooldownSeconds, 0, 120))
                     SaveConfig(ModuleConfig);
+                
+                ImGui.NewLine();
                         
-                // 聊天上下文限制
+                // API调用时的历史记录数量限制
                 if (ImGui.Checkbox(GetLoc("AutoReplyChatBot-EnableContextLimit"), ref ModuleConfig.EnableContextLimit))
                     SaveConfig(ModuleConfig);
                 ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-EnableContextLimit-Help"));
@@ -110,6 +115,30 @@ public class AutoReplyChatBot : DailyModuleBase
                     if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-MaxContextMessages"), ref ModuleConfig.MaxContextMessages, 1, 50))
                         SaveConfig(ModuleConfig);
                 }
+
+                ImGui.NewLine();
+
+                // 历史记录存储上限（仅作提示，不删除记录）
+                ImGui.SetNextItemWidth(fieldW);
+                if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-MaxHistory"), ref ModuleConfig.MaxHistory, 1, 50))
+                    SaveConfig(ModuleConfig);
+                ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-MaxHistory-Help"));
+
+                ImGui.NewLine();
+
+                // 最大令牌数
+                ImGui.SetNextItemWidth(fieldW);
+                if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-MaxTokens"), ref ModuleConfig.MaxTokens, 256, 8192))
+                    SaveConfig(ModuleConfig);
+                ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-MaxTokens-Help"));
+
+                ImGui.NewLine();
+
+                // 温度参数
+                ImGui.SetNextItemWidth(fieldW);
+                if (ImGui.SliderFloat(GetLoc("AutoReplyChatBot-Temperature"), ref ModuleConfig.Temperature, 0.0f, 2.0f))
+                    SaveConfig(ModuleConfig);
+                ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-Temperature-Help"));
             }
         }
 
@@ -370,87 +399,23 @@ public class AutoReplyChatBot : DailyModuleBase
         using (var testChatTab = ImRaii.TabItem(GetLoc("AutoReplyChatBot-TestChat")))
         {
             if (testChatTab)
-            {
-                ImGui.Text($"{GetLoc("AutoReplyChatBot-TestChat-Role")}");
-                    
-                ImGui.SetNextItemWidth(fieldW);
-                ImGui.InputText("##TestRoleInput", ref ModuleConfig.TestRole, 96);
-                    
-                ImGui.Text($"{GetLoc("AutoReplyChatBot-Content")}");
-                    
-                ImGui.SetNextItemWidth(promptW);
-                ImGui.InputText("##TestContentInput", ref TestChatInput, 512);
-
-                ImGui.SameLine();
-                if (ImGui.SmallButton(GetLoc("AutoReplyChatBot-Send")))
-                {
-                    if (string.IsNullOrWhiteSpace(TestChatInput)) return;
-
-                    var testerHistoryKey = $"{ModuleConfig.TestRole}@DailyRoutines";
-                    var text             = TestChatInput;
-                        
-                    TaskHelper.Abort();
-                    TaskHelper.DelayNext(1000, "等待 1 秒收集更多消息");
-                    TaskHelper.Enqueue(() => IsCooldownReady());
-                    TaskHelper.EnqueueAsync(() => Task.Run(async () =>
-                    {
-                        SetCooldown();
-                            
-                        AppendHistory(testerHistoryKey, "user", text);
-                        var reply = string.Empty;
-
-                        try
-                        {
-                            reply = await GenerateReplyAsync(ModuleConfig, testerHistoryKey, CancellationToken.None);
-                        }
-                        catch (Exception ex)
-                        {
-                            NotificationError(GetLoc("AutoReplyChatBot-ErrorTitle"));
-                            Error($"{GetLoc("AutoReplyChatBot-ErrorTitle")}:", ex);
-
-                            reply = string.Empty;
-                        }
-
-                        if (string.IsNullOrWhiteSpace(reply)) return;
-
-                        AppendHistory(testerHistoryKey, "assistant", reply);
-                        var builder = new SeStringBuilder();
-
-                        builder.AddUiForeground(25)
-                               .AddText($"[{Info.Title}]")
-                               .AddUiForegroundOff()
-                               .Add(NewLinePayload.Payload)
-                               .AddUiForeground(537)
-                               .AddText($">> {ModuleConfig.Model}: ")
-                               .AddText(text)
-                               .AddUiForegroundOff()
-                               .Add(NewLinePayload.Payload)
-                               .AddUiForeground(537)
-                               .AddText($"{ModuleConfig.Model} >> ")
-                               .AddText(reply)
-                               .AddUiForegroundOff();
-
-                        Chat(builder.Build());
-                    }));
-                        
-                }
-            }
+                DrawTestChatTab();
         }
 
         using (var historyTab = ImRaii.TabItem(GetLoc("AutoReplyChatBot-HistoryPreview")))
         {
             if (historyTab)
             {
-                var keys = Histories.Keys.ToArray();
+                var keys = ModuleConfig.Histories.Keys.ToArray();
 
                 var noneLabel   = GetLoc("None");
                 var displayKeys = new List<string>(keys.Length + 1) { string.Empty };
                 displayKeys.AddRange(keys);
 
-                if (HistoryKeyIndex < 0 || HistoryKeyIndex >= displayKeys.Count)
-                    HistoryKeyIndex = 0;
+                if (ModuleConfig.HistoryKeyIndex < 0 || ModuleConfig.HistoryKeyIndex >= displayKeys.Count)
+                    ModuleConfig.HistoryKeyIndex = 0;
 
-                var currentLabel = HistoryKeyIndex == 0 ? noneLabel : displayKeys[HistoryKeyIndex];
+                var currentLabel = ModuleConfig.HistoryKeyIndex == 0 ? noneLabel : displayKeys[ModuleConfig.HistoryKeyIndex];
 
                 ImGui.SetNextItemWidth(fieldW);
                 using (var combo = ImRaii.Combo("###UserKey", currentLabel))
@@ -460,9 +425,12 @@ public class AutoReplyChatBot : DailyModuleBase
                         for (var i = 0; i < displayKeys.Count; i++)
                         {
                             var label    = i == 0 ? noneLabel : displayKeys[i];
-                            var selected = i == HistoryKeyIndex;
+                            var selected = i == ModuleConfig.HistoryKeyIndex;
                             if (ImGui.Selectable(label, selected))
-                                HistoryKeyIndex = i;
+                            {
+                                ModuleConfig.HistoryKeyIndex = i;
+                                SaveConfig(ModuleConfig);
+                            }
                         }
                     }
                 }
@@ -470,34 +438,36 @@ public class AutoReplyChatBot : DailyModuleBase
                 ImGui.SameLine();
                 if (ImGui.Button($"{GetLoc("Clear")}##ClearHistory"))
                 {
-                    if (HistoryKeyIndex > 0)
+                    if (ModuleConfig.HistoryKeyIndex > 0)
                     {
-                        var currentKey = displayKeys[HistoryKeyIndex];
-                        Histories.TryRemove(currentKey, out _);
+                        var currentKey = displayKeys[ModuleConfig.HistoryKeyIndex];
+                        ModuleConfig.Histories.Remove(currentKey);
+                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig);
                     }
                 }
 
-                if (HistoryKeyIndex > 0)
+                if (ModuleConfig.HistoryKeyIndex > 0)
                 {
-                    var currentKey = displayKeys[HistoryKeyIndex];
-                    var entries    = Histories.TryGetValue(currentKey, out var list) ? list.ToList() : [];
+                    var currentKey = displayKeys[ModuleConfig.HistoryKeyIndex];
+                    var entries    = ModuleConfig.Histories.TryGetValue(currentKey, out var list) ? list.ToList() : [];
                     using (ImRaii.Child("##HistoryViewer", new(promptW, promptH), true))
                     {
                         var isAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 2f;
                             
                         for (var i = 0; i < entries.Count; i++)
                         {
-                            var (role, text) = entries[i];
-                            var isUser = role.Equals("user", StringComparison.OrdinalIgnoreCase);
-                            var source = isUser ? LuminaWrapper.GetAddonText(973) : "AI";
+                            var message = entries[i];
+                            var isUser = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase);
+                            var timestamp = UnixSecondToDateTime(message.Timestamp).ToString("HH:mm:ss");
 
                             using (ImRaii.PushColor(ImGuiCol.Text, new Vector4(0.90f, 0.85f, 1f, 1f), !isUser))
                             using (ImRaii.PushColor(ImGuiCol.Text, new Vector4(0.85f, 0.90f, 1f, 1f), isUser))
                             {
-                                if (ImGui.Selectable($"[{source}] {text}"))
+                                if (ImGui.Selectable($"[{timestamp}] [{message.Name}] {message.Text}"))
                                 {
-                                    ImGui.SetClipboardText(text);
-                                    NotificationSuccess($"{GetLoc("CopiedToClipboard")}: {text}");
+                                    ImGui.SetClipboardText(message.Text);
+                                    NotificationSuccess($"{GetLoc("CopiedToClipboard")}: {message.Text}");
                                 }
 
                                 using (var context = ImRaii.ContextPopupItem($"{i}"))
@@ -508,12 +478,12 @@ public class AutoReplyChatBot : DailyModuleBase
                                         {
                                             try
                                             {
-                                                Histories[currentKey].RemoveAt(i);
+                                                ModuleConfig.Histories[currentKey].RemoveAt(i);
                                                 break;
                                             }
                                             catch
                                             {
-                                                // ignired
+                                                // ignored
                                             }
                                         }
                                     }
@@ -529,47 +499,59 @@ public class AutoReplyChatBot : DailyModuleBase
                 }
             }
         }
+
+        using (var gameContextTab = ImRaii.TabItem(GetLoc("AutoReplyChatBot-GameContext")))
+        {
+            if (gameContextTab)
+            {
+                // 启用游戏上下文
+                if (ImGui.Checkbox(GetLoc("AutoReplyChatBot-EnableGameContext"), ref ModuleConfig.EnableGameContext))
+                    SaveConfig(ModuleConfig);
+                ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-EnableGameContext-Help"));
+                
+                // 游戏上下文设置
+                using (ImRaii.Disabled(!ModuleConfig.EnableGameContext))
+                using (ImRaii.PushIndent())
+                {
+                    foreach (var contextType in Enum.GetValues<GameContextType>())
+                    {
+                        using var id = ImRaii.PushId($"AutoReplyChatBot-GameContext-{contextType}");
+                            
+                        var enabled = ModuleConfig.GameContextSettings.GetValueOrDefault(contextType, true);
+                        var label   = GameContextLocMap.GetValueOrDefault(contextType, contextType.ToString());
+                            
+                        if (ImGui.Checkbox($"{label}##{contextType}", ref enabled))
+                        {
+                            ModuleConfig.GameContextSettings[contextType] = enabled;
+                            SaveConfig(ModuleConfig);
+                            UpdateGameContextInWorldBook();
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
         if (!ModuleConfig.ValidChatTypes.Contains(type)) return;
         
-        var (name, worldID, worldName) = ExtractNameWorld(ref sender);
-        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(worldName)) return;
-        if (name == LocalPlayerState.Name && worldID == GameState.HomeWorld) return;
-        if (type == XivChatType.TellIncoming && ModuleConfig.OnlyReplyNonFriendTell && IsFriend(name, worldID)) return;
+        var (playerName, worldID, worldName) = ExtractNameWorld(sender);
+        if (string.IsNullOrEmpty(playerName) || string.IsNullOrEmpty(worldName)) return;
+        if (playerName == LocalPlayerState.Name && worldID == GameState.HomeWorld) return;
+        if (type == XivChatType.TellIncoming && ModuleConfig.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
 
         var userText = message.TextValue;
         if (string.IsNullOrWhiteSpace(userText)) return;
 
-        AppendHistory($"{name}@{worldName}", "user", userText);
+        AppendHistory($"{playerName}@{worldName}", "user", userText);
         
         TaskHelper.Abort();
         TaskHelper.DelayNext(1000, "等待 1 秒收集更多消息");
         TaskHelper.Enqueue(() => IsCooldownReady());
-        TaskHelper.EnqueueAsync(() => GenerateAndReplyAsync(name, worldName, type));
+        TaskHelper.EnqueueAsync(() => GenerateAndReplyAsync(playerName, worldName, type));
     }
-
-    private static (string Name, ushort WorldID, string? WorldName) ExtractNameWorld(ref SeString sender)
-    {
-        var p = sender.Payloads?.OfType<PlayerPayload>().FirstOrDefault();
-        if (p != null)
-        {
-            var name     = p.PlayerName;
-            var worldId  = (ushort)p.World.RowId;
-            var worldStr = p.World.Value.Name.ExtractText();
-            if (!string.IsNullOrEmpty(name))
-                return (name, worldId, worldStr);
-        }
-
-        var text = sender.TextValue?.Trim() ?? string.Empty;
-        var idx  = text.IndexOf('@');
-        var nm   = idx < 0 ? text : text[..idx].Trim();
-        var wn   = idx < 0 ? null : text[(idx + 1)..].Trim();
-        return (nm, 0, wn);
-    }
-
+    
     private static async Task GenerateAndReplyAsync(string name, string world, XivChatType originalType)
     {
         var target = $"{name}@{world}";
@@ -669,6 +651,226 @@ public class AutoReplyChatBot : DailyModuleBase
         AppendHistory(target, "assistant", reply);
     }
 
+    private void DrawTestChatTab()
+    {
+        if (ModuleConfig.TestChatWindows.Count == 0)
+        {
+            var testGuid = Guid.NewGuid().ToString();
+            ModuleConfig.TestChatWindows[testGuid] = new ChatWindow
+            {
+                Id   = testGuid,
+                Name = "Chat Test",
+                Role = "Tester",
+                HistoryGuid = testGuid
+            };
+            ModuleConfig.CurrentActiveChat = testGuid;
+            SaveConfig(ModuleConfig);
+        }
+
+        // 聊天窗口标签页
+        using (var tabBar = ImRaii.TabBar("ChatTabs"))
+        {
+            if (tabBar)
+            {
+                if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing))
+                {
+                    var newGuid = Guid.NewGuid().ToString();
+                    ModuleConfig.TestChatWindows[newGuid] = new ChatWindow
+                    {
+                        Id   = newGuid,
+                        Name = "New Chat",
+                        Role = "NewUser",
+                        HistoryGuid = newGuid
+                    };
+                    ModuleConfig.CurrentActiveChat = newGuid;
+                    SaveConfig(ModuleConfig);
+                }
+
+                // 聊天窗口标签
+                var chatTabs = ModuleConfig.TestChatWindows.ToList();
+                foreach (var (id, window) in chatTabs)
+                {
+                    var isOpen = true;
+                    
+                    var flags = ImGuiTabItemFlags.None;
+                    if (id == ModuleConfig.CurrentActiveChat)
+                        flags |= ImGuiTabItemFlags.SetSelected;
+
+                    using (var tabItem = ImRaii.TabItem($"{window.Name}###{id}", ref isOpen, flags))
+                    {
+                        if (tabItem)
+                        {
+                            // ignored
+                        }
+                    }
+                    
+                    if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                        ModuleConfig.CurrentActiveChat = id;
+
+                    // 点击关闭按钮
+                    if (!isOpen && ModuleConfig.TestChatWindows.Count > 1)
+                    {
+                        ModuleConfig.TestChatWindows.Remove(id);
+                        if (ModuleConfig.CurrentActiveChat == id && ModuleConfig.TestChatWindows.Count > 0)
+                            ModuleConfig.CurrentActiveChat = ModuleConfig.TestChatWindows.Keys.First();
+                        SaveConfig(ModuleConfig);
+                    }
+                }
+            }
+        }
+        
+        ImGui.Spacing();
+        
+        if (!ModuleConfig.TestChatWindows.TryGetValue(ModuleConfig.CurrentActiveChat, out var currentWindow))
+            return;
+
+        ImGui.AlignTextToFramePadding();
+        ImGui.Text($"{GetLoc("AutoReplyChatBot-TestChat-Role")}:");
+        
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150f * GlobalFontScale);
+        ImGui.InputText("##CurrentRole", ref currentWindow.Role, 96);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            SaveConfig(ModuleConfig);
+
+        ImGui.SameLine();
+        ImGui.Text($"{GetLoc("Name")}:");
+        
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150f * GlobalFontScale);
+        ImGui.InputText("##WindowName", ref currentWindow.Name, 96);
+        
+        ImGui.SameLine(0, 10f * GlobalFontScale);
+        if (ImGui.Button($"{GetLoc("Clear")}"))
+        {
+            var historyKey = currentWindow.HistoryKey;
+            if (ModuleConfig.Histories.TryGetValue(historyKey, out var historyList))
+                historyList.Clear();
+        }
+        
+        ImGui.Spacing();
+        
+        var chatHeight = 300f * GlobalFontScale;
+        var chatWidth  = ImGui.GetContentRegionAvail().X - (4 * ImGui.GetStyle().ItemSpacing.X);
+
+        using (var child = ImRaii.Child("##ChatMessages", new(chatWidth, chatHeight - (60f * GlobalFontScale)), true))
+        {
+            if (child)
+            {
+                var historyKey = currentWindow.HistoryKey;
+                var messages = ModuleConfig.Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
+
+                for (var i = 0; i < messages.Count; i++)
+                {
+                    var message = messages[i];
+                    var isUser = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase);
+                    
+                    var textSize     = ImGui.CalcTextSize(message.Text) + new Vector2(2 * ImGui.GetStyle().ItemSpacing.X, 4 * ImGui.GetStyle().ItemSpacing.Y);
+                    var messageWidth = Math.Min(textSize.X + (20f * GlobalFontScale), chatWidth * 0.75f);
+                     
+                    if (isUser)
+                        ImGui.SetCursorPosX(chatWidth - messageWidth - (16f * GlobalFontScale));
+                    else
+                        ImGui.SetCursorPosX(8f * GlobalFontScale);
+
+                    var bgColor   = isUser ? CadetBlue : SlateGrey;
+                    var textColor = isUser ? White : new(0.9f, 0.9f, 0.9f, 1.0f);
+                    
+                    using (ImRaii.Group())
+                    using (ImRaii.PushColor(ImGuiCol.ChildBg, bgColor))
+                    using (ImRaii.PushColor(ImGuiCol.Text, textColor))
+                    {
+                        using (var msgChild = ImRaii.Child($"##Msg_{i}", textSize with { X = messageWidth }, true, 
+                                                           ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+                        {
+                            if (msgChild)
+                            {
+                                ImGui.TextWrapped(message.Text);
+                                
+                                // 右键菜单
+                                using var context = ImRaii.ContextPopupItem($"Context_{i}");
+                                if (context)
+                                {
+                                    if (ImGui.MenuItem($"{GetLoc("Copy")}"))
+                                    {
+                                        ImGui.SetClipboardText(message.Text);
+                                        NotificationSuccess($"{GetLoc("CopiedToClipboard")}");
+                                    }
+                                        
+                                    if (ImGui.MenuItem($"{GetLoc("Delete")}"))
+                                    {
+                                        try
+                                        {
+                                            if (ModuleConfig.Histories.TryGetValue(historyKey, out var historyList) && i < historyList.Count)
+                                            {
+                                                historyList.RemoveAt(i);
+                                                SaveConfig(ModuleConfig);
+                                            }
+                                            
+                                            break;
+                                        }
+                                        catch
+                                        {
+                                            // ignored
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        var dateTime = UnixSecondToDateTime(message.Timestamp);
+                        var timeStr  = dateTime.ToString("HH:mm:ss");
+
+                        using (FontManager.UIFont80.Push())
+                            ImGui.TextDisabled($"[{timeStr}] {message.Name}");
+                    }
+                    
+                    ScaledDummy(0, 6f);
+                }
+            }
+        }
+
+        ImGui.SetNextItemWidth(chatWidth - ImGui.CalcTextSize(GetLoc("AutoReplyChatBot-Send")).X - (4 * ImGui.GetStyle().ItemSpacing.X));
+        ImGui.InputText("##MessageInput", ref currentWindow.InputText, 512, ImGuiInputTextFlags.EnterReturnsTrue);
+
+        ImGui.SameLine();
+        if ((ImGui.Button(GetLoc("AutoReplyChatBot-Send")) || ImGui.IsKeyPressed(ImGuiKey.Enter)) && 
+            !string.IsNullOrWhiteSpace(currentWindow.InputText))
+        {
+            var text = currentWindow.InputText;
+            var historyKey = currentWindow.HistoryKey;
+            
+            currentWindow.InputText = string.Empty;
+            currentWindow.IsProcessing = true;
+
+            TaskHelper.Abort();
+            TaskHelper.DelayNext(1000, "等待 1 秒收集更多消息");
+            TaskHelper.Enqueue(() => IsCooldownReady());
+            TaskHelper.EnqueueAsync(() => Task.Run(async () =>
+            {
+                SetCooldown();
+                
+                AppendHistory(historyKey, "user", text, currentWindow.Role);
+                var reply = string.Empty;
+
+                try
+                {
+                    reply = await GenerateReplyAsync(ModuleConfig, historyKey, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    NotificationError(GetLoc("AutoReplyChatBot-ErrorTitle"));
+                    Error($"{GetLoc("AutoReplyChatBot-ErrorTitle")}:", ex);
+                }
+
+                if (!string.IsNullOrWhiteSpace(reply))
+                    AppendHistory(historyKey, "assistant", reply);
+
+                currentWindow.IsProcessing = false;
+            }));
+        }
+    }
+
     private static async Task<string?> GenerateReplyAsync(Config cfg, string historyKey, CancellationToken ct)
     {
         UpdateGameContextInWorldBook();
@@ -676,11 +878,10 @@ public class AutoReplyChatBot : DailyModuleBase
         if (cfg.APIKey.IsNullOrWhitespace() || cfg.BaseUrl.IsNullOrWhitespace() || cfg.Model.IsNullOrWhitespace())
             return null;
 
-        var hist = Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
+        var hist = ModuleConfig.Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
         if (hist.Count == 0) 
             return null;
         
-        // 检查聊天上下文消息数量限制
         if (cfg.EnableContextLimit)
         {
             var userMessagesCount = hist.Count(x => x.Role == "user");
@@ -702,13 +903,13 @@ public class AutoReplyChatBot : DailyModuleBase
 
             if (filteredMessage != userMessage)
             {
-                if (Histories.TryGetValue(historyKey, out var originalList))
+                if (ModuleConfig.Histories.TryGetValue(historyKey, out var originalList))
                 {
                     for (var i = originalList.Count - 1; i >= 0; i--)
                     {
                         if (originalList[i].Role == "user")
                         {
-                            originalList[i] = (originalList[i].Role, filteredMessage);
+                            originalList[i] = new ChatMessage(originalList[i].Role, filteredMessage, originalList[i].Timestamp, originalList[i].Name);
                             break;
                         }
                     }
@@ -718,7 +919,7 @@ public class AutoReplyChatBot : DailyModuleBase
                 {
                     if (hist[i].Role == "user")
                     {
-                        hist[i] = (hist[i].Role, filteredMessage);
+                        hist[i] = new ChatMessage(hist[i].Role, filteredMessage, hist[i].Timestamp, hist[i].Name);
                         break;
                     }
                 }
@@ -756,8 +957,16 @@ public class AutoReplyChatBot : DailyModuleBase
         if (!string.IsNullOrWhiteSpace(worldBookContext))
             messages.Add(new { role = "system", content = worldBookContext });
 
-        foreach (var (role, text) in hist)
-            messages.Add(new { role, content = text });
+        var messagesToSend = hist;
+        if (cfg is { EnableContextLimit: true, MaxContextMessages: > 0 })
+        {
+            // 每轮对话包含用户和 AI 消息
+            var totalMessagesToTake = Math.Min(cfg.MaxContextMessages * 2, hist.Count);
+            messagesToSend = hist.Skip(Math.Max(0, hist.Count - totalMessagesToTake)).ToList();
+        }
+
+        foreach (var message in messagesToSend)
+            messages.Add(new { role = message.Role, content = message.Text });
 
         var body = Backends[cfg.Provider].BuildRequestBody(messages, cfg.Model, cfg.MaxTokens, cfg.Temperature);
 
@@ -812,12 +1021,83 @@ public class AutoReplyChatBot : DailyModuleBase
         }
         catch (Exception ex)
         {
-            // 如果过滤器调用失败，为了安全起见返回null
             Error($"过滤失败: {ex.Message}");
             return null;
         }
     }
 
+    private static void AppendHistory(string key, string role, string text, string name = null)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        var list = ModuleConfig.Histories.GetOrAdd(key, _ => []);
+
+        var displayName = name;
+        if (string.IsNullOrEmpty(displayName))
+        {
+            if (role.Equals("user", StringComparison.OrdinalIgnoreCase))
+                displayName = key;
+            else if (role.Equals("assistant", StringComparison.OrdinalIgnoreCase))
+                displayName = ModuleConfig.Model;
+            else
+                displayName = role;
+        }
+
+        list.Add(new ChatMessage(role, text, displayName));
+        // 不再删除历史记录，全部保留
+        ModuleConfig.Save(ModuleManager.GetModule<AutoReplyChatBot>());
+    }
+
+    private static void UpdateGameContextInWorldBook()
+    {
+        if (ModuleConfig is not { EnableGameContext: true }) return;
+
+        var contextParts = new List<string>();
+        
+        foreach (var contextType in Enum.GetValues<GameContextType>())
+        {
+            if (ModuleConfig.GameContextSettings.TryGetValue(contextType, out var enabled) && enabled)
+            {
+                var value = GameContextValueMap[contextType]();
+                contextParts.Add($"{contextType}:{value}");
+            }
+        }
+
+        var context = string.Join(", ", contextParts);
+        ModuleConfig.WorldBookEntry["GameContext"] = context;
+    }
+
+    
+    #region 工具
+
+    private static bool IsCooldownReady()
+    {
+        var cd = TimeSpan.FromSeconds(Math.Max(5, ModuleConfig.CooldownSeconds));
+        return DateTime.UtcNow - LastTs >= cd;
+    }
+
+    private static void SetCooldown() => 
+        LastTs = DateTime.UtcNow;
+    
+    private static (string Name, ushort WorldID, string? WorldName) ExtractNameWorld(SeString sender)
+    {
+        var p = sender.Payloads?.OfType<PlayerPayload>().FirstOrDefault();
+        if (p != null)
+        {
+            var name     = p.PlayerName;
+            var worldId  = (ushort)p.World.RowId;
+            var worldStr = p.World.Value.Name.ExtractText();
+            if (!string.IsNullOrEmpty(name))
+                return (name, worldId, worldStr);
+        }
+
+        var text = sender.TextValue?.Trim() ?? string.Empty;
+        var idx  = text.IndexOf('@');
+        var nm   = idx < 0 ? text : text[..idx].Trim();
+        var wn   = idx < 0 ? null : text[(idx + 1)..].Trim();
+        return (nm, 0, wn);
+    }
+    
     private static unsafe bool IsFriend(string name, ushort worldID)
     {
         if (string.IsNullOrEmpty(name)) return false;
@@ -839,44 +1119,8 @@ public class AutoReplyChatBot : DailyModuleBase
 
         return false;
     }
-
-    private static void AppendHistory(string key, string role, string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return;
-
-        var list = Histories.GetOrAdd(key, _ => []);
-
-        list.Add((role, text));
-        if (list.Count > ModuleConfig.MaxHistory)
-            list.RemoveAt(0);
-    }
-
-    private static void UpdateGameContextInWorldBook()
-    {
-        if (ModuleConfig == null) return;
-
-        var jobText     = LocalPlayerState.ClassJobData.Name;
-        var level       = LocalPlayerState.CurrentLevel;
-        var name        = LocalPlayerState.Name;
-        var world       = GameState.CurrentWorldData.Name;
-        var zoneName    = LuminaWrapper.GetZonePlaceName(GameState.TerritoryType);
-        var weatherName = GameState.WeatherData.Name.ExtractText();
-
-        var context = $"Name:{name}, ClassJob:{jobText}, Level:{level}, HomeWorld:{world}, CurrentZone:{zoneName}, Weather:{weatherName}";
-        ModuleConfig.WorldBookEntry["GameContext"] = context;
-    }
-
-    private static readonly ConcurrentDictionary<string, List<(string Role, string Text)>> Histories =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    private static bool IsCooldownReady()
-    {
-        var cd = TimeSpan.FromSeconds(Math.Max(5, ModuleConfig.CooldownSeconds));
-        return DateTime.UtcNow - LastTs >= cd;
-    }
-
-    private static void SetCooldown() => 
-        LastTs = DateTime.UtcNow;
+    
+    #endregion
 
     private static class WorldBookManager
     {
@@ -902,7 +1146,7 @@ public class AutoReplyChatBot : DailyModuleBase
         public static string BuildWorldBookContext(List<KeyValuePair<string, string>> matches, int maxLength)
         {
             var context = new StringBuilder();
-            context.AppendLine("[World Book Info]");
+            context.AppendLine("[WorldBookInfo]");
 
             var currentLength = 0;
             foreach (var match in matches)
@@ -922,6 +1166,58 @@ public class AutoReplyChatBot : DailyModuleBase
         }
     }
 
+    private enum GameContextType
+    {
+        PlayerName,
+        ClassJob,
+        Level,
+        HomeWorld,
+        CurrentWorld,
+        CurrentZone,
+        Weather,
+    }
+    
+    private class ChatWindow
+    {
+        public string Id        = string.Empty;
+        public string Name      = string.Empty;
+        public string Role      = "TestUser";
+        public string InputText = string.Empty;
+        public bool   IsProcessing;
+        public float  ScrollY    = 0f;
+        public string HistoryGuid = string.Empty;
+        
+        public string HistoryKey => string.IsNullOrEmpty(HistoryGuid) ? $"{Role}@{Name}" : HistoryGuid;
+    }
+
+    private class ChatMessage
+    {
+        public string Role      { get; set; } = string.Empty;
+        public string Text      { get; set; } = string.Empty;
+        public long   Timestamp { get; set; }
+        public string Name      { get; set; } = string.Empty;
+
+        public ChatMessage() => Timestamp = GameState.ServerTimeUnix;
+
+        public ChatMessage(string role, string text, string name = null)
+        {
+            Role = role;
+            Text = text;
+            Timestamp = GameState.ServerTimeUnix;
+            Name = name ?? role;
+        }
+
+        public ChatMessage(string role, string text, long timestamp, string name = null)
+        {
+            Role = role;
+            Text = text;
+            Timestamp = timestamp;
+            Name = name ?? role;
+        }
+
+        public override string ToString() => $"[{Name}] {Text}";
+    }
+
     private class Config : ModuleConfiguration
     {
         public HashSet<XivChatType> ValidChatTypes         = [XivChatType.TellIncoming];
@@ -930,7 +1226,6 @@ public class AutoReplyChatBot : DailyModuleBase
         public string               APIKey                 = string.Empty;
         public string               BaseUrl                = "https://api.deepseek.com/v1";
         public string               Model                  = "deepseek-chat";
-        public string               TestRole               = "Tester";
         public string               FilterModel            = "deepseek-chat";
         public bool                 EnableFilter           = true;
         public string               FilterPrompt           = FilterSystemPrompt;
@@ -946,9 +1241,21 @@ public class AutoReplyChatBot : DailyModuleBase
         public int                        MaxWorldBookContext = 1024;
         
         // 聊天上下文限制配置
-        public bool                EnableContextLimit;
-        public int                 MaxContextMessages = 10;
-        public APIProvider         Provider           = APIProvider.OpenAI;
+        public bool        EnableContextLimit;
+        public int         MaxContextMessages = 10;
+        public APIProvider Provider           = APIProvider.OpenAI;
+
+        // 游戏上下文配置
+        public bool                              EnableGameContext   = true;
+        public Dictionary<GameContextType, bool> GameContextSettings = [];
+
+        // 聊天窗口配置
+        public Dictionary<string, ChatWindow> TestChatWindows   = [];
+        public string                         CurrentActiveChat = "TestChat";
+        public int                            HistoryKeyIndex;
+        
+        // 聊天记录存储
+        public Dictionary<string, List<ChatMessage>> Histories = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private class Prompt
@@ -1075,6 +1382,28 @@ public class AutoReplyChatBot : DailyModuleBase
         [XivChatType.CrossLinkShell6] = LuminaWrapper.GetAddonText(8394),
         [XivChatType.CrossLinkShell7] = LuminaWrapper.GetAddonText(8395),
         [XivChatType.CrossLinkShell8] = LuminaWrapper.GetAddonText(8396),
+    };
+
+    private static readonly Dictionary<GameContextType, string> GameContextLocMap = new()
+    {
+        [GameContextType.PlayerName]   = LuminaWrapper.GetAddonText(9818),
+        [GameContextType.ClassJob]     = LuminaWrapper.GetAddonText(294),
+        [GameContextType.Level]        = LuminaWrapper.GetAddonText(8928),
+        [GameContextType.HomeWorld]    = LuminaWrapper.GetAddonText(12515),
+        [GameContextType.CurrentWorld] = LuminaWrapper.GetAddonText(12516),
+        [GameContextType.CurrentZone]  = LuminaWrapper.GetAddonText(2213),
+        [GameContextType.Weather]      = LuminaWrapper.GetAddonText(8555)
+    };
+
+    private static readonly Dictionary<GameContextType, Func<string>> GameContextValueMap = new()
+    {
+        [GameContextType.PlayerName]   = () => LocalPlayerState.Name,
+        [GameContextType.ClassJob]     = () => LocalPlayerState.ClassJobData.Name.ExtractText(),
+        [GameContextType.Level]        = () => LocalPlayerState.CurrentLevel.ToString(),
+        [GameContextType.HomeWorld]    = () => GameState.HomeWorldData.Name.ExtractText(),
+        [GameContextType.CurrentWorld] = () => GameState.CurrentWorldData.Name.ExtractText(),
+        [GameContextType.CurrentZone]  = () => LuminaWrapper.GetZonePlaceName(GameState.TerritoryType),
+        [GameContextType.Weather]      = () => GameState.WeatherData.Name.ExtractText()
     };
     
     private const string DefaultSystemPrompt =
