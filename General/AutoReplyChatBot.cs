@@ -117,6 +117,19 @@ public class AutoReplyChatBot : DailyModuleBase
         {
             if (apiTab)
             {
+                // API Select
+                ImGui.SetNextItemWidth(fieldW);
+                ImGui.TextColored(LightSkyBlue, GetLoc("AutoReplyChatBot-APISelection"));
+
+                var currentProvider = ModuleConfig.Provider;
+                if (ImGui.RadioButton("OpenAI", currentProvider == APIProvider.OpenAI))
+                    ModuleConfig.Provider = APIProvider.OpenAI;
+
+                ImGui.SameLine();
+                if (ImGui.RadioButton("Ollama", currentProvider == APIProvider.Ollama))
+                    ModuleConfig.Provider = APIProvider.Ollama;
+                SaveConfig(ModuleConfig);
+
                 // API Key
                 ImGui.SetNextItemWidth(fieldW);
                 if (ImGui.InputText("API Key", ref ModuleConfig.APIKey, 256))
@@ -708,7 +721,18 @@ public class AutoReplyChatBot : DailyModuleBase
             }
         }
 
-        var       url = cfg.BaseUrl.TrimEnd('/') + "/chat/completions";
+        var url = cfg.BaseUrl.TrimEnd('/');
+        var currentAPI = ModuleConfig.Provider;
+        switch (currentAPI)
+        {
+            case APIProvider.OpenAI:
+                url += "/chat/completions";
+                break;
+            case APIProvider.Ollama:
+                url += "/chat";
+                break;
+        }
+
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.APIKey);
 
@@ -741,13 +765,22 @@ public class AutoReplyChatBot : DailyModuleBase
         foreach (var (role, text) in hist)
             messages.Add(new { role, content = text });
 
-        var body = new
+        var body = new Dictionary<string, object>
         {
-            messages,
-            model       = cfg.Model,
-            max_tokens  = cfg.MaxTokens,
-            temperature = cfg.Temperature
+            ["messages"] = messages,
+            ["model"]   = cfg.Model,
         };
+        switch (currentAPI)
+        {
+            case APIProvider.OpenAI:
+                body["max_token"] = cfg.MaxTokens;
+                body["temprature"] = cfg.Temperature;
+                break;
+            case APIProvider.Ollama:
+                body["think"] = false;
+                body["stream"] = false;
+                break;
+        }
 
         var json = JsonConvert.SerializeObject(body);
         req.Content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -756,11 +789,19 @@ public class AutoReplyChatBot : DailyModuleBase
         resp.EnsureSuccessStatusCode();
 
         var jsonResponse = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
         var jObj         = JObject.Parse(jsonResponse);
 
-        if (jObj["choices"] is not JArray { Count: > 0 } choices) return null;
+        var message = currentAPI switch
+        {
+            APIProvider.OpenAI when jObj["choices"] is JArray { Count: > 0 } choices => choices[0]["message"],
+            APIProvider.Ollama => jObj["message"],
+            _ => null
+        };
 
-        var message = choices[0]["message"];
+        if (message is null)
+            return null;
+
         var content = message?["content"];
 
         var final = content?.Value<string>();
@@ -772,7 +813,18 @@ public class AutoReplyChatBot : DailyModuleBase
         if (cfg.APIKey.IsNullOrWhitespace() || cfg.BaseUrl.IsNullOrWhitespace() || cfg.FilterModel.IsNullOrWhitespace())
             return userMessage;
 
-        var       url = cfg.BaseUrl.TrimEnd('/') + "/chat/completions";
+        var url = cfg.BaseUrl.TrimEnd('/');
+        var currentAPI = ModuleConfig.Provider;
+        switch (currentAPI)
+        {
+            case APIProvider.OpenAI:
+                url += "/chat/completions";
+                break;
+            case APIProvider.Ollama:
+                url += "/chat";
+                break;
+        }
+
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.APIKey);
         
@@ -783,13 +835,22 @@ public class AutoReplyChatBot : DailyModuleBase
             new { role = "user", content   = userMessage }
         };
 
-        var body = new
+        var body = new Dictionary<string, object>
         {
-            messages,
-            model       = cfg.FilterModel,
-            max_tokens  = 512, // 过滤器不需要太多token
-            temperature = 0.0f // 极低温度，确保严格按照规则执行
+            ["messages"] = messages,
+            ["model"] = cfg.FilterModel,
         };
+        switch (currentAPI)
+        {
+            case APIProvider.OpenAI:
+                body["max_token"] = 512;    // 过滤器不需要太多token
+                body["temprature"] = 0.0f;  // 极低温度，确保严格按照规则执行
+                break;
+            case APIProvider.Ollama:
+                body["think"] = false;
+                body["stream"] = false;
+                break;
+        }
 
         var json = JsonConvert.SerializeObject(body);
         req.Content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -802,9 +863,16 @@ public class AutoReplyChatBot : DailyModuleBase
             var jsonResponse = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             var jObj = JObject.Parse(jsonResponse);
 
-            if (jObj["choices"] is not JArray { Count: > 0 } choices) return null;
+            var message = currentAPI switch
+            {
+                APIProvider.OpenAI when jObj["choices"] is JArray { Count: > 0 } choices => choices[0]["message"],
+                APIProvider.Ollama => jObj["message"],
+                _ => null
+            };
 
-            var message = choices[0]["message"];
+            if (message is null)
+                return null;
+
             var content = message?["content"]?.Value<string>();
 
             return string.IsNullOrWhiteSpace(content) ? null : content.Trim();
@@ -945,8 +1013,9 @@ public class AutoReplyChatBot : DailyModuleBase
         public int                        MaxWorldBookContext = 1024;
         
         // 聊天上下文限制配置
-        public bool EnableContextLimit;
-        public int  MaxContextMessages = 10;
+        public bool                EnableContextLimit;
+        public int                 MaxContextMessages = 10;
+        public APIProvider         Provider           = APIProvider.OpenAI;
     }
 
     private class Prompt
@@ -954,7 +1023,13 @@ public class AutoReplyChatBot : DailyModuleBase
         public string Name    = GetLoc("Default");
         public string Content = DefaultSystemPrompt;
     }
-    
+
+    private enum APIProvider
+    {
+        OpenAI = 0,
+        Ollama = 1,
+    }
+
     #region 预设数据
 
     private static readonly Dictionary<XivChatType, string> ValidChatTypes = new()
