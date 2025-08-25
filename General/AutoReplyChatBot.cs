@@ -1334,6 +1334,7 @@ public class AutoReplyChatBot : DailyModuleBase
         /// 组装完整的请求体，包括 messages / model 以及 provider 特定参数。
         /// </summary>
         /// <param name="messages">聊天消息数组</param>
+        /// <param name="model">model name</param>
         /// <param name="maxTokens">最大 token</param>
         /// <param name="temperature">采样温度</param>
         /// <returns>序列化前的请求体字典</returns>
