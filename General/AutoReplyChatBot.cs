@@ -993,6 +993,11 @@ public class AutoReplyChatBot : DailyModuleBase
             case APIProvider.Ollama:
                 body["think"] = false;
                 body["stream"] = false;
+                body["options"] = new 
+                {
+                    num_ctx = cfg.MaxTokens,
+                    temprature = cfg.Temperature,
+                };
                 break;
         }
 
@@ -1063,6 +1068,11 @@ public class AutoReplyChatBot : DailyModuleBase
             case APIProvider.Ollama:
                 body["think"] = false;
                 body["stream"] = false;
+                body["options"] = new
+                {
+                    num_ctx = 512,
+                    temprature = 0.0f,
+                };
                 break;
         }
 
