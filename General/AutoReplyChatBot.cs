@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
 using DailyRoutines.Managers;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
