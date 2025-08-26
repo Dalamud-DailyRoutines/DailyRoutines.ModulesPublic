@@ -1179,6 +1179,7 @@ public class AutoReplyChatBot : DailyModuleBase
         CurrentWorld,
         CurrentZone,
         Weather,
+        LocalTime
     }
     
     private class ChatWindow
@@ -1390,24 +1391,26 @@ public class AutoReplyChatBot : DailyModuleBase
 
     private static readonly Dictionary<GameContextType, string> GameContextLocMap = new()
     {
-        [GameContextType.PlayerName]   = LuminaWrapper.GetAddonText(9818),
-        [GameContextType.ClassJob]     = LuminaWrapper.GetAddonText(294),
-        [GameContextType.Level]        = LuminaWrapper.GetAddonText(8928),
-        [GameContextType.HomeWorld]    = LuminaWrapper.GetAddonText(12515),
-        [GameContextType.CurrentWorld] = LuminaWrapper.GetAddonText(12516),
-        [GameContextType.CurrentZone]  = LuminaWrapper.GetAddonText(2213),
-        [GameContextType.Weather]      = LuminaWrapper.GetAddonText(8555)
+        [GameContextType.PlayerName]    = LuminaWrapper.GetAddonText(9818),
+        [GameContextType.ClassJob]      = LuminaWrapper.GetAddonText(294),
+        [GameContextType.Level]         = LuminaWrapper.GetAddonText(8928),
+        [GameContextType.HomeWorld]     = LuminaWrapper.GetAddonText(12515),
+        [GameContextType.CurrentWorld]  = LuminaWrapper.GetAddonText(12516),
+        [GameContextType.CurrentZone]   = LuminaWrapper.GetAddonText(2213),
+        [GameContextType.Weather]       = LuminaWrapper.GetAddonText(8555),
+        [GameContextType.LocalTime]     = LuminaWrapper.GetAddonText(1127)
     };
 
     private static readonly Dictionary<GameContextType, Func<string>> GameContextValueMap = new()
     {
-        [GameContextType.PlayerName]   = () => LocalPlayerState.Name,
-        [GameContextType.ClassJob]     = () => LocalPlayerState.ClassJobData.Name.ExtractText(),
-        [GameContextType.Level]        = () => LocalPlayerState.CurrentLevel.ToString(),
-        [GameContextType.HomeWorld]    = () => GameState.HomeWorldData.Name.ExtractText(),
-        [GameContextType.CurrentWorld] = () => GameState.CurrentWorldData.Name.ExtractText(),
-        [GameContextType.CurrentZone]  = () => LuminaWrapper.GetZonePlaceName(GameState.TerritoryType),
-        [GameContextType.Weather]      = () => GameState.WeatherData.Name.ExtractText()
+        [GameContextType.PlayerName]    = () => LocalPlayerState.Name,
+        [GameContextType.ClassJob]      = () => LocalPlayerState.ClassJobData.Name.ExtractText(),
+        [GameContextType.Level]         = () => LocalPlayerState.CurrentLevel.ToString(),
+        [GameContextType.HomeWorld]     = () => GameState.HomeWorldData.Name.ExtractText(),
+        [GameContextType.CurrentWorld]  = () => GameState.CurrentWorldData.Name.ExtractText(),
+        [GameContextType.CurrentZone]   = () => LuminaWrapper.GetZonePlaceName(GameState.TerritoryType),
+        [GameContextType.Weather]       = () => GameState.WeatherData.Name.ExtractText(),
+        [GameContextType.LocalTime]     = () => new DateTimeOffset(DateTime.Now).ToString("yyyy-MM-dd HH:mm"),
     };
     
     private const string DefaultSystemPrompt =
