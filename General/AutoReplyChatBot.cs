@@ -1070,7 +1070,6 @@ public class AutoReplyChatBot : DailyModuleBase
 
         var context = string.Join(", ", contextParts);
         ModuleConfig.WorldBookEntry["GameContext"] = context;
-        ChatHelper.SendMessage("/e " + context);
     }
 
     
