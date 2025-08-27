@@ -215,7 +215,7 @@ public unsafe class CastBarAddon : DailyModuleBase
     }
     protected void OnAddon(AddonEvent type, AddonArgs args)
     {
-        var barNode = CastBar->GetNodeById(3);
+        var barNode = CastBar->GetNodeById(9);
         var icon = (AtkComponentNode*)CastBar->GetNodeById(8);
         var countdownText = CastBar->GetTextNodeById(7);
         var castingText = CastBar->GetTextNodeById(6);
