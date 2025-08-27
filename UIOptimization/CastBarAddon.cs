@@ -264,13 +264,13 @@ public unsafe class CastBarAddon : DailyModuleBase
     {
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_CastBar", OnAddon);//注册咏唱栏更新事件监听
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_CastBar", OnAddon);//注册咏唱栏注销事件监听
-    }
+        }
     protected override void Uninit()
-    {
+        {
         DService.AddonLifecycle.UnregisterListener(OnAddon);//注销监听器
         OnAddon(AddonEvent.PreFinalize, null);//最后对咏唱栏进行一次复原
         base.Uninit();
-    }
+        }
     protected static void OnAddon(AddonEvent type, AddonArgs args)
     {
         var barNode = AddonCastBar->UldManager.NodeList[3];
@@ -284,72 +284,72 @@ public unsafe class CastBarAddon : DailyModuleBase
         {
             case AddonEvent.PreFinalize://注销时复原 断开并删除自定义节点
                 if (slideMarker != null)
-                {
+            {
                     slideMarker.IsVisible = false;
                     Service.AddonController.DetachNode(slideMarker);
                     slideMarker = null;
-                }
+            }
                 if (classicSlideMarker != null)
-                {
+            {
                     classicSlideMarker.IsVisible = false;
                     Service.AddonController.DetachNode(classicSlideMarker);
                     classicSlideMarker = null;
-                }
-                icon->AtkResNode.ToggleVisibility(true);
-                countdownText->AtkResNode.ToggleVisibility(true);
-                castingText->AtkResNode.ToggleVisibility(true);
-                skillNameText->AtkResNode.ToggleVisibility(true);
+        }
+            icon->AtkResNode.ToggleVisibility(true);
+            countdownText->AtkResNode.ToggleVisibility(true);
+            castingText->AtkResNode.ToggleVisibility(true);
+            skillNameText->AtkResNode.ToggleVisibility(true);
 
-                SetSize(skillNameText, 170, null);
-                SetPosition(skillNameText, barNode->X + 4, 0);
+            SetSize(skillNameText, 170, null);
+            SetPosition(skillNameText, barNode->X + 4, 0);
 
-                SetSize(countdownText, 42, null);
-                SetPosition(countdownText, 170, 30);
-                interruptedText->AtkResNode.SetScale(1, 1);
+            SetSize(countdownText, 42, null);
+            SetPosition(countdownText, 170, 30);
+            interruptedText->AtkResNode.SetScale(1, 1);
 
-                countdownText->AlignmentFontType = 0x25;
-                skillNameText->AlignmentFontType = 0x03;
+            countdownText->AlignmentFontType = 0x25;
+            skillNameText->AlignmentFontType = 0x03;
 
-                return;
+            return;
             case AddonEvent.PostDraw://每帧更新时进行修改
                 if (AddonCastBar->UldManager.NodeList == null || AddonCastBar->UldManager.NodeListCount < 12) return;//如果节点列表为空或者节点数小于12 可能有别的插件改动过咏唱栏 就不对其进行修改 不然可能会出问题
 
 
-                if (Configs.RemoveIcon) icon->AtkResNode.ToggleVisibility(false);
-                if (Configs.RemoveName) skillNameText->AtkResNode.ToggleVisibility(false);
-                if (Configs.RemoveCounter) countdownText->AtkResNode.ToggleVisibility(false);
-                if (Configs.RemoveCastingText) castingText->AtkResNode.ToggleVisibility(false);
+        if (Configs.RemoveIcon) icon->AtkResNode.ToggleVisibility(false);
+        if (Configs.RemoveName) skillNameText->AtkResNode.ToggleVisibility(false);
+        if (Configs.RemoveCounter) countdownText->AtkResNode.ToggleVisibility(false);
+        if (Configs.RemoveCastingText) castingText->AtkResNode.ToggleVisibility(false);
 
-                if (Configs.RemoveCastingText && !Configs.RemoveCounter)
-                {
-                    countdownText->AlignmentFontType = (byte)(0x20 | (byte)Configs.AlignCounter);
-                    SetSize(countdownText, barNode->Width - 8, null);
-                    SetPosition(countdownText, barNode->X + 4 + Configs.OffsetCounter.X, 30 + Configs.OffsetCounter.Y);
-                }
-                else
-                {
-                    countdownText->AlignmentFontType = 0x20 | (byte)Alignment.Right;
-                    SetSize(countdownText, 42, null);
-                    SetPosition(countdownText, 170, null);
-                }
+        if (Configs.RemoveCastingText && !Configs.RemoveCounter)
+        {
+            countdownText->AlignmentFontType = (byte)(0x20 | (byte)Configs.AlignCounter);
+            SetSize(countdownText, barNode->Width - 8, null);
+            SetPosition(countdownText, barNode->X + 4 + Configs.OffsetCounter.X, 30 + Configs.OffsetCounter.Y);
+        }
+        else
+        {
+            countdownText->AlignmentFontType = 0x20 | (byte)Alignment.Right;
+            SetSize(countdownText, 42, null);
+            SetPosition(countdownText, 170, null);
+        }
 
-                if (!Configs.RemoveName)
-                {
-                    skillNameText->AlignmentFontType = (byte)(0x00 | (byte)Configs.AlignName);
-                    SetPosition(skillNameText, (barNode->X + 4) + Configs.OffsetName.X, Configs.OffsetName.Y);
-                    SetSize(skillNameText, barNode->Width - 8, null);
-                }
+        if (!Configs.RemoveName)
+        {
+            skillNameText->AlignmentFontType = (byte)(0x00 | (byte)Configs.AlignName);
+            SetPosition(skillNameText, (barNode->X + 4) + Configs.OffsetName.X, Configs.OffsetName.Y);
+            SetSize(skillNameText, barNode->Width - 8, null);
+        }
 
-                if (Configs.RemoveInterruptedText)
-                {
-                    interruptedText->AtkResNode.SetScale(0, 0);
-                }
+        if (Configs.RemoveInterruptedText)
+        {
+            interruptedText->AtkResNode.SetScale(0, 0);
+        }
 
-                if (Configs.SlideCast && Configs.ClassicSlideCast == false)
-                {
+        if (Configs.SlideCast && Configs.ClassicSlideCast == false)
+        {
                     if (classicSlideMarker != null) classicSlideMarker.IsVisible = false;
-                    if (slideMarker == null)
-                    {
+            if (slideMarker == null)
+            {
                         slideMarker = new SimpleNineGridNode
                         {
                             PartId = 0,
@@ -363,12 +363,12 @@ public unsafe class CastBarAddon : DailyModuleBase
                         };
 
                         Service.AddonController.AttachNode(slideMarker, AddonCastBar->GetNodeById(10));
-                    }
+            }
 
-                    if (slideMarker != null)
-                    {
+            if (slideMarker != null)
+            {
                         var slidePer = ((float)(AddonCastBar->CastTime * 10) - Configs.SlideCastAdjust) / (AddonCastBar->CastTime * 10);
-                        var pos = 160 * slidePer;
+                var pos = 160 * slidePer;
                         slideMarker.IsVisible = true;
                         slideMarker.Size = new Vector2(168 - (int)pos, 15);
                         slideMarker.Position = new Vector2(pos - 11, 3);
@@ -377,19 +377,19 @@ public unsafe class CastBarAddon : DailyModuleBase
                         slideMarker.MultiplyColor = new Vector3(c.X, c.Y, c.Z);
                         slideMarker.Alpha = c.W;
                         slideMarker.PartId = 0;
-                    }
+            }
 
-                }
-                else if (Configs.SlideCast && Configs.ClassicSlideCast)
-                {
+        }
+        else if (Configs.SlideCast && Configs.ClassicSlideCast)
+        {
                     if (slideMarker != null) slideMarker.IsVisible = false;
-                    if (classicSlideMarker == null)
-                    {
-                        if (progressBar == null) return;
+            if (classicSlideMarker == null)
+            {
+                if (progressBar == null) return;
 
                         // 创建传统模式节点
                         classicSlideMarker = new SimpleNineGridNode()
-                        {
+                {
                             TexturePath = "ui/uld/emjfacemask.tex",//这个贴图是个纯色贴图 狒狒自带的
                             TextureCoordinates = new(28, 28),
                             TextureSize = new(8, 8),
@@ -401,10 +401,10 @@ public unsafe class CastBarAddon : DailyModuleBase
                         };
 
                         Service.AddonController.AttachNode(classicSlideMarker, progressBar->ParentNode);
-                    }
+                }
 
                     if (classicSlideMarker != null)
-                    {
+                {
                         classicSlideMarker.IsVisible = true;
 
                         var slidePer = ((float)(AddonCastBar->CastTime * 10) - Configs.SlideCastAdjust) / (AddonCastBar->CastTime * 10);
@@ -425,7 +425,7 @@ public unsafe class CastBarAddon : DailyModuleBase
 
 
                 return;
-        }
+    }
         return;
     }//使用了监听器方法进行重构
 }
