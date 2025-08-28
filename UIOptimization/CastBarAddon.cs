@@ -187,8 +187,6 @@ public unsafe class CastBarAddon : DailyModuleBase
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         OnAddon(AddonEvent.PreFinalize, null);
-        if (Config != null)
-            SaveConfig(Config);
     }
     protected void OnAddon(AddonEvent type, AddonArgs args)
     {
