@@ -149,7 +149,7 @@ public unsafe class CastBarAddon : DailyModuleBase
                 if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-ClassicMode"), ref Config.ClassicSlideCast))
                     SaveConfig(Config);
 
-                if (Config.ClassicSlideCast is true)
+                if (Config.ClassicSlideCast == true)
                 {
                     using (ImRaii.PushIndent(2))
                     {
