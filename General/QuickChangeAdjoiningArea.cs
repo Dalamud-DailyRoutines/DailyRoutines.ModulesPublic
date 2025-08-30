@@ -23,7 +23,7 @@ namespace DailyRoutines.ModulesPublic.General
         };
         protected override void Init()
         {
-            ModuleConfig = LoadConfig<Config>() ?? new();
+            Config = LoadConfig<Config>() ?? new();
         }
         protected override void ConfigUI()
         {
