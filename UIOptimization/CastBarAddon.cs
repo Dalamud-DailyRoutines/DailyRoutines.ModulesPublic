@@ -27,32 +27,34 @@ public unsafe class CastBarAddon : DailyModuleBase
     private static SimpleNineGridNode? classicSlideMarker;
 
     private static Configs Config = null!;
+
     protected override void Init()
     {
         Config = LoadConfig<Configs>() ?? new();
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_CastBar", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_CastBar", OnAddon);
     }
+
     protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideCastingText"), ref Config.RemoveCastingText))
             SaveConfig(Config);
+
         if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideIcon"), ref Config.RemoveIcon))
             SaveConfig(Config);
+
         if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideInterruptedText"), ref Config.RemoveInterruptedText))
             SaveConfig(Config);
+
         if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideCountdownText"), ref Config.RemoveCounter))
             SaveConfig(Config);
-        if (Config.RemoveCastingText is true && Config.RemoveCounter is not true)
+        if (Config is { RemoveCastingText: true, RemoveCounter: false })
         {
             ImGui.SameLine();
             using (ImRaii.PushId("CounterPosition"))
-            using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 2f))
-            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.One))
-            using (ImRaii.PushFont(UiBuilder.IconFont))
             using (ImRaii.Group())
             {
-                using (ImRaii.PushColor(ImGuiCol.Border, Config.AlignCounter == Alignment.Left ? 0xFF00A5FFu : 0u))
+                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignCounter == Alignment.Left ? 0xFF00A5FFu : 0xFFFFFFFFu))
                 {
                     if (ImGui.Button($"{(char)FontAwesomeIcon.AlignLeft}"))
                     {
@@ -60,9 +62,8 @@ public unsafe class CastBarAddon : DailyModuleBase
                         SaveConfig(Config);
                     }
                 }
-
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Border, Config.AlignCounter == Alignment.Center ? 0xFF00A5FFu : 0u))
+                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignCounter == Alignment.Center ? 0xFF00A5FFu : 0xFFFFFFFFu))
                 {
                     if (ImGui.Button($"{(char)FontAwesomeIcon.AlignCenter}"))
                     {
@@ -71,7 +72,7 @@ public unsafe class CastBarAddon : DailyModuleBase
                     }
                 }
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Border, Config.AlignCounter == Alignment.Right ? 0xFF00A5FFu : 0u))
+                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignCounter == Alignment.Right ? 0xFF00A5FFu : 0xFFFFFFFFu))
                 {
                     if (ImGui.Button($"{(char)FontAwesomeIcon.AlignRight}"))
                     {
@@ -82,8 +83,10 @@ public unsafe class CastBarAddon : DailyModuleBase
             }
             ImGui.SameLine();
             ImGui.Text(GetLoc("CastBarAddonTitle-CountdownAlignmentPosition"));
-            ImGui.SetNextItemWidth(200 * ImGui.GetIO().FontGlobalScale);
-            if (ImGui.SliderFloat2(GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset") + "##offsetCounterPosition", ref Config.OffsetCounter, -100, 100, $"%.0f"))
+
+            ImGui.SetNextItemWidth(200 * GlobalFontScale);
+            ImGui.SliderFloat2($"{GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset")}##offsetCounterPosition", ref Config.OffsetCounter, -100, 100, "%.0f");
+            if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(Config);
 
             Config.OffsetCounter = Vector2.Clamp(Config.OffsetCounter, new Vector2(-100), new Vector2(100));
@@ -91,17 +94,13 @@ public unsafe class CastBarAddon : DailyModuleBase
 
         if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideName"), ref Config.RemoveName))
             SaveConfig(Config);
-
-        if (Config.RemoveName is not true)
+        if (Config.RemoveName == false)
         {
             ImGui.SameLine();
             using (ImRaii.PushId("NamePosition"))
-            using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 2f))
-            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.One))
-            using (ImRaii.PushFont(UiBuilder.IconFont))
             using (ImRaii.Group())
             {
-                using (ImRaii.PushColor(ImGuiCol.Border, Config.AlignName == Alignment.Left ? 0xFF00A5FFu : 0u))
+                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignName == Alignment.Left ? 0xFF00A5FFu : 0xFFFFFFFFu))
                 {
                     if (ImGui.Button($"{(char)FontAwesomeIcon.AlignLeft}"))
                     {
@@ -111,7 +110,7 @@ public unsafe class CastBarAddon : DailyModuleBase
                 }
 
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Border, Config.AlignName == Alignment.Center ? 0xFF00A5FFu : 0u))
+                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignName == Alignment.Center ? 0xFF00A5FFu : 0xFFFFFFFFu))
                 {
                     if (ImGui.Button($"{(char)FontAwesomeIcon.AlignCenter}"))
                     {
@@ -120,7 +119,7 @@ public unsafe class CastBarAddon : DailyModuleBase
                     }
                 }
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Border, Config.AlignName == Alignment.Right ? 0xFF00A5FFu : 0u))
+                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignName == Alignment.Right ? 0xFF00A5FFu : 0xFFFFFFFFu))
                 {
                     if (ImGui.Button($"{(char)FontAwesomeIcon.AlignRight}"))
                     {
@@ -131,50 +130,51 @@ public unsafe class CastBarAddon : DailyModuleBase
             }
             ImGui.SameLine();
             ImGui.Text(GetLoc("CastBarAddonTitle-NameAlignmentPosition"));
-            ImGui.SetNextItemWidth(200 * ImGui.GetIO().FontGlobalScale);
+            ImGui.SetNextItemWidth(200 * GlobalFontScale);
 
-            if (ImGui.SliderFloat2(GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset") + "##offsetNamePosition", ref Config.OffsetName, -100, 100, "%.0f"))
+            ImGui.SliderFloat2($"{GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset")}##offsetNamePosition", ref Config.OffsetName, -100, 100, "%.0f");
+            if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(Config);
+
             Config.OffsetName = Vector2.Clamp(Config.OffsetName, new Vector2(-100), new Vector2(100));
         }
 
         if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-ShowSlideCastMarker"), ref Config.SlideCast))
             SaveConfig(Config);
 
-        if (Config.SlideCast is true)
+        if (Config.SlideCast == true)
         {
-            using (ImRaii.PushIndent())
-            using (ImRaii.PushIndent())
+            using (ImRaii.PushIndent(2))
             {
                 if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-ClassicMode"), ref Config.ClassicSlideCast))
                     SaveConfig(Config);
 
                 if (Config.ClassicSlideCast is true)
                 {
-                    using (ImRaii.PushIndent())
-                    using (ImRaii.PushIndent())
+                    using (ImRaii.PushIndent(2))
                     {
-                        using (ImRaii.ItemWidth(100f * ImGui.GetIO().FontGlobalScale))
-                        {
-                            if (ImGui.SliderInt(GetLoc("CastBarAddonTitle-Width"), ref Config.ClassicSlideCastWidth, 1, 10))
-                                SaveConfig(Config);
-                        }
+                        ImGui.SetNextItemWidth(100f * GlobalFontScale);
+                        ImGui.SliderInt(GetLoc("CastBarAddonTitle-Width"), ref Config.ClassicSlideCastWidth, 1, 10);
+                        if (ImGui.IsItemDeactivatedAfterEdit())
+                            SaveConfig(Config);
 
-                        using (ImRaii.ItemWidth(100f * ImGui.GetIO().FontGlobalScale))
-                        {
-                            if (ImGui.SliderInt(GetLoc("CastBarAddonTitle-ExtraHeight"), ref Config.ClassicSlideCastOverHeight, 0, 20))
-                                SaveConfig(Config);
-                        }
+                        ImGui.SetNextItemWidth(100f * GlobalFontScale);
+                        ImGui.SliderInt(GetLoc("CastBarAddonTitle-ExtraHeight"), ref Config.ClassicSlideCastOverHeight, 0, 20);
+                        if (ImGui.IsItemDeactivatedAfterEdit())
+                            SaveConfig(Config);
                     }
                 }
 
-                if (ImGui.SliderInt(GetLoc("CastBarAddonTitle-SlideCastOffsetTime"), ref Config.SlideCastAdjust, 0, 1000))
+                ImGui.SliderInt(GetLoc("CastBarAddonTitle-SlideCastOffsetTime"), ref Config.SlideCastAdjust, 0, 1000);
+                if (ImGui.IsItemDeactivatedAfterEdit())
                     SaveConfig(Config);
 
-                if (ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastMarkerColor"), ref Config.SlideCastColor))
+                ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastMarkerColor"), ref Config.SlideCastColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
                     SaveConfig(Config);
 
-                if (ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastReadyColor"), ref Config.SlideCastReadyColor))
+                ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastReadyColor"), ref Config.SlideCastReadyColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
                     SaveConfig(Config);
             }
         }
@@ -183,11 +183,13 @@ public unsafe class CastBarAddon : DailyModuleBase
 
         OnAddon(AddonEvent.PreFinalize, null);
     }
+
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         OnAddon(AddonEvent.PreFinalize, null);
     }
+
     protected void OnAddon(AddonEvent type, AddonArgs args)
     {
         if (CastBar == null)
@@ -237,8 +239,7 @@ public unsafe class CastBarAddon : DailyModuleBase
                     countdownText->AtkResNode.ToggleVisibility(false);
                 if (Config.RemoveCastingText)
                     castingText->AtkResNode.ToggleVisibility(false);
-
-                if (Config.RemoveCastingText is true && Config.RemoveCounter is not true)
+                if (Config is { RemoveCastingText: true, RemoveCounter: false })
                 {
                     countdownText->AlignmentFontType = (byte)(0x20 | (byte)Config.AlignCounter);
                     countdownText->SetWidth((ushort)(barNode->Width - 8));
@@ -251,17 +252,16 @@ public unsafe class CastBarAddon : DailyModuleBase
                     countdownText->SetXFloat(170);
                 }
 
-                if (Config.RemoveName is not true)
+                if (Config.RemoveName == false)
                 {
                     skillNameText->AlignmentFontType = (byte)(0x00 | (byte)Config.AlignName);
                     skillNameText->SetPositionFloat(barNode->X + 4 + Config.OffsetName.X, Config.OffsetName.Y);
                     skillNameText->SetWidth((ushort)(barNode->Width - 8));
                 }
 
-                if (Config.RemoveInterruptedText is true)
+                if (Config.RemoveInterruptedText == true)
                     interruptedText->AtkResNode.SetScale(0, 0);
-
-                if (Config.SlideCast is true && Config.ClassicSlideCast is not true)
+                if (Config is { SlideCast: true, ClassicSlideCast: false })
                 {
                     if (classicSlideMarker != null)
                         classicSlideMarker.IsVisible = false;
@@ -296,7 +296,7 @@ public unsafe class CastBarAddon : DailyModuleBase
                     }
 
                 }
-                else if (Config.SlideCast is true && Config.ClassicSlideCast is true)
+                else if (Config is { SlideCast: true, ClassicSlideCast: true })
                 {
                     if (slideMarker != null)
                         slideMarker.IsVisible = false;
@@ -338,6 +338,7 @@ public unsafe class CastBarAddon : DailyModuleBase
         }
         return;
     }
+
     protected class Configs : ModuleConfiguration
     {
         public bool RemoveCastingText;
