@@ -5,7 +5,6 @@ using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -19,18 +18,18 @@ public unsafe class NoRenderWhenBackground : DailyModuleBase
         Author      = ["Siren"]
     };
 
-    private static readonly CompSig DeviceDX11PostTickSig =
-        new("E8 ?? ?? ?? ?? 80 7B ?? ?? 74 ?? 48 8B 03 48 8B CB FF 50 ?? 84 C0");
-    private delegate void DeviceDX11PostTickDelegate(nint instance);
-    private static Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
+    private static readonly CompSig                           DeviceDX11PostTickSig = new("E8 ?? ?? ?? ?? 80 7B ?? ?? 74 ?? 48 8B 03 48 8B CB FF 50 ?? 84 C0");
+    private delegate        void                              DeviceDX11PostTickDelegate(nint instance);
+    private static          Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
 
-    private static readonly CompSig NamePlateDrawSig = new("0F B7 81 ?? ?? ?? ?? 81 A1");
-    private delegate void NamePlateDrawDelegate(AtkUnitBase* addon);
-    private static Hook<NamePlateDrawDelegate>? NamePlateDrawHook;
+    private static readonly CompSig                      NamePlateDrawSig = new("0F B7 81 ?? ?? ?? ?? 81 A1");
+    private delegate        void                         NamePlateDrawDelegate(AtkUnitBase* addon);
+    private static          Hook<NamePlateDrawDelegate>? NamePlateDrawHook;
 
-    private static readonly CompSig ShouldLimitFPSSig = new("E8 ?? ?? ?? ?? 84 C0 74 0A B9 32 00 00 00");
-    private delegate bool ShouldLimitFPSDelegate(UIModule* module);
-    private static ShouldLimitFPSDelegate? ShouldLimitFPS;
+    // TODO: 7.3 FFCS UIModuleInterface
+    private static readonly CompSig                 ShouldLimitFPSSig = new("E8 ?? ?? ?? ?? 84 C0 74 0A B9 32 00 00 00");
+    private delegate        bool                    ShouldLimitFPSDelegate(UIModule* module);
+    private static          ShouldLimitFPSDelegate? ShouldLimitFPS;
     
     private static Config ModuleConfig = null!;
 
@@ -51,18 +50,11 @@ public unsafe class NoRenderWhenBackground : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(
-                GetLoc("NoRenderWhenBackground-OnlyProhibitedInIconic", LuminaGetter.GetRow<Addon>(4024)!.Value.Text.ExtractText()), 
-                ref ModuleConfig.OnlyProhibitedInIconic))
+        if (ImGui.Checkbox(GetLoc("NoRenderWhenBackground-OnlyProhibitedInIconic", LuminaWrapper.GetAddonText(4024)), ref ModuleConfig.OnlyProhibitedInIconic))
             SaveConfig(ModuleConfig);
     }
 
-    protected override void Uninit()
-    {
-        base.Uninit();
-
-        IsOnNoRender = false;
-    }
+    protected override void Uninit() => IsOnNoRender = false;
 
     private static void DeviceDX11PostTickDetour(nint instance)
     {

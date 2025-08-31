@@ -44,8 +44,7 @@ public class CrossDCPartyFinder : DailyModuleBase
     private static string LocatedDataCenter =>
         GameState.CurrentDataCenterData.Name.ExtractText();
 
-    private static readonly CompSig AgentLookingForGroupReceiveEventSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 45 8B D1");
-    private static          Hook<AgentReceiveEventDelegate>? AgentLookingForGroupReceiveEventHook;
+    private static Hook<AgentReceiveEventDelegate>? AgentLookingForGroupReceiveEventHook;
 
     private static Config ModuleConfig = null!;
 
@@ -80,7 +79,9 @@ public class CrossDCPartyFinder : DailyModuleBase
         if (IsAddonAndNodesReady(LookingForGroup))
             OnAddon(AddonEvent.PostSetup, null);
 
-        AgentLookingForGroupReceiveEventHook ??= AgentLookingForGroupReceiveEventSig.GetHook<AgentReceiveEventDelegate>(AgentLookingForGroupReceiveEventDetour);
+        AgentLookingForGroupReceiveEventHook ??=
+            DService.Hook.HookFromAddress<AgentReceiveEventDelegate>(AgentLookingForGroup.Instance()->VirtualTable->ReceiveEvent,
+                                                                     AgentLookingForGroupReceiveEventDetour);
         AgentLookingForGroupReceiveEventHook.Enable();
     }
 

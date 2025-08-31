@@ -20,6 +20,7 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
+    // TODO: 7.3 FFCS
     private delegate void RefreshPartyFinderDelegate(AgentLookingForGroup* agent);
     private static readonly RefreshPartyFinderDelegate RefreshPartyFinder =
         new CompSig("E8 ?? ?? ?? ?? 8B 8B ?? ?? ?? ?? 85 C9 75 12").GetDelegate<RefreshPartyFinderDelegate>();
