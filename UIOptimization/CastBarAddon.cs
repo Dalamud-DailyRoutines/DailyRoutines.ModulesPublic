@@ -1,3 +1,4 @@
+using System.Numerics;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -5,15 +6,12 @@ using Dalamud.Interface;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
-using System.Numerics;
 using static FFXIVClientStructs.FFXIV.Client.UI.ListPanel;
 
 namespace DailyRoutines.ModulesPublic;
 
-
 public unsafe class CastBarAddon : DailyModuleBase
 {
-
     public override ModuleInfo Info { get; } = new()
     {
         Title = GetLoc("CastBarAddonTitle"),
@@ -22,166 +20,149 @@ public unsafe class CastBarAddon : DailyModuleBase
         Author = ["Middo"]
     };
 
-    private static SimpleNineGridNode? slideMarker;
+    private static SimpleNineGridNode? SlideMarkerNode;
+    private static SimpleNineGridNode? ClassicSlideMarkerNode;
 
-    private static SimpleNineGridNode? classicSlideMarker;
-
-    private static Configs Config = null!;
+    private static Config ModuleConfig = null!;
 
     protected override void Init()
     {
-        Config = LoadConfig<Configs>() ?? new();
+        ModuleConfig = LoadConfig<Config>() ?? new();
+
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_CastBar", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_CastBar", OnAddon);
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideCastingText"), ref Config.RemoveCastingText))
-            SaveConfig(Config);
+        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideCastingText"), ref ModuleConfig.RemoveCastingText))
+            SaveConfig(ModuleConfig);
 
-        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideIcon"), ref Config.RemoveIcon))
-            SaveConfig(Config);
+        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideIcon"), ref ModuleConfig.RemoveIcon))
+            SaveConfig(ModuleConfig);
 
-        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideInterruptedText"), ref Config.RemoveInterruptedText))
-            SaveConfig(Config);
+        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideInterruptedText"), ref ModuleConfig.RemoveInterruptedText))
+            SaveConfig(ModuleConfig);
 
-        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideCountdownText"), ref Config.RemoveCounter))
-            SaveConfig(Config);
-        if (Config is { RemoveCastingText: true, RemoveCounter: false })
+        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideCountdownText"), ref ModuleConfig.RemoveCounter))
+            SaveConfig(ModuleConfig);
+
+        if (ModuleConfig is { RemoveCastingText: true, RemoveCounter: false })
         {
-            ImGui.SameLine();
+            ImGui.SameLine(0, 8f * GlobalFontScale);
             using (ImRaii.PushId("CounterPosition"))
             using (ImRaii.Group())
             {
-                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignCounter == Alignment.Left ? 0xFF00A5FFu : 0xFFFFFFFFu))
+                if (ImGui.Button($"{(char)FontAwesomeIcon.AlignLeft}"))
                 {
-                    if (ImGui.Button($"{(char)FontAwesomeIcon.AlignLeft}"))
-                    {
-                        Config.AlignCounter = Alignment.Left;
-                        SaveConfig(Config);
-                    }
+                    ModuleConfig.AlignCounter = Alignment.Left;
+                    SaveConfig(ModuleConfig);
                 }
+
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignCounter == Alignment.Center ? 0xFF00A5FFu : 0xFFFFFFFFu))
+                if (ImGui.Button($"{(char)FontAwesomeIcon.AlignCenter}"))
                 {
-                    if (ImGui.Button($"{(char)FontAwesomeIcon.AlignCenter}"))
-                    {
-                        Config.AlignCounter = Alignment.Center;
-                        SaveConfig(Config);
-                    }
+                    ModuleConfig.AlignCounter = Alignment.Center;
+                    SaveConfig(ModuleConfig);
                 }
+
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignCounter == Alignment.Right ? 0xFF00A5FFu : 0xFFFFFFFFu))
+                if (ImGui.Button($"{(char)FontAwesomeIcon.AlignRight}"))
                 {
-                    if (ImGui.Button($"{(char)FontAwesomeIcon.AlignRight}"))
-                    {
-                        Config.AlignCounter = Alignment.Right;
-                        SaveConfig(Config);
-                    }
+                    ModuleConfig.AlignCounter = Alignment.Right;
+                    SaveConfig(ModuleConfig);
                 }
             }
+
             ImGui.SameLine();
             ImGui.Text(GetLoc("CastBarAddonTitle-CountdownAlignmentPosition"));
 
-            ImGui.SetNextItemWidth(200 * GlobalFontScale);
-            ImGui.SliderFloat2($"{GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset")}##offsetCounterPosition", ref Config.OffsetCounter, -100, 100, "%.0f");
+            ImGui.SetNextItemWidth(200f * GlobalFontScale);
+            if (ImGui.SliderFloat2($"{GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset")}##offsetCounterPosition", ref ModuleConfig.OffsetCounter, -100, 100, "%.0f"))
+                ModuleConfig.OffsetCounter = Vector2.Clamp(ModuleConfig.OffsetCounter, new(-100), new(100));
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(Config);
-
-            Config.OffsetCounter = Vector2.Clamp(Config.OffsetCounter, new Vector2(-100), new Vector2(100));
+                SaveConfig(ModuleConfig);
         }
 
-        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideName"), ref Config.RemoveName))
-            SaveConfig(Config);
-        if (Config.RemoveName == false)
+        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-HideName"), ref ModuleConfig.RemoveName))
+            SaveConfig(ModuleConfig);
+
+        if (ModuleConfig.RemoveName == false)
         {
-            ImGui.SameLine();
+            ImGui.SameLine(0, 8f * GlobalFontScale);
             using (ImRaii.PushId("NamePosition"))
             using (ImRaii.Group())
             {
-                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignName == Alignment.Left ? 0xFF00A5FFu : 0xFFFFFFFFu))
+                if (ImGui.Button($"{(char)FontAwesomeIcon.AlignLeft}"))
                 {
-                    if (ImGui.Button($"{(char)FontAwesomeIcon.AlignLeft}"))
-                    {
-                        Config.AlignName = Alignment.Left;
-                        SaveConfig(Config);
-                    }
+                    ModuleConfig.AlignName = Alignment.Left;
+                    SaveConfig(ModuleConfig);
                 }
 
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignName == Alignment.Center ? 0xFF00A5FFu : 0xFFFFFFFFu))
+                if (ImGui.Button($"{(char)FontAwesomeIcon.AlignCenter}"))
                 {
-                    if (ImGui.Button($"{(char)FontAwesomeIcon.AlignCenter}"))
-                    {
-                        Config.AlignName = Alignment.Center;
-                        SaveConfig(Config);
-                    }
+                    ModuleConfig.AlignName = Alignment.Center;
+                    SaveConfig(ModuleConfig);
                 }
+
                 ImGui.SameLine();
-                using (ImRaii.PushColor(ImGuiCol.Text, Config.AlignName == Alignment.Right ? 0xFF00A5FFu : 0xFFFFFFFFu))
+                if (ImGui.Button($"{(char)FontAwesomeIcon.AlignRight}"))
                 {
-                    if (ImGui.Button($"{(char)FontAwesomeIcon.AlignRight}"))
-                    {
-                        Config.AlignName = Alignment.Right;
-                        SaveConfig(Config);
-                    }
+                    ModuleConfig.AlignName = Alignment.Right;
+                    SaveConfig(ModuleConfig);
                 }
             }
+
             ImGui.SameLine();
             ImGui.Text(GetLoc("CastBarAddonTitle-NameAlignmentPosition"));
-            ImGui.SetNextItemWidth(200 * GlobalFontScale);
 
-            ImGui.SliderFloat2($"{GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset")}##offsetNamePosition", ref Config.OffsetName, -100, 100, "%.0f");
+            ImGui.SetNextItemWidth(200f * GlobalFontScale);
+            if (ImGui.SliderFloat2($"{GetLoc("CastBarAddonTitle-HorizontalAndVerticalOffset")}##offsetNamePosition", ref ModuleConfig.OffsetName, -100, 100, "%.0f"))
+                ModuleConfig.OffsetName = Vector2.Clamp(ModuleConfig.OffsetName, new(-100), new(100));
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(Config);
-
-            Config.OffsetName = Vector2.Clamp(Config.OffsetName, new Vector2(-100), new Vector2(100));
+                SaveConfig(ModuleConfig);
         }
 
-        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-ShowSlideCastMarker"), ref Config.SlideCast))
-            SaveConfig(Config);
+        if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-ShowSlideCastMarker"), ref ModuleConfig.SlideCast))
+            SaveConfig(ModuleConfig);
 
-        if (Config.SlideCast == true)
+        if (ModuleConfig.SlideCast)
         {
-            using (ImRaii.PushIndent(2))
+            using (ImRaii.PushIndent())
             {
-                if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-ClassicMode"), ref Config.ClassicSlideCast))
-                    SaveConfig(Config);
+                if (ImGui.Checkbox(GetLoc("CastBarAddonTitle-ClassicMode"), ref ModuleConfig.ClassicSlideCast))
+                    SaveConfig(ModuleConfig);
 
-                if (Config.ClassicSlideCast == true)
+                if (ModuleConfig.ClassicSlideCast)
                 {
-                    using (ImRaii.PushIndent(2))
+                    using (ImRaii.PushIndent())
                     {
                         ImGui.SetNextItemWidth(100f * GlobalFontScale);
-                        ImGui.SliderInt(GetLoc("CastBarAddonTitle-Width"), ref Config.ClassicSlideCastWidth, 1, 10);
+                        ImGui.SliderInt(GetLoc("CastBarAddonTitle-Width"), ref ModuleConfig.ClassicSlideCastWidth, 1, 10);
                         if (ImGui.IsItemDeactivatedAfterEdit())
-                            SaveConfig(Config);
+                            SaveConfig(ModuleConfig);
 
                         ImGui.SetNextItemWidth(100f * GlobalFontScale);
-                        ImGui.SliderInt(GetLoc("CastBarAddonTitle-ExtraHeight"), ref Config.ClassicSlideCastOverHeight, 0, 20);
+                        ImGui.SliderInt(GetLoc("CastBarAddonTitle-ExtraHeight"), ref ModuleConfig.ClassicSlideCastOverHeight, 0, 20);
                         if (ImGui.IsItemDeactivatedAfterEdit())
-                            SaveConfig(Config);
+                            SaveConfig(ModuleConfig);
                     }
                 }
 
-                ImGui.SliderInt(GetLoc("CastBarAddonTitle-SlideCastOffsetTime"), ref Config.SlideCastAdjust, 0, 1000);
+                ImGui.SliderInt(GetLoc("CastBarAddonTitle-SlideCastOffsetTime"), ref ModuleConfig.SlideCastAdjust, 0, 1000);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    SaveConfig(Config);
+                    SaveConfig(ModuleConfig);
 
-                ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastMarkerColor"), ref Config.SlideCastColor);
+                ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastMarkerColor"), ref ModuleConfig.SlideCastColor);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    SaveConfig(Config);
+                    SaveConfig(ModuleConfig);
 
-                ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastReadyColor"), ref Config.SlideCastReadyColor);
+                ImGui.ColorEdit4(GetLoc("CastBarAddonTitle-SlideCastReadyColor"), ref ModuleConfig.SlideCastReadyColor);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    SaveConfig(Config);
+                    SaveConfig(ModuleConfig);
             }
         }
-
-        ScaledDummy(5f);
-
-        OnAddon(AddonEvent.PreFinalize, null);
     }
 
     protected override void Uninit()
@@ -190,167 +171,174 @@ public unsafe class CastBarAddon : DailyModuleBase
         OnAddon(AddonEvent.PreFinalize, null);
     }
 
-    protected void OnAddon(AddonEvent type, AddonArgs args)
+    private static void OnAddon(AddonEvent type, AddonArgs args)
     {
-        if (CastBar == null)
-            return;
-        var barNode = CastBar->GetNodeById(9);
-        var icon = (AtkComponentNode*)CastBar->GetNodeById(8);
-        var countdownText = CastBar->GetTextNodeById(7);
-        var castingText = CastBar->GetTextNodeById(6);
-        var skillNameText = CastBar->GetTextNodeById(4);
-        var progressBar = (AtkNineGridNode*)CastBar->GetNodeById(11);
-        var interruptedText = CastBar->GetTextNodeById(2);
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                if (slideMarker != null)
-                {
-                    Service.AddonController.DetachNode(slideMarker);
-                    slideMarker = null;
-                }
-                if (classicSlideMarker != null)
-                {
-                    Service.AddonController.DetachNode(classicSlideMarker);
-                    classicSlideMarker = null;
-                }
-                icon->AtkResNode.ToggleVisibility(true);
-                countdownText->AtkResNode.ToggleVisibility(true);
-                castingText->AtkResNode.ToggleVisibility(true);
-                skillNameText->AtkResNode.ToggleVisibility(true);
+                Service.AddonController.DetachNode(SlideMarkerNode);
+                SlideMarkerNode = null;
 
-                skillNameText->SetWidth(170);
-                skillNameText->SetPositionFloat(barNode->X + 4, 0);
-
-                countdownText->SetWidth(42);
-                countdownText->SetPositionFloat(170, 30);
-                interruptedText->AtkResNode.SetScale(1, 1);
-
-                countdownText->AlignmentFontType = 0x25;
-                skillNameText->AlignmentFontType = 0x03;
-
+                Service.AddonController.DetachNode(ClassicSlideMarkerNode);
+                ClassicSlideMarkerNode = null;
                 return;
             case AddonEvent.PostDraw:
-                if (Config.RemoveIcon)
-                    icon->AtkResNode.ToggleVisibility(false);
-                if (Config.RemoveName)
-                    skillNameText->AtkResNode.ToggleVisibility(false);
-                if (Config.RemoveCounter)
-                    countdownText->AtkResNode.ToggleVisibility(false);
-                if (Config.RemoveCastingText)
-                    castingText->AtkResNode.ToggleVisibility(false);
-                if (Config is { RemoveCastingText: true, RemoveCounter: false })
+                if (CastBar == null) return;
+
+                var barNode = CastBar->GetNodeById(9);
+                if (barNode == null) return;
+
+                var iconNode = (AtkComponentNode*)CastBar->GetNodeById(8);
+                if (iconNode == null) return;
+
+                var countdownTextNode = CastBar->GetTextNodeById(7);
+                if (countdownTextNode == null) return;
+
+                var castingTextNode = CastBar->GetTextNodeById(6);
+                if (castingTextNode == null) return;
+
+                var actionNameTextNode = CastBar->GetTextNodeById(4);
+                if (actionNameTextNode == null) return;
+
+                var progressBarNode = (AtkNineGridNode*)CastBar->GetNodeById(11);
+                if (progressBarNode == null) return;
+
+                var interruptedTextNode = CastBar->GetTextNodeById(2);
+                if (interruptedTextNode == null) return;
+
+                if (ModuleConfig.RemoveIcon)
+                    iconNode->AtkResNode.ToggleVisibility(false);
+
+                if (ModuleConfig.RemoveName)
+                    actionNameTextNode->AtkResNode.ToggleVisibility(false);
+
+                if (ModuleConfig.RemoveCounter)
+                    countdownTextNode->AtkResNode.ToggleVisibility(false);
+
+                if (ModuleConfig.RemoveCastingText)
+                    castingTextNode->AtkResNode.ToggleVisibility(false);
+
+                if (ModuleConfig is { RemoveCastingText: true, RemoveCounter: false })
                 {
-                    countdownText->AlignmentFontType = (byte)(0x20 | (byte)Config.AlignCounter);
-                    countdownText->SetWidth((ushort)(barNode->Width - 8));
-                    countdownText->SetPositionFloat(barNode->X + 4 + Config.OffsetCounter.X, 30 + Config.OffsetCounter.Y);
+                    countdownTextNode->AlignmentFontType = (byte)(0x20 | (byte)ModuleConfig.AlignCounter);
+                    countdownTextNode->SetWidth((ushort)(barNode->Width - 8));
+                    countdownTextNode->SetPositionFloat(barNode->X + 4 + ModuleConfig.OffsetCounter.X, 30 + ModuleConfig.OffsetCounter.Y);
                 }
                 else
                 {
-                    countdownText->AlignmentFontType = 0x20 | (byte)Alignment.Right;
-                    countdownText->SetWidth(42);
-                    countdownText->SetXFloat(170);
+                    countdownTextNode->AlignmentFontType = 0x20 | (byte)Alignment.Right;
+                    countdownTextNode->SetWidth(42);
+                    countdownTextNode->SetXFloat(170);
                 }
 
-                if (Config.RemoveName == false)
+                if (ModuleConfig.RemoveName == false)
                 {
-                    skillNameText->AlignmentFontType = (byte)(0x00 | (byte)Config.AlignName);
-                    skillNameText->SetPositionFloat(barNode->X + 4 + Config.OffsetName.X, Config.OffsetName.Y);
-                    skillNameText->SetWidth((ushort)(barNode->Width - 8));
+                    actionNameTextNode->AlignmentFontType = (byte)(0x00 | (byte)ModuleConfig.AlignName);
+                    actionNameTextNode->SetPositionFloat(barNode->X + 4 + ModuleConfig.OffsetName.X, ModuleConfig.OffsetName.Y);
+                    actionNameTextNode->SetWidth((ushort)(barNode->Width - 8));
                 }
 
-                if (Config.RemoveInterruptedText == true)
-                    interruptedText->AtkResNode.SetScale(0, 0);
-                if (Config is { SlideCast: true, ClassicSlideCast: false })
+                if (ModuleConfig.RemoveInterruptedText)
+                    interruptedTextNode->AtkResNode.SetScale(0, 0);
+
+                switch (ModuleConfig)
                 {
-                    if (classicSlideMarker != null)
-                        classicSlideMarker.IsVisible = false;
-                    if (slideMarker == null)
-                    {
-                        slideMarker = new SimpleNineGridNode
+                    case { SlideCast: true, ClassicSlideCast: false }:
                         {
-                            PartId = 0,
-                            TexturePath = "ui/uld/bgparts_hr1.tex",
-                            TextureCoordinates = new(32, 37),
-                            TextureSize = new(28, 30),
-                            IsVisible = false,
-                            Color = progressBar->Color.RGBA.ToVector4(),
-                            NodeFlags = progressBar->NodeFlags,
-                        };
+                            if (ClassicSlideMarkerNode != null)
+                                ClassicSlideMarkerNode.IsVisible = false;
 
-                        Service.AddonController.AttachNode(slideMarker, CastBar->GetNodeById(10));
-                    }
+                            if (SlideMarkerNode == null)
+                            {
+                                SlideMarkerNode = new SimpleNineGridNode
+                                {
+                                    PartId = 0,
+                                    TexturePath = "ui/uld/bgparts_hr1.tex",
+                                    TextureCoordinates = new(32, 37),
+                                    TextureSize = new(28, 30),
+                                    IsVisible = false,
+                                    Color = progressBarNode->Color.RGBA.ToVector4(),
+                                    NodeFlags = progressBarNode->NodeFlags
+                                };
 
-                    if (slideMarker != null)
-                    {
-                        var slidePer = ((float)(((AddonCastBar*)CastBar)->CastTime * 10) - Config.SlideCastAdjust) / (((AddonCastBar*)CastBar)->CastTime * 10);
-                        var pos = 160 * slidePer;
-                        slideMarker.IsVisible = true;
-                        slideMarker.Size = new Vector2(168 - (int)pos, 15);
-                        slideMarker.Position = new Vector2(pos - 11, 3);
-                        var c = (slidePer * 100) >= ((AddonCastBar*)CastBar)->CastPercent ? Config.SlideCastColor : Config.SlideCastReadyColor;
-                        slideMarker.AddColor = new Vector3(c.X, c.Y, c.Z);
-                        slideMarker.MultiplyColor = new Vector3(c.X, c.Y, c.Z);
-                        slideMarker.Alpha = c.W;
-                        slideMarker.PartId = 0;
-                    }
+                                Service.AddonController.AttachNode(SlideMarkerNode, CastBar->GetNodeById(10));
+                            }
 
-                }
-                else if (Config is { SlideCast: true, ClassicSlideCast: true })
-                {
-                    if (slideMarker != null)
-                        slideMarker.IsVisible = false;
-                    if (classicSlideMarker == null)
-                    {
-                        if (progressBar == null) return;
+                            if (SlideMarkerNode != null)
+                            {
+                                var slidePer = ((float)(((AddonCastBar*)CastBar)->CastTime * 10) - ModuleConfig.SlideCastAdjust) / (((AddonCastBar*)CastBar)->CastTime * 10);
+                                var pos = 160 * slidePer;
+                                SlideMarkerNode.IsVisible = true;
+                                SlideMarkerNode.Size = new(168 - (int)pos, 15);
+                                SlideMarkerNode.Position = new(pos - 11, 3);
+                                var c = slidePer * 100 >= ((AddonCastBar*)CastBar)->CastPercent ? ModuleConfig.SlideCastColor : ModuleConfig.SlideCastReadyColor;
+                                SlideMarkerNode.AddColor = new(c.X, c.Y, c.Z);
+                                SlideMarkerNode.MultiplyColor = new(c.X, c.Y, c.Z);
+                                SlideMarkerNode.Alpha = c.W;
+                                SlideMarkerNode.PartId = 0;
+                            }
 
-                        classicSlideMarker = new SimpleNineGridNode()
+                            break;
+                        }
+                    case { SlideCast: true, ClassicSlideCast: true }:
                         {
-                            TexturePath = "ui/uld/emjfacemask.tex",
-                            TextureCoordinates = new(28, 28),
-                            TextureSize = new(8, 8),
-                            NodeFlags = NodeFlags.AnchorTop | NodeFlags.AnchorLeft,
-                            IsVisible = true,
-                            Width = 1,
-                            Height = 12,
-                            Position = new Vector2(100, 4),
-                        };
+                            if (SlideMarkerNode != null)
+                                SlideMarkerNode.IsVisible = false;
 
-                        Service.AddonController.AttachNode(classicSlideMarker, progressBar->ParentNode);
-                    }
+                            if (ClassicSlideMarkerNode == null)
+                            {
+                                if (progressBarNode == null) return;
 
-                    if (classicSlideMarker != null)
-                    {
-                        classicSlideMarker.IsVisible = true;
+                                ClassicSlideMarkerNode = new SimpleNineGridNode
+                                {
+                                    TexturePath = "ui/uld/emjfacemask.tex",
+                                    TextureCoordinates = new(28, 28),
+                                    TextureSize = new(8, 8),
+                                    NodeFlags = NodeFlags.AnchorTop | NodeFlags.AnchorLeft,
+                                    IsVisible = true,
+                                    Width = 1,
+                                    Height = 12,
+                                    Position = new Vector2(100, 4)
+                                };
 
-                        var slidePer = ((float)(((AddonCastBar*)CastBar)->CastTime * 10) - Config.SlideCastAdjust) / (((AddonCastBar*)CastBar)->CastTime * 10);
-                        var pos = 160 * slidePer;
+                                Service.AddonController.AttachNode(ClassicSlideMarkerNode, progressBarNode->ParentNode);
+                            }
 
-                        classicSlideMarker.Width = (ushort)Config.ClassicSlideCastWidth;
-                        classicSlideMarker.Height = (ushort)(12 + Config.ClassicSlideCastOverHeight * 2);
-                        classicSlideMarker.Position = new Vector2(pos, 4 - Config.ClassicSlideCastOverHeight);
+                            if (ClassicSlideMarkerNode != null)
+                            {
+                                ClassicSlideMarkerNode.IsVisible = true;
 
-                        var c = (slidePer * 100) >= ((AddonCastBar*)CastBar)->CastPercent ? Config.SlideCastColor : Config.SlideCastReadyColor;
-                        classicSlideMarker.Color = new Vector4(c.X, c.Y, c.Z, c.W);
-                    }
+                                var slidePer = ((float)(((AddonCastBar*)CastBar)->CastTime * 10) - ModuleConfig.SlideCastAdjust) / (((AddonCastBar*)CastBar)->CastTime * 10);
+                                var pos = 160 * slidePer;
+
+                                ClassicSlideMarkerNode.Width = (ushort)ModuleConfig.ClassicSlideCastWidth;
+                                ClassicSlideMarkerNode.Height = (ushort)(12 + (ModuleConfig.ClassicSlideCastOverHeight * 2));
+                                ClassicSlideMarkerNode.Position = new Vector2(pos, 4 - ModuleConfig.ClassicSlideCastOverHeight);
+
+                                var c = slidePer * 100 >= ((AddonCastBar*)CastBar)->CastPercent ? ModuleConfig.SlideCastColor : ModuleConfig.SlideCastReadyColor;
+                                ClassicSlideMarkerNode.Color = new(c.X, c.Y, c.Z, c.W);
+                            }
+
+                            break;
+                        }
                 }
+
                 return;
         }
-        return;
     }
 
-    protected class Configs : ModuleConfiguration
+    protected class Config : ModuleConfiguration
     {
         public bool RemoveCastingText;
-        public bool RemoveIcon = false;
+        public bool RemoveIcon;
         public bool RemoveCounter;
         public bool RemoveName;
         public bool RemoveInterruptedText;
 
         public bool SlideCast;
         public int SlideCastAdjust = 500;
-        public Vector4 SlideCastColor = new(0.8F, 0.3F, 0.3F, 1);
-        public Vector4 SlideCastReadyColor = new(0.3F, 0.8F, 0.3F, 1);
+        public Vector4 SlideCastColor = new(0.8f, 0.3f, 0.3f, 1);
+        public Vector4 SlideCastReadyColor = new(0.3f, 0.8f, 0.3f, 1);
         public bool ClassicSlideCast;
         public int ClassicSlideCastWidth = 3;
         public int ClassicSlideCastOverHeight;
@@ -358,7 +346,7 @@ public unsafe class CastBarAddon : DailyModuleBase
         public Alignment AlignName = Alignment.Left;
         public Alignment AlignCounter = Alignment.Right;
 
-        public Vector2 OffsetName = new(0);
-        public Vector2 OffsetCounter = new(0);
+        public Vector2 OffsetName = Vector2.Zero;
+        public Vector2 OffsetCounter = Vector2.Zero;
     }
 }
