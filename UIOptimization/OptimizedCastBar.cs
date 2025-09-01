@@ -260,7 +260,9 @@ public unsafe class OptimizedCastBar : DailyModuleBase
                 
                 var slidePerercentage = ((float)(addon->CastTime * 10) - ModuleConfig.SlideCastZoneAdjust) / (addon->CastTime * 10);
                 var slidePosition     = 160                                                                * slidePerercentage;
-                var slideColor        = DService.Condition[ConditionFlag.Casting] ? ModuleConfig.SlideCastNotReadyColor : ModuleConfig.SlideCastReadyColor;
+                var slideColor = DService.Condition[ConditionFlag.Casting] || DService.Condition[ConditionFlag.OccupiedInEvent]
+                                     ? ModuleConfig.SlideCastNotReadyColor
+                                     : ModuleConfig.SlideCastReadyColor;
 
                 switch (ModuleConfig.SlideCastHighlightType)
                 {
@@ -288,9 +290,8 @@ public unsafe class OptimizedCastBar : DailyModuleBase
                         SlideMarkerZoneNode.Size      = new(168           - (int)slidePosition, 22);
                         SlideMarkerZoneNode.Position  = new(slidePosition - 9, -1f);
                             
-                        var color = DService.Condition[ConditionFlag.Casting] ? ModuleConfig.SlideCastNotReadyColor : ModuleConfig.SlideCastReadyColor;
-                        SlideMarkerZoneNode.AddColor      = color.AsVector3();
-                        SlideMarkerZoneNode.MultiplyColor = color.AsVector3();
+                        SlideMarkerZoneNode.AddColor      = slideColor.AsVector3();
+                        SlideMarkerZoneNode.MultiplyColor = slideColor.AsVector3();
 
                         break;
                     case SlideCastHighlightType.Line:
