@@ -35,11 +35,12 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
         TaskHelper.Abort();
         
         if (GameState.IsInPVPArea || GameState.ContentFinderCondition == 0) return;
-        if (GameState.ContentFinderConditionData.PvP || 
-            !ValidContentJobCategories.Contains(GameState.ContentFinderConditionData.AcceptClassJobCategory.RowId)) 
+        if (GameState.ContentFinderConditionData.PvP                                                               ||
+            !ValidContentJobCategories.Contains(GameState.ContentFinderConditionData.AcceptClassJobCategory.RowId) ||
+            GameState.ContentFinderConditionData.ContentMemberType.Value.MeleesPerParty == 0)
             return;
         
-        TaskHelper.Enqueue(() => !BetweenAreas && DService.ObjectTable.LocalPlayer != null, "WaitForEnteringDuty", weight: 2);
+        TaskHelper.Enqueue(() => !BetweenAreas && DService.ObjectTable.LocalPlayer != null, "WaitForEnteringDuty");
         TaskHelper.Enqueue(() => CheckMembersItemLevel([LocalPlayerState.EntityID]));
     }
 
@@ -53,7 +54,9 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
             return true;
         }
 
-        if (IsAddonAndNodesReady(CharacterInspect))
+        if (BetweenAreas) return false;
+
+        if (CharacterInspect != null)
         {
             CharacterInspect->Close(true);
             return false;
@@ -62,14 +65,26 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
         var members = agent->PartyMembers.ToArray();
         foreach (var member in members)
         {
-            if (member.EntityId == 0 || member.EntityId == LocalPlayerState.EntityID || !checkedMembers.Add(member.EntityId)) continue;
-            
+            if (member.EntityId  == 0                         ||
+                member.ContentId == 0                         ||
+                member.EntityId  == LocalPlayerState.EntityID ||
+                !checkedMembers.Add(member.EntityId))
+                continue;
+
             TaskHelper.Enqueue(() =>
             {
                 if (CharacterInspect != null && agentInspect->CurrentEntityId == member.EntityId) return true;
 
                 if (Throttler.Throttle("AutoCheckItemLevel-OpenExamine"))
-                    agentInspect->ExamineCharacter(member.EntityId);
+                {
+                    if (CharacterInspect != null)
+                    {
+                        CharacterInspect->Close(true);
+                        Throttler.Throttle("AutoCheckItemLevel-OpenExamine", 10, true);
+                    }
+                    else
+                        agentInspect->ExamineCharacter(member.EntityId);
+                }
                 
                 return false;
             }, "打开检视界面");
@@ -116,18 +131,19 @@ public unsafe class AutoCheckItemLevel : DailyModuleBase
                 var avgItemLevel = (uint)(totalIL / itemSlotAmount);
                 
                 SendNotification(member, avgItemLevel, lowestIL);
+                
+                CharacterInspect->Close(true);
+                agentInspect->FetchCharacterDataStatus = 0;
+                agentInspect->FetchSearchCommentStatus = 0;
+                agentInspect->FetchCharacterDataStatus = 0;
+                
                 return true;
             }, "检查装等");
-            
-            TaskHelper.Enqueue(() =>
-            {
-                if (CharacterInspect == null) return true;
 
-                CharacterInspect->Close(true);
-                return false;
-            }, "关掉");
+            var checkedCount = checkedMembers.Count - 1;
+            if (checkedCount != 0 && checkedCount % 3 == 0)
+                TaskHelper.DelayNext(1000, "等待 1 秒");
             
-            TaskHelper.DelayNext(1000, "等待 1 秒");
             TaskHelper.Enqueue(() => CheckMembersItemLevel(checkedMembers), "进入新循环");
             return true;
         }

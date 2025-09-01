@@ -1,34 +1,33 @@
+using System;
+using System.Threading;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Hooking;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
-using System;
-using System.Threading;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public class AutoConstantlyClick : DailyModuleBase
+public unsafe class AutoConstantlyClick : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoConstantlyClickTitle"),
+        Title       = GetLoc("AutoConstantlyClickTitle"),
         Description = GetLoc("AutoConstantlyClickDescription"),
-        Category = ModuleCategories.Combat,
-        Author = ["AtmoOmen", "KirisameVanilla"],
+        Category    = ModuleCategories.Combat,
+        Author      = ["AtmoOmen", "KirisameVanilla"],
     };
 
     private const int MaxKey = 512;
-    private static readonly HeldInfo[] InputIDInfos = new HeldInfo[MaxKey + 1];
-    private static int runningTimersCount;
+    
+    private static readonly GamepadButtons[] Triggers = [GamepadButtons.L2, GamepadButtons.R2];
 
-    private delegate bool IDKeyDelegate(nint data, int key);
+    private delegate byte IDKeyDelegate(void* data, InputId key);
 
-    private static readonly CompSig IsIDKeyClickedSig = new("48 89 5C 24 ?? 56 41 56 41 57 48 83 EC ?? 48 63 C2");
-    private static Hook<IDKeyDelegate>? IsIDKeyClickedHook;
+    private static readonly CompSig              IsIDKeyPressedSig = new("48 89 5C 24 ?? 56 41 56 41 57 48 83 EC ?? 48 63 C2");
+    private static          Hook<IDKeyDelegate>? IsIDKeyPressedHook;
 
-    private static readonly CompSig IsIDKeyPressedSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? BA ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 4C 8B 05 ?? ?? ?? ?? 48 8D 4C 24 ?? 0F 29 BC 24");
-    private static IDKeyDelegate? IsIDKeyPressed;
+    private static readonly CompSig        IsInputIDDownSig = new("E8 ?? ?? ?? ?? 33 DB 41 8B D5");
+    private static          IDKeyDelegate? IsInputIDDown;
 
     private static readonly CompSig GamepadPollSig = new("40 55 53 57 41 57 48 8D AC 24 58 FC FF FF");
     private static Hook<ControllerPoll>? GamepadPollHook;
@@ -38,9 +37,12 @@ public class AutoConstantlyClick : DailyModuleBase
     private delegate void CheckHotbarClickedDelegate(nint a1, byte a2);
     private static Hook<CheckHotbarClickedDelegate>? CheckHotbarClickedHook;
 
-    private                 long             ThrottleTime { get; set; } = Environment.TickCount64;
-    private static          Config           ModuleConfig = null!;
-    private static readonly GamepadButtons[] Triggers     = [GamepadButtons.L2, GamepadButtons.R2];
+    private static Config ModuleConfig = null!;
+    
+    private static readonly HeldInfo[] InputIDInfos = new HeldInfo[MaxKey + 1];
+    private static          long       ThrottleTime = Environment.TickCount64;
+    private static          int        RunningTimersCount;
+
 
     protected override void Init()
     {
@@ -49,9 +51,9 @@ public class AutoConstantlyClick : DailyModuleBase
         for (var i = 0; i <= MaxKey; i++)
             InputIDInfos[i] = new HeldInfo();
 
-        IsIDKeyPressed = IsIDKeyPressedSig.GetDelegate<IDKeyDelegate>();
+        IsInputIDDown = IsInputIDDownSig.GetDelegate<IDKeyDelegate>();
 
-        IsIDKeyClickedHook ??= IsIDKeyClickedSig.GetHook<IDKeyDelegate>(IsIDKeyClickedDetour);
+        IsIDKeyPressedHook ??= IsIDKeyPressedSig.GetHook<IDKeyDelegate>(IsIDKeyPressedDetour);
 
         CheckHotbarClickedHook ??= CheckHotbarClickedSig.GetHook<CheckHotbarClickedDelegate>(CheckHotbarClickedDetour);
         GamepadPollHook        ??= GamepadPollSig.GetHook<ControllerPoll>(GamepadPollDetour);
@@ -115,7 +117,7 @@ public class AutoConstantlyClick : DailyModuleBase
         }
     }
 
-    private unsafe int GamepadPollDetour(nint gamepadInput)
+    private int GamepadPollDetour(nint gamepadInput)
     {
         var input = (PadDevice*)gamepadInput;
         if (DService.Gamepad.Raw(ModuleConfig.GamepadModeTriggerButtons) == 1)
@@ -136,21 +138,21 @@ public class AutoConstantlyClick : DailyModuleBase
         return GamepadPollHook.Original((nint)input);
     }
 
-    private static bool IsIDKeyClickedDetour(nint data, int key)
+    private static byte IsIDKeyPressedDetour(void* data, InputId key)
     {
-        if (key is not (>= 45 and <= 190)) return false;
+        if (key is not (>= InputId.HOTBAR_UP and <= InputId.HOTBAR_CONTENTS_ACT_R)) return 0;
 
-        var info = InputIDInfos[key];
+        var info = InputIDInfos[(int)key];
 
-        var isClicked = IsIDKeyClickedHook.Original(data, key);
-        var isPressed = IsIDKeyPressed(data, key);
-        var orig = info.IsReady ? isPressed : isClicked;
+        var isClicked = IsIDKeyPressedHook.Original(data, key) == 1;
+        var isPressed = IsInputIDDown(data, key)               == 1;
+        var orig      = info.IsReady ? isPressed : isClicked;
 
         if (orig)
             info.RestartLastPress();
         else if (isPressed != info.LastFrameHeld)
         {
-            if (isPressed && runningTimersCount > 0)
+            if (isPressed && RunningTimersCount > 0)
                 info.RestartLastPress();
             else
                 info.ResetLastPress();
@@ -158,14 +160,14 @@ public class AutoConstantlyClick : DailyModuleBase
 
         info.LastFrameHeld = isPressed;
         info.LastFramePressed = isClicked;
-        return orig;
+        return (byte)(orig ? 1 : 0);
     }
 
     private static void CheckHotbarClickedDetour(nint a1, byte a2)
     {
-        IsIDKeyClickedHook.Enable();
+        IsIDKeyPressedHook.Enable();
         CheckHotbarClickedHook.Original(a1, a2);
-        IsIDKeyClickedHook.Disable();
+        IsIDKeyPressedHook.Disable();
     }
 
     private class HeldInfo
@@ -179,14 +181,14 @@ public class AutoConstantlyClick : DailyModuleBase
         public void RestartLastPress()
         {
             if (!LastPress.IsRunning)
-                Interlocked.Increment(ref runningTimersCount);
+                Interlocked.Increment(ref RunningTimersCount);
             LastPress.Restart();
         }
 
         public void ResetLastPress()
         {
             if (LastPress.IsRunning)
-                Interlocked.Decrement(ref runningTimersCount);
+                Interlocked.Decrement(ref RunningTimersCount);
             LastPress.Reset();
         }
     }

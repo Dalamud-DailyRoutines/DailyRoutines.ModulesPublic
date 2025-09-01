@@ -1,13 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Collections.Generic;
 using System.Numerics;
-using System.Text;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
@@ -78,21 +74,31 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
             return;
         }
 
-        var resNode  = addon->GetNodeById(19);
-        var textNode = addon->GetTextNodeById(20);
-        if (resNode == null || textNode == null) return;
+        var resNode     = addon->GetNodeById(19);
+        var buttonShare = addon->GetComponentButtonById(34);
+        var locatedNode = addon->GetNodeById(30);
+        var textNode    = addon->GetTextNodeById(20);
+        if (resNode == null || buttonShare == null || locatedNode == null || textNode == null) return;
+        
+        var nodeStateInfo    = NodeState.Get(resNode);
+        var nodeStateShare   = NodeState.Get((AtkResNode*)buttonShare->OwnerNode);
+        var nodeStateLocated = NodeState.Get(locatedNode);
 
-        using var fontBefore = FontManager.UIFont80.Push();
-        var nodeState = NodeState.Get(resNode);
-
-        var offsetSpacing       = 3 * ImGui.GetStyle().ItemSpacing;
+        var offsetSpacing       = ImGui.GetStyle().ItemSpacing;
         var offsetHeightSpacing = new Vector2(0f, ImGui.GetTextLineHeightWithSpacing());
         
-        ImGui.SetWindowPos(nodeState.Position - offsetSpacing - offsetHeightSpacing);
-        ImGui.SetWindowSize(nodeState.Size    + (2 * offsetSpacing) + offsetHeightSpacing);
+        using var fontBefore = FontManager.UIFont80.Push();
+        
+        var windowPos = nodeStateInfo.Position - (3 * offsetSpacing) - offsetHeightSpacing;
+        
+        var width  = nodeStateShare.Position.X   - nodeStateInfo.Position.X;
+        var height = nodeStateLocated.Position.Y - windowPos.Y - offsetSpacing.Y;
+        
+        ImGui.SetWindowPos(windowPos);
+        ImGui.SetWindowSize(new(width, height));
         
         using var fontAfter = FontManager.UIFont.Push();
-        ImGuiOm.TextSelectable(textNode->NodeText.ExtractText(), nodeState.Size.X, LinkTypes);
+        ImGuiOm.TextSelectable(textNode->NodeText.ExtractText(), width - (2 * offsetSpacing.X), LinkTypes);
     }
     
     private void OnAddon(AddonEvent type, AddonArgs? args)

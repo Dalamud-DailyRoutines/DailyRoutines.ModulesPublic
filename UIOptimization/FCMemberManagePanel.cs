@@ -161,7 +161,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
         ImGui.TableSetupColumn("位置", ImGuiTableColumnFlags.WidthStretch, 25);
         ImGui.TableSetupColumn("勾选框", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeight());
 
-        if (DService.ClientState.ClientLanguage == (ClientLanguage)4)
+        if (GameState.IsCN)
             ImGui.TableSetColumnEnabled(5, false);
         
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);

@@ -1,10 +1,14 @@
+using System.Collections.Generic;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
-using System.Collections.Generic;
+using KamiToolKit.Nodes;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoMoveGearsNotInSet : DailyModuleBase
 {
@@ -16,24 +20,32 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
     };
 
     private const string Command = "retrievegears";
-    
+
     private static readonly InventoryType[] ArmoryInventories =
     [
-        InventoryType.ArmoryOffHand, InventoryType.ArmoryHead, InventoryType.ArmoryBody,
-        InventoryType.ArmoryHands, InventoryType.ArmoryWaist, InventoryType.ArmoryLegs, InventoryType.ArmoryFeets,
-        InventoryType.ArmoryEar, InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings,
-        InventoryType.ArmoryMainHand,
+        InventoryType.ArmoryOffHand, InventoryType.ArmoryHead, InventoryType.ArmoryBody, InventoryType.ArmoryHands,
+        InventoryType.ArmoryWaist, InventoryType.ArmoryLegs, InventoryType.ArmoryFeets, InventoryType.ArmoryEar,
+        InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings, InventoryType.ArmoryMainHand,
     ];
 
-    private static readonly InventoryType[] BagInventories =
-    [
-        InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4
-    ];
+    private static TextButtonNode? Button;
 
     protected override void Init()
     {
-        CommandManager.AddSubCommand(
-            Command, new(OnCommand) { HelpMessage = GetLoc("AutoMoveGearsNotInSet-CommandHelp") });
+        CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("AutoMoveGearsNotInSet-CommandHelp") });
+        
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "ArmouryBoard", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "ArmouryBoard", OnAddon);
+    }
+
+    protected override void Uninit()
+    {
+        DService.AddonLifecycle.UnregisterListener(OnAddon);
+        
+        Service.AddonController.DetachNode(Button);
+        Button = null;
+        
+        CommandManager.RemoveSubCommand(Command);
     }
 
     protected override void ConfigUI()
@@ -52,8 +64,47 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
         if (ImGui.Button(GetLoc("Confirm")))
             EnqueueRetrieve();
     }
+    
+    private static unsafe void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        switch (type)
+        {
+            case AddonEvent.PostDraw:
+                if (ArmouryBoard == null) return;
 
-    private static void OnCommand(string command, string args) => EnqueueRetrieve();
+                if (Button == null)
+                {
+                    Button = new TextButtonNode
+                    {
+                        Size      = new(50),
+                        Position  = new(12, 515),
+                        IsVisible = true,
+                        Label     = new SeStringBuilder().AddIcon(BitmapFontIcon.SwordSheathed).Build(),
+                        Tooltip   = GetLoc("AutoMoveGearsNotInSet-Button"),
+                        OnClick   = () => ChatHelper.SendMessage($"/pdr {Command}"),
+                        IsEnabled = true,
+                    };
+
+                    var backgroundNode = (SimpleNineGridNode)Button.BackgroundNode;
+
+                    backgroundNode.TexturePath        = "ui/uld/partyfinder_hr1.tex";
+                    backgroundNode.TextureCoordinates = new(38);
+                    backgroundNode.TextureSize        = new(32, 34);
+                    backgroundNode.LeftOffset         = 0;
+                    backgroundNode.RightOffset        = 0f;
+                    
+                    Service.AddonController.AttachNode(Button, ArmouryBoard->RootNode);
+                }
+                break;
+            case AddonEvent.PreFinalize:
+                Service.AddonController.DetachNode(Button);
+                Button = null;
+                break;
+        }
+    }
+
+    private static void OnCommand(string command, string args) => 
+        EnqueueRetrieve();
 
     private static unsafe void EnqueueRetrieve()
     {
@@ -84,7 +135,7 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
                     itemID += 100_0000;
                 if (gearsetItemIDs.Contains(itemID)) continue;
                 
-                if (!TryGetFirstInventoryItem(BagInventories, x => x.ItemId == 0, out var emptySlot)) goto Out;
+                if (!TryGetFirstInventoryItem(PlayerInventories, x => x.ItemId == 0, out var emptySlot)) goto Out;
                 
                 manager->MoveItemSlot(type, (ushort)i, emptySlot->Container, (ushort)emptySlot->Slot, 1);
                 counter++;
@@ -92,7 +143,6 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
         }
         
         Out:
-        if (counter > 0)
-            NotificationInfo(GetLoc("AutoMoveGearsNotInSet-Notification", counter));
+        Chat(GetLoc("AutoMoveGearsNotInSet-Notification", counter));
     }
 }

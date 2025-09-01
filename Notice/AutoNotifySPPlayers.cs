@@ -1,64 +1,55 @@
-using DailyRoutines.Abstracts;
-using Dalamud.Hooking;
-using Dalamud.Interface;
-using Dalamud.Interface.Utility.Raii;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using DailyRoutines.Abstracts;
+using Dalamud.Hooking;
+using Dalamud.Interface;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using Lumina.Excel.Sheets;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNotifySPPlayers : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoNotifySPPlayersTitle"),
+        Title       = GetLoc("AutoNotifySPPlayersTitle"),
         Description = GetLoc("AutoNotifySPPlayersDescription"),
-        Category = ModuleCategories.Notice,
+        Category    = ModuleCategories.Notice,
     };
 
-    private static readonly CompSig IsReadyToDrawSig =
-        new("0F B6 81 ?? ?? ?? ?? C0 E8 ?? 24 ?? C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 48 83 EC");
-    private delegate bool IsReadyToDrawDelegate(GameObject* gameObj);
-    private static Hook<IsReadyToDrawDelegate>? IsReadyToDrawHook;
+    private static readonly CompSig                      IsReadyToDrawSig = new("E8 ?? ?? ?? ?? 84 C0 74 19 48 8B 17 ");
+    private delegate        bool                         IsReadyToDrawDelegate(GameObject* gameObj);
+    private static          Hook<IsReadyToDrawDelegate>? IsReadyToDrawHook;
 
     private static Config ModuleConfig = null!;
 
-    private static readonly Dictionary<uint, OnlineStatus> OnlineStatuses;
+    private static readonly Dictionary<uint, OnlineStatus> OnlineStatuses =
+        LuminaGetter.Get<OnlineStatus>()
+                    .Where(x => x.RowId != 0 && x.RowId != 47)
+                    .ToDictionary(x => x.RowId, x => x);
+    
+    private static readonly Throttler<ulong> ObjThrottler = new();
 
     private static HashSet<uint> SelectedOnlineStatus = [];
-    private static HashSet<uint> SelectedZone = [];
+    private static HashSet<uint> SelectedZone         = [];
 
-    private static string ZoneSearchInput = string.Empty;
+    private static string ZoneSearchInput         = string.Empty;
     private static string OnlineStatusSearchInput = string.Empty;
 
-    private static string SelectName = string.Empty;
+    private static string SelectName    = string.Empty;
     private static string SelectCommand = string.Empty;
 
     private static readonly Dictionary<ulong, long> NoticeTimeInfo = [];
-
-    private static readonly Throttler<ulong> ObjThrottler;
-
-    static AutoNotifySPPlayers()
-    {
-        OnlineStatuses = LuminaGetter.Get<OnlineStatus>()
-                                    .Where(x => x.RowId != 0 && x.RowId != 47)
-                                    .ToDictionary(x => x.RowId, x => x);
-
-        ObjThrottler = new();
-    }
-
+    
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        IsReadyToDrawHook ??=
-            DService.Hook.HookFromSignature<IsReadyToDrawDelegate>(IsReadyToDrawSig.Get(), IsReadyToDrawDetour);
+        IsReadyToDrawHook ??= IsReadyToDrawSig.GetHook<IsReadyToDrawDelegate>(IsReadyToDrawDetour);
         IsReadyToDrawHook.Enable();
     }
 
@@ -406,6 +397,6 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public readonly List<NotifiedPlayers> NotifiedPlayer = [];
+        public List<NotifiedPlayers> NotifiedPlayer = [];
     }
 }

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Hooking;
@@ -48,6 +50,9 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         DService.ClientState.Logout += OnLogout;
 
         FrameworkManager.Register(OnUpdate, throttleMS: 5_000);
+        
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_CharaSelectRemain", OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_CharaSelectRemain", OnAddon);
     }
 
     protected override void ConfigUI()
@@ -83,6 +88,8 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
 
     protected override void Uninit()
     {
+        DService.AddonLifecycle.UnregisterListener(OnAddon);
+        
         FrameworkManager.Unregister(OnUpdate);
         
         Entry?.Remove();
@@ -106,9 +113,43 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         });
     }
 
-    private static void OnUpdate(IFramework _) => RefreshEntry();
+    private static void OnUpdate(IFramework _) => 
+        RefreshEntry();
 
-    private void OnLogout(int code, int type) => TaskHelper?.Abort();
+    private void OnLogout(int code, int type) => 
+        TaskHelper?.Abort();
+    
+    private void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        if (CharaSelectRemain == null) return;
+        if (type == AddonEvent.PostDraw && !Throttler.Throttle("AutoRecordSubTimeLeft-OnAddonDraw")) return;
+
+        var agent = AgentLobby.Instance();
+        if (agent == null) return;
+        
+        var info = agent->LobbyData.LobbyUIClient.SubscriptionInfo;
+        if (info == null) return;
+
+        var contentID = agent->LobbyData.ContentId;
+        if (contentID == 0) return;
+                
+        var timeInfo = GetLeftTimeSecond(*info);
+        ModuleConfig.Infos[contentID]
+            = new(DateTime.Now,
+                  timeInfo.MonthTime == 0 ? TimeSpan.MinValue : TimeSpan.FromSeconds(timeInfo.MonthTime),
+                  timeInfo.PointTime == 0 ? TimeSpan.MinValue : TimeSpan.FromSeconds(timeInfo.PointTime));
+        ModuleConfig.Save(this);
+
+        var textNode = CharaSelectRemain->GetTextNodeById(7);
+        if (textNode != null)
+        {
+            textNode->SetPositionFloat(-20, 40);
+            textNode->SetText($"剩余天数: {FormatTimeSpan(TimeSpan.FromSeconds(timeInfo.MonthTime))}\n" +
+                              $"剩余时长: {FormatTimeSpan(TimeSpan.FromSeconds(timeInfo.PointTime))}");
+        }
+
+        RefreshEntry(contentID);
+    }
 
     private nint AgentLobbyOnLoginDetour(AgentLobby* agent)
     {

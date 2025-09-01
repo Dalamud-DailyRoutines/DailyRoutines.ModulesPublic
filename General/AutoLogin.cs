@@ -410,8 +410,8 @@ public unsafe class AutoLogin : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public readonly List<LoginInfo> LoginInfos = [];
-        public          BehaviourMode   Mode       = BehaviourMode.Once;
+        public List<LoginInfo> LoginInfos = [];
+        public BehaviourMode   Mode       = BehaviourMode.Once;
     }
 
     private class LoginInfo(uint worldID, int index) : IEquatable<LoginInfo>

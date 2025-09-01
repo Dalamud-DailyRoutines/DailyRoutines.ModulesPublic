@@ -19,11 +19,11 @@ public class AutoTankStance : DailyModuleBase
     private static readonly Dictionary<uint, (uint Action, uint Status)> TankStanceActions = new()
     {
         // 剑术师 / 骑士
-        [1] = (28, 79),
+        [1]  = (28, 79),
         [19] = (28, 79),
         // 斧术师 / 战士
         [3]  = (48, 91),
-        [21] = (38, 91),
+        [21] = (48, 91),
         // 暗黑骑士
         [32] = (3629, 743),
         // 绝枪战士
@@ -55,7 +55,10 @@ public class AutoTankStance : DailyModuleBase
         TaskHelper.Abort();
         
         if (!IsValidPVEDuty()) return;
-        if (ModuleConfig.OnlyAutoStanceWhenOneTank && GameState.ContentFinderConditionData.ContentMemberType.Value.TanksPerParty != 1) return;
+        
+        // TODO: 表数据定义歪了, 所以
+        if (ModuleConfig.OnlyAutoStanceWhenOneTank && 
+            GameState.ContentFinderConditionData.ContentMemberType.Value.HealersPerParty != 1) return;
         
         TaskHelper.DelayNext(1000);
         TaskHelper.Enqueue(CheckCurrentJob);

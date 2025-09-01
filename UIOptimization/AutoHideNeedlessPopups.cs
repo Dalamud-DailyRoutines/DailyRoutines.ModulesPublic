@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
-using Dalamud.Hooking;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoHideNeedlessPopups : DailyModuleBase
 {
@@ -14,31 +15,29 @@ public unsafe class AutoHideNeedlessPopups : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
     };
 
-    private static readonly HashSet<string> AddonNames = 
+    private static readonly HashSet<string> AddonNames =
     [
-        "_NotificationCircleBook", "AchievementInfo", "RecommendList", "PlayGuide", "HowTo", "WebLauncher",
+        "_NotificationCircleBook",
+        "AchievementInfo",
+        "RecommendList",
+        "PlayGuide",
+        "HowTo",
+        "WebLauncher",
         "LicenseViewer"
     ];
 
-    private static readonly CompSig AtkUnitBaseDrawSig = new("48 83 EC ?? F6 81 ?? ?? ?? ?? ?? 4C 8B C1 0F 84");
-    private delegate void AtkUnitBaseDrawDelegate(AtkUnitBase* addon);
-    private static Hook<AtkUnitBaseDrawDelegate>? AtkUnitBaseDrawHook;
+    protected override void Init() => 
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreDraw, AddonNames, OnAddon);
+    
+    protected override void Uninit() => 
+        DService.AddonLifecycle.UnregisterListener(OnAddon);
 
-    protected override void Init()
+    private static void OnAddon(AddonEvent type, AddonArgs args)
     {
-        AtkUnitBaseDrawHook ??= AtkUnitBaseDrawSig.GetHook<AtkUnitBaseDrawDelegate>(AtkUnitBaseDrawDetour);
-        AtkUnitBaseDrawHook.Enable();
-    }
-
-    private static void AtkUnitBaseDrawDetour(AtkUnitBase* addon)
-    {
+        var addon = (AtkUnitBase*)args.Addon;
         if (addon == null) return;
-        if (!AddonNames.Contains(addon->NameString))
-        {
-            AtkUnitBaseDrawHook.Original(addon);
-            return;
-        }
         
+        addon->RootNode->ToggleVisibility(false);
         addon->Close(false);
         addon->FireCloseCallback();
     }

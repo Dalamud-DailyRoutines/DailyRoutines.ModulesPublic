@@ -46,6 +46,21 @@ public unsafe class OptimizedCameraSetting : DailyModuleBase
 
     protected override void OverlayUI()
     {
+        if (CameraSetting == null)
+        {
+            Overlay.IsOpen = false;
+            return;
+        }
+
+        var node = CameraSetting->GetTextNodeById(25);
+        if (node == null || !GetNodeVisible((AtkResNode*)node))
+        {
+            Overlay.Flags |= ImGuiWindowFlags.NoBackground;
+            return;
+        }
+        
+        Overlay.Flags &= ~ImGuiWindowFlags.NoBackground;
+        
         ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(5972));
 
         using (ImRaii.PushIndent())

@@ -147,11 +147,11 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         
         var message = $"{GetLoc("AutoNotifyCutSceneEnd-NotificationMessage")}";
         if (ModuleConfig.SendChat) 
-            Chat(message);
+            Chat($"{message} {GetLoc("AutoNotifyCutSceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
         if (ModuleConfig.SendNotification) 
-            NotificationInfo(message);
+            NotificationInfo($"{message} {GetLoc("AutoNotifyCutSceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
         if (ModuleConfig.SendTTS) 
-            Speak($"{message} {GetLoc("AutoNotifyCutSceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
+            Speak(message);
     }
 
     private class Config : ModuleConfiguration

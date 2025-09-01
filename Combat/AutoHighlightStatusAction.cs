@@ -9,13 +9,13 @@ using DailyRoutines.Widgets;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Interface;
+using Dalamud.Interface.Textures;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using LuminaAction = Lumina.Excel.Sheets.Action;
 using Status = Lumina.Excel.Sheets.Status;
-
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -29,117 +29,157 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         Author      = ["HaKu"]
     };
 
-    private static readonly CompSig isActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 47 41 80 BB C9 00 00 00 01");
-
+    private static readonly CompSig IsActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 47 41 80 BB C9 00 00 00 01");
     [return: MarshalAs(UnmanagedType.U1)]
     private delegate bool IsActionHighlightedDelegate(ActionManager* actionManager, ActionType actionType, uint actionId);
+    private static Hook<IsActionHighlightedDelegate>? IsActionHighlightedHook;
 
-    private static Hook<IsActionHighlightedDelegate>? isActionHighlightedHook;
+    private static Config ModuleConfig = null!;
 
-    private static Config moduleConfig = null!;
-
-    private static StatusSelectCombo? statusCombo;
-    private static ActionSelectCombo? actionCombo;
+    private static StatusSelectCombo? StatusCombo;
+    private static ActionSelectCombo? ActionCombo;
+    
+    public static float Countdown                = 4.0f;
+    public static bool  KeepHighlightAfterExpire = true;
 
     public static readonly  HashSet<uint>            ActionsToHighlight = [];
-    private static          uint                     lastActionId;
-    private static readonly Dictionary<ushort, uint> lastStatusTarget = new();
-
+    private static          uint                     LastActionID;
+    private static readonly Dictionary<ushort, uint> LastStatusTarget = [];
+    
     protected override void Init()
     {
-        moduleConfig = LoadConfig<Config>() ??
-                       new()
-                       {
-                           StatusToMonitor = statusToAction.ToDictionary(x => x.Key, x => x.Value)
-                       };
+        ModuleConfig = LoadConfig<Config>() ?? new();
+        if (ModuleConfig.MonitoredStatus.Count == 0)
+        {
+            ModuleConfig.MonitoredStatus = statusConfigs.ToDictionary(x => x.Key, x => x.Value);
+            SaveConfig(ModuleConfig);
+        }
+        
+        StatusCombo ??= new("StatusCombo", PresetSheet.Statuses.Values);
+        ActionCombo ??= new("ActionCombo", PresetSheet.PlayerActions.Values);
 
-        statusCombo ??= new("StatusCombo", PresetSheet.Statuses.Values);
-        actionCombo ??= new("ActionCombo", PresetSheet.PlayerActions.Values);
-
-        isActionHighlightedHook = isActionHighlightedSig.GetHook<IsActionHighlightedDelegate>(IsActionHighlightedDetour);
-        isActionHighlightedHook.Enable();
+        IsActionHighlightedHook = IsActionHighlightedSig.GetHook<IsActionHighlightedDelegate>(IsActionHighlightedDetour);
+        IsActionHighlightedHook.Enable();
 
         UseActionManager.RegPreUseActionLocation(OnPreUseActionLocation);
-        FrameworkManager.Register(OnUpdate, throttleMS: 200);
+        FrameworkManager.Register(OnUpdate, throttleMS: 500);
     }
 
     protected override void Uninit()
     {
         UseActionManager.UnregPreUseActionLocation(OnPreUseActionLocation);
         FrameworkManager.Unregister(OnUpdate);
-
-        base.Uninit();
     }
 
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.SliderFloat($"{GetLoc("Threshold")} (s)##ReminderThreshold", ref moduleConfig.Threshold, 2.0f, 10.0f, "%.1f"))
-            SaveConfig(moduleConfig);
-        ImGuiOm.HelpMarker(GetLoc("AutoHighlightStatusAction-ThresholdHelp"));
-        ImGui.NewLine();
+        if (ImGui.SliderFloat($"{GetLoc("AutoHighlightStatusAction-Countdown")}##ReminderThreshold", ref Countdown, 2.0f, 10.0f, "%.1f"))
+            SaveConfig(ModuleConfig);
+        ImGuiOm.HelpMarker(GetLoc("AutoHighlightStatusAction-Countdown-Help"));
 
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
-        using (ImRaii.PushId("Status"))
-            statusCombo.DrawRadio();
-        ImGui.TextDisabled("↓");
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
-        using (ImRaii.PushId("Action"))
-            actionCombo.DrawCheckbox();
-
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
-        {
-            if (statusCombo.SelectedStatusID != 0 && actionCombo.SelectedActionIDs.Count > 0)
-            {
-                moduleConfig.StatusToMonitor[statusCombo.SelectedStatusID] = actionCombo.SelectedActionIDs.ToList();
-                moduleConfig.Save(this);
-            }
-        }
+        ImGui.SameLine(0, 5f * GlobalFontScale);
+        if (ImGui.Checkbox($"{GetLoc("AutoHighlightStatusAction-KeepHighlightAfterExpire")}##KeepHighlightAfterExpire", ref KeepHighlightAfterExpire))
+            SaveConfig(ModuleConfig);
+        ImGuiOm.HelpMarker(GetLoc("AutoHighlightStatusAction-KeepHighlightAfterExpire-Help"));
 
         ImGui.Spacing();
 
-        foreach (var (status, actions) in moduleConfig.StatusToMonitor)
+        ImGui.SetNextItemWidth(300f * GlobalFontScale);
+        using (ImRaii.PushId("Status"))
+            StatusCombo.DrawRadio();
+        ImGui.TextDisabled("↓");
+        ImGui.SetNextItemWidth(300f * GlobalFontScale);
+        using (ImRaii.PushId("Action"))
+            ActionCombo.DrawCheckbox();
+
+        ImGui.Spacing();
+
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
+        {
+            if (StatusCombo.SelectedStatusID != 0 && ActionCombo.SelectedActionIDs.Count > 0)
+            {
+                ModuleConfig.MonitoredStatus[StatusCombo.SelectedStatusID] = new StatusConfig
+                {
+                    BindActions = ActionCombo.SelectedActionIDs.ToList(),
+                    Countdown   = Countdown,
+                    KeepHighlight       = KeepHighlightAfterExpire,
+                };
+                ModuleConfig.Save(this);
+            }
+        }
+
+        ImGui.NewLine();
+
+        using var table = ImRaii.Table("PlayersInList", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.ScrollY, new(0, 200f * GlobalFontScale));
+        if (!table)
+            return;
+        
+        ImGui.TableSetupColumn("##Delete",                                                   ImGuiTableColumnFlags.WidthFixed);
+        ImGui.TableSetupColumn(GetLoc("Status"),                                             ImGuiTableColumnFlags.WidthStretch, 15);
+        ImGui.TableSetupColumn(GetLoc("Action"),                                             ImGuiTableColumnFlags.WidthStretch, 40);
+        ImGui.TableSetupColumn(GetLoc("AutoHighlightStatusAction-Countdown"),                ImGuiTableColumnFlags.WidthStretch, 20);
+        ImGui.TableSetupColumn(GetLoc("AutoHighlightStatusAction-KeepHighlightAfterExpire"), ImGuiTableColumnFlags.WidthStretch, 20);
+
+        ImGui.TableHeadersRow();
+
+        foreach (var (status, statusConfig) in ModuleConfig.MonitoredStatus)
         {
             using var id = ImRaii.PushId($"{status}");
 
+            ImGui.TableNextRow();
+
+            ImGui.TableNextColumn();
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, GetLoc("Delete")))
             {
-                moduleConfig.StatusToMonitor.Remove(status);
-                moduleConfig.Save(this);
+                ModuleConfig.MonitoredStatus.Remove(status);
+                ModuleConfig.Save(this);
+                break;
             }
 
+            ImGui.TableNextColumn();
             if (!LuminaGetter.TryGetRow<Status>(status, out var statusRow) ||
-                !DService.Texture.TryGetFromGameIcon(new(statusRow.Icon), out var texture))
+                !DService.Texture.TryGetFromGameIcon(new GameIconLookup(statusRow.Icon), out var texture))
                 continue;
 
             ImGui.SameLine();
-            ImGuiOm.TextImage(statusRow.Name.ExtractText(), texture.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeight()));
+            ImGuiOm.TextImage(statusRow.Name.ExtractText(), texture.GetWrapOrEmpty().ImGuiHandle, new Vector2(ImGui.GetTextLineHeight()));
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                statusCombo.SelectedStatusID = status;
+                StatusCombo.SelectedStatusID = status;
 
-            ImGui.SameLine();
-            ImGui.TextDisabled("→");
-
-            ImGui.SameLine();
+            ImGui.TableNextColumn();
             using (ImRaii.Group())
             {
-                foreach (var action in actions)
+                foreach (var action in statusConfig.BindActions)
                 {
                     if (!LuminaGetter.TryGetRow<LuminaAction>(action, out var actionRow) ||
-                        !DService.Texture.TryGetFromGameIcon(new(actionRow.Icon), out var actionTexture))
+                        !DService.Texture.TryGetFromGameIcon(new GameIconLookup(actionRow.Icon), out var actionTexture))
                         continue;
 
-                    ImGuiOm.TextImage(actionRow.Name.ExtractText(), actionTexture.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeight()));
+                    ImGuiOm.TextImage(actionRow.Name.ExtractText(), actionTexture.GetWrapOrEmpty().ImGuiHandle, new Vector2(ImGui.GetTextLineHeight()));
                     ImGui.SameLine();
                 }
             }
-
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                actionCombo.SelectedActionIDs = actions.ToHashSet();
+                ActionCombo.SelectedActionIDs = statusConfig.BindActions.ToHashSet();
+
+            ImGui.TableNextColumn();
+            ImGui.Text($"{statusConfig.Countdown:0.0}");
+            if (ImGui.IsItemHovered())
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            if (ImGui.IsItemClicked())
+                Countdown = statusConfig.Countdown;
+
+            ImGui.TableNextColumn();
+            ImGui.Text(statusConfig.KeepHighlight ? GetLoc("Yes") : GetLoc("No"));
+            if (ImGui.IsItemHovered())
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            if (ImGui.IsItemClicked())
+                KeepHighlightAfterExpire = statusConfig.KeepHighlight;
         }
     }
 
@@ -149,11 +189,11 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         {
             // clear record when leaving combat
             ActionsToHighlight.Clear();
-            lastStatusTarget.Clear();
+            LastStatusTarget.Clear();
             return;
         }
 
-        var actionToHighlight = new Dictionary<uint, float>();
+        var actionToHighlight = new Dictionary<uint, (float, float)>();
 
         // status on local player
         var localPlayer = Control.GetLocalPlayer();
@@ -162,12 +202,14 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
         foreach (var status in localPlayer->StatusManager.Status)
         {
-            if (!moduleConfig.StatusToMonitor.TryGetValue(status.StatusId, out var actions))
+            if (status.SourceObject != localPlayer->GetGameObjectId())
+                continue;
+            if (!ModuleConfig.MonitoredStatus.TryGetValue(status.StatusId, out var statusConfig))
                 continue;
 
-            foreach (var action in actions)
-                actionToHighlight[action] = status.RemainingTime;
-            lastStatusTarget[status.StatusId] = localPlayer->EntityId;
+            foreach (var action in statusConfig.BindActions)
+                actionToHighlight[action] = (status.RemainingTime, statusConfig.Countdown);
+            LastStatusTarget[status.StatusId] = localPlayer->EntityId;
         }
 
         // status on current target
@@ -176,21 +218,23 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         {
             foreach (var status in battleNpc.ToBCStruct()->StatusManager.Status)
             {
-                if (!moduleConfig.StatusToMonitor.TryGetValue(status.StatusId, out var actions))
+                if (status.SourceObject != localPlayer->GetGameObjectId())
+                    continue;
+                if (!ModuleConfig.MonitoredStatus.TryGetValue(status.StatusId, out var statusConfig))
                     continue;
 
-                foreach (var action in actions)
-                    actionToHighlight[action] = status.RemainingTime;
-                lastStatusTarget[status.StatusId] = battleNpc.EntityId;
+                foreach (var action in statusConfig.BindActions)
+                    actionToHighlight[action] = (status.RemainingTime, statusConfig.Countdown);
+                LastStatusTarget[status.StatusId] = battleNpc.EntityId;
             }
         }
 
         // status in cache
-        foreach (var status in lastStatusTarget)
+        foreach (var status in LastStatusTarget)
         {
             // check entity is still valid
             var lastTarget = CharacterManager.Instance()->LookupBattleCharaByEntityId(status.Value);
-            if (lastTarget != null && lastTarget->IsDead() == false)
+            if (lastTarget != null && !lastTarget->IsDead())
             {
                 // check if status is still active
                 var isActive = false;
@@ -208,11 +252,12 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
                     continue;
 
                 // manually add action to highlight
-                if (!moduleConfig.StatusToMonitor.TryGetValue(status.Key, out var actions))
+                // when status is no longer active and renew is enabled
+                if (!ModuleConfig.MonitoredStatus.TryGetValue(status.Key, out var statusConfig) || !statusConfig.KeepHighlight)
                     continue;
 
-                foreach (var action in actions)
-                    actionToHighlight[action] = 0f;
+                foreach (var action in statusConfig.BindActions)
+                    actionToHighlight[action] = (0f, statusConfig.Countdown);
             }
         }
 
@@ -223,24 +268,29 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         {
             var actionChain = FetchComboChain(actionId);
 
-            var cutoff        = moduleConfig.Threshold * actionChain.Length;
+            var cutoff        = time.Item2 * actionChain.Length;
             var notInChain    = actionChain.All(id => !manager->IsActionHighlighted(ActionType.Action, id));
-            var notLastAction = actionChain[..^1].All(id => id != lastActionId);
+            var notLastAction = actionChain[..^1].All(id => id != LastActionID);
 
-            if (time <= cutoff && notInChain && notLastAction)
+            if (time.Item1 <= cutoff && notInChain && notLastAction)
                 ActionsToHighlight.Add(actionChain[0]);
         }
     }
 
     private static void OnPreUseActionLocation(
-        ref bool isPrevented, ref ActionType type, ref uint actionId, ref ulong targetId, ref Vector3 location, ref uint extraParam)
+        ref bool       isPrevented,
+        ref ActionType type,
+        ref uint       actionID,
+        ref ulong      targetID,
+        ref Vector3    location,
+        ref uint       extraParam)
     {
-        ActionsToHighlight.Remove(actionId);
-        lastActionId = actionId;
+        ActionsToHighlight.Remove(actionID);
+        LastActionID = actionID;
     }
 
-    private static bool IsActionHighlightedDetour(ActionManager* actionManager, ActionType actionType, uint actionId)
-        => ActionsToHighlight.Contains(actionId) || isActionHighlightedHook!.Original(actionManager, actionType, actionId);
+    private static bool IsActionHighlightedDetour(ActionManager* actionManager, ActionType actionType, uint actionID) => 
+        ActionsToHighlight.Contains(actionID) || IsActionHighlightedHook.Original(actionManager, actionType, actionID);
 
     private static uint[] FetchComboChain(uint actionId)
     {
@@ -263,23 +313,45 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public float Threshold = 4.0f;
-
-        public Dictionary<uint, List<uint>> StatusToMonitor = [];
+        public Dictionary<uint, StatusConfig> MonitoredStatus = [];
     }
 
-    // Status - Actions
-    private static readonly Dictionary<uint, List<uint>> statusToAction = new()
+    // default status to monitor
+    private static readonly Dictionary<uint, StatusConfig> statusConfigs = new()
     {
-        [1881] = [16554],
-        [1871] = [16532],
-        [2616] = [24314],
-        [3897] = [37032],
-        [1895] = [16540],
-        [1200] = [7406, 3560],
-        [1201] = [7407, 3560],
-        [1299] = [7485],
-        [2719] = [25772],
-        [2677] = [45]
+        // AST
+        [838]  = new StatusConfig { BindActions = [3599], Countdown  = 4.0f, KeepHighlight  = true },
+        [843]  = new StatusConfig { BindActions = [3608], Countdown  = 4.0f, KeepHighlight  = true },
+        [1881] = new StatusConfig { BindActions = [16554], Countdown = 4.0f, KeepHighlight  = true },
+        [1248] = new StatusConfig { BindActions = [8324], Countdown  = 10.0f, KeepHighlight = false },
+        // WHM
+        [143]  = new StatusConfig { BindActions = [121], Countdown   = 4.0f, KeepHighlight = true },
+        [144]  = new StatusConfig { BindActions = [132], Countdown   = 4.0f, KeepHighlight = true },
+        [1871] = new StatusConfig { BindActions = [16532], Countdown = 4.0f, KeepHighlight = true },
+        // SGE
+        [2614] = new StatusConfig { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
+        [2615] = new StatusConfig { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
+        [2616] = new StatusConfig { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
+        // SCH
+        [179]  = new StatusConfig { BindActions = [17864], Countdown = 4.0f, KeepHighlight = true },
+        [189]  = new StatusConfig { BindActions = [17865], Countdown = 4.0f, KeepHighlight = true },
+        [1895] = new StatusConfig { BindActions = [16540], Countdown = 4.0f, KeepHighlight = true },
+        // BARD
+        [124]  = new StatusConfig { BindActions = [100], Countdown        = 4.0f, KeepHighlight = true },
+        [1200] = new StatusConfig { BindActions = [7406, 3560], Countdown = 4.0f, KeepHighlight = true },
+        [129]  = new StatusConfig { BindActions = [113], Countdown        = 4.0f, KeepHighlight = true },
+        [1201] = new StatusConfig { BindActions = [7407, 3560], Countdown = 4.0f, KeepHighlight = true },
+        // SAM
+        [1299] = new StatusConfig { BindActions = [7485], Countdown  = 4.0f, KeepHighlight = true },
+        [2719] = new StatusConfig { BindActions = [25772], Countdown = 4.0f, KeepHighlight = true },
+        // WAR
+        [2677] = new StatusConfig { BindActions = [45], Countdown = 4.0f, KeepHighlight = true },
     };
+
+    private class StatusConfig
+    {
+        public List<uint> BindActions { get; init; } = [];
+        public float      Countdown   { get; init; } = 4.0f;
+        public bool       KeepHighlight       { get; init; } = true;
+    }
 }

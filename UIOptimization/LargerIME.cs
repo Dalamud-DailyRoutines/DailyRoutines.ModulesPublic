@@ -47,8 +47,7 @@ public unsafe class LargerIME : DailyModuleBase
     {
         TextInputReceiveEventHook.Original(component, eventType, i, atkEvent, eventData);
         
-        if (eventType == AtkEventType.FocusStart)
-            ModifyTextInputComponent(component);
+        ModifyTextInputComponent(component);
     }
 
     private static void ModifyTextInputComponent(AtkComponentTextInput* component)
@@ -57,7 +56,7 @@ public unsafe class LargerIME : DailyModuleBase
 
         var imeBackground = component->AtkComponentInputBase.AtkComponentBase.UldManager.SearchNodeById(4);
         if (imeBackground == null) return;
-
+        
         imeBackground->SetScale(ModuleConfig.Scale, ModuleConfig.Scale);
     }
 

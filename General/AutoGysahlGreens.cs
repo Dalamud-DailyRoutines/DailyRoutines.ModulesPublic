@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -24,11 +23,11 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private const uint GysahlGreens = 4868;
 
-    private static HashSet<ushort> ValidTerritory { get; } = PresetSheet.Zones
-                                                                        .Where(x => x.Value.TerritoryIntendedUse.RowId == 1 &&
-                                                                                    x.Key                              != 250)
-                                                                        .Select(x => (ushort)x.Key)
-                                                                        .ToHashSet();
+    private static HashSet<ushort> ValidTerritory { get; } =
+        PresetSheet.Zones
+                   .Where(x => x.Value.TerritoryIntendedUse.RowId == 1 && x.Key != 250)
+                   .Select(x => (ushort)x.Key)
+                   .ToHashSet();
 
     private static Config ModuleConfig = null!;
 
@@ -97,12 +96,14 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static void OnUpdate(IFramework framework)
     {
+        if (IsInDuty()) return;
+        
         if (PlayerState.Instance()->IsPlayerStateFlagSet(PlayerStateFlag.IsBuddyInStable)) return;
 
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null || localPlayer->IsDead()) return;
         
-        if (OccupiedInEvent || IsOnMount) return;
+        if (OccupiedInEvent || IsOnMount || !IsScreenReady()) return;
 
         if (!LuminaGetter.TryGetRow<ClassJob>(localPlayer->ClassJob, out var classJob)) return;
         if (!ModuleConfig.NotBattleJobUsingGysahl && classJob.DohDolJobIndex != -1) return;
@@ -139,6 +140,9 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static void SwitchCommand(ChocoboStance command) =>
         UseActionManager.UseAction(ActionType.BuddyAction, (uint)command);
+
+    private static bool IsInDuty() => 
+        GameState.ContentFinderCondition != 0;
 
     protected override void Uninit()
     {

@@ -4,6 +4,7 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 
@@ -67,7 +68,7 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
                                      .OrderBy(x => x.RowId)
                                      .ToList();
 
-        uint firstIncompleteId = 0;
+        var firstIncompleteID = (uint)AgentScenarioTree.Instance()->Data->CurrentScenarioQuest + 65536;
         var  completedCount    = 0;
 
         foreach (var quest in currentExpansionQuests)
@@ -78,10 +79,8 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
 
             if (isCompleted)
                 completedCount++;
-            else if (firstIncompleteId == 0)
-                firstIncompleteId = quest.RowId;
         }
-
+        
         var totalCount = currentExpansion.RowId == 0
                              ? AdjustARRTotalCount(currentExpansionQuests.Count)
                              : currentExpansionQuests.Count;
@@ -91,7 +90,7 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
                                   ? completedCount * 100f / totalCount
                                   : 100f;
 
-        result = new MSQProgressResult(remaining, percentComplete, firstIncompleteId);
+        result = new(remaining, percentComplete, firstIncompleteID);
         return true;
     }
 

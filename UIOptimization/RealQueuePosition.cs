@@ -1,13 +1,11 @@
-using DailyRoutines.Abstracts;
-using Dalamud.Hooking;
 using System;
 using System.Runtime.InteropServices;
-using System.Text;
+using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
+using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class RealQueuePosition : DailyModuleBase
 {
@@ -18,8 +16,6 @@ public unsafe class RealQueuePosition : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         Author      = ["逆光", "Nukoooo"]
     };
-
-    private DateTime ETA = DateTime.Now;
     
     private readonly CompSig AgentWorldTravelUpdaterSig = new("40 53 56 57 41 54 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 4C 8B FA");
     private delegate bool AgentWorldTravelUpdateDelegate(nint a1, NumberArrayData* a2, StringArrayData* a3, bool a4);
@@ -32,6 +28,8 @@ public unsafe class RealQueuePosition : DailyModuleBase
     private static readonly CompSig ContentFinderQueuePositionDataSig = new("40 ?? 57 41 ?? 48 ?? ?? ?? 0f ?? ?? ?? 49");
     private delegate byte ContentFinderQueuePositionDataDelegate(nint a1, uint a2, nint a3);
     private static Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
+    
+    private DateTime ETA = DateTime.Now;
 
     protected override void Init()
     {
@@ -89,7 +87,7 @@ public unsafe class RealQueuePosition : DailyModuleBase
             index = 6;
 
         var position = *(uint*)(agentData + 0x12c);
-        var positionStr = $"{LuminaGetter.GetRow<Addon>(10988)!.Value.Text.ExtractText()}: #{position}";
+        var positionStr = $"{LuminaWrapper.GetAddonText(10988)}: #{position}";
         a3->SetValue(index, positionStr);
         
         var queueTime = TimeSpan.FromSeconds(*(int*)(agentData + 0x128));
@@ -99,7 +97,7 @@ public unsafe class RealQueuePosition : DailyModuleBase
         return true;
     }
 
-    private byte ContentFinderQueuePositionDataDetour(nint a1, uint a2, nint a3)
+    private static byte ContentFinderQueuePositionDataDetour(nint a1, uint a2, nint a3)
     {
         uint v9 = Marshal.ReadByte(new nint(a3 + 4));
 

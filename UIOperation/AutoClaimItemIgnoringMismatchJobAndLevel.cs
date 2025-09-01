@@ -20,7 +20,7 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    private void OnAddon(AddonEvent type, AddonArgs? args)
+    private static void OnAddon(AddonEvent type, AddonArgs? args)
     {
         if (!IsAddonAndNodesReady(SelectYesno)) return;
         
