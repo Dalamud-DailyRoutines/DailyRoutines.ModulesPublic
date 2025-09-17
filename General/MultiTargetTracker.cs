@@ -16,15 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class MultiTargetTracker : DailyModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static readonly TempTrackMenuItem  TempTrackItem  = new();
-    private static readonly PermanentTrackMenuItem PermanentTrackItem = new();
-
-    public static HashSet<TrackPlayer> TempTrackedPlayers = [];
-
-    #region ModuleBase
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = GetLoc("MultiTargetTrackerTitle"),
@@ -33,11 +24,13 @@ public class MultiTargetTracker : DailyModuleBase
         Author          = ["KirisameVanilla"],
         ModulesConflict = ["AutoHighlightFlagMarker"],
     };
+    
+    private static Config ModuleConfig = null!;
 
-    private class Config : ModuleConfiguration
-    {
-        public List<TrackPlayer> PermanentTrackedPlayers = [];
-    }
+    private static readonly TempTrackMenuItem      TempTrackItem      = new();
+    private static readonly PermanentTrackMenuItem PermanentTrackItem = new();
+
+    private static readonly HashSet<TrackPlayer> TempTrackedPlayers = [];
 
     protected override void Init()
     {
@@ -56,10 +49,6 @@ public class MultiTargetTracker : DailyModuleBase
 
         TempTrackedPlayers.Clear();
     }
-
-    #endregion
-
-    #region UI
 
     protected override void ConfigUI()
     {
@@ -118,8 +107,6 @@ public class MultiTargetTracker : DailyModuleBase
         }
     }
 
-    #endregion
-
     private static void OnMenuOpen(IMenuOpenedArgs args)
     {
         if (!ShouldMenuOpen(args)) return;
@@ -128,7 +115,8 @@ public class MultiTargetTracker : DailyModuleBase
         args.AddMenuItem(PermanentTrackItem.Get());
     }
 
-    private static void OnZoneChanged(ushort obj) => TempTrackedPlayers.Clear();
+    private static void OnZoneChanged(ushort obj) => 
+        TempTrackedPlayers.Clear();
 
     private static unsafe void OnUpdate(IFramework framework)
     {
@@ -197,8 +185,11 @@ public class MultiTargetTracker : DailyModuleBase
         if (args.Target is not MenuTargetDefault target) return false;
         return target.TargetContentId != 0;
     }
-
-    #region CustomClass
+    
+    private class Config : ModuleConfiguration
+    {
+        public List<TrackPlayer> PermanentTrackedPlayers = [];
+    }
 
     public class TrackPlayer : IEquatable<TrackPlayer>
     {
@@ -273,22 +264,23 @@ public class MultiTargetTracker : DailyModuleBase
         protected override void OnClicked(IMenuItemClickedArgs args)
         {
             var target = args.Target as MenuTargetDefault;
-            if (IGameObject.Create(target.TargetObject.Address) is not IPlayerCharacter ipc) return;
-
-            if (ModuleConfig.PermanentTrackedPlayers.Contains(new(ipc)))
+            if (IPlayerCharacter.Create(target.TargetObject.Address) is not { } player ||
+                string.IsNullOrEmpty(player.Name.ExtractText())                        ||
+                player.ClassJob.RowId == 0)
+                return;
+            
+            if (ModuleConfig.PermanentTrackedPlayers.Contains(new(player)))
             {
-                ModuleConfig.PermanentTrackedPlayers.Remove(new(ipc));
+                ModuleConfig.PermanentTrackedPlayers.Remove(new(player));
                 NotificationSuccess(GetLoc("Deleted"));
             }
             else
             {
-                ModuleConfig.PermanentTrackedPlayers.Add(new(ipc));
+                ModuleConfig.PermanentTrackedPlayers.Add(new(player));
                 NotificationSuccess(GetLoc("Added"));
             }
 
             ModuleConfig.Save(ModuleManager.GetModule<MultiTargetTracker>());
         }
     }
-
-    #endregion
 }

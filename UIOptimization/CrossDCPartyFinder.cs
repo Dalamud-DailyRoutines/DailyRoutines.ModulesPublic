@@ -92,8 +92,6 @@ public class CrossDCPartyFinder : DailyModuleBase
         ClearResources();
 
         ClearNodes();
-
-        base.Uninit();
     }
 
     protected override unsafe void OverlayUI()
@@ -466,14 +464,14 @@ public class CrossDCPartyFinder : DailyModuleBase
                 LayoutNode = new()
                 {
                     IsVisible = true,
-                    Position  = new(85, 12)
+                    Position  = new(85, 8)
                 };
                 
                 foreach (var dataCenter in DataCenters)
                 {
-                    var node = new CheckboxNode()
+                    var node = new CheckboxNode
                     {
-                        Size      = new(100.0f, 28f),
+                        Size      = new(100f, 28f),
                         IsVisible = true,
                         IsChecked = dataCenter == SelectedDataCenter,
                         IsEnabled = true,

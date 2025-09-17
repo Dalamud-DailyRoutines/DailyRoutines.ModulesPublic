@@ -37,16 +37,16 @@ public unsafe class LargerIME : DailyModuleBase
         if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);
     }
-    
+
     private static void TextInputReceiveEventDetour(
-        AtkComponentTextInput* component, 
-        AtkEventType eventType, 
-        int i, 
-        AtkEvent* atkEvent, 
-        AtkEventData* eventData)
+        AtkComponentTextInput* component,
+        AtkEventType           eventType,
+        int                    i,
+        AtkEvent*              atkEvent,
+        AtkEventData*          eventData)
     {
         TextInputReceiveEventHook.Original(component, eventType, i, atkEvent, eventData);
-        
+
         ModifyTextInputComponent(component);
     }
 

@@ -22,70 +22,65 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
 
     protected override void Init()
     {
-        TaskHelper    ??= new();
+        TaskHelper ??= new();
         
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "AOZNotebook", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "AOZNotebook", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "AOZNotebook", OnAddon);
-        if (IsAddonAndNodesReady(AOZNotebook)) 
-            OnAddon(AddonEvent.PostSetup, null);
     }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
     {
-        var addon = AOZNotebook;
-        if (addon == null) return;
-
-        if (type == AddonEvent.PostSetup)
+        switch (type)
         {
-            ConductSearch(SearchBarInput);
+            case AddonEvent.PreFinalize:
+                Service.AddonController.DetachNode(SearchBarNode);
+                SearchBarNode = null;
+                break;
+            case AddonEvent.PostDraw:
+                if (AOZNotebook == null) return;
+                
+                if (SearchBarNode == null)
+                {
+                    ConductSearch(SearchBarInput);
 
-            var component = AOZNotebook->GetComponentNodeById(123);
-            if (component == null) return;
+                    var component = AOZNotebook->GetComponentNodeById(123);
+                    if (component == null) return;
 
-            var windowTitleMain = component->GetComponent()->UldManager.SearchNodeById(3);
-            if (windowTitleMain != null)
-                windowTitleMain->ToggleVisibility(false);
-            
-            var windowTitleSub = component->GetComponent()->UldManager.SearchNodeById(4);
-            if (windowTitleSub != null)
-                windowTitleSub->ToggleVisibility(false);
-            
-            SearchBarNode = CreateSearchNode();
-            Service.AddonController.AttachNode(SearchBarNode, AOZNotebook->GetComponentNodeById(123));
+                    var windowTitleMain = component->GetComponent()->UldManager.SearchNodeById(3);
+                    if (windowTitleMain != null)
+                        windowTitleMain->ToggleVisibility(false);
+
+                    var windowTitleSub = component->GetComponent()->UldManager.SearchNodeById(4);
+                    if (windowTitleSub != null)
+                        windowTitleSub->ToggleVisibility(false);
+
+                    SearchBarNode = new TextInputNode
+                    {
+                        IsVisible     = true,
+                        Position      = new(40, 35),
+                        Size          = new(200f, 35f),
+                        MaxCharacters = 20,
+                        ShowLimitText = true,
+                        OnInputReceived = x =>
+                        {
+                            SearchBarInput = x.TextValue;
+                            ConductSearch(SearchBarInput);
+                        },
+                        OnInputComplete = x =>
+                        {
+                            SearchBarInput = x.TextValue;
+                            ConductSearch(SearchBarInput);
+                        },
+                    };
+                    SearchBarNode.CurrentTextNode.FontSize =  14;
+                    SearchBarNode.CurrentTextNode.Position += new Vector2(0, 3);
+                    
+                    Service.AddonController.AttachNode(SearchBarNode, component);
+                }
+
+                SearchBarNode.IsVisible = AOZNotebook->AtkValues->Int < 9;
+                break;
         }
-
-        if (type == AddonEvent.PreFinalize)
-            Service.AddonController.DetachNode(SearchBarNode);
-
-        if (type == AddonEvent.PostDraw && SearchBarNode != null)     
-            SearchBarNode.IsVisible = addon->AtkValues->Int < 9;
-    }
-
-    private TextInputNode CreateSearchNode()
-    {
-        var node = new TextInputNode
-        {
-            IsVisible     = true,
-            Position      = new(40, 35),
-            Size          = new(200.0f, 35f),
-            MaxCharacters = 20,
-            ShowLimitText = true,
-            OnInputReceived = x =>
-            {
-                SearchBarInput = x.TextValue;
-                ConductSearch(SearchBarInput);
-            },
-            OnInputComplete = x =>
-            {
-                SearchBarInput = x.TextValue;
-                ConductSearch(SearchBarInput);
-            },
-        };
-
-        node.CurrentTextNode.FontSize =  14;
-        node.CurrentTextNode.Position += new Vector2(0, 3);
-        return node;
     }
 
     private void ConductSearch(string input)
@@ -115,9 +110,6 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        
-        Service.AddonController.DetachNode(SearchBarNode);
-        
-        base.Uninit();
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 }

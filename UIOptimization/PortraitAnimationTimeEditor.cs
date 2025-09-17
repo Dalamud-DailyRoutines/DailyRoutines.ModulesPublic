@@ -27,10 +27,9 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
-    private static AgentBannerEditorState* EditorState => AgentBannerEditor.Instance()->EditorState;
-    private static CharaViewPortrait*      CharaView   => EditorState != null ? EditorState->CharaView : null;
-    private static Character* PortraitChara =>
-        CharaView != null ? (Character*)ClientObjectManager.Instance()->GetObjectByIndex((ushort)CharaView->ClientObjectIndex) : null;
+    private static AgentBannerEditorState* EditorState   => AgentBannerEditor.Instance()->EditorState;
+    private static CharaViewPortrait*      CharaView     => EditorState != null ? EditorState->CharaView : null;
+    private static Character*              PortraitChara => CharaView   != null ?  CharaView->GetCharacter() : null;
 
     private static float Duration;
     private static int   FrameCount;
@@ -183,7 +182,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
 
         if (DService.ClientState.ClientLanguage == (ClientLanguage)4)
         {
-            var actor = (Actor*)charaActor;
+            var actor = (ActorGlobal*)charaActor;
             if (actor->Model                                                                                      == null ||
                 actor->Model->Skeleton                                                                            == null ||
                 actor->Model->Skeleton->PartialSkeletons                                                          == null ||

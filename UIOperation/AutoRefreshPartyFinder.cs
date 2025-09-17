@@ -153,7 +153,7 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
         
         OnlyInactiveNode ??= new()
         {
-            Size      = new(150.0f, 28.0f),
+            Size      = new(150f, 28f),
             IsVisible = true,
             IsChecked = ModuleConfig.OnlyInactive,
             IsEnabled = true,
@@ -163,7 +163,7 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
                 ModuleConfig.OnlyInactive = newState;
                 ModuleConfig.Save(ModuleManager.GetModule<AutoRefreshPartyFinder>());
             },
-            Position = new(0, 3)
+            Position = new(0, 1)
         };
 
         LeftTimeNode ??= new TextNode()
@@ -178,9 +178,9 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
             TextOutlineColor = ColorHelper.GetColor(7),
         };
 
-        LayoutNode = new HorizontalListNode()
+        LayoutNode = new HorizontalListNode
         {
-            Width     = 280,
+            Width     = 270,
             IsVisible = true,
             Position  = new(500, 630),
             Alignment = HorizontalListAnchor.Right
