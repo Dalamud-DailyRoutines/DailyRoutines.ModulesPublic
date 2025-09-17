@@ -18,7 +18,7 @@ public class AutoManagePeloton : DailyModuleBase
         UseActionManager.RegPreUseAction(OnPreUseAction);
 
     protected override void Uninit() => 
-        UseActionManager.UnregPreUseAction(OnPreUseAction);
+        UseActionManager.Unreg(OnPreUseAction);
 
     private static void OnPreUseAction(
         ref bool                        isPrevented,

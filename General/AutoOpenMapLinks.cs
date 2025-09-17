@@ -167,11 +167,11 @@ public class AutoOpenMapLinks : DailyModuleBase
         if (ModuleConfig.WhitelistPlayer.Count == 0 && ModuleConfig.WhitelistChannel.Count == 0) return;
         if (message.Payloads.OfType<MapLinkPayload>().FirstOrDefault() is not { } mapPayload) return;
 
-        var territoryId = mapPayload.TerritoryType.RowId;
-        var mapId = mapPayload.Map.RowId;
+        var territoryID = mapPayload.TerritoryType.RowId;
+        var mapID       = mapPayload.Map.RowId;
         if (ModuleConfig.WhitelistChannel.Contains(type))
         {
-            SetFlag(territoryId, mapId, mapPayload.RawX, mapPayload.RawY);
+            SetFlag(territoryID, mapID, mapPayload.RawX, mapPayload.RawY);
             return;
         }
 
@@ -184,17 +184,17 @@ public class AutoOpenMapLinks : DailyModuleBase
                 var senderName = $"{playerPayload.PlayerName}@{playerPayload.World.Value.Name.ExtractText()}";
                 if (ModuleConfig.WhitelistPlayer.Contains(senderName))
                 {
-                    SetFlag(territoryId, mapId, mapPayload.RawX, mapPayload.RawY);
+                    SetFlag(territoryID, mapID, mapPayload.RawX, mapPayload.RawY);
                     return;
                 }
             }
         }
     }
 
-    private static unsafe void SetFlag(uint territoryId, uint mapId, int x, int y)
+    private static unsafe void SetFlag(uint territoryID, uint mapID, int x, int y)
     {
         if (!ModuleConfig.IsFlagCentered)
-            DService.Gui.OpenMapWithMapLink(new(territoryId, mapId, x, y));
+            DService.Gui.OpenMapWithMapLink(new(territoryID, mapID, x, y));
         else
         {
             var agentMap = AgentMap.Instance();
@@ -203,9 +203,9 @@ public class AutoOpenMapLinks : DailyModuleBase
             // agentMap->FlagMapMarker.XFloat\YFloat 是 真实的<flag>坐标，格式WorldPos
             // MapLinkPayload里面的 RawX和 RawY 是worldPos * 1000
             if (agentMap == null) return;
-            if (!agentMap->IsAgentActive() || agentMap->SelectedMapId != mapId)
-                agentMap->OpenMap(mapId, territoryId);
-            agentMap->SetFlagMapMarker(territoryId, mapId, new Vector3(x / 1000f, 0f, y / 1000f));
+            if (!agentMap->IsAgentActive() || agentMap->SelectedMapId != mapID)
+                agentMap->OpenMap(mapID, territoryID);
+            agentMap->SetFlagMapMarker(territoryID, mapID, new Vector3(x / 1000f, 0f, y / 1000f));
         }
     }
 

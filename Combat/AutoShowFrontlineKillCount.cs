@@ -48,7 +48,7 @@ public unsafe class AutoShowFrontlineKillCount : DailyModuleBase
             
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100f * GlobalFontScale);
-            if (ImGuiOm.InputUInt("###PreviewInput", ref Preview, 1, 1))
+            if (ImGui.InputUInt("###PreviewInput", ref Preview, 1, 1))
                 Preview = Math.Clamp(Preview, 1, 99);
         }
     }

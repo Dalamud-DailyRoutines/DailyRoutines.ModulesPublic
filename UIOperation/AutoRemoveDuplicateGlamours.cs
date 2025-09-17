@@ -38,8 +38,8 @@ public class AutoRemoveDuplicateGlamours : DailyModuleBase
             var item = instance->PrismBoxItemIds[(int)i];
             if (item == 0) continue;
 
-            var itemId = item % 100_0000;
-            if (!itemIndexHash.Add(itemId))
+            var itemID = item % 100_0000;
+            if (!itemIndexHash.Add(itemID))
                 itemIndexToRemove.Add(i);
         }
 

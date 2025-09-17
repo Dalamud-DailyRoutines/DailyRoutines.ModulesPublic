@@ -58,7 +58,7 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
                         Size      = new(280, 28),
                         Position  = new(370, 500),
                         IsVisible = true,
-                        Label     = GetLoc("AutoClaimPVPRewards-Button"),
+                        SeString  = GetLoc("AutoClaimPVPRewards-Button"),
                         OnClick = () =>
                         {
                             var currentRank = PvpReward->AtkValues[7].UInt;

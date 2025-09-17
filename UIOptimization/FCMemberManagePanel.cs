@@ -192,7 +192,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
                 {
                     var origPosY = ImGui.GetCursorPosY();
                     ImGui.SetCursorPosY(origPosY + (2f * GlobalFontScale));
-                    ImGui.Image(onlineStatusIcon.ImGuiHandle, new(ImGui.GetTextLineHeight()));
+                    ImGui.Image(onlineStatusIcon.Handle, new(ImGui.GetTextLineHeight()));
                     ImGui.SetCursorPosY(origPosY);
                     ImGui.SameLine();
                 }
@@ -204,7 +204,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
             {
                 var origPosY = ImGui.GetCursorPosY();
                 ImGui.SetCursorPosY(origPosY + (2f * GlobalFontScale));
-                ImGui.Image(data.JobIcon.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeight()));
+                ImGui.Image(data.JobIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
                 ImGui.SetCursorPosY(origPosY);
                 ImGui.SameLine();
             }
@@ -223,8 +223,8 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
     {
         ImGui.TableNextColumn();
         var arrowButton = IsReverse
-                              ? ImGui.ArrowButton("IndexButton", ImGuiDir.Up)
-                              : ImGui.ArrowButton("IndexButton", ImGuiDir.Down);
+                              ? ImGui.Button(FontAwesomeIcon.ArrowUp.ToIconString())
+                              : ImGui.Button(FontAwesomeIcon.ArrowDown.ToIconString());
         if (arrowButton)
             IsReverse ^= true;
         
@@ -520,7 +520,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
             var lastOnlineTime = string.Empty;
             try
             {
-                lastOnlineTime = SeString.Parse(stringArray[1 + (index * 5)]).TextValue;
+                lastOnlineTime = SeString.Parse(stringArray[1 + (index * 5)].Value).TextValue;
             }
             catch (Exception)
             {

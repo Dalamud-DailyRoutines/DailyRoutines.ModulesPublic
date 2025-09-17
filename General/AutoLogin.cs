@@ -98,7 +98,7 @@ public unsafe class AutoLogin : DailyModuleBase
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(120f * GlobalFontScale);
-                    if (ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref SelectedCharaIndex, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue))
+                    if (ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref SelectedCharaIndex, flags: ImGuiInputTextFlags.EnterReturnsTrue))
                         SelectedCharaIndex = Math.Clamp(SelectedCharaIndex, 0, 8);
                     ImGuiOm.TooltipHover(GetLoc("AutoLogin-CharaIndexInputTooltip"));
                 }
@@ -137,7 +137,7 @@ public unsafe class AutoLogin : DailyModuleBase
                     {
                         if (source)
                         {
-                            if (ImGui.SetDragDropPayload("LoginInfoReorder", nint.Zero, 0))
+                            if (ImGui.SetDragDropPayload("LoginInfoReorder", [], 0))
                                 DropIndex = i;
 
                             ImGui.TextColored(ImGuiColors.DalamudYellow,
@@ -152,7 +152,7 @@ public unsafe class AutoLogin : DailyModuleBase
                     {
                         if (target)
                         {
-                            if (ImGui.AcceptDragDropPayload("LoginInfoReorder").NativePtr != null)
+                            if (ImGui.AcceptDragDropPayload("LoginInfoReorder").Handle != null)
                             {
                                 Swap(DropIndex, i);
                                 DropIndex = -1;
@@ -357,7 +357,7 @@ public unsafe class AutoLogin : DailyModuleBase
         {
             try
             {
-                var worldString = SeString.Parse(stringArray[i]).ExtractText();
+                var worldString = SeString.Parse(stringArray[i].Value).ExtractText();
                 if (!worldString.Contains(worldName, StringComparison.OrdinalIgnoreCase)) continue;
 
                 SendEvent(AgentId.Lobby, 0, 25, 0, i);

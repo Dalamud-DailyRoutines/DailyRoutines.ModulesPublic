@@ -48,7 +48,7 @@ public class AutoNotifyDiademWeather : DailyModuleBase
                 if (!LuminaGetter.TryGetRow<Weather>(weather, out var data)) continue;
                 if (!DService.Texture.TryGetFromGameIcon(new((uint)data.Icon), out var icon)) continue;
 
-                if (ImGuiOm.SelectableImageWithText(icon.GetWrapOrEmpty().ImGuiHandle,
+                if (ImGuiOm.SelectableImageWithText(icon.GetWrapOrEmpty().Handle,
                                                     new(ImGui.GetTextLineHeightWithSpacing()), $"{data.Name.ExtractText()}",
                                                     ModuleConfig.Weathers.Contains(weather),
                                                     ImGuiSelectableFlags.DontClosePopups))

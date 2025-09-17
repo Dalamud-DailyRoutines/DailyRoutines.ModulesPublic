@@ -13,13 +13,13 @@ public unsafe class NoHideHotbars : DailyModuleBase
         Category = ModuleCategories.UIOptimization,
     };
 
-    private static readonly CompSig ToggleUISig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B 01 41 0F B6 D9 41 0F B6 F8 8B F2 FF 50 ?? 44 0F B6 CB 44 0F B6 C7 48 8B C8 8B D6 48 8B 5C 24 ?? 48 8B 74 24 ?? 48 83 C4 ?? 5F E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 48 89 6C 24");
-    private delegate void ToggleUIDelegate(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true);
-    private static Hook<ToggleUIDelegate>? ToggleUIHook;
+    private static readonly CompSig                 ToggleUISig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 48 8B 01 41 0F B6 D9");
+    private delegate        void                    ToggleUIDelegate(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true);
+    private static          Hook<ToggleUIDelegate>? ToggleUIHook;
 
-    private static readonly CompSig ToggleUI2Sig = new("48 89 6C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 45 0F B6 F1 41 0F B6 E8");
-    private delegate bool ToggleUI2Delegate(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true);
-    private static Hook<ToggleUI2Delegate>? ToggleUI2Hook;
+    private static readonly CompSig                  ToggleUI2Sig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 41 0F B6 E9 41 0F B6 F0");
+    private delegate        bool                     ToggleUI2Delegate(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true);
+    private static          Hook<ToggleUI2Delegate>? ToggleUI2Hook;
 
     protected override void Init()
     {

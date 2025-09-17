@@ -34,7 +34,7 @@ public unsafe class AutoHideNeedlessPopups : DailyModuleBase
 
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
-        var addon = (AtkUnitBase*)args.Addon;
+        var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
         
         addon->RootNode->ToggleVisibility(false);

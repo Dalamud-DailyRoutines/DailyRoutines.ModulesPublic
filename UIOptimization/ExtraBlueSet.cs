@@ -134,7 +134,7 @@ public unsafe class ExtraBlueSet : DailyModuleBase
                     if (index != 0)
                         ImGui.SameLine();
 
-                    ImGui.Image(actionIcon.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeight()));
+                    ImGui.Image(actionIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
                 }
 
                 ImGui.EndTooltip();

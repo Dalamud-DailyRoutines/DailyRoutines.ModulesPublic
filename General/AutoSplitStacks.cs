@@ -72,7 +72,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
             ImGui.Text($"{Lang.Get("AutoSplitStacks-PleaseInputSplitAmount")}:");
 
             ImGui.SetNextItemWidth(150f * GlobalFontScale);
-            if (ImGui.InputInt("###FastSplitAmountInput", ref SplitAmountInput, 0, 0))
+            if (ImGui.InputInt("###FastSplitAmountInput", ref SplitAmountInput))
                 SplitAmountInput = Math.Clamp(SplitAmountInput, 1, 998);
 
             ImGui.SameLine();
@@ -141,7 +141,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
 
                             foreach (var item in ItemSearcher.SearchResult)
                             {
-                                var icon = ImageHelper.GetGameIcon(item.Icon).ImGuiHandle;
+                                var icon = ImageHelper.GetGameIcon(item.Icon).Handle;
                                 if (ImGuiOm.SelectableImageWithText(icon, new(ImGui.GetTextLineHeightWithSpacing()),
                                                                     item.Name.ExtractText(), item.Equals(SelectedItem)))
                                     SelectedItem = item;
@@ -154,7 +154,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(250f * GlobalFontScale);
-                    if (ImGui.InputInt("###SplitAmountInput", ref SplitAmountInput, 0, 0))
+                    if (ImGui.InputInt("###SplitAmountInput", ref SplitAmountInput))
                         SplitAmountInput = Math.Clamp(SplitAmountInput, 1, 998);
                 }
 
@@ -200,7 +200,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
             if (!LuminaGetter.TryGetRow<Item>(group.ItemID, out var item)) continue;
             var icon = ImageHelper.GetGameIcon(item.Icon);
             var name = item.Name.ExtractText();
-            ImGuiOm.TextImage(name, icon.ImGuiHandle, ScaledVector2(24f));
+            ImGuiOm.TextImage(name, icon.Handle, ScaledVector2(24f));
 
             ImGui.TableNextColumn();
             ImGuiOm.Selectable(group.Amount.ToString());
@@ -214,7 +214,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(150f * GlobalFontScale);
-                ImGui.InputInt($"###{group.ItemID}AmountEdit", ref SplitAmountInput, 0, 0);
+                ImGui.InputInt($"###{group.ItemID}AmountEdit", ref SplitAmountInput);
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     var index = ModuleConfig.SplitGroups.IndexOf(group);
@@ -343,7 +343,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
 
             if (foundSlot == null) continue;
 
-            agent->OpenForItemSlot(type, (int)foundSlot, agentInventory->AddonId);
+            agent->OpenForItemSlot(type, (int)foundSlot, 0, agentInventory->AddonId);
             EnqueueOperations(itemID, type, (int)foundSlot, amount);
             return true;
         }

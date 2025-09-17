@@ -206,25 +206,25 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            DrawItemIcon(slot.CraftObjectId);
+            DrawItemIcon(slot.CraftObjectID);
             ImGui.TableNextColumn();
-            DrawItemName(slot.CraftObjectId);
+            DrawItemName(slot.CraftObjectID);
         }
     }
 
-    private static void DrawItemIcon(uint craftObjectId)
+    private static void DrawItemIcon(uint craftObjectID)
     {
-        if (!OriginalCraftItemsSheet.TryGetValue(craftObjectId, out var row)) return;
+        if (!OriginalCraftItemsSheet.TryGetValue(craftObjectID, out var row)) return;
         var iconSize = ImGui.GetTextLineHeight() * 1.5f;
         var iconSizeVec = new Vector2(iconSize, iconSize);
         var craftworkItemIcon = row.Item.Value.Icon;
-        ImGui.Image(DService.Texture.GetFromGameIcon(new(craftworkItemIcon)).GetWrapOrEmpty().ImGuiHandle,
+        ImGui.Image(DService.Texture.GetFromGameIcon(new(craftworkItemIcon)).GetWrapOrEmpty().Handle,
             iconSizeVec, Vector2.Zero, Vector2.One);
     }
 
-    private static void DrawItemName(uint craftObjectId)
+    private static void DrawItemName(uint craftObjectID)
     {
-        if (!OriginalCraftItemsSheet.TryGetValue(craftObjectId, out var row)) return;
+        if (!OriginalCraftItemsSheet.TryGetValue(craftObjectID, out var row)) return;
         ImGui.TextUnformatted(row.Item.Value.Name.ExtractText());
     }
 
@@ -298,7 +298,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
                 : assignment.Workshops[0];
 
             foreach (var slotRec in workshopRec.Slots)
-                ScheduleItemToWorkshop(slotRec.CraftObjectId, slotRec.Slot, cycle, workshop);
+                ScheduleItemToWorkshop(slotRec.CraftObjectID, slotRec.Slot, cycle, workshop);
         }
     }
 
@@ -309,8 +309,8 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
         ResetCurrentCycleToRefreshUI();
     }
 
-    public static void ScheduleItemToWorkshop(uint objId, int startingHour, int cycle, int workshop)
-        => MJIManager.Instance()->ScheduleCraft((ushort)objId, (byte)((startingHour + 17) % 24), (byte)cycle,
+    public static void ScheduleItemToWorkshop(uint objectID, int startingHour, int cycle, int workshop)
+        => MJIManager.Instance()->ScheduleCraft((ushort)objectID, (byte)((startingHour + 17) % 24), (byte)cycle,
                                                 (byte)workshop);
 
     public static void SetRestCycles(uint mask)
@@ -515,10 +515,8 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
         public List<SlotRec> Slots { get; } = [];
         public bool IsRest { get; private set; }
 
-        public void Add(int slot, uint craftObjectId)
-        {
-            Slots.Add(new SlotRec(slot, craftObjectId));
-        }
+        public void Add(int slot, uint craftObjectID) => 
+            Slots.Add(new SlotRec(slot, craftObjectID));
 
         public static WorkshopAssignment Create(string tasks)
         {
@@ -560,5 +558,5 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
         }
     }
 
-    public readonly record struct SlotRec(int Slot, uint CraftObjectId);
+    public readonly record struct SlotRec(int Slot, uint CraftObjectID);
 }

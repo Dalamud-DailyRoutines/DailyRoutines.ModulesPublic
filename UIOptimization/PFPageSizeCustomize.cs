@@ -33,7 +33,7 @@ public class PFPageSizeCustomize : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGuiOm.InputShort(GetLoc("PFPageSizeCustomize-DisplayAmount"), ref ModuleConfig.PageSize, 1, 10))
+        if (ImGui.InputShort(GetLoc("PFPageSizeCustomize-DisplayAmount"), ref ModuleConfig.PageSize, 1, 10))
             ModuleConfig.PageSize = Math.Clamp(ModuleConfig.PageSize, (short)1, (short)100);
         if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);

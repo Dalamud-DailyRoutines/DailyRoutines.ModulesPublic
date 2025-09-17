@@ -69,7 +69,7 @@ public unsafe class OptimizedCameraSetting : DailyModuleBase
             ImGui.Text($"{LuminaWrapper.GetAddonText(5935)} {GetLoc("StepSize")}");
 
             ImGui.SetNextItemWidth(100f * GlobalFontScale);
-            ImGuiOm.InputUInt("###AngleOfView", ref ModuleConfig.AngleofViewStepSize, 1, 1);
+            ImGui.InputUInt("###AngleOfView", ref ModuleConfig.AngleofViewStepSize, 1, 1);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
         
@@ -77,7 +77,7 @@ public unsafe class OptimizedCameraSetting : DailyModuleBase
             ImGui.Text($"{LuminaWrapper.GetAddonText(5936)} {GetLoc("StepSize")}");
 
             ImGui.SetNextItemWidth(100f * GlobalFontScale);
-            ImGuiOm.InputUInt("###RollAngle", ref ModuleConfig.RollAngleStepSize, 1, 1);
+            ImGui.InputUInt("###RollAngle", ref ModuleConfig.RollAngleStepSize, 1, 1);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
         }

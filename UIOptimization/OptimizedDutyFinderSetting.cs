@@ -23,11 +23,10 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
         Author      = ["Mizami", "Cyf5119"]
     };
 
-    private static readonly CompSig SetContentsFinderSettingsInitSig = new("E8 ?? ?? ?? ?? 49 8B 06 33 ED");
-
-    private delegate void SetContentsFinderSettingsInitDelegate(byte* a1, nint a2);
-
-    private static Hook<SetContentsFinderSettingsInitDelegate>? SetContentsFinderSettingsInitHook;
+    private static readonly CompSig SetContentsFinderSettingsInitSig =
+        new("E8 ?? ?? ?? ?? 49 8B 06 45 33 FF 49 8B CE 45 89 7E 20 FF 50 28 B0 01");
+    private delegate        void                                         SetContentsFinderSettingsInitDelegate(byte* a1, nint a2);
+    private static          Hook<SetContentsFinderSettingsInitDelegate>? SetContentsFinderSettingsInitHook;
 
     private static readonly Dictionary<string, List<IconButtonNode>> DutyFinderButtonNodes = [];
     private static readonly Dictionary<string, List<IconImageNode>>  DutyFinderImageNodes  = [];
@@ -36,11 +35,9 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
 
     private static AddonController<AddonContentsFinder>? ContentsFinderController;
     private static AddonController<AddonRaidFinder>?     RaidFinderController;
-    private static NativeController?                     NativeController;
 
     protected override void Init()
     {
-        NativeController                   =  new(DService.PI);
         ContentsFinderController           =  new AddonController<AddonContentsFinder>(DService.PI);
         ContentsFinderController.OnAttach  += addon => SetupAddon((AtkUnitBase*)addon);
         ContentsFinderController.OnDetach  += addon => ResetAddon((AtkUnitBase*)addon);
@@ -65,7 +62,6 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
 
         ContentsFinderController?.Dispose();
         RaidFinderController?.Dispose();
-        NativeController?.Dispose();
 
         SetContentsFinderSettingsInitHook?.Dispose();
         SetContentsFinderSettingsInitHook = null;
@@ -94,7 +90,7 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
 
         var attachNode = addon->GetNodeById(4);
         if (attachNode != null)
-            NativeController.AttachNode(layoutNode, attachNode);
+            Service.AddonController.AttachNode(layoutNode, attachNode);
 
         CreateDutyFinderButtons(addonName, addon, layoutNode);
 
@@ -112,13 +108,13 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
         if (LanguageButtonNodes.TryGetValue(addonName, out var languageButtons))
         {
             foreach (var button in languageButtons)
-                NativeController?.DetachNode(button);
+                Service.AddonController.DetachNode(button);
             LanguageButtonNodes.Remove(addonName);
         }
 
         if (LayoutNodes.TryGetValue(addonName, out var layoutNode))
         {
-            NativeController?.DetachNode(layoutNode);
+            Service.AddonController.DetachNode(layoutNode);
             LayoutNodes.Remove(addonName);
         }
 
@@ -156,6 +152,7 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                 IsVisible = true,
                 Size      = new(basedOn->Width, basedOn->Height),
                 Tooltip   = LuminaWrapper.GetAddonText(settingDetail.GetTooltip()),
+                IconId    = (uint)settingDetail.GetIcon()
             };
             button.OnClick = () =>
             {
@@ -170,10 +167,10 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
             {
                 IsVisible = true,
                 Size      = new(basedOn->Width, basedOn->Height),
-                IconId    = (uint)settingDetail.GetIcon()
+                IconId    = (uint)settingDetail.GetIcon(),
             };
 
-            NativeController.AttachNode(image, button);
+            Service.AddonController.AttachNode(image, button);
             layoutNode.AddNode(button);
 
             buttonNodes.Add(button);
@@ -201,8 +198,8 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
             {
                 IsVisible = true,
                 Size      = new(originalNode->Width, originalNode->Height),
-                Position  = new(originalNode->X,     originalNode->Y),
-                Label     = string.Empty,
+                Position  = new(originalNode->X, originalNode->Y),
+                SeString  = string.Empty,
                 OnClick   = () => OnLanguageClick(langSetting.Setting)
             };
 
@@ -211,7 +208,7 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
 
             var parentNode = originalNode->ParentNode;
             if (parentNode != null)
-                NativeController!.AttachNode(languageButton, parentNode);
+                Service.AddonController.AttachNode(languageButton, parentNode);
 
             languageButtonNodes.Add(languageButton);
         }

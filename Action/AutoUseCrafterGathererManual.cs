@@ -77,7 +77,7 @@ public unsafe class AutoUseCrafterGathererManual : DailyModuleBase
     private void OnZoneChanged(ushort zone) => 
         EnqueueCheck();
     
-    private void OnLevelChanged(uint classJobId, uint level) => 
+    private void OnLevelChanged(uint classJobID, uint level) => 
         EnqueueCheck();
 
     private void OnClassJobChanged(uint classJobID) => 

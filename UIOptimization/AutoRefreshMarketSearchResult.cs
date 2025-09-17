@@ -20,10 +20,9 @@ public unsafe class AutoRefreshMarketSearchResult : DailyModuleBase
     [IPCProvider("DailyRoutines.Modules.AutoRefreshMarketSearchResult.IsMarketStuck")]
     public static bool IsCurrentMarketStuck => IsMarketStuck;
     
-    private static readonly CompSig ProcessRequestResultSig =
-        new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F9 0F B6 EA");
-    private delegate nint                                ProcessRequestResultDelegate(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4);
-    private static   Hook<ProcessRequestResultDelegate>? ProcessRequestResultHook;
+    private static readonly CompSig                             ProcessRequestResultSig = new("E8 ?? ?? ?? ?? 83 3B 00 74 16");
+    private delegate        nint                                ProcessRequestResultDelegate(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4);
+    private static          Hook<ProcessRequestResultDelegate>? ProcessRequestResultHook;
 
     private static readonly CompSig     WaitMessageSig   = new("BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 8B C0 BA ?? ?? ?? ?? 48 8B CE E8 ?? ?? ?? ?? 45 33 C9");
     private static readonly MemoryPatch WaitMessagePatch = new(WaitMessageSig.Get(), [0xBA, 0xB9, 0x1A, 0x00, 0x00]);

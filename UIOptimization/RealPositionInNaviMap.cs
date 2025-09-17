@@ -63,7 +63,7 @@ public class RealPositionInNaviMap : DailyModuleBase
                         Position  = new(0),
                         Size      = new(130, 18),
                         IsVisible = true,
-                        Label     = string.Empty,
+                        SeString  = string.Empty,
                         OnClick   = () =>
                         {
                             if (DService.ObjectTable.LocalPlayer is not { } player) return;
@@ -95,7 +95,7 @@ public class RealPositionInNaviMap : DailyModuleBase
                 }
 
                 if (LocalPlayerState.IsMoving && DService.ObjectTable.LocalPlayer is { } localPlayer)
-                    PositionButton.Label = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
+                    PositionButton.SeString = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
                 
                 break;
         }

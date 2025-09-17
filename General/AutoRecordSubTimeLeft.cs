@@ -26,7 +26,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true };
 
-    private static readonly CompSig                          AgentLobbyOnLoginSig = new("E8 ?? ?? ?? ?? 41 C6 46 08 01 E9 ?? ?? ?? ?? 83 FB 03");
+    private static readonly CompSig                          AgentLobbyOnLoginSig = new("E8 ?? ?? ?? ?? 41 C6 45 ?? ?? E9 ?? ?? ?? ?? 83 FB 03");
     private delegate        nint                             AgentLobbyOnLoginDelegate(AgentLobby* agent);
     private static          Hook<AgentLobbyOnLoginDelegate>? AgentLobbyOnLoginHook;
     
@@ -39,7 +39,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         TaskHelper   ??= new();
 
         Entry         ??= DService.DtrBar.Get("DailyRoutines-GameTimeLeft");
-        Entry.OnClick =   () => ChatHelper.SendMessage($"/pdr search {GetType().Name}");
+        Entry.OnClick =   _ => ChatHelper.SendMessage($"/pdr search {GetType().Name}");
 
         RefreshEntry();
 

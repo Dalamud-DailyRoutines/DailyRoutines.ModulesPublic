@@ -24,7 +24,7 @@ public class AutoQuestAccept : DailyModuleBase
     {
         InterruptByConflictKey(TaskHelper, this);
 
-        var addon = (AtkUnitBase*)args.Addon;
+        var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
 
         var questID = addon->AtkValues[261].UInt;

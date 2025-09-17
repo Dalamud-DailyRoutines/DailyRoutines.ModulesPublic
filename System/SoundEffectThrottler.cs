@@ -13,10 +13,9 @@ public class SoundEffectThrottler : DailyModuleBase
         Category    = ModuleCategories.System,
     };
 
-    private static readonly CompSig PlaySoundEffectSig =
-        new("40 53 41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? F6 05");
-    private delegate void PlaySoundEffectDelegate(uint sound, nint a2, nint a3, byte a4);
-    private static Hook<PlaySoundEffectDelegate>? PlaySoundEffectHook;
+    private static readonly CompSig                        PlaySoundEffectSig = new("E9 ?? ?? ?? ?? C6 41 28 01");
+    private delegate        void                           PlaySoundEffectDelegate(uint sound, nint a2, nint a3, byte a4);
+    private static          Hook<PlaySoundEffectDelegate>? PlaySoundEffectHook;
 
     private static Config? ModuleConfig;
 

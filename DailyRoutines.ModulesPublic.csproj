@@ -1,4 +1,4 @@
-﻿<Project Sdk="Dalamud.CN.NET.Sdk/12.0.2">
+﻿<Project Sdk="Dalamud.CN.NET.Sdk/13.1.0">
     
     <PropertyGroup>
         <Authors>AtmoOmen</Authors>
@@ -34,7 +34,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="DailyRoutines.CodeAnalysis" Version="1.2.0">
+        <PackageReference Include="DailyRoutines.CodeAnalysis" Version="1.7.0">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>

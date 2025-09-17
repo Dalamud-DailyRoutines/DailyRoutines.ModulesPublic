@@ -20,7 +20,7 @@ public class AutoNotifyDutyConfirm : DailyModuleBase
 
     private static unsafe void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
-        var addon = (AtkUnitBase*)args.Addon;
+        var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
 
         var dutyName = MemoryHelper.ReadStringNullTerminated((nint)addon->AtkValues[1].String.Value);

@@ -20,11 +20,6 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
-    // TODO: 7.3 FFCS
-    private delegate void RefreshPartyFinderDelegate(AgentLookingForGroup* agent);
-    private static readonly RefreshPartyFinderDelegate RefreshPartyFinder =
-        new CompSig("E8 ?? ?? ?? ?? 8B 8B ?? ?? ?? ?? 85 C9 75 12").GetDelegate<RefreshPartyFinderDelegate>();
-
     private static Config ModuleConfig = null!;
     
     private static Timer? PFRefreshTimer;
@@ -113,7 +108,7 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
         Cooldown = ModuleConfig.RefreshInterval;
         UpdateNextRefreshTime(Cooldown);
 
-        DService.Framework.Run(() => RefreshPartyFinder(AgentLookingForGroup.Instance()));
+        DService.Framework.Run(() => AgentLookingForGroup.Instance()->RequestListingsUpdate());
     }
 
     private static void CleanNodes()
@@ -162,7 +157,7 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
             IsVisible = true,
             IsChecked = ModuleConfig.OnlyInactive,
             IsEnabled = true,
-            LabelText = GetLoc("AutoRefreshPartyFinder-OnlyInactive"),
+            SeString  = GetLoc("AutoRefreshPartyFinder-OnlyInactive"),
             OnClick = newState =>
             {
                 ModuleConfig.OnlyInactive = newState;
@@ -173,7 +168,7 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
 
         LeftTimeNode ??= new TextNode()
         {
-            Text             = $"({ModuleConfig.RefreshInterval})  ",
+            SeString         = $"({ModuleConfig.RefreshInterval})  ",
             FontSize         = 12,
             IsVisible        = true,
             Size             = new(0, 28f),
@@ -199,7 +194,7 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
     {
         if (LeftTimeNode == null) return;
 
-        LeftTimeNode.Text = $"({leftTime})  ";
+        LeftTimeNode.SeString = $"({leftTime})  ";
     }
 
     protected override void Uninit()

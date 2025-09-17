@@ -28,7 +28,7 @@ public class AutoConstantlyInspect : DailyModuleBase
             return;
         }
 
-        var addon = (AtkUnitBase*)args.Addon;
+        var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
 
         var nextButton = addon->GetComponentButtonById(74);

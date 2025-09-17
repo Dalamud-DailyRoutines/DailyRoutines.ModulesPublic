@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using System.Text;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Objects.Enums;
@@ -5,12 +9,8 @@ using Dalamud.Game.Gui.Dtr;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
-using System;
-using System.Collections.Generic;
-using System.Numerics;
-using System.Text;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCountBlacklisted : DailyModuleBase
 {
@@ -22,13 +22,13 @@ public unsafe class AutoCountBlacklisted : DailyModuleBase
         Author      = ["ToxicStar"],
     };
     
-    private static readonly CompSig InfoProxyBlackListUpdateSig = new("48 89 5C 24 ?? 4C 8B 91 ?? ?? ?? ?? 33 C0");
-    private delegate void InfoProxyBlackListUpdateDelegate(InfoProxyBlacklist.BlockResult* outBlockResult, ulong accountId, ulong contentId);
-    private static Hook<InfoProxyBlackListUpdateDelegate>? InfoProxyBlackListUpdateHook;
+    private static readonly CompSig InfoProxyBlackListUpdateSig = new("4C 8B 91 ?? ?? ?? ?? 33 C0 48 89 42");
+    private delegate        void InfoProxyBlackListUpdateDelegate(InfoProxyBlacklist.BlockResult* outBlockResult, ulong accountID, ulong contentID);
+    private static          Hook<InfoProxyBlackListUpdateDelegate>? InfoProxyBlackListUpdateHook;
 
     private static Config         ModuleConfig = null!;
     private static IDtrBarEntry?  DtrEntry;
-    private static int            LastCheckNum = 0;
+    private static int            LastCheckNum;
     private static HashSet<ulong> BlacklistHashSet = [];
 
     protected override void Init()

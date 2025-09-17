@@ -79,7 +79,7 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
                         Size      = new(50),
                         Position  = new(12, 515),
                         IsVisible = true,
-                        Label     = new SeStringBuilder().AddIcon(BitmapFontIcon.SwordSheathed).Build(),
+                        SeString  = new SeStringBuilder().AddIcon(BitmapFontIcon.SwordSheathed).Build(),
                         Tooltip   = GetLoc("AutoMoveGearsNotInSet-Button"),
                         OnClick   = () => ChatHelper.SendMessage($"/pdr {Command}"),
                         IsEnabled = true,
@@ -137,7 +137,7 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
                 
                 if (!TryGetFirstInventoryItem(PlayerInventories, x => x.ItemId == 0, out var emptySlot)) goto Out;
                 
-                manager->MoveItemSlot(type, (ushort)i, emptySlot->Container, (ushort)emptySlot->Slot, 1);
+                manager->MoveItemSlot(type, (ushort)i, emptySlot->Container, (ushort)emptySlot->Slot, true);
                 counter++;
             }
         }

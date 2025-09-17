@@ -1,20 +1,18 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Objects.Enums;
-using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.Gui.ContextMenu;
-using Dalamud.Interface.Utility.Raii;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Lumina.Excel.Sheets;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class MultiTargetTracker : DailyModuleBase
 {
@@ -223,9 +221,9 @@ public class MultiTargetTracker : DailyModuleBase
 
         public TrackPlayer() { }
 
-        public TrackPlayer(ulong contentId, string name, string world)
+        public TrackPlayer(ulong contentID, string name, string world)
         {
-            ContentID = contentId;
+            ContentID = contentID;
             Name      = name;
             WorldName = world;
 
@@ -275,7 +273,7 @@ public class MultiTargetTracker : DailyModuleBase
         protected override void OnClicked(IMenuItemClickedArgs args)
         {
             var target = args.Target as MenuTargetDefault;
-            if (target.TargetObject is not IPlayerCharacter ipc) return;
+            if (IGameObject.Create(target.TargetObject.Address) is not IPlayerCharacter ipc) return;
 
             if (ModuleConfig.PermanentTrackedPlayers.Contains(new(ipc)))
             {

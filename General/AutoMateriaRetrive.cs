@@ -1,28 +1,26 @@
-using DailyRoutines.Abstracts;
-using Dalamud.Hooking;
-using Dalamud.Interface.Utility.Raii;
-using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DailyRoutines.Abstracts;
+using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using Lumina.Excel.Sheets;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMateriaRetrive : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoMateriaRetriveTitle"),
+        Title       = GetLoc("AutoMateriaRetriveTitle"),
         Description = GetLoc("AutoMateriaRetriveDescription"),
-        Category = ModuleCategories.General,
+        Category    = ModuleCategories.General,
     };
 
-    private static readonly CompSig RetriveMateriaSig = new("E8 ?? ?? ?? ?? 88 87 08 01 00 00");
-    private delegate bool RetriveMateriaDelegate(
-        EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam);
-    private static Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
+    private static readonly CompSig RetriveMateriaSig = new("E8 ?? ?? ?? ?? EB 25 48 8B 01");
+    private delegate        bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam);
+    private static          Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
 
     private static readonly InventoryType[] Inventories =
     [
@@ -83,7 +81,7 @@ public unsafe class AutoMateriaRetrive : DailyModuleBase
 
             ImGui.Separator();
             foreach (var (itemName, item) in ItemNamesAnother)
-                if (ImGuiOm.SelectableImageWithText(ImageHelper.GetGameIcon(item.Icon).ImGuiHandle,
+                if (ImGuiOm.SelectableImageWithText(ImageHelper.GetGameIcon(item.Icon).Handle,
                                                     ScaledVector2(24f), itemName,
                                                     (SelectedItem?.RowId ?? 0) == item.RowId,
                                                     ImGuiSelectableFlags.DontClosePopups))

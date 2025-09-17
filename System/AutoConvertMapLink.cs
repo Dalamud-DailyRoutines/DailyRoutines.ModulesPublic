@@ -24,7 +24,7 @@ public class AutoConvertMapLink : DailyModuleBase
         Author      = ["KirisameVanilla"]
     };
 
-    private static readonly CompSig                     MessageParseSig = new("E8 ?? ?? ?? ?? 48 8B D0 48 8D 4C 24 30 E8 ?? ?? ?? ?? 48 8B 44 24 30 80 38 00 0F 84");
+    private static readonly CompSig                     MessageParseSig = new("E8 ?? ?? ?? ?? 48 8B D0 48 8D 4D D0 E8 ?? ?? ?? ?? 49 8B 07");
     private delegate        nint                        MessageParseDelegate(nint a, nint b);
     private static          Hook<MessageParseDelegate>? MessageParseHook;
 

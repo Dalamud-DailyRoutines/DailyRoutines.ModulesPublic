@@ -30,5 +30,5 @@ public class AutoHolmgangSelf : DailyModuleBase
     }
 
     protected override void Uninit() => 
-        UseActionManager.UnregPreUseAction(OnPreUseAction);
+        UseActionManager.Unreg(OnPreUseAction);
 }

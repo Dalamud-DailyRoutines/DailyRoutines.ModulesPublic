@@ -12,9 +12,9 @@ public class SameAethernetTeleport : DailyModuleBase
     };
 
     public override ModulePermission Permission => new() { NeedAuth = true };
-
-    private static readonly MemoryPatch Patch0 = new("75 ?? 48 8B 49 ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? 4C 8D 5C 24", [0xEB]);
-    private static readonly MemoryPatch Patch1 = new("75 ?? 48 8B 4E ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? 48 8B BC 24", [0xEB]);
+    
+    private static readonly MemoryPatch Patch0 = new("75 ?? 48 8B 49 ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? 48 83 C4 ?? 5E 5D", [0xEB]);
+    private static readonly MemoryPatch Patch1 = new("75 ?? 48 8B 4E ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 80 7D", [0xEB]);
 
     protected override void Init()
     {

@@ -61,13 +61,13 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
         foreach (var item in cachedData.Items)
         {
             ImGui.SetNextWindowPos(item.Position);
-            if (ImGui.Begin($"FastContentsFinderRouletteOverlay-{item.NodeId}", WindowFlags))
+            if (ImGui.Begin($"FastContentsFinderRouletteOverlay-{item.NodeID}", WindowFlags))
             {
                 if (cachedData.InDutyQueue)
                 {
                     if (DService.Texture.TryGetFromGameIcon(new(61502), out var explorerTexture))
                     {
-                        if (ImGui.ImageButton(explorerTexture.GetWrapOrEmpty().ImGuiHandle, new(lineHeight)))
+                        if (ImGui.ImageButton(explorerTexture.GetWrapOrEmpty().Handle, new(lineHeight)))
                             CancelDutyApply();
                         ImGuiOm.TooltipHover($"{GetLoc("Cancel")}");
                     }
@@ -82,7 +82,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
                         {
                             if (DService.Texture.TryGetFromGameIcon(new(60081), out var joinTexture))
                             {
-                                if (ImGui.ImageButton(joinTexture.GetWrapOrEmpty().ImGuiHandle, new(lineHeight)))
+                                if (ImGui.ImageButton(joinTexture.GetWrapOrEmpty().Handle, new(lineHeight)))
                                 {
                                     ChatHelper.SendMessage($"/pdrduty {(cachedData.CurrentTab == 0 ? "r" : "n")} {item.CleanName}");
                                     ChatHelper.SendMessage($"/pdrduty {(cachedData.CurrentTab != 0 ? "r" : "n")} {item.CleanName}");
@@ -97,7 +97,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
                                     if (DService.Texture.TryGetFromGameIcon(new(60648), out var explorerTexture))
                                     {
                                         ImGui.SameLine();
-                                        if (ImGui.ImageButton(explorerTexture.GetWrapOrEmpty().ImGuiHandle, new(lineHeight)))
+                                        if (ImGui.ImageButton(explorerTexture.GetWrapOrEmpty().Handle, new(lineHeight)))
                                             ChatHelper.SendMessage($"/pdrduty n {item.CleanName} explorer");
                                         ImGuiOm.TooltipHover($"{sharedPrefix} ({LuminaGetter.GetRow<Addon>(13038)!.Value.Text.ExtractText()})");
                                     }
@@ -107,7 +107,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
                                     if (DService.Texture.TryGetFromGameIcon(new(60641), out var unrestTexture))
                                     {
                                         ImGui.SameLine();
-                                        if (ImGui.ImageButton(unrestTexture.GetWrapOrEmpty().ImGuiHandle, new(lineHeight)))
+                                        if (ImGui.ImageButton(unrestTexture.GetWrapOrEmpty().Handle, new(lineHeight)))
                                             ChatHelper.SendMessage($"/pdrduty n {item.CleanName} unrest");
                                         ImGuiOm.TooltipHover($"{sharedPrefix} ({LuminaGetter.GetRow<Addon>(10008)!.Value.Text.ExtractText()})\n" +
                                                              $"[{GetLoc("FastContentsFinderRegister-HoldConflictKeyToToggle")}]");
@@ -187,7 +187,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
     // 数据结构定义
     public class ContentFinderItemData
     {
-        public uint    NodeId    { get; init; }
+        public uint    NodeID    { get; init; }
         public string  Name      { get; init; } = string.Empty;
         public string  Level     { get; init; } = string.Empty;
         public Vector2 Position  { get; init; }
@@ -278,7 +278,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
 
                     var itemData = new ContentFinderItemData
                     {
-                        NodeId    = listItemComponent->NodeId,
+                        NodeID    = listItemComponent->NodeId,
                         Name      = name,
                         Level     = level,
                         Position  = new(levelNode->ScreenX + (newData.CurrentTab == 0 ? 8f : -7f), levelNode->ScreenY - 8f),

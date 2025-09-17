@@ -104,7 +104,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
                                      if (!DService.Texture.TryGetFromGameIcon(x.Icon, out var statusIcon)) return;
                                      using var id = ImRaii.PushId($"{x.Name.ExtractText()}_{x.RowId}");
                                      if (ImGuiOm.SelectableImageWithText(
-                                             statusIcon.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()),
+                                             statusIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()),
                                              x.Name.ExtractText(),
                                              SelectedOnlineStatus.Contains(x.RowId),
                                              ImGuiSelectableFlags.DontClosePopups))
@@ -274,7 +274,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
 
                 using (ImRaii.Group())
                 {
-                    ImGui.Image(texture.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeight()));
+                    ImGui.Image(texture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
                     if (withText)
                     {
                         ImGui.SameLine();

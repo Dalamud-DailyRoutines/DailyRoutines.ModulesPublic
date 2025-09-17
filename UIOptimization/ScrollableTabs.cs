@@ -229,7 +229,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         var addonCharacter = name == "Character" ? (AddonCharacter*)unitBase : GetAddonByName<AddonCharacter>("Character");
 
         if (addonCharacter == null || !addonCharacter->AddonControl.IsChildSetupComplete ||
-            IntersectingCollisionNode == addonCharacter->CharacterPreviewCollisionNode)
+            IntersectingCollisionNode == addonCharacter->PreviewController.CollisionNode)
         {
             WheelState = 0;
             return;
@@ -592,7 +592,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         // if (IsAddonOpen("MiragePrismPrismBoxFilter"))
         // return;
         // TODO 先这样写着，但可能有BUG
-        if (IsAddonAndNodesReady(GetAddonByName("MiragePrismPrismBoxFilter")))
+        if (IsAddonAndNodesReady(MiragePrismPrismBoxFilter))
             return;
 
         var agent = AgentMiragePrismPrismBox.Instance();

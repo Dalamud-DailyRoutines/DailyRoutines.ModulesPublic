@@ -658,7 +658,7 @@ public class AutoReplyChatBot : DailyModuleBase
             var testGuid = Guid.NewGuid().ToString();
             ModuleConfig.TestChatWindows[testGuid] = new ChatWindow
             {
-                Id   = testGuid,
+                ID   = testGuid,
                 Name = "Chat Test",
                 Role = "Tester",
                 HistoryGuid = testGuid
@@ -677,7 +677,7 @@ public class AutoReplyChatBot : DailyModuleBase
                     var newGuid = Guid.NewGuid().ToString();
                     ModuleConfig.TestChatWindows[newGuid] = new ChatWindow
                     {
-                        Id   = newGuid,
+                        ID   = newGuid,
                         Name = "New Chat",
                         Role = "NewUser",
                         HistoryGuid = newGuid
@@ -1089,10 +1089,10 @@ public class AutoReplyChatBot : DailyModuleBase
         if (p != null)
         {
             var name     = p.PlayerName;
-            var worldId  = (ushort)p.World.RowId;
+            var worldID  = (ushort)p.World.RowId;
             var worldStr = p.World.Value.Name.ExtractText();
             if (!string.IsNullOrEmpty(name))
-                return (name, worldId, worldStr);
+                return (name, worldID, worldStr);
         }
 
         var text = sender.TextValue?.Trim() ?? string.Empty;
@@ -1185,7 +1185,7 @@ public class AutoReplyChatBot : DailyModuleBase
     
     private class ChatWindow
     {
-        public string Id        = string.Empty;
+        public string ID        = string.Empty;
         public string Name      = string.Empty;
         public string Role      = "TestUser";
         public string InputText = string.Empty;
