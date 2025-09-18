@@ -1,16 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Hooking;
-using Dalamud.Plugin.Services;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit;
+using KamiToolKit.Classes.TimelineBuilding;
 using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
@@ -30,7 +26,6 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
         new CompSig("E8 ?? ?? ?? ?? 49 8B 06 45 33 FF 49 8B CE 45 89 7E 20 FF 50 28 B0 01").GetDelegate<SetContentsFinderSettingsInitDelegate>();
 
     private static readonly Dictionary<DutyFinderSettingDisplay, (IconButtonNode ButtonNode, IconImageNode ImageNode)> Nodes = [];
-
     private static HorizontalListNode? LayoutNode;
 
     protected override void Init()
@@ -38,6 +33,12 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    ["ContentsFinder", "RaidFinder"], OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, ["ContentsFinder", "RaidFinder"], OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, ["ContentsFinder", "RaidFinder"], OnAddon);
+    }
+    
+    protected override void Uninit()
+    {
+        DService.AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 
     private static void OnAddon(AddonEvent type, AddonArgs args)
@@ -50,8 +51,9 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                     Service.AddonController.DetachNode(buttonNode);
                     Service.AddonController.DetachNode(imageNode);
                 }
+
                 Nodes.Clear();
-                
+
                 Service.AddonController.DetachNode(LayoutNode);
                 LayoutNode = null;
                 break;
@@ -59,17 +61,17 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
             case AddonEvent.PostDraw:
                 var addon = args.Addon.ToAtkUnitBase();
                 if (addon == null) return;
-                
+
                 if (LayoutNode == null)
                 {
                     var defaultContainer = addon->GetNodeById(6);
                     if (defaultContainer == null) return;
-                    
+
                     defaultContainer->ToggleVisibility(false);
-                    
+
                     var attchTargetNode = addon->GetNodeById(4);
                     if (attchTargetNode == null) return;
-                    
+
                     LayoutNode = new HorizontalListNode
                     {
                         IsVisible   = true,
@@ -78,92 +80,101 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                         ItemSpacing = 0
                     };
                     Service.AddonController.AttachNode(LayoutNode, attchTargetNode);
-                    
+
                     foreach (var settingDetail in DutyFinderSettingIcons)
                     {
                         if (Nodes.ContainsKey(settingDetail)) continue;
-                    
+
                         var button = new IconButtonNode
                         {
                             IsVisible = true,
-                            Size      = new(36),
-                            Position  = new(0, -5),
+                            Size      = new(32),
+                            Position  = new(0, -5f),
                             Tooltip   = LuminaWrapper.GetAddonText(settingDetail.GetTooltip()),
-                            IconId    = settingDetail.GetIcon()
                         };
-                        
-                        button.OnClick = () =>
-                        {
-                            ToggleSetting(settingDetail.Setting);
-                            OnAddon(AddonEvent.PreFinalize, null);
-                        };
-                        
+
+                        button.OnClick = () => ToggleSetting(settingDetail.Setting);
+
                         button.BackgroundNode.IsVisible = false;
-                        
-                        Nodes[settingDetail] = (button, null!);
+                        button.ImageNode.IsVisible      = false;
+
+                        var origPosition = new Vector2(4, 5);
+                        var iconNode = new IconImageNode
+                        {
+                            IconId    = settingDetail.GetIcon(),
+                            Size      = new(24),
+                            IsVisible = true,
+                            Position  = origPosition
+                        };
+
+                        iconNode.AddTimeline(new TimelineBuilder()
+                                             .AddFrameSetWithFrame(1,  10, 1,  position: origPosition)
+                                             .AddFrameSetWithFrame(11, 17, 11, position: origPosition)
+                                             .AddFrameSetWithFrame(18, 26, 18, position: origPosition + new Vector2(0.0f, 1.0f))
+                                             .AddFrameSetWithFrame(27, 36, 27, position: origPosition)
+                                             .AddFrameSetWithFrame(37, 46, 37, position: origPosition)
+                                             .AddFrameSetWithFrame(47, 53, 47, position: origPosition)
+                                             .Build());
+
+                        Service.AddonController.AttachNode(iconNode, button);
+
+                        Nodes[settingDetail] = (button, iconNode);
                         LayoutNode.AddNode(button);
+                    }
+
+                    if (GetLanguageButtons() is { Count: > 0 } langButtons)
+                    {
+                        for (var i = 0; i < langButtons.Count; i++)
+                        {
+                            var origNode = addon->GetNodeById(17 + (uint)i);
+                            if (origNode == null) continue;
+
+                            var parentNode = origNode->ParentNode;
+                            if (parentNode == null) continue;
+
+                            var langSetting = langButtons[i];
+
+                            var languageButton = new IconButtonNode
+                            {
+                                IsVisible = true,
+                                Size      = new(28),
+                                Position  = new(origNode->X - 7, origNode->Y - 5),
+                                Tooltip   = LuminaWrapper.GetAddonText((uint)(4266 + i)),
+                                OnClick = () =>
+                                {
+                                    if (!IsLangConfigReady()) return;
+                                    ToggleSetting(langSetting.Setting);
+                                }
+                            };
+
+                            languageButton.BackgroundNode.IsVisible = false;
+                            languageButton.ImageNode.IsVisible      = false;
+
+                            Service.AddonController.AttachNode(languageButton, parentNode);
+                            Nodes[langSetting] = (languageButton, null!);
+                        }
                     }
                 }
 
-                foreach (var (settingDetail, (buttonNode, _)) in Nodes)
+                foreach (var (settingDetail, (buttonNode, imageNode)) in Nodes)
                 {
                     var value = GetCurrentSettingValue(settingDetail.Setting);
-                    
-                    buttonNode.IconId = settingDetail.GetIcon();
-                    
-                    if (settingDetail.Setting                                       is DutyFinderSetting.LevelSync &&
+
+                    imageNode.IconId = settingDetail.GetIcon();
+
+                    if (settingDetail.Setting is DutyFinderSetting.LevelSync &&
                         GetCurrentSettingValue(DutyFinderSetting.UnrestrictedParty) == 0)
-                        buttonNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.25f);
+                        imageNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.25f);
                     else
-                        buttonNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.5f);
+                        imageNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.5f);
 
                     buttonNode.Tooltip = LuminaWrapper.GetAddonText(settingDetail.GetTooltip());
                 }
-                
+
                 break;
         }
     }
 
-    protected override void Uninit()
-    {
-        DService.AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-    }
-    
-    private static void SetupLanguageButtonEvents(AtkUnitBase* addon)
-    {
-        if (GetLanguageButtons() is not { Count: > 0 } langButtons)
-            return;
-
-        var languageButtonNodes = new List<TextButtonNode>();
-
-        for (var i = 0; i < langButtons.Count; i++)
-        {
-            var langSetting  = langButtons[i];
-            var originalNode = addon->GetNodeById(17 + (uint)i);
-            if (originalNode == null) continue;
-
-            var languageButton = new TextButtonNode
-            {
-                IsVisible = true,
-                Size      = new(originalNode->Width, originalNode->Height),
-                Position  = new(originalNode->X, originalNode->Y),
-                SeString  = string.Empty,
-                OnClick   = () => OnLanguageClick(langSetting.Setting)
-            };
-
-            languageButton.BackgroundNode.IsVisible = false;
-            languageButton.LabelNode.IsVisible      = false;
-
-            var parentNode = originalNode->ParentNode;
-            if (parentNode != null)
-                Service.AddonController.AttachNode(languageButton, parentNode);
-
-            languageButtonNodes.Add(languageButton);
-        }
-
-    }
-    
     private static byte GetCurrentSettingValue(DutyFinderSetting dutyFinderSetting)
     {
         var option = ContentsFinderOption.Get();
@@ -245,8 +256,6 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                 new DutyFinderSettingDisplay(DutyFinderSetting.Fr, 0, 13)
             ];
 
-    #region 工具
-
     private static bool IsLangConfigReady()
     {
         try
@@ -264,20 +273,6 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
 
         return false;
     }
-
-    #endregion
-
-    #region 事件
-
-    private static void OnLanguageClick(DutyFinderSetting setting)
-    {
-        if (!IsLangConfigReady()) return;
-        ToggleSetting(setting);
-    }
-
-    #endregion
-
-    #region 自定类
 
     private enum DutyFinderSetting
     {
@@ -303,17 +298,9 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
             GetTooltip = () => tooltip;
         }
 
-        public Func<uint>?  GetIcon    { get; init; }
+        public Func<uint>? GetIcon    { get; init; }
         public Func<uint>? GetTooltip { get; init; }
-
-        public void ShowTooltip(AtkUnitBase* unitBase, AtkResNode* node) =>
-            AtkStage.Instance()->TooltipManager.ShowTooltip(unitBase->Id, node,
-                                                            LuminaWrapper.GetAddonText(GetTooltip()));
     }
-
-    #endregion
-
-    #region 数据
 
     private static readonly List<DutyFinderSettingDisplay> DutyFinderSettingIcons =
     [
@@ -342,6 +329,4 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
             }
         }
     ];
-
-    #endregion
 }
