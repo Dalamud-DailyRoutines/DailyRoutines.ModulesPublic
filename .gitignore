@@ -4,3 +4,5 @@ bin/
 *.user
 .idea/
 DevModule.cs
+/DailyRoutines.ModulesPublic.csproj
+/.gitignore
