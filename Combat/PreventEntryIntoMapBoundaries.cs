@@ -1,19 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+
 using System.Numerics;
-using System.Text.RegularExpressions;
 using System.Data;
 using DailyRoutines.Abstracts;
-using Dalamud.Interface.Colors;
-using Dalamud.Interface.Components;
+using DailyRoutines.Managers;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
 using static DailyRoutines.Managers.CommandManager;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Dalamud.Interface.Colors;
+using Dalamud.Interface.Utility.Raii;
 using OmenTools;
+using OmenTools.Helpers;
 using static DailyRoutines.Helpers.NotifyHelper;
 
 
@@ -23,18 +21,18 @@ namespace DailyRoutines.ModulesPublic
     {
         public bool Enabled { get; set; }
         public string Name { get; set; }
-        public string ZoneType { get; set; } // "圆", "月环", "方", "矩形安全区", "表达式"
+        public string ZoneType { get; set; } // Circle, Annulus, Square, SafeZone, Expression
         public Vector3 CenterPos { get; set; }
         public float Radius { get; set; }
-        public float InnerRadius { get; set; } // 月环内半径
-        public float MinX { get; set; } // 矩形安全区最小X
-        public float MaxX { get; set; } // 矩形安全区最大X
-        public float MinZ { get; set; } // 矩形安全区最小Z
-        public float MaxZ { get; set; } // 矩形安全区最大Z
-        public string MathExpression { get; set; } // 数学表达式，支持 x, z 变量
+        public float InnerRadius { get; set; } // Inner radius for annulus
+        public float MinX { get; set; } // Minimum X for rectangle safe zone
+        public float MaxX { get; set; } // Maximum X for rectangle safe zone
+        public float MinZ { get; set; } // Minimum Z for rectangle safe zone
+        public float MaxZ { get; set; } // Maximum Z for rectangle safe zone
+        public string MathExpression { get; set; } // Math expression supporting x, z variables
         public uint Color { get; set; } // RGBA color for debug visualization
 
-        public DangerZone(string name = "危险区域")
+        public DangerZone(string name = "DangerZone")
         {
             Enabled = false; // 默认关闭
             Name = name;
@@ -46,8 +44,8 @@ namespace DailyRoutines.ModulesPublic
             MaxX = 120f;
             MinZ = 80f;
             MaxZ = 120f;
-            MathExpression = "(x-100)^2 + (z-100)^2 <= 400"; // 默认圆形表达式
-            Color = 0xFF0000FF; // 红色
+            MathExpression = "(x-100)^2 + (z-100)^2 <= 400";
+            Color = ImGuiColors.DPSRed.ToUint();
         }
     }
 
@@ -77,22 +75,23 @@ namespace DailyRoutines.ModulesPublic
     {
         public override ModuleInfo Info { get; } = new()
         {
-            Title           = GetLoc("PreventEntryIntoMapBoundaries"),
-            Description     = GetLoc("PreventEntryIntoMapBoundaries"),
+            Title           = GetLoc("PreventEntryIntoMapBoundariesTitle"),
+            Description     = GetLoc("PreventEntryIntoMapBoundariesDescription"),
             Category        = ModuleCategories.Combat,
             Author          = ["Nag0mi"]
         };
 
         private const string Command = "pdrfence";
         private Config? ModuleConfig;
-        private static int _debugCounter = 0;
+
+        
 
         public class Config : ModuleConfiguration
         {
             public List<uint> ZoneIds { get; set; } = [];
             public Dictionary<uint, ZoneLimit> ZoneLimitList { get; set; } = [];
-            public bool ShowDebugInfo { get; set; } = false;
-            public bool ShowBoundaryVisualization { get; set; } = false;
+            public bool ShowDebugInfo { get; set; } 
+            public bool ShowBoundaryVisualization { get; set; } 
             public float RadarRange { get; set; } = 50.0f; // 雷达显示范围（米）
             public float RadarScale { get; set; } = 2.0f; // 雷达缩放系数
             public int DisableOnDeathCount { get; set; } = 2; // 多少个死亡玩家时禁用防撞电网
@@ -100,30 +99,25 @@ namespace DailyRoutines.ModulesPublic
 
         protected override void Init()
         {
-            ModuleConfig = LoadConfig<Config>() ?? new();
-            DService.Framework.Update += OnFrameworkUpdate;
+            ModuleConfig = LoadConfig<Config>();
+            FrameworkManager.Register(OnFrameworkUpdate);
             DService.ClientState.TerritoryChanged += OnTerritoryChanged;
-
-            AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("PreventEntryIntoMapBoundaries-CommandHelp") });
+            AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("PreventEntryIntoMapBoundariesCommandHelp") });
         }
 
         protected override void ConfigUI()
         {
-            if (ModuleConfig == null) return;
+            using var configChild = ImRaii.Child(GetLoc("ConfigTitle"), new Vector2(0, 0), false);
 
-            ImGui.BeginChild(GetLoc("Config"), new Vector2(0, 0), false);
+            ImGui.Text(GetLoc("GlobalSettingsTitle"));
 
-            // 全局设置
-            ImGui.Text(GetLoc("GlobalSettings"));
-
-            // 添加当前区域按钮
-            if (ImGui.Button(GetLoc("AddCurrentZone")))
+            if (ImGui.Button(GetLoc("AddCurrentZoneButton")))
             {
                 var currentZoneId = DService.ClientState.TerritoryType;
 
                 if (currentZoneId == 0)
                 {
-                    ChatError(GetLoc("InvalidZone"));
+                    ChatError(GetLoc("PreventEntryIntoMapBoundariesInvalidZone"));
                     return;
                 }
 
@@ -131,20 +125,18 @@ namespace DailyRoutines.ModulesPublic
                 {
                     ModuleConfig.ZoneIds.Add(currentZoneId);
                     ModuleConfig.ZoneLimitList[currentZoneId] = new ZoneLimit(currentZoneId);
-                    // 默认中心点为 100,0,100，不使用玩家位置
-
                     SaveConfig(ModuleConfig);
-                    Chat(string.Format(GetLoc("ZoneAdded"), currentZoneId));
+                    Chat(string.Format(GetLoc("ZoneAddedSuccess"), currentZoneId));
                 }
                 else
-                    ChatError(string.Format(GetLoc("ZoneExists"), currentZoneId));
+                    ChatError(string.Format(GetLoc("ZoneExistsError"), currentZoneId));
             }
 
             ImGui.Separator();
 
             // 显示调试信息选项
             var showDebug = ModuleConfig.ShowDebugInfo;
-            if (ImGui.Checkbox(GetLoc("ShowDebugInfo"), ref showDebug))
+            if (ImGui.Checkbox(GetLoc("PreventEntryIntoMapBoundariesShowDebugInfo"), ref showDebug))
             {
                 ModuleConfig.ShowDebugInfo = showDebug;
                 SaveConfig(ModuleConfig);
@@ -152,7 +144,7 @@ namespace DailyRoutines.ModulesPublic
 
 
             var showVisualization = ModuleConfig.ShowBoundaryVisualization;
-            if (ImGui.Checkbox(GetLoc("ShowVisualization"), ref showVisualization))
+            if (ImGui.Checkbox(GetLoc("PreventEntryIntoMapBoundariesShowVisualization"), ref showVisualization))
             {
                 ModuleConfig.ShowBoundaryVisualization = showVisualization;
                 SaveConfig(ModuleConfig);
@@ -160,35 +152,35 @@ namespace DailyRoutines.ModulesPublic
 
             // 死亡玩家数量配置
             var deathCount = ModuleConfig.DisableOnDeathCount;
-            if (ImGui.SliderInt(GetLoc("DeathCountThreshold"), ref deathCount, 0, 8, "%d"))
+            if (ImGui.SliderInt(GetLoc("PreventEntryIntoMapBoundariesDeathCountThreshold"), ref deathCount, 0, 8, "%d"))
             {
                 ModuleConfig.DisableOnDeathCount = deathCount;
                 SaveConfig(ModuleConfig);
             }
 
-            // 添加详细说明
-            ImGui.TextColored(new Vector4(1.0f, 0.8f, 0.2f, 1.0f), "注意：");
-            ImGui.SameLine(0, 5);
-            ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1.0f), "如果设置为0，那么即使没有玩家死亡也会禁用传送");
-            ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1.0f), "推荐设置为2-8之间的值");
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudYellow))
+                ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesNotice"));
+            ImGui.SameLine(0, 5 * ImGuiHelpers.GlobalScale);
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey))
+                ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesDeathCountNotice"));
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey))
+                ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesDeathCountRecommendation"));
 
-            // 配置导入导出
-            ImGui.Text(GetLoc("ConfigManagement"));
-            if (ImGui.Button(GetLoc("ExportAll")))
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesConfigManagement"));
+            if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundariesExportAll")))
                 ExportAllConfigs();
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Import")))
+            if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundariesImport")))
                 ImportConfigs();
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("ExportCurrent")))
+            if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundariesExportCurrent")))
                 ExportCurrentZoneConfig();
 
             ImGui.Separator();
 
             if (ModuleConfig.ZoneIds.Count == 0)
             {
-                ImGui.TextColored(ImGuiColors.DalamudGrey, GetLoc("NoZones"));
-                ImGui.EndChild();
+                ImGui.TextColored(ImGuiColors.DalamudGrey, GetLoc("PreventEntryIntoMapBoundariesNoZones"));
                 return;
             }
 
@@ -208,14 +200,13 @@ namespace DailyRoutines.ModulesPublic
                 var zoneName = GetZoneName(zoneId);
                 var nodeLabel = $"{zoneId}: {zoneName}";
 
-                ImGui.PushStyleColor(ImGuiCol.Text, nodeColor);
+                using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, nodeColor);
                 var isOpen = ImGui.TreeNode($"{nodeLabel}###{zoneId}");
-                ImGui.PopStyleColor();
 
                 if (isOpen)
                 {
                     var enabled = zoneLimit.Enabled;
-                    if (ImGui.Checkbox(GetLoc("Enable"), ref enabled))
+                    if (ImGui.Checkbox(GetLoc("PreventEntryIntoMapBoundariesEnable"), ref enabled))
                     {
                         zoneLimit.Enabled = enabled;
                         SaveConfig(ModuleConfig);
@@ -223,20 +214,20 @@ namespace DailyRoutines.ModulesPublic
 
                     ImGui.SameLine();
                     var advancedMode = zoneLimit.IsAdvancedMode;
-                    if (ImGui.Checkbox(GetLoc("AdvancedMode"), ref advancedMode))
+                    if (ImGui.Checkbox(GetLoc("PreventEntryIntoMapBoundariesAdvancedMode"), ref advancedMode))
                     {
                         zoneLimit.IsAdvancedMode = advancedMode;
                         SaveConfig(ModuleConfig);
                     }
 
                     ImGui.SameLine();
-                    if (isCurrentZone && ImGui.Button(GetLoc("SetCurrentPos")))
+                    if (isCurrentZone && ImGui.Button(GetLoc("PreventEntryIntoMapBoundariesSetCurrentPos")))
                     {
                         if (DService.ClientState.LocalPlayer != null)
                         {
                             zoneLimit.CenterPos = DService.ClientState.LocalPlayer.Position;
                             SaveConfig(ModuleConfig);
-                            Chat(GetLoc("CenterUpdated"));
+                            Chat(GetLoc("PreventEntryIntoMapBoundariesCenterUpdated"));
                         }
                     }
 
@@ -244,19 +235,18 @@ namespace DailyRoutines.ModulesPublic
                         DrawAdvancedModeUI(zoneLimit, isCurrentZone);
                     else
                         DrawTraditionalModeUI(zoneLimit, zoneId, isCurrentZone);
-
-                    ImGuiHelpers.ScaledDummy(5.0f);
-                    ImGui.PushStyleColor(ImGuiCol.Button, ImGuiColors.DPSRed);
-                    if (ImGui.Button(string.Format(GetLoc("DeleteZone"), zoneId)))
+                    
+                    using (var deleteButtonStyle = ImRaii.PushColor(ImGuiCol.Button, ImGuiColors.DPSRed))
                     {
-                        ModuleConfig.ZoneIds.RemoveAt(i);
-                        ModuleConfig.ZoneLimitList.Remove(zoneId);
-                        SaveConfig(ModuleConfig);
-                        ImGui.PopStyleColor();
-                        ImGui.TreePop();
-                        break;
+                        if (ImGui.Button(string.Format(GetLoc("PreventEntryIntoMapBoundariesDeleteZone"), zoneId)))
+                        {
+                            ModuleConfig.ZoneIds.RemoveAt(i);
+                            ModuleConfig.ZoneLimitList.Remove(zoneId);
+                            SaveConfig(ModuleConfig);
+                            ImGui.TreePop();
+                            break;
+                        }
                     }
-                    ImGui.PopStyleColor();
 
                     ImGui.TreePop();
                 }
@@ -267,8 +257,6 @@ namespace DailyRoutines.ModulesPublic
                     
             }
 
-            ImGui.EndChild();
-
             // 绘制雷达窗口（如果启用了边界可视化）
             if (ModuleConfig.ShowBoundaryVisualization)
                 DrawRadarWindow();
@@ -277,21 +265,21 @@ namespace DailyRoutines.ModulesPublic
         private void DrawTraditionalModeUI(ZoneLimit zoneLimit, uint zoneId, bool isCurrentZone)
         {
             // 地图类型选择
-            var mapTypes = new[] { GetLoc("Circle"), GetLoc("Rectangle") };
-            var mapTypeValues = new[] { "圆", "方" };
+            var mapTypes = new[] { GetLoc("PreventEntryIntoMapBoundariesCircle"), GetLoc("PreventEntryIntoMapBoundariesRectangle") };
+            var mapTypeValues = new[] { GetLoc("PreventEntryIntoMapBoundariesCircle"), GetLoc("PreventEntryIntoMapBoundariesSquare") };
             var currentMapTypeIndex = Array.IndexOf(mapTypeValues, zoneLimit.MapType);
             if (currentMapTypeIndex == -1)
                 currentMapTypeIndex = 0;
 
-            if (ImGui.Combo(GetLoc("MapType"), ref currentMapTypeIndex, mapTypes, mapTypes.Length))
+            if (ImGui.Combo(GetLoc("PreventEntryIntoMapBoundariesMapType"), ref currentMapTypeIndex, mapTypes, mapTypes.Length))
             {
                 zoneLimit.MapType = mapTypeValues[currentMapTypeIndex];
                 SaveConfig(ModuleConfig);
             }
 
             // 中心位置 - 紧凑布局
-            ImGui.Text(GetLoc("CenterPosition"));
-            ImGui.SetNextItemWidth(200);
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesCenterPosition"));
+            ImGui.SetNextItemWidth(200 * ImGuiHelpers.GlobalScale);
             var centerPos = zoneLimit.CenterPos;
             if (ImGui.InputFloat3($"##CenterPos{zoneId}", ref centerPos))
             {
@@ -300,7 +288,7 @@ namespace DailyRoutines.ModulesPublic
             }
 
             // 半径 - 并排布局
-            ImGui.SetNextItemWidth(120);
+            ImGui.SetNextItemWidth(120 * ImGuiHelpers.GlobalScale);
             var radius = zoneLimit.Radius;
             if (ImGui.InputFloat($"##Radius{zoneId}", ref radius, 1.0f, 10.0f, "%.2f"))
             {
@@ -308,7 +296,7 @@ namespace DailyRoutines.ModulesPublic
                 SaveConfig(ModuleConfig);
             }
             ImGui.SameLine();
-            ImGui.Text(GetLoc("Radius"));
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesRadius"));
 
             if (ModuleConfig.ShowDebugInfo && isCurrentZone && DService.ClientState.LocalPlayer != null)
             {
@@ -320,11 +308,11 @@ namespace DailyRoutines.ModulesPublic
 
         private void DrawAdvancedModeUI(ZoneLimit zoneLimit, bool isCurrentZone)
         {
-            ImGui.Text(GetLoc("DangerZoneManagement"));
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesDangerZoneManagement"));
 
-            if (ImGui.Button(GetLoc("AddDangerZone")))
+            if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundariesAddDangerZone")))
             {
-                var newZone = new DangerZone(string.Format(GetLoc("DangerZone"), zoneLimit.DangerZones.Count + 1));
+                var newZone = new DangerZone(string.Format(GetLoc("PreventEntryIntoMapBoundariesDangerZone"), zoneLimit.DangerZones.Count + 1));
                 // 默认中心点为 100,0,100，不使用玩家位置
 
                 zoneLimit.DangerZones.Add(newZone);
@@ -339,14 +327,14 @@ namespace DailyRoutines.ModulesPublic
                 {
                     // 危险区域基本设置（紧凑布局）
                     var dzEnabled = dangerZone.Enabled;
-                    if (ImGui.Checkbox($"{GetLoc("Enable")}##dz{j}", ref dzEnabled))
+                    if (ImGui.Checkbox($"{GetLoc("PreventEntryIntoMapBoundariesEnable")}##dz{j}", ref dzEnabled))
                     {
                         dangerZone.Enabled = dzEnabled;
                         SaveConfig(ModuleConfig);
                     }
 
                     ImGui.SameLine();
-                    ImGui.SetNextItemWidth(150);
+                    ImGui.SetNextItemWidth(150 * ImGuiHelpers.GlobalScale);
                     var dzName = dangerZone.Name;
                     if (ImGui.InputText($"##dzName{j}", ref dzName, 50))
                     {
@@ -354,12 +342,12 @@ namespace DailyRoutines.ModulesPublic
                         SaveConfig(ModuleConfig);
                     }
                     ImGui.SameLine();
-                    ImGui.Text(GetLoc("Name"));
+                    ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesName"));
 
                     // 区域类型选择（紧凑布局）
-                    ImGui.SetNextItemWidth(120);
-                    var zoneTypes = new[] { GetLoc("Circle"), GetLoc("Annulus"), GetLoc("Rectangle"), GetLoc("SafeZone"), GetLoc("MathExpression") };
-                    var zoneTypeValues = new[] { "圆", "月环", "方", "矩形安全区", "表达式" };
+                    ImGui.SetNextItemWidth(120 * ImGuiHelpers.GlobalScale);
+                    var zoneTypes = new[] { GetLoc("PreventEntryIntoMapBoundariesCircle"), GetLoc("PreventEntryIntoMapBoundariesAnnulus"), GetLoc("PreventEntryIntoMapBoundariesRectangle"), GetLoc("PreventEntryIntoMapBoundariesSafeZone"), GetLoc("PreventEntryIntoMapBoundariesMathExpression") };
+                    var zoneTypeValues = new[] { GetLoc("PreventEntryIntoMapBoundariesCircle"), GetLoc("PreventEntryIntoMapBoundariesAnnulus"), GetLoc("PreventEntryIntoMapBoundariesSquare"), GetLoc("PreventEntryIntoMapBoundariesSafeZone"), GetLoc("PreventEntryIntoMapBoundariesExpression") };
                     var currentZoneTypeIndex = Array.IndexOf(zoneTypeValues, dangerZone.ZoneType);
                     if (currentZoneTypeIndex == -1)
                         currentZoneTypeIndex = 0;
@@ -370,13 +358,13 @@ namespace DailyRoutines.ModulesPublic
                         SaveConfig(ModuleConfig);
                     }
                     ImGui.SameLine();
-                    ImGui.Text(GetLoc("Type"));
+                    ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesType"));
 
                     // 根据类型显示不同的参数
-                    if (dangerZone.ZoneType == "表达式")
+                    if (dangerZone.ZoneType == GetLoc("PreventEntryIntoMapBoundariesExpression"))
                     {
-                        ImGui.Text(GetLoc("MathExpressionDesc"));
-                        ImGui.TextColored(ImGuiColors.DalamudGrey, GetLoc("MathExample"));
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesMathExpressionDesc"));
+                        ImGui.TextColored(ImGuiColors.DalamudGrey, GetLoc("PreventEntryIntoMapBoundariesMathExample"));
                         var mathExpr = dangerZone.MathExpression;
                         if (ImGui.InputTextMultiline($"##expr{j}", ref mathExpr, 200, new Vector2(300, 60)))
                         {
@@ -386,11 +374,11 @@ namespace DailyRoutines.ModulesPublic
                     }
 
                     // 根据类型显示不同的参数（紧凑布局）
-                    if (dangerZone.ZoneType == "圆" || dangerZone.ZoneType == "月环")
+                    if (dangerZone.ZoneType == GetLoc("PreventEntryIntoMapBoundariesCircle") || dangerZone.ZoneType == GetLoc("PreventEntryIntoMapBoundariesAnnulus"))
                     {
                         // 中心位置 - 使用更紧凑的布局
-                        ImGui.Text(GetLoc("CenterPosition"));
-                        ImGui.SetNextItemWidth(200);
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesCenterPosition"));
+                        ImGui.SetNextItemWidth(200 * ImGuiHelpers.GlobalScale);
                         var dzCenterPos = dangerZone.CenterPos;
                         if (ImGui.InputFloat3($"##dzCenter{j}", ref dzCenterPos))
                         {
@@ -399,7 +387,7 @@ namespace DailyRoutines.ModulesPublic
                         }
 
                         // 半径 - 并排布局
-                        ImGui.SetNextItemWidth(100);
+                        ImGui.SetNextItemWidth(100 * ImGuiHelpers.GlobalScale);
                         var dzRadius = dangerZone.Radius;
                         if (ImGui.InputFloat($"##dzRadius{j}", ref dzRadius, 1.0f, 10.0f, "%.2f"))
                         {
@@ -407,12 +395,12 @@ namespace DailyRoutines.ModulesPublic
                             SaveConfig(ModuleConfig);
                         }
                         ImGui.SameLine();
-                        ImGui.Text(GetLoc("OuterRadius"));
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesOuterRadius"));
 
-                        if (dangerZone.ZoneType == "月环")
+                        if (dangerZone.ZoneType == GetLoc("PreventEntryIntoMapBoundariesAnnulus"))
                         {
                             ImGui.SameLine();
-                            ImGui.SetNextItemWidth(100);
+                            ImGui.SetNextItemWidth(100 * ImGuiHelpers.GlobalScale);
                             var dzInnerRadius = dangerZone.InnerRadius;
                             if (ImGui.InputFloat($"##dzInnerRadius{j}", ref dzInnerRadius, 1.0f, 10.0f, "%.2f"))
                             {
@@ -420,14 +408,14 @@ namespace DailyRoutines.ModulesPublic
                                 SaveConfig(ModuleConfig);
                             }
                             ImGui.SameLine();
-                            ImGui.Text(GetLoc("InnerRadius"));
+                            ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesInnerRadius"));
                         }
                     }
-                    else if (dangerZone.ZoneType == "方")
+                    else if (dangerZone.ZoneType == GetLoc("PreventEntryIntoMapBoundariesSquare"))
                     {
                         // X范围 - 并排布局
-                        ImGui.Text(GetLoc("XRange"));
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesXRange"));
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var squareMinX = dangerZone.MinX;
                         if (ImGui.InputFloat($"##squareMinX{j}", ref squareMinX, 1.0f, 10.0f, "%.1f"))
                         {
@@ -437,7 +425,7 @@ namespace DailyRoutines.ModulesPublic
                         ImGui.SameLine();
                         ImGui.Text("~");
                         ImGui.SameLine();
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var squareMaxX = dangerZone.MaxX;
                         if (ImGui.InputFloat($"##squareMaxX{j}", ref squareMaxX, 1.0f, 10.0f, "%.1f"))
                         {
@@ -446,8 +434,8 @@ namespace DailyRoutines.ModulesPublic
                         }
 
                         // Z范围 - 并排布局
-                        ImGui.Text(GetLoc("ZRange"));
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesZRange"));
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var squareMinZ = dangerZone.MinZ;
                         if (ImGui.InputFloat($"##squareMinZ{j}", ref squareMinZ, 1.0f, 10.0f, "%.1f"))
                         {
@@ -457,7 +445,7 @@ namespace DailyRoutines.ModulesPublic
                         ImGui.SameLine();
                         ImGui.Text("~");
                         ImGui.SameLine();
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var squareMaxZ = dangerZone.MaxZ;
                         if (ImGui.InputFloat($"##squareMaxZ{j}", ref squareMaxZ, 1.0f, 10.0f, "%.1f"))
                         {
@@ -465,15 +453,15 @@ namespace DailyRoutines.ModulesPublic
                             SaveConfig(ModuleConfig);
                         }
 
-                        ImGui.TextColored(ImGuiColors.DalamudGrey, string.Format(GetLoc("CurrentDangerArea"), dangerZone.MinX, dangerZone.MaxX, dangerZone.MinZ, dangerZone.MaxZ));
+                        ImGui.TextColored(ImGuiColors.DalamudGrey, string.Format(GetLoc("PreventEntryIntoMapBoundariesCurrentDangerArea"), dangerZone.MinX, dangerZone.MaxX, dangerZone.MinZ, dangerZone.MaxZ));
                     }
-                    else if (dangerZone.ZoneType == "矩形安全区")
+                    else if (dangerZone.ZoneType == GetLoc("PreventEntryIntoMapBoundariesSafeZone"))
                     {
-                        ImGui.TextColored(ImGuiColors.DalamudYellow, GetLoc("SafeZoneDesc"));
+                        ImGui.TextColored(ImGuiColors.DalamudYellow, GetLoc("PreventEntryIntoMapBoundariesSafeZoneDesc"));
 
                         // X范围 - 并排布局
-                        ImGui.Text(GetLoc("XRange"));
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesXRange"));
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var minX = dangerZone.MinX;
                         if (ImGui.InputFloat($"##safeMinX{j}", ref minX, 1.0f, 10.0f, "%.1f"))
                         {
@@ -483,7 +471,7 @@ namespace DailyRoutines.ModulesPublic
                         ImGui.SameLine();
                         ImGui.Text("~");
                         ImGui.SameLine();
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var maxX = dangerZone.MaxX;
                         if (ImGui.InputFloat($"##safeMaxX{j}", ref maxX, 1.0f, 10.0f, "%.1f"))
                         {
@@ -492,8 +480,8 @@ namespace DailyRoutines.ModulesPublic
                         }
 
                         // Z范围 - 并排布局
-                        ImGui.Text(GetLoc("ZRange"));
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesZRange"));
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var minZ = dangerZone.MinZ;
                         if (ImGui.InputFloat($"##safeMinZ{j}", ref minZ, 1.0f, 10.0f, "%.1f"))
                         {
@@ -503,7 +491,7 @@ namespace DailyRoutines.ModulesPublic
                         ImGui.SameLine();
                         ImGui.Text("~");
                         ImGui.SameLine();
-                        ImGui.SetNextItemWidth(80);
+                        ImGui.SetNextItemWidth(80 * ImGuiHelpers.GlobalScale);
                         var maxZ = dangerZone.MaxZ;
                         if (ImGui.InputFloat($"##safeMaxZ{j}", ref maxZ, 1.0f, 10.0f, "%.1f"))
                         {
@@ -511,12 +499,12 @@ namespace DailyRoutines.ModulesPublic
                             SaveConfig(ModuleConfig);
                         }
 
-                        ImGui.TextColored(ImGuiColors.DalamudGrey, string.Format(GetLoc("CurrentSafeArea"), dangerZone.MinX, dangerZone.MaxX, dangerZone.MinZ, dangerZone.MaxZ));
+                        ImGui.TextColored(ImGuiColors.DalamudGrey, string.Format(GetLoc("PreventEntryIntoMapBoundariesCurrentSafeArea"), dangerZone.MinX, dangerZone.MaxX, dangerZone.MinZ, dangerZone.MaxZ));
                     }
-                    else if (dangerZone.ZoneType != "表达式")
+                    else if (dangerZone.ZoneType != GetLoc("PreventEntryIntoMapBoundariesExpression"))
                     {
                         // 其他类型的后备处理
-                        ImGui.Text(GetLoc("CenterPosition"));
+                        ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesCenterPosition"));
                         var dzCenterPos = dangerZone.CenterPos;
                         if (ImGui.InputFloat3($"##dzCenter{j}", ref dzCenterPos))
                         {
@@ -533,7 +521,7 @@ namespace DailyRoutines.ModulesPublic
                         ((dangerZone.Color >> 24) & 0xFF) / 255.0f
                     );
 
-                    ImGui.SetNextItemWidth(100);
+                    ImGui.SetNextItemWidth(100 * ImGuiHelpers.GlobalScale);
                     if (ImGui.ColorEdit4($"##dzColor{j}", ref color, ImGuiColorEditFlags.NoInputs))
                     {
                         dangerZone.Color =
@@ -544,7 +532,7 @@ namespace DailyRoutines.ModulesPublic
                         SaveConfig(ModuleConfig);
                     }
                     ImGui.SameLine();
-                    ImGui.Text(GetLoc("Color"));
+                    ImGui.Text(GetLoc("PreventEntryIntoMapBoundariesColor"));
 
                     // 调试信息
                     if (ModuleConfig.ShowDebugInfo && isCurrentZone && DService.ClientState.LocalPlayer != null)
@@ -553,22 +541,22 @@ namespace DailyRoutines.ModulesPublic
                         var inDanger = IsInDangerZone(dangerZone, playerPos);
                         ImGui.TextColored(
                             inDanger ? ImGuiColors.DPSRed : ImGuiColors.HealerGreen,
-                            string.Format(GetLoc("CurrentStatus"), inDanger ? GetLoc("Dangerous") : GetLoc("Safe"))
+                            string.Format(GetLoc("PreventEntryIntoMapBoundariesCurrentStatus"), inDanger ? GetLoc("PreventEntryIntoMapBoundariesDangerous") : GetLoc("PreventEntryIntoMapBoundariesSafe"))
                         );
                     }
 
                     // 删除按钮 - 放在颜色选择器同一行
                     ImGui.SameLine();
-                    ImGui.PushStyleColor(ImGuiCol.Button, ImGuiColors.DPSRed);
-                    if (ImGui.Button($"{GetLoc("Delete")}##dz{j}"))
+                    using (var deleteButtonStyle = ImRaii.PushColor(ImGuiCol.Button, ImGuiColors.DPSRed))
                     {
-                        zoneLimit.DangerZones.RemoveAt(j);
-                        SaveConfig(ModuleConfig);
-                        ImGui.PopStyleColor();
-                        ImGui.TreePop();
-                        break;
+                        if (ImGui.Button($"{GetLoc("PreventEntryIntoMapBoundariesDelete")}##dz{j}"))
+                        {
+                            zoneLimit.DangerZones.RemoveAt(j);
+                            SaveConfig(ModuleConfig);
+                            ImGui.TreePop();
+                            break;
+                        }
                     }
-                    ImGui.PopStyleColor();
 
                     ImGui.TreePop();
                 }
@@ -619,24 +607,24 @@ namespace DailyRoutines.ModulesPublic
 
             switch (zone.ZoneType)
             {
-                case "圆":
+                case var circle when circle == GetLoc("PreventEntryIntoMapBoundariesCircle"):
                     var distance = (position - zone.CenterPos).Length();
                     return distance <= zone.Radius;
 
-                case "月环":
+                case var annulus when annulus == GetLoc("PreventEntryIntoMapBoundariesAnnulus"):
                     var ringDistance = (position - zone.CenterPos).Length();
                     // 月环：圆环内为安全区，内圆和外圆为危险区
                     return ringDistance < zone.InnerRadius || ringDistance > zone.Radius;
 
-                case "方":
+                case var square when square == GetLoc("PreventEntryIntoMapBoundariesSquare"):
                     // 方形危险区：使用边界条件
                     return x >= zone.MinX && x <= zone.MaxX && z >= zone.MinZ && z <= zone.MaxZ;
 
-                case "矩形安全区":
+                case var safeZone when safeZone == GetLoc("PreventEntryIntoMapBoundariesSafeZone"):
                     // 矩形安全区：矩形内为安全，矩形外为危险
                     return x < zone.MinX || x > zone.MaxX || z < zone.MinZ || z > zone.MaxZ;
 
-                case "表达式":
+                case var expression when expression == GetLoc("PreventEntryIntoMapBoundariesExpression"):
                     return EvaluateMathExpression(zone.MathExpression, x, z);
 
                 default:
@@ -648,7 +636,7 @@ namespace DailyRoutines.ModulesPublic
         {
             switch (zone.ZoneType)
             {
-                case "圆":
+                case var circle when circle == GetLoc("PreventEntryIntoMapBoundariesCircle"):
                     var direction = currentPos - zone.CenterPos;
                     if (direction.Length() == 0)
                         direction = new Vector3(1.0f, 0, 0);
@@ -656,7 +644,7 @@ namespace DailyRoutines.ModulesPublic
                         direction = Vector3.Normalize(direction);
                     return zone.CenterPos + direction * (zone.Radius + 1.0f);
 
-                case "月环":
+                case var annulus when annulus == GetLoc("PreventEntryIntoMapBoundariesAnnulus"):
                     // 月环的安全位置处理（圆环内为安全，内外圆为危险）
                     var ringDirection = currentPos - zone.CenterPos;
                     var ringDistance = ringDirection.Length();
@@ -677,7 +665,7 @@ namespace DailyRoutines.ModulesPublic
                     else
                         return currentPos;
 
-                case "方":
+                case var square when square == GetLoc("PreventEntryIntoMapBoundariesSquare"):
                     // 方形危险区：使用边界条件定义
                     var squareNewX = currentPos.X;
                     var squareNewZ = currentPos.Z;
@@ -701,7 +689,7 @@ namespace DailyRoutines.ModulesPublic
 
                     return new Vector3(squareNewX, currentPos.Y, squareNewZ);
 
-                case "矩形安全区":
+                case var safeZone when safeZone == GetLoc("PreventEntryIntoMapBoundariesSafeZone"):
                     // 矩形安全区：移动到最近的安全区域（矩形内）
                     var safeCenterX = (zone.MinX + zone.MaxX) / 2;
                     var safeCenterZ = (zone.MinZ + zone.MaxZ) / 2;
@@ -711,14 +699,18 @@ namespace DailyRoutines.ModulesPublic
                     var newZ = Math.Max(zone.MinZ, Math.Min(zone.MaxZ, currentPos.Z));
 
                     // 如果已经在边界上，向内移动一点
-                    if (Math.Abs(newX - zone.MinX) < 0.1f) newX = zone.MinX + 1.0f;
-                    if (Math.Abs(newX - zone.MaxX) < 0.1f) newX = zone.MaxX - 1.0f;
-                    if (Math.Abs(newZ - zone.MinZ) < 0.1f) newZ = zone.MinZ + 1.0f;
-                    if (Math.Abs(newZ - zone.MaxZ) < 0.1f) newZ = zone.MaxZ - 1.0f;
+                    if (Math.Abs(newX - zone.MinX) < 0.1f) 
+                        newX = zone.MinX + 1.0f;
+                    if (Math.Abs(newX - zone.MaxX) < 0.1f) 
+                        newX = zone.MaxX - 1.0f;
+                    if (Math.Abs(newZ - zone.MinZ) < 0.1f) 
+                        newZ = zone.MinZ + 1.0f;
+                    if (Math.Abs(newZ - zone.MaxZ) < 0.1f) 
+                        newZ = zone.MaxZ - 1.0f;
 
                     return new Vector3(newX, currentPos.Y, newZ);
 
-                case "表达式":
+                case var expression when expression == GetLoc("PreventEntryIntoMapBoundariesExpression"):
                     // 对于复杂表达式，简单地向中心点移动
                     var dirToCenter = zone.CenterPos - currentPos;
                     if (dirToCenter.Length() == 0)
@@ -735,7 +727,7 @@ namespace DailyRoutines.ModulesPublic
         private void OnTerritoryChanged(ushort territoryId)
         {
             if (ModuleConfig?.ShowDebugInfo == true)
-                Chat(string.Format(GetLoc("SwitchedToZone"), territoryId));
+                Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesSwitchedToZone"), territoryId));
         }
 
         private void OnFrameworkUpdate(IFramework framework)
@@ -747,14 +739,7 @@ namespace DailyRoutines.ModulesPublic
 
             if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneId, out var zoneLimit))
                 return;
-
-            // 调试计数器（可用于调试时的频率控制）
-            _debugCounter++;
-
-            // 移除这个检查，让传送功能无论区域是否启用都能工作
-            // if (!zoneLimit.Enabled)
-            //     return;
-
+            
             // 检查小队人数及死亡人数
             var deathCount = DService.PartyList.Count(p => p.CurrentHP <= 0);
             if (deathCount >= ModuleConfig.DisableOnDeathCount)
@@ -786,7 +771,7 @@ namespace DailyRoutines.ModulesPublic
                 var isOutside = false;
                 var newPos = currentPos; // 初始化新位置为当前位置
 
-                if (zoneLimit.MapType == "圆")
+                if (zoneLimit.MapType == GetLoc("PreventEntryIntoMapBoundariesCircle"))
                 {
                     // 计算玩家与中心点的距离
                     var distance = (currentPos - centerPos).Length();
@@ -799,7 +784,7 @@ namespace DailyRoutines.ModulesPublic
                     newPos = centerPos + direction * (radius - 0.5f); // 留出0.5f的缓冲
                     isOutside = true;
                 }
-                else if (zoneLimit.MapType == "方")
+                else if (zoneLimit.MapType == GetLoc("PreventEntryIntoMapBoundariesSquare"))
                 {
                     // 计算正方形的边界
                     var halfSize = radius; // 将半径解释为半边长
@@ -842,7 +827,7 @@ namespace DailyRoutines.ModulesPublic
                 }
                 else
                 {
-                    ChatError($"未知的 MapType: {zoneLimit.MapType} for Zone ID {currentZoneId}");
+                    ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesUnknownMapType"), zoneLimit.MapType, currentZoneId));
                     return;
                 }
 
@@ -853,8 +838,6 @@ namespace DailyRoutines.ModulesPublic
 
         private void TeleportToSafePosition(Vector3 newPos, string message)
         {
-            unsafe
-            {
                 var gameObject = (FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)DService.ClientState.LocalPlayer.Address;
                 if (gameObject != null)
                 {
@@ -864,8 +847,8 @@ namespace DailyRoutines.ModulesPublic
                         Chat($"{message}: {newPos:F2}");
                 }
                 else
-                    ChatError("Player GameObject is null.");
-            }
+                    ChatError(GetLoc("PreventEntryIntoMapBoundariesPlayerGameObjectNull"));
+            
         }
 
 
@@ -897,8 +880,8 @@ namespace DailyRoutines.ModulesPublic
 
 
                 // 绘制雷达背景
-                drawList.AddCircleFilled(absoluteRadarCenter, radarRadius, 0x30000000); // 半透明黑色背景
-                drawList.AddCircle(absoluteRadarCenter, radarRadius, 0xFF00FF00, 64, 2.0f); // 绿色边框
+                drawList.AddCircleFilled(absoluteRadarCenter, radarRadius, ImGuiColors.DalamudGrey3.WithAlpha(0.2f).ToUint());
+                drawList.AddCircle(absoluteRadarCenter, radarRadius, ImGuiColors.HealerGreen.ToUint(), 64, 2.0f);
 
                 // 绘制雷达网格圈 (每圈代表一定距离)
                 var gridCount = 4;
@@ -907,13 +890,13 @@ namespace DailyRoutines.ModulesPublic
                 for (var i = 1; i <= gridCount; i++)
                 {
                     var gridRadius = radarRadius * i / gridCount;
-                    drawList.AddCircle(absoluteRadarCenter, gridRadius, 0x40FFFFFF, 32, 1.0f);
+                    drawList.AddCircle(absoluteRadarCenter, gridRadius, ImGuiColors.DalamudWhite.WithAlpha(0.25f).ToUint(), 32, 1.0f);
 
                     // 在每个网格圈上标注距离（只显示偶数圈防止重叠）
                     if (i % 2 == 0 && gridRadius < radarRadius - 15) // 防止标签超出雷达边界
                     {
                         var labelPos = new Vector2(absoluteRadarCenter.X + gridRadius + 5, absoluteRadarCenter.Y - 8);
-                        drawList.AddText(labelPos, 0x80FFFFFF, $"{gridDistance * i:F0}m");
+                        drawList.AddText(labelPos, ImGuiColors.DalamudWhite.WithAlpha(0.5f).ToUint(), $"{gridDistance * i:F0}m");
                     }
                 }
 
@@ -921,11 +904,11 @@ namespace DailyRoutines.ModulesPublic
                 drawList.AddLine(
                     new Vector2(absoluteRadarCenter.X - radarRadius, absoluteRadarCenter.Y),
                     new Vector2(absoluteRadarCenter.X + radarRadius, absoluteRadarCenter.Y),
-                    0x40FFFFFF, 1.0f);
+                    ImGuiColors.DalamudWhite.WithAlpha(0.25f).ToUint(), 1.0f);
                 drawList.AddLine(
                     new Vector2(absoluteRadarCenter.X, absoluteRadarCenter.Y - radarRadius),
                     new Vector2(absoluteRadarCenter.X, absoluteRadarCenter.Y + radarRadius),
-                    0x40FFFFFF, 1.0f);
+                    ImGuiColors.DalamudWhite.WithAlpha(0.25f).ToUint(), 1.0f);
 
                 var playerPos = DService.ClientState.LocalPlayer.Position;
                 var radarCenterWorldPos = GetRadarCenterWorldPos();
@@ -941,52 +924,47 @@ namespace DailyRoutines.ModulesPublic
                 if (playerDistanceFromRadarCenter <= radarRadius)
                 {
                     // 绘制玩家位置点
-                    drawList.AddCircleFilled(new Vector2(playerRadarX, playerRadarY), 4.0f, 0xFF0000FF); // 红色玩家点
-                    drawList.AddText(new Vector2(playerRadarX + 8, playerRadarY - 8), 0xFF0000FF, "玩家");
+                    drawList.AddCircleFilled(new Vector2(playerRadarX, playerRadarY), 4.0f, ImGuiColors.DPSRed.ToUint());
+                    drawList.AddText(new Vector2(playerRadarX + 8, playerRadarY - 8), ImGuiColors.DPSRed.ToUint(), GetLoc("PreventEntryIntoMapBoundariesPlayer"));
                 }
                 else
                 {
                     // 玩家在雷达范围外，在边缘显示箭头指示方向
                     var directionToPlayer = Vector2.Normalize(new Vector2(playerRadarX, playerRadarY) - absoluteRadarCenter);
                     var edgePos = absoluteRadarCenter + directionToPlayer * (radarRadius - 10);
-                    drawList.AddCircleFilled(edgePos, 3.0f, 0xFF0000FF);
-                    drawList.AddText(new Vector2(edgePos.X + 6, edgePos.Y - 6), 0xFF0000FF, "玩家(外)");
+                    drawList.AddCircleFilled(edgePos, 3.0f, ImGuiColors.DPSRed.ToUint());
+                    drawList.AddText(new Vector2(edgePos.X + 6, edgePos.Y - 6), ImGuiColors.DPSRed.ToUint(), GetLoc("PreventEntryIntoMapBoundariesPlayerOutside"));
                 }
 
                 // 高级模式：绘制多个危险区域
                 if (zoneLimit.IsAdvancedMode && zoneLimit.DangerZones.Count > 0)
                 {
                     foreach (var dangerZone in zoneLimit.DangerZones)
-                    {
-                        // 无论是否启用都绘制，用不同颜色表示状态
                         DrawDangerZoneOnRadar(drawList, absoluteRadarCenter, radarRadius, dangerZone, playerPos);
-                    }
                 }
                 // 传统模式：绘制单一边界
                 else
                     DrawTraditionalBoundaryOnRadar(drawList, absoluteRadarCenter, radarRadius, zoneLimit, playerPos);
 
                 // 绘制雷达中心标记
-                drawList.AddCircle(absoluteRadarCenter, 3.0f, 0xFF00FFFF, 16, 2.0f); // 青色圆圈
-                drawList.AddText(new Vector2(absoluteRadarCenter.X + 8, absoluteRadarCenter.Y + 8), 0xFF00FFFF, "中心");
+                drawList.AddCircle(absoluteRadarCenter, 3.0f, ImGuiColors.ParsedBlue.ToUint(), 16, 2.0f);
+                drawList.AddText(new Vector2(absoluteRadarCenter.X + 8, absoluteRadarCenter.Y + 8), ImGuiColors.ParsedBlue.ToUint(), GetLoc("PreventEntryIntoMapBoundariesCenter"));
 
                 // 显示实时信息（放在雷达下方，确保有足够间距）
                 ImGui.SetCursorPos(new Vector2(10, radarCenter.Y + radarRadius + 30));
-                ImGui.Text($"玩家位置: ({playerPos.X:F1}, {playerPos.Z:F1})");
-                ImGui.Text($"雷达中心: ({radarCenterWorldPos.X:F1}, {radarCenterWorldPos.Z:F1})");
-                ImGui.Text($"显示范围: {ModuleConfig.RadarRange:F0}米");
-                ImGui.Text($"比例: 1像素 = {ModuleConfig.RadarRange / radarRadius:F2}米");
-                // 雷达设置控制
-                ImGui.Text("雷达设置:");
+                ImGui.Text($"pos: ({playerPos.X:F1}, {playerPos.Z:F1})");
+                ImGui.Text($"center: ({radarCenterWorldPos.X:F1}, {radarCenterWorldPos.Z:F1})");
+                ImGui.Text($"R: {ModuleConfig.RadarRange:F0}米");
+                
                 var radarRange = ModuleConfig.RadarRange;
-                if (ImGui.SliderFloat("显示范围(米)", ref radarRange, 10.0f, 200.0f, "%.1f"))
+                if (ImGui.SliderFloat("R", ref radarRange, 10.0f, 200.0f, "%.1f"))
                 {
                     ModuleConfig.RadarRange = radarRange;
                     SaveConfig(ModuleConfig);
                 }
 
                 var radarScale = ModuleConfig.RadarScale;
-                if (ImGui.SliderFloat("缩放系数", ref radarScale, 0.5f, 5.0f, "%.1f"))
+                if (ImGui.SliderFloat("scale", ref radarScale, 0.5f, 5.0f, "%.1f"))
                 {
                     ModuleConfig.RadarScale = radarScale;
                     SaveConfig(ModuleConfig);
@@ -1010,12 +988,12 @@ namespace DailyRoutines.ModulesPublic
                 else if (zoneLimit.Enabled)
                 {
                     // 传统模式危险检测
-                    if (zoneLimit.MapType == "圆")
+                    if (zoneLimit.MapType == GetLoc("PreventEntryIntoMapBoundariesCircle"))
                     {
                         var distance = (playerPos - zoneLimit.CenterPos).Length();
                         inDanger = distance >= zoneLimit.Radius - 0.3f;
                     }
-                    else if (zoneLimit.MapType == "方")
+                    else if (zoneLimit.MapType == GetLoc("PreventEntryIntoMapBoundariesSquare"))
                     {
                         var halfSize = zoneLimit.Radius;
                         inDanger = Math.Abs(playerPos.X - zoneLimit.CenterPos.X) >= halfSize - 0.3f ||
@@ -1023,7 +1001,7 @@ namespace DailyRoutines.ModulesPublic
                     }
                 }
 
-                ImGui.TextColored(inDanger ? new Vector4(1, 0, 0, 1) : new Vector4(0, 1, 0, 1),
+                ImGui.TextColored(inDanger ? ImGuiColors.DPSRed : ImGuiColors.HealerGreen,
                                  inDanger ? GetLoc("StatusDangerous") : GetLoc("StatusSafe"));
             }
             ImGui.End();
@@ -1045,18 +1023,18 @@ namespace DailyRoutines.ModulesPublic
             var zoneRadarX = radarCenter.X + relativeToRadarCenter.X * scale * ModuleConfig.RadarScale;
             var zoneRadarY = radarCenter.Y + relativeToRadarCenter.Z * scale * ModuleConfig.RadarScale; // Z轴正向
 
-            var color = zone.Enabled ? (zone.Color | 0x80000000) : 0x40808080; // 启用时使用配置颜色，禁用时使用灰色
+            var color = zone.Enabled ? (zone.Color | 0x80000000) : ImGuiColors.DalamudGrey.WithAlpha(0.25f).ToUint();
 
             switch (zone.ZoneType)
             {
-                case "圆":
+                case var circle when circle == GetLoc("PreventEntryIntoMapBoundariesCircle"):
                     var zoneRadiusOnRadar = zone.Radius * scale * ModuleConfig.RadarScale;
                     drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), zoneRadiusOnRadar, color, 32, 2.0f);
                     // 绘制填充区域以便更好地可视化
-                    drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), zoneRadiusOnRadar, (uint)(color & 0x30FFFFFF));
+                    drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), zoneRadiusOnRadar, zone.Enabled ? (zone.Color & 0x30FFFFFF) : ImGuiColors.DalamudGrey.WithAlpha(0.2f).ToUint());
                     break;
 
-                case "月环":
+                case var annulus when annulus == GetLoc("PreventEntryIntoMapBoundariesAnnulus"):
                     var outerRadiusOnRadar = zone.Radius * scale * ModuleConfig.RadarScale;
                     var innerRadiusOnRadar = zone.InnerRadius * scale * ModuleConfig.RadarScale;
 
@@ -1066,10 +1044,10 @@ namespace DailyRoutines.ModulesPublic
                     drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), innerRadiusOnRadar, color, 32, 2.0f);
 
                     // 填充内圆（危险区域）
-                    drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), innerRadiusOnRadar, (uint)(color & 0x40FFFFFF));
+                    drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), innerRadiusOnRadar, zone.Enabled ? (zone.Color & 0x40FFFFFF) : ImGuiColors.DalamudGrey.WithAlpha(0.25f).ToUint());
 
                     // 绘制安全圆环区域（绿色显示）
-                    var DsafeColor = 0x8000FF00; // 半透明绿色
+                    var DsafeColor = ImGuiColors.HealerGreen.WithAlpha(0.5f).ToUint();
                     for (float r = innerRadiusOnRadar + 2; r < outerRadiusOnRadar; r += 3.0f)
                         drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), r, DsafeColor, 16, 1.0f);
 
@@ -1080,10 +1058,10 @@ namespace DailyRoutines.ModulesPublic
                         drawList.AddText(dangerTextPos, color, GetLoc("Dangerous"));
                     }
                     var safeTextPos = new Vector2(zoneRadarX + (innerRadiusOnRadar + outerRadiusOnRadar) / 2, zoneRadarY - 5);
-                    drawList.AddText(safeTextPos, 0xFF00FF00, GetLoc("Safe"));
+                    drawList.AddText(safeTextPos, ImGuiColors.HealerGreen.ToUint(), GetLoc("PreventEntryIntoMapBoundariesSafe"));
                     break;
 
-                case "方":
+                case var square when square == GetLoc("PreventEntryIntoMapBoundariesSquare"):
                     // 使用边界绘制方形
                     var radarCenterWorld = GetRadarCenterWorldPos();
 
@@ -1103,10 +1081,10 @@ namespace DailyRoutines.ModulesPublic
 
                     drawList.AddRect(topLeft, bottomRight, color, 0.0f, ImDrawFlags.None, 2.0f);
                     // 绘制填充区域
-                    drawList.AddRectFilled(topLeft, bottomRight, (uint)(color & 0x30FFFFFF));
+                    drawList.AddRectFilled(topLeft, bottomRight, zone.Enabled ? (zone.Color & 0x30FFFFFF) : ImGuiColors.DalamudGrey.WithAlpha(0.2f).ToUint());
                     break;
 
-                case "矩形安全区":
+                case var safeZone when safeZone == GetLoc("PreventEntryIntoMapBoundariesSafeZone"):
                     // 使用MinX/MaxX和MinZ/MaxZ绘制矩形安全区
                     var radarCenterWorldSafe = GetRadarCenterWorldPos();
 
@@ -1125,10 +1103,10 @@ namespace DailyRoutines.ModulesPublic
                     );
 
                     // 绘制安全区边界（绿色）
-                    var safeColor = 0xFF00FF00; // 绿色
+                    var safeColor = ImGuiColors.HealerGreen.ToUint();
                     drawList.AddRect(safeTopLeft, safeBottomRight, safeColor, 0.0f, ImDrawFlags.None, 2.0f);
                     // 绘制半透明绿色填充
-                    drawList.AddRectFilled(safeTopLeft, safeBottomRight, 0x4000FF00);
+                    drawList.AddRectFilled(safeTopLeft, safeBottomRight, ImGuiColors.HealerGreen.WithAlpha(0.25f).ToUint());
 
                     // 添加文字说明
                     var safeCenterX = (safeTopLeft.X + safeBottomRight.X) / 2;
@@ -1136,7 +1114,7 @@ namespace DailyRoutines.ModulesPublic
                     drawList.AddText(new Vector2(safeCenterX - 15, safeCenterY - 8), safeColor, GetLoc("SafeZone"));
                     break;
 
-                case "表达式":
+                case var expression when expression == GetLoc("PreventEntryIntoMapBoundariesExpression"):
                     // 对于复杂表达式，绘制一个更明显的标记
                     drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), 6.0f, color);
                     drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), 8.0f, color, 16, 2.0f);
@@ -1144,7 +1122,7 @@ namespace DailyRoutines.ModulesPublic
             }
 
             // 绘制区域中心点（除了方形类型）
-            if (zone.ZoneType != "方")
+            if (zone.ZoneType != GetLoc("PreventEntryIntoMapBoundariesSquare"))
                 drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), 2.0f, color);
             else
             {
@@ -1203,7 +1181,7 @@ namespace DailyRoutines.ModulesPublic
                 }
 
                 // 添加文字背景提高可读性
-                var bgColor = 0x80000000; // 半透明黑色背景
+                var bgColor = ImGuiColors.DalamudGrey3.WithAlpha(0.5f).ToUint();
                 drawList.AddRectFilled(
                     new Vector2(finalTextPos.X - 2, finalTextPos.Y - 2),
                     new Vector2(finalTextPos.X + textSize.X + 2, finalTextPos.Y + textSize.Y + 2),
@@ -1223,22 +1201,22 @@ namespace DailyRoutines.ModulesPublic
             var boundaryRadarX = radarCenter.X + relativeToRadarCenter.X * scale * ModuleConfig.RadarScale;
             var boundaryRadarY = radarCenter.Y + relativeToRadarCenter.Z * scale * ModuleConfig.RadarScale; // Z轴正向
 
-            var color = zoneLimit.Enabled ? 0xFF0000FF : 0xFF808080; // 启用时红色，禁用时灰色
-            var fillColor = zoneLimit.Enabled ? 0x300000FF : 0x30808080; // 半透明填充
+            var color = zoneLimit.Enabled ? ImGuiColors.DPSRed.ToUint() : ImGuiColors.DalamudGrey.ToUint();
+            var fillColor = zoneLimit.Enabled ? ImGuiColors.DPSRed.WithAlpha(0.2f).ToUint() : ImGuiColors.DalamudGrey.WithAlpha(0.2f).ToUint();
 
-            if (zoneLimit.MapType == "圆")
+            if (zoneLimit.MapType == GetLoc("PreventEntryIntoMapBoundariesCircle"))
             {
                 var zoneRadiusOnRadar = zoneLimit.Radius * scale * ModuleConfig.RadarScale;
                 drawList.AddCircle(new Vector2(boundaryRadarX, boundaryRadarY), zoneRadiusOnRadar, color, 32, 2.0f);
-                drawList.AddCircleFilled(new Vector2(boundaryRadarX, boundaryRadarY), zoneRadiusOnRadar, (uint)fillColor);
+                drawList.AddCircleFilled(new Vector2(boundaryRadarX, boundaryRadarY), zoneRadiusOnRadar, fillColor);
             }
-            else if (zoneLimit.MapType == "方")
+            else if (zoneLimit.MapType == GetLoc("PreventEntryIntoMapBoundariesSquare"))
             {
                 var halfSize = zoneLimit.Radius * scale * ModuleConfig.RadarScale;
                 var topLeft = new Vector2(boundaryRadarX - halfSize, boundaryRadarY - halfSize);
                 var bottomRight = new Vector2(boundaryRadarX + halfSize, boundaryRadarY + halfSize);
                 drawList.AddRect(topLeft, bottomRight, color, 0.0f, ImDrawFlags.None, 2.0f);
-                drawList.AddRectFilled(topLeft, bottomRight, (uint)fillColor);
+                drawList.AddRectFilled(topLeft, bottomRight, fillColor);
             }
 
             // 绘制边界中心点
@@ -1260,14 +1238,11 @@ namespace DailyRoutines.ModulesPublic
                 distanceFromCenter = Vector2.Distance(textPos, radarCenter);
 
                 if (distanceFromCenter + textSize.X > radarRadius - 10)
-                {
-                    // 如果还是超出，放在下方
-                    textPos = new Vector2(boundaryRadarX - textSize.X / 2, boundaryRadarY + textOffset);
-                }
+                    textPos = new Vector2(boundaryRadarX - (textSize.X / 2), boundaryRadarY + textOffset);
             }
 
             // 添加文字背景
-            var bgColor = 0x80000000;
+            var bgColor = ImGuiColors.DalamudGrey3.WithAlpha(0.5f).ToUint();
             drawList.AddRectFilled(
                 new Vector2(textPos.X - 2, textPos.Y - 2),
                 new Vector2(textPos.X + textSize.X + 2, textPos.Y + textSize.Y + 2),
@@ -1467,7 +1442,7 @@ namespace DailyRoutines.ModulesPublic
             {
                 if (ModuleConfig == null)
                 {
-                    ChatError("没有配置可导出");
+                    ChatError(GetLoc("PreventEntryIntoMapBoundariesNoConfigToExport"));
                     return;
                 }
 
@@ -1475,11 +1450,11 @@ namespace DailyRoutines.ModulesPublic
                 var encodedString = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(configData));
 
                 ImGui.SetClipboardText(encodedString);
-                Chat(GetLoc("ConfigExported"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesConfigExported"));
             }
             catch (Exception ex)
             {
-                ChatError($"导出失败: {ex.Message}");
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesExportFailed"), ex.Message));
             }
         }
 
@@ -1489,14 +1464,14 @@ namespace DailyRoutines.ModulesPublic
             {
                 if (ModuleConfig == null)
                 {
-                    ChatError("没有配置可导出");
+                    ChatError(GetLoc("PreventEntryIntoMapBoundariesNoConfigToExport"));
                     return;
                 }
 
                 var currentZoneId = DService.ClientState.TerritoryType;
                 if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneId, out var zoneLimit))
                 {
-                    ChatError(string.Format(GetLoc("CurrentZoneNoConfig"), currentZoneId));
+                    ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesCurrentZoneNoConfig"), currentZoneId));
                     return;
                 }
 
@@ -1505,11 +1480,11 @@ namespace DailyRoutines.ModulesPublic
                 var encodedString = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(configData));
 
                 ImGui.SetClipboardText(encodedString);
-                Chat($"已导出区域 {currentZoneId} 配置到剪贴板");
+                Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesZoneConfigExported"), currentZoneId));
             }
             catch (Exception ex)
             {
-                ChatError($"导出失败: {ex.Message}");
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesExportFailed"), ex.Message));
             }
         }
 
@@ -1519,14 +1494,14 @@ namespace DailyRoutines.ModulesPublic
             {
                 if (ModuleConfig == null)
                 {
-                    ChatError(GetLoc("ConfigNotInitialized"));
+                    ChatError(GetLoc("PreventEntryIntoMapBoundariesConfigNotInitialized"));
                     return;
                 }
 
                 var clipboardText = ImGui.GetClipboardText();
                 if (string.IsNullOrWhiteSpace(clipboardText))
                 {
-                    ChatError("剪贴板为空，请先复制配置字符串");
+                    ChatError(GetLoc("PreventEntryIntoMapBoundariesClipboardEmpty"));
                     return;
                 }
 
@@ -1538,16 +1513,11 @@ namespace DailyRoutines.ModulesPublic
                 }
                 catch
                 {
-                    ChatError("无效的base64配置字符串");
+                    ChatError(GetLoc("PreventEntryIntoMapBoundariesInvalidBase64"));
                     return;
                 }
 
                 var importedData = DeserializeZoneLimitList(configString);
-                if (importedData == null)
-                {
-                    ChatError("解析配置失败");
-                    return;
-                }
 
                 var importCount = 0;
                 foreach (var kvp in importedData)
@@ -1563,11 +1533,11 @@ namespace DailyRoutines.ModulesPublic
                 }
 
                 SaveConfig(ModuleConfig);
-                Chat($"成功导入 {importCount} 个区域配置");
+                Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesImportSuccess"), importCount));
             }
             catch (Exception ex)
             {
-                ChatError($"导入失败: {ex.Message}");
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesImportFailed"), ex.Message));
             }
         }
 
@@ -1577,12 +1547,12 @@ namespace DailyRoutines.ModulesPublic
 
             if (parts.Length == 0)
             {
-                Chat(GetLoc("CommandUsage"));
-                Chat(GetLoc("CommandExamples"));
-                Chat(GetLoc("CommandExample1"));
-                Chat(GetLoc("CommandExample2"));
-                Chat(GetLoc("CommandExample3"));
-                Chat(GetLoc("CommandExample4"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesCommandUsage"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesCommandExamples"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesCommandExample1"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesCommandExample2"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesCommandExample3"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesCommandExample4"));
                 return;
             }
 
@@ -1591,13 +1561,13 @@ namespace DailyRoutines.ModulesPublic
 
             if (ModuleConfig == null)
             {
-                ChatError(GetLoc("ConfigNotInitialized"));
+                ChatError(GetLoc("PreventEntryIntoMapBoundariesConfigNotInitialized"));
                 return;
             }
 
             if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneId, out var zoneLimit))
             {
-                ChatError(string.Format(GetLoc("ZoneNotConfigured"), currentZoneId));
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesZoneNotConfigured"), currentZoneId));
                 return;
             }
 
@@ -1613,7 +1583,7 @@ namespace DailyRoutines.ModulesPublic
                     HandleModifyCommand(parts.Skip(1).ToArray(), zoneLimit);
                     break;
                 default:
-                    ChatError(string.Format(GetLoc("UnknownCommand"), action));
+                    ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesUnknownCommand"), action));
                     break;
             }
         }
@@ -1622,32 +1592,32 @@ namespace DailyRoutines.ModulesPublic
         {
             if (args.Length < 1)
             {
-                ChatError(GetLoc("AddCommandUsage"));
+                ChatError(GetLoc("PreventEntryIntoMapBoundariesAddCommandUsage"));
                 return;
             }
 
             var shapeType = args[0].ToLower();
-            var dangerZone = new DangerZone(string.Format(GetLoc("CommandZone"), zoneLimit.DangerZones.Count + 1));
+            var dangerZone = new DangerZone(string.Format(GetLoc("PreventEntryIntoMapBoundariesCommandZone"), zoneLimit.DangerZones.Count + 1));
 
             switch (shapeType)
             {
                 case "circle":
                     if (args.Length < 4)
                     {
-                        ChatError(GetLoc("CircleUsage"));
+                        ChatError(GetLoc("PreventEntryIntoMapBoundariesCircleUsage"));
                         return;
                     }
 
                     if (float.TryParse(args[1], out var x) && float.TryParse(args[2], out var z) && float.TryParse(args[3], out var radius))
                     {
-                        dangerZone.ZoneType = "圆";
+                        dangerZone.ZoneType = GetLoc("PreventEntryIntoMapBoundariesCircle");
                         dangerZone.CenterPos = new Vector3(x, 0, z);
                         dangerZone.Radius = radius;
                         dangerZone.Enabled = true;
                     }
                     else
                     {
-                        ChatError(GetLoc("InvalidNumericParams"));
+                        ChatError(GetLoc("PreventEntryIntoMapBoundariesInvalidNumericParams"));
                         return;
                     }
                     break;
@@ -1655,14 +1625,14 @@ namespace DailyRoutines.ModulesPublic
                 case "rect":
                     if (args.Length < 5)
                     {
-                        ChatError(GetLoc("RectUsage"));
+                        ChatError(GetLoc("PreventEntryIntoMapBoundariesRectUsage"));
                         return;
                     }
 
                     if (float.TryParse(args[1], out var minX) && float.TryParse(args[2], out var maxX) &&
                         float.TryParse(args[3], out var minZ) && float.TryParse(args[4], out var maxZ))
                     {
-                        dangerZone.ZoneType = "方";
+                        dangerZone.ZoneType = GetLoc("PreventEntryIntoMapBoundariesSquare");
                         dangerZone.MinX = minX;
                         dangerZone.MaxX = maxX;
                         dangerZone.MinZ = minZ;
@@ -1671,27 +1641,27 @@ namespace DailyRoutines.ModulesPublic
                     }
                     else
                     {
-                        ChatError(GetLoc("InvalidNumericParams"));
+                        ChatError(GetLoc("PreventEntryIntoMapBoundariesInvalidNumericParams"));
                         return;
                     }
                     break;
 
                 default:
-                    ChatError(string.Format(GetLoc("UnknownShapeType"), shapeType));
+                    ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesUnknownShapeType"), shapeType));
                     return;
             }
 
             zoneLimit.DangerZones.Add(dangerZone);
             zoneLimit.IsAdvancedMode = true;
             SaveConfig(ModuleConfig);
-            Chat(string.Format(GetLoc("ZoneAdded"), shapeType, dangerZone.Name));
+            Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesZoneAdded"), shapeType, dangerZone.Name));
         }
 
         private void HandleDeleteCommand(string[] args, ZoneLimit zoneLimit)
         {
             if (args.Length < 1)
             {
-                ChatError(GetLoc("DeleteUsage"));
+                ChatError(GetLoc("PreventEntryIntoMapBoundariesDeleteUsage"));
                 return;
             }
 
@@ -1700,24 +1670,24 @@ namespace DailyRoutines.ModulesPublic
                 var removedZone = zoneLimit.DangerZones[index - 1];
                 zoneLimit.DangerZones.RemoveAt(index - 1);
                 SaveConfig(ModuleConfig);
-                Chat(string.Format(GetLoc("ZoneDeleted"), removedZone.Name));
+                Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesZoneDeleted"), removedZone.Name));
             }
             else
-                ChatError($"无效的索引，当前有 {zoneLimit.DangerZones.Count} 个危险区域");
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesInvalidIndex"), zoneLimit.DangerZones.Count));
         }
 
         private void HandleModifyCommand(string[] args, ZoneLimit zoneLimit)
         {
             if (args.Length < 3)
             {
-                ChatError(GetLoc("ModifyUsage"));
-                Chat(GetLoc("ModifyProperties"));
+                ChatError(GetLoc("PreventEntryIntoMapBoundariesModifyUsage"));
+                Chat(GetLoc("PreventEntryIntoMapBoundariesModifyProperties"));
                 return;
             }
 
             if (!int.TryParse(args[0], out var index) || index <= 0 || index > zoneLimit.DangerZones.Count)
             {
-                ChatError($"无效的索引，当前有 {zoneLimit.DangerZones.Count} 个危险区域");
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesInvalidIndex"), zoneLimit.DangerZones.Count));
                 return;
             }
 
@@ -1732,16 +1702,16 @@ namespace DailyRoutines.ModulesPublic
                     {
                         dangerZone.Enabled = enabled;
                         SaveConfig(ModuleConfig);
-                        Chat(string.Format(GetLoc("ZoneToggled"), enabled ? GetLoc("Enabled") : GetLoc("Disabled"), dangerZone.Name));
+                        Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesZoneToggled"), enabled ? GetLoc("PreventEntryIntoMapBoundariesEnabled") : GetLoc("PreventEntryIntoMapBoundariesDisabled"), dangerZone.Name));
                     }
                     else
-                        ChatError(GetLoc("EnabledValueError"));
+                        ChatError(GetLoc("PreventEntryIntoMapBoundariesEnabledValueError"));
                     break;
 
                 case "name":
                     dangerZone.Name = value;
                     SaveConfig(ModuleConfig);
-                    Chat(string.Format(GetLoc("NameChanged"), value));
+                    Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesNameChanged"), value));
                     break;
 
                 case "color":
@@ -1749,21 +1719,21 @@ namespace DailyRoutines.ModulesPublic
                     {
                         dangerZone.Color = color;
                         SaveConfig(ModuleConfig);
-                        Chat(string.Format(GetLoc("ColorChanged"), color.ToString("X8")));
+                        Chat(string.Format(GetLoc("PreventEntryIntoMapBoundariesColorChanged"), color.ToString("X8")));
                     }
                     else
-                        ChatError(GetLoc("InvalidColorValue"));
+                        ChatError(GetLoc("PreventEntryIntoMapBoundariesInvalidColorValue"));
                     break;
 
                 default:
-                    ChatError(string.Format(GetLoc("UnknownProperty"), property));
+                    ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundariesUnknownProperty"), property));
                     break;
             }
         }
 
         protected override void Uninit()
         {
-            DService.Framework.Update -= OnFrameworkUpdate;
+            FrameworkManager.Unregister(OnFrameworkUpdate);
             DService.ClientState.TerritoryChanged -= OnTerritoryChanged;
             RemoveSubCommand(Command);
         }
