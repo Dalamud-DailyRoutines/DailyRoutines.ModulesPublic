@@ -18,18 +18,13 @@ public unsafe class NoRenderWhenBackground : DailyModuleBase
         Author      = ["Siren"]
     };
 
-    private static readonly CompSig                           DeviceDX11PostTickSig = new("E8 ?? ?? ?? ?? 80 7B ?? ?? 74 ?? 48 8B 03 48 8B CB FF 50 ?? 84 C0");
+    private static readonly CompSig                           DeviceDX11PostTickSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 B8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 8B 15");
     private delegate        void                              DeviceDX11PostTickDelegate(nint instance);
     private static          Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
 
-    private static readonly CompSig                      NamePlateDrawSig = new("0F B7 81 ?? ?? ?? ?? 81 A1");
+    private static readonly CompSig                      NamePlateDrawSig = new("0F B7 81 ?? ?? ?? ?? 81 A1 ?? ?? ?? ?? ?? ?? ?? ?? 81 A1 ?? ?? ?? ?? ?? ?? ?? ?? 66 C1 E0 06 0F B7 D0 66 89 91 ?? ?? ?? ?? C1 E2 0D 09 91 ?? ?? ?? ?? 09 91 ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 33 C0");
     private delegate        void                         NamePlateDrawDelegate(AtkUnitBase* addon);
     private static          Hook<NamePlateDrawDelegate>? NamePlateDrawHook;
-
-    // TODO: 7.3 FFCS UIModuleInterface
-    private static readonly CompSig                 ShouldLimitFPSSig = new("E8 ?? ?? ?? ?? 84 C0 74 0A B9 32 00 00 00");
-    private delegate        bool                    ShouldLimitFPSDelegate(UIModule* module);
-    private static          ShouldLimitFPSDelegate? ShouldLimitFPS;
     
     private static Config ModuleConfig = null!;
 
@@ -44,8 +39,6 @@ public unsafe class NoRenderWhenBackground : DailyModuleBase
 
         NamePlateDrawHook ??= NamePlateDrawSig.GetHook<NamePlateDrawDelegate>(NamePlateDrawDetour);
         NamePlateDrawHook.Enable();
-
-        ShouldLimitFPS ??= ShouldLimitFPSSig.GetDelegate<ShouldLimitFPSDelegate>();
     }
 
     protected override void ConfigUI()
@@ -54,7 +47,12 @@ public unsafe class NoRenderWhenBackground : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
 
-    protected override void Uninit() => IsOnNoRender = false;
+    protected override void Uninit()
+    {
+        base.Uninit();
+
+        IsOnNoRender = false;
+    }
 
     private static void DeviceDX11PostTickDetour(nint instance)
     {
@@ -79,7 +77,7 @@ public unsafe class NoRenderWhenBackground : DailyModuleBase
         {
             IsOnNoRender = true;
             // 防止限帧失效
-            if (ShouldLimitFPS(UIModule.Instance())) 
+            if (UIModule.Instance()->ShouldLimitFps()) 
                 Thread.Sleep(50);
             return;
         }

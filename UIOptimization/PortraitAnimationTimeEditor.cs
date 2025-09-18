@@ -8,6 +8,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -28,7 +29,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
 
     private static AgentBannerEditorState* EditorState   => AgentBannerEditor.Instance()->EditorState;
     private static CharaViewPortrait*      CharaView     => EditorState != null ? EditorState->CharaView : null;
-    private static Character*              PortraitChara => CharaView   != null ? CharaView->GetCharacter() : null;
+    private static Character*              PortraitChara => CharaView   != null ?  CharaView->GetCharacter() : null;
 
     private static float Duration;
     private static int   FrameCount;
@@ -76,7 +77,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
             }
 
             ImGui.SameLine();
-            if (ImGui.ArrowButton("###LastFrame", ImGuiDir.Left))
+            if (ImGuiOm.ButtonIcon("###LastFrame", FontAwesomeIcon.ArrowLeft))
             {
                 CurrentFrame = Math.Max(0, CurrentFrame - 1);
                 UpdatePortraitCurrentFrame(CurrentFrame);
@@ -99,7 +100,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
             }
 
             ImGui.SameLine(0, 8f * GlobalFontScale);
-            if (ImGui.ArrowButton("###NextFrame", ImGuiDir.Right))
+            if (ImGuiOm.ButtonIcon("###NextFrame", FontAwesomeIcon.ArrowRight))
             {
                 CurrentFrame = Math.Min(CurrentFrame + 1, FrameCount);
                 UpdatePortraitCurrentFrame(CurrentFrame);
@@ -181,7 +182,7 @@ public unsafe class PortraitAnimationTimeEditor : DailyModuleBase
 
         if (DService.ClientState.ClientLanguage == (ClientLanguage)4)
         {
-            var actor = (Actor*)charaActor;
+            var actor = (ActorGlobal*)charaActor;
             if (actor->Model                                                                                      == null ||
                 actor->Model->Skeleton                                                                            == null ||
                 actor->Model->Skeleton->PartialSkeletons                                                          == null ||

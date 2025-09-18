@@ -105,14 +105,16 @@ public class AutoNotifyMessages : DailyModuleBase
                     using var id = ImRaii.PushId(keyword);
                     ImGui.Selectable(keyword);
 
-                    if (ImGui.BeginPopupContextItem())
+                    using (var context = ImRaii.ContextPopupItem($"{keyword}"))
                     {
-                        if (ImGui.MenuItem(GetLoc("Delete")))
+                        if (context)
                         {
-                            ModuleConfig.ValidKeywords.Remove(keyword);
-                            SaveConfig(ModuleConfig);
+                            if (ImGui.MenuItem(GetLoc("Delete")))
+                            {
+                                ModuleConfig.ValidKeywords.Remove(keyword);
+                                SaveConfig(ModuleConfig);
+                            }
                         }
-                        ImGui.EndPopup();
                     }
                 }
             }

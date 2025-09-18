@@ -24,7 +24,7 @@ public unsafe class AutoReplaceLowBlowWithInterject : DailyModuleBase
     private delegate        uint GetAdjustedActionIDDelegate(ActionManager* manager, uint actionID);
     private static          Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
 
-    private static readonly CompSig GetIconIDForSlotSig = new("40 57 48 83 EC ?? 0F B6 C2 41 8B F8");
+    private static readonly CompSig GetIconIDForSlotSig = new("E8 ?? ?? ?? ?? 85 C0 89 83 ?? ?? ?? ?? 0F 94 C0");
     private delegate        uint GetIconIDForSlotDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
     private static          Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
 

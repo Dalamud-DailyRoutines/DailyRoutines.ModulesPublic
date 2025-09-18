@@ -145,7 +145,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
                 ImGui.Text($"{counter}.");
 
                 ImGui.SameLine();
-                ImGui.Image(actionIcon.ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()));
+                ImGui.Image(actionIcon.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
 
                 ImGui.SameLine();
                 ImGui.Text(data.Name.ExtractText());

@@ -103,7 +103,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
                     ImGui.Spacing();
 
                     ImGui.SameLine();
-                    ImGuiOm.TextImage(result.Name.ExtractText(), ImageHelper.GetGameIcon(result.Icon).ImGuiHandle,
+                    ImGuiOm.TextImage(result.Name.ExtractText(), ImageHelper.GetGameIcon(result.Icon).Handle,
                                       ScaledVector2(20f));
                     
                     ImGui.TableNextColumn();
@@ -129,7 +129,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         if (statusIcon == null) return;
 
         ImGui.SameLine();
-        ImGui.Image(statusIcon.ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()));
+        ImGui.Image(statusIcon.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
 
         ImGuiOm.TooltipHover($"{status.GetName()}\n" +
                              $"{GetLoc("AutoPreventDuplicateStatus-DetectType")}: {DetectTypeLoc[status.DetectType]}");
@@ -178,7 +178,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
     }
 
     protected override void Uninit() => 
-        UseActionManager.UnregPreUseAction(OnPreUseAction);
+        UseActionManager.Unreg(OnPreUseAction);
 
     private class Config : ModuleConfiguration
     {

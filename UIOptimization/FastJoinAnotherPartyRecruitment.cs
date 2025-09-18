@@ -73,7 +73,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
                 Size      = new(140, 28),
                 Position  = new(100, 0),
                 IsVisible = true,
-                Label     = GetLoc("FastJoinAnotherPartyRecruitment-LeaveAndJoin"),
+                SeString  = GetLoc("FastJoinAnotherPartyRecruitment-LeaveAndJoin"),
                 OnClick   = () => Enqueue(taskHelper),
             };
 
@@ -120,7 +120,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
             
             var instance = AgentLookingForGroup.Instance();
             if (instance->ListingContentId == currentCID) return true;
-
+            
             instance->OpenListingByContentId(currentCID);
             return instance->ListingContentId == currentCID;
         });

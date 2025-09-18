@@ -63,7 +63,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
             
-            ImGuiOm.InputByte(GetLoc("FontSize"), ref ModuleConfig.CastingTextSize);
+            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.CastingTextSize);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
         }
@@ -76,7 +76,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         using (ImRaii.ItemWidth(250f * GlobalFontScale))
         using (ImRaii.PushIndent())
         {
-            ImGuiOm.InputByte(GetLoc("Alpha"), ref ModuleConfig.IconAlpha);
+            ImGui.InputByte(GetLoc("Alpha"), ref ModuleConfig.IconAlpha);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
             
@@ -113,7 +113,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
             
-            ImGuiOm.InputByte(GetLoc("FontSize"), ref ModuleConfig.InterruptedTextSize);
+            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.InterruptedTextSize);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
         }
@@ -142,7 +142,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
             
-            ImGuiOm.InputByte(GetLoc("FontSize"), ref ModuleConfig.NameTextSize);
+            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.NameTextSize);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
         }
@@ -171,7 +171,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
             
-            ImGuiOm.InputByte(GetLoc("FontSize"), ref ModuleConfig.CastTimeTextSize);
+            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.CastTimeTextSize);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
         }

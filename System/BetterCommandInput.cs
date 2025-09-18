@@ -16,14 +16,14 @@ public unsafe class BetterCommandInput : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("BetterCommandInputTitle"),
+        Title       = GetLoc("BetterCommandInputTitle"),
         Description = GetLoc("BetterCommandInputDescription"),
-        Category = ModuleCategories.System,
+        Category    = ModuleCategories.System,
     };
 
-    private static readonly CompSig ProcessSendedChatSig = new("E8 ?? ?? ?? ?? FE 86 ?? ?? ?? ?? C7 86 ?? ?? ?? ?? ?? ?? ?? ??");
-    private delegate void ProcessSendedChatDelegate(ShellCommandModule* module, Utf8String* message, UIModule* uiModule);
-    private static   Hook<ProcessSendedChatDelegate>? ProcessSendedChatHook;
+    private static readonly CompSig                          ProcessSendedChatSig = new("E8 ?? ?? ?? ?? FE 87 ?? ?? ?? ?? C7 87 ?? ?? ?? ?? ?? ?? ?? ??");
+    private delegate        void                             ProcessSendedChatDelegate(ShellCommandModule* module, Utf8String* message, UIModule* uiModule);
+    private static          Hook<ProcessSendedChatDelegate>? ProcessSendedChatHook;
     
     private static DateTime lastChatTime = DateTime.MinValue;
 

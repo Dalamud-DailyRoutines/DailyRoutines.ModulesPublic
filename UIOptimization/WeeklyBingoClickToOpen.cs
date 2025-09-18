@@ -1,6 +1,7 @@
 using System.Linq;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Events;
+using Dalamud.Game.Addon.Events.EventDataTypes;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -57,8 +58,7 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
         foreach (var index in Enumerable.Range(0, 16))
         {
             var dutySlot = addon->DutySlotList[index];
-            var handle = DService.AddonEvent.AddEvent((nint)addon, (nint)dutySlot.DutyButton->OwnerNode,
-                                                      AddonEventType.ButtonClick, OnDutySlotClick);
+            var handle   = DService.AddonEvent.AddEvent((nint)addon, (nint)dutySlot.DutyButton->OwnerNode, AddonEventType.ButtonClick, OnDutySlotClick);
             eventHandles[index] = handle;
         }
     }
@@ -216,6 +216,12 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
                 34 => 985,
                 // 阿卡狄亚轻量级 3-4
                 35 => 989,
+                // 阿卡狄亚轻量级 1-4
+                36 => 985,
+                // 阿卡狄亚中量级 1-2
+                37 => 1019,
+                // 阿卡狄亚中量级 3-4,
+                38 => 1023,
                 _  => 0
             },
             // 多等级区间

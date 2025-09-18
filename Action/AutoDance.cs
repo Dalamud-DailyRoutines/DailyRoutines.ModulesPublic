@@ -25,7 +25,14 @@ public unsafe class AutoDance : DailyModuleBase
         UseActionManager.RegUseActionLocation(OnPostUseAction);
     }
 
-    private void OnPostUseAction(bool result, ActionType actionType, uint actionID, ulong targetID, Vector3 location, uint extraParam)
+    private void OnPostUseAction(
+        bool       result,
+        ActionType actionType,
+        uint       actionID,
+        ulong      targetID,
+        Vector3    location,
+        uint       extraParam,
+        byte       a7)
     {
         if (!result || actionType != ActionType.Action || !DanceActions.Contains(actionID)) return;
         
@@ -62,6 +69,11 @@ public unsafe class AutoDance : DailyModuleBase
         return false;
     }
 
-    protected override void Uninit() => 
-        UseActionManager.UnregUseActionLocation(OnPostUseAction);
+    protected override void Uninit()
+    {
+        UseActionManager.Unreg(OnPostUseAction);
+
+        TaskHelper?.Abort();
+        TaskHelper = null;
+    }
 }

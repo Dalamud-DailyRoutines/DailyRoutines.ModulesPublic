@@ -146,7 +146,7 @@ public unsafe class AutoLucidDreaming : DailyModuleBase
             return true;
 
         var gcdRecast = actionManager->GetRecastGroupDetail(58);
-        if (gcdRecast->IsActive != 0)
+        if (gcdRecast->IsActive)
         {
             var gcdTotal   = actionManager->GetRecastTimeForGroup(58);
             var gcdElapsed = gcdRecast->Elapsed;

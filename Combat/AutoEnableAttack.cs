@@ -31,5 +31,5 @@ public unsafe class AutoEnableAttack : DailyModuleBase
     }
 
     protected override void Uninit() => 
-        UseActionManager.UnregUseAction(OnPostUseAction);
+        UseActionManager.Unreg(OnPostUseAction);
 }

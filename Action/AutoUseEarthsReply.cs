@@ -39,7 +39,7 @@ public class AutoUseEarthsReply : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
 
-    private void OnUseAction(bool result, ActionType actionType, uint actionID, ulong targetID, Vector3 location, uint extraParam)
+    private void OnUseAction(bool result, ActionType actionType, uint actionID, ulong targetID, Vector3 location, uint extraParam, byte a7)
     {
         if (actionType != ActionType.Action || actionID != RiddleOfEarthAction || !result) return;
 
@@ -57,7 +57,7 @@ public class AutoUseEarthsReply : DailyModuleBase
     }
 
     protected override void Uninit() => 
-        UseActionManager.UnregUseActionLocation(OnUseAction);
+        UseActionManager.Unreg(OnUseAction);
 
     public class Config : ModuleConfiguration
     {

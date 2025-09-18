@@ -22,7 +22,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
     };
 
     // 0 - 成功; 3 - 获取 InventoryType 或 InventorySlot 失败; 4 - 物品为空或不符合条件; 34 - 当前状态无法使用; 
-    private static readonly CompSig                       ExtractMateriaSig = new("E8 ?? ?? ?? ?? 83 7E 20 00 75 5A");
+    private static readonly CompSig                       ExtractMateriaSig = new("E8 ?? ?? ?? ?? 83 7E 20 00 75 58");
     private delegate        int                           ExtractMateriaDelegate(nint a1, InventoryType type, uint slot);
     private static          Hook<ExtractMateriaDelegate>? ExtractMateriaHook;
 
@@ -147,7 +147,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
                         IsVisible     = true,
                         Position      = new(135, 8),
                         Size          = new(150, 28),
-                        Text          = $"{Info.Title}",
+                        SeString      = $"{Info.Title}",
                         FontSize      = 14,
                         AlignmentType = AlignmentType.Right,
                         TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
@@ -162,7 +162,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
                         Position  = new(295, 10),
                         Size      = new(100, 28),
                         IsVisible = true,
-                        Label     = GetLoc("Start"),
+                        SeString  = GetLoc("Start"),
                         OnClick   = StartARoundAll
                     };
                     Service.AddonController.AttachNode(StartButtonNode, Materialize->RootNode);
@@ -177,7 +177,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
                         Position  = new(400, 10),
                         Size      = new(100, 28),
                         IsVisible = true,
-                        Label     = GetLoc("Stop"),
+                        SeString  = GetLoc("Stop"),
                         OnClick   = () => TaskHelper.Abort()
                     };
                     Service.AddonController.AttachNode(StopButtonNode, Materialize->RootNode);
@@ -193,7 +193,7 @@ public unsafe class AutoMaterialize : DailyModuleBase
                 Service.AddonController.DetachNode(StopButtonNode);
                 StopButtonNode = null;
                 
-                TaskHelper.Abort();
+                TaskHelper?.Abort();
                 break;
         }
     }
@@ -214,7 +214,5 @@ public unsafe class AutoMaterialize : DailyModuleBase
         OnAddon(AddonEvent.PreFinalize, null);
         
         DService.AddonLifecycle.UnregisterListener(OnDialogAddon);
-
-        base.Uninit();
     }
 }

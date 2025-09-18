@@ -39,9 +39,7 @@ public class AutoStoreToCabinet : DailyModuleBase
 
     private static CancellationTokenSource? CancelSource;
     private static bool IsOnTask;
-
-    private static unsafe AtkUnitBase* Cabinet => (AtkUnitBase*)DService.Gui.GetAddonByName("Cabinet");
-
+    
     protected override void Init()
     {
         CabinetItems ??= LuminaGetter.Get<Cabinet>()
@@ -57,7 +55,7 @@ public class AutoStoreToCabinet : DailyModuleBase
 
     protected override unsafe void OverlayPreDraw()
     {
-        if (Cabinet == null)
+        if (InfosOm.Cabinet == null)
             Overlay.IsOpen = false;
     }
 
@@ -67,8 +65,8 @@ public class AutoStoreToCabinet : DailyModuleBase
         {
             unsafe
             {
-                var addon = Cabinet;
-                var pos = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight() + 6);
+                var addon = InfosOm.Cabinet;
+                var pos   = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight() + 6);
                 ImGui.SetWindowPos(pos);
             }
 

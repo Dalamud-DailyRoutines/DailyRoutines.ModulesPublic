@@ -92,7 +92,7 @@ public unsafe class FastRetainerStore : DailyModuleBase
                     if (!TryFindTargetSlot(targetInvs, itemID, isHQ, isCollectable, out var targetSlot))
                         return true;
 
-                    manager->MoveItemSlot(sourceInv, (ushort)slot->Slot, targetSlot.Inventory, (ushort)targetSlot.Slot, 1);
+                    manager->MoveItemSlot(sourceInv, (ushort)slot->Slot, targetSlot.Inventory, (ushort)targetSlot.Slot, true);
                 }
             }
 
@@ -100,21 +100,21 @@ public unsafe class FastRetainerStore : DailyModuleBase
         }, storeToRetainer ? "存入雇员" : "取出到背包");
     }
 
-    private static bool IsSameItem(InventoryItem* slot, uint itemId, bool isHQ, bool isCollectable)
+    private static bool IsSameItem(InventoryItem* slot, uint itemID, bool isHQ, bool isCollectable)
     {
-        var rawId = slot->GetItemId();
-        if (rawId == 0) return false;
+        var rawID = slot->GetItemId();
+        if (rawID == 0) return false;
 
         var currentIsHQ          = slot->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
         var currentIsCollectable = slot->Flags.HasFlag(InventoryItem.ItemFlags.Collectable);
 
-        var baseItemId = rawId;
+        var baseItemID = rawID;
         if (currentIsCollectable)
-            baseItemId %= 500000;
+            baseItemID %= 500000;
         else if (currentIsHQ)
-            baseItemId %= 1000000;
+            baseItemID %= 1000000;
 
-        return baseItemId == itemId && currentIsHQ == isHQ && currentIsCollectable == isCollectable;
+        return baseItemID == itemID && currentIsHQ == isHQ && currentIsCollectable == isCollectable;
     }
 
     private static bool TryFindTargetSlot(List<InventoryType> targetInvs, uint itemID, bool isHQ, bool isCollectable, 
@@ -168,12 +168,12 @@ public unsafe class FastRetainerStore : DailyModuleBase
         return false;
     }
 
-    private class ItemMoveMenu(uint ItemId, bool IsHQ, bool IsCollectable, bool IsStoreToRetainer) : MenuItemBase
+    private class ItemMoveMenu(uint ItemID, bool IsHQ, bool IsCollectable, bool IsStoreToRetainer) : MenuItemBase
     {
         public override    string Name         { get; protected set; } = GetLoc(IsStoreToRetainer ? "SaveAll" : "RetrieveAll");
         protected override bool   WithDRPrefix { get; set; }           = true;
 
         protected override void OnClicked(IMenuItemClickedArgs args) => 
-            ModuleManager.GetModule<FastRetainerStore>().ExecuteMoveAll(ItemId, IsHQ, IsCollectable, IsStoreToRetainer);
+            ModuleManager.GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
     }
 }

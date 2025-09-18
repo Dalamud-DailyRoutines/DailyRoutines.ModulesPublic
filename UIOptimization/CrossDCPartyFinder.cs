@@ -92,8 +92,6 @@ public class CrossDCPartyFinder : DailyModuleBase
         ClearResources();
 
         ClearNodes();
-
-        base.Uninit();
     }
 
     protected override unsafe void OverlayUI()
@@ -223,7 +221,7 @@ public class CrossDCPartyFinder : DailyModuleBase
 
             ImGui.TableNextColumn();
             if (DService.Texture.TryGetFromGameIcon(new(listing.CategoryIcon), out var categoryTexture))
-                ImGui.Image(categoryTexture.GetWrapOrEmpty().ImGuiHandle,
+                ImGui.Image(categoryTexture.GetWrapOrEmpty().Handle,
                             new Vector2(ImGui.GetTextLineHeightWithSpacing() * 3) +
                             new Vector2(ImGui.GetStyle().ItemSpacing.X, 2    * ImGui.GetStyle().ItemSpacing.Y));
 
@@ -274,7 +272,7 @@ public class CrossDCPartyFinder : DailyModuleBase
                             var displayIcon = slot.JobIcons.Count > 1 ? 62146 : slot.JobIcons[0];
                             if (DService.Texture.TryGetFromGameIcon(new(displayIcon), out var jobTexture))
                             {
-                                ImGui.Image(jobTexture.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()));
+                                ImGui.Image(jobTexture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
                                 if (slot.JobIcons.Count > 1 && ImGui.IsItemHovered())
                                 {
                                     using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, 1f))
@@ -284,7 +282,7 @@ public class CrossDCPartyFinder : DailyModuleBase
                                         {
                                             if (DService.Texture.TryGetFromGameIcon(new(jobIcon), out var jobTooltipTexture))
                                             {
-                                                ImGui.Image(jobTooltipTexture.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()));
+                                                ImGui.Image(jobTooltipTexture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
                                                 ImGui.SameLine();
                                             }
                                         }
@@ -466,18 +464,18 @@ public class CrossDCPartyFinder : DailyModuleBase
                 LayoutNode = new()
                 {
                     IsVisible = true,
-                    Position  = new(85, 12)
+                    Position  = new(85, 8)
                 };
                 
                 foreach (var dataCenter in DataCenters)
                 {
-                    var node = new CheckboxNode()
+                    var node = new CheckboxNode
                     {
-                        Size      = new(100.0f, 28f),
+                        Size      = new(100f, 28f),
                         IsVisible = true,
                         IsChecked = dataCenter == SelectedDataCenter,
                         IsEnabled = true,
-                        LabelText = dataCenter,
+                        SeString  = dataCenter,
                         OnClick = _ =>
                         {
                             SelectedDataCenter = dataCenter;

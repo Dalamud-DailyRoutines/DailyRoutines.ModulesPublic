@@ -17,17 +17,17 @@ public unsafe class RealQueuePosition : DailyModuleBase
         Author      = ["逆光", "Nukoooo"]
     };
     
-    private readonly CompSig AgentWorldTravelUpdaterSig = new("40 53 56 57 41 54 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 4C 8B FA");
-    private delegate bool AgentWorldTravelUpdateDelegate(nint a1, NumberArrayData* a2, StringArrayData* a3, bool a4);
-    private static Hook<AgentWorldTravelUpdateDelegate> AgentWorldTravelUpdateHook;
+    private readonly CompSig                              AgentWorldTravelUpdaterSig = new("E8 ?? ?? ?? ?? 40 0A F8 B9 ?? ?? ?? ??");
+    private delegate bool                                 AgentWorldTravelUpdateDelegate(nint a1, NumberArrayData* a2, StringArrayData* a3, bool a4);
+    private static   Hook<AgentWorldTravelUpdateDelegate> AgentWorldTravelUpdateHook;
 
-    private static readonly CompSig UpdateWorldTravelDataSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B FA 0F B6 4A");
-    private delegate void UpdateWorldTravelDataDelegate(nint a1, nint a2);
-    private static Hook<UpdateWorldTravelDataDelegate> UpdateWorldTravelDataHook;
+    private static readonly CompSig UpdateWorldTravelDataSig = new("48 89 5C 24 ?? 57 48 83 EC 20 48 8B D9 48 8B FA 0F B6 4A 10");
+    private delegate        void UpdateWorldTravelDataDelegate(nint a1, nint a2);
+    private static          Hook<UpdateWorldTravelDataDelegate> UpdateWorldTravelDataHook;
 
-    private static readonly CompSig ContentFinderQueuePositionDataSig = new("40 ?? 57 41 ?? 48 ?? ?? ?? 0f ?? ?? ?? 49");
-    private delegate byte ContentFinderQueuePositionDataDelegate(nint a1, uint a2, nint a3);
-    private static Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
+    private static readonly CompSig                                       ContentFinderQueuePositionDataSig = new("40 ?? 57 41 ?? 48 ?? ?? ?? 0f ?? ?? ?? 49");
+    private delegate        byte                                          ContentFinderQueuePositionDataDelegate(nint a1, uint a2, nint a3);
+    private static          Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
     
     private DateTime ETA = DateTime.Now;
 

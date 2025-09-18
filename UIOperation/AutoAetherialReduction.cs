@@ -99,7 +99,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
                         IsVisible     = true,
                         Position      = new(135, 8),
                         Size          = new(150, 28),
-                        Text          = $"{Info.Title}",
+                        SeString      = $"{Info.Title}",
                         FontSize      = 14,
                         AlignmentType = AlignmentType.Right,
                         TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
@@ -114,7 +114,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
                         Position  = new(295, 10),
                         Size      = new(100, 28),
                         IsVisible = true,
-                        Label     = GetLoc("Start"),
+                        SeString  = GetLoc("Start"),
                         OnClick   = () => StartReduction()
                     };
                     Service.AddonController.AttachNode(StartButtonNode, PurifyItemSelector->RootNode);
@@ -129,7 +129,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
                         Position  = new(400, 10),
                         Size      = new(100, 28),
                         IsVisible = true,
-                        Label     = GetLoc("Stop"),
+                        SeString  = GetLoc("Stop"),
                         OnClick   = () => TaskHelper.Abort()
                     };
                     Service.AddonController.AttachNode(StopButtonNode, PurifyItemSelector->RootNode);

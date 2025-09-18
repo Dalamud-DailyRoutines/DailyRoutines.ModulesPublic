@@ -18,27 +18,34 @@ public unsafe class CustomizeSightDistance : DailyModuleBase
         Category    = ModuleCategories.System,
     };
 
-    private static readonly CompSig CameraUpdateSig = new("8B 81 ?? ?? ?? ?? 33 D2 F3 0F 10 05");
-    private delegate nint CameraUpdateDelegate(Camera* camera);
-    private static Hook<CameraUpdateDelegate>? CameraUpdateHook;
+    private static readonly CompSig                     CameraUpdateSig = new("8B 81 ?? ?? ?? ?? 33 D2 F3 0F 10 05");
+    private delegate        nint                        CameraUpdateDelegate(Camera* camera);
+    private static          Hook<CameraUpdateDelegate>? CameraUpdateHook;
 
-    private static readonly CompSig CameraCurrentSightDistanceSig =
-        new("48 83 EC ?? 48 8B 15 ?? ?? ?? ?? 0F 29 74 24");
-    private delegate float CameraCurrentSightDistanceDelegate(nint a1, float minValue, float maxValue, float upperBound, float lowerBound, int mode, float currentValue, float targetValue);
+    private static readonly CompSig CameraCurrentSightDistanceSig = new("48 83 EC ?? 48 8B 15 ?? ?? ?? ?? 0F 29 74 24");
+    private delegate float CameraCurrentSightDistanceDelegate(
+        nint  a1,
+        float minValue,
+        float maxValue,
+        float upperBound,
+        float lowerBound,
+        int   mode,
+        float currentValue,
+        float targetValue);
     private static Hook<CameraCurrentSightDistanceDelegate>? CameraCurrentSightDistanceHook;
 
     private static readonly CompSig     CameraCollisionBaseSig = new("84 C0 0F 84 ?? ?? ?? ?? F3 0F 10 44 24 ?? 41 B7");
-    private static readonly MemoryPatch CameraCollisionPatch   = new(CameraCollisionBaseSig.Get(), [0x90, 0x90, 0xE9, 0xC1, 0x01, 0x00, 0x00, 0x90]);
+    private static readonly MemoryPatch CameraCollisionPatch   = new(CameraCollisionBaseSig.Get(), [0x90, 0x90, 0xE9, 0xA7, 0x01, 0x00, 0x00, 0x90]);
 
     private static readonly Dictionary<string, float> OriginalData = new()
     {
-        { "CustomizeSightDistance-MaxDistanceInput", 20f},
-        { "CustomizeSightDistance-MinDistanceInput", 1.5f},
-        { "CustomizeSightDistance-MaxRotationInput", 0.785398f},
-        { "CustomizeSightDistance-MinRotationInput", -1.483530f},
-        { "CustomizeSightDistance-MaxFoVInput", 0.78f},
-        { "CustomizeSightDistance-MinFoVInput", 0.69f},
-        { "CustomizeSightDistance-ManualFoVInput", 0.78f}
+        ["CustomizeSightDistance-MaxDistanceInput"] = 20f,
+        ["CustomizeSightDistance-MinDistanceInput"] = 1.5f,
+        ["CustomizeSightDistance-MaxRotationInput"] = 0.785398f,
+        ["CustomizeSightDistance-MinRotationInput"] = -1.483530f,
+        ["CustomizeSightDistance-MaxFoVInput"]      = 0.78f,
+        ["CustomizeSightDistance-MinFoVInput"]      = 0.69f,
+        ["CustomizeSightDistance-ManualFoVInput"]   = 0.78f
     };
 
     private static Config ModuleConfig = null!;
@@ -168,10 +175,8 @@ public unsafe class CustomizeSightDistance : DailyModuleBase
     protected override void Uninit()
     {
         if (!Initialized) return;
-        UpdateCamera(CameraManager.Instance()->Camera, 20f, 1.5f, 0.785398f, -1.483530f, 0.78f, 0.69f, 0.78f);
-
         CameraCollisionPatch.Disable();
-        base.Uninit();
+        UpdateCamera(CameraManager.Instance()->Camera, 20f, 1.5f, 0.785398f, -1.483530f, 0.78f, 0.69f, 0.78f);
     }
 
     private class Config : ModuleConfiguration

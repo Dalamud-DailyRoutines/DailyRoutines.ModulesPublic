@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
@@ -13,6 +14,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Extensions;
 using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
@@ -34,7 +36,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
     private static Dictionary<uint, int> HaterInfo = [];
     
-    private static readonly List<(uint ComponentNodeID, TextNode TextNode, NineGridNode BackgroundNode, CastBarProgressBarNode CastBarNode)> TextNodes = [];
+    private static readonly List<(uint ComponentNodeID, TextNode TextNode, NineGridNode BackgroundNode, EnemyCastProgressBarNode CastBarNode)> TextNodes = [];
 
     private static string CastInfoTargetBlacklistInput = string.Empty;
 
@@ -57,7 +59,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
-        ImGui.InputFloat2("###TextOffsetInput", ref ModuleConfig.TextOffset, "%.1f");
+        ImGui.InputFloat2("###TextOffsetInput", ref ModuleConfig.TextOffset, format: "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             ModuleConfig.Save(this);
@@ -134,7 +136,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         if (ModuleConfig.UseCustomizeText)
         {
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing());
-            ImGui.InputText("###CustomizeTextPatternInput", ref ModuleConfig.CustomizeTextPattern, 512);
+            ImGui.InputText("###CustomizeTextPatternInput", ref ModuleConfig.CustomizeTextPattern);
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
                 ModuleConfig.Save(this);
@@ -149,7 +151,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         
         ImGui.SameLine();
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        ImGuiOm.InputByte("###FontSize", ref ModuleConfig.FontSize);
+        ImGui.InputByte("###FontSize", ref ModuleConfig.FontSize);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             ModuleConfig.Save(this);
@@ -170,7 +172,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         {
             if (popup)
             {
-                ImGui.InputText("###CastInfoTargetBlacklistInput", ref CastInfoTargetBlacklistInput, 512);
+                ImGui.InputText("###CastInfoTargetBlacklistInput", ref CastInfoTargetBlacklistInput);
                 
                 ImGui.SameLine();
                 using (ImRaii.Disabled(string.IsNullOrWhiteSpace(CastInfoTargetBlacklistInput) || 
@@ -261,11 +263,11 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             var gameObj = DService.ObjectTable.SearchById(gameObjectID);
             if (gameObj is not IBattleChara bc || !HaterInfo.TryGetValue(gameObj.EntityId, out var enmity))
             {
-                textNode.Text            = string.Empty;
+                textNode.SeString        = string.Empty;
                 backgroundNode.IsVisible = false;
                 continue;
             }
-            
+
             var componentNode = EnemyList->GetComponentNodeById(nodes[i].ComponentNodeID);
             if (componentNode == null)
             {
@@ -279,11 +281,17 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             var targetNameTextNode = componentNode->Component->UldManager.SearchNodeById(6)->GetAsAtkTextNode();
             if (targetNameTextNode == null) continue;
             
+            var origCastBarNode         = componentNode->Component->UldManager.SearchNodeById(7);
+            var origCastBarProgressNode = componentNode->Component->UldManager.SearchNodeById(8);
+            if (origCastBarNode == null || origCastBarProgressNode == null) continue;
+            
             targetNameTextNode->GetTextDrawSize(castWidth, castHeight);
 
             var isCasting = bc.IsCasting || (isTargetCasting && bc.Address == (DService.Targets.Target?.Address ?? nint.Zero));
             if (isCasting)
             {
+                origCastBarNode->SetAlpha(0);
+                origCastBarProgressNode->SetAlpha(0);
                 castTextNode->SetAlpha(0);
 
                 var castBackgroundNode = componentNode->Component->UldManager.SearchNodeById(5);
@@ -291,17 +299,12 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                     castBackgroundNode->SetAlpha(0);
                 
                 castBarNode.IsVisible = true;
-                castBarNode.Progress  = bc.CurrentCastTime / bc.TotalCastTime;
+                castBarNode.ProgressNode.Width  = 105 * (bc.CurrentCastTime / bc.TotalCastTime);
 
                 if (bc.IsCastInterruptible)
-                    castBarNode.BorderImageNode.MultiplyColor = new(1, 0, 0);
+                    castBarNode.AddColor = KnownColor.Red.Vector().AsVector3Color();
                 else
-                {
-                    castBarNode.BorderImageNode.TexturePath        = "ui/uld/enemylist_hr1.tex";
-                    castBarNode.BorderImageNode.TextureCoordinates = new(0, 120);
-                    castBarNode.BorderImageNode.TextureSize        = new(120, 16);
-                    castBarNode.BorderImageNode.MultiplyColor      = new(0.392f);
-                }
+                    castBarNode.AddColor = KnownColor.Yellow.Vector().AsVector3Color() / 255f;
             }
             else
             {
@@ -326,24 +329,24 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             if (isCasting && !ModuleConfig.CastInfoTargetBlacklist.Contains(targetName))
             {
                 var castTimeLeft = MathF.Max(bc.TotalCastTime - bc.CurrentCastTime, 0f);
-                
-                textNode.Text            = $"{GetCastInfoText(bc.CastActionType, bc.CastActionId)}: " + (castTimeLeft != 0 ? $"{castTimeLeft:F1}" : "\ue07f\ue07b");
+
+                textNode.SeString        = $"{GetCastInfoText(bc.CastActionType, bc.CastActionId)}: " + (castTimeLeft != 0 ? $"{castTimeLeft:F1}" : "\ue07f\ue07b");
                 backgroundNode.IsVisible = true;
             }            
             else if (!bc.IsTargetable && bc.CurrentHp == bc.MaxHp)
             {
-                textNode.Text            = string.Empty;
+                textNode.SeString        = string.Empty;
                 backgroundNode.IsVisible = false;
             }
             else
             {
-                textNode.Text            = GetGeneralInfoText((float)bc.CurrentHp / bc.MaxHp * 100, enmity);
+                textNode.SeString        = GetGeneralInfoText((float)bc.CurrentHp / bc.MaxHp * 100, enmity);
                 backgroundNode.IsVisible = true;
             }
             
             textNode.Position = new(Math.Max(95, *castWidth + 28) + ModuleConfig.TextOffset.X, 4 + ModuleConfig.TextOffset.Y);
 
-            var textSize = textNode.GetTextDrawSize(textNode.Text);
+            var textSize = textNode.GetTextDrawSize(textNode.SeString);
             
             backgroundNode.Position = new(Math.Max(68, *castWidth + 1) + (isCasting ? 12.5f : 0) + ModuleConfig.TextOffset.X, 6 + ModuleConfig.TextOffset.Y);
             backgroundNode.Size     = new(textSize.X                   + 47                      + (isCasting ? -18 : 0), textSize.Y * 0.7f);
@@ -366,15 +369,15 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             var textNode = new TextNode
             {
-                Text            = string.Empty,
-                FontSize        = ModuleConfig.FontSize,
-                IsVisible       = true,
-                Size            = new(160f, 25f),
-                AlignmentType   = AlignmentType.TopLeft,
-                Position        = new(100, 5),
-                TextFlags       = TextFlags.Edge    | TextFlags.Emboss,
-                NodeFlags       = NodeFlags.Visible | NodeFlags.Enabled | NodeFlags.AnchorTop | NodeFlags.AnchorLeft,
-                LineSpacing     = 20,
+                SeString      = string.Empty,
+                FontSize      = ModuleConfig.FontSize,
+                IsVisible     = true,
+                Size          = new(160f, 25f),
+                AlignmentType = AlignmentType.TopLeft,
+                Position      = new(100, 5),
+                TextFlags     = TextFlags.Edge    | TextFlags.Emboss,
+                NodeFlags     = NodeFlags.Visible | NodeFlags.Enabled | NodeFlags.AnchorTop | NodeFlags.AnchorLeft,
+                LineSpacing   = 20,
             };
 
             // 需要把 STP 显示 UVWH 都除以 2
@@ -391,26 +394,16 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             };
 
-            var castBarNode = new CastBarProgressBarNode
+            var castBarNode = new EnemyCastProgressBarNode
             {
                 IsVisible = true,
-                Position  = new(90, 16),
-                Size      = new(120, 16),
+                Position  = new(85, 13.7f),
+                Size      = new(120, 20)
             };
 
-            castBarNode.ProgressNode.TexturePath        =  "ui/uld/enemylist_hr1.tex";
-            castBarNode.ProgressNode.TextureCoordinates =  new(0, 104);
-            castBarNode.ProgressNode.TextureSize        =  new(120, 16);
-            castBarNode.ProgressNode.Position           += new Vector2(1, 0);
-            
-            castBarNode.BorderImageNode.TexturePath        =  "ui/uld/enemylist_hr1.tex";
-            castBarNode.BorderImageNode.TextureCoordinates =  new(0, 120);
-            castBarNode.BorderImageNode.TextureSize        =  new(120, 16);
-            castBarNode.BorderImageNode.Size               += new Vector2(2, 0);
-
-            castBarNode.ProgressNode.AddColor = new(1);
-            
-            castBarNode.BackgroundImageNode.IsVisible = false;
+            castBarNode.ProgressNode.Height   -= 12f;
+            castBarNode.ProgressNode.Position += new Vector2(7.7f, 6.5f);
+            castBarNode.ProgressNode.AddColor =  new(1);
             
             Service.AddonController.AttachNode(backgroundNode, node);
             Service.AddonController.AttachNode(textNode,       node);

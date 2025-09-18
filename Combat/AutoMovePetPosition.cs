@@ -175,7 +175,7 @@ public class AutoMovePetPosition : DailyModuleBase
                 ImGui.TableNextColumn();
                 var timeInSeconds = schedule.DelayS;
                 ImGui.SetNextItemWidth(50f * GlobalFontScale);
-                ImGui.InputInt("##延迟", ref timeInSeconds, 0, 0);
+                ImGui.InputInt("##延迟", ref timeInSeconds);
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     timeInSeconds = Math.Max(0, timeInSeconds);
@@ -192,7 +192,7 @@ public class AutoMovePetPosition : DailyModuleBase
                 var pos = schedule.Position;
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(125f * GlobalFontScale);
-                ImGui.InputFloat2("##坐标", ref pos, "%.1f");
+                ImGui.InputFloat2("##坐标", ref pos, format: "%.1f");
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     schedule.Position = pos;

@@ -25,7 +25,7 @@ public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
     private delegate        uint                              GetAdjustedActionIDDelegate(ActionManager* manager, uint actionID);
     private static          Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
 
-    private static readonly CompSig GetIconIDForSlotSig = new("40 57 48 83 EC ?? 0F B6 C2 41 8B F8");
+    private static readonly CompSig GetIconIDForSlotSig = new("E8 ?? ?? ?? ?? 85 C0 89 83 ?? ?? ?? ?? 0F 94 C0");
     private delegate        uint GetIconIDForSlotDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
     private static          Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
 
@@ -63,14 +63,14 @@ public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
 
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGuiOm.TextImage(action0Data.Value.Name.ExtractText(), action0Icon.ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()));
+            ImGuiOm.TextImage(action0Data.Value.Name.ExtractText(), action0Icon.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
 
             ImGui.TableNextColumn();
             ImGui.AlignTextToFramePadding();
             ImGui.Text("→");
 
             ImGui.TableNextColumn();
-            ImGuiOm.TextImage(action1Data.Value.Name.ExtractText(), action1Icon.ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()));
+            ImGuiOm.TextImage(action1Data.Value.Name.ExtractText(), action1Icon.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
         }
     }
 

@@ -19,16 +19,17 @@ public unsafe class BetterBlueSetLoad : DailyModuleBase
         Description = GetLoc("BetterBlueSetLoadDescription"),
         Category    = ModuleCategories.UIOptimization,
     };
-    
-    private static readonly CompSig AgentAozNotebookReceiveEventSig =
-        new("40 53 55 56 57 41 56 48 81 EC 30 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 20 01 00 00 48 8B BC 24 80 01 00 00");
+
     private static Hook<AgentReceiveEventDelegate>? AgentAozNotebookReceiveEventHook;
 
     private const string Command = "blueset";
 
     protected override void Init()
     {
-        AgentAozNotebookReceiveEventHook ??= AgentAozNotebookReceiveEventSig.GetHook<AgentReceiveEventDelegate>(AgentAozNotebookReceiveEventDetour);
+        AgentAozNotebookReceiveEventHook ??=
+            DService.Hook.HookFromAddress<AgentReceiveEventDelegate>(
+                GetVFuncByName(AgentModule.Instance()->GetAgentByInternalId(AgentId.AozNotebook)->VirtualTable, "ReceiveEvent"),
+                AgentAozNotebookReceiveEventDetour);
         AgentAozNotebookReceiveEventHook.Enable();
 
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("BetterBlueSetLoad-CommandHelp") });
@@ -42,7 +43,12 @@ public unsafe class BetterBlueSetLoad : DailyModuleBase
         ImGui.Text($"/pdr {Command} → {GetLoc("BetterBlueSetLoad-CommandHelp")}");
     }
 
-    private static AtkValue* AgentAozNotebookReceiveEventDetour(AgentInterface* agent, AtkValue* returnvalues, AtkValue* values, uint valueCount, ulong eventKind)
+    private static AtkValue* AgentAozNotebookReceiveEventDetour(
+        AgentInterface* agent,
+        AtkValue*       returnvalues,
+        AtkValue*       values,
+        uint            valueCount,
+        ulong           eventKind)
     {
         if (!IsAddonAndNodesReady(AOZNotebookPresetList) || AOZNotebookPresetList->AtkValues->UInt != 0 || eventKind != 1 || valueCount != 2)
             return InvokeOriginal();
@@ -55,7 +61,8 @@ public unsafe class BetterBlueSetLoad : DailyModuleBase
         using var returnValue = new AtkValueArray(false);
         return returnValue;
 
-        AtkValue* InvokeOriginal() => AgentAozNotebookReceiveEventHook.Original(agent, returnvalues, values, valueCount, eventKind);
+        AtkValue* InvokeOriginal() =>
+            AgentAozNotebookReceiveEventHook.Original(agent, returnvalues, values, valueCount, eventKind);
     }
 
     private static void OnCommand(string command, string args)

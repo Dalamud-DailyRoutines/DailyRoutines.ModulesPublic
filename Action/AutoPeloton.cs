@@ -78,18 +78,18 @@ public class AutoPeloton : DailyModuleBase
     }
 
     // 等级变更
-    private void OnLevelChanged(uint classJobId, uint level)
+    private void OnLevelChanged(uint classJobID, uint level)
     {
         TaskHelper.Abort();
         TaskHelper.Enqueue(OneTimeConditionCheck);
     }
 
     // 职业变更
-    private void OnClassJobChanged(uint classJobId)
+    private void OnClassJobChanged(uint classJobID)
     {
         TaskHelper.Abort();
 
-        if (!ValidClassJobs.Contains(classJobId)) return;
+        if (!ValidClassJobs.Contains(classJobID)) return;
 
         TaskHelper.Enqueue(OneTimeConditionCheck);
     }

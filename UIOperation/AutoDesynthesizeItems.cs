@@ -58,7 +58,7 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                 {
                     IsVisible = true,
                     Size      = new(200, 28),
-                    Label     = $"{Info.Title}",
+                    SeString  = $"{Info.Title}",
                     OnClick   = StartDesynthesizeAll,
                 };
                 
@@ -79,13 +79,13 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                 {
                     if (TaskHelper.IsBusy)
                     {
-                        ButtonNode.Label = GetLoc("Stop");
-                        ButtonNode.OnClick = () => TaskHelper.Abort();
+                        ButtonNode.SeString = GetLoc("Stop");
+                        ButtonNode.OnClick  = () => TaskHelper.Abort();
                     }
                     else
                     {
-                        ButtonNode.Label = $"{Info.Title}";
-                        ButtonNode.OnClick = StartDesynthesizeAll;
+                        ButtonNode.SeString = $"{Info.Title}";
+                        ButtonNode.OnClick  = StartDesynthesizeAll;
                     }
                 }
                 

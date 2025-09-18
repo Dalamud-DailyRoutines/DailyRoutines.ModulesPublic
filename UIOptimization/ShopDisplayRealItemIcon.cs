@@ -128,14 +128,13 @@ public unsafe class ShopDisplayRealItemIcon : DailyModuleBase
         
         var itemCount = addon->AtkValues[4].UInt;
         if (itemCount == 0) return;
-
+        
         for (var i = 0; i < itemCount; i++)
         {
-            var itemID = addon->AtkValues[1063 + i].UInt;
-            if (itemID == 0) continue;
-            if (!LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) continue;
+            var itemID = addon->AtkValues[1064 + i].UInt;
+            if (itemID == 0 || !LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) continue;
             
-            addon->AtkValues[209 + i].SetUInt(itemRow.Icon);
+            addon->AtkValues[210 + i].SetUInt(itemRow.Icon);
         }
         
         addon->OnRefresh(addon->AtkValuesCount, addon->AtkValues);
@@ -199,7 +198,7 @@ public unsafe class ShopDisplayRealItemIcon : DailyModuleBase
             switch (currentTab)
             {
                 case 0:
-                    itemID   = addon->AtkValues[441 + i].UInt;
+                    itemID = addon->AtkValues[441 + i].UInt;
                     break;
                 case 1:
                     var buybackItem = ShopEventHandler.AgentProxy.Instance()->Handler->Buyback[i];

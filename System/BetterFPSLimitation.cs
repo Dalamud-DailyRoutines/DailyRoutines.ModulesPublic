@@ -107,7 +107,7 @@ public class BetterFPSLimitation : DailyModuleBase
             
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100f * GlobalFontScale);
-            if (ImGuiOm.InputUShort("###NewThreshold", ref NewThresholdInput, 10, 10))
+            if (ImGui.InputUShort("###NewThreshold", ref NewThresholdInput, 10, 10))
                 NewThresholdInput = (ushort)Math.Clamp(NewThresholdInput, 1, short.MaxValue);
         }
     }
@@ -147,7 +147,7 @@ public class BetterFPSLimitation : DailyModuleBase
                 }
                 
                 Entry         ??= DService.DtrBar.Get("DailyRoutines-BetterFPSLimitation");
-                Entry.OnClick +=  () => Addon.Toggle();
+                Entry.OnClick +=  _ => Addon.Toggle();
                 Entry.Shown   =   true;
                 Entry.Text    =   LuminaWrapper.GetAddonText(4002);
                 return;
@@ -208,7 +208,7 @@ public class BetterFPSLimitation : DailyModuleBase
             {
                 var text       = LuminaGetter.GetRow<Addon>(4002).GetValueOrDefault().Text.ToDalamudString();
                 text.Payloads[0] = new TextPayload($"{Framework.Instance()->FrameRate:F0}");
-                FPSDisplayNumberNode.Text = text;
+                FPSDisplayNumberNode.SeString = text;
             }
 
             if (IsEnabledNode != null)
@@ -235,19 +235,19 @@ public class BetterFPSLimitation : DailyModuleBase
                 IsVisible = true,
             };
             var totalHeight = 0f;
-            
+
             IsEnabledNode = new CheckboxNode()
             {
                 Size      = new Vector2(150.0f, 20.0f),
                 IsVisible = true,
                 IsChecked = ModuleConfig.IsEnabled,
                 IsEnabled = true,
-                LabelText = GetLoc("Enable"),
+                SeString  = GetLoc("Enable"),
                 OnClick = newState =>
                 {
                     ModuleConfig.IsEnabled = newState;
                     ModuleConfig.Save(ModuleManager.GetModule<BetterFPSLimitation>());
-                    
+
                     Update();
                 },
             };
@@ -260,7 +260,7 @@ public class BetterFPSLimitation : DailyModuleBase
 
             var fpsLimitationTextNode = new TextNode
             {
-                Text          = GetLoc("BetterFPSLimitation-MaxFPS"),
+                SeString      = GetLoc("BetterFPSLimitation-MaxFPS"),
                 FontSize      = 14,
                 IsVisible     = true,
                 Size          = new(150f, 25f),
@@ -297,20 +297,20 @@ public class BetterFPSLimitation : DailyModuleBase
                 IsVisible      = true,
                 AlignmentFlags = FlexFlags.FitContentHeight,
             };
-            
+
             var fpsDisplayTextNode = new TextNode
             {
-                Text          = GetLoc("BetterFPSLimitation-CurrentFPS"),
+                SeString      = GetLoc("BetterFPSLimitation-CurrentFPS"),
                 FontSize      = 12,
                 IsVisible     = true,
                 Size          = new(20f, 25f),
                 AlignmentType = AlignmentType.Left
             };
             fpsDisplayColumn.AddNode(fpsDisplayTextNode);
-            
+
             FPSDisplayNumberNode = new TextNode
             {
-                Text          = "0",
+                SeString      = "0",
                 FontSize      = 12,
                 IsVisible     = true,
                 Size          = new(30f, 25f),
@@ -325,10 +325,10 @@ public class BetterFPSLimitation : DailyModuleBase
             var spacer1 = new ResNode { Size = new(0, 8), IsVisible = true };
             column.AddNode(spacer1);
             totalHeight += spacer1.Size.Y;
-            
+
             var fastSetTextNode = new TextNode
             {
-                Text          = GetLoc("BetterFPSLimitation-FastSetFPSLimitation"),
+                SeString      = GetLoc("BetterFPSLimitation-FastSetFPSLimitation"),
                 FontSize      = 14,
                 IsVisible     = true,
                 Size          = new(150f, 20f),
@@ -359,18 +359,18 @@ public class BetterFPSLimitation : DailyModuleBase
                 {
                     var button = new TextButtonNode
                     {
-                        Size      = new Vector2(60f, 25f),
+                        Size      = new(60f, 25f),
                         IsVisible = true,
-                        Label     = threshold.ToString(),
+                        SeString  = threshold.ToString(),
                         OnClick = () =>
                         {
                             ModuleConfig.Limitation = threshold;
                             ModuleConfig.IsEnabled  = true;
                             ModuleConfig.Save(ModuleManager.GetModule<BetterFPSLimitation>());
-                            
+
                             FPSInputNode.Value = ModuleConfig.Limitation;
                             FPSInputNode.ValueTextNode.SetNumber(ModuleConfig.Limitation);
-                            
+
                             Update();
                         },
                     };

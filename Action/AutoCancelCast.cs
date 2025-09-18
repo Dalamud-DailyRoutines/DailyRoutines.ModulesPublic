@@ -53,7 +53,9 @@ public unsafe class AutoCancelCast : DailyModuleBase
         }
 
         var player = DService.ObjectTable.LocalPlayer;
-        if (player.CastActionType != ActionType.Action || TargetAreaActions.Contains(player.CastActionId))
+        if (player.CastActionType != ActionType.Action      ||
+            TargetAreaActions.Contains(player.CastActionId) ||
+            !LuminaGetter.TryGetRow(player.CastActionId, out LuminaAction actionRow))
         {
             IsOnCasting = false;
             return;
@@ -62,7 +64,7 @@ public unsafe class AutoCancelCast : DailyModuleBase
         var obj = player.CastTargetObject;
         if (obj is not IBattleChara battleChara || !ValidObjectKinds.Contains(battleChara.ObjectKind)) return;
 
-        if (battleChara.IsDead || !battleChara.IsTargetable || battleChara.CurrentHp == 0)
+        if (!battleChara.IsTargetable || (actionRow.DeadTargetBehaviour == 0 && (battleChara.IsDead ||  battleChara.CurrentHp == 0)))
         {
             ExecuteCancast();
             return;

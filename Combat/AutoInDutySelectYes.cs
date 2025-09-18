@@ -29,7 +29,7 @@ public class AutoInDutySelectYes : DailyModuleBase
     {
         if (GameState.ContentFinderCondition == 0) return;
         
-        var addon = (AddonSelectYesno*)args.Addon;
+        var addon = (AddonSelectYesno*)args.Addon.Address;
         if (addon == null) return;
         
         var text = addon->PromptText->NodeText.ExtractText();

@@ -82,7 +82,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(-1f);
-                if (ImGui.InputInt("###PreviewNumberInput", ref NumberPreview, 0, 0))
+                if (ImGui.InputInt("###PreviewNumberInput", ref NumberPreview))
                     NumberPreview = (int)Math.Clamp(NumberPreview, 0, uint.MaxValue);
 
                 ImGui.Separator();
@@ -223,7 +223,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
             using (ImRaii.PushIndent())
             {
                 ImGui.SetNextItemWidth(150f * GlobalFontScale);
-                ImGui.InputFloat2($"{GetLoc("OptimizedTargetInfo-PosOffset")}", ref ModuleConfig.ClearFocusPosition, "%.2f");
+                ImGui.InputFloat2($"{GetLoc("OptimizedTargetInfo-PosOffset")}", ref ModuleConfig.ClearFocusPosition, format: "%.2f");
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     SaveConfig(ModuleConfig);
             }
@@ -301,7 +301,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         }
         
         ImGui.SetNextItemWidth(150f * GlobalFontScale);
-        ImGui.InputFloat2($"{GetLoc("OptimizedTargetInfo-PosOffset")}###Position", ref position, "%.2f");
+        ImGui.InputFloat2($"{GetLoc("OptimizedTargetInfo-PosOffset")}###Position", ref position, format: "%.2f");
         if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);
 
@@ -315,6 +315,8 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
 
     private static void OnAddonTargetInfo(AddonEvent type, AddonArgs args)
     {
+        if (ModuleConfig == null) return;
+        
         HandleAddonEventTargetInfo(type,
                                    ModuleConfig.IsEnabled,
                                    ModuleConfig.HideAutoAttack,
@@ -431,7 +433,10 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         }
     }
 
-    private static void OnAddonTargetInfoSplitTarget(AddonEvent type, AddonArgs args) =>
+    private static void OnAddonTargetInfoSplitTarget(AddonEvent type, AddonArgs args)
+    {
+        if (ModuleConfig == null) return;
+        
         HandleAddonEventTargetInfo(type,
                                    ModuleConfig.IsEnabled,
                                    ModuleConfig.HideAutoAttack,
@@ -447,9 +452,12 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                    ModuleConfig.CustomColor,
                                    () => (DService.Targets.SoftTarget ?? DService.Targets.Target) as IBattleChara,
                                    (width, height) => new Vector2(width - 5, height + 2));
+    }
 
     private static void OnAddonFocusTargetInfo(AddonEvent type, AddonArgs args)
     {
+        if (ModuleConfig == null) return;
+        
         HandleAddonEventTargetInfo(type,
                                    ModuleConfig.FocusIsEnabled,
                                    false,
@@ -493,11 +501,11 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     ClearFocusButtonNode = new()
                     {
                         IsVisible = true,
-                        Size = new(32),
-                        Position = new(-13, 12),
-                        Label = "\ue04c",
+                        Size      = new(32),
+                        Position  = new(-13, 12),
+                        SeString  = "\ue04c",
                         Tooltip   = GetLoc("OptimizedTargetInfo-ClearFocusTarget"),
-                        OnClick = () => DService.Targets.FocusTarget = null
+                        OnClick   = () => DService.Targets.FocusTarget = null
                     };
                     ClearFocusButtonNode.BackgroundNode.IsVisible = false;
                     
@@ -514,7 +522,10 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         }
     }
 
-    private static void OnAddonTargetInfoCastBar(AddonEvent type, AddonArgs args) =>
+    private static void OnAddonTargetInfoCastBar(AddonEvent type, AddonArgs args)
+    {
+        if (ModuleConfig == null) return;
+        
         HandleAddonEventCastBar(type,
                                 ModuleConfig.CastBarIsEnabled,
                                 TargetInfoCastBar,
@@ -527,9 +538,12 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                 ModuleConfig.CastBarCustomColor,
                                 () => (DService.Targets.SoftTarget ?? DService.Targets.Target) as IBattleChara,
                                 (width, height) => new Vector2(width - 5, height));
-    
+    }
+
     private static void OnAddonTargetInfoBuffDebuff(AddonEvent type, AddonArgs args)
     {
+        if (ModuleConfig == null) return;
+        
         switch (type)
         {
             case AddonEvent.PreFinalize:
@@ -690,9 +704,9 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     textNode.TextColor        = customColor.W != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
                     textNode.TextOutlineColor = sourceTextNode->EdgeColor.ToVector4();
 
-                    textNode.Text = string.Format(ModuleConfig.DisplayFormatString,
-                                                  FormatNumber(target.MaxHp),
-                                                  FormatNumber(target.CurrentHp));
+                    textNode.SeString = string.Format(ModuleConfig.DisplayFormatString,
+                                                      FormatNumber(target.MaxHp),
+                                                      FormatNumber(target.CurrentHp));
                 }
 
                 break;
@@ -761,7 +775,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     textNode.FontSize      = fontSize;
                     textNode.TextColor     = customColor.W != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
 
-                    textNode.Text = $"{target.TotalCastTime - target.CurrentCastTime:F2}";
+                    textNode.SeString = $"{target.TotalCastTime - target.CurrentCastTime:F2}";
                 }
 
                 break;

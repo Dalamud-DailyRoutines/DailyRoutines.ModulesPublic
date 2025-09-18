@@ -38,11 +38,11 @@ public unsafe class AutoCutsceneSkip : DailyModuleBase
     private static Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
 
     private static readonly CompSig PlayStaffRollSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 20 04 00 00");
+        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 30 04 00 00");
     private static Hook<LuaFunctionDelegate>? PlayStaffRollHook;
     
     private static readonly CompSig PlayToBeContinuedSig = 
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 28 04 00 00");
+        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 38 04 00 00");
     private static Hook<LuaFunctionDelegate>? PlayToBeContinuedHook;
     
     private static readonly MemoryPatch CutsceneUnskippablePatch =

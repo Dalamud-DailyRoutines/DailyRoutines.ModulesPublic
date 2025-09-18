@@ -29,7 +29,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     public override ModulePermission Permission { get; } = new() { CNOnly = true };
 
     private static readonly CompSig GetFilteredUtf8StringSig =
-        new("48 89 74 24 ?? 57 48 83 EC ?? 48 83 79 ?? ?? 48 8B FA 48 8B F1 0F 84");
+        new("48 89 74 24 ?? 57 48 83 EC ?? 48 83 79 ?? ?? 48 8B FA 48 8B F1 0F 84 ?? ?? ?? ?? 48 89 5C 24");
     private delegate void GetFilteredUtf8StringDelegate(nint vulgarInstance, Utf8String* str);
     private static GetFilteredUtf8StringDelegate? GetFilteredUtf8String;
 
@@ -37,13 +37,12 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     private delegate nint Utf8StringCopyDelegate(Utf8String* target, Utf8String* source);
     private static Utf8StringCopyDelegate? Utf8StringCopy;
 
-    private static readonly CompSig LocalMessageDisplaySig =
-        new("40 53 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 8B 0D");
-    private delegate nint LocalMessageDisplayDelegate(nint a1, Utf8String* source);
-    private static Hook<LocalMessageDisplayDelegate>? LocalMessageDisplayHook;
+    private static readonly CompSig LocalMessageDisplaySig = new("40 53 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 8B 0D");
+    private delegate        nint LocalMessageDisplayDelegate(nint a1, Utf8String* source);
+    private static          Hook<LocalMessageDisplayDelegate>? LocalMessageDisplayHook;
 
     private static readonly CompSig ProcessSendedChatSig =
-        new("E8 ?? ?? ?? ?? FE 86 ?? ?? ?? ?? C7 86 ?? ?? ?? ?? ?? ?? ?? ??");
+        new("E8 ?? ?? ?? ?? FE 87 ?? ?? ?? ?? C7 87 ?? ?? ?? ?? ?? ?? ?? ??");
     private delegate void ProcessSendedChatDelegate(ShellCommandModule* commandModule, Utf8String* message, UIModule* module);
     private static Hook<ProcessSendedChatDelegate>? ProcessSendedChatHook;
 
@@ -115,7 +114,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
             }
             
             ImGui.SetNextItemWidth(150f * GlobalFontScale);
-            if (ImGuiOm.InputUInt("###HighlightColorInput", ref ModuleConfig.HighlightColor, 1, 1))
+            if (ImGui.InputUInt("###HighlightColorInput", ref ModuleConfig.HighlightColor, 1, 1))
                 SaveConfig(ModuleConfig);
             
             ImGui.SameLine();
@@ -371,7 +370,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         
         source->SetString(builder.Build().Encode());
         
-        return Utf8StringCopy((Utf8String*)(a1 + 11288), source);
+        return Utf8StringCopy((Utf8String*)(a1 + 11408), source);
     }
     
     private static void BypassCensorshipByTextPayload(ref TextPayload payload)
@@ -525,7 +524,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     private static string GetFilteredString(string str)
     {
         var utf8String = Utf8String.FromString(str);
-        GetFilteredUtf8String(Marshal.ReadIntPtr((nint)Framework.Instance() + 0x2B48), utf8String);
+        GetFilteredUtf8String(Marshal.ReadIntPtr((nint)Framework.Instance() + 11080), utf8String);
         var result = utf8String->ExtractText();
 
         utf8String->Dtor(true);

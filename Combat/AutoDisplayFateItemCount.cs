@@ -51,7 +51,7 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
         
         ImGui.SetWindowPos(new Vector2(ToDoList->X, ToDoList->Y));
         
-        ImGui.Image(texture.GetWrapOrEmpty().ImGuiHandle, new(ImGui.GetTextLineHeightWithSpacing()));
+        ImGui.Image(texture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
         
         ImGui.SameLine();
         ImGui.AlignTextToFramePadding();

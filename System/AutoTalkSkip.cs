@@ -22,24 +22,24 @@ public unsafe class AutoTalkSkip : DailyModuleBase
     // Base0: 48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B F9 48 8B EA 48 8B 49 ?? E8
     // Base1: 40 55 56 57 41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24 ??
     private static readonly CompSig TalkSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 98 00 00 00");
+        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 A8 00 00 00");
     private static   Hook<TalkDelegate>? TalkHook;
 
     private static readonly CompSig TalkAsyncSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 A0 00 00 00");
+        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 B0 00 00 00");
     private static Hook<TalkDelegate>? TalkAsyncHook;
 
     private static readonly CompSig SystemTalkSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 A8 00 00 00");
+        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 B8 00 00 00");
     private static Hook<TalkDelegate>? SystemTalkHook;
     
     // Base: 48 89 54 24 ?? 53 56 57 41 54 41 55 48 83 EC ?? 48 8B D9
     private static readonly CompSig ShortTalkSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 80 03 00 00");
+        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 90 03 00 00");
     private static Hook<TalkDelegate>? ShortTalkHook;
     
     private static readonly CompSig ShortTalkWithLineVoiceSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 88 03 00 00");
+        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 98 03 00 00");
     private static Hook<TalkDelegate>? ShortTalkWithLineVoiceHook;
     
     private static readonly CompSig CraftLeveTalkSig = new("40 53 48 83 EC 50 48 8B D1 48 8D 4C 24 20 E8 ?? ?? ?? ?? BA 01 00 00 00 48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8B 4C 24 28 4C 8B C0 BA 01 00 00 00 E8 ?? ?? ?? ?? 48 8B 4C 24 28 BA 02 00 00 00 48 8B 18 E8 ?? ?? ?? ?? 48 85 DB 74 2A 8B D0 48 8B CB E8 ?? ?? ?? ?? 33 D2 48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8D 4C 24 20 8B D8 E8 ?? ?? ?? ?? 8B C3 48 83 C4 50 5B C3 48 8D 4C 24 20 E8 ?? ?? ?? ?? 8B C3 48 83 C4 50 5B C3 CC CC CC CC CC CC CC CC CC 40 53 48 81 EC 50 01 00 00");

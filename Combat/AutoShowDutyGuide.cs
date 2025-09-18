@@ -99,7 +99,7 @@ public class AutoShowDutyGuide : DailyModuleBase
     {
         using (FontManager.GetUIFont(ModuleConfig.FontScale).Push())
         {
-            if (ImGuiOm.SelectableImageWithText(NoviceIcon.GetWrapOrEmpty().ImGuiHandle, ScaledVector2(24f),
+            if (ImGuiOm.SelectableImageWithText(NoviceIcon.GetWrapOrEmpty().Handle, ScaledVector2(24f),
                                                 GetLoc("AutoShowDutyGuide-Source"), false))
                 Util.OpenLink($"https://ff14.org/duty/{CurrentDuty}.htm");
 

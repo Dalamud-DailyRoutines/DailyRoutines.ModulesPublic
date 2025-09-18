@@ -84,7 +84,7 @@ public unsafe class OptimizedFreeShop : DailyModuleBase
                         IsVisible = true,
                         IsChecked = ModuleConfig.IsEnabled,
                         IsEnabled = true,
-                        LabelText = GetLoc("OptimizedFreeShop-FastClaim"),
+                        SeString  = GetLoc("OptimizedFreeShop-FastClaim"),
                         OnClick = newState =>
                         {
                             ModuleConfig.IsEnabled = newState;
