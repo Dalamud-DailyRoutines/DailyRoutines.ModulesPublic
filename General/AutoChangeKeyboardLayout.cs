@@ -12,8 +12,8 @@ public class AutoChangeKeyboardLayout : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("自动切换输入法"),
-        Description = GetLoc("在输入框输入时自动切换为中文, 其他时候自动切换为英文"),
+        Title       = GetLoc("AutoChangeKeyboardLayoutTitle"),
+        Description = GetLoc("AutoChangeKeyboardLayoutDescription"),
         Category    = ModuleCategories.General,
         Author      = ["JiaXX"]
     };
