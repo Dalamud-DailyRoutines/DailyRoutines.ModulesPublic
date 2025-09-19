@@ -18,7 +18,7 @@ public class FieldEntryCommand : DailyModuleBase
     {
         Title               = GetLoc("FieldEntryCommandTitle"),
         Description         = GetLoc("FieldEntryCommandDescription", Command),
-        Category            = ModuleCategories.System,
+        Category            = ModuleCategories.General,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
 
@@ -39,6 +39,7 @@ public class FieldEntryCommand : DailyModuleBase
         ["diadem"]  = (EnqueueDiadem, 753),
         ["island"]  = (EnqueueIsland, 1),
         ["ardorum"] = (EnqueueArdorum, 2),
+        ["phaenna"] = (EnqueuePhaenna, 3),
         ["ocs"]     = (EnqueueOccultCrescent, 1018),
     };
 
@@ -46,8 +47,10 @@ public class FieldEntryCommand : DailyModuleBase
     {
         // 开拓无人岛
         [1] = LuminaWrapper.GetPlaceName(2566),
-        // 宇宙探索 1
+        // 憧憬湾
         [2] = LuminaWrapper.GetPlaceName(5219),
+        // 法恩娜
+        [3] = LuminaWrapper.GetPlaceName(5301)
     };
 
     private static readonly Vector3 GangosDefaultPosition                 = new(-33f, 0.15f, -41f);
@@ -55,14 +58,18 @@ public class FieldEntryCommand : DailyModuleBase
     private static readonly Vector3 DiademDefaultPosition                 = new(-19.6f, -16f, 143f);
     private static readonly Vector3 LowerLaNosceaDefaultPosition          = new(172, 12, 642);
     private static readonly Vector3 IslandDefaultPosition                 = new(-269, 40, 228);
-    private static readonly Vector3 CosmicDefaultPosition                 = new(0f, -187.42f, -412f);
+    private static readonly Vector3 CosmicDefaultPosition                 = new(-5.3f, -131.1f, -504.0f);
     private static readonly Vector3 TuliyollalPhantomVillageEntryPosition = new(165.2f, -18.0f, 35.4f);
     private static readonly Vector3 PhantomVillagePosition                = new(-71.93f, 5f, -16.02f);
 
-    protected override void Init()
+    private static uint RedirectTargetZoneInMoon;
+
+    protected override unsafe void Init()
     {
         TPHelper ??= new() { TimeLimitMS = 30_000 };
 
+        GamePacketManager.RegPreSendPacket(OnPreSendPacket);
+        
         CommandManager.AddCommand(Command, new(OnCommand) { HelpMessage = GetLoc("FieldEntryCommand-CommandHelp")} );
     }
 
@@ -119,6 +126,25 @@ public class FieldEntryCommand : DailyModuleBase
                 commandPair.Value.EnqueueAction();
                 NotificationInfo(GetLoc("FieldEntryCommand-Notification", contentName));
                 return;
+            }
+        }
+    }
+    
+    public static unsafe void OnPreSendPacket(ref bool isPrevented, int opcode, ref byte* packet, ref ushort priority)
+    {
+        if (RedirectTargetZoneInMoon == 0 || GameState.TerritoryType != 959) return;
+
+        if (opcode == GamePacketOpcodes.EventCompleteOpcode)
+        {
+            var data = (EventCompletePackt*)packet;
+            if (data->EventID != 0x500AF) return;
+
+            if (data->Category == 0x2000000)
+                data->Param1 = RedirectTargetZoneInMoon;
+            if (data->Category == 0x1000064)
+            {
+                data->Param0             = RedirectTargetZoneInMoon;
+                RedirectTargetZoneInMoon = 0;
             }
         }
     }
@@ -197,20 +223,20 @@ public class FieldEntryCommand : DailyModuleBase
     }
 
     // 常风之地
-    private static void EnqueueAnemos()
-        => EnqueueKugane(LuminaWrapper.GetContentName(283));
+    private static void EnqueueAnemos() => 
+        EnqueueKugane(LuminaWrapper.GetContentName(283));
 
     // 恒冰之地
-    private static void EnqueuePagos()
-        => EnqueueKugane(LuminaWrapper.GetContentName(581));
+    private static void EnqueuePagos() => 
+        EnqueueKugane(LuminaWrapper.GetContentName(581));
 
     // 涌火之地
-    private static void EnqueuePyros()
-        => EnqueueKugane(LuminaWrapper.GetContentName(598));
+    private static void EnqueuePyros() => 
+        EnqueueKugane(LuminaWrapper.GetContentName(598));
 
     // 丰水之地
-    private static void EnqueueHydatos()
-        => EnqueueKugane(LuminaWrapper.GetContentName(639));
+    private static void EnqueueHydatos() => 
+        EnqueueKugane(LuminaWrapper.GetContentName(639));
     
     private static void EnqueueKugane(string dutyName)
     {
@@ -252,12 +278,12 @@ public class FieldEntryCommand : DailyModuleBase
     }
 
     // 博兹雅
-    private static void EnqueueBozja()
-        => EnqueueGangos(LuminaWrapper.GetContentName(735));
+    private static void EnqueueBozja() => 
+        EnqueueGangos(LuminaWrapper.GetContentName(735));
 
     // 扎杜诺尔
-    private static void EnqueueZadonor()
-        => EnqueueGangos(LuminaWrapper.GetContentName(778));
+    private static void EnqueueZadonor() => 
+        EnqueueGangos(LuminaWrapper.GetContentName(778));
     
     private static void EnqueueGangos(string dutyName)
     {
@@ -297,12 +323,15 @@ public class FieldEntryCommand : DailyModuleBase
         });
     }
     
-    private static void EnqueueArdorum()
-        => EnqueueCosmic(LuminaWrapper.GetPlaceName(5219));
+    private static void EnqueueArdorum() => 
+        EnqueueCosmic(1237);
     
-    private static void EnqueueCosmic(string dutyName)
+    private static void EnqueuePhaenna() => 
+        EnqueueCosmic(1291);
+    
+    private static void EnqueueCosmic(uint targetZone)
     {
-        if (GameState.TerritoryIntendedUse == 60) return;
+        if (GameState.TerritoryType == targetZone) return;
 
         if (GameState.TerritoryType != 959)
         {
@@ -314,7 +343,7 @@ public class FieldEntryCommand : DailyModuleBase
         {
             TPHelper.Enqueue(() =>
             {
-                if (!EventFrameworkHelper.IsEventIDNearby(721817))
+                if (!EventFrameworkHelper.IsEventIDNearby(327855))
                 {
                     TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(CosmicDefaultPosition), weight: 2);
                     TPHelper.Enqueue(() => GameState.TerritoryType == 959  && IsScreenReady() &&
@@ -324,9 +353,9 @@ public class FieldEntryCommand : DailyModuleBase
                 return true;
             });
 
-            TPHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 721817).Send());
-            TPHelper.Enqueue(() => ClickSelectString(dutyName));
-            TPHelper.Enqueue(() => ClickSelectString(0));
+            TPHelper.Enqueue(() => RedirectTargetZoneInMoon = targetZone);
+            TPHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 327855).Send());
+            TPHelper.Enqueue(() => ClickSelectString(3));
         });
     }
     
@@ -394,11 +423,15 @@ public class FieldEntryCommand : DailyModuleBase
         TPHelper.Enqueue(() => ClickSelectString(0));
     }
 
-    protected override void Uninit()
+    protected override unsafe void Uninit()
     {
+        GamePacketManager.Unreg(OnPreSendPacket);
+        
         CommandManager.RemoveCommand(Command);
 
         TPHelper?.Abort();
         TPHelper = null;
+
+        RedirectTargetZoneInMoon = 0;
     }
 }
