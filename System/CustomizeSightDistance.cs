@@ -63,7 +63,14 @@ public unsafe class CustomizeSightDistance : DailyModuleBase
         if (ModuleConfig.IgnoreCollision)
             CameraCollisionPatch.Enable();
 
-        UpdateCamera(CameraManager.Instance()->Camera, ModuleConfig.MaxDistance, ModuleConfig.MinDistance, ModuleConfig.MaxRotation, ModuleConfig.MinRotation, ModuleConfig.MaxFoV, ModuleConfig.MinFoV, ModuleConfig.FoV);
+        UpdateCamera(CameraManager.Instance()->Camera,
+                     ModuleConfig.MaxDistance,
+                     ModuleConfig.MinDistance,
+                     ModuleConfig.MaxRotation,
+                     ModuleConfig.MinRotation,
+                     ModuleConfig.MaxFoV,
+                     ModuleConfig.MinFoV,
+                     ModuleConfig.FoV);
     }
 
     protected override void ConfigUI()
@@ -74,14 +81,13 @@ public unsafe class CustomizeSightDistance : DailyModuleBase
         ImGui.TableSetupColumn("Parameter", ImGuiTableColumnFlags.WidthFixed);
         ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
 
-        AddSlider("CustomizeSightDistance-MaxDistanceInput", ref ModuleConfig.MaxDistance,
-                  ModuleConfig.MinDistance > 1 ? ModuleConfig.MinDistance : 1, 80, "%.1f");
+        AddSlider("CustomizeSightDistance-MaxDistanceInput", ref ModuleConfig.MaxDistance, ModuleConfig.MinDistance > 1 ? ModuleConfig.MinDistance : 1, 80, "%.1f");
         AddSlider("CustomizeSightDistance-MinDistanceInput", ref ModuleConfig.MinDistance, 0, ModuleConfig.MaxDistance, "%.1f");
         AddSlider("CustomizeSightDistance-MaxRotationInput", ref ModuleConfig.MaxRotation, ModuleConfig.MinRotation, 1.569f, "%.3f");
         AddSlider("CustomizeSightDistance-MinRotationInput", ref ModuleConfig.MinRotation, -1.569f, ModuleConfig.MaxRotation, "%.3f");
-        AddSlider("CustomizeSightDistance-MaxFoVInput", ref ModuleConfig.MaxFoV, ModuleConfig.MinFoV, 3f, "%.3f");
-        AddSlider("CustomizeSightDistance-MinFoVInput", ref ModuleConfig.MinFoV, 0.01f, ModuleConfig.MaxFoV, "%.3f");
-        AddSlider("CustomizeSightDistance-ManualFoVInput", ref ModuleConfig.FoV, ModuleConfig.MinFoV, ModuleConfig.MaxFoV, "%.3f");
+        AddSlider("CustomizeSightDistance-MaxFoVInput",      ref ModuleConfig.MaxFoV,      ModuleConfig.MinFoV, 3f, "%.3f");
+        AddSlider("CustomizeSightDistance-MinFoVInput",      ref ModuleConfig.MinFoV,      0.01f, ModuleConfig.MaxFoV, "%.3f");
+        AddSlider("CustomizeSightDistance-ManualFoVInput",   ref ModuleConfig.FoV,         ModuleConfig.MinFoV, ModuleConfig.MaxFoV, "%.3f");
 
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -107,12 +113,12 @@ public unsafe class CustomizeSightDistance : DailyModuleBase
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
         ImGui.SliderFloat($"##{label}", ref value, min, max, format);
-
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             SaveConfig(ModuleConfig);
             UpdateCamera(CameraManager.Instance()->Camera, ModuleConfig.MaxDistance, ModuleConfig.MinDistance, ModuleConfig.MaxRotation, ModuleConfig.MinRotation, ModuleConfig.MaxFoV, ModuleConfig.MinFoV, ModuleConfig.FoV);
         }
+        
         ImGui.SameLine();
         if (ImGuiOm.ButtonIcon($"##reset{label}", FontAwesomeIcon.UndoAlt, GetLoc("Reset")))
         {
@@ -126,25 +132,42 @@ public unsafe class CustomizeSightDistance : DailyModuleBase
     private static nint CameraUpdateDetour(Camera* camera)
     {
         var original = CameraUpdateHook.Original(camera);
-        UpdateCamera(camera, ModuleConfig.MaxDistance, ModuleConfig.MinDistance, ModuleConfig.MaxRotation, ModuleConfig.MinRotation, ModuleConfig.MaxFoV, ModuleConfig.MinFoV, ModuleConfig.FoV);
+
+        UpdateCamera(camera,
+                     ModuleConfig.MaxDistance,
+                     ModuleConfig.MinDistance,
+                     ModuleConfig.MaxRotation,
+                     ModuleConfig.MinRotation,
+                     ModuleConfig.MaxFoV,
+                     ModuleConfig.MinFoV,
+                     ModuleConfig.FoV);
+        
         return original;
     }
 
-    private static float CameraCurrentSightDistanceDetour(nint a1, float minValue, float maxValue, float upperBound, float lowerBound, int mode, float currentValue, float targetValue)
+    private static float CameraCurrentSightDistanceDetour(
+        nint  a1,
+        float minValue,
+        float maxValue,
+        float upperBound,
+        float lowerBound,
+        int   mode,
+        float currentValue,
+        float targetValue)
     {
         const float Epsilon = 0.001f;
 
-        var framework = Framework.Instance();
+        var framework          = Framework.Instance();
         var adjustedUpperBound = Math.Min(upperBound - Epsilon, maxValue);
         var adjustedLowerBound = Math.Min(lowerBound - Epsilon, maxValue);
 
         var newValue = mode switch
         {
-            1 => Math.Min(adjustedUpperBound, Interpolate(adjustedLowerBound, 0.3f)),
-            2 => Interpolate(adjustedUpperBound, 0.3f),
-            3 => adjustedUpperBound,
+            1           => Math.Min(adjustedUpperBound, Interpolate(adjustedLowerBound, 0.3f)),
+            2           => Interpolate(adjustedUpperBound, 0.3f),
+            3           => adjustedUpperBound,
             0 or 4 or 5 => Interpolate(adjustedUpperBound, 0.07f),
-            _ => currentValue
+            _           => currentValue
         };
 
         return Math.Max(Math.Min(targetValue, newValue), ModuleConfig.MinDistance);
@@ -161,21 +184,30 @@ public unsafe class CustomizeSightDistance : DailyModuleBase
         }
     }
 
-    private static void UpdateCamera(Camera* camera, float maxDistance, float minDistance, float maxRotation, float minRotation, float maxFoV, float minFoV, float FoV)
+    private static void UpdateCamera(
+        Camera* camera, 
+        float maxDistance, 
+        float minDistance, 
+        float maxRotation, 
+        float minRotation, 
+        float maxFoV, 
+        float minFoV, 
+        float FoV)
     {
-        camera->MinDistance = minDistance;
-        camera->MaxDistance = maxDistance;
-        *(float*)((byte*)camera + 328) = minRotation;
-        *(float*)((byte*)camera + 332) = maxRotation;
-        camera->MinFoV = minFoV;
-        camera->MaxFoV = maxFoV;
-        camera->FoV = FoV;
+        camera->MinDistance            = minDistance;
+        camera->MaxDistance            = maxDistance;
+        *(float*)((byte*)camera + 344) = minRotation;
+        *(float*)((byte*)camera + 348) = maxRotation;
+        camera->MinFoV                 = minFoV;
+        camera->MaxFoV                 = maxFoV;
+        camera->FoV                    = FoV;
     }
 
     protected override void Uninit()
     {
         if (!Initialized) return;
         CameraCollisionPatch.Disable();
+        
         UpdateCamera(CameraManager.Instance()->Camera, 20f, 1.5f, 0.785398f, -1.483530f, 0.78f, 0.69f, 0.78f);
     }
 
