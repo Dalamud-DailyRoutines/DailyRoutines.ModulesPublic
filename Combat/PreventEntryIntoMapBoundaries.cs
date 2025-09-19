@@ -359,7 +359,7 @@ namespace DailyRoutines.ModulesPublic.old
                     // 区域类型选择（紧凑布局）
                     ImGui.SetNextItemWidth(120 * ImGuiHelpers.GlobalScale);
                     var zoneTypes = new[] { GetLoc("PreventEntryIntoMapBoundariesCircle"), GetLoc("PreventEntryIntoMapBoundariesAnnulus"), GetLoc("PreventEntryIntoMapBoundariesRectangle"), GetLoc("PreventEntryIntoMapBoundariesSafeZone"), GetLoc("PreventEntryIntoMapBoundariesMathExpression") };
-                    var zoneTypeValues = new[] { "圆", "月环", "方", "矩形安全区", "表达式" };
+                    var zoneTypeValues = new[] { "圆", "月环", "方", "矩形安全区", "表达式" };//不会被显示，显示的是上面的
                     var currentZoneTypeIndex = Array.IndexOf(zoneTypeValues, dangerZone.ZoneType);
                     if (currentZoneTypeIndex == -1)
                         currentZoneTypeIndex = 0;
@@ -747,12 +747,6 @@ namespace DailyRoutines.ModulesPublic.old
 
             if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneId, out var zoneLimit))
                 return;
-
-          
-
-            // 移除这个检查，让传送功能无论区域是否启用都能工作
-            // if (!zoneLimit.Enabled)
-            //     return;
 
             // 检查小队人数及死亡人数
             var deathCount = DService.PartyList.Count(p => p.CurrentHP <= 0);
