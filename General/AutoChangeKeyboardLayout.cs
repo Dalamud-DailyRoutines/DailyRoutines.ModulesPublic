@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using DailyRoutines.Abstracts;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -21,10 +22,16 @@ public partial class AutoChangeKeyboardLayout : DailyModuleBase
 
     protected override void Init()
     {
+        DService.ClientState.Login += OnLogin;
+        DService.ClientState.Logout += OnLogout;
         setTextInputTargetHook ??= SetTextInputTargetSig.GetHook<SetTextInputTargetDelegate>(ChangeKeyboardLayout);
         setTextInputTargetHook.Enable();
     }
 
+    private static void OnLogin() => InputMethodController.SwitchToEnglish();
+    
+    private static void OnLogout(int type, int code)=> InputMethodController.SwitchToChinese();
+    
     private static nint ChangeKeyboardLayout(nint raptureAtkModule, nint textInputEventInterface)
     {
         var result = setTextInputTargetHook!.Original(raptureAtkModule, textInputEventInterface);
@@ -44,6 +51,8 @@ public partial class AutoChangeKeyboardLayout : DailyModuleBase
     
     protected override void Uninit()
     {
+        DService.ClientState.Login -= OnLogin;
+        DService.ClientState.Logout -= OnLogout;
         setTextInputTargetHook?.Disable();
         setTextInputTargetHook?.Dispose();
     }
