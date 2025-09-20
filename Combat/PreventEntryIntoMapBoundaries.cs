@@ -48,24 +48,24 @@ namespace DailyRoutines.ModulesPublic
             // 添加当前区域按钮
             if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundaries-AddCurrentZone")))
             {
-                var currentZoneId = DService.ClientState.TerritoryType;
+                var CurrentZoneId = DService.ClientState.TerritoryType;
 
-                if (currentZoneId == 0)
+                if (CurrentZoneId == 0)
                 {
                     ChatError(GetLoc("PreventEntryIntoMapBoundaries-InvalidZone"));
                     return;
                 }
 
-                if (!ModuleConfig.ZoneIds.Contains(currentZoneId))
+                if (!ModuleConfig.ZoneIds.Contains(CurrentZoneId))
                 {
-                    ModuleConfig.ZoneIds.Add(currentZoneId);
-                    ModuleConfig.ZoneLimitList[currentZoneId] = new ZoneLimit(currentZoneId);
+                    ModuleConfig.ZoneIds.Add(CurrentZoneId);
+                    ModuleConfig.ZoneLimitList[CurrentZoneId] = new ZoneLimit(CurrentZoneId);
 
                     SaveConfig(ModuleConfig!);
-                    Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneAdded"), currentZoneId));
+                    Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneAdded"), CurrentZoneId));
                 }
                 else
-                    ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneExists"), currentZoneId));
+                    ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneExists"), CurrentZoneId));
             }
 
             ImGui.Separator();
@@ -128,21 +128,21 @@ namespace DailyRoutines.ModulesPublic
             // 显示所有已添加的区域
             for (var i = 0; i < ModuleConfig.ZoneIds.Count; i++)
             {
-                var zoneId = ModuleConfig.ZoneIds[i];
-                if (!ModuleConfig.ZoneLimitList.TryGetValue(zoneId, out var zoneLimit))
+                var ZoneId = ModuleConfig.ZoneIds[i];
+                if (!ModuleConfig.ZoneLimitList.TryGetValue(ZoneId, out var zoneLimit))
                 {
-                    zoneLimit = new ZoneLimit(zoneId);
-                    ModuleConfig.ZoneLimitList[zoneId] = zoneLimit;
+                    zoneLimit = new ZoneLimit(ZoneId);
+                    ModuleConfig.ZoneLimitList[ZoneId] = zoneLimit;
                     SaveConfig(ModuleConfig!);
                 }
 
-                var isCurrentZone = DService.ClientState.TerritoryType == zoneId;
+                var isCurrentZone = DService.ClientState.TerritoryType == ZoneId;
                 var nodeColor = isCurrentZone ? ImGuiColors.HealerGreen : ImGuiColors.DalamudWhite;
-                var zoneName = GetZoneName(zoneId);
-                var nodeLabel = $"{zoneId}: {zoneName}";
+                var zoneName = GetZoneName(ZoneId);
+                var nodeLabel = $"{ZoneId}: {zoneName}";
 
                 using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, nodeColor);
-                var isOpen = ImGui.TreeNode($"{nodeLabel}###{zoneId}");
+                var isOpen = ImGui.TreeNode($"{nodeLabel}###{ZoneId}");
               
 
                 if (isOpen)
@@ -175,14 +175,14 @@ namespace DailyRoutines.ModulesPublic
                     if (zoneLimit.IsAdvancedMode)
                         DrawAdvancedModeUi(zoneLimit, isCurrentZone);
                     else
-                        DrawTraditionalModeUi(zoneLimit, zoneId, isCurrentZone);
+                        DrawTraditionalModeUi(zoneLimit, ZoneId, isCurrentZone);
 
                     using (ImRaii.PushColor(ImGuiCol.Button, ImGuiColors.DPSRed))
                     {
-                        if (ImGui.Button(string.Format(GetLoc("Delete"), zoneId)))
+                        if (ImGui.Button(string.Format(GetLoc("Delete"), ZoneId)))
                         {
                             ModuleConfig.ZoneIds.RemoveAt(i);
-                            ModuleConfig.ZoneLimitList.Remove(zoneId);
+                            ModuleConfig.ZoneLimitList.Remove(ZoneId);
                             SaveConfig(ModuleConfig!);
                             ImGui.TreePop();
                             break;
@@ -197,7 +197,7 @@ namespace DailyRoutines.ModulesPublic
             }
         }
 
-        private void DrawTraditionalModeUi(ZoneLimit zoneLimit, uint zoneId, bool isCurrentZone)
+        private void DrawTraditionalModeUi(ZoneLimit zoneLimit, uint ZoneId, bool isCurrentZone)
         {
             // 地图类型选择
             var mapTypes = new[] {
@@ -219,7 +219,7 @@ namespace DailyRoutines.ModulesPublic
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-CenterPosition"));
             ImGui.SetNextItemWidth(200 * ImGuiHelpers.GlobalScale);
             var centerPos = zoneLimit.CenterPos;
-            if (ImGui.InputFloat3($"##CenterPos{zoneId}", ref centerPos))
+            if (ImGui.InputFloat3($"##CenterPos{ZoneId}", ref centerPos))
             {
                 zoneLimit.CenterPos = centerPos;
                 SaveConfig(ModuleConfig!);
@@ -228,7 +228,7 @@ namespace DailyRoutines.ModulesPublic
             // 半径
             ImGui.SetNextItemWidth(120 * ImGuiHelpers.GlobalScale);
             var radius = zoneLimit.Radius;
-            if (ImGui.InputFloat($"##Radius{zoneId}", ref radius, 1.0f, 10.0f, "%.2f"))
+            if (ImGui.InputFloat($"##Radius{ZoneId}", ref radius, 1.0f, 10.0f, "%.2f"))
             {
                 zoneLimit.Radius = Math.Max(1.0f, radius);
                 SaveConfig(ModuleConfig!);
@@ -471,9 +471,9 @@ namespace DailyRoutines.ModulesPublic
             }
         }
 
-        private static string GetZoneName(uint zoneId)
+        private static string GetZoneName(uint ZoneId)
         {
-            return $"Zone {zoneId}"; // 简化区域名称显示
+            return $"Zone {ZoneId}"; // 简化区域名称显示
         }
 
         private static bool IsInDangerZone(DangerZone zone, Vector3 position)
@@ -626,9 +626,9 @@ namespace DailyRoutines.ModulesPublic
             if (ModuleConfig == null || DService.ClientState.LocalPlayer == null)
                 return;
 
-            var currentZoneId = DService.ClientState.TerritoryType;
+            var CurrentZoneId = DService.ClientState.TerritoryType;
 
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneId, out var zoneLimit))
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(CurrentZoneId, out var zoneLimit))
                 return;
 
             // 检查小队人数及死亡人数
@@ -746,12 +746,12 @@ namespace DailyRoutines.ModulesPublic
             }
 
             var action = parts[0].ToLower();
-            var currentZoneId = DService.ClientState.TerritoryType;
+            var CurrentZoneId = DService.ClientState.TerritoryType;
             
 
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneId, out var zoneLimit))
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(CurrentZoneId, out var zoneLimit))
             {
-                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneNotConfigured"), currentZoneId));
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneNotConfigured"), CurrentZoneId));
                 return;
             }
 
@@ -918,21 +918,21 @@ namespace DailyRoutines.ModulesPublic
 
         private void ExportCurrentZoneConfig()
         {
-            var currentZoneId = DService.ClientState.TerritoryType;
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneId, out var zoneLimit))
+            var CurrentZoneId = DService.ClientState.TerritoryType;
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(CurrentZoneId, out var zoneLimit))
             {
-                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundaries-CurrentZoneNoConfig"), currentZoneId));
+                ChatError(string.Format(GetLoc("PreventEntryIntoMapBoundaries-CurrentZoneNoConfig"), CurrentZoneId));
                 return;
             }
 
             var exportConfig = new Config
             {
-                ZoneIds = [currentZoneId],
-                ZoneLimitList = new Dictionary<uint, ZoneLimit> { { currentZoneId, zoneLimit } }
+                ZoneIds = [CurrentZoneId],
+                ZoneLimitList = new Dictionary<uint, ZoneLimit> { { CurrentZoneId, zoneLimit } }
             };
 
             ExportToClipboard(exportConfig);
-            Chat(string.Format(GetLoc("DailyModuleBase-Exported"), currentZoneId));
+            Chat(string.Format(GetLoc("DailyModuleBase-Exported"), CurrentZoneId));
         }
 
         protected override void Uninit()
