@@ -27,12 +27,8 @@ namespace DailyRoutines.ModulesPublic
             Category = ModuleCategories.Combat,
             Author = ["Nag0mi"]
         };
-
         private const string Command = "pdrfence";
         private Config? ModuleConfig;
-
-       
-
         protected override void Init()
         {
             ModuleConfig = LoadConfig<Config>() ?? new Config();
@@ -65,7 +61,7 @@ namespace DailyRoutines.ModulesPublic
                     ModuleConfig.ZoneIds.Add(currentZoneId);
                     ModuleConfig.ZoneLimitList[currentZoneId] = new ZoneLimit(currentZoneId);
 
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(ModuleConfig!);
                     Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneAdded"), currentZoneId));
                 }
                 else
@@ -79,14 +75,14 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.Checkbox(GetLoc("PreventEntryIntoMapBoundaries-ShowDebug"), ref showDebug))
             {
                 ModuleConfig.ShowDebugInfo = showDebug;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             var showVisualization = ModuleConfig.ShowBoundaryVisualization;
             if (ImGui.Checkbox(GetLoc("PreventEntryIntoMapBoundaries-ShowVisualization"), ref showVisualization))
             {
                 ModuleConfig.ShowBoundaryVisualization = showVisualization;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             // 死亡玩家数量配置
@@ -94,7 +90,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.SliderInt(GetLoc("PreventEntryIntoMapBoundaries-DeathThreshold"), ref deathCount, 0, 8, "%d"))
             {
                 ModuleConfig.DisableOnDeathCount = deathCount;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
             
             using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey))
@@ -111,7 +107,7 @@ namespace DailyRoutines.ModulesPublic
                 if (imported != null)
                 {
                     ModuleConfig = imported;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(ModuleConfig!);
                     Chat(GetLoc("DailyModuleBase-Imported"));
                 }
                 else
@@ -137,7 +133,7 @@ namespace DailyRoutines.ModulesPublic
                 {
                     zoneLimit = new ZoneLimit(zoneId);
                     ModuleConfig.ZoneLimitList[zoneId] = zoneLimit;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(ModuleConfig!);
                 }
 
                 var isCurrentZone = DService.ClientState.TerritoryType == zoneId;
@@ -147,14 +143,15 @@ namespace DailyRoutines.ModulesPublic
 
                 using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, nodeColor);
                 var isOpen = ImGui.TreeNode($"{nodeLabel}###{zoneId}");
+              
 
                 if (isOpen)
                 {
                     var enabled = zoneLimit.Enabled;
-                    if (ImGui.Checkbox(GetLoc("Enabled"), ref enabled))
+                    if (ImGui.Checkbox(GetLoc("Enable"), ref enabled))
                     {
                         zoneLimit.Enabled = enabled;
-                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig!);
                     }
 
                     ImGui.SameLine();
@@ -162,7 +159,7 @@ namespace DailyRoutines.ModulesPublic
                     if (ImGui.Checkbox(GetLoc("Advance"), ref advancedMode))
                     {
                         zoneLimit.IsAdvancedMode = advancedMode;
-                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig!);
                     }
 
                     ImGui.SameLine();
@@ -171,22 +168,22 @@ namespace DailyRoutines.ModulesPublic
                         if (DService.ClientState.LocalPlayer != null)
                         {
                             zoneLimit.CenterPos = DService.ClientState.LocalPlayer.Position;
-                            SaveConfig(ModuleConfig);
+                            SaveConfig(ModuleConfig!);
                         }
                     }
 
                     if (zoneLimit.IsAdvancedMode)
-                        DrawAdvancedModeUI(zoneLimit, isCurrentZone);
+                        DrawAdvancedModeUi(zoneLimit, isCurrentZone);
                     else
-                        DrawTraditionalModeUI(zoneLimit, zoneId, isCurrentZone);
+                        DrawTraditionalModeUi(zoneLimit, zoneId, isCurrentZone);
 
-                    using (var deleteButtonStyle = ImRaii.PushColor(ImGuiCol.Button, ImGuiColors.DPSRed))
+                    using (ImRaii.PushColor(ImGuiCol.Button, ImGuiColors.DPSRed))
                     {
                         if (ImGui.Button(string.Format(GetLoc("Delete"), zoneId)))
                         {
                             ModuleConfig.ZoneIds.RemoveAt(i);
                             ModuleConfig.ZoneLimitList.Remove(zoneId);
-                            SaveConfig(ModuleConfig);
+                            SaveConfig(ModuleConfig!);
                             ImGui.TreePop();
                             break;
                         }
@@ -200,7 +197,7 @@ namespace DailyRoutines.ModulesPublic
             }
         }
 
-        private void DrawTraditionalModeUI(ZoneLimit zoneLimit, uint zoneId, bool isCurrentZone)
+        private void DrawTraditionalModeUi(ZoneLimit zoneLimit, uint zoneId, bool isCurrentZone)
         {
             // 地图类型选择
             var mapTypes = new[] {
@@ -215,7 +212,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.Combo(GetLoc("PreventEntryIntoMapBoundaries-MapType"), ref currentMapTypeIndex, mapTypes, mapTypes.Length))
             {
                 zoneLimit.MapType = mapTypeValues[currentMapTypeIndex];
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             // 中心位置
@@ -225,7 +222,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat3($"##CenterPos{zoneId}", ref centerPos))
             {
                 zoneLimit.CenterPos = centerPos;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             // 半径
@@ -234,7 +231,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat($"##Radius{zoneId}", ref radius, 1.0f, 10.0f, "%.2f"))
             {
                 zoneLimit.Radius = Math.Max(1.0f, radius);
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
             ImGui.SameLine();
             ImGui.Text(GetLoc("Radius"));
@@ -247,7 +244,7 @@ namespace DailyRoutines.ModulesPublic
             }
         }
 
-        private void DrawAdvancedModeUI(ZoneLimit zoneLimit, bool isCurrentZone)
+        private void DrawAdvancedModeUi(ZoneLimit zoneLimit, bool isCurrentZone)
         {
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-DangerZoneManagement"));
 
@@ -255,7 +252,7 @@ namespace DailyRoutines.ModulesPublic
             {
                 var newZone = new DangerZone(string.Format(GetLoc("PreventEntryIntoMapBoundaries-DangerZoneName"), zoneLimit.DangerZones.Count + 1));
                 zoneLimit.DangerZones.Add(newZone);
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             for (var j = 0; j < zoneLimit.DangerZones.Count; j++)
@@ -266,10 +263,10 @@ namespace DailyRoutines.ModulesPublic
                 {
                     // 危险区域基本设置
                     var dzEnabled = dangerZone.Enabled;
-                    if (ImGui.Checkbox($"{GetLoc("Enabled")}##dz{j}", ref dzEnabled))
+                    if (ImGui.Checkbox($"{GetLoc("Enable")}##dz{j}", ref dzEnabled))
                     {
                         dangerZone.Enabled = dzEnabled;
-                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig!);
                     }
 
                     ImGui.SameLine();
@@ -278,7 +275,7 @@ namespace DailyRoutines.ModulesPublic
                     if (ImGui.InputText($"##dzName{j}", ref dzName, 50))
                     {
                         dangerZone.Name = dzName;
-                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig!);
                     }
                     ImGui.SameLine();
                     ImGui.Text(GetLoc("Name"));
@@ -300,7 +297,7 @@ namespace DailyRoutines.ModulesPublic
                     if (ImGui.Combo($"##dzType{j}", ref currentZoneTypeIndex, zoneTypes, zoneTypes.Length))
                     {
                         dangerZone.ZoneType = zoneTypeValues[currentZoneTypeIndex];
-                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig!);
                     }
                     ImGui.SameLine();
                     ImGui.Text(GetLoc("Type"));
@@ -315,22 +312,22 @@ namespace DailyRoutines.ModulesPublic
                             if (ImGui.InputTextMultiline($"##expr{j}", ref mathExpr, 200, new Vector2(300, 60)))
                             {
                                 dangerZone.MathExpression = mathExpr;
-                                SaveConfig(ModuleConfig);
+                                SaveConfig(ModuleConfig!);
                             }
                             break;
 
                         case ZoneType.Circle:
                         case ZoneType.Annulus:
-                            DrawCircularZoneUI(dangerZone, j);
+                            DrawCircularZoneUi(dangerZone, j);
                             break;
 
                         case ZoneType.Rectangle:
-                            DrawRectangleZoneUI(dangerZone, j, GetLoc("PreventEntryIntoMapBoundaries-DangerArea"));
+                            DrawRectangleZoneUi(dangerZone, j, GetLoc("PreventEntryIntoMapBoundaries-DangerArea"));
                             break;
 
                         case ZoneType.RectangularSafeZone:
                             ImGui.TextColored(ImGuiColors.DalamudYellow, GetLoc("PreventEntryIntoMapBoundaries-RectangularSafeZoneDescription"));
-                            DrawRectangleZoneUI(dangerZone, j, GetLoc("PreventEntryIntoMapBoundaries-RectangularSafeArea"));
+                            DrawRectangleZoneUi(dangerZone, j, GetLoc("PreventEntryIntoMapBoundaries-RectangularSafeArea"));
                             break;
                     }
 
@@ -342,7 +339,7 @@ namespace DailyRoutines.ModulesPublic
             }
         }
 
-        private void DrawCircularZoneUI(DangerZone dangerZone, int index)
+        private void DrawCircularZoneUi(DangerZone dangerZone, int index)
         {
             // 中心位置
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-CenterPosition"));
@@ -351,7 +348,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat3($"##dzCenter{index}", ref dzCenterPos))
             {
                 dangerZone.CenterPos = dzCenterPos;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             // 外半径
@@ -360,7 +357,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat($"##dzRadius{index}", ref dzRadius, 1.0f, 10.0f, "%.2f"))
             {
                 dangerZone.Radius = Math.Max(1.0f, dzRadius);
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
             ImGui.SameLine();
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-OuterRadius"));
@@ -374,14 +371,14 @@ namespace DailyRoutines.ModulesPublic
                 if (ImGui.InputFloat($"##dzInnerRadius{index}", ref dzInnerRadius, 1.0f, 10.0f, "%.2f"))
                 {
                     dangerZone.InnerRadius = Math.Max(0.0f, Math.Min(dzInnerRadius, dangerZone.Radius - 0.1f));
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(ModuleConfig!);
                 }
                 ImGui.SameLine();
                 ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-InnerRadius"));
             }
         }
 
-        private void DrawRectangleZoneUI(DangerZone dangerZone, int index, string areaTypeKey)
+        private void DrawRectangleZoneUi(DangerZone dangerZone, int index, string areaTypeKey)
         {
             // X范围
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-XRange"));
@@ -390,7 +387,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat($"##minX{index}", ref minX, 1.0f, 10.0f, "%.1f"))
             {
                 dangerZone.MinX = minX;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
             ImGui.SameLine();
             ImGui.Text("~");
@@ -400,7 +397,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat($"##maxX{index}", ref maxX, 1.0f, 10.0f, "%.1f"))
             {
                 dangerZone.MaxX = maxX;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             // Z范围
@@ -410,7 +407,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat($"##minZ{index}", ref minZ, 1.0f, 10.0f, "%.1f"))
             {
                 dangerZone.MinZ = minZ;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
             ImGui.SameLine();
             ImGui.Text("~");
@@ -420,7 +417,7 @@ namespace DailyRoutines.ModulesPublic
             if (ImGui.InputFloat($"##maxZ{index}", ref maxZ, 1.0f, 10.0f, "%.1f"))
             {
                 dangerZone.MaxZ = maxZ;
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
 
             ImGui.TextColored(ImGuiColors.DalamudGrey,
@@ -444,7 +441,7 @@ namespace DailyRoutines.ModulesPublic
                     ((uint)(color.Z * 255) << 16) |
                     ((uint)(color.Y * 255) << 8) |
                     ((uint)(color.X * 255) << 0);
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
             }
             ImGui.SameLine();
             ImGui.Text(GetLoc("Color"));
@@ -463,12 +460,12 @@ namespace DailyRoutines.ModulesPublic
 
             // 删除按钮
             ImGui.SameLine();
-            using (var deleteButtonStyle = ImRaii.PushColor(ImGuiCol.Button, ImGuiColors.DPSRed))
+            using (ImRaii.PushColor(ImGuiCol.Button, ImGuiColors.DPSRed))
             {
                 if (ImGui.Button($"{GetLoc("Delete")}##dz{index}"))
                 {
                     zoneLimit.DangerZones.RemoveAt(index);
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(ModuleConfig!);
                     ImGui.TreePop();
                 }
             }
@@ -554,12 +551,12 @@ namespace DailyRoutines.ModulesPublic
             var distToBottom = Math.Abs(currentPos.Z - zone.MaxZ);
 
             var minDist = Math.Min(Math.Min(distToLeft, distToRight), Math.Min(distToTop, distToBottom));
-
-            if (minDist == distToLeft)
+            const float tolerance = 1e-6f;
+            if (Math.Abs(minDist - distToLeft) < tolerance)
                 squareNewX = zone.MinX - 1.0f;
-            else if (minDist == distToRight)
+            else if (Math.Abs(minDist - distToRight) < tolerance)
                 squareNewX = zone.MaxX + 1.0f;
-            else if (minDist == distToTop)
+            else if (Math.Abs(minDist - distToTop) < tolerance)
                 squareNewZ = zone.MinZ - 1.0f;
             else
                 squareNewZ = zone.MaxZ + 1.0f;
@@ -656,10 +653,10 @@ namespace DailyRoutines.ModulesPublic
             }
             // 传统模式：单一边界检查
             else if (zoneLimit.Enabled)
-                ProcessTraditionalMode(zoneLimit, currentPos, currentZoneId);
+                ProcessTraditionalMode(zoneLimit, currentPos);
         }
 
-        private void ProcessTraditionalMode(ZoneLimit zoneLimit, Vector3 currentPos, uint currentZoneId)
+        private void ProcessTraditionalMode(ZoneLimit zoneLimit, Vector3 currentPos)
         {
             var centerPos = zoneLimit.CenterPos;
             var radius = zoneLimit.Radius;
@@ -840,7 +837,7 @@ namespace DailyRoutines.ModulesPublic
 
             zoneLimit.DangerZones.Add(dangerZone);
             zoneLimit.IsAdvancedMode = true;
-            SaveConfig(ModuleConfig);
+            SaveConfig(ModuleConfig!);
         }
 
         private void HandleDeleteCommand(string[] args, ZoneLimit zoneLimit)
@@ -855,7 +852,7 @@ namespace DailyRoutines.ModulesPublic
             {
                 var removedZone = zoneLimit.DangerZones[index - 1];
                 zoneLimit.DangerZones.RemoveAt(index - 1);
-                SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig!);
                 Chat(string.Format(GetLoc("Deleted"), removedZone.Name));
             }
             else
@@ -887,9 +884,9 @@ namespace DailyRoutines.ModulesPublic
                     if (bool.TryParse(value, out var enabled))
                     {
                         dangerZone.Enabled = enabled;
-                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig!);
                         Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneToggled"),
-                            enabled ? GetLoc("Enabledd") : GetLoc("Disable"),
+                            enabled ? GetLoc("Enabled") : GetLoc("Disable"),
                             dangerZone.Name));
                     }
                     else
@@ -898,7 +895,7 @@ namespace DailyRoutines.ModulesPublic
 
                 case "name":
                     dangerZone.Name = value;
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(ModuleConfig!);
                     Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-NameChanged"), value));
                     break;
 
@@ -906,7 +903,7 @@ namespace DailyRoutines.ModulesPublic
                     if (uint.TryParse(value, out var color))
                     {
                         dangerZone.Color = color;
-                        SaveConfig(ModuleConfig);
+                        SaveConfig(ModuleConfig!);
                         Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ColorChanged"), color.ToString("X8")));
                     }
                     else
@@ -943,17 +940,13 @@ namespace DailyRoutines.ModulesPublic
             FrameworkManager.Unregister(OnFrameworkUpdate);
             RemoveSubCommand(Command);
         }
-
         
-
         private class Config : ModuleConfiguration
         {
             public List<uint> ZoneIds { get; set; } = [];
             public Dictionary<uint, ZoneLimit> ZoneLimitList { get; set; } = [];
             public bool ShowDebugInfo { get; set; } = false;
             public bool ShowBoundaryVisualization { get; set; } = false;
-            public float RadarRange { get; set; } = 50.0f;
-            public float RadarScale { get; set; } = 2.0f;
             public int DisableOnDeathCount { get; set; } = 2;
         }
         private enum ZoneType
@@ -1025,7 +1018,5 @@ namespace DailyRoutines.ModulesPublic
             }
             
         }
-
-        
     }
 }
