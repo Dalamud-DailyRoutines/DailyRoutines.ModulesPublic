@@ -2,11 +2,10 @@
 using System.Runtime.InteropServices;
 using DailyRoutines.Abstracts;
 using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoChangeKeyboardLayout : DailyModuleBase
+public class AutoChangeKeyboardLayout : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,25 +15,19 @@ public partial class AutoChangeKeyboardLayout : DailyModuleBase
         Author      = ["JiaXX"]
     };
     
-    private static Hook<SetTextInputTargetDelegate>? setTextInputTargetHook;
+    private static Hook<SetTextInputTargetDelegate>? SetTextInputTargetHook;
     private delegate nint SetTextInputTargetDelegate(nint raptureAtkModule, nint textInputEventInterface);
     private static readonly CompSig SetTextInputTargetSig = new("4C 8B DC 55 53 57 41 54 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B 9D ?? ?? ?? ??");
 
     protected override void Init()
     {
-        DService.ClientState.Login += OnLogin;
-        DService.ClientState.Logout += OnLogout;
-        setTextInputTargetHook ??= SetTextInputTargetSig.GetHook<SetTextInputTargetDelegate>(ChangeKeyboardLayout);
-        setTextInputTargetHook.Enable();
+        SetTextInputTargetHook ??= SetTextInputTargetSig.GetHook<SetTextInputTargetDelegate>(ChangeKeyboardLayout);
+        SetTextInputTargetHook.Enable();
     }
-
-    private static void OnLogin() => InputMethodController.SwitchToEnglish();
-    
-    private static void OnLogout(int type, int code)=> InputMethodController.SwitchToChinese();
     
     private static nint ChangeKeyboardLayout(nint raptureAtkModule, nint textInputEventInterface)
     {
-        var result = setTextInputTargetHook!.Original(raptureAtkModule, textInputEventInterface);
+        var result = SetTextInputTargetHook!.Original(raptureAtkModule, textInputEventInterface);
 
         switch (textInputEventInterface)
         {
@@ -48,22 +41,14 @@ public partial class AutoChangeKeyboardLayout : DailyModuleBase
 
         return result;
     }
-    
-    protected override void Uninit()
-    {
-        DService.ClientState.Login -= OnLogin;
-        DService.ClientState.Logout -= OnLogout;
-        setTextInputTargetHook?.Disable();
-        setTextInputTargetHook?.Dispose();
-    }
 
-    public static partial class InputMethodController
+    private static class InputMethodController
     {
-        [LibraryImport("user32.dll", EntryPoint = "ActivateKeyboardLayout")]
-        private static partial void ActivateKeyboardLayout(nint hkl, uint Flags);
+        [DllImport("user32.dll")]
+        private static extern void ActivateKeyboardLayout(nint hkl, uint Flags);
 
-        [LibraryImport("user32.dll", EntryPoint = "GetKeyboardLayout")]
-        private static partial nint GetKeyboardLayout(uint idThread);
+        [DllImport("user32.dll")]
+        private static extern nint GetKeyboardLayout(uint idThread);
 
         public static nint currentLayout => GetKeyboardLayout(0);
         
