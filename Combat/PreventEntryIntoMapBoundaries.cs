@@ -165,8 +165,8 @@ public class PreventEntryIntoMapBoundaries : DailyModuleBase
                 if (i < ModuleConfig.ZoneIDs.Count - 1)
                     ImGui.NewLine();
                 // 绘制雷达窗口（如果启用了边界可视化）
-                //if (ModuleConfig.ShowBoundaryVisualization)
-                 //   DrawRadarWindow();
+                if (ModuleConfig.ShowBoundaryVisualization)
+                    DrawRadarWindow();
             }
 
         }
