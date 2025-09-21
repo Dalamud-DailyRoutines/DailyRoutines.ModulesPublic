@@ -142,7 +142,7 @@ namespace DailyRoutines.ModulesPublic;
 
                     using (ImRaii.PushColor(ImGuiCol.Button, KnownColor.Red.Vector()))
                     {
-                        if (ImGui.Button(string.Format(GetLoc("Delete"), zid)))
+                        if (ImGui.Button(GetLoc("Delete", zid)))
                         {
                             ModuleConfig.ZoneIDs.RemoveAt(i);
                             ModuleConfig.ZoneLimitList.Remove(zid);
@@ -193,7 +193,7 @@ namespace DailyRoutines.ModulesPublic;
             if (ModuleConfig.ShowDebugInfo && isCurrentZone && DService.ObjectTable.LocalPlayer != null)
             {
                 var distance = LocalPlayerState.DistanceTo3D(zoneLimit.CenterPos);
-                ImGui.TextColored(KnownColor.Gray.Vector(), string.Format(GetLoc("PreventEntryIntoMapBoundaries-Distance"), distance));
+                ImGui.TextColored(KnownColor.Gray.Vector(), GetLoc("PreventEntryIntoMapBoundaries-Distance", distance));
             }
         }
 
@@ -203,7 +203,7 @@ namespace DailyRoutines.ModulesPublic;
 
             if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundaries-AddDangerZone")))
             {
-                var newZone = new DangerZone(string.Format(GetLoc("PreventEntryIntoMapBoundaries-DangerZoneName"), zoneLimit.DangerZones.Count + 1));
+                var newZone = new DangerZone(GetLoc("PreventEntryIntoMapBoundaries-DangerZoneName", zoneLimit.DangerZones.Count + 1));
                 zoneLimit.DangerZones.Add(newZone);
                 SaveConfig(ModuleConfig!);
             }
@@ -379,7 +379,7 @@ namespace DailyRoutines.ModulesPublic;
                 var inDanger = IsInDangerZone(dangerZone, playerPos);
                 ImGui.TextColored(
                     inDanger ? KnownColor.Red.Vector() : KnownColor.Green.Vector(),
-                    string.Format(GetLoc("PreventEntryIntoMapBoundaries-Status"),
+                    GetLoc("PreventEntryIntoMapBoundaries-Status",
                         inDanger ? GetLoc("PreventEntryIntoMapBoundaries-Dangerous") : GetLoc("PreventEntryIntoMapBoundaries-Safe"))
                 );
             }
@@ -631,7 +631,7 @@ namespace DailyRoutines.ModulesPublic;
         {
             MovementManager.TPPlayerAddress(newPos);
             if (ModuleConfig?.ShowDebugInfo == true)
-                Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-DebugPosition"),  newPos.X, newPos.Y, newPos.Z));
+                Chat(GetLoc("PreventEntryIntoMapBoundaries-DebugPosition",  newPos.X, newPos.Y, newPos.Z));
         }
 
         private void OnCommand(string command, string args)
@@ -660,7 +660,7 @@ namespace DailyRoutines.ModulesPublic;
                     HandleModifyCommand(parts.Skip(1).ToArray(), zoneLimit);
                     break;
                 default:
-                    ChatError(string.Format(GetLoc("Commands-SubCommandNotFound"), action));
+                    ChatError(GetLoc("Commands-SubCommandNotFound", action));
                     break;
             }
         }
@@ -674,7 +674,7 @@ namespace DailyRoutines.ModulesPublic;
             }
 
             var shapeType = args[0].ToLower();
-            var dangerZone = new DangerZone(string.Format(GetLoc("PreventEntryIntoMapBoundaries-CommandZone"), zoneLimit.DangerZones.Count + 1));
+            var dangerZone = new DangerZone(GetLoc("PreventEntryIntoMapBoundaries-CommandZone", zoneLimit.DangerZones.Count + 1));
 
             switch (shapeType)
             {
@@ -724,7 +724,7 @@ namespace DailyRoutines.ModulesPublic;
                     break;
 
                 default:
-                    ChatError(string.Format(GetLoc("Commands-InvalidArgs"), shapeType));
+                    ChatError(GetLoc("Commands-InvalidArgs", shapeType));
                     return;
             }
 
@@ -746,7 +746,7 @@ namespace DailyRoutines.ModulesPublic;
                 var removedZone = zoneLimit.DangerZones[index - 1];
                 zoneLimit.DangerZones.RemoveAt(index - 1);
                 SaveConfig(ModuleConfig!);
-                Chat(string.Format(GetLoc("Deleted"), removedZone.Name));
+                Chat(GetLoc("Deleted", removedZone.Name));
             }
            
         }
@@ -761,7 +761,7 @@ namespace DailyRoutines.ModulesPublic;
 
             if (!int.TryParse(args[0], out var index) || index <= 0 || index > zoneLimit.DangerZones.Count)
             {
-                ChatError(string.Format(GetLoc("Commands-InvalidArgs"), zoneLimit.DangerZones.Count));
+                ChatError(GetLoc("Commands-InvalidArgs", zoneLimit.DangerZones.Count));
                 return;
             }
 
@@ -776,7 +776,7 @@ namespace DailyRoutines.ModulesPublic;
                     {
                         dangerZone.Enabled = enabled;
                         SaveConfig(ModuleConfig!);
-                        Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ZoneToggled"),
+                        Chat(GetLoc("PreventEntryIntoMapBoundaries-ZoneToggled",
                             enabled ? GetLoc("Enabled") : GetLoc("Disable"),
                             dangerZone.Name));
                     }
@@ -785,7 +785,7 @@ namespace DailyRoutines.ModulesPublic;
                 case "name":
                     dangerZone.Name = value;
                     SaveConfig(ModuleConfig!);
-                    Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-NameChanged"), value));
+                    Chat((GetLoc("PreventEntryIntoMapBoundaries-NameChanged", value)));
                     break;
 
                 case "color":
@@ -793,13 +793,13 @@ namespace DailyRoutines.ModulesPublic;
                     {
                         dangerZone.Color = color;
                         SaveConfig(ModuleConfig!);
-                        Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ColorChanged"), color.ToString("X8")));
+                        Chat((GetLoc("PreventEntryIntoMapBoundaries-ColorChanged", color.ToString("X8"))));
                     }
                    
                     break;
 
                 default:
-                    ChatError(string.Format(GetLoc("Commands-InvalidArgs"), property));
+                    ChatError((GetLoc("Commands-InvalidArgs", property)));
                     break;
             }
         }
