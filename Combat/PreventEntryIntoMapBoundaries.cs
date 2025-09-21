@@ -9,10 +9,19 @@ using DailyRoutines.Managers;
 using Dalamud.Interface;
 using Dalamud.Plugin.Services;
 using static DailyRoutines.Managers.CommandManager;
+using System.Text.RegularExpressions;
+using Dalamud.Interface.Components;
+using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using OmenTools;
+using OmenTools.Helpers;
+using static DailyRoutines.Helpers.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-    public class PreventEntryIntoMapBoundaries : DailyModuleBase
+public class PreventEntryIntoMapBoundaries : DailyModuleBase
     {
         public override ModuleInfo Info { get; } = new()
         {
@@ -31,7 +40,7 @@ namespace DailyRoutines.ModulesPublic;
             FrameworkManager.Register(OnFrameworkUpdate);
             AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("PreventEntryIntoMapBoundaries-CommandHelp") });
         }
-
+        
         protected override void ConfigUI()
         {
             using var configChild = ImRaii.Child(GetLoc("Settings-ModuleConfiguration"), Vector2.Zero, false);
@@ -52,7 +61,6 @@ namespace DailyRoutines.ModulesPublic;
                     ModuleConfig.ZoneIDs.Add(zid);
                     ModuleConfig.ZoneLimitList[zid] = new ZoneLimit();
                     SaveConfig(ModuleConfig);
-                    Chat(GetLoc("PreventEntryIntoMapBoundaries-ZoneAdded", zid));
                 }
             }
 
@@ -157,9 +165,11 @@ namespace DailyRoutines.ModulesPublic;
 
                 if (i < ModuleConfig.ZoneIDs.Count - 1)
                     ImGui.NewLine();
+                // 绘制雷达窗口（如果启用了边界可视化）
+                if (ModuleConfig.ShowBoundaryVisualization)
+                    DrawRadarWindow();
             }
 
-            DrawRadarWindow();
         }
 
         private void DrawTraditionalModeUI(ZoneLimit zoneLimit, uint zid, bool isCurrentZone)
@@ -999,18 +1009,14 @@ namespace DailyRoutines.ModulesPublic;
             return DService.ClientState.LocalPlayer?.Position ?? Vector3.Zero;
         }
         
-
-       
         private void OnCommand(string command, string args)
         {
             var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
             if (parts.Length == 0)
                 return;
 
             var action = parts[0].ToLower();
             var zid = GameState.TerritoryType;
-            
 
             if (!ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit))
                 return;
