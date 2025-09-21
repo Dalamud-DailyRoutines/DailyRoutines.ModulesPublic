@@ -16,7 +16,7 @@ public class AutoChangeKeyboardLayout : DailyModuleBase
     };
     
     private static Hook<SetTextInputTargetDelegate>? SetTextInputTargetHook;
-    private delegate nint SetTextInputTargetDelegate(nint raptureAtkModule, nint textInputEventInterface);
+    private delegate void SetTextInputTargetDelegate(nint textInputEventInterface, int eventType, int eventParam, nint atkEvent, nint atkEventData);
     private static readonly CompSig SetTextInputTargetSig = new("4C 8B DC 55 53 57 41 54 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B 9D ?? ?? ?? ??");
 
     protected override void Init()
@@ -25,11 +25,11 @@ public class AutoChangeKeyboardLayout : DailyModuleBase
         SetTextInputTargetHook.Enable();
     }
     
-    private static nint ChangeKeyboardLayout(nint raptureAtkModule, nint textInputEventInterface)
+    private static void ChangeKeyboardLayout(nint textInputEventInterface, int eventType, int eventParam, nint atkEvent, nint atkEventData)
     {
-        var result = SetTextInputTargetHook!.Original(raptureAtkModule, textInputEventInterface);
+        SetTextInputTargetHook!.Original(textInputEventInterface, eventType, eventParam, atkEvent, atkEventData);
 
-        switch (textInputEventInterface)
+        switch (eventType)
         {
             case 19:
                 InputMethodController.SwitchToEnglish();
@@ -38,8 +38,6 @@ public class AutoChangeKeyboardLayout : DailyModuleBase
                 InputMethodController.SwitchToChinese();
                 break;
         }
-
-        return result;
     }
 
     private static class InputMethodController
