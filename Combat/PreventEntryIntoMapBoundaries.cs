@@ -114,7 +114,7 @@ namespace DailyRoutines.ModulesPublic;
 
                 using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, nodeColor);
                 var isOpen = ImRaii.TreeNode($"{nodeLabel}###{zid}");
-              
+
 
                 if (isOpen)
                 {
@@ -158,6 +158,8 @@ namespace DailyRoutines.ModulesPublic;
                 if (i < ModuleConfig.ZoneIDs.Count - 1)
                     ImGui.NewLine();
             }
+
+            DrawRadarWindow();
         }
 
         private void DrawTraditionalModeUI(ZoneLimit zoneLimit, uint zid, bool isCurrentZone)
@@ -633,7 +635,372 @@ namespace DailyRoutines.ModulesPublic;
             if (ModuleConfig?.ShowDebugInfo == true)
                 Chat(GetLoc("PreventEntryIntoMapBoundaries-DebugPosition",  newPos.X, newPos.Y, newPos.Z));
         }
+         private void DrawRadarWindow()
+        {
+            if (ModuleConfig?.ShowBoundaryVisualization != true ||
+                DService.ObjectTable.LocalPlayer == null)
+                return;
 
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit))
+                return;
+
+            var isOpen = true;
+            if (!ImGui.Begin(GetLoc("PreventEntryIntoMapBoundaries-RadarWindow"), ref isOpen, ImGuiWindowFlags.NoResize))
+            {
+                ImGui.End();
+                return;
+            }
+
+            ImGui.SetWindowSize(new Vector2(420, 600));
+
+            const float radarRadius = 140f;
+            var drawList = ImGui.GetWindowDrawList();
+            var windowPos = ImGui.GetWindowPos();
+            var absoluteRadarCenter = new Vector2(windowPos.X + 210, windowPos.Y + 220);
+
+            // 绘制雷达背景
+            drawList.AddCircleFilled(absoluteRadarCenter, radarRadius, KnownColor.Gray.Vector().WithAlpha(0.2f).ToUint());
+            drawList.AddCircle(absoluteRadarCenter, radarRadius, KnownColor.Green.Vector().ToUint(), 64, 2.0f);
+
+            // 绘制雷达网格圈 (每圈代表一定距离)
+            var gridDistance = ModuleConfig.RadarRange * 0.25f;
+            var gridColor = KnownColor.Gray.Vector().WithAlpha(0.25f).ToUint();
+            var labelColor = KnownColor.White.Vector().WithAlpha(0.5f).ToUint();
+
+            for (var i = 1; i <= 4; i++)
+            {
+                var gridRadius = radarRadius * i * 0.25f;
+                drawList.AddCircle(absoluteRadarCenter, gridRadius, gridColor, 32, 1.0f);
+
+                if (i % 2 == 0 && gridRadius < radarRadius - 15)
+                    drawList.AddText(new Vector2(absoluteRadarCenter.X + gridRadius + 5, absoluteRadarCenter.Y - 8), labelColor, $"{gridDistance * i:F0}m");
+            }
+
+            // 绘制十字线
+            var crosshairColor = KnownColor.White.Vector().WithAlpha(0.25f).ToUint();
+            drawList.AddLine(new Vector2(absoluteRadarCenter.X - radarRadius, absoluteRadarCenter.Y),
+                           new Vector2(absoluteRadarCenter.X + radarRadius, absoluteRadarCenter.Y), crosshairColor, 1.0f);
+            drawList.AddLine(new Vector2(absoluteRadarCenter.X, absoluteRadarCenter.Y - radarRadius),
+                           new Vector2(absoluteRadarCenter.X, absoluteRadarCenter.Y + radarRadius), crosshairColor, 1.0f);
+
+            var playerPos = DService.ObjectTable.LocalPlayer.Position;
+            var radarCenterWorldPos = GetRadarCenterWorldPos();
+            var playerRelativePos = playerPos - radarCenterWorldPos;
+            var scale = radarRadius / ModuleConfig.RadarRange * ModuleConfig.RadarScale;
+            var playerRadarPos = new Vector2(
+                absoluteRadarCenter.X + playerRelativePos.X * scale,
+                absoluteRadarCenter.Y + playerRelativePos.Z * scale);
+
+            // 检查玩家是否在雷达显示范围内
+            if (Vector2.Distance(playerRadarPos, absoluteRadarCenter) <= radarRadius)
+            {
+                drawList.AddCircleFilled(playerRadarPos, 4.0f, KnownColor.Red.Vector().ToUint());
+                drawList.AddText(new Vector2(playerRadarPos.X + 8, playerRadarPos.Y - 8), KnownColor.Red.Vector().ToUint(), GetLoc("PreventEntryIntoMapBoundaries-Player"));
+            }
+            else
+            {
+                var directionToPlayer = Vector2.Normalize(playerRadarPos - absoluteRadarCenter);
+                var edgePos = absoluteRadarCenter + directionToPlayer * (radarRadius - 10);
+                drawList.AddCircleFilled(edgePos, 3.0f, KnownColor.Red.Vector().ToUint());
+                drawList.AddText(new Vector2(edgePos.X + 6, edgePos.Y - 6), KnownColor.Red.Vector().ToUint(), GetLoc("PreventEntryIntoMapBoundaries-PlayerOutside"));
+            }
+
+            // 高级模式：绘制多个危险区域
+            if (zoneLimit.IsAdvancedMode && zoneLimit.DangerZones.Count > 0)
+            {
+                foreach (var dangerZone in zoneLimit.DangerZones)
+                    DrawDangerZoneOnRadar(drawList, absoluteRadarCenter, radarRadius, dangerZone);
+            }
+            else
+                DrawTraditionalBoundaryOnRadar(drawList, absoluteRadarCenter, radarRadius, zoneLimit);
+
+            // 绘制雷达中心标记
+            drawList.AddCircle(absoluteRadarCenter, 3.0f, KnownColor.Blue.Vector().ToUint(), 16, 2.0f);
+            drawList.AddText(new Vector2(absoluteRadarCenter.X + 8, absoluteRadarCenter.Y + 8), KnownColor.Blue.Vector().ToUint(), GetLoc("PreventEntryIntoMapBoundaries-Center"));
+
+            // 显示实时信息
+            ImGui.SetCursorPos(new Vector2(10, 310));
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-PlayerPosition", playerPos.X, playerPos.Z));
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-RadarCenter", radarCenterWorldPos.X, radarCenterWorldPos.Z));
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-DisplayRange", ModuleConfig.RadarRange));
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-Scale", ModuleConfig.RadarRange / radarRadius));
+            ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-RadarSettings"));
+
+            var radarRange = ModuleConfig.RadarRange;
+            if (ImGui.SliderFloat(GetLoc("PreventEntryIntoMapBoundaries-RadarRange"), ref radarRange, 10.0f, 200.0f, "%.1f"))
+            {
+                ModuleConfig.RadarRange = radarRange;
+                SaveConfig(ModuleConfig);
+            }
+
+            var radarScale = ModuleConfig.RadarScale;
+            if (ImGui.SliderFloat(GetLoc("PreventEntryIntoMapBoundaries-RadarScale"), ref radarScale, 0.5f, 5.0f, "%.1f"))
+            {
+                ModuleConfig.RadarScale = radarScale;
+                SaveConfig(ModuleConfig);
+            }
+
+            ImGui.Spacing();
+
+            // 显示当前危险状态
+            var inDanger = false;
+            if (zoneLimit.IsAdvancedMode && zoneLimit.DangerZones.Count > 0)
+            {
+                foreach (var dangerZone in zoneLimit.DangerZones)
+                {
+                    if (dangerZone.Enabled && IsInDangerZone(dangerZone, playerPos))
+                    {
+                        inDanger = true;
+                        break;
+                    }
+                }
+            }
+            else if (zoneLimit.Enabled)
+            {
+                if (zoneLimit.MapType == MapType.Circle)
+                    inDanger = (playerPos - zoneLimit.CenterPos).Length() >= zoneLimit.Radius - 0.3f;
+                else if (zoneLimit.MapType == MapType.Rectangle)
+                {
+                    var halfSize = zoneLimit.Radius;
+                    inDanger = Math.Abs(playerPos.X - zoneLimit.CenterPos.X) >= halfSize - 0.3f ||
+                              Math.Abs(playerPos.Z - zoneLimit.CenterPos.Z) >= halfSize - 0.3f;
+                }
+            }
+
+            ImGui.TextColored(inDanger ? KnownColor.Red.Vector() : KnownColor.Green.Vector(),
+                             inDanger ? GetLoc("PreventEntryIntoMapBoundariesStatusDangerous") : GetLoc("PreventEntryIntoMapBoundariesStatusSafe"));
+
+            ImGui.End();
+
+            if (!isOpen)
+            {
+                ModuleConfig.ShowBoundaryVisualization = false;
+                SaveConfig(ModuleConfig);
+            }
+        }
+
+        private void DrawDangerZoneOnRadar(ImDrawListPtr drawList, Vector2 radarCenter, float radarRadius, DangerZone zone)
+        {
+            // 计算比例尺
+            var scale = radarRadius / ModuleConfig.RadarRange;
+
+            // 危险区域在雷达中的固定位置（相对于雷达中心）
+            var relativeToRadarCenter = zone.CenterPos - GetRadarCenterWorldPos();
+            var zoneRadarX = radarCenter.X + relativeToRadarCenter.X * scale * ModuleConfig.RadarScale;
+            var zoneRadarY = radarCenter.Y + relativeToRadarCenter.Z * scale * ModuleConfig.RadarScale; // Z轴正向
+
+            var color = zone.Enabled ? (zone.Color | 0x80000000) : KnownColor.Gray.Vector().WithAlpha(0.25f).ToUint();
+
+            switch (zone.ZoneType)
+            {
+                case ZoneType.Circle:
+                    var zoneRadiusOnRadar = zone.Radius * scale * ModuleConfig.RadarScale;
+                    drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), zoneRadiusOnRadar, color, 32, 2.0f);
+                    // 绘制填充区域以便更好地可视化
+                    drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), zoneRadiusOnRadar, (uint)(color & 0x30FFFFFF));
+                    break;
+
+                case ZoneType.Annulus:
+                    var outerRadiusOnRadar = zone.Radius * scale * ModuleConfig.RadarScale;
+                    var innerRadiusOnRadar = zone.InnerRadius * scale * ModuleConfig.RadarScale;
+
+                    // 绘制外圆边界（危险区域边界）
+                    drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), outerRadiusOnRadar, color, 32, 2.0f);
+                    // 绘制内圆边界（危险区域边界）
+                    drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), innerRadiusOnRadar, color, 32, 2.0f);
+
+                    // 填充内圆（危险区域）
+                    drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), innerRadiusOnRadar, (uint)(color & 0x40FFFFFF));
+
+                    // 绘制安全圆环区域（绿色显示）
+                    var safeDountColor = KnownColor.Green.Vector().WithAlpha(0.5f).ToUint();
+                    for (float r = innerRadiusOnRadar + 2; r < outerRadiusOnRadar; r += 3.0f)
+                        drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), r, safeDountColor, 16, 1.0f);
+
+                    // 添加文字说明
+                    if (innerRadiusOnRadar > 10) // 在内圆显示危险
+                    {
+                        var dangerTextPos = new Vector2(zoneRadarX, zoneRadarY - innerRadiusOnRadar / 2);
+                        drawList.AddText(dangerTextPos, color, GetLoc("PreventEntryIntoMapBoundariesDangerous"));
+                    }
+                    var safeTextPos = new Vector2(zoneRadarX + (innerRadiusOnRadar + outerRadiusOnRadar) / 2, zoneRadarY - 5);
+                    drawList.AddText(safeTextPos, KnownColor.Green.Vector().ToUint(), GetLoc("PreventEntryIntoMapBoundariesSafe"));
+                    break;
+
+                case ZoneType.Rectangle:
+                    // 使用边界绘制方形
+                    var radarCenterWorld = GetRadarCenterWorldPos();
+                    var scaleRadar = scale * ModuleConfig.RadarScale;
+
+                    drawList.AddRect(
+                        new Vector2(
+                            radarCenter.X + ((zone.MinX - radarCenterWorld.X) * scaleRadar),
+                            radarCenter.Y + ((zone.MinZ - radarCenterWorld.Z) * scaleRadar)),
+                        new Vector2(
+                            radarCenter.X + ((zone.MaxX - radarCenterWorld.X) * scaleRadar),
+                            radarCenter.Y + ((zone.MaxZ - radarCenterWorld.Z) * scaleRadar)),
+                        color, 0.0f, ImDrawFlags.None, 2.0f);
+                    // 绘制填充区域
+                    drawList.AddRectFilled(
+                        new Vector2(
+                            radarCenter.X + ((zone.MinX - radarCenterWorld.X) * scaleRadar),
+                            radarCenter.Y + ((zone.MinZ - radarCenterWorld.Z) * scaleRadar)),
+                        new Vector2(
+                            radarCenter.X + ((zone.MaxX - radarCenterWorld.X) * scaleRadar),
+                            radarCenter.Y + ((zone.MaxZ - radarCenterWorld.Z) * scaleRadar)),
+                        (color & 0x30FFFFFF));
+                    break;
+
+                case ZoneType.RectangularSafeZone:
+                    // 使用MinX/MaxX和MinZ/MaxZ绘制矩形安全区
+                    var radarCenterWorldSafe = GetRadarCenterWorldPos();
+
+                    var sminXRelative = zone.MinX - radarCenterWorldSafe.X;
+                    var smaxXRelative = zone.MaxX - radarCenterWorldSafe.X;
+                    var sminZRelative = zone.MinZ - radarCenterWorldSafe.Z;
+                    var smaxZRelative = zone.MaxZ - radarCenterWorldSafe.Z;
+
+                    var safeTopLeft = new Vector2(
+                        radarCenter.X + sminXRelative * scale * ModuleConfig.RadarScale,
+                        radarCenter.Y + sminZRelative * scale * ModuleConfig.RadarScale
+                    );
+                    var safeBottomRight = new Vector2(
+                        radarCenter.X + smaxXRelative * scale * ModuleConfig.RadarScale,
+                        radarCenter.Y + smaxZRelative * scale * ModuleConfig.RadarScale
+                    );
+
+                    // 绘制安全区边界（绿色）
+                    drawList.AddRect(safeTopLeft, safeBottomRight, KnownColor.Green.Vector().ToUint(), 0.0f, ImDrawFlags.None, 2.0f);
+                    // 绘制半透明绿色填充
+                    drawList.AddRectFilled(safeTopLeft, safeBottomRight, KnownColor.Green.Vector().WithAlpha(0.25f).ToUint());
+
+                    // 添加文字说明
+                    var safeCenterX = (safeTopLeft.X + safeBottomRight.X) / 2;
+                    var safeCenterY = (safeTopLeft.Y + safeBottomRight.Y) / 2;
+                    drawList.AddText(new Vector2(safeCenterX - 15, safeCenterY - 8), KnownColor.Green.Vector().ToUint(), GetLoc("PreventEntryIntoMapBoundariesSafeZone"));
+                    break;
+
+                case ZoneType.Expression:
+                    // 对于复杂表达式，绘制一个更明显的标记
+                    drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), 6.0f, color);
+                    drawList.AddCircle(new Vector2(zoneRadarX, zoneRadarY), 8.0f, color, 16, 2.0f);
+                    break;
+            }
+
+            // 绘制区域中心点（除了方形类型）
+            if (zone.ZoneType != ZoneType.Rectangle)
+                drawList.AddCircleFilled(new Vector2(zoneRadarX, zoneRadarY), 2.0f, color);
+            else
+            {
+                // 方形类型绘制边界标记
+                var radarCenterWorld = GetRadarCenterWorldPos();
+
+                var scaleRadar = scale * ModuleConfig.RadarScale;
+
+                // 绘制对角点
+                drawList.AddCircleFilled(new Vector2(
+                    radarCenter.X + (zone.MinX - radarCenterWorld.X) * scaleRadar,
+                    radarCenter.Y + (zone.MinZ - radarCenterWorld.Z) * scaleRadar), 3.0f, color);
+                drawList.AddCircleFilled(new Vector2(
+                    radarCenter.X + (zone.MaxX - radarCenterWorld.X) * scaleRadar,
+                    radarCenter.Y + (zone.MaxZ - radarCenterWorld.Z) * scaleRadar), 3.0f, color);
+            }
+
+            // 绘制区域名称（智能位置避免重叠）
+            if (!string.IsNullOrEmpty(zone.Name))
+            {
+                var textSize = ImGui.CalcTextSize(zone.Name);
+                // 默认使用正下方位置
+                var finalTextPos = new Vector2(zoneRadarX - textSize.X / 2, zoneRadarY + 20);
+
+                // 添加文字背景提高可读性
+                var bgColor = KnownColor.Gray.Vector().WithAlpha(0.5f).ToUint();
+                drawList.AddRectFilled(
+                    new Vector2(finalTextPos.X - 2, finalTextPos.Y - 2),
+                    new Vector2(finalTextPos.X + textSize.X + 2, finalTextPos.Y + textSize.Y + 2),
+                    bgColor);
+
+                drawList.AddText(finalTextPos, color, zone.Name);
+            }
+        }
+
+        private void DrawTraditionalBoundaryOnRadar(ImDrawListPtr drawList, Vector2 radarCenter, float radarRadius, ZoneLimit zoneLimit)
+        {
+            // 计算比例尺
+            var scale = radarRadius / ModuleConfig.RadarRange;
+
+            // 边界区域在雷达中的固定位置（相对于雷达中心）
+            var relativeToRadarCenter = zoneLimit.CenterPos - GetRadarCenterWorldPos();
+            var boundaryRadarX = radarCenter.X + relativeToRadarCenter.X * scale * ModuleConfig.RadarScale;
+            var boundaryRadarY = radarCenter.Y + relativeToRadarCenter.Z * scale * ModuleConfig.RadarScale; // Z轴正向
+
+            var color = zoneLimit.Enabled ? KnownColor.Red.Vector().ToUint() : KnownColor.Green.Vector().ToUint();
+            var fillColor = zoneLimit.Enabled ? KnownColor.Red.Vector().WithAlpha(0.2f).ToUint() : KnownColor.Green.Vector().WithAlpha(0.2f).ToUint();
+
+            if (zoneLimit.MapType == MapType.Circle)
+            {
+                var zoneRadiusOnRadar = zoneLimit.Radius * scale * ModuleConfig.RadarScale;
+                drawList.AddCircle(new Vector2(boundaryRadarX, boundaryRadarY), zoneRadiusOnRadar, color, 32, 2.0f);
+                drawList.AddCircleFilled(new Vector2(boundaryRadarX, boundaryRadarY), zoneRadiusOnRadar, (uint)fillColor);
+            }
+            else if (zoneLimit.MapType == MapType.Rectangle)
+            {
+                var halfSize = zoneLimit.Radius * scale * ModuleConfig.RadarScale;
+                var topLeft = new Vector2(boundaryRadarX - halfSize, boundaryRadarY - halfSize);
+                var bottomRight = new Vector2(boundaryRadarX + halfSize, boundaryRadarY + halfSize);
+                drawList.AddRect(topLeft, bottomRight, color, 0.0f, ImDrawFlags.None, 2.0f);
+                drawList.AddRectFilled(topLeft, bottomRight, (uint)fillColor);
+            }
+
+            // 绘制边界中心点
+            drawList.AddCircleFilled(new Vector2(boundaryRadarX, boundaryRadarY), 2.0f, color);
+
+            // 标注边界类型（智能位置）
+            var boundaryText = string.Format(GetLoc("PreventEntryIntoMapBoundariesBoundary"), zoneLimit.MapType);
+            var textSize = ImGui.CalcTextSize(boundaryText);
+            var textOffset = 15;
+
+            // 计算最佳文字位置，避免超出雷达边界
+            var textPos = new Vector2(boundaryRadarX + textOffset, boundaryRadarY - textOffset);
+            var distanceFromCenter = Vector2.Distance(textPos, radarCenter);
+
+            if (distanceFromCenter + textSize.X > radarRadius - 10)
+            {
+                // 如果右上角超出边界，尝试左上角
+                textPos = new Vector2(boundaryRadarX - textOffset - textSize.X, boundaryRadarY - textOffset);
+                distanceFromCenter = Vector2.Distance(textPos, radarCenter);
+
+                if (distanceFromCenter + textSize.X > radarRadius - 10)
+                    textPos = new Vector2(boundaryRadarX - textSize.X / 2, boundaryRadarY + textOffset);
+            }
+
+            // 添加文字背景
+            var bgColor = KnownColor.Green.Vector().WithAlpha(0.5f).ToUint();
+            drawList.AddRectFilled(
+                new Vector2(textPos.X - 2, textPos.Y - 2),
+                new Vector2(textPos.X + textSize.X + 2, textPos.Y + textSize.Y + 2),
+                bgColor);
+
+            drawList.AddText(textPos, color, boundaryText);
+        }
+
+        private Vector3 GetRadarCenterWorldPos()
+        {
+            var zid = DService.ClientState.TerritoryType;
+            if (ModuleConfig?.ZoneLimitList.TryGetValue(zid, out var zoneLimit) == true)
+            {
+                if (zoneLimit.IsAdvancedMode && zoneLimit.DangerZones.Count > 0)
+                    return zoneLimit.DangerZones[0].CenterPos;
+                else
+                    return zoneLimit.CenterPos;
+            }
+
+            // 如果没有配置区域，使用玩家位置
+            return DService.ClientState.LocalPlayer?.Position ?? Vector3.Zero;
+        }
+        
+
+       
         private void OnCommand(string command, string args)
         {
             var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -833,6 +1200,8 @@ namespace DailyRoutines.ModulesPublic;
             public bool ShowDebugInfo ;
             public bool ShowBoundaryVisualization ;
             public int DisableOnDeathCount  = 2;
+            public float RadarRange = 50.0f;
+            public float RadarScale = 1.0f;
         }
         private enum ZoneType
         {
