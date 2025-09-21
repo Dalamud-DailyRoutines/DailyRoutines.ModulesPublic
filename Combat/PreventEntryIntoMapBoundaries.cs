@@ -42,17 +42,17 @@ namespace DailyRoutines.ModulesPublic;
             // 添加当前区域按钮
             if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundaries-AddCurrentZone")))
             {
-                var currentZoneid = GameState.TerritoryType;
+                var zid = GameState.TerritoryType;
 
-                if (currentZoneid == 0)
+                if (zid == 0)
                     return;
 
-                if (!ModuleConfig.ZoneIDs.Contains(currentZoneid))
+                if (!ModuleConfig.ZoneIDs.Contains(zid))
                 {
-                    ModuleConfig.ZoneIDs.Add(currentZoneid);
-                    ModuleConfig.ZoneLimitList[currentZoneid] = new ZoneLimit();
+                    ModuleConfig.ZoneIDs.Add(zid);
+                    ModuleConfig.ZoneLimitList[zid] = new ZoneLimit();
                     SaveConfig(ModuleConfig);
-                    Chat(GetLoc("PreventEntryIntoMapBoundaries-ZoneAdded", currentZoneid));
+                    Chat(GetLoc("PreventEntryIntoMapBoundaries-ZoneAdded", zid));
                 }
             }
 
@@ -99,21 +99,21 @@ namespace DailyRoutines.ModulesPublic;
             // 显示所有已添加的区域
             for (var i = 0; i < ModuleConfig.ZoneIDs.Count; i++)
             {
-                var zoneid = ModuleConfig.ZoneIDs[i];
-                if (!ModuleConfig.ZoneLimitList.TryGetValue(zoneid, out var zoneLimit))
+                var zid = ModuleConfig.ZoneIDs[i];
+                if (!ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit))
                 {
                     zoneLimit = new ZoneLimit();
-                    ModuleConfig.ZoneLimitList[zoneid] = zoneLimit;
+                    ModuleConfig.ZoneLimitList[zid] = zoneLimit;
                     SaveConfig(ModuleConfig);
                 }
 
-                var isCurrentZone = GameState.TerritoryType == zoneid;
+                var isCurrentZone = GameState.TerritoryType == zid;
                 var nodeColor = isCurrentZone ? KnownColor.Green.Vector() : KnownColor.White.Vector();
-                var zoneName = GetZoneName(zoneid);
-                var nodeLabel = $"{zoneid}: {zoneName}";
+                var zoneName = GetZoneName(zid);
+                var nodeLabel = $"{zid}: {zoneName}";
 
                 using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, nodeColor);
-                var isOpen = ImRaii.TreeNode($"{nodeLabel}###{zoneid}");
+                var isOpen = ImRaii.TreeNode($"{nodeLabel}###{zid}");
               
 
                 if (isOpen)
@@ -138,14 +138,14 @@ namespace DailyRoutines.ModulesPublic;
                     if (zoneLimit.IsAdvancedMode)
                         DrawAdvancedModeUI(zoneLimit, isCurrentZone);
                     else
-                        DrawTraditionalModeUI(zoneLimit, zoneid, isCurrentZone);
+                        DrawTraditionalModeUI(zoneLimit, zid, isCurrentZone);
 
                     using (ImRaii.PushColor(ImGuiCol.Button, KnownColor.Red.Vector()))
                     {
-                        if (ImGui.Button(string.Format(GetLoc("Delete"), zoneid)))
+                        if (ImGui.Button(string.Format(GetLoc("Delete"), zid)))
                         {
                             ModuleConfig.ZoneIDs.RemoveAt(i);
-                            ModuleConfig.ZoneLimitList.Remove(zoneid);
+                            ModuleConfig.ZoneLimitList.Remove(zid);
                             SaveConfig(ModuleConfig);
                             ImGui.TreePop();
                             break;
@@ -160,14 +160,14 @@ namespace DailyRoutines.ModulesPublic;
             }
         }
 
-        private void DrawTraditionalModeUI(ZoneLimit zoneLimit, uint zoneid, bool isCurrentZone)
+        private void DrawTraditionalModeUI(ZoneLimit zoneLimit, uint zid, bool isCurrentZone)
         {
             // 地图类型选择
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-MapType"));
             ImGui.SetNextItemWidth(150 * GlobalFontScale);
             var currentMapTypeIndex = zoneLimit.MapType == MapType.Circle ? 0 : 1;
 
-            if (ImGui.Combo($"##MapType{zoneid}", ref currentMapTypeIndex,
+            if (ImGui.Combo($"##MapType{zid}", ref currentMapTypeIndex,
                 $"{GetLoc("PreventEntryIntoMapBoundaries-CircleType")}\0{GetLoc("PreventEntryIntoMapBoundaries-RectangleType")}\0", 2))
             {
                 zoneLimit.MapType = currentMapTypeIndex == 0 ? MapType.Circle : MapType.Rectangle;
@@ -177,12 +177,12 @@ namespace DailyRoutines.ModulesPublic;
             // 中心位置
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-CenterPosition"));
             ImGui.SetNextItemWidth(200 * GlobalFontScale);
-            if (ImGui.InputFloat3($"##CenterPos{zoneid}", ref zoneLimit.CenterPos))
+            if (ImGui.InputFloat3($"##CenterPos{zid}", ref zoneLimit.CenterPos))
                 SaveConfig(ModuleConfig!);
 
             // 半径
             ImGui.SetNextItemWidth(120 * GlobalFontScale);
-            if (ImGui.InputFloat($"##Radius{zoneid}", ref zoneLimit.Radius, 1.0f, 10.0f, "%.2f"))
+            if (ImGui.InputFloat($"##Radius{zid}", ref zoneLimit.Radius, 1.0f, 10.0f, "%.2f"))
             {
                 zoneLimit.Radius = Math.Max(1.0f, zoneLimit.Radius);
                 SaveConfig(ModuleConfig!);
@@ -397,10 +397,7 @@ namespace DailyRoutines.ModulesPublic;
             }
         }
 
-        private static string GetZoneName(uint zoneid)
-        {
-            return $"Zone {zoneid}"; // 简化区域名称显示
-        }
+        private static string GetZoneName(uint zid) => $"Zone {zid}"; // 简化区域名称显示
 
         private static bool IsInDangerZone(DangerZone zone, Vector3 position) =>
             zone.Enabled && zone.ZoneType switch
@@ -430,11 +427,8 @@ namespace DailyRoutines.ModulesPublic;
         private static Vector3 GetSafePositionFromCircle(DangerZone zone, Vector3 currentPos)
         {
             var direction = currentPos - zone.CenterPos;
-            if (direction.Length() == 0)
-                direction = new Vector3(1.0f, 0, 0);
-            else
-                direction = Vector3.Normalize(direction);
-            return zone.CenterPos + direction * (zone.Radius + 1.0f);
+            direction = direction.Length() == 0 ? new Vector3(1.0f, 0, 0) : Vector3.Normalize(direction);
+            return zone.CenterPos + (direction * (zone.Radius + 1.0f));
         }
 
         private static Vector3 GetSafePositionFromAnnulus(DangerZone zone, Vector3 currentPos)
@@ -451,9 +445,9 @@ namespace DailyRoutines.ModulesPublic;
             ringDirection = Vector3.Normalize(ringDirection);
 
             if (ringDistance < zone.InnerRadius)
-                return zone.CenterPos + ringDirection * (zone.InnerRadius + 1.0f);
+                return zone.CenterPos + (ringDirection * (zone.InnerRadius + 1.0f));
             else if (ringDistance > zone.Radius)
-                return zone.CenterPos + ringDirection * (zone.Radius - 1.0f);
+                return zone.CenterPos + (ringDirection * (zone.Radius - 1.0f));
             else
                 return currentPos;
         }
@@ -504,11 +498,8 @@ namespace DailyRoutines.ModulesPublic;
         private static Vector3 GetSafePositionFromExpression(DangerZone zone, Vector3 currentPos)
         {
             var dirToCenter = zone.CenterPos - currentPos;
-            if (dirToCenter.Length() == 0)
-                dirToCenter = new Vector3(1.0f, 0, 0);
-            else
-                dirToCenter = Vector3.Normalize(dirToCenter);
-            return currentPos + dirToCenter * 2.0f;
+            dirToCenter = dirToCenter.Length() == 0 ? new Vector3(1.0f, 0, 0) : Vector3.Normalize(dirToCenter);
+            return currentPos + (dirToCenter * 2.0f);
         }
 
         private static bool EvaluateMathExpression(string expression, float x, float z)
@@ -526,7 +517,7 @@ namespace DailyRoutines.ModulesPublic;
                     return false;
                 if (result is bool boolResult)
                     return boolResult;
-                if (double.TryParse(result.ToString(), out double numResult))
+                if (double.TryParse(result.ToString(), out var numResult))
                     return numResult > 0;
 
                 return false;
@@ -544,9 +535,9 @@ namespace DailyRoutines.ModulesPublic;
             if (ModuleConfig == null || DService.ObjectTable.LocalPlayer == null)
                 return;
 
-            var currentZoneid = GameState.TerritoryType;
+            var zid = GameState.TerritoryType;
 
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneid, out var zoneLimit))
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit))
                 return;
 
             // 检查小队人数及死亡人数
@@ -557,14 +548,14 @@ namespace DailyRoutines.ModulesPublic;
             var currentPos = DService.ObjectTable.LocalPlayer.Position;
 
             // 高级模式：检查多个危险区域
-            if (zoneLimit.IsAdvancedMode && zoneLimit.DangerZones.Count > 0)
+            if (zoneLimit is { IsAdvancedMode: true, DangerZones.Count: > 0 })
             {
                 foreach (var dangerZone in zoneLimit.DangerZones)
                 {
                     if (dangerZone.Enabled && IsInDangerZone(dangerZone, currentPos))
                     {
                         var safePos = GetSafePositionFromDangerZone(dangerZone, currentPos);
-                        TeleportToSafePosition(safePos, string.Format(GetLoc("PreventEntryIntoMapBoundaries-Dangerous"), dangerZone.Name));
+                        TeleportToSafePosition(safePos);
                         return;
                     }
                 }
@@ -633,14 +624,14 @@ namespace DailyRoutines.ModulesPublic;
                 return;
 
             if (isOutside)
-                TeleportToSafePosition(newPos, GetLoc("PreventEntryIntoMapBoundaries-PositionCorrected"));
+                TeleportToSafePosition(newPos);
         }
 
-        private void TeleportToSafePosition(Vector3 newPos, string message)
+        private void TeleportToSafePosition(Vector3 newPos)
         {
             MovementManager.TPPlayerAddress(newPos);
             if (ModuleConfig?.ShowDebugInfo == true)
-                Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-DebugPosition"), message, newPos.X, newPos.Y, newPos.Z));
+                Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-DebugPosition"),  newPos.X, newPos.Y, newPos.Z));
         }
 
         private void OnCommand(string command, string args)
@@ -651,10 +642,10 @@ namespace DailyRoutines.ModulesPublic;
                 return;
 
             var action = parts[0].ToLower();
-            var currentZoneid = GameState.TerritoryType;
+            var zid = GameState.TerritoryType;
             
 
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneid, out var zoneLimit))
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit))
                 return;
 
             switch (action)
@@ -757,8 +748,7 @@ namespace DailyRoutines.ModulesPublic;
                 SaveConfig(ModuleConfig!);
                 Chat(string.Format(GetLoc("Deleted"), removedZone.Name));
             }
-            else
-                ChatError(string.Format(GetLoc("Commands-InvalidArgs"), zoneLimit.DangerZones.Count));
+           
         }
 
         private void HandleModifyCommand(string[] args, ZoneLimit zoneLimit)
@@ -790,8 +780,6 @@ namespace DailyRoutines.ModulesPublic;
                             enabled ? GetLoc("Enabled") : GetLoc("Disable"),
                             dangerZone.Name));
                     }
-                    else
-                        ChatError(GetLoc("Error"));
                     break;
 
                 case "name":
@@ -807,8 +795,7 @@ namespace DailyRoutines.ModulesPublic;
                         SaveConfig(ModuleConfig!);
                         Chat(string.Format(GetLoc("PreventEntryIntoMapBoundaries-ColorChanged"), color.ToString("X8")));
                     }
-                    else
-                        ChatError(GetLoc("Commands-InvalidArgs"));
+                   
                     break;
 
                 default:
@@ -817,16 +804,16 @@ namespace DailyRoutines.ModulesPublic;
             }
         }
 
-        private void ExportCurrentZoneConfig()
+        private static void ExportCurrentZoneConfig()
         {
-            var currentZoneid = GameState.TerritoryType;
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(currentZoneid, out var zoneLimit))
+            var zid = GameState.TerritoryType;
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit))
                 return;
 
             var exportConfig = new Config
             {
-                ZoneIDs = [currentZoneid],
-                ZoneLimitList = new Dictionary<uint, ZoneLimit> { { currentZoneid, zoneLimit } }
+                ZoneIDs = [zid],
+                ZoneLimitList = new Dictionary<uint, ZoneLimit> { { zid, zoneLimit } }
             };
 
             ExportToClipboard(exportConfig);
