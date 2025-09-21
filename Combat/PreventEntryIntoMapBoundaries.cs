@@ -6,15 +6,14 @@ using System.Data;
 using System.Drawing;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
+using DailyRoutines.Infos;
+using DailyRoutines.Helpers;
 using Dalamud.Interface;
 using Dalamud.Plugin.Services;
-using static DailyRoutines.Managers.CommandManager;
-using System.Text.RegularExpressions;
-using Dalamud.Interface.Components;
-using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
+using static DailyRoutines.Managers.CommandManager;
+using static DailyRoutines.Helpers.NotifyHelper;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Interface;
 using OmenTools;
 using OmenTools.Helpers;
 using static DailyRoutines.Helpers.NotifyHelper;
@@ -166,8 +165,8 @@ public class PreventEntryIntoMapBoundaries : DailyModuleBase
                 if (i < ModuleConfig.ZoneIDs.Count - 1)
                     ImGui.NewLine();
                 // 绘制雷达窗口（如果启用了边界可视化）
-                if (ModuleConfig.ShowBoundaryVisualization)
-                    DrawRadarWindow();
+                //if (ModuleConfig.ShowBoundaryVisualization)
+                 //   DrawRadarWindow();
             }
 
         }
