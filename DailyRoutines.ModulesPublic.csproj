@@ -43,26 +43,21 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Reference Include="DailyRoutines">
-            <HintPath>$(BaseOutputPath)\$(Configuration)\DailyRoutines.dll</HintPath>
-            <Private>false</Private>
-        </Reference>
-        <Reference Include="TinyPinyin">
-            <HintPath>$(BaseOutputPath)\$(Configuration)\TinyPinyin.dll</HintPath>
-            <Private>false</Private>
-        </Reference>
-        <Reference Include="OmenTools">
-            <HintPath>$(BaseOutputPath)\$(Configuration)\OmenTools.dll</HintPath>
-            <Private>false</Private>
-        </Reference>
-        <Reference Include="EdgeTTS">
-            <HintPath>$(BaseOutputPath)\$(Configuration)\EdgeTTS.dll</HintPath>
-            <Private>false</Private>
-        </Reference>
-        <Reference Include="KamiToolKit">
-            <HintPath>$(BaseOutputPath)\$(Configuration)\KamiToolKit.dll</HintPath>
-            <Private>false</Private>
-        </Reference>
+      <Reference Include="DailyRoutines">
+        <HintPath>..\..\..\AppData\Roaming\XIVLauncherCN\installedPlugins\DailyRoutines\1.8.4.5\DailyRoutines.dll</HintPath>
+      </Reference>
+      <Reference Include="EdgeTTS">
+        <HintPath>..\..\..\AppData\Roaming\XIVLauncherCN\installedPlugins\DailyRoutines\1.8.4.5\EdgeTTS.dll</HintPath>
+      </Reference>
+      <Reference Include="KamiToolKit">
+        <HintPath>..\..\..\AppData\Roaming\XIVLauncherCN\installedPlugins\DailyRoutines\1.8.4.5\KamiToolKit.dll</HintPath>
+      </Reference>
+      <Reference Include="OmenTools">
+        <HintPath>..\..\..\AppData\Roaming\XIVLauncherCN\installedPlugins\DailyRoutines\1.8.4.5\OmenTools.dll</HintPath>
+      </Reference>
+      <Reference Include="TinyPinyin">
+        <HintPath>..\..\..\AppData\Roaming\XIVLauncherCN\installedPlugins\DailyRoutines\1.8.4.5\TinyPinyin.dll</HintPath>
+      </Reference>
     </ItemGroup>
 
 </Project>
