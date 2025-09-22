@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Memory;
@@ -13,6 +15,9 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Addon;
+using KamiToolKit.Nodes;
+using KamiToolKit.Nodes.TabBar;
 using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
@@ -23,7 +28,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
     {
         Title       = GetLoc("FastGrandCompanyExchangeTitle"),
         Description = GetLoc("FastGrandCompanyExchangeDescription"),
-        Category    = ModuleCategories.UIOptimization
+        Category    = ModuleCategories.UIOperation
     };
 
     public bool IsExchanging => TaskHelper?.IsBusy ?? false;
@@ -32,17 +37,25 @@ public class FastGrandCompanyExchange : DailyModuleBase
     
     private static Config ModuleConfig = null!;
 
-    protected override unsafe void Init()
+    private static DRFastGCExchange? Addon;
+
+    protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
-        Overlay    ??= new(this);
         TaskHelper ??= new();
         
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "GrandCompanyExchange", OnAddon);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "GrandCompanyExchange", OnAddon);
-        if (IsAddonAndNodesReady(GrandCompanyExchange)) 
-            OnAddon(AddonEvent.PostSetup, null);
+        Addon ??= new(this)
+        {
+            InternalName          = "DRFastGCExchange",
+            Title                 = Info.Title,
+            Size                  = new(290f, 240f),
+            Position              = new(800f, 350f),
+            NativeController      = Service.AddonController,
+            RememberClosePosition = true,
+        };
+
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "GrandCompanyExchange", OnAddon);
 
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("FastGrandCompanyExchange-CommandHelp") });
     }
@@ -52,7 +65,8 @@ public class FastGrandCompanyExchange : DailyModuleBase
         CommandManager.RemoveSubCommand(Command);
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         
-        base.Uninit();
+        Addon?.Dispose();
+        Addon = null;
     }
 
     protected override void ConfigUI()
@@ -62,78 +76,11 @@ public class FastGrandCompanyExchange : DailyModuleBase
         ImGui.SameLine();
         ImGui.TextWrapped($"/pdr {Command} {GetLoc("FastGrandCompanyExchange-CommandHelp")}");
     }
-
-    protected override unsafe void OverlayUI()
+    
+    private static unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
-        if (!IsAddonAndNodesReady(GrandCompanyExchange))
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        var addon = GrandCompanyExchange;
-        ImGui.SetWindowPos(new(addon->GetX() + ((addon->GetScaledWidth(true) - ImGui.GetWindowSize().X) / 2), 
-                               addon->GetY() - ImGui.GetWindowSize().Y));
-        
-        ImGui.TextColored(LightSkyBlue, GetLoc("FastGrandCompanyExchangeTitle"));
-
-        using (ImRaii.Group())
-        {
-            ImGui.AlignTextToFramePadding();
-            ImGui.Text(GetLoc("Item"));
-            
-            ImGui.AlignTextToFramePadding();
-            ImGui.Text(GetLoc("Amount"));
-        }
-
-        ImGui.SameLine();
-        using (ImRaii.Group())
-        {
-            ImGui.SetNextItemWidth(200f * GlobalFontScale);
-            ImGui.InputText("###ItemNameInput", ref ModuleConfig.ExchangeItemName, 512);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-            {
-                var grandCompany = PlayerState.Instance()->GrandCompany;
-                var gcRank       = PlayerState.Instance()->GetGrandCompanyRank();
-                
-                var result = LuminaGetter.GetSub<GCScripShopItem>()
-                                        .SelectMany(x => x)
-                                        .Where(x => LuminaGetter.GetRow<GCScripShopCategory>(x.RowId)!.Value.GrandCompany.RowId == grandCompany)
-                                        .Where(x => gcRank >= x.RequiredGrandCompanyRank.RowId)
-                                        .Where(x => (x.Item.ValueNullable?.Name.ExtractText() ?? string.Empty)
-                                                   .Contains(ModuleConfig.ExchangeItemName, StringComparison.OrdinalIgnoreCase))
-                                        .OrderBy(x => (x.Item.ValueNullable?.Name.ExtractText() ?? string.Empty).Length)
-                                        .FirstOrDefault();
-                if (string.IsNullOrWhiteSpace(ModuleConfig.ExchangeItemName) || result.RowId == 0)
-                    ModuleConfig.ExchangeItemName = LuminaGetter.GetRow<Item>(21072)!.Value.Name.ExtractText();
-                else if (result.RowId != 0) 
-                    ModuleConfig.ExchangeItemName = result.Item.Value.Name.ExtractText();
-                ModuleConfig.Save(this);
-            }
-            
-            ImGui.SetNextItemWidth(200f * GlobalFontScale);
-            ImGui.InputInt("###ItemCountInput", ref ModuleConfig.ExchangeItemCount, 1, 1);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-            {
-                ModuleConfig.ExchangeItemCount = Math.Max(-1, ModuleConfig.ExchangeItemCount);
-                ModuleConfig.Save(this);
-            }
-        }
-        
-        ImGui.SameLine();
-        if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.ExchangeAlt, GetLoc("Exchange"),
-                                               new Vector2(ImGui.CalcTextSize(GetLoc("Exchange")).X * 1.5f, ImGui.GetItemRectSize().Y)))
-            EnqueueByName(ModuleConfig.ExchangeItemName, ModuleConfig.ExchangeItemCount);
-    }
-
-    private void OnAddon(AddonEvent type, AddonArgs? args)
-    {
-        Overlay.IsOpen = type switch
-        {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
-        };
+        if (Addon.IsOpen || !IsAddonAndNodesReady(GrandCompanyExchange)) return;
+        Addon.Open();
     }
 
     private void OnCommand(string command, string args)
@@ -259,6 +206,156 @@ public class FastGrandCompanyExchange : DailyModuleBase
         }*/
         
         return true;
+    }
+    
+    private unsafe class DRFastGCExchange(FastGrandCompanyExchange Instance) : NativeAddon
+    {
+        private bool IsNotClosed { get; set; }
+        
+        protected override void OnSetup(AtkUnitBase* addon)
+        {
+            var layoutNode = new VerticalListNode
+            {
+                IsVisible   = true,
+                Position    = ContentStartPosition + new Vector2(0, 2),
+                ItemSpacing = 1,
+                Size        = new(275, 28),
+                FitContents = true,
+            };
+
+            var exchangeButtonNode = new TextButtonNode
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                Size      = new(layoutNode.Size.X - 10, 38),
+                SeString  = GetLoc("Exchange"),
+                OnClick = () =>
+                {
+                    if (Instance.TaskHelper.IsBusy) return;
+                    Instance.EnqueueByName(ModuleConfig.ExchangeItemName, ModuleConfig.ExchangeItemCount);
+                }
+            };
+            
+            layoutNode.AddNode(exchangeButtonNode);
+            
+            layoutNode.AddDummy(5);
+
+            var itemLableNode = new TextNode
+            {
+                IsVisible = true,
+                Size      = new(layoutNode.Size.X - 20, 24),
+                FontSize  = 14,
+                SeString  = GetLoc("Item"),
+            };
+            
+            layoutNode.AddNode(itemLableNode);
+
+            var itemNameInputNode = new TextInputNode
+            {
+                IsVisible       = true,
+                Size            = new(layoutNode.Size.X - 10, 35),
+                SeString        = ModuleConfig.ExchangeItemName,
+                OnInputReceived = x => ModuleConfig.ExchangeItemName = x.ExtractText(),
+            };
+
+            itemNameInputNode.OnInputComplete = UpdateExchangeItem;
+            itemNameInputNode.OnEditComplete  = () => UpdateExchangeItem(itemNameInputNode.SeString);
+            itemNameInputNode.OnUnfocused     = () => UpdateExchangeItem(itemNameInputNode.SeString);
+            
+            itemNameInputNode.CursorNode.ScaleY        =  1.4f;
+            itemNameInputNode.CurrentTextNode.FontSize =  14;
+            itemNameInputNode.CurrentTextNode.Y        += 3f;
+            
+            layoutNode.AddNode(itemNameInputNode);
+            
+            layoutNode.AddDummy(5);
+            
+            var countLableNode = new TextNode
+            {
+                IsVisible = true,
+                Size      = new(layoutNode.Size.X - 20, 24),
+                FontSize  = 14,
+                SeString  = GetLoc("Amount"),
+            };
+            
+            layoutNode.AddNode(countLableNode);
+
+            var countInputNode = new NumericInputNode
+            {
+                IsVisible = true,
+                Size      = new(layoutNode.Size.X - 10, 35),
+                Step      = 1,
+                Min       = -1,
+                OnValueUpdate = newValue =>
+                {
+                    ModuleConfig.ExchangeItemCount = newValue;
+
+                    ModuleConfig.ExchangeItemCount = Math.Max(-1, ModuleConfig.ExchangeItemCount);
+                    ModuleConfig.Save(Instance);
+                },
+                Value = ModuleConfig.ExchangeItemCount
+            };
+            
+            layoutNode.AddNode(countInputNode);
+            
+            AttachNode(layoutNode);
+        }
+
+        private void UpdateExchangeItem(SeString x)
+        {
+            ModuleConfig.ExchangeItemName = x.ExtractText();
+
+            var grandCompany = PlayerState.Instance()->GrandCompany;
+            var gcRank       = PlayerState.Instance()->GetGrandCompanyRank();
+
+            var result = LuminaGetter.GetSub<GCScripShopItem>()
+                                     .SelectMany(d => d)
+                                     .Where(d => LuminaGetter.GetRowOrDefault<GCScripShopCategory>(d.RowId).GrandCompany.RowId == grandCompany)
+                                     .Where(d => gcRank                                                                        >= d.RequiredGrandCompanyRank.RowId)
+                                     .Where(d => (d.Item.ValueNullable?.Name.ExtractText() ?? string.Empty)
+                                                .Contains(ModuleConfig.ExchangeItemName, StringComparison.OrdinalIgnoreCase))
+                                     .OrderBy(d => (d.Item.ValueNullable?.Name.ExtractText() ?? string.Empty).Length)
+                                     .FirstOrDefault();
+
+            if (string.IsNullOrWhiteSpace(ModuleConfig.ExchangeItemName) || result.RowId == 0)
+                ModuleConfig.ExchangeItemName = LuminaWrapper.GetItemName(21072);
+            else if (result.RowId != 0)
+                ModuleConfig.ExchangeItemName = result.Item.Value.Name.ExtractText();
+
+            if (ModuleConfig.ExchangeItemName == x.ExtractText())
+                return;
+
+            IsNotClosed = true;
+            Close();
+            ModuleConfig.Save(Instance);
+        }
+
+        protected override void OnUpdate(AtkUnitBase* addon)
+        {
+            if (GrandCompanyExchange == null)
+            {
+                Close();
+                return;
+            }
+
+            var position = new Vector2(GrandCompanyExchange->RootNode->ScreenX - addon->GetScaledWidth(true), GrandCompanyExchange->RootNode->ScreenY);
+            SetPosition(addon,           position);
+            SetPosition(addon->RootNode, position);
+        }
+
+        protected override void OnFinalize(AtkUnitBase* addon) 
+        {
+            if (IsNotClosed)
+            {
+                IsNotClosed = false;
+                return;
+            }
+            
+            IsNotClosed = false;
+            
+            if (GrandCompanyExchange == null) return;
+            GrandCompanyExchange->Close(true);
+        }
     }
 
     private class Config : ModuleConfiguration
