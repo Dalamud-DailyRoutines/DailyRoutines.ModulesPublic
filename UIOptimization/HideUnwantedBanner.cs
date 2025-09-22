@@ -4,8 +4,10 @@ using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
+using static DailyRoutines.Infos.Widgets;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Hooking;
+using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -19,64 +21,64 @@ public class HideUnwantedBanner : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("隐藏横幅"),
-        Description = GetLoc("隐藏游戏中不想要的横幅,比如“理符任务”,“危命任务”等"),
+        Title = GetLoc("HideUnwantedBannerTitle"),
+        Description = GetLoc("HideUnwantedBannerDescription"),
         Category = ModuleCategories.UIOptimization,
         Author = ["XSZYYS"]
     };
 
     private static readonly CompSig SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
 
-    private static Hook<SetImageTextureDelegate>? SetImageTextureHook;
-    private static Config? ModuleConfig;
+    private static Hook<SetImageTextureDelegate>? setImageTextureHook;
+    private static Config? moduleConfig;
 
-    private unsafe delegate void SetImageTextureDelegate(AtkUnitBase* addon, int bannerId, int a3, int soundEffectId);
+    private unsafe delegate void SetImageTextureDelegate(AtkUnitBase* addon, int bannerID, int a3, int soundEffectID);
     
-    private record BannerSetting(int Id, string Label, bool IsCustom = false);
+    private record BannerSetting(int ID, string Label, bool IsCustom = false);
 
-    private readonly List<BannerSetting> predefinedBanners = new()
-    {
-        new BannerSetting(120031, GetLoc("理符任务：接受")),
-        new BannerSetting(120032, GetLoc("理符任务：完成")),
-        new BannerSetting(120055, GetLoc("筹备任务：交付完成")),
-        new BannerSetting(120081, GetLoc("危命任务：加入")),
-        new BannerSetting(120082, GetLoc("危命任务：完成")),
-        new BannerSetting(120083, GetLoc("危命任务：失败")),
-        new BannerSetting(120084, GetLoc("危命任务：加入（经验奖励）")),
-        new BannerSetting(120085, GetLoc("危命任务：完成（经验奖励）")),
-        new BannerSetting(120086, GetLoc("危命任务：失败（经验奖励）")),
-        new BannerSetting(120093, GetLoc("获得宝藏！")),
-        new BannerSetting(120094, GetLoc("发现宝藏！")),
-        new BannerSetting(120095, GetLoc("雇员探险：已派出")),
-        new BannerSetting(120096, GetLoc("雇员探险：已归来")),
-        new BannerSetting(120141, GetLoc("部队探险：已出发")),
-        new BannerSetting(120142, GetLoc("部队探险：已归航")),
-        new BannerSetting(121081, GetLoc("友好部族任务：接受")),
-        new BannerSetting(121082, GetLoc("友好部族任务：完成")),
-        new BannerSetting(121561, GetLoc("金碟游乐场：加入")),
-        new BannerSetting(121562, GetLoc("金碟游乐场：完成")),
-        new BannerSetting(121563, GetLoc("金碟游乐场：失败")),
-        new BannerSetting(128370, GetLoc("宇宙探索：开始")),
-        new BannerSetting(128371, GetLoc("宇宙探索：放弃")),
-        new BannerSetting(128372, GetLoc("宇宙探索：失败")),
-        new BannerSetting(128373, GetLoc("宇宙探索：完成")),
-    };
+    private readonly List<BannerSetting> predefinedBanners =
+    [
+        new BannerSetting(120031, GetLoc("HideUnwantedBanner-LevequestAccepted")),
+        new BannerSetting(120032, GetLoc("HideUnwantedBanner-LevequestComplete")),
+        new BannerSetting(120055, GetLoc("HideUnwantedBanner-DeliveryComplete")),
+        new BannerSetting(120081, GetLoc("HideUnwantedBanner-FATEJoined")),
+        new BannerSetting(120082, GetLoc("HideUnwantedBanner-FATEComplete")),
+        new BannerSetting(120083, GetLoc("HideUnwantedBanner-FATEFailed")),
+        new BannerSetting(120084, GetLoc("HideUnwantedBanner-FATEJoinedEXPBonus")),
+        new BannerSetting(120085, GetLoc("HideUnwantedBanner-FATECompleteEXPBonus")),
+        new BannerSetting(120086, GetLoc("HideUnwantedBanner-FATEFailedEXPBonus")),
+        new BannerSetting(120093, GetLoc("HideUnwantedBanner-TreasureObtained")),
+        new BannerSetting(120094, GetLoc("HideUnwantedBanner-TreasureFound")),
+        new BannerSetting(120095, GetLoc("HideUnwantedBanner-VentureCommenced")),
+        new BannerSetting(120096, GetLoc("HideUnwantedBanner-VentureAccomplished")),
+        new BannerSetting(120141, GetLoc("HideUnwantedBanner-VoyageCommenced")),
+        new BannerSetting(120142, GetLoc("HideUnwantedBanner-VoyageComplete")),
+        new BannerSetting(121081, GetLoc("HideUnwantedBanner-TribalQuestAccepted")),
+        new BannerSetting(121082, GetLoc("HideUnwantedBanner-TribalQuestComplete")),
+        new BannerSetting(121561, GetLoc("HideUnwantedBanner-GATEJoined")),
+        new BannerSetting(121562, GetLoc("HideUnwantedBanner-GATEComplete")),
+        new BannerSetting(121563, GetLoc("HideUnwantedBanner-GATEFailed")),
+        new BannerSetting(128370, GetLoc("HideUnwantedBanner-StellarMissionCommenced")),
+        new BannerSetting(128371, GetLoc("HideUnwantedBanner-StellarMissionAbandoned")),
+        new BannerSetting(128372, GetLoc("HideUnwantedBanner-StellarMissionFailed")),
+        new BannerSetting(128373, GetLoc("HideUnwantedBanner-StellarMissionComplete"))
+    ];
 
-    private readonly HashSet<int> seenBanners = new();
+    private readonly HashSet<int> seenBanners = [];
 
     public class Config : ModuleConfiguration
     {
-        public HashSet<int> HiddenBanners = new();
+        public HashSet<int> HiddenBanners = [];
     }
 
     protected override unsafe void Init()
     {
-        ModuleConfig = LoadConfig<Config>();
+        moduleConfig = LoadConfig<Config>();
 
         try
         {
-            SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(OnSetImageTexture);
-            SetImageTextureHook.Enable();
+            setImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(OnSetImageTexture);
+            setImageTextureHook.Enable();
         }
         catch (Exception ex)
         {
@@ -86,105 +88,101 @@ public class HideUnwantedBanner : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        if (ModuleConfig == null) return;
+        if (moduleConfig == null) 
+            moduleConfig = LoadConfig<Config>() ?? new Config();
 
-        ImGui.TextWrapped(GetLoc("请勾选您希望隐藏的横幅。"));
+        ImGui.TextWrapped(GetLoc("HideUnwantedBanner-HelpText"));
         ImGui.Separator();
 
-        ImGui.SetNextItemWidth(250 * ImGuiHelpers.GlobalScale);
-
-        using (var combo = ImRaii.Combo("##customBannerPicker", GetLoc("添加其他横幅...")))
+        if (seenBanners.Any())
         {
-            if (combo.Success)
-            {
-                if (seenBanners.Count == 0)
-                    ImGui.TextWrapped(GetLoc("新检测到的横幅将显示在此处。"));
+            ImGui.TextWrapped(GetLoc("HideUnwantedBanner-NewlyDetectedBannersHeader"));
+            ImGui.Spacing();
 
-                foreach (var bannerId in seenBanners.ToArray())
-                {
-                    try
-                    {
-                        var icon = DService.Texture.GetFromGameIcon((uint)bannerId).GetWrapOrDefault();
-                        if (icon != null)
-                        {
-                            if (ImGui.ImageButton(icon.Handle, new Vector2(icon.Width * 80f / icon.Height, 80)))
-                            {
-                                ModuleConfig.HiddenBanners.Add(bannerId);
-                                SaveConfig(ModuleConfig);
-                                seenBanners.Remove(bannerId);
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // 忽略无效的图标ID，防止插件UI崩溃
-                    }
-                }
-            }
-        }
-
-        ImGui.Spacing();
-
-        var allBanners = new List<BannerSetting>(predefinedBanners);
-        foreach (var hiddenId in ModuleConfig.HiddenBanners )
-        {
-            if (predefinedBanners.All(b => b.Id != hiddenId))
+            using var seenTable = ImRaii.Table("SeenBannersList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg);
+            if (seenTable.Success)
             {
-                var customLabel = string.Format(GetLoc("自定义横幅 #{0}"), hiddenId);
-                allBanners.Add(new BannerSetting(hiddenId, customLabel, true));
-            }
-        }
-        var sortedBanners = allBanners.OrderBy(b => b.IsCustom).ThenBy(b => b.Label);
-        
-        using (var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
-        {
-            if (table.Success)
-            {
-                ImGui.TableSetupColumn(GetLoc("启用"), ImGuiTableColumnFlags.WidthFixed);
-                ImGui.TableSetupColumn(GetLoc("横幅名称"));
+                ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TableAdd"), ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TablePreview"));
                 ImGui.TableHeadersRow();
 
-                foreach (var banner in sortedBanners)
+                foreach (var bannerId in seenBanners.ToArray())
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
 
-                    var isHidden = ModuleConfig.HiddenBanners.Contains(banner.Id);
-                    if (ImGui.Checkbox($"##{banner.Id}", ref isHidden))
+                    if (ImGui.Button($"{GetLoc("HideUnwantedBanner-ButtonAdd")}##{bannerId}"))
                     {
-                        if (isHidden)
-                            ModuleConfig.HiddenBanners.Add(banner.Id);
-                        else
-                            ModuleConfig.HiddenBanners.Remove(banner.Id);
-
-                        SaveConfig(ModuleConfig);
+                        moduleConfig.HiddenBanners.Add(bannerId);
+                        SaveConfig(moduleConfig);
+                        seenBanners.Remove(bannerId);
                     }
 
                     ImGui.TableNextColumn();
-                    ImGui.Text(banner.Label);
+                    if (DService.Texture.TryGetFromGameIcon((uint)bannerId, out var icon) && icon.GetWrapOrDefault() is { } wrap)
+                        ImGui.Image(wrap.Handle, new Vector2(wrap.Width * 80f / wrap.Height, 80));
+                    else
+                        ImGui.Text(string.Format(GetLoc("HideUnwantedBanner-CustomBannerLabel"), bannerId));
                 }
+            }
+            ImGui.Separator();
+        }
+
+        ImGui.Spacing();
+        
+        var allBanners = new List<BannerSetting>(predefinedBanners);
+        foreach (var hiddenID in moduleConfig.HiddenBanners)
+        {
+            if (predefinedBanners.All(b => b.ID != hiddenID))
+            {
+                var customLabel = string.Format(GetLoc("HideUnwantedBanner-CustomBannerLabel"), hiddenID);
+                allBanners.Add(new BannerSetting(hiddenID, customLabel, true));
+            }
+        }
+        
+        var sortedBanners = allBanners.OrderBy(b => b.IsCustom).ThenBy(b => b.Label);
+        
+        using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY);
+        if (table.Success)
+        {
+            ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TableEnable"), ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TableBannerName"));
+            ImGui.TableHeadersRow();
+
+            foreach (var banner in sortedBanners)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+
+                var isHidden = moduleConfig.HiddenBanners.Contains(banner.ID);
+                if (ImGui.Checkbox($"##{banner.ID}", ref isHidden))
+                {
+                    if (isHidden)
+                        moduleConfig.HiddenBanners.Add(banner.ID);
+                    else
+                        moduleConfig.HiddenBanners.Remove(banner.ID);
+
+                    SaveConfig(moduleConfig);
+                }
+
+                ImGui.TableNextColumn();
+                ImGui.Text(banner.Label);
             }
         }
     }
-
-    protected override void Uninit()
-    {
-        SetImageTextureHook?.Dispose();
-        SetImageTextureHook = null;
-    }
-
-    private unsafe void OnSetImageTexture(AtkUnitBase* addon, int bannerId, int a3, int soundEffectId)
+    
+    private unsafe void OnSetImageTexture(AtkUnitBase* addon, int bannerID, int a3, int soundEffectID)
     {
         var shouldHide = false;
-        if (ModuleConfig != null && bannerId > 0)
+        if (moduleConfig != null && bannerID > 0)
         {
-            shouldHide = ModuleConfig.HiddenBanners.Contains(bannerId);
+            shouldHide = moduleConfig.HiddenBanners.Contains(bannerID);
 
-            if (!shouldHide && predefinedBanners.All(b => b.Id != bannerId))
-                seenBanners.Add(bannerId);
+            if (!shouldHide && predefinedBanners.All(b => b.ID != bannerID))
+                seenBanners.Add(bannerID);
         }
 
-        SetImageTextureHook?.Original(addon, shouldHide ? 0 : bannerId, a3, shouldHide ? 0 : soundEffectId);
+        setImageTextureHook?.Original(addon, shouldHide ? 0 : bannerID, a3, shouldHide ? 0 : soundEffectID);
     }
 }
 
