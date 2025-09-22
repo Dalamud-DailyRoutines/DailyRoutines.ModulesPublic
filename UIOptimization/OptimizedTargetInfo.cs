@@ -20,9 +20,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         Description = GetLoc("OptimizedTargetInfoDescription"),
         Category    = ModuleCategories.UIOptimization,
     };
-
-    private static readonly Vector4 EdgeColor = new(0, 0.372549f, 1, 1);
-
+    
     private static Config ModuleConfig = null!;
     
     private static TextNode? TargetHPTextNode;
@@ -61,6 +59,9 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "_TargetInfoBuffDebuff", OnAddonTargetInfoBuffDebuff);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_TargetInfoBuffDebuff", OnAddonTargetInfoBuffDebuff);
+        
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "CastBarEnemy", OnAddonCastBarEnemy);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CastBarEnemy", OnAddonCastBarEnemy);
     }
 
     protected override void ConfigUI()
@@ -121,6 +122,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                 ref ModuleConfig.AlignLeft,
                                 ref ModuleConfig.Position,
                                 ref ModuleConfig.CustomColor,
+                                ref ModuleConfig.OutlineColor,
                                 ref ModuleConfig.FontSize,
                                 ref ModuleConfig.HideAutoAttack,
                                 true,
@@ -134,6 +136,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                 ref ModuleConfig.FocusAlignLeft,
                                 ref ModuleConfig.FocusPosition,
                                 ref ModuleConfig.FocusCustomColor,
+                                ref ModuleConfig.FocusOutlineColor,
                                 ref ModuleConfig.FocusFontSize,
                                 ref ModuleConfig.HideAutoAttack,
                                 false,
@@ -147,6 +150,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                 ref ModuleConfig.CastBarAlignLeft,
                                 ref ModuleConfig.CastBarPosition,
                                 ref ModuleConfig.CastBarCustomColor,
+                                ref ModuleConfig.CastBarOutlineColor,
                                 ref ModuleConfig.CastBarFontSize,
                                 ref ModuleConfig.HideAutoAttack,
                                 false,
@@ -154,12 +158,13 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         
         ImGui.NewLine();
         
-        // 咏唱栏
+        // 焦点目标咏唱栏
         DrawTargetConfigSection($"{LuminaWrapper.GetAddonText(1110)} {LuminaWrapper.GetAddonText(1032)}",
                                 "FocusCastBar",
                                 ref ModuleConfig.FocusCastBarAlignLeft,
                                 ref ModuleConfig.FocusCastBarPosition,
                                 ref ModuleConfig.FocusCastBarCustomColor,
+                                ref ModuleConfig.FocusCastBarOutlineColor,
                                 ref ModuleConfig.FocusCastBarFontSize,
                                 ref ModuleConfig.HideAutoAttack,
                                 false,
@@ -246,6 +251,9 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         
         DService.AddonLifecycle.UnregisterListener(OnAddonTargetInfoBuffDebuff);
         OnAddonTargetInfoBuffDebuff(AddonEvent.PreFinalize, null);
+        
+        DService.AddonLifecycle.UnregisterListener(OnAddonCastBarEnemy);
+        OnAddonCastBarEnemy(AddonEvent.PreFinalize, null);
     }
 
     private void DrawTargetConfigSection(
@@ -254,6 +262,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         ref bool    alignLeft,
         ref Vector2 position,
         ref Vector4 customColor,
+        ref Vector4 outlineColor,
         ref byte    fontSize,
         ref bool    hideAutoAttack,
         bool        showHideAutoAttack,
@@ -294,6 +303,23 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
             }
         }
         
+        if (ImGui.ColorButton($"###{prefix}OutlineColorButton", outlineColor))
+            ImGui.OpenPopup($"{prefix}OutlineColorPopup");
+        ImGuiOm.TooltipHover(GetLoc("OptimizedTargetInfo-ZeroAlphaHelp"));
+        
+        ImGui.SameLine();
+        ImGui.Text($"{GetLoc("EdgeColor")}");
+
+        using (var popup = ImRaii.Popup($"{prefix}OutlineColorPopup"))
+        {
+            if (popup)
+            {
+                ImGui.ColorPicker4($"###{prefix}OutlineColor", ref outlineColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    SaveConfig(ModuleConfig);
+            }
+        }
+        
         if (showHideAutoAttack)
         {
             if (ImGui.Checkbox($"{GetLoc("OptimizedTargetInfo-HideAutoAttackIcon")}###{prefix}HideAutoAttackIcon", ref hideAutoAttack))
@@ -313,6 +339,55 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
 
+    private static void OnAddonCastBarEnemy(AddonEvent type, AddonArgs args)
+    {
+        switch (type)
+        {
+            case AddonEvent.PreFinalize:
+                if (CastBarEnemy == null) return;
+                
+                for (var i = 10; i > 0; i--)
+                {
+                    var node = (AtkComponentNode*)CastBarEnemy->UldManager.NodeList[i];
+                    if (node == null) continue;
+
+                    var textNode = node->Component->GetTextNodeById(4);
+                    if (textNode == null) continue;
+                    
+                    textNode->SetText(LuminaWrapper.GetAddonText(16482));
+                    textNode->FontSize = 12;
+                }
+                
+                break;
+            case AddonEvent.PostDraw:
+                if (CastBarEnemy == null) return;
+
+                for (var i = 10; i > 0; i--)
+                {
+                    var node = (AtkComponentNode*)CastBarEnemy->UldManager.NodeList[i];
+                    if (node == null || !node->IsVisible()) continue;
+
+                    var castProgressOffset = 3 + (5 * (10 - i));
+                    var castProgress       = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.CastBarEnemy)->IntArray[castProgressOffset];
+                    if (castProgress == -1) continue;
+                    
+                    var gameObjectIDOffset = 2 + (5 * (10 - i));
+                    var gameObjectID       = (ulong)AtkStage.Instance()->GetNumberArrayData(NumberArrayType.CastBarEnemy)->IntArray[gameObjectIDOffset];
+                    if (gameObjectID == 0 || DService.ObjectTable.SearchById(gameObjectID) is not IBattleChara target) continue;
+                    
+                    var leftCastTime = target.TotalCastTime - target.CurrentCastTime;
+                    
+                    var textNode = node->Component->GetTextNodeById(4);
+                    if (textNode == null) continue;
+                    
+                    textNode->SetText($"{leftCastTime:F2}");
+                    textNode->FontSize = 16;
+                }
+                
+                break;
+        }
+    }
+    
     private static void OnAddonTargetInfo(AddonEvent type, AddonArgs args)
     {
         if (ModuleConfig == null) return;
@@ -330,6 +405,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                    ModuleConfig.AlignLeft,
                                    ModuleConfig.FontSize,
                                    ModuleConfig.CustomColor,
+                                   ModuleConfig.OutlineColor,
                                    () => (DService.Targets.SoftTarget ?? DService.Targets.Target) as IBattleChara,
                                    (width, height) => new Vector2(width - 5, height + 2));
         
@@ -343,6 +419,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                 ModuleConfig.CastBarAlignLeft,
                                 ModuleConfig.CastBarFontSize,
                                 ModuleConfig.CastBarCustomColor,
+                                ModuleConfig.CastBarOutlineColor,
                                 () => (DService.Targets.SoftTarget ?? DService.Targets.Target) as IBattleChara,
                                 (width, height) => new Vector2(width - 5, height));
         
@@ -450,6 +527,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                    ModuleConfig.AlignLeft,
                                    ModuleConfig.FontSize,
                                    ModuleConfig.CustomColor,
+                                   ModuleConfig.OutlineColor,
                                    () => (DService.Targets.SoftTarget ?? DService.Targets.Target) as IBattleChara,
                                    (width, height) => new Vector2(width - 5, height + 2));
     }
@@ -471,6 +549,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                    ModuleConfig.FocusAlignLeft,
                                    ModuleConfig.FocusFontSize,
                                    ModuleConfig.FocusCustomColor,
+                                   ModuleConfig.FocusOutlineColor,
                                    () => DService.Targets.FocusTarget as IBattleChara,
                                    (width, height) => new Vector2(width - 5, height + 2));
         
@@ -484,6 +563,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                 ModuleConfig.FocusCastBarAlignLeft,
                                 ModuleConfig.FocusCastBarFontSize,
                                 ModuleConfig.FocusCastBarCustomColor,
+                                ModuleConfig.FocusCastBarOutlineColor,
                                 () => DService.Targets.FocusTarget as IBattleChara,
                                 (width, height) => new Vector2(width - 5, height));
 
@@ -536,6 +616,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                                 ModuleConfig.CastBarAlignLeft,
                                 ModuleConfig.CastBarFontSize,
                                 ModuleConfig.CastBarCustomColor,
+                                ModuleConfig.CastBarOutlineColor,
                                 () => (DService.Targets.SoftTarget ?? DService.Targets.Target) as IBattleChara,
                                 (width, height) => new Vector2(width - 5, height));
     }
@@ -647,6 +728,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         bool                      alignLeft,
         byte                      fontSize,
         Vector4                   customColor,
+        Vector4                   outlineColor,
         Func<IGameObject?>        getTarget,
         Func<uint, uint, Vector2> getSizeFunc)
     {
@@ -671,7 +753,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                         FontSize         = fontSize,
                         TextFlags        = TextFlags.Edge | TextFlags.Bold,
                         TextColor        = customColor.W != 0 ? customColor : sourceTextNode->TextColor.ToVector4(),
-                        TextOutlineColor = sourceTextNode->EdgeColor.ToVector4(),
+                        TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor,
                     };
 
                     Service.AddonController.AttachNode(textNode, gauge->OwnerNode);
@@ -701,8 +783,8 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     textNode.Size             = getSizeFunc(gauge->OwnerNode->Width, gauge->OwnerNode->Height);
                     textNode.AlignmentType    = alignLeft ? AlignmentType.BottomLeft : AlignmentType.BottomRight;
                     textNode.FontSize         = fontSize;
-                    textNode.TextColor        = customColor.W != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
-                    textNode.TextOutlineColor = sourceTextNode->EdgeColor.ToVector4();
+                    textNode.TextColor        = customColor.W  != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
+                    textNode.TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor;
 
                     textNode.SeString = string.Format(ModuleConfig.DisplayFormatString,
                                                       FormatNumber(target.MaxHp),
@@ -728,6 +810,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         bool                      alignLeft,
         byte                      fontSize,
         Vector4                   customColor,
+        Vector4                   outlineColor,
         Func<IGameObject?>        getTarget,
         Func<uint, uint, Vector2> getSizeFunc)
     {
@@ -748,8 +831,8 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                         AlignmentType    = alignLeft ? AlignmentType.TopLeft : AlignmentType.TopRight,
                         FontSize         = fontSize,
                         TextFlags        = TextFlags.Edge | TextFlags.Bold,
-                        TextColor        = customColor.W != 0 ? customColor : sourceTextNode->TextColor.ToVector4(),
-                        TextOutlineColor = EdgeColor,
+                        TextColor        = customColor.W  != 0 ? customColor : sourceTextNode->TextColor.ToVector4(),
+                        TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor,
                         FontType         = FontType.Miedinger
                     };
 
@@ -769,13 +852,14 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     textNode.IsVisible = target.CurrentCastTime > 0 && leftCastTime > 0;
                     if (!textNode.IsVisible) return;
 
-                    textNode.Position      = position + new Vector2(4, -12);
-                    textNode.Size          = getSizeFunc(sourceTextNode->Width, sourceTextNode->Height);
-                    textNode.AlignmentType = alignLeft ? AlignmentType.TopLeft : AlignmentType.TopRight;
-                    textNode.FontSize      = fontSize;
-                    textNode.TextColor     = customColor.W != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
+                    textNode.Position         = position + new Vector2(4, -12);
+                    textNode.Size             = getSizeFunc(sourceTextNode->Width, sourceTextNode->Height);
+                    textNode.AlignmentType    = alignLeft ? AlignmentType.TopLeft : AlignmentType.TopRight;
+                    textNode.FontSize         = fontSize;
+                    textNode.TextColor        = customColor.W  != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
+                    textNode.TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor;
 
-                    textNode.SeString = $"{target.TotalCastTime - target.CurrentCastTime:F2}";
+                    textNode.SeString = $"{leftCastTime:F2}";
                 }
 
                 break;
@@ -846,29 +930,33 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         public DisplayFormat DisplayFormat       = DisplayFormat.ChineseOnePrecision;
         public string        DisplayFormatString = "{0} / {1}";
 
-        public bool    IsEnabled   = true;
-        public Vector2 Position    = new(0);
-        public Vector4 CustomColor = new(1, 1, 1, 0);
-        public byte    FontSize    = 14;
+        public bool    IsEnabled    = true;
+        public Vector2 Position     = new(0);
+        public Vector4 CustomColor  = new(1, 1, 1, 0);
+        public Vector4 OutlineColor = new(0, 0.372549f, 1, 0);
+        public byte    FontSize     = 14;
         public bool    AlignLeft;
         public bool    HideAutoAttack = true;
         
-        public bool    FocusIsEnabled   = true;
-        public Vector2 FocusPosition    = new(0);
-        public Vector4 FocusCustomColor = new(1, 1, 1, 0);
-        public byte    FocusFontSize    = 14;
+        public bool    FocusIsEnabled    = true;
+        public Vector2 FocusPosition     = new(0);
+        public Vector4 FocusCustomColor  = new(1, 1, 1, 0);
+        public Vector4 FocusOutlineColor = new(0, 0.372549f, 1, 0);
+        public byte    FocusFontSize     = 14;
         public bool    FocusAlignLeft;
         
-        public bool    CastBarIsEnabled   = true;
-        public Vector2 CastBarPosition    = new(0);
-        public Vector4 CastBarCustomColor = new(1, 1, 1, 0);
-        public byte    CastBarFontSize    = 14;
+        public bool    CastBarIsEnabled    = true;
+        public Vector2 CastBarPosition     = new(0);
+        public Vector4 CastBarCustomColor  = new(1, 1, 1, 0);
+        public Vector4 CastBarOutlineColor = new(0, 0.372549f, 1, 1);
+        public byte    CastBarFontSize     = 14;
         public bool    CastBarAlignLeft;
         
-        public bool    FocusCastBarIsEnabled   = true;
-        public Vector2 FocusCastBarPosition    = new(0);
-        public Vector4 FocusCastBarCustomColor = new(1, 1, 1, 0);
-        public byte    FocusCastBarFontSize    = 14;
+        public bool    FocusCastBarIsEnabled    = true;
+        public Vector2 FocusCastBarPosition     = new(0);
+        public Vector4 FocusCastBarCustomColor  = new(1, 1, 1, 0);
+        public Vector4 FocusCastBarOutlineColor = new(0, 0.372549f, 1, 1);
+        public byte    FocusCastBarFontSize     = 14;
         public bool    FocusCastBarAlignLeft;
 
         public bool  StatusIsEnabled = true;

@@ -16,7 +16,7 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
     {
         Title       = GetLoc("AutoMoveGearsNotInSetTitle"),
         Description = GetLoc("AutoMoveGearsNotInSetDescription"),
-        Category    = ModuleCategories.Combat
+        Category    = ModuleCategories.UIOptimization
     };
 
     private const string Command = "retrievegears";
@@ -41,9 +41,7 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        
-        Service.AddonController.DetachNode(Button);
-        Button = null;
+        OnAddon(AddonEvent.PreFinalize, null);
         
         CommandManager.RemoveSubCommand(Command);
     }
@@ -76,8 +74,8 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
                 {
                     Button = new TextButtonNode
                     {
-                        Size      = new(50),
-                        Position  = new(12, 515),
+                        Size      = new(48),
+                        Position  = new(12, 500),
                         IsVisible = true,
                         SeString  = new SeStringBuilder().AddIcon(BitmapFontIcon.SwordSheathed).Build(),
                         Tooltip   = GetLoc("AutoMoveGearsNotInSet-Button"),

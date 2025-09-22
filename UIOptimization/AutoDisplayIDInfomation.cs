@@ -163,8 +163,7 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
                 break;
             
             case "_TargetInfoMainTarget" or "_TargetInfo":
-                var target = DService.Targets.Target;
-                if (target == null) return;
+                if (DService.Targets.Target is not { } target) return;
 
                 var id = target.DataId;
                 if (id == 0) return;
@@ -177,7 +176,7 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
                     ObjectKind.Companion => ModuleConfig.ShowTargetIDCompanion,
                     _                    => ModuleConfig.ShowTargetIDOthers,
                 };
-                
+
                 if (!show || !ModuleConfig.ShowTargetID)
                 {
                     AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->SetValueAndUpdate(0, name.Replace($"  [{id}]", string.Empty));
