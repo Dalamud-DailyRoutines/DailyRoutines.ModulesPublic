@@ -88,8 +88,7 @@ public class HideUnwantedBanner : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        if (moduleConfig == null) 
-            moduleConfig = LoadConfig<Config>() ?? new Config();
+        moduleConfig ??= LoadConfig<Config>() ?? new Config();
 
         ImGui.TextWrapped(GetLoc("HideUnwantedBanner-HelpText"));
         ImGui.Separator();
