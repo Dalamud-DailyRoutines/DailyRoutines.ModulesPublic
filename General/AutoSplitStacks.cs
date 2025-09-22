@@ -425,8 +425,10 @@ public unsafe class AutoSplitStacks : DailyModuleBase
 
     private class FastSplitItemStack : MenuItemBase
     {
-        public override    string Name { get; protected set; } = Lang.Get("AutoSplitStacks-FastSplit");
-        protected override bool   WithDRPrefix { get; set; } = true;
+        public override string Name       { get; protected set; } = Lang.Get("AutoSplitStacks-FastSplit");
+        public override string Identifier { get; protected set; } = nameof(AutoSplitStacks);
+
+        protected override bool WithDRPrefix { get; set; } = true;
 
         protected override void   OnClicked(IMenuItemClickedArgs args)
         {

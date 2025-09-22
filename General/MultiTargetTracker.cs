@@ -237,8 +237,8 @@ public class MultiTargetTracker : DailyModuleBase
 
     private class TempTrackMenuItem : MenuItemBase
     {
-        public override string Name { get; protected set; } =
-            $"{GetLoc("MultiTargetTracker-TempTrack")}: {GetLoc("Add")}/{GetLoc("Delete")}";
+        public override string Name       { get; protected set; } = $"{GetLoc("MultiTargetTracker-TempTrack")}: {GetLoc("Add")}/{GetLoc("Delete")}";
+        public override string Identifier { get; protected set; } = nameof(MultiTargetTracker);
 
         protected override void OnClicked(IMenuItemClickedArgs args)
         {
@@ -258,8 +258,8 @@ public class MultiTargetTracker : DailyModuleBase
 
     private class PermanentTrackMenuItem : MenuItemBase
     {
-        public override string Name { get; protected set; } =
-            $"{GetLoc("MultiTargetTracker-PermanentTrack")}: {GetLoc("Add")}/{GetLoc("Delete")}";
+        public override string Name       { get; protected set; } = $"{GetLoc("MultiTargetTracker-PermanentTrack")}: {GetLoc("Add")}/{GetLoc("Delete")}";
+        public override string Identifier { get; protected set; } = nameof(MultiTargetTracker);
 
         protected override void OnClicked(IMenuItemClickedArgs args)
         {

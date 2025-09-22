@@ -265,8 +265,10 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private class ApplyLogFilterMenuItem : MenuItemBase
     {
-        public override string Name { get; protected set; } = GetLoc("MoreMessageFilterPresetsTitle");
-        protected override bool IsSubmenu { get; set; } = true;
+        public override string Name       { get; protected set; } = GetLoc("MoreMessageFilterPresetsTitle");
+        public override string Identifier { get; protected set; } = nameof(MoreMessageFilterPresets);
+        
+        protected override bool IsSubmenu    { get; set; } = true;
         protected override bool WithDRPrefix { get; set; } = true;
 
         protected override void OnClicked(IMenuItemClickedArgs args)

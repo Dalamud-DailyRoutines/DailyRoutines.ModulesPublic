@@ -95,12 +95,13 @@ public class CopyItemNameContextMenu : DailyModuleBase
 
     private sealed class CopyItemNameMenuItem(string name) : MenuItemBase
     {
-        public override string Name { get; protected set; } = name;
+        public override string Name       { get; protected set; } = name;
+        public override string Identifier { get; protected set; } = nameof(CopyItemNameContextMenu);
+        
         protected override bool WithDRPrefix { get; set; } = true;
 
         private uint ItemID;
         
-
         protected override unsafe void OnClicked(IMenuItemClickedArgs args)
         {
             var itemName = string.Empty;

@@ -211,7 +211,8 @@ public class AutoOpenMapLinks : DailyModuleBase
 
     private class AutoOpenMapLinksMenuItem : MenuItemBase
     {
-        public override string Name { get; protected set; } = Lang.Get("AutoOpenMapLinks-ClickMenu");
+        public override string Name       { get; protected set; } = Lang.Get("AutoOpenMapLinks-ClickMenu");
+        public override string Identifier { get; protected set; } = nameof(AutoOpenMapLinks);
 
         protected override void OnClicked(IMenuItemClickedArgs args)
         {

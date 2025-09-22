@@ -825,7 +825,8 @@ public unsafe class OptimizedFriendList : DailyModuleBase
     
     private class ModifyInfoMenuItem(TaskHelper TaskHelper) : MenuItemBase
     {
-        public override string Name { get; protected set; } = GetLoc("OptimizedFriendList-ContextMenu-NicknameAndRemark");
+        public override string Name       { get; protected set; } = GetLoc("OptimizedFriendList-ContextMenu-NicknameAndRemark");
+        public override string Identifier { get; protected set; } = nameof(OptimizedFriendList);
 
         public override bool IsDisplay(IMenuOpenedArgs args) =>
             args is { AddonName: "FriendList", Target: MenuTargetDefault target } &&
@@ -853,7 +854,9 @@ public unsafe class OptimizedFriendList : DailyModuleBase
     
     private class TeleportFriendZoneMenuItem : MenuItemBase
     {
-        public override string Name { get; protected set; } = GetLoc("OptimizedFriendList-ContextMenu-TeleportToFriendZone");
+        public override string Name       { get; protected set; } = GetLoc("OptimizedFriendList-ContextMenu-TeleportToFriendZone");
+        public override string Identifier { get; protected set; } = nameof(OptimizedFriendList);
+
         
         private uint AetheryteID;
 
@@ -890,7 +893,9 @@ public unsafe class OptimizedFriendList : DailyModuleBase
 
     private class TeleportFriendWorldMenuItem : MenuItemBase
     {
-        public override string Name { get; protected set; } = GetLoc("OptimizedFriendList-ContextMenu-TeleportToFriendWorld");
+        public override string Name       { get; protected set; } = GetLoc("OptimizedFriendList-ContextMenu-TeleportToFriendWorld");
+        public override string Identifier { get; protected set; } = nameof(OptimizedFriendList);
+
         
         private uint TargetWorldID;
 
