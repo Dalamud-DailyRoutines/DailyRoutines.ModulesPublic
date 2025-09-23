@@ -508,7 +508,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     break;
 
                 case ZoneType.Expression:
-                    // 对于复杂表达式，绘制一个中心点标记
                     if (DService.Gui.WorldToScreen(zone.CenterPos, out var screenPos))
                         drawList.AddCircleFilled(screenPos, 8.0f, zone.Color);
                     break;
@@ -713,8 +712,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                         dangerZone.Enabled = enabled;
                         SaveConfig(ModuleConfig!);
                         Chat(GetLoc("PreventEntryIntoMapBoundaries-ZoneToggled",
-                            enabled ? GetLoc("Enabled") : GetLoc("Disable"),
-                            dangerZone.Name));
+                            enabled ? GetLoc("Enabled") : GetLoc("Disable"), dangerZone.Name));
                     }
                     break;
 
@@ -731,7 +729,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                         SaveConfig(ModuleConfig!);
                         Chat((GetLoc("PreventEntryIntoMapBoundaries-ColorChanged", color.ToString("X8"))));
                     }
-                   
                     break;
 
                 default:
