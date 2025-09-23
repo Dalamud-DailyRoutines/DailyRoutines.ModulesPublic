@@ -31,8 +31,10 @@ public unsafe class PetSizeContextMenu : DailyModuleBase
 
     private class UpperContainerItem : MenuItemBase
     {
-        public override    string Name { get; protected set; } = GetLoc("PetSizeContextMenu-MenuName");
-        protected override bool   IsSubmenu { get; set; } = true;
+        public override string Name       { get; protected set; } = GetLoc("PetSizeContextMenu-MenuName");
+        public override string Identifier { get; protected set; } = nameof(PetSizeContextMenu);
+
+        protected override bool IsSubmenu { get; set; } = true;
         
         protected override void OnClicked(IMenuItemClickedArgs args) 
             => args.OpenSubmenu(Name, ProcessMenuItems());

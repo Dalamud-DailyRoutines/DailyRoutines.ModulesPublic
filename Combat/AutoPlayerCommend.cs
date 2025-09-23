@@ -288,7 +288,8 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
     
     private class AssignPlayerCommendationMenu : MenuItemBase
     {
-        public override string Name { get; protected set; } = GetLoc("AutoPlayerCommend-AssignPlayerCommend");
+        public override string Name       { get; protected set; } = GetLoc("AutoPlayerCommend-AssignPlayerCommend");
+        public override string Identifier { get; protected set; } = nameof(AutoPlayerCommend);
 
         public override bool IsDisplay(IMenuOpenedArgs args)
         {

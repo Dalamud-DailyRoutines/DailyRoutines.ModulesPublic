@@ -170,8 +170,10 @@ public unsafe class FastRetainerStore : DailyModuleBase
 
     private class ItemMoveMenu(uint ItemID, bool IsHQ, bool IsCollectable, bool IsStoreToRetainer) : MenuItemBase
     {
-        public override    string Name         { get; protected set; } = GetLoc(IsStoreToRetainer ? "SaveAll" : "RetrieveAll");
-        protected override bool   WithDRPrefix { get; set; }           = true;
+        public override string Name       { get; protected set; } = GetLoc(IsStoreToRetainer ? "SaveAll" : "RetrieveAll");
+        public override string Identifier { get; protected set; } = nameof(FastRetainerStore);
+
+        protected override bool WithDRPrefix { get; set; } = true;
 
         protected override void OnClicked(IMenuItemClickedArgs args) => 
             ModuleManager.GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
