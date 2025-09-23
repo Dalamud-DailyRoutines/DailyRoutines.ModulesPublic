@@ -28,15 +28,13 @@ public class HideUnwantedBanner : DailyModuleBase
     };
 
     private static readonly CompSig SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
-
-    private static Hook<SetImageTextureDelegate>? setImageTextureHook;
-    private static Config? moduleConfig;
-
     private unsafe delegate void SetImageTextureDelegate(AtkUnitBase* addon, int bannerID, int a3, int soundEffectID);
+    private static Hook<SetImageTextureDelegate>? SetImageTextureHook;
+    private static Config? ModuleConfig;
     
     private record BannerSetting(int ID, string Label, bool IsCustom = false);
 
-    private readonly List<BannerSetting> predefinedBanners =
+    private static readonly List<BannerSetting> predefinedBanners =
     [
         new BannerSetting(120031, GetLoc("HideUnwantedBanner-LevequestAccepted")),
         new BannerSetting(120032, GetLoc("HideUnwantedBanner-LevequestComplete")),
@@ -63,8 +61,8 @@ public class HideUnwantedBanner : DailyModuleBase
         new BannerSetting(128372, GetLoc("HideUnwantedBanner-StellarMissionFailed")),
         new BannerSetting(128373, GetLoc("HideUnwantedBanner-StellarMissionComplete"))
     ];
-
-    private readonly HashSet<int> seenBanners = [];
+    private static readonly HashSet<int> PredefinedBannerIDs = predefinedBanners.Select(b => b.ID).ToHashSet();
+    private static readonly HashSet<int> SeenBanners = [];
 
     public class Config : ModuleConfiguration
     {
@@ -73,115 +71,125 @@ public class HideUnwantedBanner : DailyModuleBase
 
     protected override unsafe void Init()
     {
-        moduleConfig = LoadConfig<Config>();
-
-        try
-        {
-            setImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(OnSetImageTexture);
-            setImageTextureHook.Enable();
-        }
-        catch (Exception ex)
-        {
-            DService.Log.Error(ex, "创建隐藏横幅Hook失败！");
-        }
+        ModuleConfig = LoadConfig<Config>() ?? new Config();
+        SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(OnSetImageTextureDetour);
+        SetImageTextureHook.Enable();
     }
 
     protected override void ConfigUI()
     {
-        moduleConfig ??= LoadConfig<Config>() ?? new Config();
-
         ImGui.TextWrapped(GetLoc("HideUnwantedBanner-HelpText"));
         ImGui.Separator();
 
-        if (seenBanners.Any())
+        if (SeenBanners.Count > 0)
         {
             ImGui.TextWrapped(GetLoc("HideUnwantedBanner-NewlyDetectedBannersHeader"));
             ImGui.Spacing();
 
             using var seenTable = ImRaii.Table("SeenBannersList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg);
-            if (seenTable.Success)
-            {
-                ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TableAdd"), ImGuiTableColumnFlags.WidthFixed);
-                ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TablePreview"));
-                ImGui.TableHeadersRow();
-
-                foreach (var bannerId in seenBanners.ToArray())
-                {
-                    ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
-
-                    if (ImGui.Button($"{GetLoc("HideUnwantedBanner-ButtonAdd")}##{bannerId}"))
-                    {
-                        moduleConfig.HiddenBanners.Add(bannerId);
-                        SaveConfig(moduleConfig);
-                        seenBanners.Remove(bannerId);
-                    }
-
-                    ImGui.TableNextColumn();
-                    if (DService.Texture.TryGetFromGameIcon((uint)bannerId, out var icon) && icon.GetWrapOrDefault() is { } wrap)
-                        ImGui.Image(wrap.Handle, new Vector2(wrap.Width * 80f / wrap.Height, 80));
-                    else
-                        ImGui.Text(string.Format(GetLoc("HideUnwantedBanner-CustomBannerLabel"), bannerId));
-                }
-            }
-            ImGui.Separator();
-        }
-
-        ImGui.Spacing();
-        
-        var allBanners = new List<BannerSetting>(predefinedBanners);
-        foreach (var hiddenID in moduleConfig.HiddenBanners)
-        {
-            if (predefinedBanners.All(b => b.ID != hiddenID))
-            {
-                var customLabel = string.Format(GetLoc("HideUnwantedBanner-CustomBannerLabel"), hiddenID);
-                allBanners.Add(new BannerSetting(hiddenID, customLabel, true));
-            }
-        }
-        
-        var sortedBanners = allBanners.OrderBy(b => b.IsCustom).ThenBy(b => b.Label);
-        
-        using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY);
-        if (table.Success)
-        {
-            ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TableEnable"), ImGuiTableColumnFlags.WidthFixed);
-            ImGui.TableSetupColumn(GetLoc("HideUnwantedBanner-TableBannerName"));
+            ImGui.TableSetupColumn(GetLoc("Add"), ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn(GetLoc("Preview"));
             ImGui.TableHeadersRow();
-
-            foreach (var banner in sortedBanners)
+            foreach (var bannerID in new List<int>(SeenBanners))
             {
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
 
-                var isHidden = moduleConfig.HiddenBanners.Contains(banner.ID);
-                if (ImGui.Checkbox($"##{banner.ID}", ref isHidden))
+                if (ImGui.Button($"{GetLoc("Add")}##{bannerID}"))
                 {
-                    if (isHidden)
-                        moduleConfig.HiddenBanners.Add(banner.ID);
-                    else
-                        moduleConfig.HiddenBanners.Remove(banner.ID);
-
-                    SaveConfig(moduleConfig);
+                    ModuleConfig.HiddenBanners.Add(bannerID);
+                    SaveConfig(ModuleConfig);
+                    SeenBanners.Remove(bannerID);
                 }
-
                 ImGui.TableNextColumn();
-                ImGui.Text(banner.Label);
+                if (DService.Texture.TryGetFromGameIcon((uint)bannerID, out var icon))
+                {
+                    var wrap = icon.GetWrapOrDefault();
+                    if (wrap != null)
+                    {
+                        var iconHeight = ImGui.GetTextLineHeight() * 4;
+                        var iconWidth = wrap.Width * iconHeight / wrap.Height;
+                        ImGui.Image(wrap.Handle, new Vector2(iconWidth, iconHeight));
+                    }
+                    else
+                    {
+                        ImGui.Text(GetLoc("HideUnwantedBanner-CustomBannerLabel", bannerID));
+                        if (ImGui.IsItemHovered())
+                            ImGui.SetTooltip($"Icon found for {bannerID}, but failed to create texture wrap.");
+                    }
+                }
+                else
+                {
+                    ImGui.Text(GetLoc("HideUnwantedBanner-CustomBannerLabel", bannerID));
+                    if (ImGui.IsItemHovered()) 
+                        ImGui.SetTooltip($"Could not find icon for ID: {bannerID}");
+                }
             }
+            ImGui.Separator();
+        }
+        ImGui.Spacing();
+        var allBanners = new List<BannerSetting>(predefinedBanners);
+        foreach (var hiddenID in ModuleConfig.HiddenBanners)
+        {
+            bool isPredefined = false;
+            foreach (var pBanner in predefinedBanners)
+            {
+                if (pBanner.ID == hiddenID)
+                {
+                    isPredefined = true;
+                    break;
+                }
+            }
+
+            if (!isPredefined)
+            {
+                var customLabel = GetLoc("HideUnwantedBanner-CustomBannerLabel", hiddenID);
+                allBanners.Add(new BannerSetting(hiddenID, customLabel, true));
+            }
+        }
+        
+        allBanners.Sort((b1, b2) =>
+        {
+            int customCompare = b1.IsCustom.CompareTo(b2.IsCustom);
+            if (customCompare != 0) return customCompare;
+            return string.Compare(b1.Label, b2.Label, StringComparison.Ordinal);
+        });
+        
+        using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY);
+        ImGui.TableSetupColumn(GetLoc("Enable"), ImGuiTableColumnFlags.WidthFixed);
+        ImGui.TableSetupColumn(GetLoc("Name"));
+        ImGui.TableHeadersRow();
+
+        foreach (var banner in allBanners)
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+
+            var isHidden = ModuleConfig.HiddenBanners.Contains(banner.ID);
+            if (ImGui.Checkbox($"##{banner.ID}", ref isHidden))
+            {
+                if (isHidden)
+                    ModuleConfig.HiddenBanners.Add(banner.ID);
+                else
+                    ModuleConfig.HiddenBanners.Remove(banner.ID);
+
+                SaveConfig(ModuleConfig);
+            }
+            ImGui.TableNextColumn();
+            ImGui.Text(banner.Label);
         }
     }
     
-    private unsafe void OnSetImageTexture(AtkUnitBase* addon, int bannerID, int a3, int soundEffectID)
+    private unsafe void OnSetImageTextureDetour(AtkUnitBase* addon, int bannerID, int a3, int soundEffectID)
     {
         var shouldHide = false;
-        if (moduleConfig != null && bannerID > 0)
+        if (ModuleConfig != null && bannerID > 0)
         {
-            shouldHide = moduleConfig.HiddenBanners.Contains(bannerID);
-
-            if (!shouldHide && predefinedBanners.All(b => b.ID != bannerID))
-                seenBanners.Add(bannerID);
+            shouldHide = ModuleConfig.HiddenBanners.Contains(bannerID);
+            if (!shouldHide && !PredefinedBannerIDs.Contains(bannerID))
+                SeenBanners.Add(bannerID);
         }
-
-        setImageTextureHook?.Original(addon, shouldHide ? 0 : bannerID, a3, shouldHide ? 0 : soundEffectID);
+        SetImageTextureHook?.Original(addon, shouldHide ? 0 : bannerID, a3, shouldHide ? 0 : soundEffectID);
     }
 }
 
