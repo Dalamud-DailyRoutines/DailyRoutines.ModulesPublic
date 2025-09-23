@@ -447,8 +447,8 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             };
 
         private static Vector3 CheckCircleBoundary(ZoneLimit zoneLimit, Vector3 currentPos) =>
-            (currentPos - zoneLimit.CenterPos) is var diff && diff.Length() is var distance && distance >= zoneLimit.Radius - 0.3f
-                ? zoneLimit.CenterPos + (distance == 0 ? Vector3.UnitX : diff / distance) * (zoneLimit.Radius - 0.5f)
+            (currentPos - zoneLimit.CenterPos) is var diff && diff.Length() is var distance && distance > zoneLimit.Radius-0.3f
+                ? zoneLimit.CenterPos + (distance == 0 ? Vector3.UnitX : diff / distance) * (zoneLimit.Radius - 0.31f)
                 : currentPos;
 
         private static Vector3 CheckRectangleBoundary(ZoneLimit zoneLimit, Vector3 currentPos) =>
