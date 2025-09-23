@@ -125,8 +125,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 
                 var nodeLabel = $"{zid}: {GetZoneName(zid)}";
 
-                using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, KnownColor.White.Vector());
-               
                 if (ImRaii.TreeNode($"{nodeLabel}###{zid}"))
                 {
                     if (ImGui.Checkbox(GetLoc("Enable"), ref zoneLimit.Enabled))
