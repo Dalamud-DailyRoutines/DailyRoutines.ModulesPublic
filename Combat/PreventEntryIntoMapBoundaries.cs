@@ -33,7 +33,20 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
         // 缓存DataTable实例以避免重复创建
         private static readonly DataTable ExpressionTable = new();
         private static readonly System.Globalization.CultureInfo InvariantCulture = System.Globalization.CultureInfo.InvariantCulture;
-
+        // 缓存字典以避免重复创建
+        private static readonly Dictionary<ZoneType, string> ZoneTypeDict = new()
+        {
+            { ZoneType.Circle, GetLoc("PreventEntryIntoMapBoundaries-CircleType") },
+            { ZoneType.Annulus, GetLoc("PreventEntryIntoMapBoundaries-AnnulusType") },
+            { ZoneType.Rectangle, GetLoc("PreventEntryIntoMapBoundaries-RectangleType") },
+            { ZoneType.RectangularSafeZone, GetLoc("PreventEntryIntoMapBoundaries-RectangularSafeZoneType") },
+            { ZoneType.Expression, GetLoc("PreventEntryIntoMapBoundaries-ExpressionType") }
+        };
+        private static readonly Dictionary<MapType, string> MapTypeDict = new()
+        {
+            { MapType.Circle, GetLoc("PreventEntryIntoMapBoundaries-CircleType") },
+            { MapType.Rectangle, GetLoc("PreventEntryIntoMapBoundaries-RectangleType") }
+        };
         // SetPosition Hook 相关定义
         private static readonly CompSig SetPositionSig = new("E8 ?? ?? ?? ?? 83 4B 70 01");
         private delegate void SetPositionDelegate(GameObject* gameObject, float x, float y, float z);
@@ -52,14 +65,9 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
         protected override void Init()
         {
             ModuleConfig = LoadConfig<Config>() ?? new Config();
-
-            // 初始化 SetPosition Hook
             SetPositionHook ??= SetPositionSig.GetHook<SetPositionDelegate>(SetPositionDetour);
             SetPositionHook.Enable();
-
             AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("PreventEntryIntoMapBoundaries-CommandHelp") });
-
-            // 绑定绘制事件以在世界中显示边界
             DService.UiBuilder.Draw += OnDraw;
         }
 
@@ -77,12 +85,9 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     SaveConfig(ModuleConfig);
                 }
             }
-
             ImGui.NewLine();
-
             if (ImGuiOm.CheckboxColored(GetLoc("PreventEntryIntoMapBoundaries-ShowVisualization"), ref ModuleConfig.ShowBoundaryVisualization))
                 SaveConfig(ModuleConfig);
-
             // 线条粗细配置 - 仅在启用边界可视化时显示
             if (ModuleConfig.ShowBoundaryVisualization)
             {
@@ -90,16 +95,12 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 if (ImGui.SliderFloat(GetLoc("PreventEntryIntoMapBoundaries-LineThickness"), ref ModuleConfig.LineThickness, 1.0f, 10.0f, "%.1f"))
                     SaveConfig(ModuleConfig);
             }
-
             // 死亡玩家数量配置
             if (ImGui.SliderInt(GetLoc("PreventEntryIntoMapBoundaries-DeathThreshold"), ref ModuleConfig.DisableOnDeathCount, 1,7, "%d"))
                 SaveConfig(ModuleConfig);
-            
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-DeathDescription"));
-            
             if (ImGui.Button(GetLoc("Export")))
                 ExportToClipboard(ModuleConfig);
-
             if (ImGui.Button(GetLoc("Import")))
             {
                 var imported = ImportFromClipboard<Config>();
@@ -109,15 +110,11 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     SaveConfig(ModuleConfig);
                 }
             }
-
             if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundaries-ExportCurrentZone")))
                 ExportCurrentZoneConfig();
-
             ImGui.NewLine();
-
             if (ModuleConfig.ZoneIDs.Count is 0)
                 return;
-
             // 显示所有已添加的区域
             for (var i = 0; i < ModuleConfig.ZoneIDs.Count; i++)
             {
@@ -128,17 +125,12 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     ModuleConfig.ZoneLimitList[zid] = zoneLimit;
                     SaveConfig(ModuleConfig);
                 }
+                
+                var nodeLabel = $"{zid}: {GetZoneName(zid)}";
 
-                var isCurrentZone = GameState.TerritoryType == zid;
-                var nodeColor = KnownColor.White.Vector();
-                var zoneName = GetZoneName(zid);
-                var nodeLabel = $"{zid}: {zoneName}";
-
-                using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, nodeColor);
-                var isOpen = ImRaii.TreeNode($"{nodeLabel}###{zid}");
-
-
-                if (isOpen)
+                using var nodeColorStyle = ImRaii.PushColor(ImGuiCol.Text, KnownColor.White.Vector());
+               
+                if (ImRaii.TreeNode($"{nodeLabel}###{zid}"))
                 {
                     if (ImGui.Checkbox(GetLoc("Enable"), ref zoneLimit.Enabled))
                         SaveConfig(ModuleConfig);
@@ -147,7 +139,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     if (ImGui.Checkbox(GetLoc("Advance"), ref zoneLimit.IsAdvancedMode))
                         SaveConfig(ModuleConfig);
 
-                    if (isCurrentZone)
+                    if (GameState.TerritoryType == zid)
                     {
                         ImGui.SameLine();
                         if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundaries-SetPosition")))
@@ -184,17 +176,10 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
 
         private void DrawTraditionalModeUI(ZoneLimit zoneLimit, uint zid)
         {
-            // 地图类型选择
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-MapType"));
             ImGui.SetNextItemWidth(150 * GlobalFontScale);
 
-            var mapTypeDict = new Dictionary<MapType, string>
-            {
-                { MapType.Circle, GetLoc("PreventEntryIntoMapBoundaries-CircleType") },
-                { MapType.Rectangle, GetLoc("PreventEntryIntoMapBoundaries-RectangleType") }
-            };
-
-            foreach (var (key, label) in mapTypeDict)
+            foreach (var (key, label) in MapTypeDict)
             {
                 if (ImGui.RadioButton(label, zoneLimit.MapType == key))
                 {
@@ -202,14 +187,12 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     SaveConfig(ModuleConfig!);
                 }
             }
-
-            // 中心位置
+            
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-CenterPosition"));
             ImGui.SetNextItemWidth(200 * GlobalFontScale);
             if (ImGui.InputFloat3($"##CenterPos{zid}", ref zoneLimit.CenterPos))
                 SaveConfig(ModuleConfig!);
-
-            // 半径
+            
             ImGui.SetNextItemWidth(120 * GlobalFontScale);
             if (ImGui.InputFloat($"##Radius{zid}", ref zoneLimit.Radius, 1.0f, 10.0f, "%.2f"))
             {
@@ -238,7 +221,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
 
                 if (ImRaii.TreeNode($"{dangerZone.Name}###{j}"))
                 {
-                    // 危险区域基本设置
                     if (ImGui.Checkbox($"{GetLoc("Enable")}##dz{j}", ref dangerZone.Enabled))
                         SaveConfig(ModuleConfig!);
 
@@ -248,19 +230,9 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                         SaveConfig(ModuleConfig!);
                     ImGui.SameLine();
                     ImGui.Text(GetLoc("Name"));
-
-                    // 区域类型选择
+                    
                     ImGui.SetNextItemWidth(120 * GlobalFontScale);
-                    var zoneTypeDict = new Dictionary<ZoneType, string>
-                    {
-                        { ZoneType.Circle, GetLoc("PreventEntryIntoMapBoundaries-CircleType") },
-                        { ZoneType.Annulus, GetLoc("PreventEntryIntoMapBoundaries-AnnulusType") },
-                        { ZoneType.Rectangle, GetLoc("PreventEntryIntoMapBoundaries-RectangleType") },
-                        { ZoneType.RectangularSafeZone, GetLoc("PreventEntryIntoMapBoundaries-RectangularSafeZoneType") },
-                        { ZoneType.Expression, GetLoc("PreventEntryIntoMapBoundaries-ExpressionType") }
-                    };
-
-                    foreach (var (key, label) in zoneTypeDict)
+                    foreach (var (key, label) in ZoneTypeDict)
                     {
                         if (ImGui.RadioButton(label, dangerZone.ZoneType == key))
                         {
@@ -270,8 +242,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     }
                     ImGui.SameLine();
                     ImGui.Text(GetLoc("Type"));
-
-                    // 根据类型显示不同的参数
+                    
                     switch (dangerZone.ZoneType)
                     {
                         case ZoneType.Expression:
@@ -295,7 +266,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                             DrawRectangleZoneUI(dangerZone, j, GetLoc("PreventEntryIntoMapBoundaries-RectangularSafeArea"));
                             break;
                     }
-                    // 颜色选择和删除按钮
+                    
                     DrawZoneColorAndDelete(dangerZone, j, zoneLimit);
                 }
             }
@@ -394,7 +365,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 if (ImGui.Button($"{GetLoc("Delete")}##dz{index}"))
                 {
                     zoneLimit.DangerZones.RemoveAt(index);
-                    SaveConfig(ModuleConfig);
+                    SaveConfig(ModuleConfig!);
                 }
             }
         }
@@ -464,84 +435,61 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
         
         private static bool EvaluateMathExpression(string expression, float x, float z)
         {
-            try
+            var expr = expression.Replace("x", x.ToString("F2", InvariantCulture)).Replace("z", z.ToString("F2", InvariantCulture)).Replace("^", "**");
+            var result = ExpressionTable.Compute(expr, null);
+            return result switch
             {
-                // 使用StringBuilder减少字符串分配
-                var expr = expression.Replace("x", x.ToString("F2", InvariantCulture))
-                                   .Replace("z", z.ToString("F2", InvariantCulture))
-                                   .Replace("^", "**");
-
-                lock (ExpressionTable) // DataTable.Compute不是线程安全的
-                {
-                    var result = ExpressionTable.Compute(expr, null);
-
-                    return result switch
-                    {
-                        DBNull or null => false,
-                        bool boolResult => boolResult,
-                        IConvertible convertible => Convert.ToDouble(convertible) > 0,
-                        _ => false
-                    };
-                }
-            }
-            catch
-            {
-                return false;
-            }
+                DBNull or null => false,
+                bool boolResult => boolResult,
+                IConvertible convertible => Convert.ToDouble(convertible) > 0,
+                _ => false
+            };
+           
         }
 
         private static void SetPositionDetour(GameObject* gameObject, float x, float y, float z)
         {
-            // 检查是否需要拦截位置更新
-            var localPlayer = DService.ObjectTable.LocalPlayer;
-            var zid = GameState.TerritoryType;
-            var deathCount = DService.PartyList.Count(p => p.CurrentHP <= 0);
 
-            if (gameObject is null || localPlayer is null || (nint)gameObject != localPlayer.Address ||
-                !ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit) ||
-                deathCount >= ModuleConfig.DisableOnDeathCount)
+            if (gameObject is null || DService.ObjectTable.LocalPlayer is null ||
+                (nint)gameObject != DService.ObjectTable.LocalPlayer.Address ||
+                !ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit) ||
+                DService.PartyList.Count(p => p.CurrentHP <= 0) >= ModuleConfig.DisableOnDeathCount)
             {
                 SetPositionHook!.Original(gameObject, x, y, z);
                 return;
             }
-
-            var newPos = new Vector3(x, y, z);
-
-            // 高级模式：检查多个危险区域
+            
             if (zoneLimit is { IsAdvancedMode: true, DangerZones.Count: > 0 })
             {
                 foreach (var dangerZone in zoneLimit.DangerZones)
                 {
-                    if (dangerZone.Enabled && IsInDangerZone(dangerZone, newPos))
+                    if (dangerZone.Enabled && IsInDangerZone(dangerZone, new Vector3(x, y, z)))
                     {
-                        var safePos = GetSafePositionFromDangerZone(dangerZone, newPos);
+                        var safePos = GetSafePositionFromDangerZone(dangerZone, new Vector3(x, y, z));
                         SetPositionHook!.Original(gameObject, safePos.X, safePos.Y, safePos.Z);
                         return;
                     }
                 }
             }
-            // 传统模式：单一边界检查
+
             else if (zoneLimit.Enabled)
             {
-                var correctedPos = CheckAndCorrectTraditionalMode(zoneLimit, newPos);
+                var correctedPos = CheckAndCorrectTraditionalMode(zoneLimit, new Vector3(x, y, z));
                 SetPositionHook!.Original(gameObject, correctedPos.X, correctedPos.Y, correctedPos.Z);
                 return;
             }
-
-            // 如果没有违规，使用原始位置
+            
             SetPositionHook!.Original(gameObject, x, y, z);
         }
         
         private void OnDraw()
         {
-            if (ModuleConfig?.ShowBoundaryVisualization is not true ||
-                DService.ObjectTable.LocalPlayer is null ||
+            if (ModuleConfig?.ShowBoundaryVisualization != true ||
                 !ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit))
                 return;
 
             var drawList = ImGui.GetForegroundDrawList();
-
-            // 绘制危险区域
+            
             if (zoneLimit is { IsAdvancedMode: true, DangerZones.Count: > 0 })
                 zoneLimit.DangerZones.ForEach(zone => DrawDangerZoneInWorld(drawList, zone));
             else
@@ -551,33 +499,30 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
         private void DrawDangerZoneInWorld(ImDrawListPtr drawList, DangerZone zone)
         {
             if (!zone.Enabled) return;
-
-            var color = zone.Color;
-            var lineThickness = ModuleConfig.LineThickness;
-
+            
             switch (zone.ZoneType)
             {
                 case ZoneType.Circle:
-                    DrawCircleInWorld(drawList, zone.CenterPos, zone.Radius, color, lineThickness);
+                    DrawCircleInWorld(drawList, zone.CenterPos, zone.Radius, zone.Color, ModuleConfig.LineThickness);
                     break;
 
                 case ZoneType.Annulus:
-                    DrawCircleInWorld(drawList, zone.CenterPos, zone.Radius, color, lineThickness);
-                    DrawCircleInWorld(drawList, zone.CenterPos, zone.InnerRadius, color, lineThickness);
+                    DrawCircleInWorld(drawList, zone.CenterPos, zone.Radius, zone.Color, ModuleConfig.LineThickness);
+                    DrawCircleInWorld(drawList, zone.CenterPos, zone.InnerRadius, zone.Color, ModuleConfig.LineThickness);
                     break;
 
                 case ZoneType.Rectangle:
-                    DrawRectangleInWorld(drawList, zone.MinX, zone.MaxX, zone.MinZ, zone.MaxZ, color, lineThickness);
+                    DrawRectangleInWorld(drawList, zone.MinX, zone.MaxX, zone.MinZ, zone.MaxZ, zone.Color, ModuleConfig.LineThickness);
                     break;
 
                 case ZoneType.RectangularSafeZone:
-                    DrawRectangleInWorld(drawList, zone.MinX, zone.MaxX, zone.MinZ, zone.MaxZ, KnownColor.Green.Vector().ToUint(), lineThickness);
+                    DrawRectangleInWorld(drawList, zone.MinX, zone.MaxX, zone.MinZ, zone.MaxZ, KnownColor.Green.Vector().ToUint(), ModuleConfig.LineThickness);
                     break;
 
                 case ZoneType.Expression:
                     // 对于复杂表达式，绘制一个中心点标记
                     if (DService.Gui.WorldToScreen(zone.CenterPos, out var screenPos))
-                        drawList.AddCircleFilled(screenPos, 8.0f, color);
+                        drawList.AddCircleFilled(screenPos, 8.0f, zone.Color);
                     break;
             }
         }
@@ -585,34 +530,28 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
         private void DrawTraditionalBoundaryInWorld(ImDrawListPtr drawList, ZoneLimit zoneLimit)
         {
             if (!zoneLimit.Enabled) return;
-
-            var color = KnownColor.Red.Vector().ToUint();
-            var lineThickness = ModuleConfig.LineThickness;
-
+            
             switch (zoneLimit.MapType)
             {
                 case MapType.Circle:
-                    DrawCircleInWorld(drawList, zoneLimit.CenterPos, zoneLimit.Radius, color, lineThickness);
+                    DrawCircleInWorld(drawList, zoneLimit.CenterPos, zoneLimit.Radius, KnownColor.Red.Vector().ToUint(), ModuleConfig.LineThickness);
                     break;
                 case MapType.Rectangle:
                     var halfSize = zoneLimit.Radius;
                     DrawRectangleInWorld(drawList,
                         zoneLimit.CenterPos.X - halfSize, zoneLimit.CenterPos.X + halfSize,
                         zoneLimit.CenterPos.Z - halfSize, zoneLimit.CenterPos.Z + halfSize,
-                        color, lineThickness);
+                        KnownColor.Red.Vector().ToUint(), ModuleConfig.LineThickness);
                     break;
             }
         }
 
         private void DrawCircleInWorld(ImDrawListPtr drawList, Vector3 center, float radius, uint color, float thickness)
         {
-            const int segments = 64;
-            const float angleStep = (float)(2 * Math.PI / segments);
-
-            for (var i = 0; i < segments; i++)
+            for (var i = 0; i < 64; i++)
             {
-                var angle1 = i * angleStep;
-                var angle2 = (i + 1) * angleStep;
+                var angle1 = i * (float)(2 * Math.PI / 64);
+                var angle2 = (i + 1) * (float)(2 * Math.PI / 64);
 
                 // 内联计算坐标，减少临时变量
                 DService.Gui.WorldToScreen(
@@ -653,9 +592,8 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 return;
 
             var action = parts[0].ToLower();
-            var zid = GameState.TerritoryType;
 
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit))
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit))
                 return;
 
             switch (action)
@@ -816,14 +754,13 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
 
         private static void ExportCurrentZoneConfig()
         {
-            var zid = GameState.TerritoryType;
-            if (!ModuleConfig.ZoneLimitList.TryGetValue(zid, out var zoneLimit))
+            if (!ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit))
                 return;
 
             var exportConfig = new Config
             {
-                ZoneIDs = [zid],
-                ZoneLimitList = new Dictionary<uint, ZoneLimit> { { zid, zoneLimit } }
+                ZoneIDs = [GameState.TerritoryType],
+                ZoneLimitList = new Dictionary<uint, ZoneLimit> { { GameState.TerritoryType, zoneLimit } }
             };
 
             ExportToClipboard(exportConfig);
@@ -833,10 +770,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
         protected override void Uninit()
         {
             DService.UiBuilder.Draw -= OnDraw;
-            SetPositionHook?.Disable();
-            SetPositionHook?.Dispose();
             RemoveSubCommand(Command);
-            base.Uninit();
         }
         
         private class Config : ModuleConfiguration
