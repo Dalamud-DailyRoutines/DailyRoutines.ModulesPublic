@@ -30,10 +30,8 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
     {
-        // 缓存DataTable实例以避免重复创建
         private static readonly DataTable ExpressionTable = new();
         private static readonly System.Globalization.CultureInfo InvariantCulture = System.Globalization.CultureInfo.InvariantCulture;
-        // 缓存字典以避免重复创建
         private static readonly Dictionary<ZoneType, string> ZoneTypeDict = new()
         {
             { ZoneType.Circle, GetLoc("PreventEntryIntoMapBoundaries-CircleType") },
