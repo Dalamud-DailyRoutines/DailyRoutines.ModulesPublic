@@ -4,8 +4,6 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using Lumina.Excel.Sheets;
-using Lumina.Excel.Sheets.Experimental;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -42,8 +40,8 @@ public unsafe class AutoNoise : DailyModuleBase
                 .Where(x => !string.IsNullOrEmpty(x.Singular.ExtractText()))
                 .GroupBy(x => x.Singular.ExtractText())
                 .Select(x => x.First()),
-            [x => x.RowId.ToString()],
-            x => x.RowId.ToString());
+            [x => x.Singular.ExtractText()],
+            x => x.Singular.ExtractText());
 
         FrameworkManager.Register(OnUpdate, throttleMS: 1500);
     }
@@ -136,9 +134,9 @@ public unsafe class AutoNoise : DailyModuleBase
                         if (ImGui.Button(GetLoc("Add")))
                         {
                             var newAction = new MountAction(SelectedMount!.Value.RowId, SelectedActionID);
-                            if (!ModuleConfig.MountActions.Contains(newAction))
+                            if (!ModuleConfig.MountActions.ContainsKey(newAction.MountID))
                             {
-                                ModuleConfig.MountActions.Add(newAction);
+                                ModuleConfig.MountActions[newAction.MountID] = newAction;
                                 ModuleConfig.Save(this);
                             }
                             ImGui.CloseCurrentPopup();
@@ -149,8 +147,9 @@ public unsafe class AutoNoise : DailyModuleBase
         }
 
         // 显示已配置的动作列表
-        foreach (var action in ModuleConfig.MountActions)
+        foreach (var kv in ModuleConfig.MountActions)
         {
+            var action = kv.Value;
             ImGui.TableNextRow();
 
             // 坐骑ID和特性
@@ -174,12 +173,12 @@ public unsafe class AutoNoise : DailyModuleBase
             ImGui.TableNextColumn();
             if (ImGuiOm.ButtonIcon($"{action.MountID}_Delete", FontAwesomeIcon.TrashAlt))
             {
-                ModuleConfig.MountActions.Remove(action);
+                ModuleConfig.MountActions.Remove(action.MountID);
                 ModuleConfig.Save(this);
             }
         }
     }
-    
+
     private static string GetActionName(uint actionID)
     {
         if (actionID == 0)
@@ -212,44 +211,44 @@ public unsafe class AutoNoise : DailyModuleBase
         var currentMountID = localPlayer.CurrentMount?.RowId;
         if (currentMountID == null) return;
 
-        var action = ModuleConfig.MountActions.FirstOrDefault(x => x.MountID == currentMountID);
-        if (action != null &&
+        if (ModuleConfig.MountActions.TryGetValue(currentMountID.Value, out var action) &&
             ActionManager.Instance()->GetActionStatus(ActionType.Action, action.ActionID) == 0)
-
+        
             UseActionManager.UseAction(ActionType.Action, action.ActionID);
+        
     }
 
     protected override void Uninit() => FrameworkManager.Unregister(OnUpdate);
 
     private class Config : ModuleConfiguration
     {
-        public List<MountAction> MountActions { get; set; } = new();
+        public Dictionary<uint, MountAction> MountActions { get; set; } = new();
     }
 
     private class MountAction : IEquatable<MountAction>
+    {
+        public uint MountID { get; set; }
+        public uint ActionID { get; set; }
+
+        public MountAction() { }
+
+        public MountAction(uint mountID, uint actionID)
         {
-            public uint MountID { get; set; }
-            public uint ActionID { get; set; }
-
-            public MountAction() { }
-
-            public MountAction(uint mountID, uint actionID)
-            {
-                MountID = mountID;
-                ActionID = actionID;
-            }
-
-            public bool Equals(MountAction? other)
-            {
-                if (other is null) return false;
-                if (ReferenceEquals(this, other)) return true;
-                return MountID == other.MountID;
-            }
-
-            public override bool Equals(object? obj) =>
-                obj is MountAction other && Equals(other);
-
-            public override int GetHashCode() =>
-                (int)MountID;
+            MountID = mountID;
+            ActionID = actionID;
         }
+
+        public bool Equals(MountAction? other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return MountID == other.MountID;
+        }
+
+        public override bool Equals(object? obj) =>
+            obj is MountAction other && Equals(other);
+
+        public override int GetHashCode() =>
+            (int)MountID;
     }
+}
