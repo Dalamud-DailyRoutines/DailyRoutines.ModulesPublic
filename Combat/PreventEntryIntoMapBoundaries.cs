@@ -86,14 +86,13 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             ImGui.NewLine();
             if (ImGuiOm.CheckboxColored(GetLoc("PreventEntryIntoMapBoundaries-ShowVisualization"), ref ModuleConfig.ShowBoundaryVisualization))
                 SaveConfig(ModuleConfig);
-            // 线条粗细配置 - 仅在启用边界可视化时显示
             if (ModuleConfig.ShowBoundaryVisualization)
             {
                 ImGui.SetNextItemWidth(120 * GlobalFontScale);
                 if (ImGui.SliderFloat(GetLoc("PreventEntryIntoMapBoundaries-LineThickness"), ref ModuleConfig.LineThickness, 1.0f, 10.0f, "%.1f"))
                     SaveConfig(ModuleConfig);
             }
-            // 死亡玩家数量配置
+            
             if (ImGui.SliderInt(GetLoc("PreventEntryIntoMapBoundaries-DeathThreshold"), ref ModuleConfig.DisableOnDeathCount, 1,7, "%d"))
                 SaveConfig(ModuleConfig);
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-DeathDescription"));
@@ -264,7 +263,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                             DrawRectangleZoneUI(dangerZone, j, GetLoc("PreventEntryIntoMapBoundaries-RectangularSafeArea"));
                             break;
                     }
-                    
                     DrawZoneColorAndDelete(dangerZone, j, zoneLimit);
                 }
             }
@@ -328,7 +326,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             ImGui.SetNextItemWidth(80 * GlobalFontScale);
             if (ImGui.InputFloat($"##maxZ{index}", ref dangerZone.MaxZ, 1.0f, 10.0f, "%.1f"))
                 SaveConfig(ModuleConfig!);
-
             ImGui.TextColored(KnownColor.Gray.Vector(),
                 $"{areaTypeKey}: X({dangerZone.MinX:F1}~{dangerZone.MaxX:F1}) Z({dangerZone.MinZ:F1}~{dangerZone.MaxZ:F1})");
         }
@@ -354,8 +351,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             }
             ImGui.SameLine();
             ImGui.Text(GetLoc("Color"));
-
-
             // 删除按钮
             ImGui.SameLine();
             using (ImRaii.PushColor(ImGuiCol.Button, KnownColor.Red.Vector()))
@@ -447,16 +442,13 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
 
         private static void SetPositionDetour(GameObject* gameObject, float x, float y, float z)
         {
-
-            if (gameObject is null || DService.ObjectTable.LocalPlayer is null ||
-                (nint)gameObject != DService.ObjectTable.LocalPlayer.Address ||
+            if ((nint)gameObject != DService.ObjectTable.LocalPlayer.Address ||
                 !ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit) ||
                 DService.PartyList.Count(p => p.CurrentHP <= 0) >= ModuleConfig.DisableOnDeathCount)
             {
                 SetPositionHook!.Original(gameObject, x, y, z);
                 return;
             }
-            
             if (zoneLimit is { IsAdvancedMode: true, DangerZones.Count: > 0 })
             {
                 foreach (var dangerZone in zoneLimit.DangerZones)
@@ -469,14 +461,12 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     }
                 }
             }
-
             else if (zoneLimit.Enabled)
             {
                 var correctedPos = CheckAndCorrectTraditionalMode(zoneLimit, new Vector3(x, y, z));
                 SetPositionHook!.Original(gameObject, correctedPos.X, correctedPos.Y, correctedPos.Z);
                 return;
             }
-            
             SetPositionHook!.Original(gameObject, x, y, z);
         }
         
