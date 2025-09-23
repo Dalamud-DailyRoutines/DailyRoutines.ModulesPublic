@@ -75,11 +75,10 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             // 添加当前区域按钮
             if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundaries-AddCurrentZone")))
             {
-                var zid = GameState.TerritoryType;
-                if (!ModuleConfig.ZoneIDs.Contains(zid))
+                if (!ModuleConfig.ZoneIDs.Contains(GameState.TerritoryType))
                 {
-                    ModuleConfig.ZoneIDs.Add(zid);
-                    ModuleConfig.ZoneLimitList[zid] = new ZoneLimit();
+                    ModuleConfig.ZoneIDs.Add(GameState.TerritoryType);
+                    ModuleConfig.ZoneLimitList[GameState.TerritoryType] = new ZoneLimit();
                     SaveConfig(ModuleConfig);
                 }
             }
@@ -100,11 +99,10 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 ExportToClipboard(ModuleConfig);
             if (ImGui.Button(GetLoc("Import")))
             {
-                var imported = ImportFromClipboard<Config>();
-                if (imported is not null)
+                if (ImportFromClipboard<Config>() is not null)
                 {
-                    ModuleConfig = imported;
-                    SaveConfig(ModuleConfig);
+                    ModuleConfig = ImportFromClipboard<Config>();
+                    SaveConfig(ModuleConfig!);
                 }
             }
             if (ImGui.Button(GetLoc("PreventEntryIntoMapBoundaries-ExportCurrentZone")))
@@ -312,7 +310,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             ImGui.SetNextItemWidth(80 * GlobalFontScale);
             if (ImGui.InputFloat($"##maxX{index}", ref dangerZone.MaxX, 1.0f, 10.0f, "%.1f"))
                 SaveConfig(ModuleConfig!);
-
             // Z范围
             ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-ZRange"));
             ImGui.SetNextItemWidth(80 * GlobalFontScale);
