@@ -395,7 +395,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 {
                     zoneLimit.DangerZones.RemoveAt(index);
                     SaveConfig(ModuleConfig);
-                    ImGui.TreePop();
                 }
             }
         }
