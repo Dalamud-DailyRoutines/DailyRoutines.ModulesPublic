@@ -380,7 +380,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 _ => currentPos
             };
 
-
         private static Vector3 GetSafePositionFromCircle(DangerZone zone, Vector3 currentPos) =>
              zone.CenterPos + ((currentPos - zone.CenterPos).Length() == 0 ? new Vector3(1.0f, 0, 0) : Vector3.Normalize(currentPos - zone.CenterPos)) * (zone.Radius + 1.0f);
 
@@ -417,21 +416,15 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                       ? new Vector3(clampedX, currentPos.Y, clampedZ)
                       : currentPos
                 : currentPos;
-
         
-        private static bool EvaluateMathExpression(string expression, float x, float z)
-        {
-            var expr = expression.Replace("x", x.ToString("F2", InvariantCulture)).Replace("z", z.ToString("F2", InvariantCulture)).Replace("^", "**");
-            var result = ExpressionTable.Compute(expr, null);
-            return result switch
+        private static bool EvaluateMathExpression(string expression, float x, float z) =>
+            ExpressionTable.Compute(expression.Replace("x", x.ToString("F2", InvariantCulture)).Replace("z", z.ToString("F2", InvariantCulture)).Replace("^", "**"), null) switch
             {
                 DBNull or null => false,
                 bool boolResult => boolResult,
                 IConvertible convertible => Convert.ToDouble(convertible) > 0,
                 _ => false
             };
-           
-        }
 
         private static void SetPositionDetour(GameObject* gameObject, float x, float y, float z)
         {
@@ -468,13 +461,11 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             if (ModuleConfig?.ShowBoundaryVisualization != true ||
                 !ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit))
                 return;
-
-            var drawList = ImGui.GetForegroundDrawList();
             
             if (zoneLimit is { IsAdvancedMode: true, DangerZones.Count: > 0 })
-                zoneLimit.DangerZones.ForEach(zone => DrawDangerZoneInWorld(drawList, zone));
+                zoneLimit.DangerZones.ForEach(zone => DrawDangerZoneInWorld(ImGui.GetForegroundDrawList(), zone));
             else
-                DrawTraditionalBoundaryInWorld(drawList, zoneLimit);
+                DrawTraditionalBoundaryInWorld(ImGui.GetForegroundDrawList(), zoneLimit);
         }
 
         private void DrawDangerZoneInWorld(ImDrawListPtr drawList, DangerZone zone)
@@ -570,13 +561,11 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
             var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0)
                 return;
-
-            var action = parts[0].ToLower();
-
+            
             if (!ModuleConfig.ZoneLimitList.TryGetValue(GameState.TerritoryType, out var zoneLimit))
                 return;
 
-            switch (action)
+            switch (parts[0].ToLower())
             {
                 case "add":
                     HandleAddCommand(parts.Skip(1).ToArray(), zoneLimit);
@@ -588,7 +577,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     HandleModifyCommand(parts.Skip(1).ToArray(), zoneLimit);
                     break;
                 default:
-                    ChatError(GetLoc("Commands-SubCommandNotFound", action));
+                    ChatError(GetLoc("Commands-SubCommandNotFound", parts[0].ToLower()));
                     break;
             }
         }
@@ -600,11 +589,10 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 ChatError(GetLoc("Commands-InvalidArgs"));
                 return;
             }
-
-            var shapeType = args[0].ToLower();
+            
             var dangerZone = new DangerZone(GetLoc("PreventEntryIntoMapBoundaries-CommandZone", zoneLimit.DangerZones.Count + 1));
 
-            switch (shapeType)
+            switch (args[0].ToLower())
             {
                 case "circle":
                     if (args.Length < 4)
@@ -652,7 +640,7 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     break;
 
                 default:
-                    ChatError(GetLoc("Commands-InvalidArgs", shapeType));
+                    ChatError(GetLoc("Commands-InvalidArgs", args[0].ToLower()));
                     return;
             }
 
@@ -692,40 +680,36 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                 ChatError(GetLoc("Commands-InvalidArgs", zoneLimit.DangerZones.Count));
                 return;
             }
-
-            var dangerZone = zoneLimit.DangerZones[index - 1];
-            var property = args[1].ToLower();
-            var value = args[2];
-
-            switch (property)
+            
+            switch (args[1].ToLower())
             {
                 case "enabled":
-                    if (bool.TryParse(value, out var enabled))
+                    if (bool.TryParse(args[2], out var enabled))
                     {
-                        dangerZone.Enabled = enabled;
+                        zoneLimit.DangerZones[index - 1].Enabled = enabled;
                         SaveConfig(ModuleConfig!);
                         Chat(GetLoc("PreventEntryIntoMapBoundaries-ZoneToggled",
-                            enabled ? GetLoc("Enabled") : GetLoc("Disable"), dangerZone.Name));
+                            enabled ? GetLoc("Enabled") : GetLoc("Disable"), zoneLimit.DangerZones[index - 1].Name));
                     }
                     break;
 
                 case "name":
-                    dangerZone.Name = value;
+                    zoneLimit.DangerZones[index - 1].Name = args[2];
                     SaveConfig(ModuleConfig!);
-                    Chat((GetLoc("PreventEntryIntoMapBoundaries-NameChanged", value)));
+                    Chat((GetLoc("PreventEntryIntoMapBoundaries-NameChanged", args[2])));
                     break;
 
                 case "color":
-                    if (uint.TryParse(value, out var color))
+                    if (uint.TryParse(args[2], out var color))
                     {
-                        dangerZone.Color = color;
+                        zoneLimit.DangerZones[index - 1].Color = color;
                         SaveConfig(ModuleConfig!);
                         Chat((GetLoc("PreventEntryIntoMapBoundaries-ColorChanged", color.ToString("X8"))));
                     }
                     break;
 
                 default:
-                    ChatError((GetLoc("Commands-InvalidArgs", property)));
+                    ChatError((GetLoc("Commands-InvalidArgs", args[1].ToLower())));
                     break;
             }
         }
