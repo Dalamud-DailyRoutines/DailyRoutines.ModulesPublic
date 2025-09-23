@@ -99,16 +99,6 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
 
         ImGui.Spacing();
 
-        // "/"键自动转英文
-        var forceEnglishOnSlash = ModuleConfig.ForceEnglishOnSlash;
-        if (ImGui.Checkbox(GetLoc("AutoChangeKeyboardLayout-ForceEnglishOnSlash"), ref forceEnglishOnSlash))
-        {
-            ModuleConfig.ForceEnglishOnSlash = forceEnglishOnSlash;
-            SaveConfig(ModuleConfig);
-        }
-
-        ImGui.NewLine();
-
         var currentLayoutHandle = InputMethodController.currentLayout;
         var currentLangID = (ushort)(currentLayoutHandle.ToInt64() & 0xFFFF);
         var currentLayoutName = cachedLayouts.GetValueOrDefault(currentLangID).Name ?? GetLoc("Unknown");
@@ -122,14 +112,7 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
         switch (eventType)
         {
             case AtkEventType.FocusStart: // 聚焦
-                if (ModuleConfig.ForceEnglishOnSlash)
-                    DService.Framework.RunOnTick(() => CheckSlashAndSwitchLayout(textInputEventInterface), TimeSpan.FromMilliseconds(50));
-                else
-                {
-                    var focusLayout = InputMethodController.FindKeyboardLayout(ModuleConfig.FocusLayoutLangID);
-                    if (focusLayout != nint.Zero)
-                        InputMethodController.SwitchToLayout(focusLayout);
-                }
+                DService.Framework.RunOnTick(() => CheckSlashAndSwitchLayout(textInputEventInterface), TimeSpan.FromMilliseconds(50));
                 break;
             case AtkEventType.FocusStop: // 失焦
                 var unfocusLayout = InputMethodController.FindKeyboardLayout(ModuleConfig.UnfocusLayoutLangID);
@@ -264,7 +247,6 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
     {
         public ushort FocusLayoutLangID;    // 聚焦时的布局语言ID
         public ushort UnfocusLayoutLangID;  // 失焦时的布局语言ID
-        public bool ForceEnglishOnSlash = true; // 当按/键进入聚焦时强制使用英文输入法
     }
 
     public struct KeyboardLayoutInfo
