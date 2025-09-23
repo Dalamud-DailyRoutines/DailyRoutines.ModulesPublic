@@ -24,6 +24,7 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
 
     private static Config ModuleConfig = null!;
     private static Dictionary<ushort, KeyboardLayoutInfo>? cachedLayouts;
+    private const ushort EnglishLangID = 0x0409;
 
     protected override void Init()
     {
@@ -95,7 +96,17 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
                 }
             }
         }
-        
+
+        ImGui.Spacing();
+
+        // "/"键自动转英文
+        var forceEnglishOnSlash = ModuleConfig.ForceEnglishOnSlash;
+        if (ImGui.Checkbox(GetLoc("AutoChangeKeyboardLayout-ForceEnglishOnSlash"), ref forceEnglishOnSlash))
+        {
+            ModuleConfig.ForceEnglishOnSlash = forceEnglishOnSlash;
+            SaveConfig(ModuleConfig);
+        }
+
         ImGui.NewLine();
 
         var currentLayoutHandle = InputMethodController.currentLayout;
@@ -111,15 +122,42 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
         switch (eventType)
         {
             case AtkEventType.FocusStart: // 聚焦
-                var focusLayout = InputMethodController.FindKeyboardLayout(ModuleConfig.FocusLayoutLangID);
-                if (focusLayout != nint.Zero)
-                    InputMethodController.SwitchToLayout(focusLayout);
+                if (ModuleConfig.ForceEnglishOnSlash)
+                    DService.Framework.RunOnTick(() => CheckSlashAndSwitchLayout(textInputEventInterface), TimeSpan.FromMilliseconds(50));
+                else
+                {
+                    var focusLayout = InputMethodController.FindKeyboardLayout(ModuleConfig.FocusLayoutLangID);
+                    if (focusLayout != nint.Zero)
+                        InputMethodController.SwitchToLayout(focusLayout);
+                }
                 break;
             case AtkEventType.FocusStop: // 失焦
                 var unfocusLayout = InputMethodController.FindKeyboardLayout(ModuleConfig.UnfocusLayoutLangID);
                 if (unfocusLayout != nint.Zero)
                     InputMethodController.SwitchToLayout(unfocusLayout);
                 break;
+        }
+    }
+
+    private static void CheckSlashAndSwitchLayout(AtkComponentTextInput* textInputEventInterface)
+    {
+        if (textInputEventInterface == null) return;
+
+        var textNode = textInputEventInterface->AtkTextNode;
+        if (textNode == null) return;
+
+        var nodeText = textNode->NodeText.ToString();
+        if (nodeText.StartsWith('/'))
+        {
+            var englishLayout = InputMethodController.FindKeyboardLayout(EnglishLangID);
+            if (englishLayout != nint.Zero)
+                InputMethodController.SwitchToLayout(englishLayout);
+        }
+        else
+        {
+            var focusLayout = InputMethodController.FindKeyboardLayout(ModuleConfig.FocusLayoutLangID);
+            if (focusLayout != nint.Zero)
+                InputMethodController.SwitchToLayout(focusLayout);
         }
     }
 
@@ -161,12 +199,13 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
                 allLayouts[langID] = layoutInfo;
             }
 
-            if (!allLayouts.ContainsKey(0x0409))
+            // 没有就日一个英文键盘出来
+            if (!allLayouts.ContainsKey(EnglishLangID))
             {
                 var englishHandle = LoadKeyboardLayout("00000409", 0x00000001);
                 if (englishHandle != nint.Zero)
                 {
-                    var englishInfo = new KeyboardLayoutInfo { Handle = englishHandle, Name = GetLayoutDisplayName(0x0409), LangID = 0x0409 };
+                    var englishInfo = new KeyboardLayoutInfo { Handle = englishHandle, Name = GetLayoutDisplayName(EnglishLangID), LangID = EnglishLangID };
                     allLayouts[0x0409] = englishInfo;
                 }
             }
@@ -225,6 +264,7 @@ public unsafe class AutoChangeKeyboardLayout : DailyModuleBase
     {
         public ushort FocusLayoutLangID;    // 聚焦时的布局语言ID
         public ushort UnfocusLayoutLangID;  // 失焦时的布局语言ID
+        public bool ForceEnglishOnSlash = true; // 当按/键进入聚焦时强制使用英文输入法
     }
 
     public struct KeyboardLayoutInfo
