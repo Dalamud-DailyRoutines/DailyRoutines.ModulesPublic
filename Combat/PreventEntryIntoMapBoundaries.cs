@@ -239,8 +239,6 @@ public unsafe class PreventEntryIntoMapBoundaries : DailyModuleBase
                     switch (dangerZone.ZoneType)
                     {
                         case ZoneType.Expression:
-                            ImGui.Text(GetLoc("PreventEntryIntoMapBoundaries-ExpressionDescription"));
-                            ImGui.TextColored(KnownColor.Gray.Vector(), GetLoc("PreventEntryIntoMapBoundaries-ExpressionExample"));
                             if (ImGui.InputTextMultiline($"##expr{j}", ref dangerZone.MathExpression, 200, new Vector2(300, 60)))
                                 SaveConfig(ModuleConfig!);
                             break;
