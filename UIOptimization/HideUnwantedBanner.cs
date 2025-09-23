@@ -119,7 +119,7 @@ public class HideUnwantedBanner : DailyModuleBase
         ImGui.Spacing();
         
         using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit);
-        if (table.Success)
+        if (table)
         {
             ImGui.TableSetupColumn(GetLoc("Enable"), ImGuiTableColumnFlags.WidthFixed, 50 * GlobalFontScale);
             ImGui.TableSetupColumn(GetLoc("Name"), ImGuiTableColumnFlags.WidthFixed, 200 * GlobalFontScale);
