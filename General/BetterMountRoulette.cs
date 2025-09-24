@@ -31,18 +31,18 @@ public class BetterMountRoulette : DailyModuleBase
     
     private static readonly CompSig UseActionSig = new("E8 ?? ?? ?? ?? B0 01 EB B6");
     private unsafe delegate byte UseActionDelegate(ActionManager* actionManager, uint actionType, uint actionID, long targetedActorID, uint param, uint useType, int pvp, bool* isGroundTarget);
-    private static Hook<UseActionDelegate>? useActionHook;
-    private static Config? moduleConfig;
+    private static Hook<UseActionDelegate>? UseActionHook;
+    private static Config? ModuleConfig;
     private static readonly uint[] MountRouletteActionIDs = [
         9,  
         24  
     ];
-    private static List<Mount>? unlockedMounts;
+    private static List<Mount>? UnlockedMounts;
     private static readonly Random random = new();
     private string normalSearchText = string.Empty;
     private string pvpSearchText = string.Empty;
-    private List<Mount> sortedNormalMounts = new();
-    private List<Mount> sortedPvpMounts = new();
+    private List<Mount> SortedNormalMounts = new();
+    private List<Mount> SortedPvpMounts = new();
     private bool normalListDirty = true;
     private bool pvpListDirty = true;
     private delegate void MarkDirtyAction();
@@ -56,37 +56,50 @@ public class BetterMountRoulette : DailyModuleBase
 
     protected override unsafe void Init()
     {
-        moduleConfig = LoadConfig<Config>() ?? new Config();
-        useActionHook ??= UseActionSig.GetHook<UseActionDelegate>(OnUseActionDetour);
-        useActionHook.Enable();
+        ModuleConfig = LoadConfig<Config>() ?? new Config();
+        UseActionHook ??= UseActionSig.GetHook<UseActionDelegate>(OnUseActionDetour);
+        UseActionHook.Enable();
+        DService.ClientState.Login += OnLogin;
+        if (DService.ClientState.IsLoggedIn)
+            OnLogin();
+    }
+    private unsafe void OnLogin()
+    {
         var playerState = PlayerState.Instance();
         if (playerState == null)
         {
             DService.Log.Error("无法获取 PlayerState，坐骑列表为空。");
-            unlockedMounts = new List<Mount>();
+            UnlockedMounts = new List<Mount>();
             return;
         }
-        
         var allMountsSheet = DService.Data.GetExcelSheet<Mount>();
         var tempMountList = new List<Mount>();
-        foreach (var mount in allMountsSheet)
+        if (allMountsSheet != null)
         {
-            if (mount.Icon != 0 && !string.IsNullOrEmpty(mount.Singular.ToString()) && playerState->IsMountUnlocked(mount.RowId))
-                tempMountList.Add(mount);
+            foreach (var mount in allMountsSheet)
+            {
+                if (mount.Icon != 0 && !string.IsNullOrEmpty(mount.Singular.ToString()) && playerState->IsMountUnlocked(mount.RowId))
+                    tempMountList.Add(mount);
+            }
         }
 
         tempMountList.Sort((mount1, mount2) => mount1.RowId.CompareTo(mount2.RowId));
-        unlockedMounts = tempMountList;
+        UnlockedMounts = tempMountList;
     }
-
     protected override void ConfigUI()
     {
-        if (moduleConfig == null || unlockedMounts == null)
+        if (ModuleConfig == null) return;
+        
+        if (UnlockedMounts == null)
         {
-            ImGui.Text(GetLoc("BetterMountRoulette-Loading"));
+            ImGui.Text(GetLoc("Settings-NeedLoginToAnyCharacter"));
             return;
         }
 
+        if (ImGui.Button(GetLoc("Refresh")))
+            OnLogin();
+        
+        ImGui.SameLine();
         ImGui.TextWrapped(GetLoc("BetterMountRoulette-HelpText"));
         ImGui.Separator();
         
@@ -102,14 +115,14 @@ public class BetterMountRoulette : DailyModuleBase
                         normalListDirty = true;
                     if (normalListDirty)
                     {
-                        UpdateSortedMounts(unlockedMounts, moduleConfig.NormalRouletteMounts, normalSearchText,
-                            ref sortedNormalMounts);
+                        UpdateSortedMounts(UnlockedMounts, ModuleConfig.NormalRouletteMounts, normalSearchText,
+                            ref SortedNormalMounts);
                         normalListDirty = false;
                     }
 
                     using var child = ImRaii.Child("##NormalMountsGrid", new Vector2(-1, 300 * GlobalFontScale), true);
                     if (child)
-                        DrawMountsGrid(sortedNormalMounts, moduleConfig.NormalRouletteMounts, MarkNormalListAsDirty);
+                        DrawMountsGrid(SortedNormalMounts, ModuleConfig.NormalRouletteMounts, MarkNormalListAsDirty);
                 }
             }
         }
@@ -124,13 +137,13 @@ public class BetterMountRoulette : DailyModuleBase
                 
                 if (pvpListDirty)
                 {
-                    UpdateSortedMounts(unlockedMounts, moduleConfig.PvpRouletteMounts, pvpSearchText, ref sortedPvpMounts);
+                    UpdateSortedMounts(UnlockedMounts, ModuleConfig.PvpRouletteMounts, pvpSearchText, ref SortedPvpMounts);
                     pvpListDirty = false;
                 }
                 
                 using var child = ImRaii.Child("##PvpMountsGrid", new Vector2(-1, 300 * GlobalFontScale), true);
                 if (child)
-                    DrawMountsGrid(sortedPvpMounts, moduleConfig.PvpRouletteMounts, MarkPvpListAsDirty);
+                    DrawMountsGrid(SortedPvpMounts, ModuleConfig.PvpRouletteMounts, MarkPvpListAsDirty);
             }
         }
     }
@@ -188,8 +201,8 @@ public class BetterMountRoulette : DailyModuleBase
                         selectedMounts.Add(mount.RowId);
                     else
                         selectedMounts.Remove(mount.RowId);
-                    if (moduleConfig != null)
-                        SaveConfig(moduleConfig);
+                    if (ModuleConfig != null)
+                        SaveConfig(ModuleConfig);
                     markAsDirty();
                 }
                 ImGui.SameLine();
@@ -218,7 +231,10 @@ public class BetterMountRoulette : DailyModuleBase
             }
         }
     }
-
+    protected override void Uninit()
+    {
+        DService.ClientState.Login -= OnLogin;
+    }
     private unsafe byte OnUseActionDetour(ActionManager* actionManager, uint actionType, uint actionID, long targetedActorID, uint param, uint useType, int pvp, bool* isGroundTarget)
     {
         var isRouletteAction = false;
@@ -231,14 +247,14 @@ public class BetterMountRoulette : DailyModuleBase
             }
         }
 
-        if (isRouletteAction)
+        if (actionType == 5 && isRouletteAction)
         {
             try
             {
                 var isInPvp = DService.ClientState.IsPvP;
-                if (moduleConfig != null)
+                if (ModuleConfig != null)
                 {
-                    var mountList = isInPvp ? moduleConfig.PvpRouletteMounts : moduleConfig.NormalRouletteMounts;
+                    var mountList = isInPvp ? ModuleConfig.PvpRouletteMounts : ModuleConfig.NormalRouletteMounts;
 
                     if (mountList.Count > 0)
                     {
@@ -260,7 +276,7 @@ public class BetterMountRoulette : DailyModuleBase
             }
         }
 
-        return useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp,
+        return UseActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp,
             isGroundTarget);
     }
 }
