@@ -89,11 +89,11 @@ public unsafe class AutoNoise : DailyModuleBase
                             {
                                 foreach (var mount in MountSearcher.SearchResult)
                                 {
-                                    var icon = ImageHelper.GetGameIcon(mount.Icon).Handle;
-                                    if (ImGuiOm.SelectableImageWithText(icon,
-                                        new(ImGui.GetTextLineHeightWithSpacing()),
-                                        $"{mount.Singular.ExtractText()}",
-                                        mount.Equals(SelectedMount)))
+                                    ImageHelper.TryGetGameIcon(mount.Icon, out var textureWrap);
+                                    if (ImGuiOm.SelectableImageWithText(textureWrap.Handle, 
+                                                                        new(ImGui.GetTextLineHeightWithSpacing()),
+                                                                        $"{mount.Singular.ExtractText()}",
+                                                                        SelectedMount != null && mount.RowId == SelectedMount.Value.RowId))
                                     {
                                         SelectedMount = mount;
                                         UpdateAvailableActions(mount);
@@ -112,17 +112,18 @@ public unsafe class AutoNoise : DailyModuleBase
                         ImGui.SetNextItemWidth(250f * GlobalFontScale);
 
                         using var combo = ImRaii.Combo("###ActionSelectCombo",
-                                                      GetActionName(SelectedActionID),
+                                                      LuminaWrapper.GetActionName(SelectedActionID),
                                                       ImGuiComboFlags.None);
                         if (combo)
                         {
                             foreach (var (act, actionId, name) in AvailableActions)
                             {
-                                var icon = ImageHelper.GetGameIcon(act.Icon).Handle;
-                                if (ImGuiOm.SelectableImageWithText(icon,
-                                        new(ImGui.GetTextLineHeightWithSpacing()),
-                                        $"{name}",
-                                        actionId == SelectedActionID))
+                                ImageHelper.TryGetGameIcon(act.Icon, out var textureWrap);
+                                if (ImGuiOm.SelectableImageWithText(textureWrap.Handle, 
+                                                                    new(ImGui.GetTextLineHeightWithSpacing()), 
+                                                                    $"{name}", 
+                                                                    actionId == SelectedActionID))
+
                                     SelectedActionID = actionId;
                             }
                         }
@@ -179,22 +180,12 @@ public unsafe class AutoNoise : DailyModuleBase
         }
     }
 
-    private static string GetActionName(uint actionID)
-    {
-        if (actionID == 0)
-            return string.Empty;
-        if (LuminaGetter.TryGetRow<Action>(actionID, out var action))
-            return action.Name.ExtractText();
-        return $"{actionID}";
-    }
-
     private void UpdateAvailableActions(Mount mount)
     {
         AvailableActions.Clear();
         SelectedActionID = 0;
 
-        if (!LuminaGetter.TryGetRow<Lumina.Excel.Sheets.MountAction>(mount.MountAction.RowId, out var mountAction)) return;
-
+        var mountAction = mount.MountAction.Value;
         for (var i = 0; i < 6; i++)
         {
             var action = mountAction.Action[i];
@@ -208,10 +199,10 @@ public unsafe class AutoNoise : DailyModuleBase
         if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return;
         if (!DService.Condition[ConditionFlag.Mounted]) return;
 
-        var currentMountID = localPlayer.CurrentMount?.RowId;
-        if (currentMountID == null) return;
+        var currentMountID = localPlayer.CurrentMount?.RowId ?? 0;
+        if (currentMountID == 0) return;
 
-        if (ModuleConfig.MountActions.TryGetValue(currentMountID.Value, out var action) &&
+        if (ModuleConfig.MountActions.TryGetValue(currentMountID, out var action) &&
             ActionManager.Instance()->GetActionStatus(ActionType.Action, action.ActionID) == 0)
         
             UseActionManager.UseAction(ActionType.Action, action.ActionID);
