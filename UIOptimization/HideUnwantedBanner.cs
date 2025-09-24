@@ -32,8 +32,6 @@ public class HideUnwantedBanner : DailyModuleBase
     private static Hook<SetImageTextureDelegate>? SetImageTextureHook;
     private static Config? ModuleConfig;
     
-    private record BannerSetting(int ID, string Label);
-    
     private static readonly Dictionary<int, string> PredefinedBanners = new()
     {
         [120031] = GetLoc("HideUnwantedBanner-LevequestAccepted"),
@@ -61,9 +59,6 @@ public class HideUnwantedBanner : DailyModuleBase
         [128372] = GetLoc("HideUnwantedBanner-StellarMissionFailed"),
         [128373] = GetLoc("HideUnwantedBanner-StellarMissionComplete")
     };
-    private static readonly Dictionary<int, bool> SeenBanners = [];
-    private static List<BannerSetting> SortedPredefinedBanners = [];
-
     public class Config : ModuleConfiguration
     {
         public HashSet<int> HiddenBanners = [];
@@ -74,99 +69,50 @@ public class HideUnwantedBanner : DailyModuleBase
         ModuleConfig = LoadConfig<Config>() ?? new Config();
         SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(OnSetImageTextureDetour);
         SetImageTextureHook.Enable();
-        
-        SortedPredefinedBanners = new List<BannerSetting>();
-        foreach (var kvp in PredefinedBanners)
-            SortedPredefinedBanners.Add(new BannerSetting(kvp.Key, kvp.Value));
-        SortedPredefinedBanners.Sort((b1, b2) => string.Compare(b1.Label, b2.Label, StringComparison.Ordinal));
     }
 
     protected override void ConfigUI()
     {
         ImGui.TextWrapped(GetLoc("HideUnwantedBanner-HelpText"));
         ImGui.Separator();
-
-        if (SeenBanners.Count > 0)
+        ImGui.Spacing();
+        using var child = ImRaii.Child("BannerListChild", new Vector2(-1, 300 * GlobalFontScale), true);
+        if (child)
         {
-            ImGui.TextWrapped(GetLoc("HideUnwantedBanner-NewlyDetectedBannersHeader"));
-            ImGui.Spacing();
-            
-            using var seenTable = ImRaii.Table("SeenBannersList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit);
-            if (seenTable)
+            using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit);
+            if (table)
             {
-                ImGui.TableSetupColumn(GetLoc("Add"), ImGuiTableColumnFlags.WidthFixed, 50 * GlobalFontScale);
-                ImGui.TableSetupColumn(GetLoc("Preview"), ImGuiTableColumnFlags.WidthFixed, 200 * GlobalFontScale);
+                ImGui.TableSetupColumn(GetLoc("Enable"), ImGuiTableColumnFlags.WidthFixed, 20 * GlobalFontScale);
+                ImGui.TableSetupColumn(GetLoc("Name"), ImGuiTableColumnFlags.WidthFixed, 200 * GlobalFontScale);
                 ImGui.TableHeadersRow();
 
-                foreach (var bannerID in SeenBanners.Keys.ToList())
+                foreach (var banner in PredefinedBanners)
                 {
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
 
-                    if (ImGui.Button($"{GetLoc("Add")}##{bannerID}"))
+                    var isHidden = ModuleConfig.HiddenBanners.Contains(banner.Key);
+                    if (ImGui.Checkbox($"##{banner.Key}", ref isHidden))
                     {
-                        ModuleConfig.HiddenBanners.Add(bannerID);
+                        if (isHidden)
+                            ModuleConfig.HiddenBanners.Add(banner.Key);
+                        else
+                            ModuleConfig.HiddenBanners.Remove(banner.Key);
+
                         SaveConfig(ModuleConfig);
-                        SeenBanners.Remove(bannerID);
                     }
+
                     ImGui.TableNextColumn();
-                    ImGui.Text(GetLoc("HideUnwantedBanner-CustomBannerLabel", bannerID));
-                }
-            }
-            
-            ImGui.Separator();
-        }
-        ImGui.Spacing();
-        
-        using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit);
-        if (table)
-        {
-            ImGui.TableSetupColumn(GetLoc("Enable"), ImGuiTableColumnFlags.WidthFixed, 50 * GlobalFontScale);
-            ImGui.TableSetupColumn(GetLoc("Name"), ImGuiTableColumnFlags.WidthFixed, 200 * GlobalFontScale);
-            ImGui.TableHeadersRow();
-
-            foreach (var banner in SortedPredefinedBanners)
-                DrawBannerTableRow(banner);
-
-            foreach (var hiddenID in ModuleConfig.HiddenBanners)
-            {
-                if (!PredefinedBanners.ContainsKey(hiddenID))
-                {
-                    var customLabel = GetLoc("HideUnwantedBanner-CustomBannerLabel", hiddenID);
-                    DrawBannerTableRow(new BannerSetting(hiddenID, customLabel));
+                    ImGui.Text(banner.Value);
                 }
             }
         }
     }
-    
-    private void DrawBannerTableRow(BannerSetting banner)
-    {
-        ImGui.TableNextRow();
-        ImGui.TableNextColumn();
-
-        var isHidden = ModuleConfig.HiddenBanners.Contains(banner.ID);
-        if (ImGui.Checkbox($"##{banner.ID}", ref isHidden))
-        {
-            if (isHidden)
-                ModuleConfig.HiddenBanners.Add(banner.ID);
-            else
-                ModuleConfig.HiddenBanners.Remove(banner.ID);
-
-            SaveConfig(ModuleConfig);
-        }
-        ImGui.TableNextColumn();
-        ImGui.Text(banner.Label);
-    }
-    
     private unsafe void OnSetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID)
     {
         var shouldHide = false;
         if (ModuleConfig != null && bannerID > 0)
-        {
             shouldHide = ModuleConfig.HiddenBanners.Contains((int)bannerID);
-            if (!shouldHide && !PredefinedBanners.ContainsKey((int)bannerID))
-                SeenBanners.TryAdd((int)bannerID, true);
-        }
         SetImageTextureHook?.Original(addon, shouldHide ? 0 : bannerID, a3, soundEffectID);
     }
 }
