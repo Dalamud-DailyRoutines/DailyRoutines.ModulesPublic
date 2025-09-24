@@ -7,6 +7,7 @@ using Dalamud.Bindings.ImGui;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Helpers;
 using Dalamud.Game;
+using Dalamud.Memory;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -14,8 +15,8 @@ using FFXIVClientStructs.FFXIV.Common.Math;
 using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.Infos;
+using TinyPinyin;
 using static DailyRoutines.Infos.Widgets;
-
 
 namespace DailyRoutines.Modules;
 
@@ -34,26 +35,29 @@ public class BetterMountRoulette : DailyModuleBase
     private static Hook<UseActionDelegate>? UseActionHook;
     private static Config? ModuleConfig;
     private static readonly uint[] MountRouletteActionIDs = [
-        9,  
-        24  
+        9,
+        24
     ];
     private static List<Mount>? UnlockedMounts;
     private static readonly Random random = new();
     private string normalSearchText = string.Empty;
     private string pvpSearchText = string.Empty;
-    private List<Mount> SortedNormalMounts = new();
+    private List<Mount> SortedNormalMounts = new(); 
     private List<Mount> SortedPvpMounts = new();
     private bool normalListDirty = true;
     private bool pvpListDirty = true;
     private delegate void MarkDirtyAction();
     private void MarkNormalListAsDirty() => normalListDirty = true;
     private void MarkPvpListAsDirty() => pvpListDirty = true;
+    // 拼音缓存
+    private static readonly Dictionary<uint, string> MountPinyinCache = new();
+    
     private class Config : ModuleConfiguration
     {
         public HashSet<uint> NormalRouletteMounts = [];
         public HashSet<uint> PvpRouletteMounts = [];
     }
-
+    
     protected override unsafe void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new Config();
@@ -63,6 +67,11 @@ public class BetterMountRoulette : DailyModuleBase
         if (DService.ClientState.IsLoggedIn)
             OnLogin();
     }
+    protected override void Uninit()
+    {
+        DService.ClientState.Login -= OnLogin;
+    }
+    
     private unsafe void OnLogin()
     {
         var playerState = PlayerState.Instance();
@@ -82,9 +91,17 @@ public class BetterMountRoulette : DailyModuleBase
                     tempMountList.Add(mount);
             }
         }
-
         tempMountList.Sort((mount1, mount2) => mount1.RowId.CompareTo(mount2.RowId));
         UnlockedMounts = tempMountList;
+        MountPinyinCache.Clear();
+        foreach (var mount in UnlockedMounts)
+        {
+            var pinyin = PinyinHelper.GetPinyin(mount.Singular.ToString(), string.Empty);
+            MountPinyinCache[mount.RowId] = pinyin.ToLowerInvariant();
+        }
+        // 标记列表需要刷新
+        normalListDirty = true;
+        pvpListDirty = true;
     }
     protected override void ConfigUI()
     {
@@ -95,7 +112,7 @@ public class BetterMountRoulette : DailyModuleBase
             ImGui.Text(GetLoc("Settings-NeedLoginToAnyCharacter"));
             return;
         }
-
+        
         if (ImGui.Button(GetLoc("Refresh")))
             OnLogin();
         
@@ -119,14 +136,13 @@ public class BetterMountRoulette : DailyModuleBase
                             ref SortedNormalMounts);
                         normalListDirty = false;
                     }
-
                     using var child = ImRaii.Child("##NormalMountsGrid", new Vector2(-1, 300 * GlobalFontScale), true);
                     if (child)
                         DrawMountsGrid(SortedNormalMounts, ModuleConfig.NormalRouletteMounts, MarkNormalListAsDirty);
                 }
             }
         }
-
+        
         using (var tab = ImRaii.TabItem(GetLoc("BetterMountRoulette-PvpAreaTab")))
         {
             if (tab)
@@ -134,7 +150,6 @@ public class BetterMountRoulette : DailyModuleBase
                 ImGui.Text(GetLoc("BetterMountRoulette-PvpMountsHeader"));
                 if (ImGui.InputTextWithHint("##PvpSearch", GetLoc("Search"), ref pvpSearchText, 100))
                     pvpListDirty = true;
-                
                 if (pvpListDirty)
                 {
                     UpdateSortedMounts(UnlockedMounts, ModuleConfig.PvpRouletteMounts, pvpSearchText, ref SortedPvpMounts);
@@ -147,18 +162,21 @@ public class BetterMountRoulette : DailyModuleBase
             }
         }
     }
-
+    
     private void UpdateSortedMounts(List<Mount> allMounts, HashSet<uint> selectedMounts, string searchText, ref List<Mount> sortedList)
     {
         List<Mount> filteredMounts;
+        // 根据搜索文本过滤坐骑
         if (string.IsNullOrEmpty(searchText))
             filteredMounts = allMounts;
         else
         {
             filteredMounts = new List<Mount>();
+            var lowerSearchText = searchText.ToLowerInvariant();
             foreach (var mount in allMounts)
             {
-                if (mount.Singular.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                // 支持名称和拼音搜索
+                if (mount.Singular.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase) || (MountPinyinCache.TryGetValue(mount.RowId, out var pinyin) && pinyin.Contains(lowerSearchText)))
                     filteredMounts.Add(mount);
             }
         }
@@ -167,6 +185,7 @@ public class BetterMountRoulette : DailyModuleBase
         var selectedFilteredMounts = new List<Mount>();
         var unselectedFilteredMounts = new List<Mount>();
 
+        // 将过滤后的坐骑分为已选择和未选择两组
         foreach (var mount in filteredMounts)
         {
             if (selectedMounts.Contains(mount.RowId))
@@ -175,13 +194,13 @@ public class BetterMountRoulette : DailyModuleBase
                 unselectedFilteredMounts.Add(mount);
         }
 
+        // 将已选择的坐骑放在前面
         sortedList.AddRange(selectedFilteredMounts);
         sortedList.AddRange(unselectedFilteredMounts);
     }
     private void DrawMountsGrid(List<Mount> mountsToDraw, HashSet<uint> selectedMounts, MarkDirtyAction markAsDirty)
     {
         if (mountsToDraw.Count == 0) return;
-        
         var itemWidthEstimate = 120 * GlobalFontScale;
         var contentWidth = ImGui.GetContentRegionAvail().X;
         var columnCount = Math.Max(1, (int)Math.Floor(contentWidth / itemWidthEstimate));
@@ -203,6 +222,7 @@ public class BetterMountRoulette : DailyModuleBase
                         selectedMounts.Remove(mount.RowId);
                     if (ModuleConfig != null)
                         SaveConfig(ModuleConfig);
+                    // 标记列表需要刷新
                     markAsDirty();
                 }
                 ImGui.SameLine();
@@ -231,10 +251,7 @@ public class BetterMountRoulette : DailyModuleBase
             }
         }
     }
-    protected override void Uninit()
-    {
-        DService.ClientState.Login -= OnLogin;
-    }
+    
     private unsafe byte OnUseActionDetour(ActionManager* actionManager, uint actionType, uint actionID, long targetedActorID, uint param, uint useType, int pvp, bool* isGroundTarget)
     {
         var isRouletteAction = false;
@@ -265,7 +282,7 @@ public class BetterMountRoulette : DailyModuleBase
                     }
                     else
                     {
-                        ChatHelper.SendMessage(GetLoc("BetterMountRoulette-ListEmptyError"));
+                        OmenTools.Helpers.HelpersOm.NotificationInfo(GetLoc("BetterMountRoulette-ListEmptyError"));
                         return 0;
                     }
                 }
@@ -275,9 +292,7 @@ public class BetterMountRoulette : DailyModuleBase
                 DService.Log.Error(ex, "执行坐骑随机时出错");
             }
         }
-
         return UseActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp,
             isGroundTarget);
     }
 }
-
