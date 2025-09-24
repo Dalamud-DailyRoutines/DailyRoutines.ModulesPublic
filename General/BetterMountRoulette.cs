@@ -34,10 +34,7 @@ public class BetterMountRoulette : DailyModuleBase
     private unsafe delegate byte UseActionDelegate(ActionManager* actionManager, uint actionType, uint actionID, long targetedActorID, uint param, uint useType, int pvp, bool* isGroundTarget);
     private static Hook<UseActionDelegate>? UseActionHook;
     private static Config? ModuleConfig;
-    private static readonly uint[] MountRouletteActionIDs = [
-        9,
-        24
-    ];
+    private static readonly uint[] MountRouletteActionIDs = [9, 24];
     private static List<Mount>? UnlockedMounts;
     private static readonly Random random = new();
     private string normalSearchText = string.Empty;
