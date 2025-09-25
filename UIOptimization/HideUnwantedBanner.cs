@@ -108,7 +108,8 @@ public class HideUnwantedBanner : DailyModuleBase
             }
         }
     }
-    private unsafe void OnSetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID)
+
+    private unsafe void SetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID)
     {
         var shouldHide = false;
         if (ModuleConfig != null && bannerID > 0)
