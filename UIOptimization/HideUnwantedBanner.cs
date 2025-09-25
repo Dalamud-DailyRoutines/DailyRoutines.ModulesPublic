@@ -113,7 +113,7 @@ public class HideUnwantedBanner : DailyModuleBase
     {
         var shouldHide = false;
         if (ModuleConfig != null && bannerID > 0)
-            shouldHide = ModuleConfig.HiddenBanners.Contains((int)bannerID);
+            shouldHide = ModuleConfig.HiddenBanners.Contains(bannerID);
         SetImageTextureHook?.Original(addon, shouldHide ? 0 : bannerID, a3, soundEffectID);
     }
 }
