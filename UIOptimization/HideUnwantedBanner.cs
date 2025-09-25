@@ -76,7 +76,8 @@ public class HideUnwantedBanner : DailyModuleBase
         ImGui.TextWrapped(GetLoc("HideUnwantedBanner-HelpText"));
         ImGui.Separator();
         ImGui.Spacing();
-        using var child = ImRaii.Child("BannerListChild", new Vector2(-1, 300 * GlobalFontScale), true);
+        var childSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 300 * GlobalFontScale);
+        using var child = ImRaii.Child("BannerListChild", childSize, true);
         if (child)
         {
             using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit);
