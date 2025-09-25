@@ -19,7 +19,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
     };
 
     private static Config ModuleConfig = null!;
-    private static int newWhitelistIDnput;
+    private static int newWhitelistIDInput;
     private const uint guardStatusID = 3054;
 
     private class Config : ModuleConfiguration
@@ -65,16 +65,16 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
             ImGuiOm.HelpMarker(GetLoc("AutoPreventGuardInterrupt-WhitelistHelp"));
             
             ImGui.SetNextItemWidth(150f * GlobalFontScale);
-            ImGui.InputInt("##newWhitelistId", ref newWhitelistIDnput);
+            ImGui.InputInt("##newWhitelistId", ref newWhitelistIDInput);
 
 
             ImGui.SameLine();
             if (ImGui.Button(GetLoc("Add")))
             {
-                if (newWhitelistIDnput > 0 && ModuleConfig.CustomWhitelist.Add((uint)newWhitelistIDnput))
+                if (newWhitelistIDInput > 0 && ModuleConfig.CustomWhitelist.Add((uint)newWhitelistIDInput))
                 {
                     SaveConfig(ModuleConfig);
-                    newWhitelistIDnput = 0;
+                    newWhitelistIDInput = 0;
                 }
             }
 
