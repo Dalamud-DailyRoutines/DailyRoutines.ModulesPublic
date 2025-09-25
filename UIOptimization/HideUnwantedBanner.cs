@@ -61,7 +61,7 @@ public class HideUnwantedBanner : DailyModuleBase
     };
     public class Config : ModuleConfiguration
     {
-        public HashSet<int> HiddenBanners = [];
+        public HashSet<uint> HiddenBanners = [];
     }
 
     protected override unsafe void Init()
