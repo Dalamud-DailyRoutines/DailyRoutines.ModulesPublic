@@ -59,7 +59,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
-        using var node = ImRaii.TreeNode($"{GetLoc("AutoPreventGuardInterrupt-Whitelist")} ({ModuleConfig.CustomWhitelist.Count})###WhitelistNode");
+        using var node = ImRaii.TreeNode($"{GetLoc("Whitelist")} ({ModuleConfig.CustomWhitelist.Count})###WhitelistNode");
         if (node)
         {
             ImGuiOm.HelpMarker(GetLoc("AutoPreventGuardInterrupt-WhitelistHelp"));
@@ -136,7 +136,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
 
         isPrevented = true;
 
-        if (ModuleConfig.SendNotification && Throttler.Throttle("AutoPreventGuardInterrupt-Notification", 1_000))
+        if (ModuleConfig.SendNotification && Throttler.Throttle("AutoPreventGuardInterrupt-Notification", 1000))
         {
             var actionData = LuminaGetter.GetRow<Action>(adjustedActionID);
             var actionName = actionData?.Name.ExtractText() ?? GetLoc("UnknownAction");
