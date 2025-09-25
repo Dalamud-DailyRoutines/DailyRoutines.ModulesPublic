@@ -32,7 +32,7 @@ public class HideUnwantedBanner : DailyModuleBase
     private static Hook<SetImageTextureDelegate>? SetImageTextureHook;
     private static Config? ModuleConfig;
     
-    private static readonly Dictionary<int, string> PredefinedBanners = new()
+    private static readonly Dictionary<uint, string> PredefinedBanners = new()
     {
         [120031] = GetLoc("HideUnwantedBanner-LevequestAccepted"),
         [120032] = GetLoc("HideUnwantedBanner-LevequestComplete"),
