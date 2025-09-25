@@ -27,7 +27,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         Title = GetLoc("AutoBuyMapsTitle"),
         Description = GetLoc("AutoBuyMapsDescription"),
         Category = ModuleCategories.General,
-        Author = ["qingsiweisan", "Simplified"]
+        Author = ["qingsiweisan"]
     };
 
     private static readonly (uint ItemID, string Name, uint DecipheredKeyItemID)[] MapData =
