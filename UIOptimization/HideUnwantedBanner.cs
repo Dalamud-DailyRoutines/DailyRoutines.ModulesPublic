@@ -67,7 +67,7 @@ public class HideUnwantedBanner : DailyModuleBase
     protected override unsafe void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new Config();
-        SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(OnSetImageTextureDetour);
+        SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(SetImageTextureDetour);
         SetImageTextureHook.Enable();
     }
 
