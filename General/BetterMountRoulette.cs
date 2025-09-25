@@ -139,8 +139,8 @@ public class BetterMountRoulette : DailyModuleBase
         }
         else
             mountsToDraw = [];
-        
-        using var child = ImRaii.Child($"##MountsGrid{tabLabel}", new Vector2(-1, 300 * GlobalFontScale), true);
+        var childSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 300 * GlobalFontScale);
+        using var child = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (child)
             DrawMountsGrid(mountsToDraw, selectedMounts);
     }
