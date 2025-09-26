@@ -19,9 +19,11 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
     };
 
     private static Config ModuleConfig = null!;
-    private static int newWhitelistIDInput;
-    private const uint guardStatusID = 3054;
-    private const uint hideStatusID = 1316;
+    
+    private static int NewWhitelistIDInput;
+    
+    private const uint GuardStatusID = 3054;
+    private const uint HideStatusID = 1316;
 
     private class Config : ModuleConfiguration
     {
@@ -30,6 +32,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         public float InterruptThreshold = 0.5f;
         public HashSet<uint> CustomWhitelist = new();
     }
+    
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
@@ -40,7 +43,6 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
     protected override void Uninit()
     {
         UseActionManager.Unreg(OnPreUseAction);
-        SaveConfig(ModuleConfig);
     }
 
     protected override void ConfigUI()
@@ -60,59 +62,56 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
+        
         using var node = ImRaii.TreeNode($"{GetLoc("Whitelist")} ({ModuleConfig.CustomWhitelist.Count})###WhitelistNode");
-        if (node)
+        if (!node) return;
+        ImGuiOm.HelpMarker(GetLoc("AutoPreventGuardInterrupt-WhitelistHelp"));
+        
+        ImGui.SetNextItemWidth(150f * GlobalFontScale);
+        ImGui.InputInt("##newWhitelistId", ref NewWhitelistIDInput);
+        
+        ImGui.SameLine();
+        if (ImGui.Button(GetLoc("Add")))
         {
-            ImGuiOm.HelpMarker(GetLoc("AutoPreventGuardInterrupt-WhitelistHelp"));
-            
-            ImGui.SetNextItemWidth(150f * GlobalFontScale);
-            ImGui.InputInt("##newWhitelistId", ref newWhitelistIDInput);
-
-
-            ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Add")))
+            if (NewWhitelistIDInput > 0 && ModuleConfig.CustomWhitelist.Add((uint)NewWhitelistIDInput))
             {
-                if (newWhitelistIDInput > 0 && ModuleConfig.CustomWhitelist.Add((uint)newWhitelistIDInput))
-                {
-                    SaveConfig(ModuleConfig);
-                    newWhitelistIDInput = 0;
-                }
-            }
-
-            // 显示当前的白名单列表
-            ImGui.Spacing();
-            var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
-            using var table = ImRaii.Table("###WhitelistTable", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg, tableSize);
-            if (!table) return;
-            ImGui.TableSetupColumn(GetLoc("ID"), ImGuiTableColumnFlags.WidthFixed, 50 * GlobalFontScale);
-            ImGui.TableSetupColumn(GetLoc("Action"), ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn(GetLoc("Operation"), ImGuiTableColumnFlags.WidthFixed, 80 * GlobalFontScale);
-            ImGui.TableHeadersRow();
-            
-            uint idToRemove = 0;
-            foreach (var id in ModuleConfig.CustomWhitelist)
-            {
-                ImGui.TableNextRow();
-
-                ImGui.TableNextColumn();
-                ImGui.Text(id.ToString());
-
-                ImGui.TableNextColumn();
-                var actionData = LuminaGetter.GetRow<Action>(id);
-                var actionName = actionData?.Name.ExtractText() ?? GetLoc("UnknownAction");
-                ImGui.Text(actionName);
-                
-                ImGui.TableNextColumn();
-                using var idScope = ImRaii.PushId((int)id);
-                if (ImGui.SmallButton(GetLoc("Remove")))
-                    idToRemove = id;
-            }
-
-            if (idToRemove != 0)
-            {
-                ModuleConfig.CustomWhitelist.Remove(idToRemove);
                 SaveConfig(ModuleConfig);
+                NewWhitelistIDInput = 0;
             }
+        }
+
+        // 显示当前的白名单列表
+        ImGui.Spacing();
+        var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
+        using var table = ImRaii.Table("###WhitelistTable", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg, tableSize);
+        if (!table) return;
+        ImGui.TableSetupColumn(GetLoc("ID"), ImGuiTableColumnFlags.WidthFixed, 50 * GlobalFontScale);
+        ImGui.TableSetupColumn(GetLoc("Action"), ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(GetLoc("Operation"), ImGuiTableColumnFlags.WidthFixed, 80 * GlobalFontScale);
+        ImGui.TableHeadersRow();
+        
+        uint idToRemove = 0;
+        foreach (var id in ModuleConfig.CustomWhitelist)
+        {
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            ImGui.Text(id.ToString());
+
+            ImGui.TableNextColumn();
+            var actionData = LuminaGetter.GetRow<Action>(id);
+            var actionName = actionData?.Name.ExtractText() ?? GetLoc("UnknownAction");
+            ImGui.Text(actionName);
+            
+            ImGui.TableNextColumn();
+            using var idScope = ImRaii.PushId((int)id);
+            if (ImGui.SmallButton(GetLoc("Remove")))
+                idToRemove = id;
+        }
+
+        if (idToRemove != 0)
+        {
+            ModuleConfig.CustomWhitelist.Remove(idToRemove);
+            SaveConfig(ModuleConfig);
         }
     }
 
@@ -126,9 +125,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         ref uint comboRouteID)
     {
         if (!ModuleConfig.Enabled) return;
-
         if (actionType != ActionType.Action) return;
-
         if (!HasBlockingStatus()) return;
 
         var adjustedActionID = ActionManager.Instance()->GetAdjustedActionId(actionID);
@@ -153,13 +150,14 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         var statusManager = &localPlayer->StatusManager;
         if (statusManager == null) return false;
 
-        var guardStatusIndex = statusManager->GetStatusIndex(guardStatusID);
+        var guardStatusIndex = statusManager->GetStatusIndex(GuardStatusID);
         if (guardStatusIndex != -1)
         {
             var guardStatus = statusManager->Status[guardStatusIndex];
             if (guardStatus.RemainingTime > ModuleConfig.InterruptThreshold) return true;
         }
-        var hideStatusIndex = statusManager->GetStatusIndex(hideStatusID);
+        
+        var hideStatusIndex = statusManager->GetStatusIndex(HideStatusID);
         if (hideStatusIndex != -1)
         {
             var hideStatus = statusManager->Status[hideStatusIndex];
@@ -168,7 +166,5 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         
         return false;
     }
-    
-
 }
 
