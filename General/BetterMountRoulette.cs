@@ -67,7 +67,8 @@ public class BetterMountRoulette : DailyModuleBase
             [
                 x => x.Singular.ExtractText()
             ],
-            x => x.Singular.ExtractText()
+            x => x.Singular.ExtractText(),
+            resultLimit: unlockedMounts.Count
         );
     }
     
@@ -101,6 +102,83 @@ public class BetterMountRoulette : DailyModuleBase
 
             DrawTab(GetLoc("BetterMountRoulette-PVPAreaTab"), GetLoc("BetterMountRoulette-PVPMountsHeader"),
                     ref pvpSearchText, ModuleConfig.PVPRouletteMounts);
+            
+            DrawSelectedMountsPreviewTab();
+        }
+    }
+    
+    private void DrawSelectedMountsPreviewTab()
+    {
+        using var tab = ImRaii.TabItem(GetLoc("BetterMountRoulette-SelectedPreviewTab"));
+        if (!tab) return;
+        
+        DrawSelectedMountsList(GetLoc("BetterMountRoulette-NormalMountsHeader"), ModuleConfig.NormalRouletteMounts);
+        ImGui.Separator();
+        DrawSelectedMountsList(GetLoc("BetterMountRoulette-PVPMountsHeader"), ModuleConfig.PVPRouletteMounts);
+    }
+    
+        private void DrawSelectedMountsList(string header, HashSet<uint> selectedMounts)
+    {
+        ImGui.Text(header);
+
+        if (selectedMounts.Count > 0)
+        {
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton($"{GetLoc("ClearAll")}##{header}"))
+            {
+                selectedMounts.Clear();
+                SaveConfig(ModuleConfig);
+            }
+        }
+        var childSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 150 * GlobalFontScale);
+        using var child = ImRaii.Child($"##SelectedMounts{header}", childSize, true);
+        if (!child) return;
+
+        if (selectedMounts.Count == 0)
+        {
+            ImGui.TextDisabled(GetLoc("BetterMountRoulette-NoMountsSelected"));
+            return;
+        }
+        
+        var mountsToDraw = new List<Mount>();
+        foreach (var mount in MountsSearcher.Data)
+        {
+            if (selectedMounts.Contains(mount.RowId))
+                mountsToDraw.Add(mount);
+        }
+        
+        var itemWidthEstimate = 120 * GlobalFontScale;
+        var contentWidth = ImGui.GetContentRegionAvail().X;
+        var columnCount = Math.Max(1, (int)Math.Floor(contentWidth / itemWidthEstimate));
+        
+        using var table = ImRaii.Table($"##SelectedMountsTable{header}", columnCount);
+        if (!table) return;
+
+        foreach (var mount in mountsToDraw)
+        {
+            ImGui.TableNextColumn();
+            
+            var iconSize = 35 * GlobalFontScale;
+
+            if (ImGui.SmallButton($"{GetLoc("Remove")}##{mount.RowId}{header}"))
+            {
+                selectedMounts.Remove(mount.RowId);
+                SaveConfig(ModuleConfig);
+            }
+            
+            ImGui.SameLine();
+            
+            if (DService.Texture.TryGetFromGameIcon((uint)mount.Icon, out var icon))
+                ImGui.Image(icon.GetWrapOrEmpty().Handle, new Vector2(iconSize));
+            else
+                ImGui.Dummy(new Vector2(iconSize));
+                
+            ImGui.SameLine();
+            var mountName = mount.Singular.ExtractText();
+            var textPos = ImGui.GetCursorPos();
+            ImGui.SetCursorPosY(textPos.Y + (iconSize - ImGui.CalcTextSize(mountName).Y) / 2f);
+            ImGui.Text(mountName);
         }
     }
     
