@@ -21,6 +21,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
     private static Config ModuleConfig = null!;
     private static int newWhitelistIDInput;
     private const uint guardStatusID = 3054;
+    private const uint hideStatusID = 1316;
 
     private class Config : ModuleConfiguration
     {
@@ -128,7 +129,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
 
         if (actionType != ActionType.Action) return;
 
-        if (!PlayerHasGuardStatus()) return;
+        if (!HasBlockingStatus()) return;
 
         var adjustedActionID = ActionManager.Instance()->GetAdjustedActionId(actionID);
 
@@ -144,7 +145,7 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         }
     }
     
-    private static bool PlayerHasGuardStatus()
+    private static bool HasBlockingStatus()
     {
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return false;
@@ -152,13 +153,20 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         var statusManager = &localPlayer->StatusManager;
         if (statusManager == null) return false;
 
-        var statusIndex = statusManager->GetStatusIndex(guardStatusID);
-
-        if (statusIndex == -1) return false;
+        var guardStatusIndex = statusManager->GetStatusIndex(guardStatusID);
+        if (guardStatusIndex != -1)
+        {
+            var guardStatus = statusManager->Status[guardStatusIndex];
+            if (guardStatus.RemainingTime > ModuleConfig.InterruptThreshold) return true;
+        }
+        var hideStatusIndex = statusManager->GetStatusIndex(hideStatusID);
+        if (hideStatusIndex != -1)
+        {
+            var hideStatus = statusManager->Status[hideStatusIndex];
+            if (hideStatus.RemainingTime > ModuleConfig.InterruptThreshold) return true;
+        }
         
-        var guardStatus = statusManager->Status[statusIndex];
-        
-        return guardStatus.RemainingTime > ModuleConfig.InterruptThreshold;
+        return false;
     }
     
 
