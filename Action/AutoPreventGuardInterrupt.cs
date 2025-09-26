@@ -64,54 +64,57 @@ public unsafe class AutoPreventGuardInterrupt : DailyModuleBase
         ImGui.Spacing();
         
         using var node = ImRaii.TreeNode($"{GetLoc("Whitelist")} ({ModuleConfig.CustomWhitelist.Count})###WhitelistNode");
-        if (!node) return;
-        ImGuiOm.HelpMarker(GetLoc("AutoPreventGuardInterrupt-WhitelistHelp"));
-        
-        ImGui.SetNextItemWidth(150f * GlobalFontScale);
-        ImGui.InputInt("##newWhitelistId", ref NewWhitelistIDInput);
-        
-        ImGui.SameLine();
-        if (ImGui.Button(GetLoc("Add")))
+        if (node)
         {
-            if (NewWhitelistIDInput > 0 && ModuleConfig.CustomWhitelist.Add((uint)NewWhitelistIDInput))
+            ImGuiOm.HelpMarker(GetLoc("AutoPreventGuardInterrupt-WhitelistHelp"));
+
+            ImGui.SetNextItemWidth(150f * GlobalFontScale);
+            ImGui.InputInt("##newWhitelistId", ref NewWhitelistIDInput);
+
+            ImGui.SameLine();
+            if (ImGui.Button(GetLoc("Add")))
             {
-                SaveConfig(ModuleConfig);
-                NewWhitelistIDInput = 0;
+                if (NewWhitelistIDInput > 0 && ModuleConfig.CustomWhitelist.Add((uint)NewWhitelistIDInput))
+                {
+                    SaveConfig(ModuleConfig);
+                    NewWhitelistIDInput = 0;
+                }
             }
-        }
 
-        // 显示当前的白名单列表
-        ImGui.Spacing();
-        var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
-        using var table = ImRaii.Table("###WhitelistTable", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg, tableSize);
-        if (!table) return;
-        ImGui.TableSetupColumn(GetLoc("ID"), ImGuiTableColumnFlags.WidthFixed, 50 * GlobalFontScale);
-        ImGui.TableSetupColumn(GetLoc("Action"), ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn(GetLoc("Operation"), ImGuiTableColumnFlags.WidthFixed, 80 * GlobalFontScale);
-        ImGui.TableHeadersRow();
-        
-        uint idToRemove = 0;
-        foreach (var id in ModuleConfig.CustomWhitelist)
-        {
-            ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            ImGui.Text(id.ToString());
+            // 显示当前的白名单列表
+            ImGui.Spacing();
+            var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
+            using var table = ImRaii.Table("###WhitelistTable", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg,
+                                           tableSize);
+            if (!table) return;
+            ImGui.TableSetupColumn(GetLoc("ID"), ImGuiTableColumnFlags.WidthFixed, 50 * GlobalFontScale);
+            ImGui.TableSetupColumn(GetLoc("Action"), ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableSetupColumn(GetLoc("Operation"), ImGuiTableColumnFlags.WidthFixed, 80 * GlobalFontScale);
+            ImGui.TableHeadersRow();
 
-            ImGui.TableNextColumn();
-            var actionData = LuminaGetter.GetRow<Action>(id);
-            var actionName = actionData?.Name.ExtractText() ?? GetLoc("UnknownAction");
-            ImGui.Text(actionName);
-            
-            ImGui.TableNextColumn();
-            using var idScope = ImRaii.PushId((int)id);
-            if (ImGui.SmallButton(GetLoc("Remove")))
-                idToRemove = id;
-        }
+            uint idToRemove = 0;
+            foreach (var id in ModuleConfig.CustomWhitelist)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.Text(id.ToString());
 
-        if (idToRemove != 0)
-        {
-            ModuleConfig.CustomWhitelist.Remove(idToRemove);
-            SaveConfig(ModuleConfig);
+                ImGui.TableNextColumn();
+                var actionData = LuminaGetter.GetRow<Action>(id);
+                var actionName = actionData?.Name.ExtractText() ?? GetLoc("UnknownAction");
+                ImGui.Text(actionName);
+
+                ImGui.TableNextColumn();
+                using var idScope = ImRaii.PushId((int)id);
+                if (ImGui.SmallButton(GetLoc("Remove")))
+                    idToRemove = id;
+            }
+
+            if (idToRemove != 0)
+            {
+                ModuleConfig.CustomWhitelist.Remove(idToRemove);
+                SaveConfig(ModuleConfig);
+            }
         }
     }
 
