@@ -163,8 +163,10 @@ public class BetterMountRoulette : DailyModuleBase
         using var table = ImRaii.Table($"##SelectedMountsTable{header}", columnCount);
         if (!table) return;
 
-        foreach (var mount in mountsToDraw)
+        foreach (var id in handler.SelectedIDs)
         {
+            if (!LuminaGetter.TryGetRow<Mount>(id, out var mount)) continue;
+            
             ImGui.TableNextColumn();
             
             var iconSize = 3 * ImGui.GetTextLineHeightWithSpacing();
@@ -232,7 +234,7 @@ public class BetterMountRoulette : DailyModuleBase
         if (!child) return;
         
         var mountsToDraw = searchResult.Take(handler.DisplayCount).ToList();
-        DrawMountsGrid(mountsToDraw, handler.SelectedIDs);
+        DrawMountsGrid(mountsToDraw, handler);
 
         //当未搜索且有超过100个坐骑时，显示加载更多按钮
         if (!isSearching && handler.DisplayCount < totalCount)
@@ -247,7 +249,7 @@ public class BetterMountRoulette : DailyModuleBase
         }
     }
     
-    private void DrawMountsGrid(List<Mount> mountsToDraw, HashSet<uint> selectedMounts)
+    private void DrawMountsGrid(List<Mount> mountsToDraw, MountListHandler handler)
     {
         if (mountsToDraw.Count == 0) return;
         var itemWidthEstimate = 120 * GlobalFontScale;
@@ -261,13 +263,13 @@ public class BetterMountRoulette : DailyModuleBase
         {
             ImGui.TableNextColumn();
             var iconSize = 3 * ImGui.GetTextLineHeightWithSpacing();
-            var isSelected = selectedMounts.Contains(mount.RowId);
+            var isSelected = handler.SelectedIDs.Contains(mount.RowId);
             if (ImGui.Checkbox($"##{mount.RowId}", ref isSelected))
             {
                 if (isSelected)
-                    selectedMounts.Add(mount.RowId);
+                    handler.SelectedIDs.Add(mount.RowId);
                 else
-                    selectedMounts.Remove(mount.RowId);
+                    handler.SelectedIDs.Remove(mount.RowId);
                 SaveConfig(ModuleConfig);
             }
             
@@ -294,7 +296,8 @@ public class BetterMountRoulette : DailyModuleBase
 
         if (mountList.Count > 0)
         {
-            var randomMountID = mountList.ElementAt(Random.Shared.Next(mountList.Count));
+            var mountListAsList = mountList.ToList();
+            var randomMountID = mountListAsList[Random.Shared.Next(mountListAsList.Count)];
             UseActionManager.UseAction(ActionType.Mount, randomMountID);
             isPrevented = true;
         }
