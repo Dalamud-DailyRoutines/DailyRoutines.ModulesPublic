@@ -12,12 +12,12 @@ namespace DailyRoutines.Modules;
 
 public class BetterMountRoulette : DailyModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("BetterMountRouletteTitle"),
+        Title       = GetLoc("BetterMountRouletteTitle"),
         Description = GetLoc("BetterMountRouletteDescription"),
-        Category = ModuleCategories.General,
-        Author = ["XSZYYS"]
+        Category    = ModuleCategories.General,
+        Author      = ["XSZYYS"]
     };
     
     private static Config? ModuleConfig;
@@ -27,7 +27,7 @@ public class BetterMountRoulette : DailyModuleBase
     private static MountListHandler? NormalMounts;
     private static MountListHandler? PVPMounts;
     
-    private const int PageSize = 100;
+    private const int PageSize = 100; //初次加载坐骑的数量
     
     private class MountListHandler
     {
@@ -133,6 +133,7 @@ public class BetterMountRoulette : DailyModuleBase
 
             if (ImGui.SmallButton($"{GetLoc("ClearAll")}##{header}"))
             {
+                //清除所有已选择的坐骑
                 handler.SelectedIDs.Clear();
                 SaveConfig(ModuleConfig);
             }
@@ -176,6 +177,7 @@ public class BetterMountRoulette : DailyModuleBase
             
             ImGui.SameLine();
             
+            //尝试获取坐骑图标
             if (DService.Texture.TryGetFromGameIcon((uint)mount.Icon, out var icon))
                 ImGui.Image(icon.GetWrapOrEmpty().Handle, new Vector2(iconSize));
                 
@@ -194,6 +196,7 @@ public class BetterMountRoulette : DailyModuleBase
         
         ImGui.Text(header);
 
+        //搜索框
         var searchTextBefore = handler.SearchText;
         ImGui.InputTextWithHint($"##Search{tabLabel}", GetLoc("Search"), ref handler.SearchText, 100);
         if (searchTextBefore != handler.SearchText)
@@ -202,7 +205,7 @@ public class BetterMountRoulette : DailyModuleBase
         List<Mount> searchResult;
         int totalCount;
         bool isSearching = !string.IsNullOrEmpty(handler.SearchText);
-
+        
         if (isSearching)
         {
             handler.Searcher.Search(handler.SearchText);
@@ -211,9 +214,11 @@ public class BetterMountRoulette : DailyModuleBase
         }
         else
         {
-            searchResult = new List<Mount>(handler.Searcher.Data);
-            totalCount = searchResult.Count;
+            searchResult = handler.Searcher.Data.ToList();
+            totalCount = handler.Searcher.Data.Count;
         }
+        
+        //同时显示坐骑数量限制
         if (!isSearching && totalCount > PageSize)
         {
             ImGui.TextDisabled(GetLoc("BetterMountRoulette-DisplayLimit", Math.Min(handler.DisplayCount, totalCount), totalCount));
@@ -221,6 +226,7 @@ public class BetterMountRoulette : DailyModuleBase
             ImGuiOm.HelpMarker(GetLoc("BetterMountRoulette-DisplayLimitHelp"));
         }
 
+        //显示坐骑区域
         var childSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 300 * GlobalFontScale);
         using var child = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
@@ -228,6 +234,7 @@ public class BetterMountRoulette : DailyModuleBase
         var mountsToDraw = searchResult.Take(handler.DisplayCount).ToList();
         DrawMountsGrid(mountsToDraw, handler.SelectedIDs);
 
+        //当未搜索且有超过100个坐骑时，显示加载更多按钮
         if (!isSearching && handler.DisplayCount < totalCount)
         {
             ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.Button) & 0x80FFFFFF);
@@ -265,6 +272,7 @@ public class BetterMountRoulette : DailyModuleBase
             }
             
             ImGui.SameLine();
+            //尝试获取坐骑图标
             if (DService.Texture.TryGetFromGameIcon((uint)mount.Icon, out var icon))
                 ImGui.Image(icon.GetWrapOrEmpty().Handle, new Vector2(iconSize));
             
