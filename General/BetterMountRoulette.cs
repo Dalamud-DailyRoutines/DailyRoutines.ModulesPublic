@@ -27,12 +27,15 @@ public class BetterMountRoulette : DailyModuleBase
     private static MountListHandler? NormalMounts;
     private static MountListHandler? PVPMounts;
     
+    private const int PageSize = 100;
+    
     private class MountListHandler
     {
         public LuminaSearcher<Mount> Searcher { get; }
         public HashSet<uint> SelectedIDs { get; }
         public string SearchText = string.Empty;
-
+        public int DisplayCount = PageSize;
+        
         public MountListHandler(LuminaSearcher<Mount> searcher, HashSet<uint> selectedIDs)
         {
             Searcher = searcher;
@@ -190,16 +193,30 @@ public class BetterMountRoulette : DailyModuleBase
         if (!tab) return;
         
         ImGui.Text(header);
+
+        var searchTextBefore = handler.SearchText;
         ImGui.InputTextWithHint($"##Search{tabLabel}", GetLoc("Search"), ref handler.SearchText, 100);
-        
-        handler.Searcher.Search(handler.SearchText);
+        if (searchTextBefore != handler.SearchText)
+            handler.DisplayCount = PageSize;
 
-        var totalCount = handler.Searcher.Data.Count;
-        var displayCount = handler.Searcher.SearchResult.Count;
+        List<Mount> searchResult;
+        int totalCount;
+        bool isSearching = !string.IsNullOrEmpty(handler.SearchText);
 
-        if (string.IsNullOrEmpty(handler.SearchText) && totalCount > displayCount)
+        if (isSearching)
         {
-            ImGui.TextDisabled(GetLoc("BetterMountRoulette-DisplayLimit", displayCount, totalCount));
+            handler.Searcher.Search(handler.SearchText);
+            searchResult = handler.Searcher.SearchResult;
+            totalCount = searchResult.Count;
+        }
+        else
+        {
+            searchResult = new List<Mount>(handler.Searcher.Data);
+            totalCount = searchResult.Count;
+        }
+        if (!isSearching && totalCount > PageSize)
+        {
+            ImGui.TextDisabled(GetLoc("BetterMountRoulette-DisplayLimit", Math.Min(handler.DisplayCount, totalCount), totalCount));
             ImGui.SameLine();
             ImGuiOm.HelpMarker(GetLoc("BetterMountRoulette-DisplayLimitHelp"));
         }
@@ -208,7 +225,19 @@ public class BetterMountRoulette : DailyModuleBase
         using var child = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
         
-        DrawMountsGrid(handler.Searcher.SearchResult, handler.SelectedIDs);
+        var mountsToDraw = searchResult.Take(handler.DisplayCount).ToList();
+        DrawMountsGrid(mountsToDraw, handler.SelectedIDs);
+
+        if (!isSearching && handler.DisplayCount < totalCount)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.Button) & 0x80FFFFFF);
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetColorU32(ImGuiCol.ButtonHovered) & 0x80FFFFFF);
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImGui.GetColorU32(ImGuiCol.ButtonActive) & 0x80FFFFFF);
+            if (ImGui.Button(GetLoc("LoadMore"), new Vector2(ImGui.GetContentRegionAvail().X, 0)))
+                handler.DisplayCount += PageSize;
+            ImGui.PopStyleColor(3);
+            ImGuiOm.TooltipHover(GetLoc("BetterMountRoulette-LoadMoreTooltip", Math.Min(handler.DisplayCount + PageSize, totalCount), totalCount));
+        }
     }
     
     private void DrawMountsGrid(List<Mount> mountsToDraw, HashSet<uint> selectedMounts)
