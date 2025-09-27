@@ -43,8 +43,8 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                 CheckboxNode ??= new()
                 {
                     IsVisible = true,
-                    Position  = new(50, 2),
-                    Size      = new(20, 28),
+                    Position  = new(50, -2),
+                    Size      = new(25, 28),
                     IsChecked = ModuleConfig.SkipWhenHQ,
                     Tooltip   = GetLoc("AutoDesynthesizeItems-SkipHQ"),
                     OnClick = newState =>

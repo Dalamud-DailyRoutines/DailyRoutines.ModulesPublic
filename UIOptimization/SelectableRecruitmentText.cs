@@ -91,7 +91,7 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
         
         var windowPos = nodeStateInfo.Position - (3 * offsetSpacing) - offsetHeightSpacing;
         
-        var width  = nodeStateShare.Position.X   - nodeStateInfo.Position.X;
+        var width  = nodeStateShare.Position.X   - nodeStateInfo.Position.X + ImGui.GetStyle().ItemSpacing.X;
         var height = nodeStateLocated.Position.Y - windowPos.Y - offsetSpacing.Y;
         
         ImGui.SetWindowPos(windowPos);
