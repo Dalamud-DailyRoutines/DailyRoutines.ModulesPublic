@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Common.Math;
 using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.Modules;
@@ -194,6 +194,16 @@ public class BetterMountRoulette : DailyModuleBase
         
         handler.Searcher.Search(handler.SearchText);
 
+        var totalCount = handler.Searcher.Data.Count;
+        var displayCount = handler.Searcher.SearchResult.Count;
+
+        if (string.IsNullOrEmpty(handler.SearchText) && totalCount > displayCount)
+        {
+            ImGui.TextDisabled(GetLoc("BetterMountRoulette-DisplayLimit", displayCount, totalCount));
+            ImGui.SameLine();
+            ImGuiOm.HelpMarker(GetLoc("BetterMountRoulette-DisplayLimitHelp"));
+        }
+
         var childSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 300 * GlobalFontScale);
         using var child = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
@@ -222,8 +232,7 @@ public class BetterMountRoulette : DailyModuleBase
                     selectedMounts.Add(mount.RowId);
                 else
                     selectedMounts.Remove(mount.RowId);
-                if (ModuleConfig != null)
-                    SaveConfig(ModuleConfig);
+                SaveConfig(ModuleConfig);
             }
             
             ImGui.SameLine();
