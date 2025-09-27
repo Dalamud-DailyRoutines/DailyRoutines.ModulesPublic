@@ -3,8 +3,10 @@ using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -244,7 +246,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
                 .FirstOrDefault(x => x.ListingId == listing.ListingId).ListingId == 0);
         }
 
-        TaskHelper.DelayNext(2000);
+        TaskHelper.DelayNext(1000);
         TaskHelper.Enqueue(() => WaitForItemArrival(purchasesBefore));
         RetryPurchase(1000);
     }
@@ -351,6 +353,31 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         return NextAction.Wait;
     }
 
+    private static int FindTargetMapInPopupMenu(uint targetMapID)
+    {
+        var addonPtr = DService.Gui.GetAddonByName("SelectIconString");
+        if (addonPtr == nint.Zero) return -1;
+
+        var addon = (AddonSelectIconString*)*(nint*)&addonPtr;
+        if (!addon->AtkUnitBase.IsVisible) return -1;
+
+        if (!LuminaGetter.TryGetRow<Item>(targetMapID, out var targetItem)) return -1;
+        var targetMapName = targetItem.Name.ExtractText();
+        if (string.IsNullOrEmpty(targetMapName)) return -1;
+
+        var popupMenu = &addon->PopupMenu.PopupMenu;
+        for (var i = 0; i < popupMenu->EntryCount; i++)
+        {
+            if (popupMenu->EntryNames == null) continue;
+            var entryNamePtr = popupMenu->EntryNames[i];
+            var entryName = entryNamePtr.ToString();
+            if (!string.IsNullOrEmpty(entryName) && entryName.Contains(targetMapName))
+                return i;
+        }
+
+        return -1;
+    }
+
     private void DecipherMap()
     {
         var mapInfo = MapData.FirstOrDefault(m => m.ItemID == ModuleConfig.TargetMapID);
@@ -375,16 +402,23 @@ public unsafe class AutoBuyMaps : DailyModuleBase
             return actionManager->UseAction(ActionType.GeneralAction, 19);
         });
 
-        TaskHelper.DelayNext(200);
+        TaskHelper.DelayNext(100);
         TaskHelper.Enqueue(() =>
         {
             if (!HelpersOm.IsAddonAndNodesReady(InfosOm.SelectIconString))
                 return false;
 
-            return HelpersOm.ClickSelectIconString(0);
+            var targetIndex = FindTargetMapInPopupMenu(ModuleConfig.TargetMapID);
+            if (targetIndex == -1)
+            {
+                HelpersOm.ClickSelectIconString(-1);
+                return false;
+            }
+
+            return HelpersOm.ClickSelectIconString(targetIndex);
         });
 
-        TaskHelper.DelayNext(200);
+        TaskHelper.DelayNext(100);
         TaskHelper.Enqueue(() =>
         {
             if (!HelpersOm.IsAddonAndNodesReady(InfosOm.SelectYesno))
@@ -393,7 +427,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
             return HelpersOm.ClickSelectYesnoYes();
         });
 
-        TaskHelper.DelayNext(300);
+        TaskHelper.DelayNext(200);
         TaskHelper.Enqueue(() =>
         {
             if (HasDecipheredMap(ModuleConfig.TargetMapID))
@@ -420,7 +454,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
             return;
         }
 
-        TaskHelper.DelayNext(1000);
+        TaskHelper.DelayNext(500);
         TaskHelper.Enqueue(() =>
         {
             if (MoveItemToSaddlebag(invType, slot) && HasItemInSaddlebag(ModuleConfig.TargetMapID))
