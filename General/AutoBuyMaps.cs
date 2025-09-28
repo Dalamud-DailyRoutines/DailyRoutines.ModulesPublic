@@ -2,46 +2,62 @@ using System;
 using System.Linq;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
+using Dalamud.Interface.Colors;
+using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Dalamud.Interface.Colors;
-using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
-using OmenTools.Helpers;
 using Lumina.Excel.Sheets;
+using OmenTools.Helpers;
 
-namespace DailyRoutines.ModulesPublic;
+namespace DailyRoutines.Modules;
 
 public unsafe class AutoBuyMaps : DailyModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoBuyMapsTitle"),
+        Title       = GetLoc("AutoBuyMapsTitle"),
         Description = GetLoc("AutoBuyMapsDescription"),
-        Category = ModuleCategories.General,
-        Author = ["qingsiweisan"]
+        Category    = ModuleCategories.General,
+        Author      = ["qingsiweisan"]
     };
+
+    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
     private static readonly (uint ItemID, string Name, uint DecipheredKeyItemID)[] MapData =
     {
-        (0, "SelectMap", 0), (6688, "G1", 2001087), (6689, "G2", 2001088), (6690, "G3", 2001089), (6691, "G4", 2001090),
-        (6692, "G5", 2001091), (12241, "G6", 2001762), (12242, "G7", 2001763), (12243, "G8", 2001764), (17835, "G9", 2002209),
-        (17836, "G10", 2002210), (26744, "G11", 2002663), (26745, "G12", 2002664), (36611, "G13", 2003245), (36612, "G14", 2003246),
-        (39591, "G15", 2003457), (43556, "G16", 2003562), (43557, "G17", 2003563), (46185, "G18", 2003785)
+        (0,     "SelectMap", 0),
+        (6688,  "G1",        2001087),
+        (6689,  "G2",        2001088),
+        (6690,  "G3",        2001089),
+        (6691,  "G4",        2001090),
+        (6692,  "G5",        2001091),
+        (12241, "G6",        2001762),
+        (12242, "G7",        2001763),
+        (12243, "G8",        2001764),
+        (17835, "G9",        2002209),
+        (17836, "G10",       2002210),
+        (26744, "G11",       2002663),
+        (26745, "G12",       2002664),
+        (36611, "G13",       2003245),
+        (36612, "G14",       2003246),
+        (39591, "G15",       2003457),
+        (43556, "G16",       2003562),
+        (43557, "G17",       2003563),
+        (46185, "G18",       2003785)
     };
 
-    private bool isBuying = false;
-    private uint? originalMapID = null;
-    private int? originalCount = null;
-    private int? originalMaxPrice = null;
+    private static bool IsBuying;
+    private static uint? OriginalMapID;
+    private static int? OriginalCount;
+    private static int? OriginalMaxPrice;
     private static Config ModuleConfig = null!;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new Config();
+        ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new() { TimeLimitMS = 30_000 };
 
         CommandManager.AddSubCommand("buymaps", new Dalamud.Game.Command.CommandInfo(OnPdrCommand)
@@ -93,44 +109,37 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
         ImGui.Spacing();
 
-        using (ImRaii.Disabled(isBuying || ModuleConfig.TargetMapID == 0))
+        using (ImRaii.Disabled(IsBuying || ModuleConfig.TargetMapID == 0))
         {
             if (ImGui.Button("Start"))
                 StartPurchase();
         }
 
         ImGui.SameLine();
-        using (ImRaii.Disabled(!isBuying))
+        using (ImRaii.Disabled(!IsBuying))
         {
             if (ImGui.Button("Stop"))
                 StopPurchase();
         }
 
-        if (isBuying)
+        if (IsBuying)
             ImGui.TextColored(ImGui.ColorConvertFloat4ToU32(ImGuiColors.DalamudYellow),
                 GetLoc("AutoBuyMapsPurchasing", AnalyzeCurrentState().TotalCount, ModuleConfig.Count));
     }
 
-    private void RetryPurchase(int delay = 1000) => RetryAction(PurchaseNext, delay);
-    private void RetryAction(System.Action action, int delay)
-    {
-        TaskHelper.DelayNext(delay);
-        TaskHelper.Enqueue(() => { action(); return true; });
-    }
-    private void EnqueueWithRetry(System.Action action) => TaskHelper.Enqueue(() => { action(); return true; });
 
     private void StartPurchase()
     {
-        if (isBuying || ModuleConfig.TargetMapID == 0)
+        if (IsBuying || ModuleConfig.TargetMapID == 0)
             return;
 
-        isBuying = true;
-        EnqueueWithRetry(PurchaseNext);
+        IsBuying = true;
+        TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
     }
 
     private void PurchaseNext()
     {
-        if (!isBuying)
+        if (!IsBuying)
         {
             StopPurchase();
             return;
@@ -161,7 +170,8 @@ public unsafe class AutoBuyMaps : DailyModuleBase
                 StopPurchase();
                 break;
             case NextAction.Wait:
-                RetryPurchase(1000);
+                TaskHelper.DelayNext(1000);
+                TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
                 break;
         }
     }
@@ -180,17 +190,18 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
         if (!infoProxy->RequestData())
         {
-            RetryAction(SearchMarket, 1000);
+            TaskHelper.DelayNext(1000);
+            TaskHelper.Enqueue(() => { SearchMarket(); return true; });
             return;
         }
 
         TaskHelper.Enqueue(() => IsMarketDataFullyReceived(ModuleConfig.TargetMapID));
-        EnqueueWithRetry(ProcessResults);
+        TaskHelper.Enqueue(() => { ProcessResults(); return true; });
     }
 
     private bool IsMarketDataFullyReceived(uint itemID)
     {
-        if (!isBuying) return false;
+        if (!IsBuying) return false;
 
         var infoProxy = InfoProxyItemSearch.Instance();
         if (infoProxy == null || infoProxy->SearchItemId != itemID) return false;
@@ -248,7 +259,8 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
         TaskHelper.DelayNext(1000);
         TaskHelper.Enqueue(() => WaitForItemArrival(purchasesBefore));
-        RetryPurchase(1000);
+        TaskHelper.DelayNext(1000);
+                TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
     }
 
     private bool SendBuyRequest(MarketBoardListing listing)
@@ -277,18 +289,18 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
     private void StopPurchase()
     {
-        isBuying = false;
+        IsBuying = false;
 
-        if (originalMapID.HasValue)
+        if (OriginalMapID.HasValue)
         {
-            ModuleConfig.TargetMapID = originalMapID.Value;
-            ModuleConfig.Count = originalCount ?? ModuleConfig.Count;
-            ModuleConfig.MaxPrice = originalMaxPrice ?? ModuleConfig.MaxPrice;
+            ModuleConfig.TargetMapID = OriginalMapID.Value;
+            ModuleConfig.Count = OriginalCount ?? ModuleConfig.Count;
+            ModuleConfig.MaxPrice = OriginalMaxPrice ?? ModuleConfig.MaxPrice;
             SaveConfig(ModuleConfig);
 
-            originalMapID = null;
-            originalCount = null;
-            originalMaxPrice = null;
+            OriginalMapID = null;
+            OriginalCount = null;
+            OriginalMaxPrice = null;
         }
 
         TaskHelper?.Abort();
@@ -383,14 +395,16 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         var mapInfo = MapData.FirstOrDefault(m => m.ItemID == ModuleConfig.TargetMapID);
         if (mapInfo.DecipheredKeyItemID == 0)
         {
-            RetryPurchase(500);
+            TaskHelper.DelayNext(500);
+            TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
             return;
         }
 
         var manager = InventoryManager.Instance();
         if (manager != null && manager->GetItemCountInContainer(mapInfo.DecipheredKeyItemID, InventoryType.KeyItems) > 0)
         {
-            RetryPurchase(500);
+            TaskHelper.DelayNext(500);
+            TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
             return;
         }
 
@@ -432,7 +446,8 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         {
             if (HasDecipheredMap(ModuleConfig.TargetMapID))
             {
-                RetryPurchase(500);
+                TaskHelper.DelayNext(500);
+            TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
                 return true;
             }
             return false;
@@ -444,13 +459,15 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         var (invType, slot) = FindItemInInventory(ModuleConfig.TargetMapID);
         if (invType == InventoryType.Invalid || !HasSaddlebagSpace())
         {
-            RetryPurchase(500);
+            TaskHelper.DelayNext(500);
+            TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
             return;
         }
 
         if (!OpenSaddlebag())
         {
-            RetryPurchase(1000);
+            TaskHelper.DelayNext(1000);
+                TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
             return;
         }
 
@@ -460,12 +477,14 @@ public unsafe class AutoBuyMaps : DailyModuleBase
             if (MoveItemToSaddlebag(invType, slot) && HasItemInSaddlebag(ModuleConfig.TargetMapID))
             {
                 CloseSaddlebag();
-                RetryPurchase(500);
+                TaskHelper.DelayNext(500);
+            TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
             }
             else
             {
                 CloseSaddlebag();
-                RetryPurchase(1000);
+                TaskHelper.DelayNext(1000);
+                TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
             }
             return true;
         });
@@ -578,12 +597,12 @@ public unsafe class AutoBuyMaps : DailyModuleBase
                     return;
             }
 
-            if (isBuying)
+            if (IsBuying)
                 return;
 
-            originalMapID = ModuleConfig.TargetMapID;
-            originalCount = ModuleConfig.Count;
-            originalMaxPrice = ModuleConfig.MaxPrice;
+            OriginalMapID = ModuleConfig.TargetMapID;
+            OriginalCount = ModuleConfig.Count;
+            OriginalMaxPrice = ModuleConfig.MaxPrice;
 
             ModuleConfig.TargetMapID = mapData.ItemID;
             ModuleConfig.Count = quantity;
@@ -597,10 +616,10 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         }
     }
 
-    protected class Config : ModuleConfiguration
+    private class Config : ModuleConfiguration
     {
-        public uint TargetMapID = 0;
+        public uint TargetMapID;
         public int Count = 3;
-        public int MaxPrice = 0;
+        public int MaxPrice;
     }
 }
