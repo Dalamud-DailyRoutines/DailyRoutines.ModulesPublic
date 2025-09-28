@@ -5,7 +5,6 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
 using System.Windows.Forms;
@@ -32,14 +31,20 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
     }
 
     private static Config ModuleConfig = null!;
-    private static readonly TaskHelper RaceTaskHelper = new() { TimeLimitMS = 5000 };
-    public static ContentsFinderOption ContentsFinderOption { get; set; } = ContentsFinderHelper.DefaultOption.Clone();
-    private byte ChocoboLevel { get { var manager = RaceChocoboManager.Instance(); return manager != null ? manager->Rank : (byte)0; } }
+    private static ContentsFinderOption ContentsFinderOption { get; set; } = ContentsFinderHelper.DefaultOption.Clone();
 
+    private byte ChocoboLevel
+    {
+        get
+        {
+            var manager = RaceChocoboManager.Instance(); 
+            return manager != null ? manager->Rank : (byte)0;
+        }
+    }
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new Config();
+        ModuleConfig = LoadConfig<Config>() ?? new();
 
         FrameworkManager.Register(OnUpdate, throttleMS: 1500);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RaceChocoboResult", OnRaceResult);
@@ -47,27 +52,26 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
 
     protected override void ConfigUI()
     {
-
         ImGui.Text(GetLoc($"AutoChocoboRacing-ChocoboLevel{ChocoboLevel}"));
 
         ImGui.NewLine();
+
         ImGui.Text(GetLoc("AutoChocoboRacing-RouteSelection"));
         var currentRoute = (RaceRoute)ModuleConfig.Route;
-        if (ImGui.BeginCombo("##RouteSelection", LuminaWrapper.GetContentRouletteName((ushort)currentRoute)))
+        using (var combo = ImRaii.Combo("##RouteSelection", LuminaWrapper.GetContentRouletteName((ushort)currentRoute)))
         {
-            foreach (var route in Enum.GetValues<RaceRoute>())
+            if (combo)
             {
-                var isSelected = currentRoute == route;
-                if (ImGui.Selectable(LuminaWrapper.GetContentRouletteName((ushort)route), isSelected))
+                foreach (var route in Enum.GetValues<RaceRoute>())
                 {
-                    ModuleConfig.Route = (ushort)route;
-                    SaveConfig(ModuleConfig);
+                    var isSelected = currentRoute == route;
+                    if (ImGui.Selectable(LuminaWrapper.GetContentRouletteName((ushort)route), isSelected))
+                    {
+                        ModuleConfig.Route = (ushort)route;
+                        SaveConfig(ModuleConfig);
+                    }
                 }
-
-                if (isSelected)
-                    ImGui.SetItemDefaultFocus();
             }
-            ImGui.EndCombo();
         }
 
         if (ImGui.Checkbox(GetLoc("AutoChocoboRacing-AutoExit"), ref ModuleConfig.AutoExit))
@@ -78,9 +82,10 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
             SaveConfig(ModuleConfig);
 
         ImGui.NewLine();
-        if (ImGui.Button(ModuleConfig.IsEnabled ? GetLoc("Stop"):GetLoc("Start")))
+
+        if (ImGui.Button(ModuleConfig.IsEnabled ? GetLoc("Stop") : GetLoc("Start")))
         {
-            ModuleConfig.IsEnabled = !ModuleConfig.IsEnabled;
+            ModuleConfig.IsEnabled ^= true;
             SaveConfig(ModuleConfig);
             if (!ModuleConfig.IsEnabled && DService.Condition[ConditionFlag.ChocoboRacing])
                 SetMoving(false);
@@ -93,13 +98,13 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
     {
         if (!ModuleConfig.AutoExit) return;
 
-        var addon = (AddonRaceChocoboResult*)DService.Gui.GetAddonByName("RaceChocoboResult").Address;
-        if ((addon == null || !IsAddonAndNodesReady(&addon->AtkUnitBase)) && (addon->LeaveButton == null)) return;
+        var addon = RaceChocoboResult;
+        if ((addon == null || !IsAddonAndNodesReady(addon)) && (addon->GetNodeById(8) == null)) return;
 
         SetMoving(false);
         SlowDown(false);
 
-        Callback(&addon->AtkUnitBase, true, 1);
+        Callback(addon, true, 1);
     }
 
     private void OnUpdate(IFramework _)
@@ -166,8 +171,6 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
 
         DService.AddonLifecycle.UnregisterListener(OnRaceResult);
         FrameworkManager.Unregister(OnUpdate);
-        RaceTaskHelper?.Abort();
-        base.Uninit();
     }
 
     private class Config : ModuleConfiguration
