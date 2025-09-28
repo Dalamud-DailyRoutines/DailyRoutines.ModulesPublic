@@ -27,7 +27,7 @@ public class BetterMountRoulette : DailyModuleBase
     private static MountListHandler? NormalMounts;
     private static MountListHandler? PVPMounts;
     
-    private const int PageSize = 100; //初次加载坐骑的数量
+    private const int PageSize = 100; // 初次加载坐骑的数量
     
     private class MountListHandler
     {
