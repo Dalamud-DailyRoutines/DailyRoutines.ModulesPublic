@@ -188,11 +188,10 @@ public class OptimizedRecipeNote : DailyModuleBase
 
                         // 职业不对
                         if (recipe.CraftType.RowId != LocalPlayerState.ClassJob - 8) return;
-
-                        // TODO: FFCS 7.3
-                        var craftPoint    = PlayerState.Instance()->Attributes[11];
-                        var craftsmanship = PlayerState.Instance()->Attributes[70];
-                        var control       = PlayerState.Instance()->Attributes[71];
+                        
+                        var craftPoint    = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.CraftingPoints);
+                        var craftsmanship = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.Craftsmanship);
+                        var control       = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.Control);
                         var id            = RaphaelIPC.StartCalculation();
                         RecipeCaculationButton.IsEnabled = false;
                         TaskHelper.Enqueue(() =>
@@ -665,11 +664,25 @@ public class OptimizedRecipeNote : DailyModuleBase
         {
             RecipeCaculationButton.IsVisible = false;
             SwitchJobButton.IsVisible        = true;
+
+            for (var i = 102U; i < 105; i++)
+            {
+                var buttonNode = InfosOm.RecipeNote->GetComponentButtonById(i);
+                if (buttonNode != null)
+                    buttonNode->SetEnabledState(false);
+            }
         }
         else
         {
             RecipeCaculationButton.IsVisible = true;
             SwitchJobButton.IsVisible        = false;
+            
+            for (var i = 102U; i < 105; i++)
+            {
+                var buttonNode = InfosOm.RecipeNote->GetComponentButtonById(i);
+                if (buttonNode != null)
+                    buttonNode->SetEnabledState(true);
+            }
         }
     }
 

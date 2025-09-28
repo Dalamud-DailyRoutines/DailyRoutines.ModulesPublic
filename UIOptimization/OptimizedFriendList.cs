@@ -29,12 +29,6 @@ public unsafe class OptimizedFriendList : DailyModuleBase
         Category            = ModuleCategories.UIOptimization,
         ModulesPrerequisite = ["WorldTravelCommand"]
     };
-
-    // TODO: FFCS 7.3
-    private delegate void RequestFriendOnlineStatusDelegate(AgentFriendlist* agent, ulong contentID);
-    private static readonly RequestFriendOnlineStatusDelegate RequestFriendOnlineStatus =
-        new CompSig("48 89 5C 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B FA 48 8B 49 ?? 48 8B 01 FF 90 ?? ?? ?? ?? 48 8B D7")
-            .GetDelegate<RequestFriendOnlineStatusDelegate>();
     
     private static          ModifyInfoMenuItem          ModifyInfoItem    = null!;
     private static readonly TeleportFriendZoneMenuItem  TeleportZoneItem  = new();
@@ -170,7 +164,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                         {
                             if (FriendList == null) return;
                             
-                            RequestFriendOnlineStatus(agent, chara.ContentId);
+                            agent->RequestFriendInfo(chara.ContentId);
                         }, TimeSpan.FromMilliseconds(10 * validCounter));
 
                         validCounter++;
