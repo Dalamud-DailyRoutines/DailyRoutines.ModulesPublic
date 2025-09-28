@@ -31,16 +31,10 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
     }
 
     private static Config ModuleConfig = null!;
-    private static ContentsFinderOption ContentsFinderOption { get; set; } = ContentsFinderHelper.DefaultOption.Clone();
 
-    private byte ChocoboLevel
-    {
-        get
-        {
-            var manager = RaceChocoboManager.Instance(); 
-            return manager != null ? manager->Rank : (byte)0;
-        }
-    }
+    private static ContentsFinderOption ContentsFinderOption = ContentsFinderHelper.DefaultOption.Clone();
+
+    private byte ChocoboLevel => RaceChocoboManager.Instance()->Rank;
 
     protected override void Init()
     {
@@ -64,8 +58,7 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
             {
                 foreach (var route in Enum.GetValues<RaceRoute>())
                 {
-                    var isSelected = currentRoute == route;
-                    if (ImGui.Selectable(LuminaWrapper.GetContentRouletteName((ushort)route), isSelected))
+                    if (ImGui.Selectable(LuminaWrapper.GetContentRouletteName((ushort)route), currentRoute == route))
                     {
                         ModuleConfig.Route = (ushort)route;
                         SaveConfig(ModuleConfig);
@@ -83,7 +76,7 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Button(ModuleConfig.IsEnabled ? GetLoc("Stop") : GetLoc("Start")))
+        if (ImGui.Button(GetLoc(ModuleConfig.IsEnabled ? "Stop" : "Start")))
         {
             ModuleConfig.IsEnabled ^= true;
             SaveConfig(ModuleConfig);
@@ -99,7 +92,7 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
         if (!ModuleConfig.AutoExit) return;
 
         var addon = RaceChocoboResult;
-        if ((addon == null || !IsAddonAndNodesReady(addon)) && (addon->GetNodeById(8) == null)) return;
+        if (!IsAddonAndNodesReady(addon)) return;
 
         SetMoving(false);
         SlowDown(false);
@@ -116,25 +109,23 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
         {
             ModuleConfig.IsEnabled = false;
             SaveConfig(ModuleConfig);
-            DService.Chat.Print("AutoChocoboRacing-FinishLeveling");
+            Chat("AutoChocoboRacing-FinishLeveling");
             return;
         }
 
         // 比赛中的移动控制
-        if (DService.Condition[ConditionFlag.ChocoboRacing] &&
-            TryGetAddonByName("_RaceChocoboParameter", out var raceChocoboParameter))
+        if (DService.Condition[ConditionFlag.ChocoboRacing])
         {
-            HandleRacing(raceChocoboParameter);
+            HandleRacing(RaceChocoboParameter);
             return;
         }
         
         // 进本
-        if (!DService.Condition[ConditionFlag.WaitingForDuty] &&
-            !DService.Condition[ConditionFlag.InDutyQueue] &&
-            Throttler.Throttle("##RequestRoulette",1500))
+        if (!DService.Condition.Any(ConditionFlag.WaitingForDuty, ConditionFlag.InDutyQueue) &&
+            Throttler.Throttle("AutoChocoboRacing-RequestDuty", 1500))
             RequestDutyRoulette(ModuleConfig.Route, ContentsFinderOption); 
     }
-
+        
     private void HandleRacing(AtkUnitBase* raceChocoboParameter)
     {
         var lathered = raceChocoboParameter->GetImageNodeById(3)->IsVisible();
