@@ -131,9 +131,9 @@ public class BetterMountRoulette : DailyModuleBase
         {
             ImGui.SameLine();
 
-            if (ImGui.SmallButton($"{GetLoc("ClearAll")}##{header}"))
+            if (ImGui.SmallButton($"{GetLoc("BetterMountRoulette-ClearAll")}##{header}"))
             {
-                //清除所有已选择的坐骑
+                // 清除所有已选择的坐骑
                 handler.SelectedIDs.Clear();
                 SaveConfig(ModuleConfig);
             }
@@ -171,7 +171,7 @@ public class BetterMountRoulette : DailyModuleBase
             
             var iconSize = 3 * ImGui.GetTextLineHeightWithSpacing();
 
-            if (ImGui.SmallButton($"{GetLoc("Remove")}##{mount.RowId}{header}"))
+            if (ImGui.SmallButton($"{GetLoc("BetterMountRoulette-Remove")}##{mount.RowId}{header}"))
             {
                 handler.SelectedIDs.Remove(mount.RowId);
                 SaveConfig(ModuleConfig);
@@ -179,7 +179,7 @@ public class BetterMountRoulette : DailyModuleBase
             
             ImGui.SameLine();
             
-            //尝试获取坐骑图标
+            // 尝试获取坐骑图标
             if (DService.Texture.TryGetFromGameIcon((uint)mount.Icon, out var icon))
                 ImGui.Image(icon.GetWrapOrEmpty().Handle, new Vector2(iconSize));
                 
@@ -198,7 +198,7 @@ public class BetterMountRoulette : DailyModuleBase
         
         ImGui.Text(header);
 
-        //搜索框
+        // 搜索框
         var searchTextBefore = handler.SearchText;
         ImGui.InputTextWithHint($"##Search{tabLabel}", GetLoc("Search"), ref handler.SearchText, 100);
         if (searchTextBefore != handler.SearchText)
@@ -220,7 +220,7 @@ public class BetterMountRoulette : DailyModuleBase
             totalCount = handler.Searcher.Data.Count;
         }
         
-        //同时显示坐骑数量限制
+        // 同时显示坐骑数量限制
         if (!isSearching && totalCount > PageSize)
         {
             ImGui.TextDisabled(GetLoc("BetterMountRoulette-DisplayLimit", Math.Min(handler.DisplayCount, totalCount), totalCount));
@@ -228,7 +228,7 @@ public class BetterMountRoulette : DailyModuleBase
             ImGuiOm.HelpMarker(GetLoc("BetterMountRoulette-DisplayLimitHelp"));
         }
 
-        //显示坐骑区域
+        // 显示坐骑区域
         var childSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 300 * GlobalFontScale);
         using var child = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
@@ -236,15 +236,14 @@ public class BetterMountRoulette : DailyModuleBase
         var mountsToDraw = searchResult.Take(handler.DisplayCount).ToList();
         DrawMountsGrid(mountsToDraw, handler);
 
-        //当未搜索且有超过100个坐骑时，显示加载更多按钮
+        // 当未搜索且有超过100个坐骑时，显示加载更多按钮
         if (!isSearching && handler.DisplayCount < totalCount)
         {
-            ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.Button) & 0x80FFFFFF);
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetColorU32(ImGuiCol.ButtonHovered) & 0x80FFFFFF);
-            ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImGui.GetColorU32(ImGuiCol.ButtonActive) & 0x80FFFFFF);
-            if (ImGui.Button(GetLoc("LoadMore"), new Vector2(ImGui.GetContentRegionAvail().X, 0)))
+            using var color = ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.Button) & 0x80FFFFFF)
+               .Push(ImGuiCol.ButtonHovered, ImGui.GetColorU32(ImGuiCol.ButtonHovered) & 0x80FFFFFF)
+               .Push(ImGuiCol.ButtonActive, ImGui.GetColorU32(ImGuiCol.ButtonActive) & 0x80FFFFFF);
+            if (ImGui.Button(GetLoc("BetterMountRoulette-LoadMore"), new Vector2(ImGui.GetContentRegionAvail().X, 0)))
                 handler.DisplayCount += PageSize;
-            ImGui.PopStyleColor(3);
             ImGuiOm.TooltipHover(GetLoc("BetterMountRoulette-LoadMoreTooltip", Math.Min(handler.DisplayCount + PageSize, totalCount), totalCount));
         }
     }
@@ -274,7 +273,7 @@ public class BetterMountRoulette : DailyModuleBase
             }
             
             ImGui.SameLine();
-            //尝试获取坐骑图标
+            // 尝试获取坐骑图标
             if (DService.Texture.TryGetFromGameIcon((uint)mount.Icon, out var icon))
                 ImGui.Image(icon.GetWrapOrEmpty().Handle, new Vector2(iconSize));
             
@@ -298,7 +297,7 @@ public class BetterMountRoulette : DailyModuleBase
         {
             var mountListAsList = mountList.ToList();
             var randomMountID = mountListAsList[Random.Shared.Next(mountListAsList.Count)];
-            UseActionManager.UseAction(ActionType.Mount, randomMountID);
+            UseActionManager.UseActionLocation(ActionType.Mount, randomMountID);
             isPrevented = true;
         }
     }
