@@ -55,6 +55,8 @@ public unsafe class AutoBuyMaps : DailyModuleBase
     private static int? OriginalMaxPrice;
     private static Config ModuleConfig = null!;
 
+    private static InfoProxyItemSearch* InfoProxy => InfoProxyItemSearch.Instance();
+
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
@@ -75,11 +77,11 @@ public unsafe class AutoBuyMaps : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
-        if (ImGui.BeginCombo(GetLoc("AutoBuyMapsMap"), GetMapName(ModuleConfig.TargetMapID)))
+        if (ImGui.BeginCombo(GetLoc("AutoBuyMaps-Map"), GetMapName(ModuleConfig.TargetMapID)))
         {
             foreach (var (itemId, name, _) in MapData)
             {
-                var displayName = name == "SelectMap" ? GetLoc("AutoBuyMapsSelectMap") : name;
+                var displayName = name == "SelectMap" ? GetLoc("AutoBuyMaps-SelectMap") : name;
                 if (ImGui.Selectable(displayName, ModuleConfig.TargetMapID == itemId))
                 {
                     ModuleConfig.TargetMapID = itemId;
@@ -91,7 +93,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(60f * GlobalFontScale);
-        if (ImGui.InputInt(GetLoc("AutoBuyMapsCount"), ref ModuleConfig.Count))
+        if (ImGui.InputInt(GetLoc("AutoBuyMaps-Count"), ref ModuleConfig.Count))
         {
             ModuleConfig.Count = Math.Clamp(ModuleConfig.Count, 1, 3);
             SaveConfig(ModuleConfig);
@@ -99,7 +101,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.InputInt(GetLoc("AutoBuyMapsMaxGil"), ref ModuleConfig.MaxPrice))
+        if (ImGui.InputInt(GetLoc("AutoBuyMaps-MaxGil"), ref ModuleConfig.MaxPrice))
         {
             ModuleConfig.MaxPrice = Math.Max(0, ModuleConfig.MaxPrice);
             SaveConfig(ModuleConfig);
@@ -111,20 +113,20 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
         using (ImRaii.Disabled(IsBuying || ModuleConfig.TargetMapID == 0))
         {
-            if (ImGui.Button("Start"))
+            if (ImGui.Button(GetLoc("Start")))
                 StartPurchase();
         }
 
         ImGui.SameLine();
         using (ImRaii.Disabled(!IsBuying))
         {
-            if (ImGui.Button("Stop"))
+            if (ImGui.Button(GetLoc("Stop")))
                 StopPurchase();
         }
 
         if (IsBuying)
             ImGui.TextColored(ImGui.ColorConvertFloat4ToU32(ImGuiColors.DalamudYellow),
-                GetLoc("AutoBuyMapsPurchasing", AnalyzeCurrentState().TotalCount, ModuleConfig.Count));
+                GetLoc("AutoBuyMaps-Purchasing", AnalyzeCurrentState().TotalCount, ModuleConfig.Count));
     }
 
 
@@ -178,17 +180,16 @@ public unsafe class AutoBuyMaps : DailyModuleBase
 
     private void SearchMarket()
     {
-        var infoProxy = InfoProxyItemSearch.Instance();
-        if (infoProxy == null)
+        if (InfoProxy == null)
         {
             StopPurchase();
             return;
         }
 
-        infoProxy->EndRequest();
-        infoProxy->SearchItemId = ModuleConfig.TargetMapID;
+        InfoProxy->EndRequest();
+        InfoProxy->SearchItemId = ModuleConfig.TargetMapID;
 
-        if (!infoProxy->RequestData())
+        if (!InfoProxy->RequestData())
         {
             TaskHelper.DelayNext(1000);
             TaskHelper.Enqueue(() => { SearchMarket(); return true; });
@@ -203,39 +204,37 @@ public unsafe class AutoBuyMaps : DailyModuleBase
     {
         if (!IsBuying) return false;
 
-        var infoProxy = InfoProxyItemSearch.Instance();
-        if (infoProxy == null || infoProxy->SearchItemId != itemID) return false;
+        if (InfoProxy == null || InfoProxy->SearchItemId != itemID) return false;
 
-        if (infoProxy->Listings.ToArray()
-                               .Where(x => x.ItemId == infoProxy->SearchItemId && x.UnitPrice != 0)
-                               .ToList().Count != infoProxy->ListingCount)
+        if (InfoProxy->Listings.ToArray()
+                               .Where(x => x.ItemId == InfoProxy->SearchItemId && x.UnitPrice != 0)
+                               .ToList().Count != InfoProxy->ListingCount)
             return false;
 
-        return infoProxy->EntryCount switch
+        return InfoProxy->EntryCount switch
         {
-            > 10 => infoProxy->ListingCount >= 10,
+            > 10 => InfoProxy->ListingCount >= 10,
             0 => true,
-            _ => infoProxy->ListingCount != 0
+            _ => InfoProxy->ListingCount != 0
         };
     }
 
     private void ProcessResults()
     {
-        var infoProxy = InfoProxyItemSearch.Instance();
-        if (infoProxy == null)
+        if (InfoProxy == null)
         {
             StopPurchase();
             return;
         }
 
-        if (infoProxy->ListingCount == 0)
+        if (InfoProxy->ListingCount == 0)
         {
             StopPurchase();
             return;
         }
 
         var currentState = AnalyzeCurrentState();
-        var listingsToBuy = infoProxy->Listings.ToArray()
+        var listingsToBuy = InfoProxy->Listings.ToArray()
             .Where(x => x.ItemId == ModuleConfig.TargetMapID && x.UnitPrice > 0)
             .Where(x => ModuleConfig.MaxPrice <= 0 || x.UnitPrice <= (ulong)ModuleConfig.MaxPrice)
             .OrderBy(x => x.UnitPrice)
@@ -253,23 +252,22 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         foreach (var listing in listingsToBuy)
         {
             TaskHelper.Enqueue(() => SendBuyRequest(listing));
-            TaskHelper.Enqueue(() => infoProxy->Listings.ToArray()
+                TaskHelper.Enqueue(() => InfoProxy->Listings.ToArray()
                 .FirstOrDefault(x => x.ListingId == listing.ListingId).ListingId == 0);
         }
 
         TaskHelper.DelayNext(1000);
         TaskHelper.Enqueue(() => WaitForItemArrival(purchasesBefore));
         TaskHelper.DelayNext(1000);
-                TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
+        TaskHelper.Enqueue(() => { PurchaseNext(); return true; });
     }
 
     private bool SendBuyRequest(MarketBoardListing listing)
     {
-        var infoProxy = InfoProxyItemSearch.Instance();
-        if (infoProxy == null) return false;
+        if (InfoProxy == null) return false;
 
-        infoProxy->SetLastPurchasedItem(&listing);
-        return infoProxy->SendPurchaseRequestPacket();
+        InfoProxy->SetLastPurchasedItem(&listing);
+        return InfoProxy->SendPurchaseRequestPacket();
     }
 
     private static bool HasItemInInventory(uint itemID) =>
@@ -493,7 +491,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
     private bool HasSaddlebagSpace() => SaddlebagTypes.Any(type => FindEmptySlot(type) != -1);
 
     private string GetMapName(uint mapID) =>
-        MapData.FirstOrDefault(m => m.ItemID == mapID) is var map && map.ItemID != 0 && map.Name != "SelectMap" ? map.Name : GetLoc("AutoBuyMapsSelectMap");
+        MapData.FirstOrDefault(m => m.ItemID == mapID) is var map && map.ItemID != 0 && map.Name != "SelectMap" ? map.Name : GetLoc("AutoBuyMaps-SelectMap");
 
     private static unsafe (InventoryType type, int slot) FindItem(uint itemID, params InventoryType[] types)
     {
@@ -612,7 +610,7 @@ public unsafe class AutoBuyMaps : DailyModuleBase
         }
         catch (Exception ex)
         {
-            NotificationError(GetLoc("AutoBuyMapsCommandError", ex.Message));
+            NotificationError(GetLoc("AutoBuyMaps-CommandError", ex.Message));
         }
     }
 
