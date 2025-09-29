@@ -97,6 +97,10 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
     private static void OnUpdate(IFramework framework)
     {
         if (IsInDuty()) return;
+                
+        if (ModuleConfig.AutoSwitchStance &&
+            ActionManager.Instance()->GetActionStatus(ActionType.BuddyAction, (uint)ModuleConfig.Stance) != 0)
+            return;
         
         if (PlayerState.Instance()->IsPlayerStateFlagSet(PlayerStateFlag.IsBuddyInStable)) return;
 
