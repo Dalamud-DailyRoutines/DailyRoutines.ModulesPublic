@@ -5,10 +5,12 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Objects.Enums;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using KamiToolKit.Extensions;
+using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -20,6 +22,10 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         Description = GetLoc("OptimizedTargetInfoDescription"),
         Category    = ModuleCategories.UIOptimization,
     };
+
+    private delegate void SetFocusTargetByObjectIDDelegate(TargetSystem* targetSystem, GameObjectId objectID);
+    private static SetFocusTargetByObjectIDDelegate? SetFocusTargetByObjectID =
+        new CompSig("E8 ?? ?? ?? ?? BA 0C 00 00 00 48 8D 0D").GetDelegate<SetFocusTargetByObjectIDDelegate>();
     
     private static Config ModuleConfig = null!;
     
@@ -585,7 +591,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                         Position  = new(-13, 12),
                         SeString  = "\ue04c",
                         Tooltip   = GetLoc("OptimizedTargetInfo-ClearFocusTarget"),
-                        OnClick   = () => DService.Targets.FocusTarget = null
+                        OnClick   = () => SetFocusTargetByObjectID(TargetSystem.Instance(), 0xE0000000)
                     };
                     ClearFocusButtonNode.BackgroundNode.IsVisible = false;
                     
