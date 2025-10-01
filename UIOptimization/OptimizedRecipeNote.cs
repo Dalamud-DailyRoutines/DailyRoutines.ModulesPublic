@@ -983,7 +983,7 @@ public class OptimizedRecipeNote : DailyModuleBase
                     SeString         = $"{index + 1}",
                     FontType         = FontType.MiedingerMed,
                     TextFlags        = TextFlags.Edge,
-                    TextOutlineColor = KnownColor.OrangeRed.Vector()
+                    TextOutlineColor = KnownColor.OrangeRed.ToVector4()
                 };
                 Service.AddonController.AttachNode(actionIndexNode, dragDropNode);
 

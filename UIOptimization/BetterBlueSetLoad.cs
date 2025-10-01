@@ -37,7 +37,7 @@ public unsafe class BetterBlueSetLoad : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
         
         ImGui.SameLine();
         ImGui.Text($"/pdr {Command} → {GetLoc("BetterBlueSetLoad-CommandHelp")}");

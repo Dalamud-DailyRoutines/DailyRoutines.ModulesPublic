@@ -147,7 +147,7 @@ public class AutoReplyChatBot : DailyModuleBase
             if (apiTab)
             {
                 // API Select
-                ImGui.TextColored(LightSkyBlue, GetLoc("Type"));
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Type"));
 
                 using (ImRaii.PushIndent())
                 {
@@ -774,8 +774,8 @@ public class AutoReplyChatBot : DailyModuleBase
                     else
                         ImGui.SetCursorPosX(8f * GlobalFontScale);
 
-                    var bgColor   = isUser ? CadetBlue : SlateGrey;
-                    var textColor = isUser ? White : new(0.9f, 0.9f, 0.9f, 1.0f);
+                    var bgColor   = isUser ? KnownColor.CadetBlue.ToVector4() : KnownColor.SlateGray.ToVector4();
+                    var textColor = isUser ? KnownColor.White.ToVector4() : new(0.9f, 0.9f, 0.9f, 1.0f);
                     
                     using (ImRaii.Group())
                     using (ImRaii.PushColor(ImGuiCol.ChildBg, bgColor))

@@ -56,7 +56,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoCheckFoodUsage-Checkpoint")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoCheckFoodUsage-Checkpoint")}:");
 
         using (ImRaii.PushIndent())
         {
@@ -78,7 +78,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
                 using (ImRaii.PushIndent())
                 {
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(LightSkyBlue,
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(),
                                       $"{GetLoc("AutoCheckFoodUsage-WhenConditionBegin")}:");
 
                     ImGui.SameLine();
@@ -117,7 +117,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
                     }
 
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(LightSkyBlue,
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(),
                                       $"{GetLoc("AutoCheckFoodUsage-WhenConditionEnd")}:");
 
                     ImGui.SameLine();
@@ -161,7 +161,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
             ScaledDummy(2f);
         }
 
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Settings")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Settings")}:");
 
         using (ImRaii.PushIndent())
         {
@@ -196,7 +196,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
         {
             if (popup)
             {
-                ImGui.TextColored(LightSkyBlue,
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(),
                                   $"{GetLoc("AutoCheckFoodUsage-AddNewPreset")}:");
 
                 using (ImRaii.PushIndent())

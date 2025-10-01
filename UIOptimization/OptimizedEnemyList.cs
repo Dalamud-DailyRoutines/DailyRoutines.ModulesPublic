@@ -55,7 +55,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, GetLoc("Offset"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Offset"));
         
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
@@ -77,7 +77,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         if (ModuleConfig.UseCustomizeTextColor)
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(LightSkyBlue, $"{GetLoc("Color")}:");
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Color")}:");
             
             ImGui.SameLine();
             ModuleConfig.TextColor =
@@ -87,7 +87,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             ImGui.TextDisabled("|");
 
             ImGui.SameLine();
-            ImGui.TextColored(LightSkyBlue, $"{GetLoc("EdgeColor")}:");
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("EdgeColor")}:");
             
             ImGui.SameLine();
             ModuleConfig.EdgeColor =
@@ -97,7 +97,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             ImGui.TextDisabled("|");
             
             ImGui.SameLine();
-            ImGui.TextColored(LightSkyBlue, $"{GetLoc("BackgroundColor")}:");
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("BackgroundColor")}:");
             
             ImGui.SameLine();
             ModuleConfig.BackgroundNodeColor =
@@ -147,7 +147,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, GetLoc("FontSize"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("FontSize"));
         
         ImGui.SameLine();
         ImGui.SetNextItemWidth(100f * GlobalFontScale);
@@ -161,7 +161,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, GetLoc("OptimizedEnemyList-CastInfoDisplayTargetBlacklist"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("OptimizedEnemyList-CastInfoDisplayTargetBlacklist"));
         ImGuiOm.HelpMarker(GetLoc("OptimizedEnemyList-CastInfoDisplayTargetBlacklistHelp"));
         
         ImGui.SameLine();
@@ -302,9 +302,9 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                 castBarNode.ProgressNode.Width  = 105 * (bc.CurrentCastTime / bc.TotalCastTime);
 
                 if (bc.IsCastInterruptible)
-                    castBarNode.AddColor = KnownColor.Red.Vector().AsVector3Color();
+                    castBarNode.AddColor = KnownColor.Red.ToVector4().ToVector3();
                 else
-                    castBarNode.AddColor = KnownColor.Yellow.Vector().AsVector3Color() / 255f;
+                    castBarNode.AddColor = KnownColor.Yellow.ToVector4().ToVector3() / 255f;
             }
             else
             {
@@ -388,7 +388,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                 TextureSize        = new(24, 24),
                 Size               = new(160, 10),
                 IsVisible          = true,
-                Color              = Black,
+                Color              = KnownColor.Black.ToVector4(),
                 Position           = new(75, 6),
                 Alpha              = 0.6f,
 

@@ -43,7 +43,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoBroadcastActionHitInfo-DHHint")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoBroadcastActionHitInfo-DHHint")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
@@ -52,7 +52,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
             SaveConfig(ModuleConfig);
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoBroadcastActionHitInfo-CHHint")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoBroadcastActionHitInfo-CHHint")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
@@ -61,7 +61,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
             SaveConfig(ModuleConfig);
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoBroadcastActionHitInfo-DCHHint")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoBroadcastActionHitInfo-DCHHint")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
@@ -72,7 +72,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ScaledDummy(5f);
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoBroadcastActionHitInfo-UseTTS")}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoBroadcastActionHitInfo-UseTTS")}");
 
         ImGui.SameLine();
         if (ImGui.Checkbox("###UseTTS", ref ModuleConfig.UseTTS))
@@ -81,7 +81,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ScaledDummy(5f);
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("WorkMode")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("WorkMode")}:");
 
         ImGui.SameLine();
         if (ImGuiComponents.ToggleButton("WorkModeButton", ref ModuleConfig.WorkMode))
@@ -91,7 +91,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ImGui.Text(ModuleConfig.WorkMode ? GetLoc("Whitelist") : GetLoc("Blacklist"));
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Action")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Action")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
@@ -103,7 +103,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ScaledDummy(5f);
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoBroadcastActionHitInfo-CustomActionAlias")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoBroadcastActionHitInfo-CustomActionAlias")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(250f * GlobalFontScale);

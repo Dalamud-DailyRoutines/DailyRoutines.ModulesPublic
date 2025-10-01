@@ -80,7 +80,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
 
     private void DrawConfigBothers()
     {
-        ImGui.TextColored(LightSteelBlue1, $"{GetLoc("Settings")}");
+        ImGui.TextColored(KnownColor.LightSteelBlue.ToVector4(), $"{GetLoc("Settings")}");
         using var indent = ImRaii.PushIndent();
 
         // 通知发送
@@ -99,7 +99,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
 
         // 重定向距离
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoReplaceLocationAction-AdjustDistance")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoReplaceLocationAction-AdjustDistance")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(80f * GlobalFontScale);
@@ -113,7 +113,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
 
         // 黑名单副本
         ImGui.SameLine();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoReplaceLocationAction-BlacklistContents")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoReplaceLocationAction-BlacklistContents")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
@@ -123,7 +123,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
 
     private void DrawConfigActions()
     {
-        ImGui.TextColored(LightSteelBlue1, $"{GetLoc("Action")}");
+        ImGui.TextColored(KnownColor.LightSteelBlue.ToVector4(), $"{GetLoc("Action")}");
         using var indent = ImRaii.PushIndent();
 
         // 技能启用情况
@@ -163,7 +163,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         var agent = AgentMap.Instance();
         if (agent == null) return;
 
-        ImGui.TextColored(LightSteelBlue1, $"{GetLoc("AutoReplaceLocationAction-CenterPointData")}");
+        ImGui.TextColored(KnownColor.LightSteelBlue.ToVector4(), $"{GetLoc("AutoReplaceLocationAction-CenterPointData")}");
         using var indent = ImRaii.PushIndent();
 
         var isMapValid = LuminaGetter.TryGetRow<Map>(DService.ClientState.MapId, out var currentMapData) && 
@@ -173,7 +173,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         using var disabled = ImRaii.Disabled(!isMapValid);
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("CurrentMap")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("CurrentMap")}:");
 
         ImGui.SameLine();
         ImGui.Text($"{currentMapPlaceName} / {currentMapPlaceNameSub}");
@@ -193,7 +193,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
             ClearCenterPoint();
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoReplaceLocationAction-CustomCenterPoint")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoReplaceLocationAction-CustomCenterPoint")}:");
 
         using (ImRaii.Disabled(agent->FlagMarkerCount == 0 || agent->FlagMapMarkers[0].MapId != DService.ClientState.MapId))
         {

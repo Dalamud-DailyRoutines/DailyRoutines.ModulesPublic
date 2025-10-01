@@ -51,7 +51,7 @@ public class BetterStatusTimeDisplay : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("BetterStatusTimeDisplay-ChooseTimeFormat")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("BetterStatusTimeDisplay-ChooseTimeFormat")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(100f * GlobalFontScale);

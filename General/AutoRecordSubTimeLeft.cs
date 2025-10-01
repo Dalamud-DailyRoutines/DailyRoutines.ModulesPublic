@@ -64,23 +64,23 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
             info.Record == DateTime.MinValue                         ||
             (info.LeftMonth == TimeSpan.MinValue && info.LeftTime == TimeSpan.MinValue))
         {
-            ImGui.TextColored(Orange, "当前角色暂无数据, 请重新登录游戏以记录");
+            ImGui.TextColored(KnownColor.Orange.ToVector4(), "当前角色暂无数据, 请重新登录游戏以记录");
             return;
         }
 
-        ImGui.TextColored(LightSkyBlue, "上次记录:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "上次记录:");
 
         ImGui.SameLine();
         ImGui.Text($"{info.Record}");
         
         ImGui.NewLine();
 
-        ImGui.TextColored(LightSkyBlue, "月卡剩余时间:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "月卡剩余时间:");
 
         ImGui.SameLine();
         ImGui.Text(FormatTimeSpan(info.LeftMonth == TimeSpan.MinValue ? TimeSpan.Zero : info.LeftMonth));
         
-        ImGui.TextColored(LightSkyBlue, "点卡剩余时间:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "点卡剩余时间:");
 
         ImGui.SameLine();
         ImGui.Text(FormatTimeSpan(info.LeftTime));

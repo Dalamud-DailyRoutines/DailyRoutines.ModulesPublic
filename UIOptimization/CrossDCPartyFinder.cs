@@ -232,12 +232,12 @@ public class CrossDCPartyFinder : DailyModuleBase
                 using (FontManager.UIFont120.Push())
                 {
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (4f * GlobalFontScale));
-                    ImGui.TextColored(LightSkyBlue, $"{listing.Duty}");
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{listing.Duty}");
                 }
 
                 ImGui.SameLine();
                 ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (2f * GlobalFontScale));
-                ImGui.TextColored(LightSkyBlue, $"({listing.PlayerName}@{listing.HomeWorldName})");
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"({listing.PlayerName}@{listing.HomeWorldName})");
                 ImGuiOm.TooltipHover($"{listing.PlayerName}@{listing.HomeWorldName}");
                 if (ImGui.IsItemHovered())
                     ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);

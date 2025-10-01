@@ -34,7 +34,7 @@ public class AutoNotifyDiademWeather : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(8555));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(8555));
         
         var weathers = string.Join(',',
                                    ModuleConfig.Weathers

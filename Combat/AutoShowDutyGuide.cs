@@ -55,7 +55,7 @@ public class AutoShowDutyGuide : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("WorkTheory")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("WorkTheory")}:");
         ImGuiOm.HelpMarker(GetLoc("AutoShowDutyGuide-TheoryHelp"), 30f);
 
         ImGui.SetNextItemWidth(80f * GlobalFontScale);

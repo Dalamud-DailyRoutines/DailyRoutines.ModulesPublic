@@ -97,7 +97,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightBlue, $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightBlue.ToVector4(), $"{GetLoc("Command")}:");
 
         ImGui.SameLine();
         ImGui.Text($"{Command} → {GetLoc("AutoSplitStacks-CommandHelp")}");
@@ -123,7 +123,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
                 using (ImRaii.Group())
                 {
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(LightSkyBlue, $"{Lang.Get("Item")}:");
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Item")}:");
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(250f * GlobalFontScale);
@@ -150,7 +150,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
                     }
 
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(LightSkyBlue, $"{Lang.Get("Amount")}:");
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Amount")}:");
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(250f * GlobalFontScale);
@@ -210,7 +210,7 @@ public unsafe class AutoSplitStacks : DailyModuleBase
                 if (ImGui.IsWindowAppearing())
                     SplitAmountInput = group.Amount;
 
-                ImGui.TextColored(LightSkyBlue, $"{Lang.Get("Amount")}:");
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Amount")}:");
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(150f * GlobalFontScale);

@@ -58,7 +58,7 @@ public unsafe class AutoRecommendFauxHollows : DailyModuleBase
         var windowPos = new Vector2(WeeklyPuzzle->GetX() - ImGui.GetWindowSize().X, WeeklyPuzzle->GetY() + 5);
         ImGui.SetWindowPos(windowPos);
 
-        ImGui.TextColored(Orange, GetLoc("AutoRecommendFauxHollowsTitle"));
+        ImGui.TextColored(KnownColor.Orange.ToVector4(), GetLoc("AutoRecommendFauxHollowsTitle"));
         
         ImGui.Separator();
 

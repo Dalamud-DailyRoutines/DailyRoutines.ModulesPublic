@@ -31,13 +31,13 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
 
                 Util.OpenLink(url);
             },
-            ImGui.ColorConvertFloat4ToU32(LightSkyBlue)
+            ImGui.ColorConvertFloat4ToU32(KnownColor.LightSkyBlue.ToVector4())
         ),
         // bilibili
         new(
             @"BV[a-zA-Z0-9]{10}",
             match => Util.OpenLink($"https://www.bilibili.com/video/{match.Value}"),
-            ImGui.ColorConvertFloat4ToU32(Pink)
+            ImGui.ColorConvertFloat4ToU32(KnownColor.Pink.ToVector4())
         ),
         // 数字
         new(@"(\d{5,11})",
@@ -48,7 +48,7 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
                 ImGui.SetClipboardText(number);
                 NotificationSuccess($"{GetLoc("CopiedToClipboard")}: {number}");
             },
-            ImGui.ColorConvertFloat4ToU32(LightYellow)
+            ImGui.ColorConvertFloat4ToU32(KnownColor.LightYellow.ToVector4())
         )
     ];
 

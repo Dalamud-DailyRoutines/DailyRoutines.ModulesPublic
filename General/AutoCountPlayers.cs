@@ -2,23 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Text;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Objects.Enums;
-using Dalamud.Game.ClientState.Objects.SubKinds;
-using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
-using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -39,9 +33,9 @@ public unsafe class AutoCountPlayers : DailyModuleBase
                                                  ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize |
                                                  ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoInputs;
 
-    private static readonly uint LineColorBlue = ImGui.ColorConvertFloat4ToU32(LightSkyBlue);
-    private static readonly uint LineColorRed  = ImGui.ColorConvertFloat4ToU32(Red);
-    private static readonly uint DotColor      = ImGui.ColorConvertFloat4ToU32(RoyalBlue);
+    private static readonly uint LineColorBlue = KnownColor.LightSkyBlue.ToVector4().ToUInt();
+    private static readonly uint LineColorRed  = KnownColor.Red.ToVector4().ToUInt();
+    private static readonly uint DotColor      = KnownColor.RoyalBlue.ToVector4().ToUInt();
     
     private static readonly CompSig             InfoProxy24EndRequestSig = new("40 53 48 83 EC 20 44 0F B6 81 ?? ?? ?? ?? 48 8B D9 8B 91 ?? ?? ?? ??");
     private delegate        void                InfoProxy24EndRequestDelegate(InfoProxy24* proxy);
@@ -142,8 +136,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
                               .Append($" {playerAround.ClassJob.Value.Name})")
                               .Add(new NewLinePayload())
                               .Append("     ")
-                              .Append(SeString.CreateMapLink(DService.ClientState.TerritoryType,
-                                                             DService.ClientState.MapId, mapPos.X, mapPos.Y))
+                              .Append(SeString.CreateMapLink(GameState.TerritoryType, GameState.Map, mapPos.X, mapPos.Y))
                               .Build();
                 Chat(message);
             }
@@ -187,7 +180,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
                         
                         ImGui.SameLine();
                         ImGui.SetCursorPosY(ImGui.GetCursorPosY() - (1.2f * GlobalFontScale));
-                        ImGuiOm.TextOutlined(Orange, $"{PlayersManager.PlayersTargetingMe.Count}", Brown4);
+                        ImGuiOm.TextOutlined(KnownColor.Orange.ToVector4(), $"{PlayersManager.PlayersTargetingMe.Count}", KnownColor.SaddleBrown.ToVector4());
 
                         if (GameState.ContentFinderCondition == 0)
                         {
@@ -195,8 +188,9 @@ public unsafe class AutoCountPlayers : DailyModuleBase
                             {
                                 var text = GetLoc("AutoCountPlayers-Notification-SomeoneTargetingMe");
                                 ImGuiOm.TextOutlined(ImGui.GetCursorScreenPos() - new Vector2(ImGui.CalcTextSize(text).X * 0.3f, 0),
-                                                     ImGui.ColorConvertFloat4ToU32(Orange),
-                                                     $"({text})", ImGui.ColorConvertFloat4ToU32(Brown4));
+                                                     KnownColor.Orange.ToVector4().ToUInt(),
+                                                     $"({text})",
+                                                     KnownColor.SaddleBrown.ToVector4().ToUInt());
                             }
                         }
                     }
@@ -246,20 +240,37 @@ public unsafe class AutoCountPlayers : DailyModuleBase
             return;
         }
         
-        var tooltip = new StringBuilder();
+        var tooltip = new SeStringBuilder();
 
         if (PlayersManager.PlayersTargetingMe.Count > 0)
         {
-            tooltip.AppendLine($"{GetLoc("AutoCountPlayers-PlayersTargetingMe")}:");
-            PlayersManager.PlayersTargetingMe.ForEach(info => 
-                tooltip.AppendLine($"{info.Player.Name} ({info.Player.ClassJob.Value.Name.ExtractText()})"));
-            tooltip.AppendLine(string.Empty);
+            tooltip.AddUiForeground(32)
+                   .AddText($"{GetLoc("AutoCountPlayers-PlayersTargetingMe")}")
+                   .AddUiForegroundOff()
+                   .Add(NewLinePayload.Payload);
+            
+            PlayersManager.PlayersTargetingMe.ForEach(info =>
+                                                          tooltip.AddText($"{info.Player.Name} (")
+                                                                 .AddIcon(info.Player.ClassJob.Value.ToBitmapFontIcon())
+                                                                 .AddText($"{info.Player.ClassJob.Value.Name.ExtractText()})")
+                                                                 .Add(NewLinePayload.Payload));
         }
+
+        tooltip.AddUiForeground(32)
+               .AddText($"{GetLoc("AutoCountPlayers-PlayersAroundInfo")}")
+               .AddUiForegroundOff()
+               .Add(NewLinePayload.Payload);
         
-        tooltip.AppendLine($"{GetLoc("AutoCountPlayers-PlayersAroundInfo")}:");
-        characters.ForEach(x => tooltip.AppendLine($"{x.Name} ({x.ClassJob.Value.Name.ExtractText()})"));
+        characters.ForEach(info => tooltip.AddText($"{info.Name} (")
+                                          .AddIcon(info.ClassJob.Value.ToBitmapFontIcon())
+                                          .AddText($"{info.ClassJob.Value.Name.ExtractText()})")
+                                          .Add(NewLinePayload.Payload));
         
-        Entry.Tooltip = tooltip.ToString().Trim();
+        var message = tooltip.Build();
+        if (message.Payloads.Last() is NewLinePayload)
+            message.Payloads.RemoveAt(message.Payloads.Count - 1);
+        
+        Entry.Tooltip = message;
     }
 
     private static void OnPlayersTargetingMeUpdate(IReadOnlyList<PlayerTargetingInfo> targetingPlayersInfo)
@@ -331,7 +342,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
                 ImGuiHelpers.SeStringWrapped(icon);
                 
                 ImGui.SameLine();
-                ImGuiOm.TextOutlined(Orange, $"{chara.Name}");
+                ImGuiOm.TextOutlined(KnownColor.Orange.ToVector4(), $"{chara.Name}");
             }
 
             ImGui.End();

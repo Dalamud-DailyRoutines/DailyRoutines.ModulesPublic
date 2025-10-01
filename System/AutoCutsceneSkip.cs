@@ -72,7 +72,7 @@ public unsafe class AutoCutsceneSkip : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("WorkMode")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("WorkMode")}:");
 
         ImGui.SameLine();
         if (ImGuiComponents.ToggleButton("WorkMode", ref ModuleConfig.WorkMode))

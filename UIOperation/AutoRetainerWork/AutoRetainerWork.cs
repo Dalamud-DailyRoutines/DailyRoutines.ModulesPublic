@@ -273,7 +273,7 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
         public override void DrawConfig()
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(RoyalBlue, GetLoc("AutoRetainerWork-Dispatch-Title"));
+            ImGui.TextColored(KnownColor.RoyalBlue.ToVector4(), GetLoc("AutoRetainerWork-Dispatch-Title"));
 
             var imageState = ImageHelper.TryGetImage(
                 "https://gh.atmoomen.top/StaticAssets/main/DailyRoutines/image/AutoRetainersDispatch-1.png",

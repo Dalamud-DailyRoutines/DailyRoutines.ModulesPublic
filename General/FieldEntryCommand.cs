@@ -75,7 +75,7 @@ public class FieldEntryCommand : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
         
         using var indent = ImRaii.PushIndent();
         using var table = ImRaii.Table("ArgsTable", 2, ImGuiTableFlags.Borders,

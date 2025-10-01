@@ -66,7 +66,7 @@ public class AutoOpenMapLinks : DailyModuleBase
         using (ImRaii.PushId("PlayerWhitelist"))
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(LightSkyBlue, GetLoc("AutoOpenMapLinks-TargetPlayer"));
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("AutoOpenMapLinks-TargetPlayer"));
 
             ImGui.Spacing();
 
@@ -128,7 +128,7 @@ public class AutoOpenMapLinks : DailyModuleBase
         using (ImRaii.PushId("ChannelWhitelist"))
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(LightSkyBlue, GetLoc("AutoOpenMapLinks-WhitelistChannels"));
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("AutoOpenMapLinks-WhitelistChannels"));
             
             ImGui.Spacing();
 

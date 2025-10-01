@@ -78,7 +78,7 @@ public class AutoNotifyMessages : DailyModuleBase
             if (combo)
             {
                 ImGui.AlignTextToFramePadding();
-                ImGui.TextColored(LightSkyBlue, $"{GetLoc("Keyword")}");
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Keyword")}");
 
                 ImGui.SameLine();
                 if (ImGui.SmallButton(GetLoc("Add")))

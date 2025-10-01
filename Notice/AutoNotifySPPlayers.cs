@@ -55,7 +55,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("WorkTheory")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("WorkTheory")}:");
 
         ImGui.SameLine();
         ImGui.Text(GetLoc("AutoNotifySPPlayers-WorkTheoryHelp"));

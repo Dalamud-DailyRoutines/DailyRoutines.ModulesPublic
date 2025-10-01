@@ -39,7 +39,7 @@ public unsafe class AutoMount : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoMount-CurrentMount")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoMount-CurrentMount")}:");
 
         ImGui.SameLine();
         ImGui.Text(ModuleConfig.SelectedMount == 0
@@ -47,7 +47,7 @@ public unsafe class AutoMount : DailyModuleBase
                        : LuminaGetter.GetRow<Mount>(ModuleConfig.SelectedMount)!.Value.Singular.ExtractText());
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoMount-SelecteMount")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoMount-SelecteMount")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(250f * GlobalFontScale);
@@ -65,7 +65,7 @@ public unsafe class AutoMount : DailyModuleBase
         }
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("BlacklistZones")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("BlacklistZones")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(250f * GlobalFontScale);
@@ -73,7 +73,7 @@ public unsafe class AutoMount : DailyModuleBase
             SaveConfig(ModuleConfig);
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Delay")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Delay")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);

@@ -41,7 +41,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(1050));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(1050));
 
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(1050)))
         using (ImRaii.ItemWidth(250f * GlobalFontScale))
@@ -70,7 +70,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(14051));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(14051));
         
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(14051)))
         using (ImRaii.ItemWidth(250f * GlobalFontScale))
@@ -91,7 +91,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(1051));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(1051));
         
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(1051)))
         using (ImRaii.ItemWidth(250f * GlobalFontScale))
@@ -120,7 +120,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(3626));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(3626));
         
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(3626)))
         using (ImRaii.ItemWidth(250f * GlobalFontScale))
@@ -149,7 +149,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(701));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(701));
         
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(701)))
         using (ImRaii.ItemWidth(250f * GlobalFontScale))
@@ -178,7 +178,7 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("OptimizedCastBar-SlideCastMarker"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("OptimizedCastBar-SlideCastMarker"));
         ImGuiOm.HelpMarker(GetLoc("OptimizedCastBar-SlideCastMarker-Help"));
         
         using (ImRaii.PushId("OptimizedCastBar-SlideCastMarker"))

@@ -64,7 +64,7 @@ public unsafe class ExtraBlueSet : DailyModuleBase
         var origPosY = ImGui.GetCursorPosY();
         ImGui.SetCursorPosY(origPosY + (2f * GlobalFontScale));
         using (FontManager.UIFont.Push())
-            ImGui.TextColored(LightSkyBlue, Info.Title);
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Info.Title);
         
         ImGui.SameLine(0, 8f * GlobalFontScale);
         ImGui.SetCursorPosY(origPosY - GlobalFontScale);
@@ -123,7 +123,7 @@ public unsafe class ExtraBlueSet : DailyModuleBase
             {
                 ImGui.BeginTooltip();
 
-                ImGui.TextColored(LightSkyBlue, $"{preset.Name}");
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{preset.Name}");
                 
                 for (var index = 0; index < preset.Actions.Length; index++)
                 {

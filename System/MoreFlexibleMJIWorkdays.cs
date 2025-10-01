@@ -57,13 +57,13 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
                 {
                     case 0:
                         ImGui.AlignTextToFramePadding();
-                        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(15107));
+                        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(15107));
 
                         ImGui.SameLine();
                         break;
                     case 7:
                         ImGui.AlignTextToFramePadding();
-                        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(15108));
+                        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(15108));
 
                         ImGui.SameLine();
                         break;

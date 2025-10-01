@@ -70,7 +70,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
         {
             if (popup)
             {
-                ImGui.TextColored(LightSkyBlue, GetLoc("MoreMessageFilterPresets-SourceTab"));
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("MoreMessageFilterPresets-SourceTab"));
                 
                 using (ImRaii.PushIndent())
                 using (var combo = ImRaii.Combo("###AddFilterPresetCombo", logTabName[SelectedFilter], ImGuiComboFlags.HeightLarge))
@@ -85,7 +85,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
                     }
                 }
 
-                ImGui.TextColored(LightSkyBlue, GetLoc("Name"));
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Name"));
                 
                 var defaultName = $"{GetLoc("Preset")} {ModuleConfig.Presets.Count + 1}";
                 var name        = InputPresetName.IsNullOrEmpty() ? defaultName : InputPresetName;
@@ -131,7 +131,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
                 if (context)
                 {
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(LightSkyBlue, GetLoc("Name"));
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Name"));
 
                     ImGui.SameLine();
                     ImGui.InputText("###RenamePresetInput", ref preset.Name, 128);

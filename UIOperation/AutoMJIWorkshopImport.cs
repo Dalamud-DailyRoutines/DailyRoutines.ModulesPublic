@@ -83,7 +83,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
     private void DrawImportSection()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, "导入数据");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "导入数据");
         
         ImGui.SameLine();
         ImGui.Text("(");
@@ -127,7 +127,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
     {
         ScaledDummy(12);
         
-        ImGui.TextColored(LightSkyBlue, "批量应用");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "批量应用");
         
         using var indent = ImRaii.PushIndent();
         
@@ -143,7 +143,7 @@ public unsafe class AutoMJIWorkshopImport : DailyModuleBase
     {
         ScaledDummy(12);
         
-        ImGui.TextColored(LightSkyBlue, "单独应用");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "单独应用");
         
         ImGui.Separator();
 

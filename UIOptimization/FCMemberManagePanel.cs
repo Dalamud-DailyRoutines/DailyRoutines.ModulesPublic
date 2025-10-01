@@ -135,7 +135,7 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
     protected override void OverlayUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{Lang.Get("FCMemberManagePanel-CurrentPage")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("FCMemberManagePanel-CurrentPage")}:");
         
         var pageAmount = ((int)FCTotalMembersCount + 199) / 200;
         for (var i = 0; i < pageAmount; i++)

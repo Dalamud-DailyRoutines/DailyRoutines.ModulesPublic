@@ -71,7 +71,7 @@ public class FastGrandCompanyExchange : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
         
         ImGui.SameLine();
         ImGui.TextWrapped($"/pdr {Command} {GetLoc("FastGrandCompanyExchange-CommandHelp")}");

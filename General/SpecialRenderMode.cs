@@ -31,7 +31,7 @@ public unsafe class SpecialRenderMode : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, GetLoc("SpecialRenderMode-Mode-DisableWorldRenderButAddons"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-DisableWorldRenderButAddons"));
 
         using (ImRaii.PushId("DisableWorldRenderButAddons"))
         using (ImRaii.PushIndent())
@@ -54,7 +54,7 @@ public unsafe class SpecialRenderMode : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("SpecialRenderMode-Mode-HideAddonsButNameplate"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideAddonsButNameplate"));
 
         using (ImRaii.PushId("HideAddonsButNameplate"))
         using (ImRaii.PushIndent())
@@ -77,7 +77,7 @@ public unsafe class SpecialRenderMode : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("SpecialRenderMode-Mode-HideAddonsButChatLog"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideAddonsButChatLog"));
 
         using (ImRaii.PushId("HideAddonsButChatLog"))
         using (ImRaii.PushIndent())
@@ -100,7 +100,7 @@ public unsafe class SpecialRenderMode : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("SpecialRenderMode-Mode-HideChatLog"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideChatLog"));
 
         using (ImRaii.PushId("HideChatLog"))
         using (ImRaii.PushIndent())
@@ -115,7 +115,7 @@ public unsafe class SpecialRenderMode : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("SpecialRenderMode-Mode-HideActionBars"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideActionBars"));
 
         using (ImRaii.PushId("HideActionBars"))
         using (ImRaii.PushIndent())
@@ -130,7 +130,7 @@ public unsafe class SpecialRenderMode : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("SpecialRenderMode-Mode-HideTargetInfo"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideTargetInfo"));
 
         using (ImRaii.PushId("HideTargetInfo"))
         using (ImRaii.PushIndent())
@@ -145,7 +145,7 @@ public unsafe class SpecialRenderMode : DailyModuleBase
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("SpecialRenderMode-Mode-HideNameplate"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideNameplate"));
 
         using (ImRaii.PushId("HideNameplate"))
         using (ImRaii.PushIndent())
@@ -161,6 +161,6 @@ public unsafe class SpecialRenderMode : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public Vector4 BackgroundColor = LightSkyBlue;
+        public Vector4 BackgroundColor = KnownColor.LightSkyBlue.ToVector4();
     }
 }

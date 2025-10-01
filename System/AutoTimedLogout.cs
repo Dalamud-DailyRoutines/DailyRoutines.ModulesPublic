@@ -51,7 +51,7 @@ public class AutoTimedLogout : DailyModuleBase
                 var seconds = remaining        % 60;
 
                 var operationText = ModeLoc.GetValueOrDefault(CurrentOperation, string.Empty);
-                ImGui.TextColored(Green, $"{operationText}:");
+                ImGui.TextColored(KnownColor.GreenYellow.ToVector4(), $"{operationText}:");
                 
                 ImGui.SameLine();
                 ImGui.Text($" {hours:D2}:{minutes:D2}:{seconds:D2}");
@@ -63,7 +63,7 @@ public class AutoTimedLogout : DailyModuleBase
             return;
         }
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("Operation"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Operation"));
         
         using (ImRaii.PushIndent())
         {
@@ -79,7 +79,7 @@ public class AutoTimedLogout : DailyModuleBase
             }
         }
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("Time"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Time"));
         
         using (ImRaii.PushIndent())
         {

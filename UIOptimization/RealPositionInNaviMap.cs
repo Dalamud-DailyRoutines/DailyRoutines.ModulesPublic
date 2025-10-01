@@ -31,7 +31,7 @@ public class RealPositionInNaviMap : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, GetLoc("RealPositionInNaviMap-CopyFormat"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("RealPositionInNaviMap-CopyFormat"));
         ImGuiOm.HelpMarker(GetLoc("RealPositionInNaviMap-CopyFormatHelp"), 20f * GlobalFontScale);
 
         ImGui.InputText("###CopyFormat", ref ModuleConfig.CopyFormat, 256);

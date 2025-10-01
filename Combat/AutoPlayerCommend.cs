@@ -49,7 +49,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoPlayerCommend-BlacklistContents")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoPlayerCommend-BlacklistContents")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
@@ -59,7 +59,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoPlayerCommend-BlockBlacklistPlayers")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoPlayerCommend-BlockBlacklistPlayers")}:");
         
         ImGui.SameLine();
         if (ImGui.Checkbox("###AutoIgnoreBlacklistPlayers", ref ModuleConfig.AutoIgnoreBlacklistPlayers))

@@ -73,7 +73,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("OptimizedTargetInfo-DisplayFormat")}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("OptimizedTargetInfo-DisplayFormat")}");
         
         ImGui.SetNextItemWidth(400f * GlobalFontScale);
         using (ImRaii.PushIndent())
@@ -109,7 +109,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         }
             
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("OptimizedTargetInfo-DisplayStringFormat")}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("OptimizedTargetInfo-DisplayStringFormat")}");
         
         using (ImRaii.PushIndent())
         {
@@ -182,7 +182,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         using (ImRaii.PushId("Status"))
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(215));
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(215));
 
             ImGui.SameLine(0, 8f * GlobalFontScale);
             if (ImGui.Checkbox($"{GetLoc("Enable")}", ref ModuleConfig.StatusIsEnabled))
@@ -221,7 +221,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         using (ImRaii.PushId("ClearFocus"))
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(LightSkyBlue, $"{GetLoc("OptimizedTargetInfo-ClearFocusTarget")}");
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("OptimizedTargetInfo-ClearFocusTarget")}");
 
             ImGui.SameLine(0, 8f * GlobalFontScale);
             if (ImGui.Checkbox($"{GetLoc("Enable")}", ref ModuleConfig.ClearFocusIsEnabled))
@@ -277,7 +277,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         using var id = ImRaii.PushId($"{prefix}_{sectionTitle}");
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, sectionTitle);
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), sectionTitle);
 
         ImGui.SameLine(0, 8f * GlobalFontScale);
         if (ImGui.Checkbox($"{GetLoc("Enable")}", ref isEnabled))

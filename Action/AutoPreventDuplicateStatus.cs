@@ -45,7 +45,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoPreventDuplicateStatus-OverlapThreshold")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoPreventDuplicateStatus-OverlapThreshold")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150f * GlobalFontScale);
@@ -56,7 +56,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         ImGuiOm.HelpMarker(GetLoc("AutoPreventDuplicateStatus-OverlapThresholdHelp"));
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("SendNotification")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("SendNotification")}:");
 
         ImGui.SameLine();
         if (ImGui.Checkbox("###SendNotification", ref ModuleConfig.SendNotification))
@@ -250,15 +250,16 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
                 case DetectType.Self:
                     return HasStatus(&Control.GetLocalPlayer()->StatusManager);
                 case DetectType.Target:
-                    if (DService.Targets.Target is not { } target || target is not IBattleChara chara) return false;
+                    if (DService.Targets.Target is not IBattleChara chara) return false;
                     return HasStatus(&chara.ToStruct()->StatusManager);
                 case DetectType.Member:
                     if (DService.PartyList.Length <= 0) return false;
+                    
                     foreach (var partyMember in DService.PartyList)
                     {
-                        var pStruct = partyMember.ToStruct();
-                        if (pStruct == null) continue;
-                        var state = HasStatus(&pStruct->StatusManager);
+                        if (IBattleChara.Create(partyMember.Address) is not { } member) continue;
+                        
+                        var state = HasStatus(member.ToStruct()->GetStatusManager());
                         if (state) return true;
                     }
                     return false;
@@ -269,15 +270,14 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
 
         public bool HasStatus(ulong gameObjectID)
         {
-            var localPlayer = DService.ObjectTable.LocalPlayer;
-            if (localPlayer == null) return false;
-            var localPlayerGameObjectID = localPlayer.GameObjectId;
+            if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return false;
 
-            var battleChara = DetectType == DetectType.Self || gameObjectID == 0xE0000000 || gameObjectID == localPlayerGameObjectID
-                                  ? Control.GetLocalPlayer()
+            var battleChara = DetectType == DetectType.Self || gameObjectID == 0xE0000000 || gameObjectID == LocalPlayerState.EntityID
+                                  ? localPlayer.ToBCStruct()
                                   : (BattleChara*)GameObjectManager.Instance()->Objects.GetObjectByGameObjectId(gameObjectID);
             if (battleChara == null) return false;
-            return HasStatus(&battleChara->StatusManager);
+            
+            return HasStatus(battleChara->GetStatusManager());
         }
 
         public bool HasStatus(StatusManager* statusManager)

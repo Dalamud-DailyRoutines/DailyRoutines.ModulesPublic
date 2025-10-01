@@ -61,7 +61,7 @@ public unsafe class OptimizedCameraSetting : DailyModuleBase
         
         Overlay.Flags &= ~ImGuiWindowFlags.NoBackground;
         
-        ImGui.TextColored(LightSkyBlue, LuminaWrapper.GetAddonText(5972));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(5972));
 
         using (ImRaii.PushIndent())
         {

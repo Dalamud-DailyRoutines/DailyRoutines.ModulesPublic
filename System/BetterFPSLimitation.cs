@@ -70,13 +70,13 @@ public class BetterFPSLimitation : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, GetLoc("Command"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Command"));
         
         ImGui.Text($"/pdr {Command} → {GetLoc("BetterFPSLimitation-CommandHelp")}");
         
         ImGui.NewLine();
         
-        ImGui.TextColored(LightSkyBlue, GetLoc("BetterFPSLimitation-FastSetFPSLimitation"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("BetterFPSLimitation-FastSetFPSLimitation"));
 
         using (ImRaii.PushIndent())
         {

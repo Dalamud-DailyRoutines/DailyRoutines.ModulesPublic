@@ -55,7 +55,7 @@ public class PartyFinderFilter : DailyModuleBase
 
         ImGui.Spacing();
 
-        ImGui.TextColored(LightSkyBlue, GetLoc("PartyFinderFilter-DescriptionRegexFilter"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("PartyFinderFilter-DescriptionRegexFilter"));
 
         ImGui.Spacing();
 
@@ -66,7 +66,7 @@ public class PartyFinderFilter : DailyModuleBase
     {
         using var group = ImRaii.Group();
 
-        ImGui.TextColored(LightSkyBlue, GetLoc("PartyFinderFilter-HighEndFilter"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("PartyFinderFilter-HighEndFilter"));
 
         using var indent = ImRaii.PushIndent();
 
@@ -131,7 +131,7 @@ public class PartyFinderFilter : DailyModuleBase
         using var group = ImRaii.Group();
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("WorkMode")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("WorkMode")}:");
 
         ImGui.SameLine();
         if (ImGuiComponents.ToggleButton("ModeToggle", ref ModuleConfig.IsWhiteList))

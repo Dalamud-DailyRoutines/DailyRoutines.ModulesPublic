@@ -155,7 +155,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         ImGui.NewLine();
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, "自定义替换规则:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "自定义替换规则:");
         
         ImGui.SameLine();
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, "添加"))
@@ -211,14 +211,14 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
                     switch (string.IsNullOrWhiteSpace(replacement))
                     {
                         case false when ValidateCustomReplacement(replacement):
-                            ImGui.TextColored(Green, "有效");
+                            ImGui.TextColored(KnownColor.GreenYellow.ToVector4(), "有效");
                             break;
                         case false:
-                            ImGui.TextColored(Red, "存在屏蔽词");
+                            ImGui.TextColored(KnownColor.Red.ToVector4(), "存在屏蔽词");
                             ImGuiOm.TooltipHover($"替换词包含屏蔽内容:\n{replacement}: {GetFilteredString(replacement)}");
                             break;
                         default:
-                            ImGui.TextColored(Grey, "无");
+                            ImGui.TextColored(KnownColor.Gray.ToVector4(), "无");
                             break;
                     }
                     

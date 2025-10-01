@@ -137,7 +137,7 @@ public unsafe class AutoLogin : DailyModuleBase
                     {
                         if (source)
                         {
-                            if (ImGui.SetDragDropPayload("LoginInfoReorder", [], 0))
+                            if (ImGui.SetDragDropPayload("LoginInfoReorder", []))
                                 DropIndex = i;
 
                             ImGui.TextColored(ImGuiColors.DalamudYellow,
@@ -216,7 +216,7 @@ public unsafe class AutoLogin : DailyModuleBase
 
         ImGui.Spacing();
 
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
 
         ImGui.SameLine();
         ImGui.Text(GetLoc("AutoLogin-AddCommandHelp", Command, Command));

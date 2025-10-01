@@ -28,7 +28,7 @@ public class AutoMaximiseWindow : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
 
         using var indent = ImRaii.PushIndent();
         

@@ -58,7 +58,7 @@ public unsafe class AutoMateriaRetrive : DailyModuleBase
         ImGui.Spacing();
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{Lang.Get("AutoMateriaRetrive-ManuallySelect")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMateriaRetrive-ManuallySelect")}:");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);

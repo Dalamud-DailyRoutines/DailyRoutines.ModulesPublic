@@ -39,7 +39,7 @@ public unsafe class AutoShowFrontlineKillCount : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, GetLoc("Preview"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Preview"));
 
         using (ImRaii.PushIndent())
         {

@@ -48,7 +48,7 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
         
         ImGui.SameLine();
         ImGui.Text($"/pdr {Command} → {GetLoc("AutoMoveGearsNotInSet-CommandHelp")}");
@@ -56,7 +56,7 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, $"{GetLoc("AutoMoveGearsNotInSet-MannualRetrieve")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoMoveGearsNotInSet-MannualRetrieve")}:");
         
         ImGui.SameLine();
         if (ImGui.Button(GetLoc("Confirm")))

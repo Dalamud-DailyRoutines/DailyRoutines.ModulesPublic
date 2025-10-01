@@ -112,7 +112,7 @@ public class HealerHelper : DailyModuleBase
         ImGui.NewLine();
 
         // notifications
-        ImGui.TextColored(LightSkyBlue, GetLoc("Notification"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Notification"));
         ImGui.Spacing();
         using (ImRaii.PushIndent())
         {
@@ -128,7 +128,7 @@ public class HealerHelper : DailyModuleBase
     {
         var cardConfig = ModuleConfig.AutoPlayCardStorage;
 
-        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-AutoPlayCardTitle"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("HealerHelper-AutoPlayCardTitle"));
         ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(17055)));
 
         ImGui.Spacing();
@@ -170,7 +170,7 @@ public class HealerHelper : DailyModuleBase
 
         // melee opener
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-MeleeOpener")}");
+        ImGui.TextColored(KnownColor.LightYellow.ToVector4(), $"{GetLoc("HealerHelper-AutoPlayCard-MeleeOpener")}");
 
         if (CustomCardOrderUI(config.CustomCardOrder.Melee["opener"]))
         {
@@ -191,7 +191,7 @@ public class HealerHelper : DailyModuleBase
 
         // melee 2m+
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-Melee2Min")}");
+        ImGui.TextColored(KnownColor.LightYellow.ToVector4(), $"{GetLoc("HealerHelper-AutoPlayCard-Melee2Min")}");
 
         if (CustomCardOrderUI(config.CustomCardOrder.Melee["2m+"]))
         {
@@ -212,7 +212,7 @@ public class HealerHelper : DailyModuleBase
 
         // range opener
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-RangeOpener")}");
+        ImGui.TextColored(KnownColor.LightYellow.ToVector4(), $"{GetLoc("HealerHelper-AutoPlayCard-RangeOpener")}");
 
         if (CustomCardOrderUI(config.CustomCardOrder.Range["opener"]))
         {
@@ -233,7 +233,7 @@ public class HealerHelper : DailyModuleBase
 
         // range opener
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightYellow, $"{GetLoc("HealerHelper-AutoPlayCard-Range2Min")}");
+        ImGui.TextColored(KnownColor.LightYellow.ToVector4(), $"{GetLoc("HealerHelper-AutoPlayCard-Range2Min")}");
 
         if (CustomCardOrderUI(config.CustomCardOrder.Range["2m+"]))
         {
@@ -296,7 +296,7 @@ public class HealerHelper : DailyModuleBase
     {
         var config = ModuleConfig.EasyHealStorage;
 
-        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyHealTitle"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("HealerHelper-EasyHealTitle"));
         ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", GetLoc("HealerHelper-SingleTargetHeal")));
 
         ImGui.Spacing();
@@ -326,7 +326,7 @@ public class HealerHelper : DailyModuleBase
 
                 ImGui.Spacing();
 
-                ImGui.TextColored(LightGreen, GetLoc("HealerHelper-EasyHeal-HealThreshold"));
+                ImGui.TextColored(KnownColor.LightGreen.ToVector4(), GetLoc("HealerHelper-EasyHeal-HealThreshold"));
                 ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyHeal-HealThresholdHelp"));
 
                 ImGui.Spacing();
@@ -338,13 +338,13 @@ public class HealerHelper : DailyModuleBase
                 if (config.NeedHealThreshold > 0.92f)
                 {
                     ImGui.Spacing();
-                    ImGui.TextColored(Orange, GetLoc("HealerHelper-EasyHeal-OverhealWarning"));
+                    ImGui.TextColored(KnownColor.Orange.ToVector4(), GetLoc("HealerHelper-EasyHeal-OverhealWarning"));
                 }
 
                 ImGui.Spacing();
 
                 // target when overheal
-                ImGui.TextColored(LightPink, GetLoc("HealerHelper-EasyHeal-OverhealTargetDescription"));
+                ImGui.TextColored(KnownColor.LightYellow.ToVector4(), GetLoc("HealerHelper-EasyHeal-OverhealTargetDescription"));
 
                 ImGui.Spacing();
 
@@ -380,7 +380,7 @@ public class HealerHelper : DailyModuleBase
 
     private void ActiveHealActionsSelect()
     {
-        ImGui.TextColored(YellowGreen, $"{GetLoc("HealerHelper-EasyHeal-ActiveHealAction")}");
+        ImGui.TextColored(KnownColor.YellowGreen.ToVector4(), $"{GetLoc("HealerHelper-EasyHeal-ActiveHealAction")}");
         ImGui.Spacing();
 
         if (ActionSelect.DrawCheckbox())
@@ -403,7 +403,7 @@ public class HealerHelper : DailyModuleBase
     {
         var config = ModuleConfig.EasyHealStorage;
 
-        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyDispelTitle"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("HealerHelper-EasyDispelTitle"));
         ImGuiOm.HelpMarker(GetLoc("HealerHelper-EasyRedirectDescription", LuminaWrapper.GetActionName(7568)));
 
         ImGui.Spacing();
@@ -444,7 +444,7 @@ public class HealerHelper : DailyModuleBase
     {
         var config = ModuleConfig.EasyHealStorage;
 
-        ImGui.TextColored(LightSkyBlue, GetLoc("HealerHelper-EasyRaiseTitle"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("HealerHelper-EasyRaiseTitle"));
 
         ImGui.Spacing();
 

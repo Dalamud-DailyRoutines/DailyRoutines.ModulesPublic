@@ -107,7 +107,7 @@ public unsafe partial class AutoRetainerWork
 
         public override void DrawConfig()
         {
-            ImGui.TextColored(RoyalBlue, GetLoc("AutoRetainerWork-PriceAdjust-Title"));
+            ImGui.TextColored(KnownColor.RoyalBlue.ToVector4(), GetLoc("AutoRetainerWork-PriceAdjust-Title"));
 
             ItemConfigSelector();
 
@@ -121,7 +121,7 @@ public unsafe partial class AutoRetainerWork
             if (!node) return;
             if (activeAddonName != "RetainerList") return;
             
-            ImGui.TextColored(LightSkyBlue, GetLoc("AutoRetainerWork-PriceAdjust-AdjustForRetainers"));
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("AutoRetainerWork-PriceAdjust-AdjustForRetainers"));
             ImGui.Spacing();
 
             using (ImRaii.Disabled(TaskHelper.IsBusy))
@@ -903,13 +903,13 @@ public unsafe partial class AutoRetainerWork
                     ManualUnitPriceImageSize = ImGui.GetItemRectSize();
 
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(LightSkyBlue, $"{LuminaWrapper.GetAddonText(933)}:");
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(933)}:");
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(150f * GlobalFontScale);
                     ImGui.InputUInt("###UnitPriceInput", ref ItemModifyUnitPriceManual);
 
-                    ImGui.TextColored(LightSkyBlue, $"{LuminaWrapper.GetAddonText(6936)}:");
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(6936)}:");
 
                     ImGui.SameLine();
                     ImGui.Text($"{FormatNumber(quantity * ItemModifyUnitPriceManual)}");
@@ -956,13 +956,13 @@ public unsafe partial class AutoRetainerWork
                     ManualUnitPriceImageSize = ImGui.GetItemRectSize();
 
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(LightSkyBlue, $"{LuminaWrapper.GetAddonText(933)}:");
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(933)}:");
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(150f * GlobalFontScale);
                     ImGui.InputUInt("###UnitPriceInput", ref ItemModifyUnitPriceManual);
 
-                    ImGui.TextColored(LightSkyBlue, $"{LuminaWrapper.GetAddonText(6936)}:");
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(6936)}:");
 
                     ImGui.SameLine();
                     ImGui.Text($"{FormatNumber(quantity * ItemModifyUnitPriceManual)}");
@@ -1230,20 +1230,20 @@ public unsafe partial class AutoRetainerWork
             ManualUnitPriceImageSize = ImGui.GetItemRectSize();
 
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(LightSkyBlue, $"{LuminaWrapper.GetAddonText(933)}:");
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(933)}:");
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(150f * GlobalFontScale);
             ImGui.InputUInt("###UnitPriceInput", ref UpshelfUnitPriceInput);
 
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(LightSkyBlue, $"{GetLoc("Amount")}:");
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Amount")}:");
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(150f * GlobalFontScale);
             ImGui.InputUInt("###QuantityInput", ref UpshelfQuantityInput);
 
-            ImGui.TextColored(LightSkyBlue, $"{LuminaWrapper.GetAddonText(6936)}:");
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(6936)}:");
 
             ImGui.SameLine();
             ImGui.Text($"{FormatNumber(UpshelfQuantityInput * UpshelfUnitPriceInput)}");

@@ -48,7 +48,7 @@ public unsafe class BetterCommandInput : DailyModuleBase
         ImGui.Spacing();
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(LightSkyBlue, GetLoc("Whitelist"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Whitelist"));
 
         ImGui.SameLine();
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))

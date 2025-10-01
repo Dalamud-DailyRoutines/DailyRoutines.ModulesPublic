@@ -186,7 +186,7 @@ public unsafe class AutoUseMountAction : DailyModuleBase
 
     protected override void Uninit()
     {
-        DService.Condition.ConditionChange += OnConditionChanged;
+        DService.Condition.ConditionChange -= OnConditionChanged;
         OnConditionChanged(ConditionFlag.Mounted, false);
     }
 

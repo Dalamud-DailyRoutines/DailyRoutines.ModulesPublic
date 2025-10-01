@@ -49,7 +49,7 @@ public unsafe class AutoAcceptInvitation : DailyModuleBase
         ImGui.SameLine();
         ImGui.Text(GetLoc(ModuleConfig.Mode ? "Whitelist" : "Blacklist"));
         
-        ImGui.TextColored(LightSkyBlue, $"{LuminaWrapper.GetAddonText(9818)}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(9818)}:");
 
         using var indent = ImRaii.PushIndent();
 
