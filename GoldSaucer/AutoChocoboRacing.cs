@@ -126,10 +126,10 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
             RequestDutyRoulette(ModuleConfig.Route, ContentsFinderOption); 
     }
         
-    private void HandleRacing(AtkUnitBase* raceChocoboParameter)
+    private void HandleRacing(AtkUnitBase* RaceChocoboParameter)
     {
-        var lathered = raceChocoboParameter->GetImageNodeById(3)->IsVisible();
-        var stamina = raceChocoboParameter->GetNodeById(5)->GetAsAtkCounterNode()->NodeText.ToString();
+        var lathered = RaceChocoboParameter->GetImageNodeById(3)->IsVisible();
+        var stamina = RaceChocoboParameter->GetNodeById(5)->GetAsAtkCounterNode()->NodeText.ToString();
         var hasStamina = !string.Equals(stamina, "0.00%");
 
         SetMoving(ModuleConfig.AlwaysRun || (!lathered && hasStamina));
@@ -154,8 +154,11 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
 
     protected override void Uninit()
     {
-        SetMoving(false);
-        SlowDown(false);
+        if (DService.Condition[ConditionFlag.ChocoboRacing])
+        {
+            SetMoving(false);
+            SlowDown(false);
+        }
 
         ModuleConfig.IsEnabled = false;
         SaveConfig(ModuleConfig);
