@@ -34,7 +34,7 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
 
     private static ContentsFinderOption ContentsFinderOption = ContentsFinderHelper.DefaultOption.Clone();
 
-    private byte ChocoboLevel => RaceChocoboManager.Instance()->Rank;
+    private static byte ChocoboLevel => RaceChocoboManager.Instance()->Rank;
 
     protected override void Init()
     {
@@ -126,10 +126,10 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
             RequestDutyRoulette(ModuleConfig.Route, ContentsFinderOption); 
     }
         
-    private void HandleRacing(AtkUnitBase* RaceChocoboParameter)
+    private void HandleRacing(AtkUnitBase* raceChocoboParameter)
     {
-        var lathered = RaceChocoboParameter->GetImageNodeById(3)->IsVisible();
-        var stamina = RaceChocoboParameter->GetNodeById(5)->GetAsAtkCounterNode()->NodeText.ToString();
+        var lathered = raceChocoboParameter->GetImageNodeById(3)->IsVisible();
+        var stamina = raceChocoboParameter->GetNodeById(5)->GetAsAtkCounterNode()->NodeText.ToString();
         var hasStamina = !string.Equals(stamina, "0.00%");
 
         SetMoving(ModuleConfig.AlwaysRun || (!lathered && hasStamina));
