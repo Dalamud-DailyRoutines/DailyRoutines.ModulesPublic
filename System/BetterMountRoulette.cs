@@ -75,33 +75,12 @@ public class BetterMountRoulette : DailyModuleBase
         if (!tab) return;
         
         // 搜索框
-        var searchTextBefore = handler.SearchText;
+        var searchText = handler.SearchText;
         ImGui.SetNextItemWidth(-1f);
-        ImGui.InputTextWithHint($"##Search{tabLabel}", GetLoc("Search"), ref handler.SearchText, 128);
-        if (searchTextBefore != handler.SearchText)
-            handler.DisplayCount = PageSize;
-
-        List<Mount> searchResult;
-        int         totalCount;
-        var         isSearching = !string.IsNullOrEmpty(handler.SearchText);
-
-        if (isSearching)
+        if (ImGui.InputTextWithHint($"##Search{tabLabel}", GetLoc("Search"), ref searchText, 128))
         {
-            handler.Searcher.Search(handler.SearchText);
-            searchResult = handler.Searcher.SearchResult;
-            totalCount   = searchResult.Count;
-        }
-        else
-        {
-            searchResult = handler.Searcher.Data.ToList();
-            totalCount   = handler.Searcher.Data.Count;
-        }
-
-        // 同时显示坐骑数量限制
-        if (!isSearching && totalCount > PageSize)
-        {
-            ImGui.TextDisabled(GetLoc("BetterMountRoulette-DisplayLimit", Math.Min(handler.DisplayCount, totalCount), totalCount));
-            ImGuiOm.HelpMarker(GetLoc("BetterMountRoulette-DisplayLimitHelp"));
+            handler.SearchText = searchText;
+            handler.Searcher.Search(searchText);
         }
 
         // 显示坐骑区域
@@ -109,20 +88,7 @@ public class BetterMountRoulette : DailyModuleBase
         using var child     = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
 
-        var mountsToDraw = searchResult.Take(handler.DisplayCount).ToList();
-        DrawMountsGrid(mountsToDraw, handler);
-
-        // 当未搜索且有超过100个坐骑时，显示加载更多按钮
-        if (!isSearching && handler.DisplayCount < totalCount)
-        {
-            using var color = ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.Button)          & 0x80FFFFFF)
-                                    .Push(ImGuiCol.ButtonHovered, ImGui.GetColorU32(ImGuiCol.ButtonHovered) & 0x80FFFFFF)
-                                    .Push(ImGuiCol.ButtonActive,  ImGui.GetColorU32(ImGuiCol.ButtonActive)  & 0x80FFFFFF);
-
-            if (ImGui.Button(GetLoc("BetterMountRoulette-LoadMore"), new(ImGui.GetContentRegionAvail().X, 0)))
-                handler.DisplayCount += PageSize;
-            ImGuiOm.TooltipHover(GetLoc("BetterMountRoulette-LoadMoreTooltip", Math.Min(handler.DisplayCount + PageSize, totalCount), totalCount));
-        }
+        DrawMountsGrid(handler.Searcher.SearchResult, handler);
     }
 
     private void DrawMountsGrid(List<Mount> mountsToDraw, MountListHandler handler)
@@ -194,8 +160,8 @@ public class BetterMountRoulette : DailyModuleBase
             x => x.Singular.ExtractText()
         );
 
-        NormalMounts = new MountListHandler(MasterMountsSearcher, ModuleConfig.NormalRouletteMounts);
-        PVPMounts    = new MountListHandler(MasterMountsSearcher, ModuleConfig.PVPRouletteMounts);
+        NormalMounts = new(MasterMountsSearcher, ModuleConfig.NormalRouletteMounts);
+        PVPMounts    = new(MasterMountsSearcher, ModuleConfig.PVPRouletteMounts);
     }
 
     private static void OnPreUseAction(
@@ -241,11 +207,10 @@ public class BetterMountRoulette : DailyModuleBase
 
     private class MountListHandler(LuminaSearcher<Mount> searcher, HashSet<uint> selectedIDs)
     {
-        public LuminaSearcher<Mount> Searcher    { get; } = searcher;
-        public HashSet<uint>         SelectedIDs { get; } = selectedIDs;
-        
-        public string SearchText   = string.Empty;
-        public int    DisplayCount = PageSize;
+        public LuminaSearcher<Mount> Searcher     { get; }       = searcher;
+        public HashSet<uint>         SelectedIDs  { get; }       = selectedIDs;
+        public string                SearchText   { get; set; }  = string.Empty;
+        public int                   DisplayCount { get; init; } = searcher.Data.Count;
     }
 
     #region 数据

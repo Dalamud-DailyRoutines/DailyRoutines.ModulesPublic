@@ -218,7 +218,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
         if (GameState.TerritoryIntendedUse == 61)
             Entry.Shown = true;
         else
-            Entry.Shown = !DService.Condition[ConditionFlag.InCombat];
+            Entry.Shown = !DService.Condition[ConditionFlag.InCombat] || GameState.IsInPVPArea;
         
         if (!Entry.Shown)
         {

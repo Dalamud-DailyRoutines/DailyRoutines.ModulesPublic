@@ -1,14 +1,21 @@
+using System.Collections.Generic;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
-using System.Collections.Generic;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoSortItems : DailyModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = GetLoc("AutoSortItemsTitle"),
+        Description = GetLoc("AutoSortItemsDescription"),
+        Category    = ModuleCategories.General,
+        Author      = ["那年雪落"],
+    };
+    
     private static readonly string[] sortOptions        = [GetLoc("Descending"), GetLoc("Ascending")];
     private static readonly string[] tabOptions         = [GetLoc("AutoSortItems-Splited"), GetLoc("AutoSortItems-Merged")];
     private static readonly string[] sortOptionsCommand = ["des", "asc"];
@@ -17,18 +24,10 @@ public class AutoSortItems : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
-    public override ModuleInfo Info { get; } = new()
-    {
-        Author = ["那年雪落"],
-        Title = GetLoc("AutoSortItemsTitle"),
-        Description = GetLoc("AutoSortItemsDescription"),
-        Category = ModuleCategories.General,
-    };
-
     protected override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
-        TaskHelper   ??= new TaskHelper { TimeLimitMS = 15_000 };
+        TaskHelper   ??= new() { TimeLimitMS = 15_000 };
         
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(DService.ClientState.TerritoryType);
@@ -36,6 +35,11 @@ public class AutoSortItems : DailyModuleBase
 
     protected override void ConfigUI()
     {
+        if (ImGui.Button(LuminaWrapper.GetAddonText(1389)))
+            TaskHelper.Enqueue(CheckCanSort);
+
+		ImGui.NewLine();
+
         if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
             SaveConfig(ModuleConfig);
         
