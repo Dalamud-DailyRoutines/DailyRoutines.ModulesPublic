@@ -27,13 +27,14 @@ public class BetterMountRoulette : DailyModuleBase
 
     private static MountListHandler? NormalMounts;
     private static MountListHandler? PVPMounts;
-    private static MountListHandler? PerMapMountsHandler;
+    private static Dictionary<string, MountListHandler> CustomMounts = [];
 
-    private static LuminaSearcher<TerritoryType>? TerritorySearcher;
-    private static string TerritorySearchText = string.Empty;
-    private static TerritoryType? SelectedTerritory;
-
-    private static bool IsNeedToModify;
+    private static string ZoneSearchInput = string.Empty;
+    private static string NewTabNameInput = string.Empty;
+    private static string? RenamingTabName;
+    private static bool IsAddingNewTab;
+    
+    private static HashSet<uint>? MountsListToUse;
     
     protected override void Init()
     {
@@ -46,13 +47,6 @@ public class BetterMountRoulette : DailyModuleBase
             OnLogin();
 
         DService.ClientState.TerritoryChanged += OnZoneChanged;
-
-        TerritorySearcher ??= new LuminaSearcher<TerritoryType>(
-            LuminaGetter.Get<TerritoryType>().Where(x => !string.IsNullOrEmpty(x.ExtractPlaceName())),
-            [x => x.PlaceName.Value.Name.ExtractText(), x => x.RowId.ToString()],
-            x => x.PlaceName.Value.Name.ExtractText()
-        );
-        TerritorySearcher.Search(string.Empty);
     }
 
     protected override void Uninit()
@@ -64,118 +58,123 @@ public class BetterMountRoulette : DailyModuleBase
         MasterMountsSearcher = null;
         NormalMounts         = null;
         PVPMounts            = null;
-        TerritorySearcher    = null;
-        TerritorySearchText  = string.Empty;
-        PerMapMountsHandler  = null;
-        SelectedTerritory    = null;
+        CustomMounts.Clear();
 
-        IsNeedToModify = false;
+        IsAddingNewTab  = false;
+        MountsListToUse = null;
     }
 
     protected override void ConfigUI()
     {
         if (NormalMounts == null || PVPMounts == null)
             return;
-        
-        using var tabBar = ImRaii.TabBar("##MountTabs");
+
+        using var tabBar = ImRaii.TabBar("##MountTabs", ImGuiTabBarFlags.Reorderable);
         if (!tabBar) return;
         
         DrawTab(GetLoc("General"), NormalMounts);
 
         DrawTab("PVP", PVPMounts);
 
-        DrawPerMapTab();
-    }
+        DrawCustomTabs();
 
-    private void DrawPerMapTab()
-    {
-        using var tab = ImRaii.TabItem(GetLoc("BetterMountRoulette-PerMap"));
-        if (!tab) return;
-
-        var handler = PerMapMountsHandler;
-        if (handler == null) return;
-
-        // 显示当前地图信息
-        var territoryID = DService.ClientState.TerritoryType;
-        var territory = LuminaGetter.GetRow<TerritoryType>(territoryID);
-        var territoryName = territory?.ExtractPlaceName() ?? GetLoc("Unknown");
-        ImGui.Text($"当前地图: {territoryName} ({territoryID})");
-
-        // 地图选择下拉框
-        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.5f);
-        var selectedTerritoryName = SelectedTerritory?.ExtractPlaceName() ?? string.Empty;
-        if (ImGui.BeginCombo("##TerritorySelect", selectedTerritoryName, ImGuiComboFlags.HeightLarge))
-        {
-            ImGui.SetNextItemWidth(-1f);
-            if (ImGui.InputTextWithHint("##TerritorySearch", GetLoc("SearchMapByNameOrID"), ref TerritorySearchText, 100))
-                TerritorySearcher?.Search(TerritorySearchText);
-            
-            if (TerritorySearcher != null)
-            {
-                foreach (var terri in TerritorySearcher.SearchResult)
-                {
-                    if (ImGui.Selectable($"{terri.ExtractPlaceName()} ({terri.RowId})"))
-                    {
-                        SelectedTerritory = terri;
-                        handler.SelectedIDs = ModuleConfig.PerMapMounts.TryGetValue(terri.RowId, out var sets) ? sets : new HashSet<uint>();
-                    }
-                }
-            }
-            ImGui.EndCombo();
-        }
-
-        // 添加/删除按钮
-        ImGui.SameLine();
-        using (ImRaii.Disabled(SelectedTerritory == null))
-        {
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
-            {
-                ModuleConfig.PerMapMounts[SelectedTerritory!.Value.RowId] = new HashSet<uint>(handler.SelectedIDs);
-                SaveConfig(ModuleConfig);
-            }
-        }
-
-        ImGui.SameLine();
-        var hasDataForSelectedTerritory = SelectedTerritory != null && ModuleConfig.PerMapMounts.ContainsKey(SelectedTerritory.Value.RowId);
-        using (ImRaii.Disabled(!hasDataForSelectedTerritory))
-        {
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, GetLoc("Delete")))
-            {
-                ModuleConfig.PerMapMounts.Remove(SelectedTerritory!.Value.RowId);
-                handler.SelectedIDs = new HashSet<uint>();
-                SaveConfig(ModuleConfig);
-            }
-        }
-
-        DrawMountsSelectionUI(handler, "PerMap");
+        HandleNewTabAddition();
     }
 
     private void DrawTab(string tabLabel, MountListHandler handler)
     {
         using var tab = ImRaii.TabItem(tabLabel);
         if (!tab) return;
-        
-        DrawMountsSelectionUI(handler, tabLabel);
+
+        DrawSearchAndMountsGrid(tabLabel, handler);
+    }
+    
+    private void DrawCustomTabs()
+    {
+        for (var i = 0; i < ModuleConfig.CustomMountLists.Count; i++)
+        {
+            var list = ModuleConfig.CustomMountLists[i];
+            if (!CustomMounts.TryGetValue(list.Name, out var handler)) continue;
+
+            var pOpen = true;
+            var tabFlags = RenamingTabName == list.Name ? ImGuiTabItemFlags.UnsavedDocument : ImGuiTabItemFlags.None;
+
+            using var id = ImRaii.PushId(i);
+            using var tab = ImRaii.TabItem(list.Name, ref pOpen, tabFlags);
+            if (tab)
+            {
+                if (ImGui.IsItemClicked(ImGuiMouseButton.Left) && ImGui.GetIO().KeyCtrl) // 按住ctrl+鼠标左键进行重命名
+                    RenamingTabName = list.Name;
+
+                HandleTabRenaming(list, handler);
+
+                DrawCustomTab(list, handler);
+            }
+
+            if (!pOpen)
+            {
+                CustomMounts.Remove(list.Name);
+                ModuleConfig.CustomMountLists.RemoveAt(i);
+                SaveConfig(ModuleConfig);
+                return;
+            }
+        }
+    }
+    
+    private void HandleTabRenaming(CustomMountList list, MountListHandler handler)
+    {
+        if (RenamingTabName != list.Name) return;
+
+        var tempName = list.Name;
+        ImGui.SetKeyboardFocusHere();
+        if (ImGui.InputText("###Rename", ref tempName, 64, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+        {
+            if (!string.IsNullOrWhiteSpace(tempName) && !IsNameExists(tempName))
+            {
+                CustomMounts.Remove(list.Name);
+                CustomMounts[tempName] = handler;
+                list.Name = tempName;
+                SaveConfig(ModuleConfig);
+            }
+            RenamingTabName = null;
+        }
+        if (ImGui.IsItemDeactivated())
+            RenamingTabName = null;
+    }
+    
+    private void HandleNewTabAddition()
+    {
+        if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing | ImGuiTabItemFlags.NoTooltip))
+            IsAddingNewTab = true;
+
+        if (!IsAddingNewTab) return;
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150f * GlobalFontScale);
+        ImGui.SetKeyboardFocusHere();
+        if (ImGui.InputText("###NewTabName", ref NewTabNameInput, 64, ImGuiInputTextFlags.EnterReturnsTrue))
+        {
+            if (!string.IsNullOrWhiteSpace(NewTabNameInput) && !IsNameExists(NewTabNameInput))
+            {
+                var newList = new CustomMountList { Name = NewTabNameInput };
+                ModuleConfig.CustomMountLists.Add(newList);
+                CustomMounts[NewTabNameInput] = new MountListHandler(MasterMountsSearcher, newList.MountIDs);
+                SaveConfig(ModuleConfig);
+            }
+
+            IsAddingNewTab = false;
+            NewTabNameInput = string.Empty;
+        }
+        if (ImGui.IsItemDeactivated())
+            IsAddingNewTab = false;
     }
 
-    private void DrawMountsSelectionUI(MountListHandler handler, string id)
+    private void DrawSearchAndMountsGrid(string tabLabel, MountListHandler handler)
     {
-        // 显示坐骑数量提示
-        var searchResult = handler.Searcher.SearchResult;
-        var totalMounts = handler.Searcher.Data.Count;
-        var isSearching = !string.IsNullOrEmpty(handler.SearchText);
-        var displayedMounts = isSearching ? searchResult.Count : Math.Min(totalMounts, PageSize);
-
-        // 显示坐骑数量/总数
-        ImGui.Text(string.Format(GetLoc("BetterMountRoulette-DisplayingMounts"), displayedMounts, totalMounts));
-        // 如果坐骑超过100个，提示玩家使用搜索功能
-        if (!isSearching && totalMounts > PageSize)
-            ImGui.TextDisabled(GetLoc("BetterMountRoulette-SearchHint"));
-
         // 搜索框
         var searchText = handler.SearchText;
         ImGui.SetNextItemWidth(-1f);
-        if (ImGui.InputTextWithHint($"##Search{id}", GetLoc("Search"), ref searchText, 128))
+        if (ImGui.InputTextWithHint($"##Search{tabLabel}", GetLoc("Search"), ref searchText, 128))
         {
             handler.SearchText = searchText;
             handler.Searcher.Search(searchText);
@@ -183,11 +182,26 @@ public class BetterMountRoulette : DailyModuleBase
 
         // 显示坐骑区域
         var       childSize = new Vector2(ImGui.GetContentRegionAvail().X, 400 * GlobalFontScale);
-        using var child     = ImRaii.Child($"##MountsGrid{id}", childSize, true);
+        using var child     = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
 
-        var mountsToDraw = isSearching ? searchResult : handler.Searcher.Data.Take(PageSize).ToList();
-        DrawMountsGrid(mountsToDraw, handler);
+        DrawMountsGrid(handler.Searcher.SearchResult, handler);
+    }
+
+    private void DrawCustomTab(CustomMountList customList, MountListHandler handler)
+    {
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Zone")}:");
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(300f * GlobalFontScale);
+        var customListZoneIDs = customList.ZoneIDs;
+        if (ZoneSelectCombo(ref customListZoneIDs, ref ZoneSearchInput))
+            SaveConfig(ModuleConfig);
+
+        ImGui.Separator();
+        
+        DrawSearchAndMountsGrid(customList.Name, handler);
     }
 
     private void DrawMountsGrid(List<Mount> mountsToDraw, MountListHandler handler)
@@ -261,7 +275,21 @@ public class BetterMountRoulette : DailyModuleBase
 
         NormalMounts = new(MasterMountsSearcher, ModuleConfig.NormalRouletteMounts);
         PVPMounts    = new(MasterMountsSearcher, ModuleConfig.PVPRouletteMounts);
-        PerMapMountsHandler = new(MasterMountsSearcher, new HashSet<uint>());
+        
+        CustomMounts.Clear();
+        foreach (var list in ModuleConfig.CustomMountLists)
+            CustomMounts[list.Name] = new MountListHandler(MasterMountsSearcher, list.MountIDs);
+    }
+
+    private bool IsNameExists(string name)
+    {
+        foreach (var list in ModuleConfig.CustomMountLists)
+        {
+            if (list.Name.Equals(name, StringComparison.Ordinal))
+                return true;
+        }
+        
+        return false;
     }
 
     private static void OnPreUseAction(
@@ -275,57 +303,80 @@ public class BetterMountRoulette : DailyModuleBase
     {
         if (!DService.Condition[ConditionFlag.Mounted] && actionType == ActionType.GeneralAction && MountRouletteActionIDs.Contains(actionID))
         {
-            var currentTerritoryID = DService.ClientState.TerritoryType;
-            HashSet<uint>? mountList = null;
-            
-            if (ModuleConfig.PerMapMounts.TryGetValue(currentTerritoryID, out var perMapList) || ModuleConfig.PerMapMounts.TryGetValue(0, out perMapList))
-                mountList = perMapList;
-            else 
-                mountList = GameState.IsInPVPArea ? ModuleConfig.PVPRouletteMounts : ModuleConfig.NormalRouletteMounts;
+            MountsListToUse = null;
+            var currentZone = DService.ClientState.TerritoryType;
 
-            if (mountList.Count > 0)
-                IsNeedToModify = true;
+            foreach (var list in ModuleConfig.CustomMountLists)
+            {
+                if (list.ZoneIDs.Contains(currentZone) && list.MountIDs.Count > 0)
+                {
+                    MountsListToUse = list.MountIDs;
+                    break;
+                }
+            }
+
+            if (MountsListToUse == null)
+            {
+                MountsListToUse = GameState.IsInPVPArea
+                                      ? ModuleConfig.PVPRouletteMounts
+                                      : ModuleConfig.NormalRouletteMounts;
+            }
         }
 
-        if (IsNeedToModify && actionType == ActionType.Mount)
+        if (MountsListToUse != null && actionType == ActionType.Mount)
         {
             try
             {
-                var currentTerritoryID = DService.ClientState.TerritoryType;
-                HashSet<uint>? mountList = null;
-
-                if (ModuleConfig.PerMapMounts.TryGetValue(currentTerritoryID, out var perMapList) || ModuleConfig.PerMapMounts.TryGetValue(0, out perMapList))
-                    mountList = perMapList;
-                else
-                    mountList = GameState.IsInPVPArea ? ModuleConfig.PVPRouletteMounts : ModuleConfig.NormalRouletteMounts;
-
-
-                if (mountList.Count > 0)
+                if (MountsListToUse.Count > 0)
                 {
-                    var mountListAsList = mountList.ToList();
+                    var mountListAsList = MountsListToUse.ToList();
                     var randomMountID   = mountListAsList[Random.Shared.Next(mountListAsList.Count)];
                     actionID = randomMountID;
                 }
             }
             finally
             {
-                IsNeedToModify = false;
+                MountsListToUse = null;
             }
         }
     }
 
+    private class CustomMountList : IEquatable<CustomMountList>
+    {
+        public string        Name     { get; set; } = string.Empty;
+        public HashSet<uint> ZoneIDs  { get; set; } = [];
+        public HashSet<uint> MountIDs { get; set; } = [];
+
+        public bool Equals(CustomMountList? other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+
+            return Name == other.Name;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is null) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            return obj.GetType() == GetType() && Equals((CustomMountList)obj);
+        }
+        public override int GetHashCode() => Name.GetHashCode();
+    }
+
     private class Config : ModuleConfiguration
     {
-        public HashSet<uint> NormalRouletteMounts = [];
-        public HashSet<uint> PVPRouletteMounts    = [];
-        public Dictionary<uint, HashSet<uint>> PerMapMounts { get; set; } = new();
+        public HashSet<uint> NormalRouletteMounts     = [];
+        public HashSet<uint> PVPRouletteMounts        = [];
+        public List<CustomMountList> CustomMountLists = [];
     }
 
     private class MountListHandler(LuminaSearcher<Mount> searcher, HashSet<uint> selectedIDs)
     {
         public LuminaSearcher<Mount> Searcher     { get; }       = searcher;
-        public HashSet<uint>         SelectedIDs  { get; set; }  = selectedIDs;
+        public HashSet<uint>         SelectedIDs  { get; }       = selectedIDs;
         public string                SearchText   { get; set; }  = string.Empty;
+        public int                   DisplayCount { get; init; } = searcher.Data.Count;
     }
 
     #region 数据
