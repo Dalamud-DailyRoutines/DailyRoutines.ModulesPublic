@@ -366,8 +366,8 @@ public class BetterMountRoulette : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public HashSet<uint> NormalRouletteMounts         = [];
-        public HashSet<uint> PVPRouletteMounts            = [];
+        public HashSet<uint>         NormalRouletteMounts = [];
+        public HashSet<uint>         PVPRouletteMounts    = [];
         public List<CustomMountList> CustomRouletteMounts = [];
     }
 
