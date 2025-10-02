@@ -91,9 +91,9 @@ public class BetterMountRoulette : DailyModuleBase
     
     private void DrawCustomTabs()
     {
-        for (var i = 0; i < ModuleConfig.CustomMountLists.Count; i++)
+        for (var i = 0; i < ModuleConfig.CustomRouletteMounts.Count; i++)
         {
-            var list = ModuleConfig.CustomMountLists[i];
+            var list = ModuleConfig.CustomRouletteMounts[i];
             if (!CustomMounts.TryGetValue(list.Name, out var handler)) continue;
 
             var pOpen = true;
@@ -114,7 +114,7 @@ public class BetterMountRoulette : DailyModuleBase
             if (!pOpen)
             {
                 CustomMounts.Remove(list.Name);
-                ModuleConfig.CustomMountLists.RemoveAt(i);
+                ModuleConfig.CustomRouletteMounts.RemoveAt(i);
                 SaveConfig(ModuleConfig);
                 return;
             }
@@ -157,7 +157,7 @@ public class BetterMountRoulette : DailyModuleBase
             if (!string.IsNullOrWhiteSpace(NewTabNameInput) && !IsNameExists(NewTabNameInput))
             {
                 var newList = new CustomMountList { Name = NewTabNameInput };
-                ModuleConfig.CustomMountLists.Add(newList);
+                ModuleConfig.CustomRouletteMounts.Add(newList);
                 CustomMounts[NewTabNameInput] = new MountListHandler(MasterMountsSearcher, newList.MountIDs);
                 SaveConfig(ModuleConfig);
             }
@@ -277,13 +277,13 @@ public class BetterMountRoulette : DailyModuleBase
         PVPMounts    = new(MasterMountsSearcher, ModuleConfig.PVPRouletteMounts);
         
         CustomMounts.Clear();
-        foreach (var list in ModuleConfig.CustomMountLists)
+        foreach (var list in ModuleConfig.CustomRouletteMounts)
             CustomMounts[list.Name] = new MountListHandler(MasterMountsSearcher, list.MountIDs);
     }
 
     private bool IsNameExists(string name)
     {
-        foreach (var list in ModuleConfig.CustomMountLists)
+        foreach (var list in ModuleConfig.CustomRouletteMounts)
         {
             if (list.Name.Equals(name, StringComparison.Ordinal))
                 return true;
@@ -306,7 +306,7 @@ public class BetterMountRoulette : DailyModuleBase
             MountsListToUse = null;
             var currentZone = DService.ClientState.TerritoryType;
 
-            foreach (var list in ModuleConfig.CustomMountLists)
+            foreach (var list in ModuleConfig.CustomRouletteMounts)
             {
                 if (list.ZoneIDs.Contains(currentZone) && list.MountIDs.Count > 0)
                 {
@@ -366,9 +366,9 @@ public class BetterMountRoulette : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public HashSet<uint> NormalRouletteMounts     = [];
-        public HashSet<uint> PVPRouletteMounts        = [];
-        public List<CustomMountList> CustomMountLists = [];
+        public HashSet<uint> NormalRouletteMounts         = [];
+        public HashSet<uint> PVPRouletteMounts            = [];
+        public List<CustomMountList> CustomRouletteMounts = [];
     }
 
     private class MountListHandler(LuminaSearcher<Mount> searcher, HashSet<uint> selectedIDs)
