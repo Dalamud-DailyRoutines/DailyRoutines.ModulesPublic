@@ -12,8 +12,10 @@ using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Gui.PartyFinder.Types;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
 using Dalamud.Interface.Colors;
+using Dalamud.Interface.Utility;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -37,10 +39,7 @@ public class CrossDCPartyFinder : DailyModuleBase
 
     private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/listings?";
     private const string BASE_DETAIL_URL = "https://xivpf.littlenightmare.top/api/listing/";
-
-    /// <summary>
-    /// 当前玩家所在大区
-    /// </summary>
+    
     private static string LocatedDataCenter =>
         GameState.CurrentDataCenterData.Name.ExtractText();
 
@@ -133,7 +132,7 @@ public class CrossDCPartyFinder : DailyModuleBase
 
                 using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(2, 0)))
                 {
-                    ImGui.SameLine();
+                    ImGui.SameLine(0, 4f * GlobalFontScale);
                     if (ImGui.Button("<<"))
                     {
                         isNeedToResetY = true;
@@ -203,8 +202,7 @@ public class CrossDCPartyFinder : DailyModuleBase
         using var table = ImRaii.Table("###ListingsTable", 3, ImGuiTableFlags.BordersInnerH, size);
         if (!table) return;
 
-        ImGui.TableSetupColumn("招募图标", ImGuiTableColumnFlags.WidthFixed,
-                               (ImGui.GetTextLineHeightWithSpacing() * 3) + ImGui.GetStyle().ItemSpacing.X);
+        ImGui.TableSetupColumn("招募图标", ImGuiTableColumnFlags.WidthFixed,   (ImGui.GetTextLineHeightWithSpacing() * 3) + ImGui.GetStyle().ItemSpacing.X);
         ImGui.TableSetupColumn("招募详情", ImGuiTableColumnFlags.WidthStretch, 50);
         ImGui.TableSetupColumn("招募信息", ImGuiTableColumnFlags.WidthFixed,   ImGui.CalcTextSize("八个汉字八个汉字").X);
 
@@ -212,19 +210,31 @@ public class CrossDCPartyFinder : DailyModuleBase
         var pageItems  = ListingsDisplay.Skip(startIndex).Take(ModuleConfig.PageSize).ToList();
 
         pageItems.ForEach(x => Task.Run(async () => await x.RequestAsync(), CancelSource.Token).ConfigureAwait(false));
+        
+        var iconSize = new Vector2(ImGui.GetTextLineHeightWithSpacing() * 3) +
+                       new Vector2(ImGui.GetStyle().ItemSpacing.X, 2    * ImGui.GetStyle().ItemSpacing.Y);
+        var jobIconSize = new Vector2(ImGui.GetTextLineHeight());
 
         foreach (var listing in pageItems)
         {
             using var id = ImRaii.PushId(listing.ID);
 
+            var lineEndPosY = 0f;
+            
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
             if (DService.Texture.TryGetFromGameIcon(new(listing.CategoryIcon), out var categoryTexture))
-                ImGui.Image(categoryTexture.GetWrapOrEmpty().Handle,
-                            new Vector2(ImGui.GetTextLineHeightWithSpacing() * 3) +
-                            new Vector2(ImGui.GetStyle().ItemSpacing.X, 2    * ImGui.GetStyle().ItemSpacing.Y));
+            {
+                ImGui.Spacing();
+                
+                ImGui.Image(categoryTexture.GetWrapOrEmpty().Handle, iconSize);
+                
+                ImGui.Spacing();
 
+                lineEndPosY = ImGui.GetCursorPosY();
+            }
+            
             // 招募详情
             ImGui.TableNextColumn();
             using (ImRaii.Group())
@@ -234,11 +244,18 @@ public class CrossDCPartyFinder : DailyModuleBase
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (4f * GlobalFontScale));
                     ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{listing.Duty}");
                 }
-
-                ImGui.SameLine();
-                ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (2f * GlobalFontScale));
-                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"({listing.PlayerName}@{listing.HomeWorldName})");
+                
+                using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.DarkGray.ToVector4()))
+                using (FontManager.UIFont90.Push())
+                using (ImRaii.Group())
+                {
+                    ImGui.SameLine(0, 8f * GlobalFontScale);
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (3f * GlobalFontScale));
+                    ImGuiOm.RenderPlayerInfo(listing.PlayerName, listing.HomeWorldName);
+                }
+                
                 ImGuiOm.TooltipHover($"{listing.PlayerName}@{listing.HomeWorldName}");
+                
                 if (ImGui.IsItemHovered())
                     ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                 if (ImGui.IsItemClicked())
@@ -247,8 +264,12 @@ public class CrossDCPartyFinder : DailyModuleBase
                     NotificationSuccess(GetLoc("CopiedToClipboard"));
                 }
 
-                var isDescEmpty = string.IsNullOrWhiteSpace(listing.Description);
-                ImGui.Text(isDescEmpty ? $"({LuminaGetter.GetRow<Addon>(11100)!.Value.Text.ExtractText()})" : $"{listing.Description}");
+                var isDescEmpty = string.IsNullOrEmpty(listing.Description);
+                ImGui.SetCursorPosY(ImGui.GetCursorPosY() - (2f * GlobalFontScale));
+                using (FontManager.UIFont80.Push())
+                    ImGui.TextWrapped(isDescEmpty ? $"({LuminaWrapper.GetAddonText(11100)})" : $"{listing.Description}");
+                ImGui.Spacing();
+                
                 if (!isDescEmpty) 
                     ImGuiOm.TooltipHover(listing.Description);
                 if (ImGui.IsItemHovered() && !isDescEmpty)
@@ -258,6 +279,8 @@ public class CrossDCPartyFinder : DailyModuleBase
                     ImGui.SetClipboardText(listing.Description);
                     NotificationSuccess(GetLoc("CopiedToClipboard"));
                 }
+                
+                lineEndPosY = MathF.Max(ImGui.GetCursorPosY(), lineEndPosY);
             }
 
             if (listing.Detail != null)
@@ -272,24 +295,7 @@ public class CrossDCPartyFinder : DailyModuleBase
                             var displayIcon = slot.JobIcons.Count > 1 ? 62146 : slot.JobIcons[0];
                             if (DService.Texture.TryGetFromGameIcon(new(displayIcon), out var jobTexture))
                             {
-                                ImGui.Image(jobTexture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
-                                if (slot.JobIcons.Count > 1 && ImGui.IsItemHovered())
-                                {
-                                    using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, 1f))
-                                    {
-                                        ImGui.BeginTooltip();
-                                        foreach (var jobIcon in slot.JobIcons)
-                                        {
-                                            if (DService.Texture.TryGetFromGameIcon(new(jobIcon), out var jobTooltipTexture))
-                                            {
-                                                ImGui.Image(jobTooltipTexture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
-                                                ImGui.SameLine();
-                                            }
-                                        }
-
-                                        ImGui.EndTooltip();
-                                    }
-                                }
+                                ImGui.Image(jobTexture.GetWrapOrEmpty().Handle, jobIconSize);
 
                                 ImGui.SameLine();
                             }
@@ -298,33 +304,43 @@ public class CrossDCPartyFinder : DailyModuleBase
 
                     ImGui.Spacing();
 
-                    ImGui.SameLine(0, 4f * GlobalFontScale);
-                    using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudYellow, listing.MinItemLevel != 0))
-                        ImGui.Text($"[{(listing.MinItemLevel == 0 ? "无" : $"{listing.MinItemLevel}")}]");
+                    if (listing.MinItemLevel > 0)
+                    {
+                        ImGui.SameLine(0, 6f * GlobalFontScale);
+                        using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudYellow, listing.MinItemLevel != 0))
+                            ImGui.Text($"[{listing.MinItemLevel}]");
+                    }
                 }
+                
+                lineEndPosY = MathF.Max(ImGui.GetCursorPosY(), lineEndPosY);
             }
 
             // 招募信息
             ImGui.TableNextColumn();
+            
+            ImGui.SetCursorPosY(lineEndPosY - (3 * ImGui.GetTextLineHeightWithSpacing()) - (4 * ImGui.GetStyle().ItemSpacing.Y));
+            using (ImRaii.Group())
             using (FontManager.UIFont80.Push())
             {
                 ImGui.NewLine();
 
-                ImGui.TextColored(ImGuiColors.DalamudYellow, "当前位于:");
+                ImGui.TextColored(KnownColor.Orange.ToVector4(), "当前位于:");
 
                 ImGui.SameLine();
                 ImGui.Text($"{listing.CreatedAtWorldName}");
 
-                ImGui.TextColored(ImGuiColors.DalamudYellow, "剩余人数:");
+                ImGui.TextColored(KnownColor.Orange.ToVector4(), "剩余人数:");
 
                 ImGui.SameLine();
                 ImGui.Text($"{listing.SlotAvailable - listing.SlotFilled}");
 
-                ImGui.TextColored(ImGuiColors.DalamudYellow, "剩余时间:");
+                ImGui.TextColored(KnownColor.Orange.ToVector4(), "剩余时间:");
 
                 ImGui.SameLine();
                 ImGui.Text($"{TimeSpan.FromSeconds(listing.TimeLeft).TotalMinutes:F0} 分钟");
             }
+            
+            ImGui.TableNextRow();
         }
     }
 
@@ -620,22 +636,22 @@ public class CrossDCPartyFinder : DailyModuleBase
         public static string ParseCategoryIDToLoc(uint categoryID) =>
             categoryID switch
             {
-                1  => LuminaGetter.GetRow<Addon>(8605)!.Value.Text.ExtractText(),
-                2  => LuminaGetter.GetRow<Addon>(8607)!.Value.Text.ExtractText(),
-                3  => LuminaGetter.GetRow<Addon>(8606)!.Value.Text.ExtractText(),
-                4  => LuminaGetter.GetRow<Addon>(8608)!.Value.Text.ExtractText(),
-                5  => LuminaGetter.GetRow<Addon>(8609)!.Value.Text.ExtractText(),
-                6  => LuminaGetter.GetRow<Addon>(10822)!.Value.Text.ExtractText(),
-                7  => LuminaGetter.GetRow<Addon>(8610)!.Value.Text.ExtractText(),
-                8  => LuminaGetter.GetRow<Addon>(8612)!.Value.Text.ExtractText(),
-                9  => LuminaGetter.GetRow<Addon>(8601)!.Value.Text.ExtractText(),
-                10 => LuminaGetter.GetRow<Addon>(8107)!.Value.Text.ExtractText(),
-                11 => LuminaGetter.GetRow<Addon>(8613)!.Value.Text.ExtractText(),
-                12 => LuminaGetter.GetRow<Addon>(2306)!.Value.Text.ExtractText(),
-                13 => LuminaGetter.GetRow<Addon>(2304)!.Value.Text.ExtractText(),
-                14 => LuminaGetter.GetRow<Addon>(2307)!.Value.Text.ExtractText(),
-                15 => LuminaGetter.GetRow<ContentType>(30)!.Value.Name.ExtractText(),
-                16 => LuminaGetter.GetRow<Addon>(7)!.Value.Text.ExtractText(),
+                1  => LuminaWrapper.GetAddonText(8605),
+                2  => LuminaWrapper.GetAddonText(8607),
+                3  => LuminaWrapper.GetAddonText(8606),
+                4  => LuminaWrapper.GetAddonText(8608),
+                5  => LuminaWrapper.GetAddonText(8609),
+                6  => LuminaWrapper.GetAddonText(10822),
+                7  => LuminaWrapper.GetAddonText(8610),
+                8  => LuminaWrapper.GetAddonText(8612),
+                9  => LuminaWrapper.GetAddonText(8601),
+                10 => LuminaWrapper.GetAddonText(8107),
+                11 => LuminaWrapper.GetAddonText(8613),
+                12 => LuminaWrapper.GetAddonText(2306),
+                13 => LuminaWrapper.GetAddonText(2304),
+                14 => LuminaWrapper.GetAddonText(2307),
+                15 => LuminaGetter.GetRowOrDefault<ContentType>(30).Name.ExtractText(),
+                16 => LuminaWrapper.GetAddonText(7),
                 _  => string.Empty
             };
 
@@ -652,7 +668,7 @@ public class CrossDCPartyFinder : DailyModuleBase
                 8  => 61820,
                 9  => 61809,
                 10 => 61808,
-                11 => 61809,
+                11 => 61819,
                 12 => 61815,
                 13 => 61824,
                 14 => 61837,
