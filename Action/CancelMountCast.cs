@@ -1,19 +1,17 @@
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using FFXIVClientStructs.FFXIV.Client.System.Input;
-using InputData = FFXIVClientStructs.FFXIV.Client.System.Input.InputData;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class BetterMountCast : DailyModuleBase
+public class CancelMountCast : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("BetterMountCastTitle"),
-        Description = GetLoc("BetterMountCastDescription"),
+        Title = GetLoc("CancelMountCastTitle"),
+        Description = GetLoc("CancelMountCastDescription"),
         Category = ModuleCategories.Action,
         Author = ["Bill"],
         ModulesRecommend = ["BetterMountRoulette"]
@@ -26,7 +24,25 @@ public class BetterMountCast : DailyModuleBase
         ModuleConfig = LoadConfig<Config>() ?? new();
 
         UseActionManager.RegPreUseAction(OnPreUseAction);
-        FrameworkManager.Register(OnUpdate);
+        DService.Condition.ConditionChange += OnConditionChanged;
+    }
+
+    protected override void ConfigUI()
+    {
+        if (ImGui.Checkbox(GetLoc("CancelMountCast-ClickToCancel"), ref ModuleConfig.ClickToCancel))
+            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(GetLoc("CancelMountCast-MoveToCancel"), ref ModuleConfig.MoveToCancel))
+            SaveConfig(ModuleConfig);
+    }
+
+    private void OnConditionChanged(ConditionFlag flag, bool value)
+    {
+        if (flag != ConditionFlag.Casting) return;
+
+        if (value && ModuleConfig.MoveToCancel)
+            FrameworkManager.Register(OnUpdate);
+        else
+            FrameworkManager.Unregister(OnUpdate);
     }
 
     private static void OnPreUseAction(
@@ -40,35 +56,32 @@ public class BetterMountCast : DailyModuleBase
     {
         if (!ModuleConfig.ClickToCancel || !IsCasting) return;
 
-        if (actionType == ActionType.Mount || actionID == 9)
-            ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CancelCast);
+        var player = DService.ObjectTable.LocalPlayer;
+        if (player.CastActionType != ActionType.Mount && player.CastActionId != 9) return;
+        
+        ExecuteCancelCast();
     }
 
     private void OnUpdate(IFramework _)
     {
-        if (!IsCasting || !ModuleConfig.MoveToCancel) return;
-
+        if (!LocalPlayerState.IsMoving) return;
+        
         var player = DService.ObjectTable.LocalPlayer;
-        if (LocalPlayerState.IsMoving && (player.CastActionType == ActionType.Mount || player.CastActionId == 9))
-            ExecuteCancelCast();
+        if (player.CastActionType != ActionType.Mount && player.CastActionId != 9) return;
+        
+        ExecuteCancelCast();
     }
 
-    protected override void ConfigUI()
-    {
-        if (ImGui.Checkbox(GetLoc("BetterMountCast-ClickToCancel"), ref ModuleConfig.ClickToCancel))
-            SaveConfig(ModuleConfig);
-        if (ImGui.Checkbox(GetLoc("BetterMountCast-MoveToCancel"),ref ModuleConfig.MoveToCancel))
-            SaveConfig(ModuleConfig);
-    }
     private static void ExecuteCancelCast()
     {
-        if (Throttler.Throttle("BetterMountCast-CancelCast", 100))
+        if (Throttler.Throttle("CancelMountCast-CancelCast", 100))
             ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CancelCast);
     }
 
     protected override void Uninit()
     {
         UseActionManager.Unreg(OnPreUseAction);
+        DService.Condition.ConditionChange -= OnConditionChanged;
         FrameworkManager.Unregister(OnUpdate);
     }
 
