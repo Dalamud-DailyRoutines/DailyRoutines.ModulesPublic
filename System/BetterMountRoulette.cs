@@ -196,7 +196,7 @@ public class BetterMountRoulette : DailyModuleBase
         
         var itemWidthEstimate = 150f * GlobalFontScale;
         var contentWidth      = ImGui.GetContentRegionAvail().X;
-        var columnCount            = Math.Max(1, (int)Math.Floor(contentWidth / itemWidthEstimate));
+        var columnCount       = Math.Max(1, (int)Math.Floor(contentWidth / itemWidthEstimate));
         var iconSize          = 3 * ImGui.GetTextLineHeightWithSpacing();
 
         using var table = ImRaii.Table("##MountsGridTable", columnCount, ImGuiTableFlags.SizingStretchSame);
