@@ -1,4 +1,5 @@
 using DailyRoutines.Abstracts;
+using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
@@ -33,14 +34,20 @@ public class CancelMountCast : DailyModuleBase
             SaveConfig(ModuleConfig);
         if (ImGui.Checkbox(GetLoc("CancelMountCast-MoveToCancel"), ref ModuleConfig.MoveToCancel))
             SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(GetLoc("CancelMountCast-JumpToCancel"), ref ModuleConfig.JumpToCancel))
+            SaveConfig(ModuleConfig);
     }
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.Casting) return;
 
-        if (value && ModuleConfig.MoveToCancel)
+        if (value && 
+            (ModuleConfig.MoveToCancel || ModuleConfig.JumpToCancel))
+        {
+            FrameworkManager.Unregister(OnUpdate);
             FrameworkManager.Register(OnUpdate);
+        }
         else
             FrameworkManager.Unregister(OnUpdate);
     }
@@ -57,19 +64,24 @@ public class CancelMountCast : DailyModuleBase
         if (!ModuleConfig.ClickToCancel || !IsCasting) return;
 
         var player = DService.ObjectTable.LocalPlayer;
-        if (player.CastActionType != ActionType.Mount && player.CastActionId != 9) return;
+        if (player.CastActionType != ActionType.Mount ||
+            (player.CastActionType == ActionType.GeneralAction && player.CastActionId != 9)) return;
         
         ExecuteCancelCast();
     }
 
     private void OnUpdate(IFramework _)
     {
-        if (!LocalPlayerState.IsMoving) return;
-        
-        var player = DService.ObjectTable.LocalPlayer;
-        if (player.CastActionType != ActionType.Mount && player.CastActionId != 9) return;
-        
-        ExecuteCancelCast();
+        if ((LocalPlayerState.IsMoving && ModuleConfig.MoveToCancel) ||
+            (DService.Condition.Any(ConditionFlag.Jumping, ConditionFlag.Jumping61) &&
+             ModuleConfig.JumpToCancel)) 
+        {
+            var player = DService.ObjectTable.LocalPlayer;
+            if (player.CastActionType != ActionType.Mount ||
+                (player.CastActionType == ActionType.GeneralAction && player.CastActionId != 9)) return;
+
+            ExecuteCancelCast();
+        }
     }
 
     private static void ExecuteCancelCast()
@@ -89,5 +101,6 @@ public class CancelMountCast : DailyModuleBase
     {
         public bool ClickToCancel = true;
         public bool MoveToCancel;
+        public bool JumpToCancel;
     }
 }
