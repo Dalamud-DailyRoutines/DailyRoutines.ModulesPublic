@@ -30,10 +30,8 @@ public class BetterMountRoulette : DailyModuleBase
     private static Dictionary<uint, MountListHandler> ZoneMounts = [];
 
     private static ZoneSelectCombo? ZoneSelector;
-    private static uint?            SelectedZoneID;
-    private static bool             ShouldFocusZoneInput;
-
-    private static HashSet<uint>? MountsListToUse;
+    
+    private static HashSet<uint>?   MountsListToUse;
     
     protected override void Init()
     {
@@ -61,10 +59,8 @@ public class BetterMountRoulette : DailyModuleBase
         PVPMounts            = null;
         ZoneMounts.Clear();
 
-        ZoneSelector         = null;
-        SelectedZoneID       = null;
-        ShouldFocusZoneInput = false;
-        MountsListToUse      = null;
+        ZoneSelector    = null;
+        MountsListToUse = null;
     }
 
     protected override void ConfigUI()
@@ -125,24 +121,21 @@ public class BetterMountRoulette : DailyModuleBase
     {
         if (ZoneSelector == null) return;
 
+        var shouldFocus = false;
         if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing | ImGuiTabItemFlags.NoTooltip))
         {
-            SelectedZoneID = 0;
-            ShouldFocusZoneInput = true;
+            ZoneSelector.SelectedZoneID = 0;
+            shouldFocus = true;
         }
 
-        if (!SelectedZoneID.HasValue) return;
+        if (ZoneSelector.SelectedZoneID == 0) return;
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
 
-        if (ShouldFocusZoneInput)
-        {
+        if (shouldFocus)
             ImGui.SetKeyboardFocusHere();
-            ShouldFocusZoneInput = false;
-        }
 
-        ImGui.SetNextItemWidth(200f * GlobalFontScale);
         if (ZoneSelector.DrawRadio())
         {
             var zoneID = ZoneSelector.SelectedZoneID;
@@ -154,11 +147,10 @@ public class BetterMountRoulette : DailyModuleBase
                 SaveConfig(ModuleConfig);
             }
             ZoneSelector.SelectedZoneID = 0;
-            SelectedZoneID = null;
         }
 
         if (ImGui.IsItemDeactivated())
-            SelectedZoneID = null;
+            ZoneSelector.SelectedZoneID = 0;
     }
 
     private void DrawSearchAndMountsGrid(string tabLabel, MountListHandler handler)
@@ -172,44 +164,15 @@ public class BetterMountRoulette : DailyModuleBase
             handler.Searcher.Search(searchText);
         }
 
-        var totalUnlocked = handler.Searcher.Data.Count;
-        var isEmptySearch = string.IsNullOrWhiteSpace(handler.SearchText);
-        var sourceList    = isEmptySearch ? handler.Searcher.Data : handler.Searcher.SearchResult;
-        var isLimited     = isEmptySearch && totalUnlocked > PageSize && sourceList.Count > handler.DisplayCount;
-
-        IReadOnlyList<Mount> toDisplay;
-        if (isLimited)
-        {
-            var displayList = new List<Mount>(handler.DisplayCount);
-            for (var i = 0; i < handler.DisplayCount && i < sourceList.Count; i++)
-                displayList.Add(sourceList[i]);
-            toDisplay = displayList;
-        }
-        else
-            toDisplay = sourceList;
-
-        // 显示加载数量提示（当坐骑总数超过 PageSize 时）
-        if (totalUnlocked > PageSize)
-            ImGui.TextDisabled(GetLoc("BetterMountRoulette-LoadedCount", toDisplay.Count, totalUnlocked));
-
         // 显示坐骑区域
         var       childSize = new Vector2(ImGui.GetContentRegionAvail().X, 400 * GlobalFontScale);
         using var child     = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
 
-        DrawMountsGrid(toDisplay, handler);
-
-        // 当达到加载上限时显示"加载剩余坐骑"
-        if (isLimited)
-        {
-            ImGui.Spacing();
-            ImGui.SetNextItemWidth(-1f);
-            if (ImGui.Button(GetLoc("BetterMountRoulette-LoadRemainingMounts"), new Vector2(-1f, 0)))
-                handler.DisplayCount = sourceList.Count;
-        }
+        DrawMountsGrid(handler.Searcher.SearchResult, handler);
     }
 
-    private void DrawMountsGrid(IReadOnlyList<Mount> mountsToDraw, MountListHandler handler)
+    private void DrawMountsGrid(List<Mount> mountsToDraw, MountListHandler handler)
     {
         if (mountsToDraw.Count == 0) return;
         
@@ -259,7 +222,8 @@ public class BetterMountRoulette : DailyModuleBase
         }
     }
 
-    private static void OnZoneChanged(ushort obj) => OnLogin();
+    private static void OnZoneChanged(ushort obj) => 
+        OnLogin();
 
     private static unsafe void OnLogin()
     {
@@ -339,7 +303,7 @@ public class BetterMountRoulette : DailyModuleBase
         public LuminaSearcher<Mount> Searcher     { get; }       = searcher;
         public HashSet<uint>         SelectedIDs  { get; }       = selectedIDs;
         public string                SearchText   { get; set; }  = string.Empty;
-        public int                   DisplayCount { get; set; }  = Math.Min(PageSize, searcher.Data.Count);
+        public int                   DisplayCount { get; set; }  = searcher.Data.Count;
     }
 
     #region 数据
