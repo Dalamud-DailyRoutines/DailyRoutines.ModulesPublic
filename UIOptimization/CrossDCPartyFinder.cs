@@ -560,8 +560,8 @@ public class CrossDCPartyFinder : DailyModuleBase
         public string     DataCenter { get; set; } = string.Empty;
         public List<uint> Jobs       { get; set; } = [];
 
-        public async Task<PartyFinderList> Request()
-            => JsonConvert.DeserializeObject<PartyFinderList>(await HttpClientHelper.Get().GetStringAsync(Format())) ?? new();
+        public async Task<PartyFinderList> Request() => 
+            JsonConvert.DeserializeObject<PartyFinderList>(await HttpClientHelper.Get().GetStringAsync(Format())) ?? new();
 
         public string Format()
         {
@@ -627,6 +627,7 @@ public class CrossDCPartyFinder : DailyModuleBase
                 "TheHunt"            => 11,
                 "GatheringForays"    => 12,
                 "DeepDungeons"       => 13,
+                "DeepDungeon"        => 13,
                 "FieldOperations"    => 14,
                 "V&C Dungeon Finder" => 15,
                 "None"               => 16,
