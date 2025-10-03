@@ -176,7 +176,17 @@ public class BetterMountRoulette : DailyModuleBase
         var isEmptySearch = string.IsNullOrWhiteSpace(handler.SearchText);
         var sourceList    = isEmptySearch ? handler.Searcher.Data : handler.Searcher.SearchResult;
         var isLimited     = isEmptySearch && totalUnlocked > PageSize && sourceList.Count > handler.DisplayCount;
-        var toDisplay     = isLimited ? sourceList.Take(handler.DisplayCount).ToList() : sourceList;
+
+        IReadOnlyList<Mount> toDisplay;
+        if (isLimited)
+        {
+            var displayList = new List<Mount>(handler.DisplayCount);
+            for (var i = 0; i < handler.DisplayCount && i < sourceList.Count; i++)
+                displayList.Add(sourceList[i]);
+            toDisplay = displayList;
+        }
+        else
+            toDisplay = sourceList;
 
         // 显示加载数量提示（当坐骑总数超过 PageSize 时）
         if (totalUnlocked > PageSize)
