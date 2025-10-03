@@ -254,6 +254,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     private static void OnZoneChangd(ushort obj)
     {
         MitigationManager.Clear();
+        MitigationManager.PartyMitigationCache.Clear();
+        PartyMemberIndexCache.Clear();
         StatusBarManager.Clear();
     }
     
@@ -770,8 +772,6 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             LocalActiveStatus.Clear();
             PartyActiveStatus.Clear();
             BattleNPCActiveStatus.Clear();
-            PartyMitigationCache.Clear();
-            PartyMemberIndexCache.Clear();
         }
 
         public static bool IsLocalEmpty() => 
