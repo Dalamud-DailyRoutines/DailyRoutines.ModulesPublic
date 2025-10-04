@@ -28,17 +28,17 @@ public unsafe class AutoCancelStarContributor : DailyModuleBase
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.ClientState.ClassJobChanged  -= OnClassJobChanged;
         
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
     
     private static void OnZoneChanged(ushort zone)
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         DService.ClientState.ClassJobChanged -= OnClassJobChanged;
         
         if (GameState.TerritoryIntendedUse != 60) return;
         
-        FrameworkManager.Register(OnUpdate, throttleMS: 10_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 10_000);
         DService.ClientState.ClassJobChanged  += OnClassJobChanged;
     }
     
@@ -49,7 +49,7 @@ public unsafe class AutoCancelStarContributor : DailyModuleBase
     {
         if (GameState.TerritoryIntendedUse != 60)
         {
-            FrameworkManager.Unregister(OnUpdate);
+            FrameworkManager.Unreg(OnUpdate);
             return;
         }
         

@@ -45,7 +45,7 @@ public class BetterStatusTimeDisplay : DailyModuleBase
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-        FrameworkManager.Register(OnUpdate, throttleMS: 1000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1000);
     }
 
     protected override void ConfigUI()
@@ -121,7 +121,7 @@ public class BetterStatusTimeDisplay : DailyModuleBase
     }
 
     protected override void Uninit() => 
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
 
     public class Config : ModuleConfiguration
     {

@@ -28,10 +28,10 @@ public unsafe class ThePraetoriumHelper : DailyModuleBase
 
     private static void OnZoneChanged(ushort zoneID)
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         if (zoneID != 1044) return;
         
-        FrameworkManager.Register(OnUpdate, throttleMS: 1000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1000);
     }
 
     private static void OnUpdate(IFramework framework)
@@ -39,7 +39,7 @@ public unsafe class ThePraetoriumHelper : DailyModuleBase
         if (!Throttler.Throttle("ThePraetoriumHelper-OnUpdate", 1_000)) return;
         if (DService.ClientState.TerritoryType != 1044)
         {
-            FrameworkManager.Unregister(OnUpdate);
+            FrameworkManager.Unreg(OnUpdate);
             return;
         }
         
@@ -89,6 +89,6 @@ public unsafe class ThePraetoriumHelper : DailyModuleBase
     protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
 }

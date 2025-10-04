@@ -52,12 +52,12 @@ public class HullbreakerIsleHelper : DailyModuleBase
     private static void OnZoneChanged(ushort zone)
     {
         DService.UiBuilder.Draw -= OnDraw;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         TrapPositions.Clear();
         FakeTreasurePositions.Clear();
         
         if (zone != 361) return;
-        FrameworkManager.Register(OnUpdate, throttleMS: 2000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 2000);
         DService.UiBuilder.Draw += OnDraw;
     }
 

@@ -24,7 +24,7 @@ public unsafe class AutoNotifyLeveUpdate : DailyModuleBase
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-        FrameworkManager.Register(OnUpdate, throttleMS: 60_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 60_000);
     }
 
     protected override void ConfigUI()
@@ -85,7 +85,7 @@ public unsafe class AutoNotifyLeveUpdate : DailyModuleBase
 
     protected override void Uninit()
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
 
     private class Config : ModuleConfiguration

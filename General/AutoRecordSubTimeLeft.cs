@@ -49,7 +49,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
         DService.ClientState.Login  += OnLogin;
         DService.ClientState.Logout += OnLogout;
 
-        FrameworkManager.Register(OnUpdate, throttleMS: 5_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 5_000);
         
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_CharaSelectRemain", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_CharaSelectRemain", OnAddon);
@@ -90,7 +90,7 @@ public unsafe class AutoRecordSubTimeLeft : DailyModuleBase
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         
         Entry?.Remove();
         Entry = null;

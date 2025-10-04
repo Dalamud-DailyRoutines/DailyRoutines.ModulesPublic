@@ -77,7 +77,7 @@ public class AutoFateSync : DailyModuleBase
     {
         if (ModuleConfig.IgnoreMounting && (DService.Condition[ConditionFlag.InFlight] || IsOnMount))
         {
-            FrameworkManager.Register(OnFlying, throttleMS: 500);
+            FrameworkManager.Reg(OnFlying, throttleMS: 500);
             return;
         }
 
@@ -102,14 +102,14 @@ public class AutoFateSync : DailyModuleBase
         var currentFate = FateManager.Instance()->CurrentFate;
         if (currentFate == null || DService.ObjectTable.LocalPlayer == null)
         {
-            FrameworkManager.Unregister(OnFlying);
+            FrameworkManager.Unreg(OnFlying);
             return;
         }
 
         if (DService.Condition[ConditionFlag.InFlight] || IsOnMount) return;
 
         ExecuteFateLevelSync(currentFate->FateId);
-        FrameworkManager.Unregister(OnFlying);
+        FrameworkManager.Unreg(OnFlying);
     }
 
     private unsafe void ExecuteFateLevelSync(ushort fateID)

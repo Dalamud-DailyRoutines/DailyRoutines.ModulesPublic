@@ -29,17 +29,17 @@ public unsafe class Alphascape3Helper : DailyModuleBase
 
     private static void OnZoneChanged(ushort zoneID)
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         if (zoneID != 800) return;
         
-        FrameworkManager.Register(OnUpdate, throttleMS: 1000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1000);
     }
 
     private static void OnUpdate(IFramework framework)
     {
         if (DService.ClientState.TerritoryType != 800)
         {
-            FrameworkManager.Unregister(OnUpdate);
+            FrameworkManager.Unreg(OnUpdate);
             return;
         }
 
@@ -54,6 +54,6 @@ public unsafe class Alphascape3Helper : DailyModuleBase
     protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
 }

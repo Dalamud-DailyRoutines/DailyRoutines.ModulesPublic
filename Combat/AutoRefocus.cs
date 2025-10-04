@@ -31,7 +31,7 @@ public unsafe class AutoRefocus : DailyModuleBase
             OnZoneChange(DService.ClientState.TerritoryType);
         DService.ClientState.TerritoryChanged += OnZoneChange;
         
-        FrameworkManager.Register(OnUpdate, throttleMS: 1000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1000);
     }
 
     private static void OnZoneChange(ushort territory)

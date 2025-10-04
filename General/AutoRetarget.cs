@@ -60,12 +60,12 @@ public class AutoRetarget : DailyModuleBase
         ModuleConfig =   LoadConfig<Config>() ?? new();
         TaskHelper   ??= new() { TimeLimitMS = 15_000 };
         
-        FrameworkManager.Register(OnUpdate, true, 1000);
+        FrameworkManager.Reg(OnUpdate, true, 1000);
     }
 
     protected override void Uninit()
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         base.Uninit();
     }
 

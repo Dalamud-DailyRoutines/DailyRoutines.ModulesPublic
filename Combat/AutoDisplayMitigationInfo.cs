@@ -63,7 +63,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         DService.UiBuilder.Draw += Draw;
 
         // refresh mitigation status
-        FrameworkManager.Register(OnFrameworkUpdateInterval, throttleMS: 500);
+        FrameworkManager.Reg(OnFrameworkUpdateInterval, throttleMS: 500);
 
         DService.ClientState.TerritoryChanged += OnZoneChangd;
     }
@@ -71,7 +71,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     protected override void Uninit()
     {
         // refresh mitigation status
-        FrameworkManager.Unregister(OnFrameworkUpdateInterval);
+        FrameworkManager.Unreg(OnFrameworkUpdateInterval);
         
         DService.ClientState.TerritoryChanged -= OnZoneChangd;
         OnZoneChangd(0);

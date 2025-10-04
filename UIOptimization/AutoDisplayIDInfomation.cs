@@ -53,7 +53,7 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreDraw,           "_TargetInfo", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "_TargetInfoMainTarget", OnAddon);
 
-        FrameworkManager.Register(OnUpdate, throttleMS: 1000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1000);
     }
 
     private static void OnUpdate(IFramework framework)
@@ -355,7 +355,7 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         GameTooltipManager.RemoveWeatherTooltipModify(WeatherTooltipModifyGuid);
 
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
     
     public class Config : ModuleConfiguration

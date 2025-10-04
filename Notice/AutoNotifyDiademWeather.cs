@@ -64,19 +64,19 @@ public class AutoNotifyDiademWeather : DailyModuleBase
 
     private static void OnZoneChanged(ushort zone)
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         
         zone = (ushort)GameState.TerritoryType;
         if (zone != 939) return;
 
-        FrameworkManager.Register(OnUpdate, throttleMS: 10_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 10_000);
     }
 
     private static unsafe void OnUpdate(IFramework framework)
     {
         if (GameState.TerritoryType != 939)
         {
-            FrameworkManager.Unregister(OnUpdate);
+            FrameworkManager.Unreg(OnUpdate);
             return;
         }
         
@@ -94,7 +94,7 @@ public class AutoNotifyDiademWeather : DailyModuleBase
     protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
 
         LastWeather = 0;
     }

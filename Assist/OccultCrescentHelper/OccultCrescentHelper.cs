@@ -48,12 +48,12 @@ public partial class OccultCrescentHelper : DailyModuleBase
         foreach (var module in Modules)
             module.Init();
         
-        FrameworkManager.Register(OnUpdate, true, throttleMS: 500);
+        FrameworkManager.Reg(OnUpdate, true, throttleMS: 500);
     }
     
     protected override void Uninit()
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
 
         foreach (var module in Modules)
             module.Uninit();

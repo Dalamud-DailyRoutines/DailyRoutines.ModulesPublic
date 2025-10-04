@@ -164,11 +164,11 @@ public unsafe class AutoUseMountAction : DailyModuleBase
     {
         if (flag != ConditionFlag.Mounted) return;
 
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         
         if (!value) return;
         
-        FrameworkManager.Register(OnUpdate, throttleMS: 1500);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1500);
     }
     
     private static void OnUpdate(IFramework framework)

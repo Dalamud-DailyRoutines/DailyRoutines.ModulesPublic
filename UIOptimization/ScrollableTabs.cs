@@ -158,7 +158,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new Config();
 
-        FrameworkManager.Register(OnUpdate);
+        FrameworkManager.Reg(OnUpdate);
     }
 
     protected override void ConfigUI()
@@ -169,7 +169,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
 
     protected override void Uninit()
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         base.Uninit();
     }
 
