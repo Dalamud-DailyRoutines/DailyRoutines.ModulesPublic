@@ -129,28 +129,22 @@ public class BetterMountRoulette : DailyModuleBase
         }
 
         if (ZoneSelector.SelectedZoneID == 0) return;
-
+        
+        if (shouldFocus)
+            ImGui.SetKeyboardFocusHere();
+        
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
 
-        if (shouldFocus)
-            ImGui.SetKeyboardFocusHere();
-
         if (ZoneSelector.DrawRadio())
         {
-            var zoneID = ZoneSelector.SelectedZoneID;
-            if (!ModuleConfig.ZoneRouletteMounts.ContainsKey(zoneID))
+            var newMountSet = new HashSet<uint>();
+            if (ModuleConfig.ZoneRouletteMounts.TryAdd(ZoneSelector.SelectedZoneID, newMountSet))
             {
-                var newMountSet = new HashSet<uint>();
-                ModuleConfig.ZoneRouletteMounts[zoneID] = newMountSet;
-                ZoneMounts[zoneID] = new MountListHandler(MasterMountsSearcher, newMountSet);
+                ZoneMounts[ZoneSelector.SelectedZoneID] = new MountListHandler(MasterMountsSearcher, newMountSet);
                 SaveConfig(ModuleConfig);
             }
-            ZoneSelector.SelectedZoneID = 0;
         }
-
-        if (ImGui.IsItemDeactivated())
-            ZoneSelector.SelectedZoneID = 0;
     }
 
     private void DrawSearchAndMountsGrid(string tabLabel, MountListHandler handler)
@@ -261,7 +255,7 @@ public class BetterMountRoulette : DailyModuleBase
         if (!DService.Condition[ConditionFlag.Mounted] && actionType == ActionType.GeneralAction && MountRouletteActionIDs.Contains(actionID))
         {
             MountsListToUse = null;
-            var currentZone = DService.ClientState.TerritoryType;
+            var currentZone = GameState.TerritoryType;
 
             if (ModuleConfig.ZoneRouletteMounts.TryGetValue(currentZone, out var zoneMounts) && zoneMounts.Count > 0)
                 MountsListToUse = zoneMounts;
