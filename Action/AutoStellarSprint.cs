@@ -31,10 +31,10 @@ public unsafe class AutoStellarSprint : DailyModuleBase
     private void OnTerritoryChange(ushort zone)
     {
         TaskHelper.Abort();
-        FrameworkManager.Unregister(OnFrameworkUpdate);
+        FrameworkManager.Unreg(OnFrameworkUpdate);
 
         if (GameState.TerritoryIntendedUse != 60) return;
-        FrameworkManager.Register(OnFrameworkUpdate, throttleMS: 2_000);
+        FrameworkManager.Reg(OnFrameworkUpdate, throttleMS: 2_000);
     }
 
     private void OnFrameworkUpdate(IFramework _)
@@ -49,7 +49,7 @@ public unsafe class AutoStellarSprint : DailyModuleBase
 
         if (GameState.TerritoryIntendedUse != 60)
         {
-            FrameworkManager.Unregister(OnFrameworkUpdate);
+            FrameworkManager.Unreg(OnFrameworkUpdate);
             return true;
         }
         
@@ -65,7 +65,7 @@ public unsafe class AutoStellarSprint : DailyModuleBase
 
     protected override void Uninit()
     {
-        FrameworkManager.Unregister(OnFrameworkUpdate);
+        FrameworkManager.Unreg(OnFrameworkUpdate);
         DService.ClientState.TerritoryChanged -= OnTerritoryChange;
     }
 }

@@ -61,11 +61,11 @@ public class AutoNotifyBonusFate : DailyModuleBase
 
     private static void OnZoneChanged(ushort zone)
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         LastFates.Clear();
 
         if (ValidTerritory.Contains(zone))
-            FrameworkManager.Register(OnUpdate, throttleMS: 5_000);
+            FrameworkManager.Reg(OnUpdate, throttleMS: 5_000);
     }
 
     private static unsafe void OnUpdate(IFramework _)
@@ -73,7 +73,7 @@ public class AutoNotifyBonusFate : DailyModuleBase
         var zoneID = DService.ClientState.TerritoryType;
         if (!ValidTerritory.Contains(zoneID))
         {
-            FrameworkManager.Unregister(OnUpdate);
+            FrameworkManager.Unreg(OnUpdate);
             return;
         }
         
@@ -122,7 +122,7 @@ public class AutoNotifyBonusFate : DailyModuleBase
     protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
 
     private class Config : ModuleConfiguration

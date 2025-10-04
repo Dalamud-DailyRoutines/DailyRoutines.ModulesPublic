@@ -40,7 +40,7 @@ public class AutoNotifyChaoticRaidBonus : DailyModuleBase
         AllDataCenters.ForEach(x => ModuleConfig.DataCentersNotifyTime.TryAdd(x, 0));
         SaveConfig(ModuleConfig);
         
-        FrameworkManager.Register(OnUpdate, throttleMS: 60_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 60_000);
         
         RunCheck(true);
     }
@@ -155,7 +155,7 @@ public class AutoNotifyChaoticRaidBonus : DailyModuleBase
             Speak(text);
     }
 
-    protected override void Uninit() => FrameworkManager.Unregister(OnUpdate);
+    protected override void Uninit() => FrameworkManager.Unreg(OnUpdate);
 
     private class Config : ModuleConfiguration
     {

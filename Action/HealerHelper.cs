@@ -69,7 +69,7 @@ public class HealerHelper : DailyModuleBase
         DService.DutyState.DutyRecommenced    += OnDutyRecommenced;
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         DService.Condition.ConditionChange    += OnConditionChanged;
-        FrameworkManager.Register(OnUpdate, throttleMS: 5_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 5_000);
     }
 
     protected override void Uninit()
@@ -78,7 +78,7 @@ public class HealerHelper : DailyModuleBase
         DService.DutyState.DutyRecommenced    -= OnDutyRecommenced;
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         DService.Condition.ConditionChange    -= OnConditionChanged;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
 
         base.Uninit();
     }

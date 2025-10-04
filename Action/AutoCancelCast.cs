@@ -33,7 +33,7 @@ public unsafe class AutoCancelCast : DailyModuleBase
     protected override void Init()
     {
         DService.Condition.ConditionChange += OnConditionChanged;
-        FrameworkManager.Register(OnUpdate);
+        FrameworkManager.Reg(OnUpdate);
     }
 
     private static void OnConditionChanged(ConditionFlag flag, bool value)
@@ -87,6 +87,6 @@ public unsafe class AutoCancelCast : DailyModuleBase
     protected override void Uninit()
     {
         DService.Condition.ConditionChange -= OnConditionChanged;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
 }

@@ -34,7 +34,7 @@ public class AutoTimedLogout : DailyModuleBase
     protected override void Init()
     {
         Abort();
-        FrameworkManager.Register(OnUpdate, throttleMS: 1_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1_000);
     }
 
     protected override void ConfigUI()
@@ -166,7 +166,7 @@ public class AutoTimedLogout : DailyModuleBase
 
     protected override void Uninit()
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         Abort();
     }
     

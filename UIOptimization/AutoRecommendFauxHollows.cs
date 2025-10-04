@@ -68,20 +68,20 @@ public unsafe class AutoRecommendFauxHollows : DailyModuleBase
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnWeeklyPuzzleEvent);
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
 
         base.Uninit();
     }
     
     private void OnWeeklyPuzzleEvent(AddonEvent type, AddonArgs? args)
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         
         switch (type)
         {
             case AddonEvent.PostSetup:
                 Overlay.IsOpen = true;
-                FrameworkManager.Register(OnUpdate, throttleMS: 1000);
+                FrameworkManager.Reg(OnUpdate, throttleMS: 1000);
                 break;
 
             case AddonEvent.PreFinalize:

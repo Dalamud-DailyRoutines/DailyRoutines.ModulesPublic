@@ -36,7 +36,7 @@ public class MultiTargetTracker : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        FrameworkManager.Register(OnUpdate, false, 1500);
+        FrameworkManager.Reg(OnUpdate, false, 1500);
         DService.ClientState.TerritoryChanged += OnZoneChanged;
         DService.ContextMenu.OnMenuOpened     += OnMenuOpen;
     }
@@ -44,7 +44,7 @@ public class MultiTargetTracker : DailyModuleBase
     protected override void Uninit()
     {
         DService.ContextMenu.OnMenuOpened -= OnMenuOpen;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
 
         TempTrackedPlayers.Clear();

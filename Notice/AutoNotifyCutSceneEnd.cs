@@ -56,7 +56,7 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
     private void OnZoneChanged(ushort zone)
     {
         DService.DutyState.DutyCompleted -= OnDutyComplete;
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         Stopwatch?.Reset();
         Stopwatch = null;
         IsDutyEnd = false;
@@ -79,7 +79,7 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         Stopwatch = new();
         
         DService.DutyState.DutyCompleted += OnDutyComplete;
-        FrameworkManager.Register(OnUpdate, throttleMS: 500);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 500);
     }
     
     private static void OnDutyComplete(object? sender, ushort zone) => 

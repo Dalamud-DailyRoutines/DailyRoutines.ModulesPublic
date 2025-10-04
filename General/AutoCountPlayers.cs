@@ -69,7 +69,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
         InfoProxy24EndRequestHook ??= InfoProxy24EndRequestSig.GetHook<InfoProxy24EndRequestDelegate>(InfoProxy24EndRequestDetour);
         InfoProxy24EndRequestHook.Enable();
 
-        FrameworkManager.Register(OnFrameworkUpdate, throttleMS: 10_000);
+        FrameworkManager.Reg(OnFrameworkUpdate, throttleMS: 10_000);
         OnFrameworkUpdate(DService.Framework);
     }
 
@@ -351,7 +351,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
 
     protected override void Uninit()
     {
-        FrameworkManager.Unregister(OnFrameworkUpdate);
+        FrameworkManager.Unreg(OnFrameworkUpdate);
         
         DService.UiBuilder.Draw -= OnDraw;
         PlayersManager.ReceivePlayersAround -= OnUpdate;

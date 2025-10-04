@@ -44,14 +44,14 @@ public class SastashaHelper : DailyModuleBase
     private void OnZoneChanged(ushort zone)
     {
         TaskHelper?.Abort();
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
 
         CorrectCoralDataID = 0;
         CorrectCoralHighlightColor = ObjectHighlightColor.None;
         if (zone != 1036) return;
         
         TaskHelper.Enqueue(GetCorrectCoral);
-        FrameworkManager.Register(OnUpdate, throttleMS: 2_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 2_000);
     }
 
     private static unsafe void OnUpdate(IFramework _)

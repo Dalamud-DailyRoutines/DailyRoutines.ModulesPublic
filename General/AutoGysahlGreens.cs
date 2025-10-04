@@ -87,11 +87,11 @@ public unsafe class AutoGysahlGreens : DailyModuleBase
 
     private static void OnZoneChanged(ushort zone)
     {
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
         HasNotifiedInCurrentZone = false;
 
         if (ValidTerritory.Contains(zone))
-            FrameworkManager.Register(OnUpdate, throttleMS: 5_000);
+            FrameworkManager.Reg(OnUpdate, throttleMS: 5_000);
     }
 
     private static void OnUpdate(IFramework framework)

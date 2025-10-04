@@ -62,13 +62,13 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         IsActionHighlightedHook.Enable();
 
         UseActionManager.RegPreUseActionLocation(OnPreUseActionLocation);
-        FrameworkManager.Register(OnUpdate, throttleMS: 500);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 500);
     }
 
     protected override void Uninit()
     {
         UseActionManager.Unreg(OnPreUseActionLocation);
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
     }
 
     protected override void ConfigUI()

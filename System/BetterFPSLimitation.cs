@@ -63,7 +63,7 @@ public class BetterFPSLimitation : DailyModuleBase
         };
 
         HandleDtrEntry(true);
-        FrameworkManager.Register(OnUpdate, throttleMS: 1_000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 1_000);
 
         CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("BetterFPSLimitation-CommandHelp") }); 
     }
@@ -162,7 +162,7 @@ public class BetterFPSLimitation : DailyModuleBase
     {
         CommandManager.RemoveSubCommand(Command); 
         
-        FrameworkManager.Unregister(OnUpdate);
+        FrameworkManager.Unreg(OnUpdate);
 
         HandleDtrEntry(false);
         
