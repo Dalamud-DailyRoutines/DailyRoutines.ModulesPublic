@@ -39,16 +39,12 @@ public class CancelMountCast : DailyModuleBase
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
+        FrameworkManager.Unreg(OnUpdate);
         if (flag != ConditionFlag.Casting) return;
         
         if (value && 
             (ModuleConfig.MoveToCancel || ModuleConfig.JumpToCancel))
-        {
-            FrameworkManager.Unregister(OnUpdate);
-            FrameworkManager.Register(OnUpdate);
-        }
-        else
-            FrameworkManager.Unregister(OnUpdate);
+            FrameworkManager.Reg(OnUpdate);
     }
 
     private static void OnPreUseAction(
