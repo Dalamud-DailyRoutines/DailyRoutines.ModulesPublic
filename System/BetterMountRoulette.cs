@@ -303,7 +303,7 @@ public class BetterMountRoulette : DailyModuleBase
         public LuminaSearcher<Mount> Searcher     { get; }       = searcher;
         public HashSet<uint>         SelectedIDs  { get; }       = selectedIDs;
         public string                SearchText   { get; set; }  = string.Empty;
-        public int                   DisplayCount { get; set; }  = searcher.Data.Count;
+        public int                   DisplayCount { get; init; }  = searcher.Data.Count;
     }
 
     #region 数据
