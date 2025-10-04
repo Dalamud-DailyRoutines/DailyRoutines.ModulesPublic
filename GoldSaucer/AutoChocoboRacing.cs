@@ -170,19 +170,15 @@ public unsafe class AutoChocoboRacing : DailyModuleBase
     {
         if (flag != ConditionFlag.ChocoboRacing ||
             !ModuleConfig.IsEnabled) return;
-
+        
+        FrameworkManager.Unregister(OnUpdate);
+        
         if (value)
-        {
-            FrameworkManager.Unregister(OnUpdate);
             FrameworkManager.Register(OnUpdate, throttleMS: 1500);
-        }
         else
         {
-            FrameworkManager.Unregister(OnUpdate);
-
             SetMoving(false);
             SlowDown(false);
-            
             
             if (!ModuleConfig.OptimisedRacing && 
                  // 该退休了
