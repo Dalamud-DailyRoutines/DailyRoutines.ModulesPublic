@@ -161,6 +161,12 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         ImGui.Spacing();
         
         ImGui.AlignTextToFramePadding();
+
+        if (ImGui.Checkbox(GetLoc("OptimizedEnemyList-ShowCastInfo"), ref ModuleConfig.ShowCastInfo))
+        {
+            ModuleConfig.Save(this);
+            UpdateTextNodes();
+        }
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("OptimizedEnemyList-CastInfoDisplayTargetBlacklist"));
         ImGuiOm.HelpMarker(GetLoc("OptimizedEnemyList-CastInfoDisplayTargetBlacklistHelp"));
         
@@ -326,7 +332,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             
             textNode.FontSize = ModuleConfig.FontSize;
             
-            if (isCasting && !ModuleConfig.CastInfoTargetBlacklist.Contains(targetName))
+            if (isCasting && !ModuleConfig.CastInfoTargetBlacklist.Contains(targetName) && ModuleConfig.ShowCastInfo)
             {
                 var castTimeLeft = MathF.Max(bc.TotalCastTime - bc.CurrentCastTime, 0f);
 
@@ -501,6 +507,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
         public byte FontSize = 10;
 
+        public bool ShowCastInfo = true;
         public HashSet<string> CastInfoTargetBlacklist = [];
     }
 }
