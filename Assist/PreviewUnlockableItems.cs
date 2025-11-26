@@ -11,30 +11,29 @@ using OmenTools;
 using LuminaCompanion = Lumina.Excel.Sheets.Companion;
 
 
-namespace 预览坐骑衣服;
+namespace DailyRoutines.ModulesPublic;
 
 
 public unsafe class PreviewUnlockableItems : DailyModuleBase
 {
+    private const uint CustomNodeid = 99990001;
+    private const ushort ItemTypeMount = 1322;
+    private const ushort ItemTypeMinion = 853;
+    private const ushort ItemTypeHairstyle = 2633;
+
+    private string lastImagePath = string.Empty;
+
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = "快捷预览",
-        Description = "在物品详情界面预览坐骑、宠物和发型的外观图像",
+        Title       = GetLoc("PreviewUnlockableItemsTitle"),
+        Description = GetLoc("PreviewUnlockableItemsDescription"),
         Category    = ModuleCategories.Assist,
         Author      = ["AZZ"],
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private const uint CustomNodeId = 99990001;
-    private string _lastImagePath = string.Empty;
-
     private record ImageSize(float Width = 0, float Height = 0, float Scale = 1);
-
-    // 物品类型定义
-    private const ushort ItemTypeMount = 1322;
-    private const ushort ItemTypeMinion = 853;
-    private const ushort ItemTypeHairstyle = 2633;
 
 
     protected override void Init()
@@ -47,7 +46,7 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
     {
         DService.AddonLifecycle.UnregisterListener(OnItemDetailUpdate);
         CleanupImageNode();
-        _lastImagePath = string.Empty;
+        lastImagePath = string.Empty;
     }
 
     private void OnItemDetailUpdate(AddonEvent type, AddonArgs args)
@@ -55,17 +54,17 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
         var window = (AtkUnitBase*)args.Addon.Address;
         if (window == null) return;
         
-        var imgNode = (AtkImageNode*)FindNodeById(&window->UldManager, CustomNodeId, NodeType.Image);
+        var imgNode = (AtkImageNode*)FindNodeByid(&window->UldManager, CustomNodeid, NodeType.Image);
         if (imgNode != null)
             imgNode->AtkResNode.ToggleVisibility(false);
 
-        // 拿到当前查看的物品ID
-        var itemId = AgentItemDetail.Instance()->ItemId;
-        if (itemId is >= 2000000 or <= 0) return;
+        // 拿到当前查看的物品id
+        var itemid = AgentItemDetail.Instance()->ItemId;
+        if (itemid is >= 2000000 or <= 0) return;
         
-        itemId %= 500000;
+        itemid %= 500000;
 
-        var item = DService.Data.GetExcelSheet<Item>()?.GetRowOrDefault(itemId);
+        var item = DService.Data.GetExcelSheet<Item>()?.GetRowOrDefault(itemid);
         var itemAction = item?.ItemAction.Value;
         if (itemAction == null) return;
 
@@ -74,7 +73,7 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
         {
             ItemTypeMount => (GetMountImagePath(itemAction.Value.Data[0]), new ImageSize(190, 234, 0.8f)),
             ItemTypeMinion => (GetMinionImagePath(itemAction.Value.Data[0]), new ImageSize(100, 100, 0.8f)),
-            ItemTypeHairstyle => (GetHairstylePath(itemId), new ImageSize(100, 100, 0.8f)),
+            ItemTypeHairstyle => (GetHairstylePath(itemid), new ImageSize(100, 100, 0.8f)),
             _ => (string.Empty, new ImageSize()),
         };
 
@@ -95,10 +94,10 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
         imgNode->AtkResNode.ToggleVisibility(true);
 
         // 加载图片
-        if (imagePath != _lastImagePath)
+        if (imagePath != lastImagePath)
         {
             imgNode->LoadTexture(imagePath);
-            _lastImagePath = imagePath;
+            lastImagePath = imagePath;
         }
 
         // 调整大小和位置
@@ -117,56 +116,56 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
     }
 
     // 获取坐骑路径
-    private string GetMountImagePath(uint mountId)
+    private string GetMountImagePath(uint mountid)
     {
-        var mount = DService.Data.GetExcelSheet<Mount>()?.GetRowOrDefault(mountId);
+        var mount = DService.Data.GetExcelSheet<Mount>()?.GetRowOrDefault(mountid);
         if (mount == null) return string.Empty;
 
-        var iconId = mount.Value.Icon + 64000U;
-        return BuildIconPath(iconId);
+        var iconid = mount.Value.Icon + 64000U;
+        return BuildIconPath(iconid);
     }
 
     // 获取宠物路径
-    private string GetMinionImagePath(uint minionId)
+    private string GetMinionImagePath(uint minionid)
     {
-        var minion = DService.Data.GetExcelSheet<LuminaCompanion>()?.GetRowOrDefault(minionId);
+        var minion = DService.Data.GetExcelSheet<LuminaCompanion>()?.GetRowOrDefault(minionid);
         if (minion == null) return string.Empty;
 
-        var iconId = minion.Value.Icon + 64000U;
-        return BuildIconPath(iconId);
+        var iconid = minion.Value.Icon + 64000U;
+        return BuildIconPath(iconid);
     }
 
     // 获取发型路径
-    private string GetHairstylePath(uint hairstyleItemId)
+    private string GetHairstylePath(uint hairstyleitemid)
     {
         // 角色的种族和性别
-        var (tribeId, gender) = GetPlayerCharacterInfo();
-        if (tribeId == 0) return string.Empty;
+        var (tribeid, gender) = GetPlayerCharacterInfo();
+        if (tribeid == 0) return string.Empty;
 
         // 种族性别找到对应的发型表
         var hairTable = DService.Data.GetExcelSheet<HairMakeType>()?.FirstOrDefault(t =>
-            t.Tribe.RowId == tribeId && t.Gender == gender);
+            t.Tribe.RowId == tribeid && t.Gender == gender);
 
         if (hairTable?.RowId == 0 || hairTable == null) return string.Empty;
 
-        // 表里所有发型ID
-        var hairstyleIds = ReadHairstyleIds(hairTable.Value);
-        if (hairstyleIds.Count == 0) return string.Empty;
+        // 表里所有发型id
+        var hairstyleids = ReadHairstyleids(hairTable.Value);
+        if (hairstyleids.Count == 0) return string.Empty;
 
         // 匹配发型
         var customizeSheet = DService.Data.GetExcelSheet<CharaMakeCustomize>();
         if (customizeSheet == null) return string.Empty;
 
-        foreach (var id in hairstyleIds)
+        foreach (var id in hairstyleids)
         {
             var customize = customizeSheet.GetRowOrDefault(id);
             if (customize == null) continue;
 
-            if (customize.Value.HintItem.RowId == hairstyleItemId)
+            if (customize.Value.HintItem.RowId == hairstyleitemid)
             {
-                var iconId = customize.Value.Icon;
-                if (iconId == 0) return string.Empty;
-                return BuildIconPath(iconId);
+                var iconid = customize.Value.Icon;
+                if (iconid == 0) return string.Empty;
+                return BuildIconPath(iconid);
             }
         }
 
@@ -174,14 +173,14 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
     }
 
     // 当前角色的种族和性别
-    private (byte tribeId, byte gender) GetPlayerCharacterInfo()
+    private (byte tribeid, byte gender) GetPlayerCharacterInfo()
     {
         var playerAddr = DService.ClientState.LocalPlayer?.Address;
         if (playerAddr == null) return (0, 0);
 
         var character = (Character*)playerAddr;
 
-        var tribeId = character->DrawData.CustomizeData.Tribe;
+        var tribeid = character->DrawData.CustomizeData.Tribe;
         var gender = character->DrawData.CustomizeData.Sex;
 
         // 幻化状态
@@ -192,16 +191,16 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
             if (charBase->GetModelType() == CharacterBase.ModelType.Human)
             {
                 var human = (Human*)charBase;
-                tribeId = human->Customize.Tribe;
+                tribeid = human->Customize.Tribe;
                 gender = human->Customize.Sex;
             }
         }
 
-        return (tribeId, gender);
+        return (tribeid, gender);
     }
 
-    // 从HairMakeType里读发型ID列表
-    private List<uint> ReadHairstyleIds(HairMakeType hairTable)
+    // 从HairMakeType里读发型id列表
+    private List<uint> ReadHairstyleids(HairMakeType hairTable)
     {
         var ids = new List<uint>();
 
@@ -222,7 +221,7 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
 
                 if (page != null && offset.HasValue)
                 {
-                    // 从内存里一个一个读ID，直到遇到0
+                    // 从内存里一个一个读id，直到遇到0
                     for (var i = 0U; i < 100; i++)
                     {
                         var id = page.ReadUInt32(offset.Value + 0xC + 4 * i);
@@ -259,10 +258,10 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
     }
 
     //图标路径生成
-    private string BuildIconPath(uint iconId, bool useHighRes = true)
+    private string BuildIconPath(uint iconid, bool useHighRes = true)
     {
         var suffix = useHighRes ? "_hr1.tex" : ".tex";
-        return $"ui/icon/{iconId / 1000 * 1000:000000}/{iconId:000000}{suffix}";
+        return $"ui/icon/{iconid / 1000 * 1000:000000}/{iconid:000000}{suffix}";
     }
 
     // 创建图片节点
@@ -274,7 +273,7 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
 
         // 节点基本属性
         imgNode->AtkResNode.Type = NodeType.Image;
-        imgNode->AtkResNode.NodeId = CustomNodeId;
+        imgNode->AtkResNode.NodeId = CustomNodeid;
         imgNode->AtkResNode.NodeFlags = NodeFlags.AnchorTop | NodeFlags.AnchorLeft;
         imgNode->AtkResNode.DrawFlags = 0;
         imgNode->WrapMode = 1;
@@ -349,7 +348,7 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
         if (addon == nint.Zero) return;
 
         var window = (AtkUnitBase*)addon.Address;
-        var imgNode = (AtkImageNode*)FindNodeById(&window->UldManager, CustomNodeId, NodeType.Image);
+        var imgNode = (AtkImageNode*)FindNodeByid(&window->UldManager, CustomNodeid, NodeType.Image);
         if (imgNode == null) return;
 
         // 从UI里移除
@@ -377,15 +376,15 @@ public unsafe class PreviewUnlockableItems : DailyModuleBase
         imgNode->AtkResNode.Destroy(true);
     }
 
-    // 在UI里找指定ID的节点
-    private AtkResNode* FindNodeById(AtkUldManager* uldManager, uint nodeId, NodeType? type = null)
+    // 在UI里找指定id的节点
+    private AtkResNode* FindNodeByid(AtkUldManager* uldManager, uint nodeid, NodeType? type = null)
     {
         for (var i = 0; i < uldManager->NodeListCount; i++)
         {
             var node = uldManager->NodeList[i];
             if (node == null) continue;
 
-            if (node->NodeId == nodeId && (type == null || node->Type == type.Value))
+            if (node->NodeId == nodeid && (type == null || node->Type == type.Value))
                 return node;
         }
         return null;
