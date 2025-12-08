@@ -16,7 +16,7 @@ public unsafe class AutoReplaceLowBlowWithInterject : DailyModuleBase
         Category    = ModuleCategories.Action
     };
 
-    private static readonly CompSig                           IsActionReplaceableSig = new("E8 ?? ?? ?? ?? 84 C0 74 68 8B D3");
+    private static readonly CompSig                           IsActionReplaceableSig = new("E8 ?? ?? ?? ?? 84 C0 74 67 8B D3");
     private delegate        bool                              IsActionReplaceableDelegate(uint actionID);
     private static          Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
 
