@@ -219,6 +219,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
                 item.DetachNode();
 
             NodeList.Clear();
+            IsBuilt = false;
         }
     }
 
