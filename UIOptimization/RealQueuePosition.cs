@@ -92,7 +92,7 @@ public unsafe class RealQueuePosition : DailyModuleBase
         var       position    = *(uint*)(agentData + 0x12C);
         var       positionStr = DService.SeStringEvaluator.Evaluate(LuminaGetter.GetRowOrDefault<Addon>(10039).Text, [position]);
         using var builder     = new RentedSeStringBuilder();
-        a3->SetValue(index, builder.Builder.Append(positionStr).GetViewAsSpan());
+        a3->SetValue(index, builder.Builder.Append(LuminaWrapper.GetAddonText(12522)).Append(positionStr).GetViewAsSpan());
         
         var queueTime = TimeSpan.FromSeconds(*(int*)(agentData + 0x128));
         var info      = GetLoc("RealQueuePosition-ETA", @$"{queueTime:mm\:ss}", @$"{ETA - DateTime.Now:mm\:ss}");

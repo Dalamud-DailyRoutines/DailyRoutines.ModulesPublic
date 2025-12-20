@@ -67,7 +67,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         // refresh mitigation status
         FrameworkManager.Reg(OnFrameworkUpdateInterval, throttleMS: 500);
 
-        DService.ClientState.TerritoryChanged += OnZoneChangd;
+        DService.ClientState.TerritoryChanged += OnZoneChanged;
     }
 
     protected override void Uninit()
@@ -75,8 +75,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         // refresh mitigation status
         FrameworkManager.Unreg(OnFrameworkUpdateInterval);
         
-        DService.ClientState.TerritoryChanged -= OnZoneChangd;
-        OnZoneChangd(0);
+        DService.ClientState.TerritoryChanged -= OnZoneChanged;
+        OnZoneChanged(0);
 
         // draw on party list
         WindowManager.Draw -= Draw;
@@ -162,7 +162,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             DrawStatusRow(status);
 
         // battle npc status
-        foreach (var status in MitigationManager.BattleNPCActiveStatus)
+        foreach (var status in MitigationManager.BattleNpcActiveStatus)
             DrawStatusRow(status);
 
         // local shield
@@ -219,7 +219,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
     }
 
-    private static void DrawStatusRow(KeyValuePair<MitigationManager.MMStatus, float> status)
+    private static void DrawStatusRow(KeyValuePair<MitigationManager.MitigationInfo, float> status)
     {
         if (!LuminaGetter.TryGetRow<LuminaStatus>(status.Key.ID, out var row))
             return;
@@ -253,11 +253,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #region Hooks
 
-    private static void OnZoneChangd(ushort obj)
+    private static void OnZoneChanged(ushort obj)
     {
-        MitigationManager.Clear();
-        MitigationManager.PartyMitigationCache.Clear();
         PartyMemberIndexCache.Clear();
+        MitigationManager.Clear();
         StatusBarManager.Clear();
     }
     
@@ -300,7 +299,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             try
             {
                 var json = await HttpClientHelper.Get().GetStringAsync($"{Uri}/mitigation.json");
-                var resp = JsonConvert.DeserializeObject<MitigationManager.MMStatus[]>(json);
+                var resp = JsonConvert.DeserializeObject<MitigationManager.MitigationInfo[]>(json);
                 if (resp == null)
                     Error($"[AutoDisplayMitigationInfo] 远程减伤技能文件解析失败: {json}");
                 else
@@ -388,7 +387,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             }
 
             // battle npc
-            foreach (var (status, _) in MitigationManager.BattleNPCActiveStatus)
+            foreach (var (status, _) in MitigationManager.BattleNpcActiveStatus)
             {
                 if (!firstTipItem)
                     tipBuilder.Append("\n");
@@ -555,11 +554,14 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     private static unsafe class MitigationManager
     {
         // cache
-        public static          Dictionary<uint, MMStatus> StatusDict           = [];
+        public static          Dictionary<uint, MitigationInfo> StatusDict           = [];
         public static readonly Dictionary<uint, float[]>  PartyMitigationCache = [];
 
+        // snapshot
+        private static KeyValuePair<uint, float[]>[] PartyMitigationSnapshot = [];
+
         // local player
-        public static readonly Dictionary<MMStatus, float> LocalActiveStatus = [];
+        public static readonly Dictionary<MitigationInfo, float> LocalActiveStatus = [];
 
         public static float LocalShield
         {
@@ -574,7 +576,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
 
         // party member
-        public static readonly Dictionary<uint, Dictionary<MMStatus, float>> PartyActiveStatus = [];
+        public static readonly Dictionary<uint, Dictionary<MitigationInfo, float>> PartyActiveStatus = [];
 
         public static Dictionary<uint, float> PartyShield
         {
@@ -600,7 +602,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         }
 
         // battle npc
-        public static readonly Dictionary<MMStatus, float> BattleNPCActiveStatus = [];
+        public static readonly Dictionary<MitigationInfo, float> BattleNpcActiveStatus = [];
 
         #region Structs
 
@@ -613,7 +615,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             public float Magical { get; set; }
         }
 
-        public class MMStatus : IEquatable<MMStatus>
+        public class MitigationInfo : IEquatable<MitigationInfo>
         {
             [JsonProperty("id")]
             public uint ID { get; private set; }
@@ -629,15 +631,15 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
             #region Equals
 
-            public bool Equals(MMStatus? other) => ID == other.ID;
+            public bool Equals(MitigationInfo? other) => ID == other.ID;
 
-            public override bool Equals(object? obj) => obj is MMStatus other && Equals(other);
+            public override bool Equals(object? obj) => obj is MitigationInfo other && Equals(other);
 
             public override int GetHashCode() => (int)ID;
 
-            public static bool operator ==(MMStatus left, MMStatus right) => left.Equals(right);
+            public static bool operator ==(MitigationInfo left, MitigationInfo right) => left.Equals(right);
 
-            public static bool operator !=(MMStatus left, MMStatus right) => !left.Equals(right);
+            public static bool operator !=(MitigationInfo left, MitigationInfo right) => !left.Equals(right);
 
             #endregion
         }
@@ -664,7 +666,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         #region Funcs
 
-        public static bool TryGetMitigation(uint targetID, MemberStatus memberStatus, out MMStatus? mitigation)
+        public static bool TryGetMitigation(uint targetID, MemberStatus memberStatus, out MitigationInfo? mitigation)
         {
             mitigation = null;
 
@@ -725,7 +727,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                     if (member.EntityId == 0)
                         continue;
 
-                    var activeStatus = new Dictionary<MMStatus, float>();
+                    var activeStatus = new Dictionary<MitigationInfo, float>();
                     foreach (var status in member.Statuses)
                     {
                         if (status.StatusId == 0)
@@ -746,39 +748,43 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
                 foreach (var status in statusList)
                 {
                     if (StatusDict.TryGetValue(status.StatusId, out var mitigation))
-                        BattleNPCActiveStatus.TryAdd(mitigation, status.RemainingTime);
+                        BattleNpcActiveStatus.TryAdd(mitigation, status.RemainingTime);
                 }
             }
 
             var partyShieldCache = PartyShield;
             foreach (var memberActiveStatus in PartyActiveStatus)
             {
-                var activeStatus = memberActiveStatus.Value.Concat(BattleNPCActiveStatus).ToDictionary(kv => kv.Key, kv => kv.Value);
-                PartyMitigationCache[memberActiveStatus.Key] =
-                [
+                var activeStatus = memberActiveStatus.Value.Concat(BattleNpcActiveStatus).ToDictionary(kv => kv.Key, kv => kv.Value);
+                PartyMitigationCache.TryAdd(memberActiveStatus.Key, [
                     Reduction(activeStatus.Keys.Select(x => x.Info.Physical)),
                     Reduction(activeStatus.Keys.Select(x => x.Info.Magical)),
                     partyShieldCache.GetValueOrDefault(memberActiveStatus.Key, 0)
-                ];
+                ]);
             }
 
             if (DService.PartyList.Count == 0 && Control.GetLocalPlayer()->EntityId is { } id)
-                PartyMitigationCache[id] = FetchLocal();
+                PartyMitigationCache.TryAdd(id, FetchLocal());
+
+            PartyMitigationSnapshot = PartyMitigationCache.ToArray();
         }
 
         public static void Clear()
         {
             LocalActiveStatus.Clear();
             PartyActiveStatus.Clear();
-            BattleNPCActiveStatus.Clear();
+            BattleNpcActiveStatus.Clear();
+
+            PartyMitigationCache.Clear();
+            PartyMitigationSnapshot = [];
         }
 
         public static bool IsLocalEmpty() => 
-            LocalActiveStatus.Count == 0 && LocalShield == 0 && BattleNPCActiveStatus.Count == 0;
+            LocalActiveStatus.Count == 0 && LocalShield == 0 && BattleNpcActiveStatus.Count == 0;
 
         public static float[] FetchLocal()
         {
-            var activeStatus = LocalActiveStatus.Concat(BattleNPCActiveStatus).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var activeStatus = LocalActiveStatus.Concat(BattleNpcActiveStatus).ToDictionary(kv => kv.Key, kv => kv.Value);
             return
             [
                 Reduction(activeStatus.Keys.Select(x => x.Info.Physical)),
@@ -787,9 +793,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             ];
         }
 
-        public static Dictionary<uint, float[]> FetchParty()
-            => PartyMitigationCache;
-
+        public static IReadOnlyList<KeyValuePair<uint, float[]>> FetchParty()
+            => PartyMitigationSnapshot;
 
         public static float Reduction(IEnumerable<float> mitigations) =>
             (1f - mitigations.Aggregate(1f, (acc, m) => acc * (1f - (m / 100f)))) * 100f;
