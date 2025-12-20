@@ -289,7 +289,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
             var contextMenuCounts = contextMenu->EventParams[0].Int;
             if (contextMenuCounts == 0) return false;
 
-            var str = contextMenu->EventParams[7].GetValueAsString();
+            var str = contextMenu->EventParams[8].GetValueAsString();
             if (!str.Equals(LuminaWrapper.GetAddonText(370), StringComparison.OrdinalIgnoreCase))
                 return false;
 
