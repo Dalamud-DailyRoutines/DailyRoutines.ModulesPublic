@@ -5,6 +5,8 @@ using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -114,6 +116,11 @@ public class AutoEliminateFishAwareness : DailyModuleBase
 
         if (ModuleConfig.AutoCast)
             TaskHelper.Enqueue(EnterFishing, "进入钓鱼状态");
+        else
+            TaskHelper.Enqueue(
+                () => ActionManager.Instance()->GetActionStatus(ActionType.Action, 289) == 0,
+                "等待技能抛竿可用"
+            );
         
         TaskHelper.Enqueue(() =>
         {
