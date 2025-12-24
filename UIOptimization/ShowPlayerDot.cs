@@ -1,14 +1,16 @@
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Infos;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface;
-using Dalamud.Interface.Components;
-using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Common.Math;
+using KamiToolKit.Classes;
+using KamiToolKit.Classes.Timelines;
+using KamiToolKit.Nodes;
+using KamiToolKit.Overlay;
 using System;
 using System.Drawing;
+using System.Numerics;
 
 namespace DailyRoutines.ModuleTemplate;
 
@@ -26,15 +28,20 @@ public unsafe class ShowPlayerDot : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
+    private static OverlayController? Controller;
+
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-        WindowManager.Draw += DrawDot;
+
+        Controller ??= new();
+        Controller.CreateNode(() => new CursorImageNode());
     }
 
     protected override void Uninit()
     {
-        WindowManager.Draw -= DrawDot;
+        Controller?.Dispose();
+        Controller = null;
     }
 
     protected override void ConfigUI()
@@ -59,46 +66,26 @@ public unsafe class ShowPlayerDot : DailyModuleBase
         ImGui.NewLine();
         ImGui.TextColored(KnownColor.AliceBlue.ToVector4(), GetLoc("ShowPlayerDot-Appearance"));
 
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Color"));
-
-        ImGui.SameLine(0, 5f * GlobalFontScale);
-        ModuleConfig.Colour = ImGuiComponents.ColorPickerWithPalette(0, "###ColorInput", ModuleConfig.Colour);
-
-        ImGui.SameLine(0, 5f * GlobalFontScale);
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Save, $"{GetLoc("Save")}"))
-            SaveConfig(ModuleConfig);
-
-        ImGui.SameLine();
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Redo, $"{GetLoc("Reset")}"))
+        using (ImRaii.ItemWidth(200f * GlobalFontScale))
         {
-            ModuleConfig.Colour = new Vector4(1f, 1f, 1f, 1f);
-            SaveConfig(ModuleConfig);
+            ImGui.ColorPicker4(GetLoc("Color"), ref ModuleConfig.Colour);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                ModuleConfig.Save(this);
+
+            if (ImGui.InputFloat(GetLoc("Size"), ref ModuleConfig.Size))
+                ModuleConfig.Size = MathF.Max(1, ModuleConfig.Size);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                ModuleConfig.Save(this);
+
+            ImGui.InputUInt(GetLoc("Icon"), ref ModuleConfig.IconID);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                ModuleConfig.Save(this);
+
+            ImGui.SameLine();
+            if (ImGui.Button($"{FontAwesomeIcon.Icons.ToIconString()}"))
+                ChatHelper.SendMessage("/xldata icon");
+            ImGuiOm.TooltipHover($"{GetLoc("IconBrowser")}\n({GetLoc("AutoHighlightCursor-IconBrowser-Help")})");
         }
-
-        ImGui.NewLine();
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.InputFloat(GetLoc("ShowPlayerDot-Thickness"), ref ModuleConfig.Thickness, 0.1f, 1f, "%.1f"))
-        {
-            ModuleConfig.Thickness = MathF.Max(0f, ModuleConfig.Thickness);
-            SaveConfig(ModuleConfig);
-        }
-
-        ImGui.NewLine();
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.InputFloat(GetLoc("Radius"), ref ModuleConfig.Radius, 0.1f, 1f, "%.1f"))
-        {
-            ModuleConfig.Radius = MathF.Max(0f, ModuleConfig.Radius);
-            SaveConfig(ModuleConfig);
-        }
-
-        ImGui.NewLine();
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.SliderInt(GetLoc("ShowPlayerDot-Segments"), ref ModuleConfig.Segments, 4, 1000))
-            SaveConfig(ModuleConfig);
-
-        ImGui.NewLine();
-        if (ImGui.Checkbox(GetLoc("ShowPlayerDot-Filled"), ref ModuleConfig.Filled))
-            SaveConfig(ModuleConfig);
 
         ImGui.NewLine();
         ImGui.TextColored(KnownColor.AliceBlue.ToVector4(), GetLoc("ShowPlayerDot-Adjustments"));
@@ -132,23 +119,62 @@ public unsafe class ShowPlayerDot : DailyModuleBase
         }
     }
 
-    private static void DrawDot()
+    private unsafe class CursorImageNode : OverlayNode
     {
-        if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return;
-        if (!ModuleConfig.Enabled) return;
-        if (DService.Condition[ConditionFlag.Occupied38]) return;
-        if (ModuleConfig.Combat && !DService.Condition[ConditionFlag.InCombat]) return;
-        if (ModuleConfig.Instance && !DService.Condition[ConditionFlag.BoundByDuty]) return;
-        if (ModuleConfig.Unsheathed && !IsWeaponUnsheathed()) return;
+        public override OverlayLayer OverlayLayer => OverlayLayer.Foreground;
+        public override bool HideWithNativeUi => false;
 
-        using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(0, 0)))
+        private readonly IconImageNode imageNode;
+
+        public CursorImageNode()
         {
-            ImGuiHelpers.ForceNextWindowMainViewport();
-            ImGuiHelpers.SetNextWindowPosRelativeMainViewport(new Vector2(0, 0));
-            ImGui.Begin("Canvas",
-                ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoTitleBar |
-                ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoFocusOnAppearing);
-            ImGui.SetWindowSize(ImGui.GetIO().DisplaySize);
+            imageNode = new IconImageNode
+            {
+                IconId = 60952,
+                FitTexture = true,
+            };
+            imageNode.AttachNode(this);
+
+            imageNode.AddTimeline(new TimelineBuilder()
+                                 .BeginFrameSet(1, 120)
+                                 .AddEmptyFrame(1)
+                                 .EndFrameSet()
+                                 .Build());
+        }
+
+        protected override void OnSizeChanged()
+        {
+            base.OnSizeChanged();
+
+            imageNode.Size = Size;
+            imageNode.Origin = new Vector2(ModuleConfig.Size / 2.0f);
+        }
+
+        public override void Update()
+        {
+            base.Update();
+
+            Size = new Vector2(ModuleConfig.Size);
+
+            imageNode.Color = ModuleConfig.Colour;
+            imageNode.IconId = ModuleConfig.IconID;
+
+            Timeline?.PlayAnimation(1);
+
+            if (DService.ObjectTable.LocalPlayer is not { } localPlayer)
+            {
+                IsVisible = false;
+                return;
+            }
+
+            IsVisible = ModuleConfig.Enabled &&
+                        !DService.Condition[ConditionFlag.Occupied38] &&
+                        (!ModuleConfig.Combat || DService.Condition[ConditionFlag.InCombat]) &&
+                        (!ModuleConfig.Instance || DService.Condition[ConditionFlag.BoundByDuty]) &&
+                        (!ModuleConfig.Unsheathed || IsWeaponUnsheathed());
+
+            if (!IsVisible)
+                return;
 
             var xOff = 0f;
             var yOff = 0f;
@@ -173,10 +199,7 @@ public unsafe class ShowPlayerDot : DailyModuleBase
 
             DService.Gui.WorldToScreen(new Vector3(localPlayer.Position.X + xOff, localPlayer.Position.Y + zed, localPlayer.Position.Z + yOff), out var pos);
 
-            if (ModuleConfig.Filled)
-                ImGui.GetWindowDrawList().AddCircleFilled(new Vector2(pos.X, pos.Y), ModuleConfig.Radius, ImGui.GetColorU32(ModuleConfig.Colour), ModuleConfig.Segments);
-            else
-                ImGui.GetWindowDrawList().AddCircle(new Vector2(pos.X, pos.Y), ModuleConfig.Radius, ImGui.GetColorU32(ModuleConfig.Colour), ModuleConfig.Segments, ModuleConfig.Thickness);
+            Position = new Vector2(pos.X, pos.Y) - (imageNode.Size / 2.0f);
 
         }
     }
@@ -189,10 +212,8 @@ public unsafe class ShowPlayerDot : DailyModuleBase
         public bool Unsheathed = false;
 
         public Vector4 Colour = new(1f, 1f, 1f, 1f);
-        public float Thickness = 10f;
-        public int Segments = 100;
-        public float Radius = 2f;
-        public bool Filled = true;
+        public float Size = 96f;
+        public uint IconID = 60952;
 
         public bool Offset = false;
         public bool RotateOffset = false;
