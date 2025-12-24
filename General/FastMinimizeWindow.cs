@@ -137,9 +137,9 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
         var buttonSize = 20f * ModuleConfig.Scale;
         var windowPos = ModuleConfig.Position switch
         {
-            ButtonPosition.TopLeft     => new Vector2(buttonSize,                                    0f),
+            ButtonPosition.TopLeft     => new Vector2(0f,                                            0f),
             ButtonPosition.TopRight    => new Vector2(ImGuiHelpers.MainViewport.Size.X - buttonSize, 0f),
-            ButtonPosition.BottomLeft  => new Vector2(buttonSize,                                    ImGuiHelpers.MainViewport.Size.Y - buttonSize),
+            ButtonPosition.BottomLeft  => new Vector2(0f,                                            ImGuiHelpers.MainViewport.Size.Y - buttonSize),
             ButtonPosition.BottomRight => ImGuiHelpers.MainViewport.Size - new Vector2(buttonSize),
             _                          => Vector2.Zero
         };
