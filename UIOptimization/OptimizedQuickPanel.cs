@@ -239,10 +239,18 @@ public unsafe class OptimizedQuickPanel : DailyModuleBase
     {
         var messageText = message.ToString();
         if (!messageText.StartsWith('/')) return;
-        if (messageText.Split(' ') is not { Length: 2 } prasedCommand                                                      ||
-            (prasedCommand[0] != QuickPanelLine.Command.ToString() && prasedCommand[0] != QuickPanelLine.Alias.ToString()) ||
-            !int.TryParse(prasedCommand[1], out var index)                                                                 ||
-            index is not (> 0 and < 5))
+        if (messageText.Split(' ') is not { Length: 2 } parsedCommand ||
+            (parsedCommand[0] != QuickPanelLine.Command.ToString() && parsedCommand[0] != QuickPanelLine.Alias.ToString()))
+            return;
+
+        if (parsedCommand[1].Equals("close"))
+        {
+            AgentQuickPanel.Instance()->Hide();
+            isPrevented = true;
+            return;
+        }
+
+        if (!int.TryParse(parsedCommand[1], out var index) || index is not (> 0 and < 5))
             return;
         
         AgentQuickPanel.Instance()->OpenPanel((uint)(index - 1), showFirstTimeHelp: false);
