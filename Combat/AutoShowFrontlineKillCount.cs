@@ -15,6 +15,8 @@ public unsafe class AutoShowFrontlineKillCount : DailyModuleBase
         Category    = ModuleCategories.Combat
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static uint LastKillCount;
 
     private static uint Preview = 1;

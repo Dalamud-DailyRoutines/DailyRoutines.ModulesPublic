@@ -4,14 +4,18 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 合并成单一投影台模块
 public class AutoRemoveDuplicateGlamours : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
         Title       = GetLoc("AutoRemoveDuplicateGlamoursTitle"),
         Description = GetLoc("AutoRemoveDuplicateGlamoursDescription"),
+        Category    = ModuleCategories.UIOperation,
         Author      = ["ECSS11"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() => 
         TaskHelper ??= new();

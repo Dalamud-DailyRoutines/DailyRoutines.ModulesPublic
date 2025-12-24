@@ -26,26 +26,27 @@ public class ExpandPlayerMenuSearch : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static Config ModuleConfig = null!;
     
     private static readonly UpperContainerItem UpperContainerMenu = new();
-    
-    private static   CancellationTokenSource? CancelSource;
+
+    private static CancellationTokenSource? CancelSource;
 
     private static CharacterSearchInfo? TargetChara;
 
     protected override void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
+        ModuleConfig = LoadConfig<Config>() ?? new();
         
         CancelSource ??= new();
 
         DService.ContextMenu.OnMenuOpened += OnMenuOpen;
     }
 
-    protected override void ConfigUI() => UpperContainerItem.Draw();
+    protected override void ConfigUI() => 
+        UpperContainerItem.Draw();
 
     private static void OnMenuOpen(IMenuOpenedArgs args)
     {
@@ -170,12 +171,12 @@ public class ExpandPlayerMenuSearch : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public bool RisingStoneEnabled     = true;
-        public bool TiebaEnabled           = true;
+        public bool RisingStoneEnabled     = GameState.IsCN;
+        public bool TiebaEnabled           = GameState.IsCN;
         public bool FFLogsEnabled          = true;
-        public bool LodestoneEnabled       = true;
-        public bool LalachievementsEnabled = true;
-        public bool TomestoneEnabled       = true;
+        public bool LodestoneEnabled       = GameState.IsGL;
+        public bool LalachievementsEnabled = GameState.IsGL;
+        public bool TomestoneEnabled       = GameState.IsGL;
         public bool SuMemoEnabled          = true;
     }
 

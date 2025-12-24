@@ -93,7 +93,7 @@ public unsafe class AutoJoinExitDuty : DailyModuleBase
                 if (gearset->Id != i) continue;
                 if (gearset->ClassJob > 18)
                 {
-                    ChatHelper.SendMessage($"/gearset change {gearset->Id + 1}");
+                    ChatManager.SendMessage($"/gearset change {gearset->Id + 1}");
                     return true;
                 }
             }

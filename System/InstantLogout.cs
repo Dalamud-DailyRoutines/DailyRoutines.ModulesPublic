@@ -2,8 +2,8 @@ using System;
 using DailyRoutines.Abstracts;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -16,18 +16,14 @@ public unsafe class InstantLogout : DailyModuleBase
         Category    = ModuleCategories.System,
     };
 
-    private static readonly CompSig                          SystemMenuExecuteSig = new("E8 ?? ?? ?? ?? 48 8B 07 48 8B CF 89 5F ?? FF 50 ?? 84 C0");
+    private static readonly CompSig                          SystemMenuExecuteSig = new("E8 ?? ?? ?? ?? 40 B5 01 41 B9 ?? ?? ?? ??");
     private delegate        nint                             SystemMenuExecuteDelegate(AgentHUD* agentHud, int a2, uint a3, int a4, nint a5);
     private static          Hook<SystemMenuExecuteDelegate>? SystemMenuExecuteHook;
 
-    private static          Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
+    private static Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
 
-    private static readonly CompSig                          ProcessSendedChatSig = new("E8 ?? ?? ?? ?? FE 87 ?? ?? ?? ?? C7 87 ?? ?? ?? ?? ?? ?? ?? ??");
-    private delegate        byte                             ProcessSendedChatDelegate(nint uiModule, CStringPointer* message, nint a3);
-    private static          Hook<ProcessSendedChatDelegate>? ProcessSendedChatHook;
-
-    private static readonly Lazy<TextCommand> LogoutLine   = new(() => LuminaGetter.GetRowOrDefault<TextCommand>(172));
-    private static readonly Lazy<TextCommand> ShutdownLine = new(() => LuminaGetter.GetRowOrDefault<TextCommand>(173));
+    private static readonly TextCommand LogoutLine   = LuminaGetter.GetRowOrDefault<TextCommand>(172);
+    private static readonly TextCommand ShutdownLine = LuminaGetter.GetRowOrDefault<TextCommand>(173);
     
     protected override void Init()
     {
@@ -41,22 +37,26 @@ public unsafe class InstantLogout : DailyModuleBase
             AgentCloseMessageShowDetour);
         AgentCloseMessageShowHook.Enable();
 
-        ProcessSendedChatHook ??= ProcessSendedChatSig.GetHook<ProcessSendedChatDelegate>(ProcessSendedChatDetour);
-        ProcessSendedChatHook.Enable();
+        ChatManager.RegPreExecuteCommandInner(OnPreExecuteCommandInner);
     }
+
+    protected override void Uninit() => 
+        ChatManager.Unreg(OnPreExecuteCommandInner);
 
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("InstantLogout-ManualOperation")}:");
 
-        ImGui.SameLine();
-        if (ImGui.Button(GetLoc("InstantLogout-Logout"))) 
-            Logout(TaskHelper);
+        using (ImRaii.PushIndent())
+        {
+            if (ImGui.Button(GetLoc("InstantLogout-Logout"))) 
+                Logout(TaskHelper);
         
-        ImGui.SameLine();
-        if (ImGui.Button(GetLoc("InstantLogout-Shutdown"))) 
-            Shutdown(TaskHelper);
+            ImGui.SameLine();
+            if (ImGui.Button(GetLoc("InstantLogout-Shutdown"))) 
+                Shutdown(TaskHelper);
+        }
     }
 
     private nint SystemMenuExecuteDetour(AgentHUD* agentHud, int a2, uint a3, int a4, nint a5)
@@ -79,24 +79,28 @@ public unsafe class InstantLogout : DailyModuleBase
     
     private void AgentCloseMessageShowDetour(AgentInterface* agent) => 
         Shutdown(TaskHelper);
-
-    private byte ProcessSendedChatDetour(nint uiModule, CStringPointer* message, nint a3)
+    
+    private void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
-        var messageDecode = message->ToString();
+        var messageDecode = message.ToString();
 
         if (string.IsNullOrWhiteSpace(messageDecode) || !messageDecode.StartsWith('/'))
-            return ProcessSendedChatHook.Original(uiModule, message, a3);
+            return;
 
-        CheckCommand(messageDecode, LogoutLine.Value,   TaskHelper, Logout);
-        CheckCommand(messageDecode, ShutdownLine.Value, TaskHelper,  Shutdown);
-
-        return ProcessSendedChatHook.Original(uiModule, message, a3);
+        if (CheckCommand(messageDecode, LogoutLine,   TaskHelper, Logout) ||
+            CheckCommand(messageDecode, ShutdownLine, TaskHelper, Shutdown))
+            isPrevented = true;
     }
 
-    private static void CheckCommand(string message, TextCommand command, TaskHelper taskHelper, Action<TaskHelper> action)
+    private static bool CheckCommand(string message, TextCommand command, TaskHelper taskHelper, Action<TaskHelper> action)
     {
-        if (message == command.Command.ExtractText() || message == command.Alias.ExtractText()) 
+        if (message == command.Command.ExtractText() || message == command.Alias.ExtractText())
+        {
             action(taskHelper);
+            return true;
+        }
+        
+        return false;
     }
 
     private static void Logout(TaskHelper _) => 
@@ -109,7 +113,7 @@ public unsafe class InstantLogout : DailyModuleBase
         {
             if (DService.ClientState.IsLoggedIn) return false;
 
-            ChatHelper.SendMessage("/xlkill");
+            ChatManager.SendMessage("/xlkill");
             return true;
         });
     }

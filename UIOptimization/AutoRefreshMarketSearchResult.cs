@@ -15,6 +15,8 @@ public unsafe class AutoRefreshMarketSearchResult : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static bool IsMarketStuck { get; set; }
     
     [IPCProvider("DailyRoutines.Modules.AutoRefreshMarketSearchResult.IsMarketStuck")]

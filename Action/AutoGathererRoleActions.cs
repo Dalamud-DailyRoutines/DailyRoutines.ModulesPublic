@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 
@@ -60,6 +59,13 @@ public class AutoGathererRoleActions : DailyModuleBase
                 TaskHelper.Enqueue(() =>
                 {
                     if (!Throttler.Throttle("AutoGathererRoleActions-UseAction")) return false;
+                    
+                    if (BetweenAreas)
+                    {
+                        TaskHelper.Abort();
+                        return true;
+                    }
+                    
                     if (localPlayer->StatusManager.HasStatus(status) || !IsActionUnlocked(action)) return true;
                     
                     UseActionManager.UseActionLocation(ActionType.Action, action);

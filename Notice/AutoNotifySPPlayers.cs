@@ -356,7 +356,7 @@ public unsafe class AutoNotifySPPlayers : DailyModuleBase
                 if (!string.IsNullOrWhiteSpace(config.Command))
                 {
                     foreach (var command in config.Command.Split('\n'))
-                        ChatHelper.SendMessage(string.Format(command.Trim(), playerName));
+                        ChatManager.SendMessage(string.Format(command.Trim(), playerName));
                 }
             }
         }

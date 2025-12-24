@@ -257,7 +257,7 @@ public unsafe class AutoLogin : DailyModuleBase
         }
 
         TaskHelper.Abort();
-        TaskHelper.Enqueue(() => ChatHelper.SendMessage("/logout"));
+        TaskHelper.Enqueue(() => ChatManager.SendMessage("/logout"));
     }
 
     private void OnTitleMenu(AddonEvent eventType, AddonArgs? args)

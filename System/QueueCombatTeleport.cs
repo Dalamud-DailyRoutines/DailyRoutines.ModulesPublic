@@ -16,7 +16,7 @@ public unsafe class QueueCombatTeleport : DailyModuleBase
     {
         Title       = GetLoc("QueueCombatTeleportTitle"),
         Description = GetLoc("QueueCombatTeleportDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Category    = ModuleCategories.System,
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
@@ -46,7 +46,7 @@ public unsafe class QueueCombatTeleport : DailyModuleBase
         CanUseTeleportMapPatch.Enable();
 
         UseActionManager.RegPreUseAction(OnPreUseAction);
-        ExecuteCommandManager.Register(OnPreUseCommand);
+        ExecuteCommandManager.RegPre(OnPreUseCommand);
         DService.Condition.ConditionChange += OnConditionChanged;
     }
 
@@ -163,7 +163,7 @@ public unsafe class QueueCombatTeleport : DailyModuleBase
         CanUseTeleportMapPatch.Disable();
 
         DService.Condition.ConditionChange -= OnConditionChanged;
-        ExecuteCommandManager.Unregister(OnPreUseCommand);
+        ExecuteCommandManager.Unreg(OnPreUseCommand);
         UseActionManager.Unreg(OnPreUseAction);
 
         TeleportHelper?.Abort();

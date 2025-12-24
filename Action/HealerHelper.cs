@@ -561,7 +561,7 @@ public class HealerHelper : DailyModuleBase
                 return;
 
             // need to update candidates?
-            var ids = DService.PartyList.Select(m => m.ObjectId).ToHashSet();
+            var ids = DService.PartyList.Select(m => m.EntityId).ToHashSet();
             if (!ids.SetEquals(AutoPlayCardService.PartyMemberIdsCache) || AutoPlayCardService.NeedReorder)
             {
                 // party member changed, update candidates
@@ -581,7 +581,7 @@ public class HealerHelper : DailyModuleBase
     #region Utils
 
     private static IPartyMember? FetchMember(uint id)
-        => DService.PartyList.FirstOrDefault(m => m.ObjectId == id);
+        => DService.PartyList.FirstOrDefault(m => m.EntityId == id);
 
     private static unsafe uint? FetchMemberIndex(uint id)
         => (uint)AgentHUD.Instance()->PartyMembers.ToArray()
@@ -787,16 +787,16 @@ public class HealerHelper : DailyModuleBase
             for (var idx = 0; idx < meleeOrder.Length; idx++)
             {
                 var member = partyList.FirstOrDefault(m => m.ClassJob.Value.NameEnglish == meleeOrder[idx]);
-                if (member is not null && meleeCandidateOrder.All(m => m.id != member.ObjectId))
-                    meleeCandidateOrder.Add((member.ObjectId, 5 - (idx * 0.1)));
+                if (member is not null && meleeCandidateOrder.All(m => m.id != member.EntityId))
+                    meleeCandidateOrder.Add((member.EntityId, 5 - (idx * 0.1)));
             }
 
             var rangeOrder = activateOrder.Range[sectionLabel];
             for (var idx = 0; idx < rangeOrder.Length; idx++)
             {
                 var member = partyList.FirstOrDefault(m => m.ClassJob.Value.NameEnglish == rangeOrder[idx]);
-                if (member is not null && rangeCandidateOrder.All(m => m.id != member.ObjectId))
-                    rangeCandidateOrder.Add((member.ObjectId, 5 - (idx * 0.1)));
+                if (member is not null && rangeCandidateOrder.All(m => m.id != member.EntityId))
+                    rangeCandidateOrder.Add((member.EntityId, 5 - (idx * 0.1)));
             }
 
             // fallback: select the first dps in party list
@@ -804,14 +804,14 @@ public class HealerHelper : DailyModuleBase
             {
                 var firstRange = partyList.FirstOrDefault(m => m.ClassJob.Value.Role is 3);
                 if (firstRange is not null)
-                    meleeCandidateOrder.Add((firstRange.ObjectId, 1));
+                    meleeCandidateOrder.Add((firstRange.EntityId, 1));
             }
 
             if (rangeCandidateOrder.Count is 0)
             {
                 var firstMelee = partyList.FirstOrDefault(m => m.ClassJob.Value.Role is 2);
                 if (firstMelee is not null)
-                    rangeCandidateOrder.Add((firstMelee.ObjectId, 1));
+                    rangeCandidateOrder.Add((firstMelee.EntityId, 1));
             }
 
             // sort candidates by priority
@@ -832,7 +832,7 @@ public class HealerHelper : DailyModuleBase
 
             foreach (var member in candidates)
             {
-                var candidate = DService.PartyList.FirstOrDefault(m => m.ObjectId == member.id);
+                var candidate = DService.PartyList.FirstOrDefault(m => m.EntityId == member.id);
                 if (candidate is null)
                     continue;
 
@@ -861,7 +861,7 @@ public class HealerHelper : DailyModuleBase
 
         public void OnPrePlayCard(ref ulong targetID, ref uint actionID)
         {
-            var partyMemberIds = DService.PartyList.Select(m => m.ObjectId).ToHashSet();
+            var partyMemberIds = DService.PartyList.Select(m => m.EntityId).ToHashSet();
             if (!partyMemberIds.Contains((uint)targetID))
             {
                 targetID = actionID switch
@@ -1001,7 +1001,7 @@ public class HealerHelper : DailyModuleBase
 
             foreach (var member in partyList)
             {
-                if (member.ObjectId == 0)
+                if (member.EntityId == 0)
                     continue;
 
                 var maxDistance = ActionManager.GetActionRange(actionID);
@@ -1014,7 +1014,7 @@ public class HealerHelper : DailyModuleBase
                 if (ratio < lowRatio && ratio <= config.NeedHealThreshold)
                 {
                     lowRatio   = ratio;
-                    needHealID = member.ObjectId;
+                    needHealID = member.EntityId;
                 }
             }
 
@@ -1035,11 +1035,11 @@ public class HealerHelper : DailyModuleBase
 
             // dispel in order (or reverse order)
             var sortedPartyList = reverse
-                                      ? partyList.OrderByDescending(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList()
-                                      : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
+                                      ? partyList.OrderByDescending(member => FetchMemberIndex(member.EntityId) ?? 0).ToList()
+                                      : partyList.OrderBy(member => FetchMemberIndex(member.EntityId) ?? 0).ToList();
             foreach (var member in sortedPartyList)
             {
-                if (member.ObjectId == 0)
+                if (member.EntityId == 0)
                     continue;
 
                 var maxDistance = ActionManager.GetActionRange(7568);
@@ -1051,7 +1051,7 @@ public class HealerHelper : DailyModuleBase
                 foreach (var status in member.Statuses)
                 {
                     if (PresetSheet.DispellableStatuses.ContainsKey(status.StatusId))
-                        return member.ObjectId;
+                        return member.EntityId;
                 }
             }
 
@@ -1064,11 +1064,11 @@ public class HealerHelper : DailyModuleBase
 
             // raise in order (or reverse order)
             var sortedPartyList = reverse
-                                      ? partyList.OrderByDescending(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList()
-                                      : partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
+                                      ? partyList.OrderByDescending(member => FetchMemberIndex(member.EntityId) ?? 0).ToList()
+                                      : partyList.OrderBy(member => FetchMemberIndex(member.EntityId) ?? 0).ToList();
             foreach (var member in sortedPartyList)
             {
-                if (member.ObjectId == 0)
+                if (member.EntityId == 0)
                     continue;
 
                 var maxDistance  = ActionManager.GetActionRange(actionID);
@@ -1076,7 +1076,7 @@ public class HealerHelper : DailyModuleBase
                 var memberRaised = member.Statuses.Any(x => x.StatusId is 148);
                 var memberDead   = member.GameObject.IsDead || member.CurrentHP <= 0;
                 if (memberDead && !memberRaised && withinRange)
-                    return member.ObjectId;
+                    return member.EntityId;
             }
 
             return UnspecificTargetID;
@@ -1109,12 +1109,12 @@ public class HealerHelper : DailyModuleBase
 
                         case OverhealTarget.FirstTank:
                             var partyList       = DService.PartyList;
-                            var sortedPartyList = partyList.OrderBy(member => FetchMemberIndex(member.ObjectId) ?? 0).ToList();
+                            var sortedPartyList = partyList.OrderBy(member => FetchMemberIndex(member.EntityId) ?? 0).ToList();
                             var firstTank       = sortedPartyList.FirstOrDefault(m => m.ClassJob.Value.Role == 1);
                             var maxDistance     = ActionManager.GetActionRange(actionID);
                             targetID = firstTank is not null &&
                                        Vector3.DistanceSquared(firstTank.Position, DService.ObjectTable.LocalPlayer.Position) <= maxDistance * maxDistance
-                                           ? firstTank.ObjectId
+                                           ? firstTank.EntityId
                                            : LocalPlayerState.EntityID;
                             break;
 

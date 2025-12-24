@@ -1,18 +1,13 @@
-using DailyRoutines.Abstracts;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Hooking;
-using Dalamud.Interface;
-using FFXIVClientStructs.FFXIV.Client.System.String;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.Shell;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using DailyRoutines.Abstracts;
+using Lumina.Text.ReadOnly;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BetterCommandInput : DailyModuleBase
+public partial class BetterCommandInput : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,25 +15,20 @@ public unsafe class BetterCommandInput : DailyModuleBase
         Description = GetLoc("BetterCommandInputDescription"),
         Category    = ModuleCategories.System,
     };
-
-    private static readonly CompSig                          ProcessSendedChatSig = new("E8 ?? ?? ?? ?? FE 87 ?? ?? ?? ?? C7 87 ?? ?? ?? ?? ?? ?? ?? ??");
-    private delegate        void                             ProcessSendedChatDelegate(ShellCommandModule* module, Utf8String* message, UIModule* uiModule);
-    private static          Hook<ProcessSendedChatDelegate>? ProcessSendedChatHook;
     
-    private static DateTime lastChatTime = DateTime.MinValue;
-
-    private static ShellCommandModule* shellCommandModule;
-
+    private static DateTime LastChatTime = DateTime.MinValue;
+    
     private static Config ModuleConfig = null!;
 
     protected override void Init()
     {
-        ModuleConfig = new Config().Load(this);
-        ProcessSendedChatHook ??=
-            DService.Hook.HookFromSignature<ProcessSendedChatDelegate>(ProcessSendedChatSig.Get(), ProcessSendedChatDetour);
-        
-        ProcessSendedChatHook.Enable();
+        ModuleConfig = LoadConfig<Config>() ?? new();
+
+        ChatManager.RegPreExecuteCommandInner(OnPreExecuteCommandInner);
     }
+
+    protected override void Uninit() => 
+        ChatManager.Unreg(OnPreExecuteCommandInner);
 
     protected override void ConfigUI()
     {
@@ -61,8 +51,9 @@ public unsafe class BetterCommandInput : DailyModuleBase
 
         for (var i = 0; i < ModuleConfig.Whitelist.Count; i++)
         {
-            var whiteListCommand = ModuleConfig.Whitelist[i];
-            var input = whiteListCommand;
+            var       whiteListCommand = ModuleConfig.Whitelist[i];
+            var       input            = whiteListCommand;
+
             using var id = ImRaii.PushId($"{whiteListCommand}_{i}_Command");
 
             ImGui.AlignTextToFramePadding();
@@ -82,37 +73,26 @@ public unsafe class BetterCommandInput : DailyModuleBase
             }
         }
     }
-
-    private static void ProcessSendedChatDetour(ShellCommandModule* module, Utf8String* message, UIModule* uiModule)
+    
+    private static void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
-        shellCommandModule = module;
+        var messageDecode          = message.ToString();
+        var isMatchRegex           = CommandRegex().IsMatch(messageDecode);
+        var isStartWithSlash       = messageDecode.StartsWith('/') || messageDecode.StartsWith('／');
+        var shouldMessageBeHandled = ModuleConfig.IsAvoidingSpace ? isMatchRegex : isStartWithSlash;
         
-        var messageDecode = message->ExtractText();
-        const string regex = @"^[ 　]*[/／]";
-        var isMatchRegex = Regex.IsMatch(messageDecode, regex);
-        var isStartWithSlash = messageDecode.StartsWith('/') || messageDecode.StartsWith('／');
-        var shouldMessageBeHandled = ModuleConfig.IsAvoidingSpace? isMatchRegex : isStartWithSlash;
         if (string.IsNullOrWhiteSpace(messageDecode) || !shouldMessageBeHandled)
-        {
-            ProcessSendedChatHook.Original(module, message, uiModule);
             return;
-        }
 
         if (HandleSlashCommand(messageDecode, out var handledMessage))
-        {
-            var stringFinal = Utf8String.FromSequence(new SeStringBuilder().Append(handledMessage).Build().Encode());
-            ProcessSendedChatHook.Original(module, stringFinal, uiModule);
-            stringFinal->Dtor(true);
-            return;
-        }
-        
-        ProcessSendedChatHook.Original(module, message, uiModule);
+            message = new(handledMessage);
     }
-
+    
     private static bool HandleSlashCommand(string command, out string handledMessage)
     {
         handledMessage = string.Empty;
-        if (shellCommandModule == null || !IsValid(command)) return false;
+        
+        if (!IsValid(command)) return false;
         if (ModuleConfig.IsAvoidingSpace)
             command = command.TrimStart(' ', '　');
 
@@ -125,9 +105,8 @@ public unsafe class BetterCommandInput : DailyModuleBase
                 if (lower.Equals(whiteListCommand, StringComparison.CurrentCultureIgnoreCase)) 
                     lower = whiteListCommand;
             }
-            var str = Utf8String.FromString(lower);
-            ProcessSendedChatHook.Original(shellCommandModule, str, UIModule.Instance());
-            str->Dtor(true);
+            
+            handledMessage = lower;
         }
         else
         {
@@ -137,18 +116,17 @@ public unsafe class BetterCommandInput : DailyModuleBase
                 if (lower.Equals(whiteListCommand, StringComparison.CurrentCultureIgnoreCase)) 
                     lower = whiteListCommand;
             }
-            var str = Utf8String.FromString($"{lower}{command[spaceIndex..]}");
-            ProcessSendedChatHook.Original(shellCommandModule, str, UIModule.Instance());
-            str->Dtor(true);
+            
+            handledMessage = $"{lower}{command[spaceIndex..]}";
         }
 
-        lastChatTime = DateTime.Now;
+        LastChatTime = DateTime.Now;
         return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsValid(ReadOnlySpan<char> chars) =>
-        (DateTime.Now - lastChatTime).TotalMilliseconds >= 500f && 
+        (DateTime.Now - LastChatTime).TotalMilliseconds >= 500f && 
         (ContainsUppercase(chars) || ContainsFullWidth(chars) || ContainsSpace(chars));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -189,7 +167,10 @@ public unsafe class BetterCommandInput : DailyModuleBase
 
     public class Config : ModuleConfiguration
     {
-        public bool IsAvoidingSpace = true;
-        public List<string> Whitelist = [];
+        public bool         IsAvoidingSpace = true;
+        public List<string> Whitelist       = [];
     }
+
+    [GeneratedRegex("^[ 　]*[/／]")]
+    private static partial Regex CommandRegex();
 }

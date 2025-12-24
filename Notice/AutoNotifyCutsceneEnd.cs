@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -10,14 +9,16 @@ using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
+public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyCutSceneEndTitle"),
-        Description = GetLoc("AutoNotifyCutSceneEndDescription"),
+        Title       = GetLoc("AutoNotifyCutsceneEndTitle"),
+        Description = GetLoc("AutoNotifyCutsceneEndDescription"),
         Category    = ModuleCategories.Notice,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static Config ModuleConfig = null!;
     
@@ -145,11 +146,11 @@ public unsafe class AutoNotifyCutSceneEnd : DailyModuleBase
         // 小于四秒 → 不播报
         if (elapsedTime < TimeSpan.FromSeconds(4)) return;
         
-        var message = $"{GetLoc("AutoNotifyCutSceneEnd-NotificationMessage")}";
+        var message = $"{GetLoc("AutoNotifyCutsceneEnd-NotificationMessage")}";
         if (ModuleConfig.SendChat) 
-            Chat($"{message} {GetLoc("AutoNotifyCutSceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
+            Chat($"{message} {GetLoc("AutoNotifyCutsceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
         if (ModuleConfig.SendNotification) 
-            NotificationInfo($"{message} {GetLoc("AutoNotifyCutSceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
+            NotificationInfo($"{message} {GetLoc("AutoNotifyCutsceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
         if (ModuleConfig.SendTTS) 
             Speak(message);
     }

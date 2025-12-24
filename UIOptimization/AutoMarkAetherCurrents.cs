@@ -30,10 +30,10 @@ public unsafe class AutoMarkAetherCurrents : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
 
     private static bool IsEligibleForTeleporting =>
-        !GameState.IsCN || AuthState.IsPremium;
+        !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium;
 
     private static TaskHelper? TaskHelperMove;
 
@@ -432,9 +432,9 @@ public unsafe class AutoMarkAetherCurrents : DailyModuleBase
     {
         public static Dictionary<uint, uint> EObjDataSheet { get; } =
             LuminaGetter.Get<EObj>()
-                        .Where(x => x.Data != 0)
-                        .DistinctBy(x => x.Data)
-                        .ToDictionary(x => x.Data, x => x.RowId);
+                        .Where(x => x.Data.RowId != 0)
+                        .DistinctBy(x => x.Data.RowId)
+                        .ToDictionary(x => x.Data.RowId, x => x.RowId);
 
         public static Dictionary<uint, Vector3> LevelSheet { get; } =
             LuminaGetter.Get<Level>()
@@ -557,7 +557,7 @@ public unsafe class AutoMarkAetherCurrents : DailyModuleBase
             if (ImGui.MenuItem($"    {GetLoc("AutoMarkAetherCurrents-SendLocation")}"))
             {
                 AgentMap.Instance()->SetFlagMapMarker(RealTerritory.RowId, RealTerritory.Map.RowId, Position);
-                ChatHelper.SendMessage("<flag>");
+                ChatManager.SendMessage("<flag>");
             }
 
             return;

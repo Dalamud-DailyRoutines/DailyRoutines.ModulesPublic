@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace DailyRoutines.ModulesPublic;
@@ -54,10 +53,10 @@ public class AutoTankStance : DailyModuleBase
         TaskHelper.Abort();
         
         if (!IsValidPVEDuty()) return;
-        
-        // TODO: 表数据定义歪了, 所以
+
         if (ModuleConfig.OnlyAutoStanceWhenOneTank && 
-            GameState.ContentFinderConditionData.ContentMemberType.Value.HealersPerParty != 1) return;
+            GameState.ContentFinderConditionData.ContentMemberType.Value.TanksPerParty != 1) 
+            return;
         
         TaskHelper.DelayNext(1000);
         TaskHelper.Enqueue(CheckCurrentJob);

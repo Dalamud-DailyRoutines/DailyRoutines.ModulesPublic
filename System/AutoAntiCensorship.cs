@@ -6,13 +6,15 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
-using Dalamud.Interface;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Component.Shell;
+using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using TinyPinyin;
 
 namespace DailyRoutines.ModulesPublic;
@@ -26,32 +28,33 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         Category    = ModuleCategories.System,
     };
 
-    public override ModulePermission Permission { get; } = new() { CNOnly = true };
+    public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
 
     private static readonly CompSig GetFilteredUtf8StringSig =
         new("48 89 74 24 ?? 57 48 83 EC ?? 48 83 79 ?? ?? 48 8B FA 48 8B F1 0F 84 ?? ?? ?? ?? 48 89 5C 24");
-    private delegate void GetFilteredUtf8StringDelegate(nint vulgarInstance, Utf8String* str);
-    private static GetFilteredUtf8StringDelegate? GetFilteredUtf8String;
+    private delegate void                           GetFilteredUtf8StringDelegate(nint vulgarInstance, Utf8String* str);
+    private static   GetFilteredUtf8StringDelegate? GetFilteredUtf8String;
 
-    private static readonly CompSig Utf8StringCopySig = new("E8 ?? ?? ?? ?? 48 8D 4C 24 ?? E8 ?? ?? ?? ?? 48 85 ED 74");
-    private delegate nint Utf8StringCopyDelegate(Utf8String* target, Utf8String* source);
-    private static Utf8StringCopyDelegate? Utf8StringCopy;
+    private static readonly CompSig VulgarInstanceOffsetBaseSig = new("48 8B 81 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B D3");
+    private static          nint    VulgarInstanceOffset;
+    
+    private static readonly CompSig PartyFinderOriginalMessageOffsetBaseSig = new("48 8D 99 ?? ?? ?? ?? 48 8B F9 48 8B CB E8 ?? ?? ?? ?? 48 8B 0D");
+    private static          nint    PartyFinderOriginalMessageOffset;
+
+    private static readonly CompSig                 Utf8StringCopySig = new("E8 ?? ?? ?? ?? 48 8D 4C 24 ?? E8 ?? ?? ?? ?? 48 85 ED 74");
+    private delegate        nint                    Utf8StringCopyDelegate(Utf8String* target, Utf8String* source);
+    private static          Utf8StringCopyDelegate? Utf8StringCopy;
 
     private static readonly CompSig LocalMessageDisplaySig = new("40 53 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 8B 0D");
     private delegate        nint LocalMessageDisplayDelegate(nint a1, Utf8String* source);
     private static          Hook<LocalMessageDisplayDelegate>? LocalMessageDisplayHook;
-
-    private static readonly CompSig ProcessSendedChatSig =
-        new("E8 ?? ?? ?? ?? FE 87 ?? ?? ?? ?? C7 87 ?? ?? ?? ?? ?? ?? ?? ??");
-    private delegate void ProcessSendedChatDelegate(ShellCommandModule* commandModule, Utf8String* message, UIModule* module);
-    private static Hook<ProcessSendedChatDelegate>? ProcessSendedChatHook;
 
     private static readonly CompSig PartyFinderMessageDisplaySig =
         new("48 89 5C 24 ?? 57 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B F9 48 8B CB E8");
     private delegate nint PartyFinderMessageDisplayDelegate(nint a1, Utf8String* source);
     private static Hook<PartyFinderMessageDisplayDelegate>? PartyFinderMessageDisplayHook;
 
-    private static readonly CompSig LookingForGroupConditionReceiveEventSig = new("48 89 5C 24 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ?? ?? ?? ?? B8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B D9");
+    private static readonly CompSig LookingForGroupConditionReceiveEventSig = new("E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 45 8B C2 48 8B D6 48 8B CB E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 45 8B C2 48 8B D6 48 8B CB E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 48 8B CE");
     private delegate byte LookingForGroupConditionReceiveEventDelegate(nint a1, AtkValue* a2);
     private static Hook<LookingForGroupConditionReceiveEventDelegate>? LookingForGroupConditionReceiveEventHook;
 
@@ -61,14 +64,23 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     {
         ModuleConfig ??= LoadConfig<Config>() ?? new();
         
+        // mov rax, [rcx + XXXX], 因为是四字节所以用 uint
+        if (VulgarInstanceOffset == nint.Zero)
+            VulgarInstanceOffset = VulgarInstanceOffsetBaseSig.GetStatic();
+        Debug($"[{nameof(AutoAntiCensorship)}] 屏蔽词系统偏移量: {VulgarInstanceOffset}");
+
+        // lea rbx, [rcx+XXXX], 因为是四字节所以用 uint
+        if (PartyFinderOriginalMessageOffset == nint.Zero)
+            PartyFinderOriginalMessageOffset = PartyFinderOriginalMessageOffsetBaseSig.GetStatic();
+        Debug($"[{nameof(AutoAntiCensorship)}] 招募信息原始字符串偏移量: {PartyFinderOriginalMessageOffset}");
+        
         GetFilteredUtf8String ??= GetFilteredUtf8StringSig.GetDelegate<GetFilteredUtf8StringDelegate>();
         Utf8StringCopy        ??= Utf8StringCopySig.GetDelegate<Utf8StringCopyDelegate>();
         
         LocalMessageDisplayHook ??= LocalMessageDisplaySig.GetHook<LocalMessageDisplayDelegate>(LocalMessageDisplayDetour);
         LocalMessageDisplayHook.Enable();
-        
-        ProcessSendedChatHook ??= ProcessSendedChatSig.GetHook<ProcessSendedChatDelegate>(ProcessSendedChatDetour);
-        ProcessSendedChatHook.Enable();
+
+        ChatManager.RegPreExecuteCommandInner(OnPreExecuteCommandInner);
         
         PartyFinderMessageDisplayHook ??= PartyFinderMessageDisplaySig.GetHook<PartyFinderMessageDisplayDelegate>(PartyFinderMessageDisplayDetour);
         PartyFinderMessageDisplayHook.Enable();
@@ -78,84 +90,80 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         LookingForGroupConditionReceiveEventHook.Enable();
     }
 
+    protected override void Uninit() => 
+        ChatManager.Unreg(OnPreExecuteCommandInner);
+
     protected override void ConfigUI()
     {
-        using (ImRaii.Group())
-        {
-            ImGui.AlignTextToFramePadding();
-            ImGui.Text("屏蔽词处理分隔符:");
-            
-            ImGui.AlignTextToFramePadding();
-            ImGui.Text("屏蔽词显示高亮颜色:");
-        }
+        DrawDisplayCensoredText();
         
-        ImGui.SameLine();
-        using (ImRaii.Group())
-        {
-            var seperator = ModuleConfig.Seperator.ToString();
-            ImGui.SetNextItemWidth(150f * GlobalFontScale);
-            if (ImGui.InputText("###SeperatorInput", ref seperator, 1))
-            {
-                seperator = seperator.Trim();
-                
-                // 我觉得真有人会输入 * 号来看看会发生什么
-                if (string.IsNullOrWhiteSpace(seperator) || seperator == "*")
-                    seperator = ".";
-                
-                ModuleConfig.Seperator = seperator[0];
-                ModuleConfig.Save(this);
-            }
+        ImGui.NewLine();
+
+        DrawHandleCensoredText();
+    }
+
+    private void DrawDisplayCensoredText()
+    {
+        if (ImGui.Checkbox("显示屏蔽文本", ref ModuleConfig.DisplayCensoredText))
+            SaveConfig(ModuleConfig);
+        ImGuiOm.HelpMarker("接收到含屏蔽词的文本时, 自动将其还原为原始文本, 并高亮显示其中包含的屏蔽文本");
+        
+        if (!ModuleConfig.DisplayCensoredText) return;
+        
+        using var indent = ImRaii.PushIndent();
             
-            if (!LuminaGetter.TryGetRow<UIColor>(ModuleConfig.HighlightColor, out var unitColorRow))
+        ImGui.SetNextItemWidth(150f * GlobalFontScale);
+        ImGui.InputInt("高亮颜色###HighlightColorInput", ref ModuleConfig.HighlightColor, 1, 1);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            SaveConfig(ModuleConfig);
+        ImGuiOm.TooltipHover("设置为 -1 以禁用高亮");
+        
+        if (ModuleConfig.HighlightColor >= 0)
+        {
+            if(!LuminaGetter.TryGetRow<UIColor>((uint)ModuleConfig.HighlightColor, out var unitColorRow))
             {
                 ModuleConfig.HighlightColor = 17;
                 ModuleConfig.Save(this);
                 return;
             }
             
-            ImGui.SetNextItemWidth(150f * GlobalFontScale);
-            if (ImGui.InputUInt("###HighlightColorInput", ref ModuleConfig.HighlightColor, 1, 1))
-                SaveConfig(ModuleConfig);
-            
             ImGui.SameLine();
             ImGui.ColorButton("###HighlightColorPreview", UIColorToVector4Color(unitColorRow.Dark));
         }
+
+        ImGui.SameLine(0, 8f * GlobalFontScale);
+        if (ImGui.Button($"{FontAwesomeIcon.Palette.ToIconChar()} 参考颜色表"))
+            ChatManager.SendCommand("/xldata uicolor");
+    }
+    
+    private void DrawHandleCensoredText()
+    {
+        if (ImGui.Checkbox("处理屏蔽文本", ref ModuleConfig.HandleCensoredText))
+            SaveConfig(ModuleConfig);
+        ImGuiOm.HelpMarker("在发送聊天消息 / 编辑招募留言时, 自动检测其中可能包含的屏蔽文本, 并将其自动处理为未被屏蔽的文本");
         
-        var sheet = LuminaGetter.Get<UIColor>();
-        using (var node = ImRaii.TreeNode("参考颜色表"))
+        if (!ModuleConfig.HandleCensoredText) return;
+        
+        using var indent = ImRaii.PushIndent();
+        
+        var seperator = ModuleConfig.Seperator.ToString();
+        ImGui.SetNextItemWidth(150f * GlobalFontScale);
+        if (ImGui.InputText($"分隔符###SeperatorInput", ref seperator, 4))
         {
-            if (node)
-            {
-                using var table = ImRaii.Table("###ColorTable", 6);
-                if (!table) return;
+            seperator = seperator.Trim();
                 
-                var counter = 0;
-                foreach (var row in sheet)
-                {
-                    if (row.RowId == 0) continue;
-                    if (row.Dark  == 0) continue;
-
-                    if (counter % 5 == 0) 
-                        ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
-                            
-                    counter++;
-
-                    using (ImRaii.Group())
-                    {
-                        ImGui.ColorButton($"###ColorButtonTable{row.RowId}", UIColorToVector4Color(row.Dark));
-                                
-                        ImGui.SameLine();
-                        ImGui.Text($"{row.RowId}");
-                    }
-                }
-            }
+            // 我觉得真有人会输入 * 号来看看会发生什么
+            if (string.IsNullOrWhiteSpace(seperator) || seperator == "*")
+                seperator = ".";
+                
+            ModuleConfig.Seperator = seperator[0];
+            ModuleConfig.Save(this);
         }
         
         ImGui.NewLine();
         
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "自定义替换规则:");
+        ImGui.Text("自定义替换规则");
         
         ImGui.SameLine();
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, "添加"))
@@ -171,10 +179,11 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
             using var table = ImRaii.Table("###CustomReplacementsTable", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg);
             if (table)
             {
-                ImGui.TableSetupColumn("原词",  ImGuiTableColumnFlags.WidthStretch, 0.3f);
-                ImGui.TableSetupColumn("替换词", ImGuiTableColumnFlags.WidthStretch, 0.3f);
-                ImGui.TableSetupColumn("状态",  ImGuiTableColumnFlags.WidthStretch, 0.2f);
-                ImGui.TableSetupColumn("操作",  ImGuiTableColumnFlags.WidthFixed,   80f * GlobalFontScale);
+                ImGui.TableSetupColumn("原始文本", ImGuiTableColumnFlags.WidthStretch, 0.3f);
+                ImGui.TableSetupColumn("替换文本", ImGuiTableColumnFlags.WidthStretch, 0.3f);
+                ImGui.TableSetupColumn("状态",   ImGuiTableColumnFlags.WidthStretch, 0.2f);
+                ImGui.TableSetupColumn("操作",   ImGuiTableColumnFlags.WidthFixed,   80f * GlobalFontScale);
+                
                 ImGui.TableHeadersRow();
 
                 var counter = 0;
@@ -214,7 +223,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
                             ImGui.TextColored(KnownColor.GreenYellow.ToVector4(), "有效");
                             break;
                         case false:
-                            ImGui.TextColored(KnownColor.Red.ToVector4(), "存在屏蔽词");
+                            ImGui.TextColored(KnownColor.Red.ToVector4(), "无效");
                             ImGuiOm.TooltipHover($"替换词包含屏蔽内容:\n{replacement}: {GetFilteredString(replacement)}");
                             break;
                         default:
@@ -233,9 +242,39 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         }
     }
     
+    // 消息发送
+    private static void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
+    {
+        if (!ModuleConfig.HandleCensoredText) return;
+        
+        var seString = message.ToDalamudString();
+        // 信息为空或者为指令
+        if (string.IsNullOrWhiteSpace(seString.TextValue) || seString.TextValue.StartsWith('/'))
+            return;
+        
+        var builder = new SeStringBuilder();
+        foreach (var payload in seString.Payloads)
+        {
+            // 不处理非文本
+            if (payload is not TextPayload textPayload)
+            {
+                builder.Add(payload);
+                continue;
+            }
+            
+            BypassCensorshipByTextPayload(ref textPayload);
+            builder.Add(textPayload);
+        }
+
+        message = new ReadOnlySeString(builder.Encode());
+    }
+    
     // 编辑招募
     private static byte LookingForGroupConditionReceiveEventDetour(nint a1, AtkValue* values)
     {
+        if (!ModuleConfig.HandleCensoredText) 
+            return InvokeOriginal();
+        
         try
         {
             if (values == null || values->Int != 15)
@@ -265,26 +304,31 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
 
             var handledText = builderHandled.Build();
 
-            if (handledText.TextValue != origText.TextValue)
+            if (handledText.TextValue == origText.TextValue)
+                return InvokeOriginal();
+            
+            var builderHighlight = new SeStringBuilder();
+            foreach (var payload in origText.Payloads)
             {
-                var builderHighlight = new SeStringBuilder();
-                foreach (var payload in origText.Payloads)
+                // 不处理非文本
+                if (payload is not TextPayload textPayload)
                 {
-                    // 不处理非文本
-                    if (payload is not TextPayload textPayload)
-                    {
-                        builderHighlight.Add(payload);
-                        continue;
-                    }
-
-                    builderHighlight.Append(HighlightCensorship(textPayload.Text));
+                    builderHighlight.Add(payload);
+                    continue;
                 }
 
-                var highlightedText = builderHighlight.Build();
-
-                values[1].SetString(*(byte**)Utf8String.FromSequence(handledText.Encode()));
-                Chat(new SeStringBuilder().Append("已对招募留言进行反屏蔽处理:\n").Append(highlightedText).Append("\n↓\n").Append(handledText).Build());
+                builderHighlight.Append(HighlightCensorship(textPayload.Text));
             }
+
+            var highlightedText = builderHighlight.Build();
+
+            values[1].SetManagedString(handledText.EncodeWithNullTerminator());
+
+            var textInputComponent = (AtkComponentTextInput*)LookingForGroupCondition->GetComponentByNodeId(22);
+            if (textInputComponent != null)
+                textInputComponent->SetText(handledText.EncodeWithNullTerminator());
+            
+            Chat(new SeStringBuilder().Append("已对招募留言进行反屏蔽处理:\n").Append(highlightedText).Append("\n↓\n").Append(handledText).Build());
         }
         catch
         {
@@ -296,41 +340,13 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
         byte InvokeOriginal() => LookingForGroupConditionReceiveEventHook.Original(a1, values);
     }
 
-    // 消息发送
-    private static void ProcessSendedChatDetour(ShellCommandModule* commandModule, Utf8String* message, UIModule* module)
-    {
-        var seString = SeString.Parse(*(byte**)message);
-        // 信息为空或者为指令
-        if (string.IsNullOrWhiteSpace(seString.TextValue) || seString.TextValue.StartsWith('/'))
-        {
-            InvokeOriginal();
-            return;
-        }
-        
-        var builder = new SeStringBuilder();
-        foreach (var payload in seString.Payloads)
-        {
-            // 不处理非文本
-            if (payload is not TextPayload textPayload)
-            {
-                builder.Add(payload);
-                continue;
-            }
-            
-            BypassCensorshipByTextPayload(ref textPayload);
-            builder.Add(textPayload);
-        }
-        
-        message->SetString(builder.Build().Encode());
-        InvokeOriginal();
-
-        void InvokeOriginal() => ProcessSendedChatHook.Original(commandModule, message, module);
-    }
-
     // 聊天信息显示
     private static nint LocalMessageDisplayDetour(nint a1, Utf8String* source)
     {
-        var seString = SeString.Parse(*(byte**)source);
+        if (!ModuleConfig.DisplayCensoredText) 
+            return LocalMessageDisplayHook.Original(a1, source);
+        
+        var seString = SeString.Parse(source->AsSpan());
         var builder  = new SeStringBuilder();
         foreach (var payload in seString.Payloads)
         {
@@ -344,16 +360,18 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
             var result = HighlightCensorship(textPayload.Text);
             builder.Append(result);
         }
-        
-        source->SetString(builder.Build().Encode());
-        
+
+        source->SetString(new ReadOnlySeStringSpan(builder.Build().Encode()));
         return Utf8StringCopy((Utf8String*)(a1 + 1096), source);
     }
 
     // 招募信息显示
     private static nint PartyFinderMessageDisplayDetour(nint a1, Utf8String* source)
     {
-        var seString = SeString.Parse(*(byte**)source);
+        if (!ModuleConfig.DisplayCensoredText) 
+            return PartyFinderMessageDisplayHook.Original(a1, source);
+        
+        var seString = SeString.Parse(source->AsSpan());
         var builder  = new SeStringBuilder();
         foreach (var payload in seString.Payloads)
         {
@@ -368,9 +386,8 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
             builder.Append(result);
         }
         
-        source->SetString(builder.Build().Encode());
-        
-        return Utf8StringCopy((Utf8String*)(a1 + 11408), source);
+        source->SetString(builder.Build().EncodeWithNullTerminator());
+        return Utf8StringCopy((Utf8String*)(a1 + PartyFinderOriginalMessageOffset), source);
     }
     
     private static void BypassCensorshipByTextPayload(ref TextPayload payload)
@@ -463,7 +480,10 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     
     public static SeString HighlightCensorship(string originalText)
     {
-        if (string.IsNullOrEmpty(originalText)) return originalText;
+        if (ModuleConfig.HighlightColor < 0) 
+            return originalText;
+        if (string.IsNullOrEmpty(originalText)) 
+            return originalText;
 
         var filtered = GetFilteredString(originalText);
         
@@ -498,8 +518,6 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
                     result.Add(new UIForegroundPayload((ushort)ModuleConfig.HighlightColor));
                     insideCensored = true;
                 }
-                
-                result.Append(originalText[i].ToString());
             }
             else
             {
@@ -509,9 +527,9 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
                     result.Add(UIForegroundPayload.UIForegroundOff);
                     insideCensored = false;
                 }
-                
-                result.Append(originalText[i].ToString());
             }
+
+            result.Append(originalText[i].ToString());
         }
         
         // 字符串结束了仍然在屏蔽词里, 结束染色
@@ -524,7 +542,7 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
     private static string GetFilteredString(string str)
     {
         var utf8String = Utf8String.FromString(str);
-        GetFilteredUtf8String(Marshal.ReadIntPtr((nint)Framework.Instance() + 11080), utf8String);
+        GetFilteredUtf8String(Marshal.ReadIntPtr((nint)Framework.Instance() + VulgarInstanceOffset), utf8String);
         var result = utf8String->ExtractText();
 
         utf8String->Dtor(true);
@@ -562,8 +580,11 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
+        public bool DisplayCensoredText = true;
+        public bool HandleCensoredText  = true;
+        
         public char Seperator = '.';
-        public uint HighlightColor   = 17;
+        public int HighlightColor   = 17;
         public Dictionary<string, string> CustomReplacements = new();
     }
 }

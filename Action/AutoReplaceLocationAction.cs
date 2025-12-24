@@ -59,7 +59,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
         ModuleConfig = LoadConfig<Config>() ?? new();
 
         UseActionManager.RegPreUseActionLocation(OnPreUseActionLocation);
-        ExecuteCommandManager.Register(OnPreExecuteCommandComplexLocation);
+        ExecuteCommandManager.RegPreComplextLocation(OnPreExecuteCommandComplexLocation);
 
         ParseActionCommandArgHook ??= ParseActionCommandArgSig.GetHook<ParseActionCommandArgDelegate>(ParseActionCommandArgDetour);
         ParseActionCommandArgHook.Enable();
@@ -417,7 +417,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
     protected override void Uninit()
     {
         UseActionManager.Unreg(OnPreUseActionLocation);
-        ExecuteCommandManager.Unregister(OnPreExecuteCommandComplexLocation);
+        ExecuteCommandManager.Unreg(OnPreExecuteCommandComplexLocation);
     }
 
     private class Config : ModuleConfiguration

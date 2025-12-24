@@ -129,10 +129,10 @@ public class AutoTimedLogout : DailyModuleBase
         switch (CurrentOperation)
         {
             case OperationMode.Logout:
-                ChatHelper.SendMessage("/logout");
+                ChatManager.SendMessage("/logout");
                 break;
             case OperationMode.ShutdownGame:
-                ChatHelper.SendMessage("/shutdown");
+                ChatManager.SendMessage("/shutdown");
                 break;
             case OperationMode.ShutdownPC:
                 try

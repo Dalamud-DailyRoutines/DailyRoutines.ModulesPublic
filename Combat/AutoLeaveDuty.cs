@@ -24,6 +24,8 @@ public class AutoLeaveDuty : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new();
+        
+        LogMessageManager.Register(OnPreReceiveLogmessage);
 
         DService.DutyState.DutyCompleted      += OnDutyComplete;
         DService.ClientState.TerritoryChanged += OnZoneChanged;
@@ -31,83 +33,77 @@ public class AutoLeaveDuty : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoLeaveDuty-ForceToLeave")}:");
-
-        ImGui.SameLine();
-        if (ImGui.Checkbox("###ForceToLeave", ref ModuleConfig.ForceToLeave))
+        if (ImGui.Checkbox($"{GetLoc("AutoLeaveDuty-ForceToLeave")}###ForceToLeave", ref ModuleConfig.ForceToLeave))
             SaveConfig(ModuleConfig);
-
-        if (ModuleConfig.ForceToLeave)
-        {
-            ImGui.SameLine();
-            ImGui.TextColored(KnownColor.RoyalBlue.ToVector4(), GetLoc("AutoLeaveDuty-Note"));
-        }
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Delay")}:");
-
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(100f);
-        if (ImGui.InputInt("ms###DelayInput", ref ModuleConfig.Delay))
+        
+        ImGui.SetNextItemWidth(100f * GlobalFontScale);
+        if (ImGui.InputInt($"{GetLoc("Delay")}###DelayInput", ref ModuleConfig.Delay))
             ModuleConfig.Delay = Math.Max(0, ModuleConfig.Delay);
         if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);
 
-        ImGui.Spacing();
+        ImGui.NewLine();
 
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoLeaveDuty-BlacklistContents")}:");
 
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(250f * GlobalFontScale);
-        if (ContentSelectCombo(ref ModuleConfig.BlacklistContents, ref ContentSearchInput))
-            SaveConfig(ModuleConfig);
-
-        ImGui.Spacing();
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoLeaveDuty-NoLeaveHighEndDuties")}:");
-
-        ImGui.SameLine();
-        if (ImGui.Checkbox("###NoLeaveHighEndDuties", ref ModuleConfig.NoLeaveHighEndDuties))
-            SaveConfig(ModuleConfig);
-
-        ImGuiOm.HelpMarker(GetLoc("AutoLeaveDuty-NoLeaveHighEndDutiesHelp"));
+        using (ImRaii.PushIndent())
+        {
+            ImGui.SetNextItemWidth(250f * GlobalFontScale);
+            if (ContentSelectCombo(ref ModuleConfig.BlacklistContents, ref ContentSearchInput))
+                SaveConfig(ModuleConfig);
+            
+            if (ImGui.Checkbox($"{GetLoc("AutoLeaveDuty-NoLeaveHighEndDuties")}###NoLeaveHighEndDuties", ref ModuleConfig.NoLeaveHighEndDuties))
+                SaveConfig(ModuleConfig);
+            ImGuiOm.HelpMarker(GetLoc("AutoLeaveDuty-NoLeaveHighEndDutiesHelp"));
+        }
     }
 
     private void OnDutyComplete(object? sender, ushort zone)
     {
-        if (ModuleConfig.BlacklistContents.Contains(zone)) return;
+        if (ModuleConfig.BlacklistContents.Contains(zone)) 
+            return;
+        
         if (ModuleConfig.NoLeaveHighEndDuties &&
             LuminaGetter.Get<ContentFinderCondition>()
-                       .FirstOrDefault(x => x.HighEndDuty && x.TerritoryType.RowId == zone).RowId != 0) return;
+                       .FirstOrDefault(x => x.HighEndDuty && x.TerritoryType.RowId == zone).RowId != 0) 
+            return;
 
         if (ModuleConfig.Delay > 0)
             TaskHelper.DelayNext(ModuleConfig.Delay);
 
-        TaskHelper.Enqueue(() =>
+        if (!ModuleConfig.ForceToLeave)
         {
-            if (!ModuleConfig.ForceToLeave && DService.Condition[ConditionFlag.InCombat]) return false;
-
-            ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.LeaveDuty);
-            return true;
-        });
+            TaskHelper.Enqueue(() => !DService.Condition[ConditionFlag.InCombat]);
+            TaskHelper.Enqueue(() => ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.LeaveDuty));
+        }
+        else
+            TaskHelper.Enqueue(() => ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.LeaveDuty, 1U));
     }
     
-    private void OnZoneChanged(ushort obj) => TaskHelper.Abort();
+    private void OnZoneChanged(ushort obj) => 
+        TaskHelper.Abort();
+    
+    // 拦截一下那个信息
+    private static void OnPreReceiveLogmessage(ref bool isPrevented, ref uint logMessageID)
+    {
+        if (logMessageID != 914) return;
+        isPrevented = true;
+    }
 
     protected override void Uninit()
     {
         DService.DutyState.DutyCompleted      -= OnDutyComplete;
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
+        
+        LogMessageManager.Unregister(OnPreReceiveLogmessage);
     }
 
     private class Config : ModuleConfiguration
     {
-        public HashSet<uint> BlacklistContents = [];
-        public bool NoLeaveHighEndDuties = true;
-        public bool ForceToLeave;
-        public int Delay;
+        public HashSet<uint> BlacklistContents    = [];
+        public bool          NoLeaveHighEndDuties = true;
+        public bool          ForceToLeave;
+        public int           Delay;
     }
 }

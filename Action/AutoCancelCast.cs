@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
@@ -18,6 +17,8 @@ public unsafe class AutoCancelCast : DailyModuleBase
         Description = GetLoc("AutoCancelCastDescription"),
         Category    = ModuleCategories.Action,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly HashSet<ObjectKind> ValidObjectKinds = [ObjectKind.Player, ObjectKind.BattleNpc];
 

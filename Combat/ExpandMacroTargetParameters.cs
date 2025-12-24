@@ -149,8 +149,8 @@ public unsafe class ExpandMacroTargetParameters : DailyModuleBase
 
         // TH 优先
         var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where(x => x.ContentId != DService.ClientState.LocalContentId && x.Object != null && 
-                                                            x.Object->GetIsTargetable() && x.Object->IsDead())
+                                                .Where(x => x.ContentId != LocalPlayerState.ContentID && x.Object != null && 
+                                                            x.Object->GetIsTargetable()               && x.Object->IsDead())
                                                 .OrderByDescending(x => LuminaGetter.GetRow<ClassJob>(x.Object->ClassJob)!.Value.Role is 1 or 4)
                                                 .FirstOrDefault();
         if (hudPartyMember.Object == null)
@@ -168,7 +168,7 @@ public unsafe class ExpandMacroTargetParameters : DailyModuleBase
         if (localPlayer == null) return nint.Zero;
 
         var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where(x => x.ContentId != DService.ClientState.LocalContentId && x.Object != null && 
+                                                .Where(x => x.ContentId != LocalPlayerState.ContentID && x.Object != null && 
                                                             x.Object->GetIsTargetable()                        && !x.Object->IsDead())
                                                 .OrderBy(x => Vector3.DistanceSquared(localPlayer->Position, x.Object->Position))
                                                 .FirstOrDefault();
@@ -187,7 +187,7 @@ public unsafe class ExpandMacroTargetParameters : DailyModuleBase
         if (localPlayer == null) return nint.Zero;
 
         var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where(x => x.ContentId != DService.ClientState.LocalContentId && x.Object != null && 
+                                                .Where(x => x.ContentId != LocalPlayerState.ContentID && x.Object != null && 
                                                             x.Object->GetIsTargetable()                        && !x.Object->IsDead())
                                                 .OrderByDescending(x => Vector3.DistanceSquared(localPlayer->Position, x.Object->Position))
                                                 .FirstOrDefault();
@@ -221,7 +221,6 @@ public unsafe class ExpandMacroTargetParameters : DailyModuleBase
                             .OrderByDescending(x => Vector3.DistanceSquared(localPlayer->Position, x.Position))
                             .FirstOrDefault();
         if (enemy == null) return nint.Zero;
-        Debug($"测试: {enemy.Name}");
         
         return enemy.Address;
     }
@@ -260,7 +259,7 @@ public unsafe class ExpandMacroTargetParameters : DailyModuleBase
         var hudPartyMember = agent->PartyMembers.ToArray()
                                                 .Where(x =>
                                                 {
-                                                    if (x.ContentId == DService.ClientState.LocalContentId || x.Object == null) return false;
+                                                    if (x.ContentId == LocalPlayerState.ContentID || x.Object == null) return false;
 
                                                     var statuses = x.Object->GetStatusManager()->Status;
                                                     foreach (var status in statuses)
@@ -312,7 +311,7 @@ public unsafe class ExpandMacroTargetParameters : DailyModuleBase
         var hudPartyMember = agent->PartyMembers.ToArray()
                                                 .Where(x =>
                                                 {
-                                                    if (x.ContentId == DService.ClientState.LocalContentId || x.Object == null) return false;
+                                                    if (x.ContentId == LocalPlayerState.ContentID || x.Object == null) return false;
 
                                                     var statuses = x.Object->GetStatusManager()->Status;
                                                     foreach (var status in statuses)

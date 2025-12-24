@@ -14,6 +14,8 @@ public class AutoNotifyRecruitmentEnd : DailyModuleBase
         Description = GetLoc("AutoNotifyRecruitmentEndDescription"),
         Category = ModuleCategories.Notice,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly string[] ValidStrings =
     [

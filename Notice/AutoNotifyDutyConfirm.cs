@@ -15,6 +15,8 @@ public class AutoNotifyDutyConfirm : DailyModuleBase
         Category    = ModuleCategories.Notice,
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     protected override void Init() => 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ContentsFinderConfirm", OnAddonSetup);
 

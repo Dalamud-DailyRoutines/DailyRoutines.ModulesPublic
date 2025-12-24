@@ -1,15 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Addon;
+using KamiToolKit;
 using KamiToolKit.Nodes;
-using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -21,6 +18,8 @@ public class AutoAethericMimicry : DailyModuleBase
         Description = GetLoc("AutoAethericMimicryDescription"),
         Category    = ModuleCategories.Action
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly HashSet<uint> Status = [2124, 2125, 2126];
     
@@ -56,22 +55,21 @@ public class AutoAethericMimicry : DailyModuleBase
         public static void OpenWithNewInstance()
         {
             Addon?.Dispose();
-            
+
             Addon = new()
             {
-                InternalName     = "DRAutoAethericMimicry",
-                Title            = string.Empty,
-                Size             = new(180f, 50f),
-                NativeController = Service.AddonController,
+                InternalName = "DRAutoAethericMimicry",
+                Title        = string.Empty,
+                Size         = new(180f, 50f),
             };
-            Addon.Position = ImGui.GetMousePos() - Addon.Size with { X = Addon.Size.X / 1.5f };
+            Addon.SetWindowPosition(ImGui.GetMousePos() - Addon.Size with { X = Addon.Size.X / 1.5f });
             
             Addon.Open();
         }
         
         protected override unsafe void OnSetup(AtkUnitBase* addon)
         {
-            WindowNode.CloseButtonNode.IsVisible = false;
+            ((WindowNode)WindowNode).CloseButtonNode.IsVisible = false;
             
             var rowOneContainer = new HorizontalFlexNode
             {
@@ -138,7 +136,7 @@ public class AutoAethericMimicry : DailyModuleBase
             HealerButton.IsEnabled = TryGetChara([4],    out _);
             DPSButton.IsEnabled    = TryGetChara([2, 3], out _);
             
-            AttachNode(rowOneContainer);
+            rowOneContainer.AttachNode(this);
         }
 
         protected override unsafe void OnUpdate(AtkUnitBase* addon)

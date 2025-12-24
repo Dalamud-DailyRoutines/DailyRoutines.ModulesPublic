@@ -164,7 +164,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
             ImGui.Dummy(Vector2.One);
 
             ImGui.SetNextItemWidth(50f * GlobalFontScale);
-            ImGui.InputInt(GetLoc("AutoCheckFoodUsage-RefreshThreshold"), ref ModuleConfig.RefreshThreshold, 0, 0);
+            ImGui.InputInt(GetLoc("AutoCheckFoodUsage-RefreshThreshold"), ref ModuleConfig.RefreshThreshold);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 SaveConfig(ModuleConfig);
 
@@ -492,7 +492,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
         (DateTime.Now - LastFoodUsageTime).TotalSeconds >= FoodUsageCooldownSeconds;
     
     private static uint ToFoodRowID(uint id) => 
-        LuminaGetter.GetRow<ItemFood>(LuminaGetter.GetRow<Item>(id)!.Value.ItemAction.Value.Data[1])?.RowId ?? 0;
+        LuminaGetter.GetRow<ItemFood>(LuminaGetter.GetRowOrDefault<Item>(id).ItemAction.Value.Data[1])?.RowId ?? 0;
 
     private static unsafe List<FoodUsagePreset> GetValidPresets()
     {

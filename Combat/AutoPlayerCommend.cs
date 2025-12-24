@@ -94,7 +94,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         var notificationMvp = GetAddonByName("_NotificationIcMvp");
         if (notification == null && notificationMvp == null) return true;
 
-        if (AssignedCommendationContentID == DService.ClientState.LocalContentId)
+        if (AssignedCommendationContentID == LocalPlayerState.ContentID)
             return true;
 
         Callback(notification, true, 0, 11);
@@ -106,7 +106,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         if (!IsAddonAndNodesReady(VoteMvp)) return false;
         if (!AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentsMvp)->IsAgentActive()) return false;
         
-        if (AssignedCommendationContentID == DService.ClientState.LocalContentId)
+        if (AssignedCommendationContentID == LocalPlayerState.ContentID)
             return true;
 
         var localPlayer = Control.GetLocalPlayer();
@@ -116,7 +116,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         Dictionary<(string Name, uint HomeWorld, uint ClassJob, byte RoleRaw, PlayerRole Role, ulong ContentID), int> partyMembers = [];
         foreach (var member in DService.PartyList)
         {
-            if ((ulong)member.ContentId == DService.ClientState.LocalContentId) continue;
+            if ((ulong)member.ContentId == LocalPlayerState.ContentID) continue;
 
             var index = Math.Clamp(hudMembers.IndexOf(x => x.ContentId == (ulong)member.ContentId) - 1, 0, 6);
             
@@ -308,7 +308,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
             var playerName  = target.TargetCharacter != null ? target.TargetCharacter.Name : target.TargetName;
             var playerWorld = target.TargetCharacter?.HomeWorld ?? target.TargetHomeWorld;
 
-            NotificationInfo(contentID == DService.ClientState.LocalContentId
+            NotificationInfo(contentID == LocalPlayerState.ContentID
                                  ? GetLoc("AutoPlayerCommend-GiveNobodyCommendMessage")
                                  : GetLoc("AutoPlayerCommend-AssignPlayerCommendMessage", playerName, playerWorld.Value.Name.ExtractText()));
             

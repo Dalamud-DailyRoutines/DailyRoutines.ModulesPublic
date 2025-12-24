@@ -273,15 +273,15 @@ public unsafe class AutoGardensWork : DailyModuleBase
     {
         if (!DService.Condition[ConditionFlag.OccupiedInQuestEvent]) return true;
 
-        if (!IsAddonAndNodesReady(InfosOm.ContextMenu)) return false;
-        if (!TryScanContextMenuText(InfosOm.ContextMenu, text, out var index))
+        if (!IsAddonAndNodesReady(InfosOm.ContextMenuXIV)) return false;
+        if (!TryScanContextMenuText(InfosOm.ContextMenuXIV, text, out var index))
         {
-            InfosOm.ContextMenu->FireCloseCallback();
-            InfosOm.ContextMenu->Close(true);
+            InfosOm.ContextMenuXIV->FireCloseCallback();
+            InfosOm.ContextMenuXIV->Close(true);
             return true;
         }
 
-        Callback(InfosOm.ContextMenu, true, 0, index, 0U, 0, 0);
+        Callback(InfosOm.ContextMenuXIV, true, 0, index, 0U, 0, 0);
         return false;
     }
     

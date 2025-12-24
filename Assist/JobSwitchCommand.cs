@@ -12,8 +12,10 @@ public class JobSwitchCommand : DailyModuleBase
     {
         Title       = GetLoc("JobSwitchCommandTitle"),
         Description = GetLoc("JobSwitchCommandDescription", Command),
-        Category    = ModuleCategories.System
+        Category    = ModuleCategories.Assist
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private const string Command = "job";
 

@@ -14,6 +14,8 @@ public class AutoNotifyDutyName : DailyModuleBase
         Category    = ModuleCategories.Notice,
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static Config ModuleConfig = null!;
 
     protected override void Init()

@@ -9,9 +9,9 @@ public unsafe class InstantDismount : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("InstantDismountTitle"),
+        Title       = GetLoc("InstantDismountTitle"),
         Description = GetLoc("InstantDismountDescription"),
-        Category = ModuleCategories.System,
+        Category    = ModuleCategories.System,
     };
 
     private static readonly CompSig DismountSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? 4D 85 F6 0F 84 ?? ?? ?? ?? 49 8B 06");

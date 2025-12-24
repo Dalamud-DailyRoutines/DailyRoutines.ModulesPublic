@@ -16,6 +16,8 @@ public unsafe class AutoDisplayDutyReadyLeftTime : DailyModuleBase
         Description = GetLoc("AutoDisplayDutyReadyLeftTimeDescription"),
         Category    = ModuleCategories.UIOptimization
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static CountdownTimer? Timer;
 

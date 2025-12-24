@@ -32,7 +32,7 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
         Author      = ["Due"]
     };
 
-    public override ModulePermission Permission { get; } = new() { CNOnly = true };
+    public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
 
     private static readonly CompSig AgentLobbyOnLoginSig = new("E8 ?? ?? ?? ?? 41 C6 45 ?? ?? E9 ?? ?? ?? ?? 83 FB 03");
 
@@ -66,7 +66,9 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
         DService.ClientState.Logout += OnLogout;
 
         FrameworkManager.Reg(OnUpdate, throttleMS: 5_000);
-
+        
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "CharaSelect",        OnAddon);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "CharaSelect",        OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_CharaSelectRemain", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_CharaSelectRemain", OnAddon);
     }
@@ -132,7 +134,7 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
         });
     }
 
-    private void OnUpdate(IFramework _) =>
+    private static void OnUpdate(IFramework _) =>
         UpdateEntryAndTimeInfo();
 
     private void OnLogout(int code, int type) =>
@@ -140,8 +142,12 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
 
     private unsafe void OnAddon(AddonEvent type, AddonArgs args)
     {
-        if (CharaSelectRemain == null) return;
-        if (type == AddonEvent.PostDraw && !Throttler.Throttle("AutoRecordSubTimeLeft-OnAddonDraw")) return;
+        if (CharaSelect == null) return;
+        if (type == AddonEvent.PostDraw)
+        {
+            if (!Throttler.Throttle("AutoRecordSubTimeLeft-OnAddonDraw"))
+                return;
+        }
 
         var agent = AgentLobby.Instance();
         if (agent == null) return;
@@ -149,8 +155,10 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
         var info = agent->LobbyData.LobbyUIClient.SubscriptionInfo;
         if (info == null) return;
 
-        var contentID = agent->LobbyData.ContentId;
+        var contentID = agent->HoveredCharacterContentId;
         if (contentID == 0) return;
+
+        if (agent->WorldIndex == -1) return;
 
         var timeInfo = GetLeftTimeSecond(*info);
         ModuleConfig.Infos[contentID]
@@ -159,12 +167,15 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
                   timeInfo.PointTime == 0 ? TimeSpan.MinValue : TimeSpan.FromSeconds(timeInfo.PointTime));
         ModuleConfig.Save(this);
 
-        var textNode = CharaSelectRemain->GetTextNodeById(7);
-        if (textNode != null)
+        if (CharaSelectRemain != null)
         {
-            textNode->SetPositionFloat(-20, 40);
-            textNode->SetText($"剩余天数: {FormatTimeSpan(TimeSpan.FromSeconds(timeInfo.MonthTime))}\n" +
-                              $"剩余时长: {FormatTimeSpan(TimeSpan.FromSeconds(timeInfo.PointTime))}");
+            var textNode = CharaSelectRemain->GetTextNodeById(7);
+            if (textNode != null)
+            {
+                textNode->SetPositionFloat(-20, 40);
+                textNode->SetText($"剩余天数: {FormatTimeSpan(TimeSpan.FromSeconds(timeInfo.MonthTime))}\n" +
+                                  $"剩余时长: {FormatTimeSpan(TimeSpan.FromSeconds(timeInfo.PointTime))}");
+            }
         }
 
         UpdateEntryAndTimeInfo(contentID);
@@ -179,6 +190,7 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
 
     private unsafe void UpdateSubInfo(AgentLobby* agent)
     {
+        TaskHelper.Abort();
         TaskHelper.Enqueue(() =>
         {
             try
@@ -186,8 +198,10 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
                 var info = agent->LobbyData.LobbyUIClient.SubscriptionInfo;
                 if (info == null) return false;
 
-                var contentID = agent->LobbyData.ContentId;
+                var contentID = agent->HoveredCharacterContentId;
                 if (contentID == 0) return false;
+
+                if (agent->WorldIndex == -1) return false;
 
                 var timeInfo = GetLeftTimeSecond(*info);
                 ModuleConfig.Infos[contentID]
@@ -296,7 +310,7 @@ public class AutoRecordSubTimeLeft : DailyModuleBase
         switch (eventData.ClickType)
         {
             case MouseClickType.Left:
-                ChatHelper.SendMessage($"/pdr search {nameof(AutoRecordSubTimeLeft)}");
+                ChatManager.SendMessage($"/pdr search {nameof(AutoRecordSubTimeLeft)}");
                 break;
             case MouseClickType.Right:
                 Util.OpenLink("https://pay.sdo.com/item/GWPAY-100001900");

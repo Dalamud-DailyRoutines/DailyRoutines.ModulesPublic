@@ -17,6 +17,8 @@ public unsafe class ChineseNumericalNotation : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
+    public override ModulePermission Permission { get; } = new() { CNDefaultEnabled = true, TCDefaultEnabled = true };
+
     // 千分位转万分位
     private static readonly MemoryPatch AtkTextNodeSetNumberCommaPatch = new(
         "B8 ?? ?? ?? ?? F7 E1 D1 EA 8D 04 52 2B C8 83 F9 ?? 75 ?? 41 0F B6 D0 48 8D 8F",

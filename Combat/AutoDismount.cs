@@ -13,10 +13,12 @@ public unsafe class AutoDismount : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoDismountTitle"),
+        Title       = GetLoc("AutoDismountTitle"),
         Description = GetLoc("AutoDismountDescription"),
-        Category = ModuleCategories.Combat,
+        Category    = ModuleCategories.Combat,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly HashSet<uint> TargetSelfOrAreaActions =
         PresetSheet.PlayerActions

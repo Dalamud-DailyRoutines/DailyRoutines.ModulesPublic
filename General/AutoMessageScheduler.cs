@@ -278,7 +278,7 @@ public class AutoMessageScheduler : DailyModuleBase
     {
         foreach (var line in sched.MessageText.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            TaskHelper.Enqueue(() => ChatHelper.SendMessage(line));
+            TaskHelper.Enqueue(() => ChatManager.SendMessage(line));
             TaskHelper.DelayNext(20);
         }
     }

@@ -6,6 +6,7 @@ using DailyRoutines.Infos;
 using DailyRoutines.IPC;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 
@@ -68,7 +69,7 @@ public partial class OccultCrescentHelper
                 }
 
                 var buttonSize = new Vector2(ImGui.CalcTextSize(longestName).X * 2, ImGui.GetTextLineHeightWithSpacing());
-                using (ImRaii.Disabled(GameState.TerritoryIntendedUse != 61))
+                using (ImRaii.Disabled(GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent))
                 using (ImRaii.PushIndent())
                 {
                     foreach (var aetheryte in CrescentAetheryte.SouthHornAetherytes)
@@ -116,7 +117,7 @@ public partial class OccultCrescentHelper
         
         private static void OnCommandTP(string command, string args)
         {
-            if (GameState.TerritoryIntendedUse != 61) return;
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
 
             args = args.Trim().ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(args)) return;
@@ -141,7 +142,7 @@ public partial class OccultCrescentHelper
         {
             if (aetheryte == null) return;
 
-            ChatHelper.SendMessage("/automove off");
+            ChatManager.SendMessage("/automove off");
             if (DService.Condition[ConditionFlag.Mounted])
                 ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.Dismount);
 

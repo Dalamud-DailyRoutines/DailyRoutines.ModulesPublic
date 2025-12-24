@@ -88,7 +88,7 @@ public unsafe class AutoUseEventItem : DailyModuleBase
         foreach (var eItem in filterItems)
         {
             if (IsCasting) return;
-            UseActionManager.UseActionLocation(ActionType.KeyItem, eItem, gameObj.GameObjectID);
+            UseActionManager.UseActionLocation(ActionType.EventItem, eItem, gameObj.GameObjectID);
         }
     }
 

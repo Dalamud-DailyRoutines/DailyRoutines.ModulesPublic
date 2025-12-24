@@ -10,6 +10,8 @@ public class AutoNotifyDutyStart : DailyModuleBase
         Description = GetLoc("AutoNotifyDutyStartDescription"),
         Category    = ModuleCategories.Notice,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() => 
         DService.DutyState.DutyStarted += OnDutyStart;

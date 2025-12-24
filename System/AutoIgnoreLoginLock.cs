@@ -12,6 +12,8 @@ public unsafe class AutoIgnoreLoginLock : DailyModuleBase
         Description = GetLoc("AutoIgnoreLoginLockDescription", LuminaWrapper.GetLogMessageText(430)),
         Category    = ModuleCategories.System
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig AgentLobbyUpdateSig =
         new("40 55 56 41 55 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 48 83 B9");

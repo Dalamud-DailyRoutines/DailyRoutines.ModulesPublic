@@ -5,7 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Addon;
+using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using Action = Lumina.Excel.Sheets.Action;
@@ -13,6 +13,7 @@ using ActionKind = FFXIVClientStructs.FFXIV.Client.UI.Agent.ActionKind;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 整合成一个忍术模块
 public unsafe class AutoTenChiJin : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -63,7 +64,7 @@ public unsafe class AutoTenChiJin : DailyModuleBase
 
     private static Config ModuleConfig = null!;
 
-    private static readonly CompSig                     IsSlotUsableSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 F2 41 8B F8");
+    private static readonly CompSig                     IsSlotUsableSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 F2 48 8B D9 41 8B F8");
     private delegate        byte                        IsSlotUsableDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint id);
     private static          Hook<IsSlotUsableDelegate>? IsSlotUsableHook;
 
@@ -73,15 +74,12 @@ public unsafe class AutoTenChiJin : DailyModuleBase
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
         TaskHelper   ??= new() { TimeLimitMS = 2_000 };
-        
+
         Addon ??= new()
         {
-            InternalName          = "DRNinJutsuActionsPreview",
-            Title                 = LuminaWrapper.GetActionName(2260),
-            Size                  = new(430f, 110f),
-            Position              = new(800f, 350f),
-            NativeController      = Service.AddonController,
-            RememberClosePosition = true
+            InternalName = "DRNinJutsuActionsPreview",
+            Title        = LuminaWrapper.GetActionName(2260),
+            Size         = new(430f, 110f),
         };
 
         UseActionManager.RegPreUseAction(OnPreUseAction);
@@ -291,15 +289,15 @@ public unsafe class AutoTenChiJin : DailyModuleBase
                         Int2 = (int)actionID,
                     },
                     IsClickable = false,
-                    OnRollOver  = (node, _) => node.ShowTooltip(AtkTooltipManager.AtkTooltipType.Action, ActionKind.Action),
-                    OnRollOut   = (node, _) => node.HideTooltip(),
+                    OnRollOver  = node => node.ShowTooltip(AtkTooltipManager.AtkTooltipType.Action, ActionKind.Action),
+                    OnRollOut   = node => node.HideTooltip(),
                 };
                 
                 flexGrid.AddNode(dragDropNode);
                 flexGrid.AddDummy();
             }
             
-            AttachNode(flexGrid);
+            flexGrid.AttachNode(this);
         }
     }
 

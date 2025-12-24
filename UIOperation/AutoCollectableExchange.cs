@@ -1,7 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
@@ -19,6 +17,8 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
         Description = GetLoc("AutoCollectableExchangeDescription"),
         Category    = ModuleCategories.UIOperation,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
     private static readonly CompSig HandInCollectablesSig =
         new("48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 48 8B 49");

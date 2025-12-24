@@ -12,17 +12,17 @@ public unsafe class QuickSynthesisMore : DailyModuleBase
     {
         Title       = GetLoc("QuickSynthesisMoreTitle"),
         Description = GetLoc("QuickSynthesisMoreDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Category    = ModuleCategories.System,
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
 
     private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
     // ja → nop
     private static readonly MemoryPatch SimpleCraftAmountJudgePatch =
         new(SimpleCraftAmountJudgeSig.Get(), [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]);
 
-    private static readonly CompSig                                       SimpleCraftGetAmountUpperLimitSig = new("4C 8B DC 48 83 EC ?? 48 8B 81");
+    private static readonly CompSig                                       SimpleCraftGetAmountUpperLimitSig = new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
     private delegate        int                                           SimpleCraftGetAmountUpperLimitDelegate(nint agent, bool eventCase);
     private static          Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
 

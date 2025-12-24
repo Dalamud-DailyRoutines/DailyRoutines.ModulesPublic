@@ -6,7 +6,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using KamiToolKit.Classes.TimelineBuilding;
+using KamiToolKit.Classes.Timelines;
 using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
@@ -20,6 +20,8 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         Author      = ["Mizami", "Cyf5119"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private delegate void SetContentsFinderSettingsInitDelegate(byte* data, UIModule* module);
     private static readonly SetContentsFinderSettingsInitDelegate SetContentsFinderSettingsInit =
@@ -48,13 +50,13 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
             case AddonEvent.PreFinalize:
                 foreach (var (buttonNode, imageNode) in Nodes.Values)
                 {
-                    Service.AddonController.DetachNode(buttonNode);
-                    Service.AddonController.DetachNode(imageNode);
+                    buttonNode?.DetachNode();
+                    imageNode?.DetachNode();
                 }
 
                 Nodes.Clear();
 
-                Service.AddonController.DetachNode(LayoutNode);
+                LayoutNode?.DetachNode();
                 LayoutNode = null;
                 break;
             case AddonEvent.PostRefresh:
@@ -79,7 +81,7 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                         Position    = new(defaultContainer->X - 5, defaultContainer->Y),
                         ItemSpacing = 0
                     };
-                    Service.AddonController.AttachNode(LayoutNode, attchTargetNode);
+                    LayoutNode.AttachNode(attchTargetNode);
 
                     foreach (var settingDetail in DutyFinderSettingIcons)
                     {
@@ -93,7 +95,13 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                             Tooltip   = LuminaWrapper.GetAddonText(settingDetail.GetTooltip()),
                         };
 
-                        button.OnClick = () => ToggleSetting(settingDetail.Setting);
+                        button.OnClick = () =>
+                        {
+                            ToggleSetting(settingDetail.Setting);
+                            button.Tooltip = LuminaWrapper.GetAddonText(settingDetail.GetTooltip());
+                            button.HideTooltip();
+                            button.ShowTooltip();
+                        };
 
                         button.BackgroundNode.IsVisible = false;
                         button.ImageNode.IsVisible      = false;
@@ -101,10 +109,11 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                         var origPosition = new Vector2(4, 5);
                         var iconNode = new IconImageNode
                         {
-                            IconId    = settingDetail.GetIcon(),
-                            Size      = new(24),
-                            IsVisible = true,
-                            Position  = origPosition
+                            IconId     = settingDetail.GetIcon(),
+                            Size       = new(24),
+                            IsVisible  = true,
+                            Position   = origPosition,
+                            FitTexture = true
                         };
 
                         iconNode.AddTimeline(new TimelineBuilder()
@@ -116,7 +125,7 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                                              .AddFrameSetWithFrame(47, 53, 47, position: origPosition)
                                              .Build());
 
-                        Service.AddonController.AttachNode(iconNode, button);
+                        iconNode.AttachNode(button);
 
                         Nodes[settingDetail] = (button, iconNode);
                         LayoutNode.AddNode(button);
@@ -150,7 +159,7 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                             languageButton.BackgroundNode.IsVisible = false;
                             languageButton.ImageNode.IsVisible      = false;
 
-                            Service.AddonController.AttachNode(languageButton, parentNode);
+                            languageButton.AttachNode(parentNode);
                             Nodes[langSetting] = (languageButton, null!);
                         }
                     }
@@ -159,14 +168,17 @@ public unsafe class OptimizedDutyFinderSetting : DailyModuleBase
                 foreach (var (settingDetail, (buttonNode, imageNode)) in Nodes)
                 {
                     var value = GetCurrentSettingValue(settingDetail.Setting);
+                    
+                    if (imageNode != null)
+                    {
+                        imageNode.IconId = settingDetail.GetIcon();
 
-                    imageNode.IconId = settingDetail.GetIcon();
-
-                    if (settingDetail.Setting is DutyFinderSetting.LevelSync &&
-                        GetCurrentSettingValue(DutyFinderSetting.UnrestrictedParty) == 0)
-                        imageNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.25f);
-                    else
-                        imageNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.5f);
+                        if (settingDetail.Setting is DutyFinderSetting.LevelSync &&
+                            GetCurrentSettingValue(DutyFinderSetting.UnrestrictedParty) == 0)
+                            imageNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.25f);
+                        else
+                            imageNode.Color = buttonNode.Color.WithW(value != 0 ? 1 : 0.5f);
+                    }
 
                     buttonNode.Tooltip = LuminaWrapper.GetAddonText(settingDetail.GetTooltip());
                 }

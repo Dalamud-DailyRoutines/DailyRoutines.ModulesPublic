@@ -2,6 +2,7 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using Lumina.Excel.Sheets;
+using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -27,7 +28,7 @@ public class AutoFateStart : DailyModuleBase
         
         try
         {
-            if (GameState.TerritoryIntendedUse != 1 || GameState.IsInPVPArea) return;
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.Overworld || GameState.IsInPVPArea) return;
             
             IsOnUpdate = true;
             

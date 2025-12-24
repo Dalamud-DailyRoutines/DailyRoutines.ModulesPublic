@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
@@ -21,8 +20,11 @@ public unsafe class AutoRecommendFauxHollows : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         Author      = ["Veever"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static          Config     ModuleConfig = null!;
+    private static Config ModuleConfig = null!;
+    
     private static readonly BoardState Board        = new();
     private static readonly Solver     FauxSolver   = new();
 

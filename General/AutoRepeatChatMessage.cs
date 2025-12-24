@@ -52,7 +52,7 @@ public unsafe class AutoRepeatChatMessage : DailyModuleBase
         [XivChatType.Ls8]             = 26,
     };
 
-    private static readonly Dictionary<uint, (int Channel, nint Message, string Sender)> SavedPayload = [];
+    private static readonly Dictionary<uint, (int Channel, byte[] Message, string Sender)> SavedPayload = [];
 
     private static Config ModuleConfig = null!;
 
@@ -106,9 +106,8 @@ public unsafe class AutoRepeatChatMessage : DailyModuleBase
                 senderStr = $"{playerPayload.PlayerName}@{playerPayload.World.Value.Name.ExtractText()}";
         }
 
-        var origMessage = (nint)Utf8String.FromSequence(message.Encode());
         var linkPayload = LinkPayloadManager.Register(OnClickRepeat, out var id);
-        SavedPayload.TryAdd(id, (channel, origMessage, senderStr));
+        SavedPayload.TryAdd(id, (channel, message.Encode(), senderStr));
         
         message.Append(new UIForegroundPayload(24))
                .Append(new TextPayload(" ["))
@@ -146,7 +145,7 @@ public unsafe class AutoRepeatChatMessage : DailyModuleBase
             switch (info.Channel)
             {
                 case 0:
-                    ChatHelper.SendMessage($"/tell {info.Sender}");
+                    ChatManager.SendMessage($"/tell {info.Sender}");
                     break;
                 default:
                     instance->ChangeChatChannel(info.Channel, linkshellIndex, Utf8String.FromString(string.Empty), true);
@@ -154,7 +153,7 @@ public unsafe class AutoRepeatChatMessage : DailyModuleBase
             }
         }
         
-        ChatHelper.SendMessageUnsafe((Utf8String*)info.Message);
+        ChatManager.SendMessage(message.Encode());
         
         if (info.Channel != -1                                                     && 
             ModuleConfig is { AutoSwitchChannel: true, AutoSwitchOrigChannel: true })
@@ -172,13 +171,6 @@ public unsafe class AutoRepeatChatMessage : DailyModuleBase
     protected override void Uninit()
     {
         DService.Chat.ChatMessage -= OnChat;
-        
-        SavedPayload.ForEach(x =>
-        {
-            var utf8Str = (Utf8String*)x.Value.Message;
-            if (utf8Str == null) return;
-            utf8Str->Dtor(true);
-        });
         SavedPayload.Clear();
     }
 

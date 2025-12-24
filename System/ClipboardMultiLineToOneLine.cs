@@ -18,10 +18,9 @@ public unsafe class ClipboardMultiLineToOneLine : DailyModuleBase
         Category    = ModuleCategories.System
     };
 
-    private static readonly CompSig GetClipboardDataSig =
-        new("48 89 5C 24 ?? 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F9 BA ?? ?? ?? ??");
-    private delegate Utf8String* GetClipboardDataDelegate(ClipBoard* clipBoard);
-    private static Hook<GetClipboardDataDelegate>? GetClipboardDataHook;
+    private static readonly CompSig GetClipboardDataSig = new("40 53 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 BA");
+    private delegate        Utf8String* GetClipboardDataDelegate(ClipBoard* clipBoard);
+    private static          Hook<GetClipboardDataDelegate>? GetClipboardDataHook;
 
     private static readonly string[] BlacklistAddons = ["Macro"];
 

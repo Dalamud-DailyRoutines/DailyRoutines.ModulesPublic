@@ -24,6 +24,8 @@ public class BetterFateProgressUI : DailyModuleBase
         Description = GetLoc("BetterFateProgressUIDescription"),
         Category    = ModuleCategories.UIOptimization,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static CancellationTokenSource? CancelSource;
     

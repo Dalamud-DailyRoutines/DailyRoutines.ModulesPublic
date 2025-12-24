@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -90,7 +91,7 @@ public partial class OccultCrescentHelper
                 var builder = new StringBuilder();
                 builder.Append("ID:\n");
                 foreach (var data in LuminaGetter.Get<MKDSupportJob>())
-                    builder.Append($"\t{data.RowId} - {data.Unknown0}\t{data.Unknown1}\t{data.Unknown4}\n");
+                    builder.Append($"\t{data.RowId} - {data.Name}\t{data.NameFemale}\t{data.NameEnglish}\n");
                 ImGuiOm.HelpMarker(builder.ToString().TrimEnd('\n'), 100f * GlobalFontScale);
 
                 ImGui.Text($"/pdr {CommandBuff} {GetLoc("OccultCrescentHelper-Command-PBuff-Help")}");
@@ -112,8 +113,8 @@ public partial class OccultCrescentHelper
                 if (actionType != ActionType.Action || actionID != 41592) return;
 
                 if (DService.Targets.Target == null)
-                    ChatHelper.SendMessage("/tenemy");
-                ChatHelper.SendMessage("/facetarget");
+                    ChatManager.SendMessage("/tenemy");
+                ChatManager.SendMessage("/facetarget");
             }
         }
         
@@ -150,7 +151,7 @@ public partial class OccultCrescentHelper
         
         private static unsafe void OnCommandSwitchJob(string command, string args)
         {
-            if (GameState.TerritoryIntendedUse != 61)
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
             {
                 RaptureLogModule.Instance()->ShowLogMessage(10970);
                 return;
@@ -173,9 +174,9 @@ public partial class OccultCrescentHelper
                                           .Select(data => new
                                           {
                                               Data        = data,
-                                              NameMale    = data.Unknown0.ExtractText(),
-                                              NameFemale  = data.Unknown1.ExtractText(),
-                                              NameEnglish = data.Unknown4.ExtractText()
+                                              NameMale    = data.Name.ExtractText(),
+                                              NameFemale  = data.NameFemale.ExtractText(),
+                                              NameEnglish = data.NameEnglish.ExtractText()
                                           })
                                           .Where(x => x.NameMale.Contains(args, StringComparison.OrdinalIgnoreCase)   ||
                                                       x.NameFemale.Contains(args, StringComparison.OrdinalIgnoreCase) ||
@@ -188,10 +189,11 @@ public partial class OccultCrescentHelper
 
         private static void OnCommandBuff(string command, string args)
         {
-            if (GameState.TerritoryIntendedUse != 61) return;
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
             ExecuteBuffSequence();
         }
 
+        // TODO: 使用自由人的探求心技能
         private static void ExecuteBuffSequence()
         {
             if (!CrescentSupportJob.TryFindKnowledgeCrystal(out _))
@@ -209,6 +211,7 @@ public partial class OccultCrescentHelper
                                                 CrescentSupportJobType.Knight => 0,
                                                 CrescentSupportJobType.Bard   => 1,
                                                 CrescentSupportJobType.Monk   => 3,
+                                                CrescentSupportJobType.Dancer => 4,
                                                 _                             => 999
                                             })
                                             .ToList();

@@ -13,12 +13,12 @@ public class ContentFinderCommand : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("ContentFinderCommandTitle"),
-        Description = GetLoc("ContentFinderCommandDescription"),
-        Category = ModuleCategories.Combat,
+        Title       = GetLoc("ContentFinderCommandTitle"),
+        Description = GetLoc("ContentFinderCommandDescription", Command),
+        Category    = ModuleCategories.Assist
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private const string Command = "/pdrduty";
 

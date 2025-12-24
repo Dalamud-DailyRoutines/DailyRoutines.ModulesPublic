@@ -1,9 +1,8 @@
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using KamiToolKit.Nodes;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -15,9 +14,11 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
         Description = GetLoc("AutoClaimPVPRewardsDescription"),
         Category    = ModuleCategories.UIOperation,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static TextButtonNode? Button;
-
+    private static AtkEventWrapper? ClaimAllEvent;
+    
     protected override void Init()
     {
         TaskHelper ??= new() { TimeLimitMS = 5_000 };
@@ -31,74 +32,59 @@ public unsafe class AutoClaimPVPRewards : DailyModuleBase
     protected override void Uninit()
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
-        
-        Service.AddonController.DetachNode(Button);
-        Button = null;
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 
     private void OnAddon(AddonEvent type, AddonArgs? args)
     {
-
         switch (type)
         {
             case AddonEvent.PostDraw:
                 if (PvpReward == null) return;
-
-                var closeButton = PvpReward->GetComponentButtonById(124);
-                if (closeButton != null && closeButton->OwnerNode->IsVisible())
-                    closeButton->OwnerNode->ToggleVisibility(false);
                 
-                if (Button == null)
+                var closeButton = PvpReward->GetComponentButtonById(124);
+                if (closeButton == null) return;
+                
+                if (ClaimAllEvent == null)
                 {
-                    var resNode = PvpReward->RootNode;
-                    if (resNode == null) return;
+                    closeButton->OwnerNode->ClearEvents();
                     
-                    Button = new()
+                    ClaimAllEvent = new AtkEventWrapper((_, _, _) =>
                     {
-                        Size      = new(280, 28),
-                        Position  = new(370, 500),
-                        IsVisible = true,
-                        SeString  = GetLoc("AutoClaimPVPRewards-Button"),
-                        OnClick = () =>
+                        for (var i = 0; i < 30; i++)
                         {
-                            var currentRank = PvpReward->AtkValues[7].UInt;
-                            if (currentRank <= 1 || IsTrophyCrystalAboutToReachLimit()) return;
+                            TaskHelper.Enqueue(() =>
+                                               {
+                                                   if (!IsTrophyCrystalAboutToReachLimit()) return;
+                                                   TaskHelper.Abort();
+                                               }, $"CheckTCAmount_Rank{i}");
 
-                            for (var i = 0; i < currentRank; i++)
-                            {
-                                TaskHelper.Enqueue(() =>
-                                                   {
-                                                       if (!IsTrophyCrystalAboutToReachLimit()) return;
-                                                       TaskHelper.Abort();
-                                                   }, $"CheckTCAmount_Rank{i}");
+                            TaskHelper.Enqueue(
+                                () =>
+                                {
+                                    ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal);
+                                    ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal, 1);
+                                },
+                                $"ClaimTC_Rank{i}");
 
-                                TaskHelper.Enqueue(
-                                    () =>
-                                    {
-                                        ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal);
-                                        ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.CollectTrophyCrystal, 1);
-                                    },
-                                    $"ClaimTC_Rank{i}");
-
-                                TaskHelper.DelayNext(10, $"Delay_Rank{i}");
-                            }
-                        },
-                        NodeId = 10001
-                    };
+                            TaskHelper.DelayNext(10, $"Delay_Rank{i}");
+                        }
+                    });
+                    ClaimAllEvent.Add(PvpReward, (AtkResNode*)closeButton->OwnerNode, AtkEventType.ButtonClick);
                     
-                    Service.AddonController.AttachNode(Button, resNode);
+                    closeButton->SetText(GetLoc("AutoClaimPVPRewards-Button"));
                 }
 
-                Button.IsEnabled = !TaskHelper.IsBusy;
+                closeButton->SetEnabledState(!TaskHelper.IsBusy);
                 
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(Button);
-                Button = null;
+                ClaimAllEvent?.Dispose();
+                ClaimAllEvent = null;
                 break;
         }
     }
     
-    private static bool IsTrophyCrystalAboutToReachLimit() 
-        => InventoryManager.Instance()->GetInventoryItemCount(36656) > 1_9000;
+    private static bool IsTrophyCrystalAboutToReachLimit() => 
+        InventoryManager.Instance()->GetInventoryItemCount(36656) > 1_9000;
 }

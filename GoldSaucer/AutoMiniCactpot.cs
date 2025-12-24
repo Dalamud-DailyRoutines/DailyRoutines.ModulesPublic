@@ -179,7 +179,8 @@ public unsafe class AutoMiniCactpot : DailyModuleBase
         public int Line(uint nodeID)
         {
             var unkNumber3D4 = LineNodeIDToUnkNumber3D4[nodeID];
-            ((AddonLotteryDaily*)Addon)->UnkNumber3D4 = unkNumber3D4;
+            var ptr          = (int*)((nint)Addon + 1004);
+            *ptr = unkNumber3D4;
 
             return unkNumber3D4;
         }

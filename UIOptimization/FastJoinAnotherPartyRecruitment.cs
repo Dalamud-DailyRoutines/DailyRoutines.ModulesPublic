@@ -16,6 +16,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static TextButtonNode? Button;
 
     protected override void Init()
@@ -46,7 +48,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
                 CreateOrUpdateButton(LookingForGroupDetail, TaskHelper);
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(Button);
+                Button?.DetachNode();
                 Button = null;
                 break;
         }
@@ -77,7 +79,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
                 OnClick   = () => Enqueue(taskHelper),
             };
 
-            Service.AddonController.AttachNode(Button, resNode);
+            Button.AttachNode(resNode);
         }
         
         resNode->SetPositionFloat(35, 56);
@@ -106,8 +108,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
                 if (!Throttler.Throttle("FastJoinAnotherPartyRecruitment-Task", 100)) return false;
                 if (!IsInAnyParty()) return true;
                 
-                ChatHelper.SendMessage("/leave");
-                ChatHelper.SendMessage("/pcmd breakup");
+                ChatManager.SendMessage("/leave");
+                ChatManager.SendMessage("/pcmd breakup");
                 SendEvent(AgentId.PartyMember, 0, 2, 3);
                 
                 return !IsInAnyParty();
@@ -145,8 +147,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : DailyModuleBase
     {
         DService.AddonLifecycle.UnregisterListener(OnAddon);
         DService.AddonLifecycle.UnregisterListener(OnAddonYesno);
-        
-        Service.AddonController.DetachNode(Button);
-        Button = null;
+
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 }

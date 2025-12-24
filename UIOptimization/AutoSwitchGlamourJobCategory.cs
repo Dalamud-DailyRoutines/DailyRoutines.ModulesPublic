@@ -5,6 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 合并成单一投影台模块
 public class AutoSwitchGlamourJobCategory : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -14,6 +15,8 @@ public class AutoSwitchGlamourJobCategory : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         Author      = ["ECSS11"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() => 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreSetup, "MiragePrismPrismBox", OnMiragePrismPrismBox);

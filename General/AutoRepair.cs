@@ -37,7 +37,7 @@ public unsafe class AutoRepair : DailyModuleBase
     private static Config ModuleConfig = null!;
 
     // 修理装备
-    private static readonly CompSig                   RepairItemSig = new("E8 ?? ?? ?? ?? EB 7F 48 83 F8 02");
+    private static readonly CompSig                   RepairItemSig = new("48 89 6C 24 ?? 48 89 74 24 ?? 41 54 41 56 41 57 48 83 EC ?? 48 8D 0D");
     private delegate        void                      RepairItemDelegate(nint repairController, InventoryType inventory, short slot, bool isNPC);
     private static          Hook<RepairItemDelegate>? RepairItemHook;
 
@@ -47,7 +47,7 @@ public unsafe class AutoRepair : DailyModuleBase
     private delegate        void                               RepairEquippedItemsDelegate(nint repairController, InventoryType inventory, bool isNPC);
     private static          Hook<RepairEquippedItemsDelegate>? RepairEquippedItemsHook;
 
-    private static readonly CompSig                       RepairAllItemsSig = new("E8 ?? ?? ?? ?? 33 DB 89 5E 50");
+    private static readonly CompSig                       RepairAllItemsSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 83 EC ?? 41 0F B6 E9 45 8B F0 0F B6 F2");
     private delegate        void                          RepairAllItemsDelegate(nint repairController, bool isNPC, int category, int a4);
     private static          Hook<RepairAllItemsDelegate>? RepairAllItemsHook;
 

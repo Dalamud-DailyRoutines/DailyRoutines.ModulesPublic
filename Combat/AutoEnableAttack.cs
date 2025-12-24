@@ -15,7 +15,7 @@ public unsafe class AutoEnableAttack : DailyModuleBase
         Category    = ModuleCategories.Combat,
     };
 
-    private static readonly HashSet<uint> InvalidActions = [7418, 23288, 23289, 34581, 23273];
+    private static readonly HashSet<uint> InvalidActions = [7385, 7418, 23288, 23289, 34581, 23273];
     
     protected override void Init() => 
         UseActionManager.RegUseAction(OnPostUseAction);

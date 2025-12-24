@@ -17,6 +17,8 @@ public unsafe class AutoHideBanners : DailyModuleBase
         Category    = ModuleCategories.System,
         Author      = ["XSZYYS"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig                        SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
     private delegate        void*                          SetImageTextureDelegate(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID);

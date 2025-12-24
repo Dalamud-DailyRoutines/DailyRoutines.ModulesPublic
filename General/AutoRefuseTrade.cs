@@ -92,7 +92,7 @@ public unsafe class AutoRefuseTrade : DailyModuleBase
         if (!string.IsNullOrWhiteSpace(ModuleConfig.ExtraCommands))
         {
             foreach (var command in ModuleConfig.ExtraCommands.Split('\n'))
-                ChatHelper.SendMessage(command);
+                ChatManager.SendMessage(command);
         }
     }
 

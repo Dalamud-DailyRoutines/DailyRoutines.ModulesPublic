@@ -16,6 +16,8 @@ public class TheCuffOfTheFatherHelper : DailyModuleBase
         Category    = ModuleCategories.Assist
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     protected override void Init()
     {
         DService.ClientState.TerritoryChanged += OnZoneChanged;

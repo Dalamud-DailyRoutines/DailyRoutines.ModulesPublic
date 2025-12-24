@@ -14,7 +14,7 @@ using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Addon;
+using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 
@@ -22,12 +22,14 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedFriendList : DailyModuleBase
 {
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     public override ModuleInfo Info { get; } = new()
     {
         Title               = GetLoc("OptimizedFriendListTitle"),
         Description         = GetLoc("OptimizedFriendListDescription"),
         Category            = ModuleCategories.UIOptimization,
-        ModulesPrerequisite = ["WorldTravelCommand"]
+        ModulesPrerequisite = ["FastWorldTravel"]
     };
     
     private static          ModifyInfoMenuItem          ModifyInfoItem    = null!;
@@ -55,22 +57,16 @@ public unsafe class OptimizedFriendList : DailyModuleBase
 
         RemarkEditAddon ??= new(this)
         {
-            InternalName          = "DRFriendlistRemarkEdit",
-            Title                 = GetLoc("OptimizedFriendList-ContextMenu-NicknameAndRemark"),
-            Size                  = new(460f, 255f),
-            Position              = new(800f, 350f),
-            NativeController      = Service.AddonController,
-            RememberClosePosition = true
+            InternalName = "DRFriendlistRemarkEdit",
+            Title        = GetLoc("OptimizedFriendList-ContextMenu-NicknameAndRemark"),
+            Size         = new(460f, 255f),
         };
-        
+
         SearchSettingAddon ??= new(this)
         {
-            InternalName          = "DRFriendlistSearchSetting",
-            Title                 = GetLoc("OptimizedFriendList-Addon-SearchSetting"),
-            Size                  = new(230f, 350f),
-            Position              = new(800f, 350f),
-            NativeController      = Service.AddonController,
-            RememberClosePosition = true
+            InternalName = "DRFriendlistSearchSetting",
+            Title        = GetLoc("OptimizedFriendList-Addon-SearchSetting"),
+            Size         = new(230f, 350f),
         };
 
         ModifyInfoItem = new(TaskHelper);
@@ -113,12 +109,12 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                         ShowLimitText = true,
                         OnInputReceived = x =>
                         {
-                            SearchString = x.TextValue;
+                            SearchString = x.ExtractText();
                             ApplyFilters(SearchString);
                         },
                         OnInputComplete = x =>
                         {
-                            SearchString = x.TextValue;
+                            SearchString = x.ExtractText();
                             ApplyFilters(SearchString);
                         },
                     };
@@ -127,7 +123,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                     SearchInputNode.CurrentTextNode.FontSize =  14;
                     SearchInputNode.CurrentTextNode.Y        += 3f;
 
-                    Service.AddonController.AttachNode(SearchInputNode, FriendList->GetNodeById(20));
+                    SearchInputNode.AttachNode(FriendList->GetNodeById(20));
 
                     SearchSettingButtonNode ??= new()
                     {
@@ -141,7 +137,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                         OnClick     = () => SearchSettingAddon.Toggle(),
                     };
 
-                    Service.AddonController.AttachNode(SearchSettingButtonNode, FriendList->GetNodeById(20));
+                    SearchSettingButtonNode.AttachNode(FriendList->GetNodeById(20));
 
                     SearchString = string.Empty;
                 }
@@ -190,10 +186,10 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 ApplyFilters(SearchString);
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(SearchInputNode);
+                SearchInputNode?.DetachNode();
                 SearchInputNode = null;
 
-                Service.AddonController.DetachNode(SearchSettingButtonNode);
+                SearchSettingButtonNode?.DetachNode();
                 SearchSettingButtonNode = null;
 
                 Tokens.ForEach(x => OnlineDataManager.GetRequest<PlayerUsedNamesRequest>().Unsubscribe(x));
@@ -510,17 +506,22 @@ public unsafe class OptimizedFriendList : DailyModuleBase
 
             NicknameInput = ModuleConfig.PlayerInfos.GetValueOrDefault(ContentID, new()).Nickname;
             RemarkInput   = ModuleConfig.PlayerInfos.GetValueOrDefault(ContentID, new()).Remark;
-            
+
             PlayerNameNode = new()
             {
-                IsVisible     = true,
-                Position      = new(10, 36),
-                Size          = new(100, 48),
-                SeString      = new SeStringBuilder().Append(Name).AddIcon(BitmapFontIcon.CrossWorld).Append(WorldName).Build(),
+                IsVisible = true,
+                Position  = new(10, 36),
+                Size      = new(100, 48),
+                SeString = new SeStringBuilder()
+                           .Append(Name)
+                           .AddIcon(BitmapFontIcon.CrossWorld)
+                           .Append(WorldName)
+                           .Build()
+                           .Encode(),
                 FontSize      = 24,
                 AlignmentType = AlignmentType.Left,
             };
-            AttachNode(PlayerNameNode);
+            PlayerNameNode.AttachNode(this);
             
             NicknameNode = new()
             {
@@ -531,7 +532,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 FontSize      = 14,
                 AlignmentType = AlignmentType.Left,
             };
-            AttachNode(NicknameNode);
+            NicknameNode.AttachNode(this);
 
             NicknameInputNode = new()
             {
@@ -560,7 +561,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 OnUnfocused = () => NicknameInputNode.HideTooltip()
             };
             NicknameInputNode.String = NicknameInput;
-            AttachNode(NicknameInputNode);
+            NicknameInputNode.AttachNode(this);
             
             RemarkNode = new()
             {
@@ -571,7 +572,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 FontSize      = 14,
                 AlignmentType = AlignmentType.Left,
             };
-            AttachNode(RemarkNode);
+            RemarkNode.AttachNode(this);
 
             RemarkInputNode = new()
             {
@@ -600,7 +601,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 OnUnfocused = () => RemarkInputNode.HideTooltip()
             };
             RemarkInputNode.String = RemarkInput;
-            AttachNode(RemarkInputNode);
+            RemarkInputNode.AttachNode(this);
 
             ConfirmButtonNode = new()
             {
@@ -623,7 +624,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                     Close();
                 },
             };
-            AttachNode(ConfirmButtonNode);
+            ConfirmButtonNode.AttachNode(this);
             
             ClearButtonNode = new()
             {
@@ -638,7 +639,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                     Close();
                 },
             };
-            AttachNode(ClearButtonNode);
+            ClearButtonNode.AttachNode(this);
             
             QuertUsedNameButtonNode = new()
             {
@@ -668,7 +669,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                     }));
                 },
             };
-            AttachNode(QuertUsedNameButtonNode);
+            QuertUsedNameButtonNode.AttachNode(this);
         }
 
         protected override void OnUpdate(AtkUnitBase* addon)
@@ -708,7 +709,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 TextFlags = TextFlags.AutoAdjustNodeSize,
                 Position  = new(10f, 42f)
             };
-            AttachNode(searchTypeTitleNode);
+            searchTypeTitleNode.AttachNode(this);
             
             var searchTypeLayoutNode = new VerticalListNode
             {
@@ -769,7 +770,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
             searchTypeLayoutNode.Height += remarkCheckboxNode.Height;
             
             searchTypeLayoutNode.AddNode(nameCheckboxNode, nicknameCheckboxNode, remarkCheckboxNode);
-            AttachNode(searchTypeLayoutNode);
+            searchTypeLayoutNode.AttachNode(this);
             
             var searchGroupIgnoreTitleNode = new TextNode
             {
@@ -777,9 +778,9 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 SeString  = GetLoc("OptimizedFriendList-SearchIgnoreGroup"),
                 FontSize  = 16,
                 TextFlags = TextFlags.AutoAdjustNodeSize,
-                Position  = new(10f, searchTypeLayoutNode.Position.Y + searchTypeLayoutNode.Height + 28f)
+                Position  = new(10f, searchTypeLayoutNode.Position.Y + searchTypeLayoutNode.Height + 12f)
             };
-            AttachNode(searchGroupIgnoreTitleNode);
+            searchGroupIgnoreTitleNode.AttachNode(this);
 
             var searchGroupIgnoreLayoutNode = new VerticalListNode
             {
@@ -801,7 +802,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                     IsVisible = true,
                     IsChecked = ModuleConfig.IgnoredGroup[i],
                     IsEnabled = true,
-                    SeString  = groupFormatText,
+                    SeString  = groupFormatText.Encode(),
                     OnClick = newState =>
                     {
                         ModuleConfig.IgnoredGroup[index] = newState;
@@ -815,7 +816,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
                 searchGroupIgnoreLayoutNode.AddNode(groupCheckboxNode);
             }
             
-            AttachNode(searchGroupIgnoreLayoutNode);
+            searchGroupIgnoreLayoutNode.AttachNode(this);
         }
 
         protected override void OnUpdate(AtkUnitBase* addon)
@@ -903,7 +904,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
 
         public override bool IsDisplay(IMenuOpenedArgs args)
         {
-            if ((ModuleManager.IsModuleEnabled("WorldTravelCommand") ?? false) &&
+            if ((ModuleManager.IsModuleEnabled("FastWorldTravel") ?? false) &&
                 args is { AddonName: "FriendList", Target: MenuTargetDefault { TargetCharacter.CurrentWorld.RowId: var targetWorldID } } &&
                 targetWorldID != GameState.CurrentWorld)
             {
@@ -915,7 +916,7 @@ public unsafe class OptimizedFriendList : DailyModuleBase
         }
 
         protected override void OnClicked(IMenuItemClickedArgs args) => 
-            ChatHelper.SendMessage($"/pdr worldtravel {LuminaWrapper.GetWorldName(TargetWorldID)}");
+            ChatManager.SendMessage($"/pdr worldtravel {LuminaWrapper.GetWorldName(TargetWorldID)}");
     }
     
     public class PlayerInfo

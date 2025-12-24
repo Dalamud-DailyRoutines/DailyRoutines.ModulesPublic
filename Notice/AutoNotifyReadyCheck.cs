@@ -15,6 +15,8 @@ public class AutoNotifyReadyCheck : DailyModuleBase
         Description = GetLoc("AutoNotifyReadyCheckDescription"),
         Category    = ModuleCategories.Notice,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly HashSet<ushort> ValidTypes = [57, 313, 569];
     private static readonly string[] ValidStrings = ["发起了准备确认", "a ready check", "レディチェックを開始しました"];

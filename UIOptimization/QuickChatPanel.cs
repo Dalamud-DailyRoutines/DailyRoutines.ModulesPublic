@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
-using DailyRoutines.Windows;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Keys;
@@ -46,7 +44,7 @@ public unsafe class QuickChatPanel : DailyModuleBase
     private static string MessageInput    = string.Empty;
     private static int    DropMacroIndex  = -1;
     
-    private static IconButtonNode ImageButton;
+    private static IconButtonNode? ImageButton;
     
     private static List<PanelTabBase> PanelTabs = [];
 
@@ -416,15 +414,11 @@ public unsafe class QuickChatPanel : DailyModuleBase
                 var text      = SeString.Parse(textNode->NodeText);
                 if (!string.IsNullOrWhiteSpace(text.ExtractText()))
                 {
-                    var utf8String = Utf8String.FromSequence(text.Encode());
-                    ChatHelper.SendMessageUnsafe(utf8String);
-                    utf8String->Dtor(true);
+                    ChatManager.SendMessage(text.Encode());
 
                     var inputComponent = (AtkComponentTextInput*)inputNode->Component;
-                    inputComponent->UnkText1.Clear();
-                    inputComponent->UnkText2.Clear();
-                    inputComponent->UnkText01.Clear();
-                    inputComponent->UnkText02.Clear();
+                    inputComponent->EvaluatedString.Clear();
+                    inputComponent->RawString.Clear();
                     inputComponent->AvailableLines.Clear();
                     inputComponent->HighlightedAutoTranslateOptionColorPrefix.Clear();
                     inputComponent->HighlightedAutoTranslateOptionColorSuffix.Clear();
@@ -459,19 +453,7 @@ public unsafe class QuickChatPanel : DailyModuleBase
         }
 
         if (ImGui.TabItemButton($"{FontAwesomeIcon.Cog.ToIconString()}###OpenQuickChatPanelSettings"))
-        {
-            if (WindowManager.Get<Main>() is { } main)
-            {
-                main.IsOpen ^= true;
-                if (main.IsOpen)
-                {
-                    Main.TabSearch.SearchString = GetLoc("QuickChatPanelTitle");
-                    return;
-                }
-
-                Main.TabSearch.SearchString = string.Empty;
-            }
-        }
+            ChatManager.SendMessage($"/pdr search {GetLoc("QuickChatPanelTitle")}");
     }
 
     private void OnAddon(AddonEvent type, AddonArgs? args)
@@ -512,7 +494,7 @@ public unsafe class QuickChatPanel : DailyModuleBase
                                    ModuleConfig.ButtonOffset
                     };
                     
-                    Service.AddonController.AttachNode(ImageButton, textInputNode);
+                    ImageButton?.AttachNode(textInputNode);
                 }
 
                 if (Throttler.Throttle("QuickChatPanel-UpdateButtonNodes"))
@@ -526,7 +508,7 @@ public unsafe class QuickChatPanel : DailyModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(ImageButton);
+                ImageButton?.DetachNode();
                 ImageButton = null;
                 break;
         }
@@ -679,7 +661,7 @@ public unsafe class QuickChatPanel : DailyModuleBase
                         ImGui.SetClipboardText(message);
 
                     if (ImGui.IsItemClicked(ImGuiMouseButton.Right)) 
-                        ChatHelper.SendMessage(message);
+                        ChatManager.SendMessage(message);
 
                     ImGuiOm.TooltipHover(GetLoc("QuickChatPanel-SendMessageHelp"));
 
@@ -811,7 +793,7 @@ public unsafe class QuickChatPanel : DailyModuleBase
                             UIGlobals.PlayChatSoundEffect(seNote.Key);
 
                         if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
-                            ChatHelper.SendMessage($"<se.{seNote.Key}><se.{seNote.Key}>");
+                            ChatManager.SendMessage($"<se.{seNote.Key}><se.{seNote.Key}>");
 
                         ImGuiOm.TooltipHover(GetLoc("QuickChatPanel-SystemSoundHelp"));
                     }

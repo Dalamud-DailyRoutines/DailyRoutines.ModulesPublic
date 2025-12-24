@@ -1,55 +1,66 @@
 using System.Collections.Generic;
 using System.Linq;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
-using Dalamud.Hooking;
-using Dalamud.Interface;
-using FFXIVClientStructs.FFXIV.Client.System.String;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.Shell;
+using Lumina.Text.ReadOnly;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
+public class AutoAddChatPrefixSuffix : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
         Title       = GetLoc("AutoAddChatPrefixSuffixTitle"),
         Description = GetLoc("AutoAddChatPrefixSuffixDescription"),
-        Author      = ["那年雪落"],
         Category    = ModuleCategories.System,
+        Author      = ["那年雪落"],
     };
-
-    private static readonly CompSig                          ProcessSendedChatSig = new("E8 ?? ?? ?? ?? FE 87 ?? ?? ?? ?? C7 87 ?? ?? ?? ?? ?? ?? ?? ??");
-    private delegate        void                             ProcessSendedChatDelegate(ShellCommandModule* module, Utf8String* message, UIModule* uiModule);
-    private static          Hook<ProcessSendedChatDelegate>? ProcessSendedChatHook;
 
     private static Config? ModuleConfig;
 
     protected override void Init()
     {
-        var config = LoadConfig<Config>();
-        if (config == null)
+        ModuleConfig = LoadConfig<Config>() ?? new()
         {
-            config = new Config();
-            if (LanguageManager.CurrentLanguage == "ChineseSimplified")
-                config.Blacklist.AddRange(".", "。", "？", "?", "！", "!", "吗", "吧", "呢", "啊", "呗", "呀", "阿", "哦", "嘛", "咯",
-                                     "哎", "啦", "哇", "呵", "哈", "奥", "嗷");
-            
-            SaveConfig(config);
-        }
-        
-        ModuleConfig = config;
+            Blacklist = !GameState.IsCN
+                            ? []
+                            :
+                            [
+                                ".",
+                                "。",
+                                "？",
+                                "?",
+                                "！",
+                                "!",
+                                "吗",
+                                "吧",
+                                "呢",
+                                "啊",
+                                "呗",
+                                "呀",
+                                "阿",
+                                "哦",
+                                "嘛",
+                                "咯",
+                                "哎",
+                                "啦",
+                                "哇",
+                                "呵",
+                                "哈",
+                                "奥",
+                                "嗷"
+                            ]
+        };
 
-        ProcessSendedChatHook ??= ProcessSendedChatSig.GetHook<ProcessSendedChatDelegate>(ProcessSendedChatDetour);
-        ProcessSendedChatHook.Enable();
+        ChatManager.RegPreExecuteCommandInner(OnPreExecuteCommandInner);
     }
+
+    protected override void Uninit() =>
+        ChatManager.Unreg(OnPreExecuteCommandInner);
 
     protected override void ConfigUI()
     {
         if (ImGui.Checkbox(GetLoc("Prefix"), ref ModuleConfig.IsAddPrefix)) 
             SaveConfig(ModuleConfig);
-
 
         if (ModuleConfig.IsAddPrefix)
         {
@@ -123,40 +134,30 @@ public unsafe class AutoAddChatPrefixSuffix : DailyModuleBase
         }
     }
 
-    private static void ProcessSendedChatDetour(ShellCommandModule* module, Utf8String* message, UIModule* uiModule)
+    private static void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
-        var messageText = message->ExtractText();
-        var isCommand = messageText.StartsWith('/') || messageText.StartsWith('／');
+        var messageText   = message.ToString();
+        var isCommand     = messageText.StartsWith('/') || messageText.StartsWith('／');
         var isTellCommand = isCommand && messageText.StartsWith("/tell ");
 
         if ((!string.IsNullOrWhiteSpace(messageText) && !isCommand) || isTellCommand)
         {
             if (IsBlackListChat(messageText) || IsGameItemChat(messageText))
-            {
-                ProcessSendedChatHook.Original(module, message, uiModule);
                 return;
-            }
 
             if (AddPrefixAndSuffixIfNeeded(messageText, out var modifiedMessage, isTellCommand))
-            {
-                var finalMessage = Utf8String.FromString(modifiedMessage);
-                ProcessSendedChatHook.Original(module, finalMessage, uiModule);
-                finalMessage->Dtor(true);
-                return;
-            }
+                message = new(modifiedMessage);
         }
-        
-        ProcessSendedChatHook.Original(module, message, uiModule);
     }
 
-    private static bool IsWhitelistChat(string message) 
-        => ModuleConfig?.Blacklist.Any(whiteListChat => !string.IsNullOrEmpty(whiteListChat) && message.EndsWith(whiteListChat)) ?? false;
+    private static bool IsWhitelistChat(string message) => 
+        ModuleConfig?.Blacklist.Any(whiteListChat => !string.IsNullOrEmpty(whiteListChat) && message.EndsWith(whiteListChat)) ?? false;
 
-    private static bool IsBlackListChat(string message)
-       => ModuleConfig?.Blacklist.Any(blackListChat => !string.IsNullOrEmpty(blackListChat) && message.EndsWith(blackListChat)) ?? false;
+    private static bool IsBlackListChat(string message) => 
+        ModuleConfig?.Blacklist.Any(blackListChat => !string.IsNullOrEmpty(blackListChat) && message.EndsWith(blackListChat)) ?? false;
 
-    private static bool IsGameItemChat(string message)
-        => message.Contains("<item>") || message.Contains("<flag>") || message.Contains("<pfinder>");
+    private static bool IsGameItemChat(string message) => 
+        message.Contains("<item>") || message.Contains("<flag>") || message.Contains("<pfinder>");
 
     private static bool AddPrefixAndSuffixIfNeeded(string original, out string handledMessage, bool isTellCommand = false)
     {

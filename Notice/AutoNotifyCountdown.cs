@@ -19,7 +19,9 @@ public class AutoNotifyCountdown : DailyModuleBase
         Author      = ["HSS"]
     };
     
-    private static readonly List<string> Countdown = LuminaGetter.GetRow<LogMessage>(5255)!.Value.Text.ToDalamudString().Payloads
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly List<string> Countdown = LuminaGetter.GetRowOrDefault<LogMessage>(5255).Text.ToDalamudString().Payloads
                                                                  .Where(x => x.Type == PayloadType.RawText)
                                                                  .Select(text => text.ToString() ?? string.Empty).ToList();
 

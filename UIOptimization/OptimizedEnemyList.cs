@@ -1,20 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
-using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Extensions;
 using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
@@ -27,6 +24,8 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         Description = GetLoc("OptimizedEnemyListDescription"),
         Category    = ModuleCategories.UIOptimization
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig                                AgentHudUpdateEnemyListSig = new("40 55 57 41 56 48 81 EC ?? ?? ?? ?? 4C 8B F1");
     private delegate        void                                   AgentHudUpdateEnemyListDelegate(AgentHUD* agent);
@@ -36,7 +35,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
     private static Dictionary<uint, int> HaterInfo = [];
     
-    private static readonly List<(uint ComponentNodeID, TextNode TextNode, NineGridNode BackgroundNode, EnemyCastProgressBarNode CastBarNode)> TextNodes = [];
+    private static readonly List<(uint ComponentNodeID, TextNode TextNode, NineGridNode BackgroundNode, ProgressBarEnemyCastNode CastBarNode)> TextNodes = [];
 
     private static string CastInfoTargetBlacklistInput = string.Empty;
 
@@ -54,19 +53,29 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Offset"));
-        
-        ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
-        ImGui.InputFloat2("###TextOffsetInput", ref ModuleConfig.TextOffset, format: "%.1f");
+        ImGui.InputFloat2($"{GetLoc("Offset")}###TextOffsetInput", ref ModuleConfig.TextOffset, format: "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             ModuleConfig.Save(this);
             UpdateTextNodes();
         }
         
-        ImGui.Spacing();
+        ImGui.SetNextItemWidth(200f * GlobalFontScale);
+        ImGui.InputByte($"{GetLoc("FontSize")}###FontSize", ref ModuleConfig.FontSize);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            ModuleConfig.Save(this);
+            UpdateTextNodes();
+        }
+        
+        if (ImGui.Checkbox(GetLoc("OptimizedEnemyList-ShowCastInfo"), ref ModuleConfig.ShowCastInfo))
+        {
+            ModuleConfig.Save(this);
+            UpdateTextNodes();
+        }
+        
+        ImGui.NewLine();
 
         if (ImGui.Checkbox(GetLoc("OptimizedEnemyList-UseCustomColor"), ref ModuleConfig.UseCustomizeTextColor))
         {
@@ -76,45 +85,41 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
         if (ModuleConfig.UseCustomizeTextColor)
         {
-            ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Color")}:");
+            ModuleConfig.TextColor = ImGuiComponents.ColorPickerWithPalette(0, "###TextColorInput", ModuleConfig.TextColor);
             
             ImGui.SameLine();
-            ModuleConfig.TextColor =
-                ImGuiComponents.ColorPickerWithPalette(0, "###TextColorInput", ModuleConfig.TextColor);
+            ImGui.Text($"{GetLoc("Color")}");
             
-            ImGui.SameLine();
+            ImGui.SameLine(0, 4f * GlobalFontScale);
             ImGui.TextDisabled("|");
 
-            ImGui.SameLine();
-            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("EdgeColor")}:");
+            ImGui.SameLine(0, 4f * GlobalFontScale);
+            ModuleConfig.EdgeColor = ImGuiComponents.ColorPickerWithPalette(1, "###EdgeColorInput", ModuleConfig.EdgeColor);
             
             ImGui.SameLine();
-            ModuleConfig.EdgeColor =
-                ImGuiComponents.ColorPickerWithPalette(1, "###EdgeColorInput", ModuleConfig.EdgeColor);
-            
-            ImGui.SameLine();
+            ImGui.Text($"{GetLoc("EdgeColor")}");
+
+            ImGui.SameLine(0, 4f * GlobalFontScale);
             ImGui.TextDisabled("|");
             
-            ImGui.SameLine();
-            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("BackgroundColor")}:");
+            ImGui.SameLine(0, 4f * GlobalFontScale);
+            ModuleConfig.BackgroundNodeColor = ImGuiComponents.ColorPickerWithPalette(2, "###BackgroundColorInput", ModuleConfig.BackgroundNodeColor);
             
             ImGui.SameLine();
-            ModuleConfig.BackgroundNodeColor =
-                ImGuiComponents.ColorPickerWithPalette(2, "###BackgroundColorInput", ModuleConfig.BackgroundNodeColor);
+            ImGui.Text($"{GetLoc("BackgroundColor")}");
             
-            ImGui.SameLine();
+            ImGui.SameLine(0, 4f * GlobalFontScale);
             ImGui.TextDisabled("|");
             
-            ImGui.SameLine();
-            if (ImGui.Button($"{GetLoc("Save")}"))
+            ImGui.SameLine(0, 4f * GlobalFontScale);
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Save, $"{GetLoc("Save")}"))
             {
                 ModuleConfig.Save(this);
                 UpdateTextNodes();
             }
             
             ImGui.SameLine();
-            if (ImGui.Button($"{GetLoc("Reset")}"))
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Redo, $"{GetLoc("Reset")}"))
             {
                 ModuleConfig.TextColor           = Vector4.One;
                 ModuleConfig.EdgeColor           = new(0, 0.372549f, 1, 1);
@@ -125,8 +130,8 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             }
         }
         
-        ImGui.Spacing();
-
+        ImGui.NewLine();
+        
         if (ImGui.Checkbox(GetLoc("OptimizedEnemyList-UseCustomGeneralInfo"), ref ModuleConfig.UseCustomizeText))
         {
             ModuleConfig.Save(this);
@@ -135,7 +140,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
         if (ModuleConfig.UseCustomizeText)
         {
-            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing());
+            ImGui.SetNextItemWidth(300f * GlobalFontScale);
             ImGui.InputText("###CustomizeTextPatternInput", ref ModuleConfig.CustomizeTextPattern);
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
@@ -144,21 +149,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             }
         }
         
-        ImGui.Spacing();
-        
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("FontSize"));
-        
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        ImGui.InputByte("###FontSize", ref ModuleConfig.FontSize);
-        if (ImGui.IsItemDeactivatedAfterEdit())
-        {
-            ModuleConfig.Save(this);
-            UpdateTextNodes();
-        }
-        
-        ImGui.Spacing();
+        ImGui.NewLine();
         
         ImGui.AlignTextToFramePadding();
 
@@ -248,18 +239,21 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             return;
         }
         
-        var numberArray = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.EnemyList);
-        if (numberArray == null) return;
+        var enemyListArray = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.EnemyList);
+        if (enemyListArray == null) return;
+
+        var hudArray = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.Hud2);
+        if (hudArray == null) return;
         
         var castWidth  = stackalloc ushort[1];
         var castHeight = stackalloc ushort[1];
-
-        var isTargetCasting = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.Hud2)->IntArray[69] != -1;
+        
+        var isTargetCasting = hudArray->IntArray[69] != -1;
         for (var i = 0; i < nodes.Count; i++)
         {
             var offset = 8 + (i * 6);
             
-            var gameObjectID = (ulong)numberArray->IntArray[offset];
+            var gameObjectID = (ulong)enemyListArray->IntArray[offset];
             if (gameObjectID is 0 or 0xE0000000) continue;
 
             var textNode       = nodes[i].TextNode;
@@ -304,8 +298,8 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                 if (castBackgroundNode != null) 
                     castBackgroundNode->SetAlpha(0);
                 
-                castBarNode.IsVisible = true;
-                castBarNode.ProgressNode.Width  = 105 * (bc.CurrentCastTime / bc.TotalCastTime);
+                castBarNode.IsVisible          = true;
+                castBarNode.ProgressNode.Width = 105 * (bc.CurrentCastTime / bc.TotalCastTime);
 
                 if (bc.IsCastInterruptible)
                     castBarNode.AddColor = KnownColor.Red.ToVector4().ToVector3();
@@ -322,13 +316,13 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             
             textNode.TextColor = ModuleConfig.UseCustomizeTextColor
                                       ? ModuleConfig.TextColor
-                                      : ConvertByteColorToVector4(castTextNode->TextColor);
+                                      : castTextNode->TextColor.ToVector4();
             textNode.TextOutlineColor = ModuleConfig.UseCustomizeTextColor
                                      ? ModuleConfig.EdgeColor
                                      : new(0, 0.372549f, 1, 1);
             backgroundNode.Color = ModuleConfig.UseCustomizeTextColor
                                        ? ModuleConfig.BackgroundNodeColor
-                                       : ConvertByteColorToVector4(castTextNode->BackgroundColor);
+                                       : castTextNode->BackgroundColor.ToVector4();
             
             textNode.FontSize = ModuleConfig.FontSize;
             
@@ -336,26 +330,29 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             {
                 var castTimeLeft = MathF.Max(bc.TotalCastTime - bc.CurrentCastTime, 0f);
 
-                textNode.SeString        = $"{GetCastInfoText(bc.CastActionType, bc.CastActionID)}: " + (castTimeLeft != 0 ? $"{castTimeLeft:F1}" : "\ue07f\ue07b");
+                textNode.String          = $"{GetCastInfoText(bc.CastActionType, bc.CastActionID)}: " + (castTimeLeft != 0 ? $"{castTimeLeft:F1}" : "\ue07f\ue07b");
                 backgroundNode.IsVisible = true;
             }            
             else if (!bc.IsTargetable && bc.CurrentHp == bc.MaxHp)
             {
-                textNode.SeString        = string.Empty;
+                textNode.String          = string.Empty;
                 backgroundNode.IsVisible = false;
             }
             else
             {
-                textNode.SeString        = GetGeneralInfoText((float)bc.CurrentHp / bc.MaxHp * 100, enmity);
+                textNode.String          = GetGeneralInfoText((float)bc.CurrentHp / bc.MaxHp * 100, enmity);
                 backgroundNode.IsVisible = true;
             }
             
             textNode.Position = new(Math.Max(95, *castWidth + 28) + ModuleConfig.TextOffset.X, 4 + ModuleConfig.TextOffset.Y);
 
-            var textSize = textNode.GetTextDrawSize(textNode.SeString);
-            
-            backgroundNode.Position = new(Math.Max(68, *castWidth + 1) + (isCasting ? 12.5f : 0) + ModuleConfig.TextOffset.X, 6 + ModuleConfig.TextOffset.Y);
-            backgroundNode.Size     = new(textSize.X                   + 47                      + (isCasting ? -18 : 0), textSize.Y * 0.7f);
+            if (!string.IsNullOrWhiteSpace(textNode.String))
+            {
+                var textSize = textNode.GetTextDrawSize(textNode.SeString);
+
+                backgroundNode.Position = new(Math.Max(68, *castWidth + 1) + (isCasting ? 12.5f : 0) + ModuleConfig.TextOffset.X, 6 + ModuleConfig.TextOffset.Y);
+                backgroundNode.Size     = new(textSize.X                   + 47                      + (isCasting ? -18 : 0), textSize.Y * 0.7f);
+            }
         }
     }
 
@@ -400,7 +397,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             };
 
-            var castBarNode = new EnemyCastProgressBarNode
+            var castBarNode = new ProgressBarEnemyCastNode
             {
                 IsVisible = true,
                 Position  = new(85, 13.7f),
@@ -411,9 +408,9 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             castBarNode.ProgressNode.Position += new Vector2(7.7f, 6.5f);
             castBarNode.ProgressNode.AddColor =  new(1);
             
-            Service.AddonController.AttachNode(backgroundNode, node);
-            Service.AddonController.AttachNode(textNode,       node);
-            Service.AddonController.AttachNode(castBarNode,    node);
+            backgroundNode.AttachNode(node);
+            textNode.AttachNode(node);
+            castBarNode.AttachNode(node);
             
             TextNodes.Add(new(node->NodeId, textNode, backgroundNode, castBarNode));
         }
@@ -423,9 +420,9 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
     {
         foreach (var (_, textNode, backgroundNode, castBarNode) in TextNodes)
         {
-            Service.AddonController.DetachNode(textNode);
-            Service.AddonController.DetachNode(backgroundNode);
-            Service.AddonController.DetachNode(castBarNode);
+            textNode?.DetachNode();
+            backgroundNode?.DetachNode();
+            castBarNode?.DetachNode();
         }
         
         TextNodes.Clear();

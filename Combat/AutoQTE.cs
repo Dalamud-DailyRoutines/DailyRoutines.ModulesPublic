@@ -16,6 +16,8 @@ public class AutoQTE : DailyModuleBase
         Description = GetLoc("AutoQTEDescription"),
         Category    = ModuleCategories.Combat,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig                         IsInputIDPressedSig = new("E9 ?? ?? ?? ?? 83 7F 44 02");
     private unsafe delegate byte                            IsInputIDPressedDelegate(void* data, InputId id);

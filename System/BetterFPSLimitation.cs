@@ -7,16 +7,14 @@ using DailyRoutines.Managers;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Interface;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Addon;
+using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
-using KamiToolKit.System;
 using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
@@ -29,6 +27,8 @@ public class BetterFPSLimitation : DailyModuleBase
         Description = GetLoc("BetterFPSLimitationDescription"),
         Category    = ModuleCategories.System
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private const string Command = "fps";
 
@@ -52,15 +52,14 @@ public class BetterFPSLimitation : DailyModuleBase
                                           .GroupBy(x => x.index / 3)
                                           .Select(g => g.Select(x => x.value).ToList())
                                           .ToList();
-        
+
         Addon ??= new()
         {
-            InternalName     = "DRBetterFPSLimitation",
-            Title            = LuminaWrapper.GetAddonText(4032),
-            Size             = new(250f, 208f + (32f * thresholdGroups.Count)),
-            Position         = ModuleConfig.AddonPosition,
-            NativeController = Service.AddonController,
+            InternalName = "DRBetterFPSLimitation",
+            Title        = LuminaWrapper.GetAddonText(4032),
+            Size         = new(250f, 208f + (32f * thresholdGroups.Count)),
         };
+        Addon.SetWindowPosition(ModuleConfig.AddonPosition);
 
         HandleDtrEntry(true);
         FrameworkManager.Reg(OnUpdate, throttleMS: 1_000);
@@ -131,8 +130,8 @@ public class BetterFPSLimitation : DailyModuleBase
 
     private static unsafe void Update()
     {
-        *(int*)((byte*)Device.Instance()   + 0xA8) = ModuleConfig.IsEnabled ? 1 : 0;
-        *(short*)((byte*)Device.Instance() + 0xAE) = ModuleConfig.Limitation;
+        *(int*)((nint)Device.Instance()   + 168) = ModuleConfig.IsEnabled ? 1 : 0;
+        *(short*)((nint)Device.Instance() + 174) = ModuleConfig.Limitation;
     }
     
     private static void HandleDtrEntry(bool isAdd)
@@ -193,7 +192,7 @@ public class BetterFPSLimitation : DailyModuleBase
             FPSWidget          = CreateFPSWidget();
             FPSWidget.Position = ContentStartPosition;
 
-            NativeController.AttachNode(FPSWidget, this);
+            FPSWidget.AttachNode(this);
 
             Size = Size with { Y = FPSWidget.Height + 65 };
             
@@ -206,7 +205,7 @@ public class BetterFPSLimitation : DailyModuleBase
             {
                 var text       = LuminaGetter.GetRow<Addon>(4002).GetValueOrDefault().Text.ToDalamudString();
                 text.Payloads[0] = new TextPayload($"{Framework.Instance()->FrameRate:F0}");
-                FPSDisplayNumberNode.SeString = text;
+                FPSDisplayNumberNode.SeString = text.Encode();
             }
 
             if (IsEnabledNode != null)
@@ -220,7 +219,7 @@ public class BetterFPSLimitation : DailyModuleBase
         
         protected override unsafe void OnFinalize(AtkUnitBase* addon)
         {
-            ModuleConfig.AddonPosition = Position;
+            ModuleConfig.AddonPosition = RootNode.Position;
             ModuleConfig.Save(ModuleManager.GetModule<BetterFPSLimitation>());
             
             base.OnFinalize(addon);

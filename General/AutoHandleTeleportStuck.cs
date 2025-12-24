@@ -12,6 +12,8 @@ public class AutoHandleTeleportStuck : DailyModuleBase
         Category    = ModuleCategories.General
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     protected override void Init() => 
         LogMessageManager.Register(OnReceiveLogMessage);
 

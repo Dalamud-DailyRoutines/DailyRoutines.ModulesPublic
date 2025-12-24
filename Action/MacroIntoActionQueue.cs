@@ -12,6 +12,8 @@ public unsafe class MacroIntoActionQueue : DailyModuleBase
         Description = GetLoc("MacroIntoActionQueueDescription"),
         Category    = ModuleCategories.Action,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() => 
         UseActionManager.RegPreUseAction(OnPreUseAction);

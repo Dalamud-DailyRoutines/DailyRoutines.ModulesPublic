@@ -6,6 +6,7 @@ using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 改成使用 KamiToolKit 的 Overlay
 public unsafe class AutoDisplayFateItemCount : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -15,6 +16,8 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
         Category    = ModuleCategories.Combat
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     protected override void Init()
     {
         Overlay       ??= new(this);

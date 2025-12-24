@@ -18,8 +18,9 @@ public unsafe class AutoMateriaRetrive : DailyModuleBase
         Category    = ModuleCategories.General,
     };
 
-    private static readonly CompSig RetriveMateriaSig = new("E8 ?? ?? ?? ?? EB 25 48 8B 01");
-    private delegate        bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam);
+    // TODO: 找一下这个 a6 到底是干什么的
+    private static readonly CompSig RetriveMateriaSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 41 8B F8");
+    private delegate        bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6);
     private static          Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
 
     private static readonly InventoryType[] Inventories =
@@ -198,12 +199,12 @@ public unsafe class AutoMateriaRetrive : DailyModuleBase
         var instance = EventFramework.Instance();
         const int eventID = 0x390001;
 
-        RetriveMateriaHook.Original(instance, eventID, type, slot, 0);
+        RetriveMateriaHook.Original(instance, eventID, type, slot, 0, 0);
     }
 
-    private bool RetriveMateriaDetour(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam)
+    private bool RetriveMateriaDetour(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6)
     {
-        var original = RetriveMateriaHook.Original(framework, eventID, inventoryType, inventorySlot, extraParam);
+        var original = RetriveMateriaHook.Original(framework, eventID, inventoryType, inventorySlot, extraParam, a6);
         if (eventID == 0x390001 && original && !TaskHelper.IsBusy)
             EnqueueRetriveTask(inventoryType, inventorySlot);
 

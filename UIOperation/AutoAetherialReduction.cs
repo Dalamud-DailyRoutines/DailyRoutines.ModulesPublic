@@ -20,9 +20,9 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
         Author      = ["YLCHEN"]
     };
 
-    private static TextNode       LableNode;
-    private static TextButtonNode StartButtonNode;
-    private static TextButtonNode StopButtonNode;
+    private static TextNode?       LableNode;
+    private static TextButtonNode? StartButtonNode;
+    private static TextButtonNode? StopButtonNode;
     
     protected override void Init()
     {
@@ -104,7 +104,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
                         AlignmentType = AlignmentType.Right,
                         TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
                     };
-                    Service.AddonController.AttachNode(LableNode, PurifyItemSelector->RootNode);
+                    LableNode.AttachNode(PurifyItemSelector->RootNode);
                 }
 
                 if (StartButtonNode == null)
@@ -117,7 +117,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
                         SeString  = GetLoc("Start"),
                         OnClick   = () => StartReduction()
                     };
-                    Service.AddonController.AttachNode(StartButtonNode, PurifyItemSelector->RootNode);
+                    StartButtonNode.AttachNode(PurifyItemSelector->RootNode);
                 }
 
                 StartButtonNode.IsEnabled = !TaskHelper.IsBusy;
@@ -132,7 +132,7 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
                         SeString  = GetLoc("Stop"),
                         OnClick   = () => TaskHelper.Abort()
                     };
-                    Service.AddonController.AttachNode(StopButtonNode, PurifyItemSelector->RootNode);
+                    StopButtonNode.AttachNode(PurifyItemSelector->RootNode);
                 }
                 
                 break;
@@ -160,13 +160,13 @@ public unsafe class AutoAetherialReduction : DailyModuleBase
     
     private static void ClearNodes()
     {
-        Service.AddonController.DetachNode(LableNode);
+        LableNode?.DetachNode();
         LableNode = null;
         
-        Service.AddonController.DetachNode(StartButtonNode);
+        StartButtonNode?.DetachNode();
         StartButtonNode = null;
         
-        Service.AddonController.DetachNode(StopButtonNode);
+        StopButtonNode?.DetachNode();
         StopButtonNode = null;
     }
     

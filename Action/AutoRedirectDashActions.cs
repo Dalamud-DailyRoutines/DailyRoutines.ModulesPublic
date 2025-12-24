@@ -15,7 +15,7 @@ public class AutoRedirectDashActions : DailyModuleBase
         Category    = ModuleCategories.Action,
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true, CNPremium = true };
+    public override ModulePermission Permission { get; } = new() { NeedAuth = true, CNPremium = true, TCPremium = true };
 
     private static Config ModuleConfig = null!;
 

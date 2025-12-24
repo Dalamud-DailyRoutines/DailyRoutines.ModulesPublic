@@ -11,6 +11,8 @@ public class BetterWaitCommand : DailyModuleBase
         Category    = ModuleCategories.System,
         Author      = ["Cindy-Master"],
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly MemoryPatch WaitSyntaxDecimalPatch = new(
         "F3 0F 58 05 ?? ?? ?? ?? F3 48 0F 2C C0 69 C8",

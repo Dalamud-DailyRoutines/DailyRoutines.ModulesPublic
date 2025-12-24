@@ -14,6 +14,8 @@ public unsafe class AutoHideExpBar : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static readonly CompSig UpdateExpSig = new("48 8B C4 4C 89 48 20 4C 89 40 18 53");
     private delegate void UpdateExpDelegate(AgentHUD* agent, NumberArrayData* expNumberArray, StringArrayData* expStringArray, StringArrayData* characterStringArray);
     private static Hook<UpdateExpDelegate>? UpdateExpHook;

@@ -17,6 +17,8 @@ public unsafe class OptimizedCharacterClass : DailyModuleBase
         Author      = ["Middo"]
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static readonly List<IAddonEventHandle> EventHandles = [];
     
     protected override void Init()

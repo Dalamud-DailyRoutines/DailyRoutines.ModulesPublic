@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -24,20 +22,19 @@ public class AutoFateSync : DailyModuleBase
     private static Config ModuleConfig = null!;
 
     private static CancellationTokenSource? CancelSource;
-
-    private static readonly uint[] TankStanceStatuses = [79, 91, 743, 1833];
-    private static readonly Dictionary<uint, uint> TankStanceActions = new()
+    
+    private static readonly Dictionary<uint, (uint ActionID, uint StatusID)> TankStanceActions = new()
     {
         // 剑术师 / 骑士
-        { 1, 28 },
-        { 19, 28 },
+        [1]  = (28, 79),
+        [19] = (28, 79),
         // 斧术师 / 战士
-        { 3, 48 },
-        { 21, 48 },
+        [3]  = (48, 91),
+        [21] = (48, 91),
         // 暗黑骑士
-        { 32, 3629 },
+        [32] = (3629, 743),
         // 绝枪战士
-        { 37, 16142 }
+        [37] = (16142, 1833)
     };
 
     protected override void Init()
@@ -54,7 +51,7 @@ public class AutoFateSync : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(50f * GlobalFontScale);
-        if (ImGui.InputFloat(GetLoc("AutoFateSync-Delay"), ref ModuleConfig.Delay, 0, 0, "%.1f"))
+        if (ImGui.InputFloat(GetLoc("AutoFateSync-Delay"), ref ModuleConfig.Delay, format: "%.1f"))
             ModuleConfig.Delay = Math.Max(0, ModuleConfig.Delay);
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
@@ -71,7 +68,8 @@ public class AutoFateSync : DailyModuleBase
             SaveConfig(ModuleConfig);
     }
     
-    private void OnEnterFate(uint fateID) => HandleFateEnter();
+    private void OnEnterFate(uint fateID) => 
+        HandleFateEnter();
 
     private unsafe void HandleFateEnter()
     {
@@ -91,6 +89,7 @@ public class AutoFateSync : DailyModuleBase
 
                 ExecuteFateLevelSync(manager->CurrentFate->FateId);
             }, TimeSpan.FromSeconds(ModuleConfig.Delay), 0, CancelSource.Token);
+            
             return;
         }
         
@@ -115,22 +114,28 @@ public class AutoFateSync : DailyModuleBase
     private unsafe void ExecuteFateLevelSync(ushort fateID)
     {
         ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.FateLevelSync, fateID, 1);
+        
+        TaskHelper.Abort();
         if (ModuleConfig.AutoTankStance)
         {
-            TaskHelper.Abort();
-            TaskHelper.Enqueue(() => !IsOnMount && !DService.Condition[ConditionFlag.Jumping] &&
+            TaskHelper.Enqueue(() => !IsOnMount                                 &&
+                                     !DService.Condition[ConditionFlag.Jumping] &&
                                      ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) == 0);
             TaskHelper.Enqueue(() =>
             {
-                if (FateManager.Instance()->CurrentFate == null || !LuminaGetter.TryGetRow<Fate>(fateID, out var data)) return true;
-                if (DService.ObjectTable.LocalPlayer is not { } localPlayer) return false;
-                if (!TankStanceActions.TryGetValue(localPlayer.ClassJob.RowId, out var actionID)) return false;
-                if (localPlayer.Level > data.ClassJobLevelMax) return false;
+                if (FateManager.Instance()->CurrentFate == null ||
+                    !LuminaGetter.TryGetRow<Fate>(fateID, out var data))
+                    return true;
+                if (DService.ObjectTable.LocalPlayer is not { } localPlayer)
+                    return false;
+                if (!TankStanceActions.TryGetValue(localPlayer.ClassJob.RowId, out var jobInfo))
+                    return false;
+                if (localPlayer.Level > data.ClassJobLevelMax)
+                    return false;
+                if (LocalPlayerState.HasStatus(jobInfo.StatusID, out _)) 
+                    return true;
                 
-                var battlePlayer = localPlayer.ToStruct();
-                if (!TankStanceStatuses.Any(status => battlePlayer->StatusManager.HasStatus(status)))
-                    UseActionManager.UseAction(ActionType.Action, actionID);
-
+                UseActionManager.UseAction(ActionType.Action, jobInfo.ActionID);
                 return true;
             });
         }

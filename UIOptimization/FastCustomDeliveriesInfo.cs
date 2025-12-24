@@ -39,7 +39,7 @@ public unsafe class FastCustomDeliveriesInfo : DailyModuleBase
     };
 
     private static bool IsEligibleForTeleporting =>
-        !GameState.IsCN || AuthState.IsPremium;
+        !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium;
     
     private static Hook<AgentReceiveEventDelegate> AgentSatisfactionListReceiveEventHook;
 

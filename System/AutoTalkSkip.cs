@@ -102,7 +102,12 @@ public unsafe class AutoTalkSkip : DailyModuleBase
         };
         
         var data = stackalloc AtkEventData[1];
+        for(var i = 0; i < sizeof(AtkEventData); i++)
+            ((byte*)data)[i] = 0;
+        
+        addon->ReceiveEvent(AtkEventType.MouseDown, 0, evt, data);
         addon->ReceiveEvent(AtkEventType.MouseClick, 0, evt, data);
+        addon->ReceiveEvent(AtkEventType.MouseUp, 0, evt, data);
     }
 
     private static ulong LuaStateTalkDetour(lua_State* state)

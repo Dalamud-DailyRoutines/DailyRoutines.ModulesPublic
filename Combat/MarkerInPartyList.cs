@@ -1,18 +1,18 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
-using System.Threading;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.System.Memory;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel;
+using KamiToolKit.Classes;
+using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -26,41 +26,38 @@ public unsafe class MarkerInPartyList : DailyModuleBase
         Author      = ["status102"]
     };
 
-    private const int DefaultIconID = 61201;
-    private static readonly (short X, short Y) BasePosition = (41, 35);
-    private static ExcelSheet<Marker>? MarkerSheet;
+    private const           int                DefaultIconID = 61201;
+    private static readonly (short X, short Y) BasePosition  = (41, 35);
 
     private static readonly CompSig LocalMarkingSig = new("E8 ?? ?? ?? ?? 4C 8B C5 8B D7 48 8B CB E8");
-    public static Hook<LocalMarkingFunc>? LocalMarkingHook;
-    public delegate void LocalMarkingFunc(nint manager, uint markingType, nint objectID, nint a4);
+    public delegate         void    LocalMarkingDelegate(void* manager, uint markingType, GameObjectId objectID, uint entityID);
+    public static           Hook<LocalMarkingDelegate>? LocalMarkingHook;
 
-    private static          Config?              ModuleConfig;
-    private static readonly List<nint>           ImageNodes   = new(8);
-    private static readonly Dictionary<int, int> MarkedObject = new(8); // markId, memberIndex
-    private static          bool                 IsBuilt, NeedClear;
+    private static Config? ModuleConfig;
     
-    private static readonly Lock Lock = new();
+    private static readonly Dictionary<int, int> MarkedObject = new(8); // markID, memberIndex
+    private static readonly List<IconImageNode>  NodeList = new(8);
 
+    private static bool NeedClear;
+    
     protected override void Init()
     {
-        IsBuilt = false;
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        ModuleConfig =   LoadConfig<Config>() ?? new();
+        TaskHelper   ??= new();
 
-        TaskHelper ??= new();
-        MarkerSheet ??= DService.Data.GetExcelSheet<Marker>();
-
-        LocalMarkingHook = DService.Hook.HookFromSignature<LocalMarkingFunc>(LocalMarkingSig.Get(), DetourLocalMarkingFunc);
+        LocalMarkingHook = LocalMarkingSig.GetHook<LocalMarkingDelegate>(LocalMarkingDetour);
         LocalMarkingHook.Enable();
 
         DService.ClientState.TerritoryChanged += ResetMarkedObject;
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_PartyList", PartyListDrawHandle);
-        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_PartyList", PartyListFinalizeHandle);
+        
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "_PartyList", OnAddonPartyList);
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_PartyList", OnAddonPartyList);
     }
 
     protected override void Uninit()
     {
-        DService.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, PartyListDrawHandle);
-        DService.AddonLifecycle.UnregisterListener(AddonEvent.PreFinalize, PartyListFinalizeHandle);
+        DService.AddonLifecycle.UnregisterListener(OnAddonPartyList);
+        
         DService.ClientState.TerritoryChanged -= ResetMarkedObject;
 
         ResetPartyMemberList();
@@ -70,11 +67,13 @@ public unsafe class MarkerInPartyList : DailyModuleBase
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
-        ImGui.InputFloat2(Lang.Get("MarkerInPartyList-IconOffset"), ref ModuleConfig.IconOffset, format: "%d");
+        var iconOffset = ModuleConfig.IconOffset;
+        ImGui.InputFloat2(Lang.Get("MarkerInPartyList-IconOffset"), ref iconOffset, format: "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
+            ModuleConfig.IconOffset = iconOffset;
             SaveConfig(ModuleConfig);
-            RefreshPosition();
+            RefreshNodeStatus();
         }
 
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
@@ -82,13 +81,23 @@ public unsafe class MarkerInPartyList : DailyModuleBase
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             SaveConfig(ModuleConfig);
-            RefreshPosition();
+            RefreshNodeStatus();
         }
 
         if (ImGui.Checkbox(Lang.Get("MarkerInPartyList-HidePartyListIndexNumber"), ref ModuleConfig.HidePartyListIndexNumber))
         {
             SaveConfig(ModuleConfig);
-            ResetPartyMemberList();
+
+            var hide = ModuleConfig.HidePartyListIndexNumber;
+            foreach (var (node, i) in NodeList.Zip(Enumerable.Range(10, 8)))
+            {
+                var component = PartyList->GetNodeById((uint)i);
+                if (component is null || !component->IsVisible())
+                    continue;
+                hide = hide && node.IsVisible;
+            }
+
+            ModifyPartyMemberNumber(!hide);
         }
     }
 
@@ -100,23 +109,20 @@ public unsafe class MarkerInPartyList : DailyModuleBase
         ResetPartyMemberList();
     }
 
-    private static void ResetPartyMemberList(AtkUnitBase* partylist = null)
+    private static void ResetPartyMemberList()
     {
-        if (partylist is null)
-            partylist = PartyList;
-        if (partylist is not null && partylist->UldManager.LoadedState is AtkLoadState.Loaded)
-            ModifyPartyMemberNumber(partylist, true);
+        if (!IsAddonAndNodesReady(PartyList)) return;
+        ModifyPartyMemberNumber(true);
     }
 
-    private static void ModifyPartyMemberNumber(AtkUnitBase* pPartyList, bool visible)
+    private static void ModifyPartyMemberNumber(bool visible)
     {
-        if (pPartyList is null || ModuleConfig == null || (!ModuleConfig.HidePartyListIndexNumber && !visible))
+        if (!IsAddonAndNodesReady(PartyList) || (!ModuleConfig.HidePartyListIndexNumber && !visible))
             return;
 
-        var memberIDList = Enumerable.Range(10, 8).ToList();
-        foreach (var id in memberIDList)
+        foreach (var id in Enumerable.Range(10, 8).ToList())
         {
-            var member = pPartyList->GetNodeById((uint)id);
+            var member = PartyList->GetNodeById((uint)id);
             if (member is null || member->GetComponent() is null)
                 continue;
 
@@ -128,241 +134,103 @@ public unsafe class MarkerInPartyList : DailyModuleBase
                 textNode->ToggleVisibility(visible);
         }
     }
-
-    #region ImageNode
-
-    private static AtkImageNode* GenerateImageNode()
-    {
-        var node = (AtkImageNode*)IMemorySpace.GetUISpace()->Malloc((ulong)sizeof(AtkImageNode), 8);
-        if (node == null)
-        {
-            DService.Log.Error("Failed to allocate memory for image parentNode");
-            return null;
-        }
-        IMemorySpace.Memset(node, 0, (ulong)sizeof(AtkImageNode));
-        node->Ctor();
-
-        node->AtkResNode.Type = NodeType.Image;
-        node->AtkResNode.NodeFlags = NodeFlags.AnchorLeft | NodeFlags.AnchorTop;
-        node->AtkResNode.DrawFlags = 0;
-
-        node->WrapMode = 1;
-        node->Flags |= (byte)ImageNodeFlags.AutoFit;
-
-        var partsList = (AtkUldPartsList*)IMemorySpace.GetUISpace()->Malloc((ulong)sizeof(AtkUldPartsList), 8);
-        if (partsList == null)
-        {
-            DService.Log.Error("Failed to allocate memory for parts list");
-            node->AtkResNode.Destroy(true);
-            return null;
-        }
-
-        partsList->Id = 0;
-        partsList->PartCount = 1;
-
-        var part = (AtkUldPart*)IMemorySpace.GetUISpace()->Malloc((ulong)sizeof(AtkUldPart), 8);
-        if (part == null)
-        {
-            DService.Log.Error("Failed to allocate memory for part");
-            IMemorySpace.Free(partsList, (ulong)sizeof(AtkUldPartsList));
-            node->AtkResNode.Destroy(true);
-            return null;
-        }
-
-        part->U = 0;
-        part->V = 0;
-        part->Width = 80;
-        part->Height = 80;
-
-        partsList->Parts = part;
-
-        var asset = (AtkUldAsset*)IMemorySpace.GetUISpace()->Malloc((ulong)sizeof(AtkUldAsset), 8);
-        if (asset == null)
-        {
-            DService.Log.Error("Failed to allocate memory for asset");
-            IMemorySpace.Free(part, (ulong)sizeof(AtkUldPart));
-            IMemorySpace.Free(partsList, (ulong)sizeof(AtkUldPartsList));
-            node->AtkResNode.Destroy(true);
-            return null;
-        }
-
-        asset->Id = 0;
-        asset->AtkTexture.Ctor();
-
-        part->UldAsset = asset;
-
-        node->PartsList = partsList;
-
-        node->LoadIconTexture(DefaultIconID, 0);
-        node->AtkResNode.SetPriority(5);
-        return node;
-    }
-
-    private static void InitImageNodes()
-    {
-        var addon = PartyList;
-        if (addon == null) return;
-        
-        lock (Lock)
-        {
-            if (IsBuilt)
-                return;
-
-            foreach (var _ in Enumerable.Range(10, 8))
-            {
-                var imageNode = GenerateImageNode();
-                if (imageNode is null) continue;
-                
-                imageNode->AtkResNode.NodeId = 114514;
-                ImageNodes.Add((nint)imageNode);
-
-                LinkNodeAtEnd((AtkResNode*)imageNode, addon);
-            }
-            IsBuilt = true;
-        }
-    }
-
-    private void InitMarkedObject()
-    {
-        if (MarkingController.Instance() is null)
-            return;
-
-        var markers = MarkingController.Instance()->Markers;
-        for (var i = 0; i < markers.Length; i++)
-        {
-            var gameObjectID = markers[i].ObjectId;
-            if (gameObjectID == 0 || gameObjectID == 0xE0000000)
-                continue;
-            var index = (uint)i;
-            TaskHelper.Insert(() => ProcMarkIconSetted(index, gameObjectID));
-        }
-    }
-
-    private static void ReleaseImageNodes()
-    {
-        lock (Lock)
-        {
-            if (!IsBuilt)
-                return;
-
-            if (PartyList is null || PartyList->UldManager.LoadedState is not AtkLoadState.Loaded)
-            {
-                Error("Failed to get partylist");
-                return;
-            }
-
-            foreach (var item in ImageNodes)
-                UnlinkAndFreeImageNode((AtkImageNode*)item, PartyList);
-            ImageNodes.Clear();
-        }
-    }
-
-    private static void ShowImageNode(int i, int iconID)
-    {
-        if (i is < 0 or > 7 || PartyList is null || ImageNodes.Count <= i)
-            return;
-
-        var node = (AtkImageNode*)ImageNodes[i];
-        if (node is null)
-            return;
-
-        var component = PartyList->GetNodeById((uint)(10 + i));
-        var (x, y) = (component->X + BasePosition.X + ModuleConfig.IconOffset.X, component->Y + BasePosition.Y + ModuleConfig.IconOffset.Y);
-        node->LoadIconTexture((uint)iconID, 0);
-        node->AtkResNode.SetHeight((ushort)ModuleConfig.Size);
-        node->AtkResNode.SetWidth((ushort)ModuleConfig.Size);
-        node->AtkResNode.SetPositionFloat(x, y);
-        node->AtkResNode.ToggleVisibility(true);
-
-        ModifyPartyMemberNumber(PartyList, false);
-    }
-
-    private static void HideImageNode(int i)
-    {
-        if (i is < 0 or > 7 || ImageNodes.Count <= i)
-            return;
-        var node = (AtkImageNode*)ImageNodes[i];
-        if (node is null)
-            return;
-
-        node->AtkResNode.ToggleVisibility(false);
-    }
-
-    private static void RefreshPosition()
-    {
-        var addon = PartyList;
-        if (!IsAddonAndNodesReady(addon)) return;
-        
-        foreach (var item in ImageNodes.Zip(Enumerable.Range(10, 8)))
-        {
-            var node = (AtkImageNode*)item.First;
-            var component = addon->GetNodeById((uint)(10 + item.Second));
-            var (x, y) = (component->X + BasePosition.X + ModuleConfig.IconOffset.X,
-                             component->Y + BasePosition.Y + ModuleConfig.IconOffset.Y);
-            node->AtkResNode.SetPositionFloat(x, y);
-            node->AtkResNode.SetHeight((ushort)ModuleConfig.Size);
-            node->AtkResNode.SetWidth((ushort)ModuleConfig.Size);
-            node->AtkResNode.ToggleVisibility(true);
-        }
-    }
-
-    #endregion
-
-    #region Handle
-
-    private void PartyListDrawHandle(AddonEvent type, AddonArgs args)
-    {
-        lock (Lock)
-        {
-            if (!IsBuilt)
-            {
-                InitImageNodes();
-                InitMarkedObject();
-            }
-        }
-
-        if (NeedClear && MarkedObject.Count is 0 && IsScreenReady())
-        {
-            ResetPartyMemberList((AtkUnitBase*)args.Addon.Address);
-            NeedClear = false;
-        }
-    }
-
-    private static void PartyListFinalizeHandle(AddonEvent type, AddonArgs args) => ReleaseImageNodes();
-
-    private static void ProcMarkIconSetted(uint markIndex, uint entityID)
+    
+    private static void ProcessMarkIconSetted(uint markIndex, uint entityID)
     {
         if (AgentHUD.Instance() is null || InfoProxyCrossRealm.Instance() is null)
             return;
 
         int index;
         var mark = (int)(markIndex + 1);
-        if (mark <= 0 || mark > MarkerSheet.Count)
+        if (mark <= 0 || mark > LuminaGetter.Get<Marker>().Count || !LuminaGetter.TryGetRow((uint)mark, out Marker markerRow))
         {
             if (FindMember(entityID, out index))
                 RemoveMemberMark(index);
+            
             return;
         }
 
-        var icon = MarkerSheet.ElementAt(mark);
         if (entityID is 0xE000_0000 or 0xE00_0000)
         {
-            RemoveMark(icon.Icon);
+            RemoveMark(markerRow.Icon);
             return;
         }
 
         if (!FindMember(entityID, out index))
-            RemoveMark(icon.Icon);
-        else if (MarkedObject.TryGetValue(icon.Icon, out var outValue) && outValue == index)
+            RemoveMark(markerRow.Icon);
+        else if (MarkedObject.TryGetValue(markerRow.Icon, out var outValue) && outValue == index)
         {
             // 对同一个成员重复标记
         }
         else
         {
             RemoveMemberMark(index);
-            AddMemberMark(index, icon.Icon);
+            AddMemberMark(index, markerRow.Icon);
         }
     }
+
+    #region ImageNode
+
+    private static void ReleaseImageNodes()
+    {
+        if (!IsAddonAndNodesReady(PartyList)) return;
+
+        foreach (var item in NodeList)
+            item.DetachNode();
+
+        NodeList.Clear();
+    }
+
+    private static void ShowImageNode(int i, int iconID)
+    {
+        if (i is < 0 or > 7 || PartyList is null || NodeList.Count <= i)
+            return;
+
+        var node = NodeList[i];
+        if (node is null) return;
+
+        node.LoadIcon((uint)iconID);
+        var component = PartyList->GetNodeById((uint)(10 + i));
+        node.Position    = new(component->X + BasePosition.X + ModuleConfig.IconOffset.X, component->Y + BasePosition.Y + ModuleConfig.IconOffset.Y);
+        node.TextureSize = node.ActualTextureSize;
+        node.Size        = new(ModuleConfig.Size);
+        node.IsVisible   = true;
+
+        ModifyPartyMemberNumber(false);
+    }
+
+    private static void HideImageNode(int i)
+    {
+        if (i is < 0 or > 7 || NodeList.Count <= i) return;
+        
+        var node = NodeList[i];
+        if (node == null) return;
+        
+        node.IsVisible = false;
+    }
+
+    private static void RefreshNodeStatus()
+    {
+        var addon = PartyList;
+        if (!IsAddonAndNodesReady(addon))
+            return;
+
+        foreach (var (node, i) in NodeList.Zip(Enumerable.Range(10, 8)))
+        {
+            var component = PartyList->GetNodeById((uint)i);
+            if (component is null || !component->IsVisible())
+                continue;
+            
+            node.Position    = new(component->X + BasePosition.X + ModuleConfig.IconOffset.X, component->Y + BasePosition.Y + ModuleConfig.IconOffset.Y);
+            node.TextureSize = node.ActualTextureSize;
+            node.Size        = new(ModuleConfig.Size);
+            node.IsVisible   = true;
+        }
+    }
+
+    #endregion
+
+    #region 工具
 
     private static void AddMemberMark(int memberIndex, int markID)
     {
@@ -406,7 +274,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
         if (InfoProxyCrossRealm.Instance()->IsCrossRealm)
         {
-            var myGroup      = InfoProxyCrossRealm.GetMemberByEntityId((uint)DService.ObjectTable.LocalPlayer!.GameObjectID);
+            var myGroup = InfoProxyCrossRealm.GetMemberByEntityId(LocalPlayerState.EntityID);
             var pGroupMember = InfoProxyCrossRealm.GetMemberByEntityId(entityID);
             if (myGroup is not null && pGroupMember is not null && pGroupMember->GroupIndex == myGroup->GroupIndex)
             {
@@ -422,26 +290,81 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
     #endregion
 
-    #region Hook
+    #region 事件
 
-    private void DetourLocalMarkingFunc(nint manager, uint markingType, nint objectID, nint a4)
+    private void LocalMarkingDetour(void* manager, uint markingType, GameObjectId objectID, uint entityID)
     {
         // 自身标记会触发两回，第一次a4: E000_0000, 第二次a4: 自身GameObjectId
         // 队友标记只会触发一回，a4: 队友GameObjectId
         // 鲶鱼精local a4: 0
         // if (a4 != (nint?)DService.ObjectTable.LocalPlayer?.GameObjectId)
 
-        TaskHelper.Insert(() => ProcMarkIconSetted(markingType, (uint)objectID));
-        LocalMarkingHook!.Original(manager, markingType, objectID, a4);
+        TaskHelper.Insert(() => ProcessMarkIconSetted(markingType, (uint)objectID));
+        LocalMarkingHook!.Original(manager, markingType, objectID, entityID);
+    }
+
+    private void OnAddonPartyList(AddonEvent type, AddonArgs args)
+    {
+        switch (type)
+        {
+            case AddonEvent.PreFinalize:
+                ReleaseImageNodes();
+                break;
+
+            case AddonEvent.PostDraw:
+                if (!IsAddonAndNodesReady(PartyList)) return;
+
+                if (NeedClear && MarkedObject.Count is 0 && IsScreenReady())
+                {
+                    ResetPartyMemberList();
+                    NeedClear = false;
+
+                    return;
+                }
+
+                // 加入
+                if (NodeList.Count == 0)
+                {
+                    foreach (var _ in Enumerable.Range(10, 8))
+                    {
+                        var imageNode = new IconImageNode
+                        {
+                            IconId    = DefaultIconID,
+                            NodeFlags = NodeFlags.Fill,
+                            DrawFlags = DrawFlags.None,
+                            WrapMode  = WrapMode.Stretch,
+                        };
+                        imageNode.Priority = 5;
+
+                        NodeList.Add(imageNode);
+                        imageNode.AttachNode(PartyList);
+                    }
+
+                    if (MarkingController.Instance() is null)
+                        return;
+
+                    var markers = MarkingController.Instance()->Markers;
+                    for (var i = 0; i < markers.Length; i++)
+                    {
+                        var gameObjectID = markers[i].ObjectId;
+                        if (gameObjectID is 0 or 0xE0000000)
+                            continue;
+
+                        var index = (uint)i;
+                        TaskHelper.Insert(() => ProcessMarkIconSetted(index, gameObjectID));
+                    }
+                }
+
+                break;
+        }
     }
 
     #endregion
 
     private class Config : ModuleConfiguration
     {
-        public Vector2 IconOffset = new(0, 0);
-        public int Size = 27;
-        public bool HidePartyListIndexNumber = true;
+        public Vector2 IconOffset               = new(0, 0);
+        public int     Size                     = 27;
+        public bool    HidePartyListIndexNumber = true;
     }
 }
-

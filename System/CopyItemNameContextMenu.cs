@@ -18,6 +18,8 @@ public class CopyItemNameContextMenu : DailyModuleBase
         Category    = ModuleCategories.System,
         Author      = ["Nukoooo"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly string CopyItemNameString = LuminaWrapper.GetAddonText(159);
     private static readonly string GlamoursString     = LuminaGetter.GetRow<CircleActivity>(18)!.Value.Name.ExtractText();
@@ -62,7 +64,7 @@ public class CopyItemNameContextMenu : DailyModuleBase
 
         var contextMenuCounts = contextMenu->EventParams[0].Int;
 
-        const int Start = 7;
+        const int Start = 8;
         var       end   = Start + contextMenuCounts;
 
         for (var i = Start; i < end; i++)

@@ -3,6 +3,7 @@ using System.Numerics;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace DailyRoutines.ModulesPublic;
@@ -11,14 +12,14 @@ public partial class OccultCrescentHelper : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = $"{GetLoc("OccultCrescentHelperTitle")}",
-        Description     = $"{GetLoc("OccultCrescentHelperDescription")}",
+        Title           = GetLoc("OccultCrescentHelperTitle"),
+        Description     = GetLoc("OccultCrescentHelperDescription"),
         Category        = ModuleCategories.Assist,
         Author          = ["Fragile"],
         ModulesConflict = ["AutoFaceCameraDirection"]
     };
-
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static Config ModuleConfig = null!;
     
@@ -29,10 +30,18 @@ public partial class OccultCrescentHelper : DailyModuleBase
     private static OthersManager     OthersModule;
 
     private static List<BaseIslandModule> Modules = [];
+
+    private static readonly CompSig IslandIDInstanceOffsetSig = new("48 8D 8F ?? ?? ?? ?? 40 0F B6 D5 E8 ?? ?? ?? ?? 8B D3");
+    private static          nint    IslandIDInstanceOffset;
     
     protected override void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
+        ModuleConfig = LoadConfig<Config>() ?? new();
+        
+        // lea     rcx, [rdi+XXXX], 因为是四字节所以用 uint
+        if (IslandIDInstanceOffset == nint.Zero)
+            IslandIDInstanceOffset = IslandIDInstanceOffsetSig.GetStatic();
+        Debug($"[{nameof(OccultCrescentHelper)}] 岛 ID 存储实例偏移量: {IslandIDInstanceOffset}");
         
         Overlay       ??= new(this);
         Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
@@ -61,7 +70,7 @@ public partial class OccultCrescentHelper : DailyModuleBase
     
     private static void OnUpdate(IFramework framework)
     {
-        if (GameState.TerritoryIntendedUse != 61) return;
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
         
         foreach (var module in Modules)
             module.OnUpdate();
@@ -107,7 +116,7 @@ public partial class OccultCrescentHelper : DailyModuleBase
 
     protected override void OverlayUI()
     {
-        if (GameState.TerritoryIntendedUse != 61)
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
         {
             Overlay.IsOpen = false;
             return;
@@ -136,7 +145,7 @@ public partial class OccultCrescentHelper : DailyModuleBase
     }
     
     private static unsafe uint GetIslandID() =>
-        (uint)*(ulong*)((byte*)GameMain.Instance() + 0xB50 + 1488);
+        (uint)*(ulong*)((byte*)GameMain.Instance() + IslandIDInstanceOffset + 1488);
     
     public class Config : ModuleConfiguration
     {

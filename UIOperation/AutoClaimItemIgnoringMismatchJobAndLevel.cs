@@ -6,6 +6,8 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : DailyModuleBase
 {
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     public override ModuleInfo Info { get; } = new()
     {
         Title       = GetLoc("AutoClaimItemIgnoringMismatchJobAndLevelTitle"),

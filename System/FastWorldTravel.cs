@@ -16,25 +16,26 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Addon;
+using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
-using KamiToolKit.System;
 using Lumina.Excel.Sheets;
+using AgentWorldTravel = OmenTools.Infos.AgentWorldTravel;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class WorldTravelCommand : DailyModuleBase
+public class FastWorldTravel : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title            = GetLoc("WorldTravelCommandTitle"),
-        Description      = GetLoc("WorldTravelCommandDescription"),
+        Title = GetLoc("FastWorldTravelTitle"),
+        Description = GetLoc("FastWorldTravelDescription", Command) +
+                      (!GameState.IsCN ? string.Empty : "\n支持快捷超域旅行并实时显示各服务器超域旅行拥挤度 [国服特供]"),
         Category         = ModuleCategories.System,
         ModulesRecommend = ["InstantReturn", "InstantTeleport"]
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     internal const string Command = "worldtravel";
 
@@ -52,7 +53,7 @@ public class WorldTravelCommand : DailyModuleBase
     
     private static IDtrBarEntry? Entry;
 
-    private static AddonDRWorldTravelCommand? Addon;
+    private static AddonDRFastWorldTravel? Addon;
 
     private static readonly Dictionary<uint, List<Tuple<uint, string>>> CNDataCenter = [];
 
@@ -68,7 +69,7 @@ public class WorldTravelCommand : DailyModuleBase
     [IPCSubscriber("DCTravelerX.GetWaitTime", DefaultValue = "-1")]
     private static IPCSubscriber<uint, int> GetDCTravelWaitTime;
 
-    static WorldTravelCommand()
+    static FastWorldTravel()
     {
         if (!GameState.IsCN) return;
         
@@ -85,17 +86,16 @@ public class WorldTravelCommand : DailyModuleBase
 
         Addon ??= new(TaskHelper)
         {
-            InternalName     = "DRWorldTravelCommand",
-            Title            = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
-            Size             = new(GameState.IsCN ? 710f : 180f, 480f),
-            Position         = ModuleConfig.AddonPosition,
-            NativeController = Service.AddonController,
+            InternalName = "DRFastWorldTravel",
+            Title        = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
+            Size         = new(GameState.IsCN ? 710f : 180f, 480f),
         };
+        Addon.SetWindowPosition(ModuleConfig.AddonPosition);
         
         GameState.Login += OnLogin;
         OnLogin();
         
-        CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("WorldTravelCommand-CommandHelp") });
+        CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("FastWorldTravel-CommandHelp") });
 
         if (ModuleConfig.AddDtrEntry)
             HandleDtrEntry(true);
@@ -111,21 +111,21 @@ public class WorldTravelCommand : DailyModuleBase
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
         using (ImRaii.PushIndent())
-            ImGui.Text($"/pdr {Command} \u2192 {GetLoc("WorldTravelCommand-CommandHelp")}");
+            ImGui.Text($"/pdr {Command} \u2192 {GetLoc("FastWorldTravel-CommandHelp")}");
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(GetLoc("WorldTravelCommand-AutoLeaveParty"), ref ModuleConfig.AutoLeaveParty))
+        if (ImGui.Checkbox(GetLoc("FastWorldTravel-AutoLeaveParty"), ref ModuleConfig.AutoLeaveParty))
             SaveConfig(ModuleConfig);
-        ImGuiOm.TooltipHover(GetLoc("WorldTravelCommand-AutoLeavePartyHelp"));
+        ImGuiOm.TooltipHover(GetLoc("FastWorldTravel-AutoLeavePartyHelp"));
 
-        if (ImGui.Checkbox(GetLoc("WorldTravelCommand-AddDtrEntry"), ref ModuleConfig.AddDtrEntry))
+        if (ImGui.Checkbox(GetLoc("FastWorldTravel-AddDtrEntry"), ref ModuleConfig.AddDtrEntry))
         {
             SaveConfig(ModuleConfig);
             HandleDtrEntry(ModuleConfig.AddDtrEntry);
         }
 
-        if (ImGui.Checkbox(GetLoc("WorldTravelCommand-ReplaceOrigAddon"), ref ModuleConfig.ReplaceOrigAddon))
+        if (ImGui.Checkbox(GetLoc("FastWorldTravel-ReplaceOrigAddon"), ref ModuleConfig.ReplaceOrigAddon))
             SaveConfig(ModuleConfig);
     }
     
@@ -140,10 +140,10 @@ public class WorldTravelCommand : DailyModuleBase
                     Entry = null;
                 }
                 
-                Entry         ??= DService.DtrBar.Get("DailyRoutines-WorldTravelCommand");
+                Entry         ??= DService.DtrBar.Get("DailyRoutines-FastWorldTravel");
                 Entry.OnClick +=  _ => Addon.Toggle();
                 Entry.Shown   =   true;
-                Entry.Tooltip =   GetLoc("WorldTravelCommand-DtrEntryTooltip");
+                Entry.Tooltip =   GetLoc("FastWorldTravel-DtrEntryTooltip");
                 Entry.Text    =   LuminaWrapper.GetAddonText(12510);
                 return;
             case false when Entry != null:
@@ -180,11 +180,13 @@ public class WorldTravelCommand : DailyModuleBase
     }
     
     // 更新区服数据
-    private static void OnLogin()
+    private void OnLogin()
     {
+        TaskHelper.RemoveAllTasks(1);
+        
         if (GameState.HomeWorld == 0 || GameState.CurrentWorld == 0) return;
         
-        var dataCenter = GameState.CurrentWorldData.DataCenter.RowId;
+        var dataCenter = GameState.CurrentDataCenter;
         if (dataCenter == 0) return;
         
         CurrentWorlds = PresetSheet.Worlds
@@ -197,14 +199,14 @@ public class WorldTravelCommand : DailyModuleBase
     // 指令
     private void OnCommand(string command, string args)
     {
-        if (!Throttler.Throttle("WorldTravelCommand-OnCommand", 1_000)) return;
+        if (!Throttler.Throttle("FastWorldTravel-OnCommand", 1_000)) return;
 
         if (!DService.ClientState.IsLoggedIn          ||
             DService.ObjectTable.LocalPlayer == null  ||
             DService.Condition.Any(InvalidConditions) ||
             DService.Condition.Any(ConditionFlag.WaitingToVisitOtherWorld))
         {
-            NotificationError(GetLoc("WorldTravelCommand-Notice-InvalidEnv"));
+            NotificationError(GetLoc("FastWorldTravel-Notice-InvalidEnv"));
             return;
         }
         
@@ -217,7 +219,7 @@ public class WorldTravelCommand : DailyModuleBase
         args = args.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(args))
         {
-            NotificationError(GetLoc("WorldTravelCommand-Notice-InvalidInput"));
+            NotificationError(GetLoc("FastWorldTravel-Notice-InvalidInput"));
             return;
         }
 
@@ -249,13 +251,13 @@ public class WorldTravelCommand : DailyModuleBase
 
         if (worldID == 0 || !LuminaGetter.TryGetRow(worldID, out World targetWorld))
         {
-            NotificationError(GetLoc("WorldTravelCommand-Notice-WorldNoFound", args));
+            NotificationError(GetLoc("FastWorldTravel-Notice-WorldNoFound", args));
             return;
         }
         
         if (GameState.CurrentWorld == worldID)
         {
-            NotificationError(GetLoc("WorldTravelCommand-Notice-SameWorld"));
+            NotificationError(GetLoc("FastWorldTravel-Notice-SameWorld"));
             return;
         }
 
@@ -308,7 +310,7 @@ public class WorldTravelCommand : DailyModuleBase
         TaskHelper.Enqueue(() =>
         {
             AgentWorldTravel.Instance()->TravelTo(worldID);
-            NotificationInfo(GetLoc("WorldTravelCommand-Notice-TravelTo",
+            NotificationInfo(GetLoc("FastWorldTravel-Notice-TravelTo",
                                     $"{char.ToUpper(targetWorld.Name.ExtractText()[0])}{targetWorld.Name.ExtractText()[1..]}"));
         }, "发起大区内跨服请求");
     }
@@ -467,7 +469,7 @@ public class WorldTravelCommand : DailyModuleBase
                         TaskHelper.Enqueue(() => CharaSelect != null || CharaSelectListMenu != null, "等待角色选择界面可用");
                     }
                     
-                    if (Service.Config.ModuleEnabled.GetValueOrDefault("AutoLogin", false))
+                    if (DRConfig.Instance().ModuleEnabled.GetValueOrDefault("AutoLogin", false))
                         TaskHelper.EnqueueAsync(() => ModuleManager.LoadAsync(ModuleManager.GetModuleByName("AutoLogin")), "启用自动登录");
                     
                     TaskHelper.Enqueue(() => EnqueueLogin(travelData), "入队登录");
@@ -480,13 +482,13 @@ public class WorldTravelCommand : DailyModuleBase
         }
         catch (Exception ex)
         {
-            DService.Log.Debug($"超域旅行失败: {ex.Message}", ex);
+            Debug($"超域旅行失败: {ex.Message}", ex);
         }
     }
 
     private unsafe void EnqueueLogin(Travel traveldata)
     {
-        TaskHelper.Enqueue(() => CharaSelect != null || CharaSelectListMenu != null, "等待角色选择界面可用");
+        TaskHelper.Enqueue(() => CharaSelect != null || CharaSelectListMenu != null, "等待角色选择界面可用", weight: 1);
 
         TaskHelper.Enqueue(() =>
         {
@@ -519,19 +521,19 @@ public class WorldTravelCommand : DailyModuleBase
                             Callback(addon, true, 29, 0, index);
                             Callback(addon, true, 21, index);
 
-                            TaskHelper.Enqueue(() => ClickSelectYesnoYes(), "点击确认登录");
+                            TaskHelper.Enqueue(() => ClickSelectYesnoYes(), "点击确认登录", weight: 1);
                             return;
                         }
 
                         index++;
                     }
                 }
-                catch (Exception)
+                catch
                 {
                     // ignored
                 }
             }
-        }, "尝试登录");
+        }, "尝试登录", weight: 1);
     }
 
     #endregion
@@ -542,10 +544,10 @@ public class WorldTravelCommand : DailyModuleBase
     {
         if (DService.PartyList.Length < 2 || DService.Condition[ConditionFlag.ParticipatingInCrossWorldPartyOrAlliance]) 
             return true;
-        if (!Throttler.Throttle("WorldTravelCommand-LeaveNonCrossWorldParty")) 
+        if (!Throttler.Throttle("FastWorldTravel-LeaveNonCrossWorldParty")) 
             return false;
 
-        ChatHelper.SendMessage("/leave");
+        ChatManager.SendMessage("/leave");
         return DService.PartyList.Length < 2;
     }
 
@@ -561,7 +563,7 @@ public class WorldTravelCommand : DailyModuleBase
         Addon = null;
 
         FrameworkManager.Unreg(OnUpdate);
-        DService.ClientState.Login -= OnLogin;
+        GameState.Login -= OnLogin;
         CommandManager.RemoveSubCommand(Command);
     }
 
@@ -584,7 +586,7 @@ public class WorldTravelCommand : DailyModuleBase
         public string? Description; // 需要切换大区的名字
     }
 
-    private class AddonDRWorldTravelCommand(TaskHelper TaskHelper) : NativeAddon
+    private class AddonDRFastWorldTravel(TaskHelper TaskHelper) : NativeAddon
     {
         private static NodeBase TeleportWidget;
 
@@ -633,7 +635,7 @@ public class WorldTravelCommand : DailyModuleBase
                 {
                     var pluginHelpNode = new TextNode
                     {
-                        SeString         = message,
+                        SeString         = message.Encode(),
                         FontSize         = 14,
                         IsVisible        = true,
                         Size             = new(150f, 25f),
@@ -642,10 +644,10 @@ public class WorldTravelCommand : DailyModuleBase
                         TextFlags        = TextFlags.Bold | TextFlags.Edge,
                         TextOutlineColor = ColorHelper.GetColor(7)
                     };
-                    AttachNode(pluginHelpNode);
+                    pluginHelpNode.AttachNode(this);
                 }
             }
-            AttachNode(TeleportWidget);
+            TeleportWidget.AttachNode(this);
             
             UpdateWaitTimeInfo();
         }
@@ -658,7 +660,7 @@ public class WorldTravelCommand : DailyModuleBase
                 return;
             }
 
-            if (Throttler.Throttle("WorldTravelCommand-OnAddonUpdate") && LastOpenPluginState != IsPluginValid)
+            if (Throttler.Throttle("FastWorldTravel-OnAddonUpdate") && LastOpenPluginState != IsPluginValid)
             {
                 Close();
                 
@@ -675,15 +677,15 @@ public class WorldTravelCommand : DailyModuleBase
             {
                 LastForegroundState = GameState.IsForeground;
                 
-                Throttler.Remove("WorldTravelCommand-OnAddonUpdate-RequestQueueTime");
-                Throttler.Remove("WorldTravelCommand-OnAddonUpdate-UpdateQueueTime");
+                Throttler.Remove("FastWorldTravel-OnAddonUpdate-RequestQueueTime");
+                Throttler.Remove("FastWorldTravel-OnAddonUpdate-UpdateQueueTime");
             }
             
             // 都在后台了就不要 DDOS 拂晓服务器了
-            if (Throttler.Throttle("WorldTravelCommand-OnAddonUpdate-RequestQueueTime", GameState.IsForeground ? 15_000 : 90_000))
+            if (Throttler.Throttle("FastWorldTravel-OnAddonUpdate-RequestQueueTime", GameState.IsForeground ? 15_000 : 90_000))
                 RequestWaitTimeInfoUpdate();
             
-            if (Throttler.Throttle("WorldTravelCommand-OnAddonUpdate-UpdateQueueTime", 1_000))
+            if (Throttler.Throttle("FastWorldTravel-OnAddonUpdate-UpdateQueueTime", 1_000))
                 UpdateWaitTimeInfo();
         }
 
@@ -691,8 +693,8 @@ public class WorldTravelCommand : DailyModuleBase
         {
             if (addon != null && this != null)
             {
-                ModuleConfig.AddonPosition = Position;
-                ModuleConfig.Save(ModuleManager.GetModule<WorldTravelCommand>());
+                ModuleConfig.AddonPosition = RootNode.Position;
+                ModuleConfig.Save(ModuleManager.GetModule<FastWorldTravel>());
             }
             
             base.OnFinalize(addon);
@@ -737,7 +739,7 @@ public class WorldTravelCommand : DailyModuleBase
                 }
                     
                     
-                node.Tooltip = builder.Build();
+                node.Tooltip = builder.Build().Encode();
                 var baseColor = time switch
                 {
                     0    => KnownColor.DarkGreen.ToVector4().ToVector3(),
@@ -822,11 +824,11 @@ public class WorldTravelCommand : DailyModuleBase
                 {
                     Size      = new(150f, 40f),
                     IsVisible = true,
-                    SeString  = worldNameBuilder.Build(),
+                    SeString  = worldNameBuilder.Build().Encode(),
                     OnClick = () =>
                     {
                         Addon.Close();
-                        ChatHelper.SendMessage($"/pdr worldtravel {worldName}");
+                        ChatManager.SendMessage($"/pdr worldtravel {worldName}");
                     },
                     IsEnabled = GameState.CurrentWorld != worldID && (CurrentWorlds.ContainsKey(worldID) || IsPluginValid)
                 };

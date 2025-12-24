@@ -26,7 +26,7 @@ public unsafe class AutoConstantlyClick : DailyModuleBase
     private static readonly CompSig              IsIDKeyPressedSig = new("48 89 5C 24 ?? 56 41 56 41 57 48 83 EC ?? 48 63 C2");
     private static          Hook<IDKeyDelegate>? IsIDKeyPressedHook;
 
-    private static readonly CompSig        IsInputIDDownSig = new("E8 ?? ?? ?? ?? 33 DB 41 8B D5");
+    private static readonly CompSig        IsInputIDDownSig = new("E8 ?? ?? ?? ?? 4C 8D 76 06");
     private static          IDKeyDelegate? IsInputIDDown;
 
     private static readonly CompSig GamepadPollSig = new("40 55 53 57 41 57 48 8D AC 24 58 FC FF FF");

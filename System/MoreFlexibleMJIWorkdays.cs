@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -40,8 +40,8 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
         var node = addon->GetNodeById(24);
         if (node == null) return;
 
-        var nodeState = NodeState.Get(node);
-        ImGui.SetWindowPos(new(nodeState.Position2.X + (3f * GlobalFontScale), nodeState.Position.Y));
+        var nodeState = NodeState.Get((AtkResNode*)addon->WindowNode);
+        ImGui.SetWindowPos(nodeState.Position with { Y = nodeState.Position.Y - ImGui.GetWindowSize().Y });
 
         if (agent->Data->NewRestCycles == 0)
             agent->Data->NewRestCycles = agent->Data->RestCycles;
@@ -52,22 +52,6 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
             for (var i = 0; i < restDays.Count; i++)
             {
                 var day = restDays[i];
-
-                switch (i)
-                {
-                    case 0:
-                        ImGui.AlignTextToFramePadding();
-                        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(15107));
-
-                        ImGui.SameLine();
-                        break;
-                    case 7:
-                        ImGui.AlignTextToFramePadding();
-                        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(15108));
-
-                        ImGui.SameLine();
-                        break;
-                }
 
                 if (ImGui.Checkbox($"##Day{i}", ref day))
                 {
@@ -91,6 +75,18 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
                     ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.MJIWorkshopRequest, agent->Data->CycleDisplayed);
                 }
                 
+                switch (i)
+                {
+                    case 6:
+                        ImGui.SameLine(0, 4f * GlobalFontScale);
+                        ImGui.Text(LuminaWrapper.GetAddonText(15107));
+                        break;
+                    case 13:
+                        ImGui.SameLine(0, 4f * GlobalFontScale);
+                        ImGui.Text(LuminaWrapper.GetAddonText(15108));
+                        break;
+                }
+                
                 if (i != 6)
                     ImGui.SameLine();
             }
@@ -108,7 +104,7 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
     private static uint EncodeRestDays(List<bool> restDays)
     {
         if (restDays.Count != 14)
-            throw new ArgumentException("休息日列表长度必须为14");
+            throw new ArgumentException("休息日列表长度必须为 14");
 
         uint result = 0;
 

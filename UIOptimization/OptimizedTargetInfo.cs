@@ -9,7 +9,6 @@ using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
-using KamiToolKit.Extensions;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
@@ -22,9 +21,11 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         Description = GetLoc("OptimizedTargetInfoDescription"),
         Category    = ModuleCategories.UIOptimization,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private delegate void SetFocusTargetByObjectIDDelegate(TargetSystem* targetSystem, GameObjectId objectID);
-    private static SetFocusTargetByObjectIDDelegate? SetFocusTargetByObjectID =
+    private static readonly SetFocusTargetByObjectIDDelegate? SetFocusTargetByObjectID =
         new CompSig("E8 ?? ?? ?? ?? BA 0C 00 00 00 48 8D 0D").GetDelegate<SetFocusTargetByObjectIDDelegate>();
     
     private static Config ModuleConfig = null!;
@@ -368,26 +369,28 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
             case AddonEvent.PostDraw:
                 if (CastBarEnemy == null) return;
 
-                for (var i = 10; i > 0; i--)
-                {
-                    var node = (AtkComponentNode*)CastBarEnemy->UldManager.NodeList[i];
-                    if (node == null || !node->IsVisible()) continue;
+                var addon = (AddonCastBarEnemy*)CastBarEnemy;
 
-                    var castProgressOffset = 3 + (5 * (10 - i));
-                    var castProgress       = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.CastBarEnemy)->IntArray[castProgressOffset];
-                    if (castProgress == -1) continue;
+                var maxCount     = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.CastBarEnemy)->IntArray[1];
+                var currentCount = 0;
+                foreach (var nodeInfo in addon->CastBarNodes)
+                {
+                    var componentNode = (AtkComponentNode*)nodeInfo.CastBarNode;
+                    if (!componentNode->IsVisible() || !nodeInfo.ProgressBarNode->IsVisible()) continue;
                     
-                    var gameObjectIDOffset = 2 + (5 * (10 - i));
-                    var gameObjectID       = (ulong)AtkStage.Instance()->GetNumberArrayData(NumberArrayType.CastBarEnemy)->IntArray[gameObjectIDOffset];
-                    if (gameObjectID == 0 || DService.ObjectTable.SearchByID(gameObjectID) is not IBattleChara target) continue;
-                    
+                    if (DService.ObjectTable.SearchByID(nodeInfo.ObjectId.Id) is not IBattleChara { CurrentCastTime: > 0 } target) 
+                        continue;
+
+                    currentCount++;
+
+                    var textNode     = componentNode->Component->GetTextNodeById(4);
                     var leftCastTime = target.TotalCastTime - target.CurrentCastTime;
-                    
-                    var textNode = node->Component->GetTextNodeById(4);
-                    if (textNode == null) continue;
                     
                     textNode->SetText($"{leftCastTime:F2}");
                     textNode->FontSize = 16;
+                    
+                    if (currentCount >= maxCount)
+                        break;
                 }
                 
                 break;
@@ -576,7 +579,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(ClearFocusButtonNode);
+                ClearFocusButtonNode?.DetachNode();
                 ClearFocusButtonNode = null;
                 break;
             case AddonEvent.PostDraw:
@@ -594,8 +597,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                         OnClick   = () => SetFocusTargetByObjectID(TargetSystem.Instance(), 0xE0000000)
                     };
                     ClearFocusButtonNode.BackgroundNode.IsVisible = false;
-                    
-                    Service.AddonController.AttachNode(ClearFocusButtonNode, FocusTargetInfo->RootNode);
+                    ClearFocusButtonNode.AttachNode(FocusTargetInfo->RootNode);
                 }
 
                 if (Throttler.Throttle("OptimizedTargetInfo-ClearFocusTarget"))
@@ -762,7 +764,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                         TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor,
                     };
 
-                    Service.AddonController.AttachNode(textNode, gauge->OwnerNode);
+                    textNode.AttachNode(gauge->OwnerNode);
                 }
 
                 if (!Throttler.Throttle(throttleKey, 100)) return;
@@ -792,14 +794,14 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     textNode.TextColor        = customColor.W  != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
                     textNode.TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor;
 
-                    textNode.SeString = string.Format(ModuleConfig.DisplayFormatString,
+                    textNode.String = string.Format(ModuleConfig.DisplayFormatString,
                                                       FormatNumber(target.MaxHp),
                                                       FormatNumber(target.CurrentHp));
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(textNode);
+                textNode?.DetachNode();
                 textNode = null;
                 break;
         }
@@ -842,7 +844,7 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                         FontType         = FontType.Miedinger
                     };
 
-                    Service.AddonController.AttachNode(textNode, addon->GetNodeById(nodeIDToAttach));
+                    textNode.AttachNode(addon->GetNodeById(nodeIDToAttach));
                 }
 
                 textNode.IsVisible = isEnabled && getTarget() != null;
@@ -865,12 +867,12 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     textNode.TextColor        = customColor.W  != 0 ? customColor : sourceTextNode->TextColor.ToVector4();
                     textNode.TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor;
 
-                    textNode.SeString = $"{leftCastTime:F2}";
+                    textNode.String = $"{leftCastTime:F2}";
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(textNode);
+                textNode?.DetachNode();
                 textNode = null;
                 break;
         }

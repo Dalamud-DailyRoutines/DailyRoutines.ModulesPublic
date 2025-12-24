@@ -292,7 +292,7 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
         }
         
         if (ModuleConfig.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, ModuleConfig.AutoCollectCount))
-            ChatHelper.SendMessage("/pdr submarine");
+            ChatManager.SendMessage("/pdr submarine");
     }
 
     // 发包获取情报
@@ -404,7 +404,7 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
             return false;
 
         // 没找到入口
-        if (HousingManager.Instance()->OutdoorTerritory->StandingInPlot != workshopInfo.PlotIndex ||
+        if (HousingManager.Instance()->OutdoorTerritory->HouseUnit.PlotIndex != workshopInfo.PlotIndex ||
             DService.ObjectTable
                     .Where(x => x is { ObjectKind: ObjectKind.EventObj, DataID: 2002737 })
                     .OrderBy(x => Vector2.DistanceSquared(x.Position.ToVector2(), workshopInfo.Position.ToVector2())).FirstOrDefault() is not { } entryObject)
@@ -527,13 +527,13 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(ItemListLayout);
+                ItemListLayout?.DetachNode();
                 ItemListLayout = null;
                 
-                Service.AddonController.DetachNode(AutoCollectNode);
+                AutoCollectNode?.DetachNode();
                 AutoCollectNode = null;
                 
-                ItemRenderers.ForEach(x => Service.AddonController.DetachNode(x));
+                ItemRenderers.ForEach(x => x?.DetachNode());
                 ItemRenderers.Clear();
                 break;
             case AddonEvent.PostDraw:
@@ -548,7 +548,7 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
                         IsVisible = true,
                         Position  = new(22, 15)
                     };
-                    Service.AddonController.AttachNode(ItemListLayout, SelectString->RootNode);
+                    ItemListLayout.AttachNode(SelectString->RootNode);
 
                     AutoCollectNode = new()
                     {
@@ -629,7 +629,7 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
     }
     
     private static void OnClickCollectSubmarinePayload(uint arg1, SeString arg2) => 
-        ChatHelper.SendMessage("/pdr submarine");
+        ChatManager.SendMessage("/pdr submarine");
     
     private static void OnUpdate(IFramework _) => 
         SendRefreshSubmarineInfo();
@@ -675,10 +675,10 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
 
     private class ItemDisplayNode : HorizontalListNode
     {
-        public uint          ItemID    { get; init; }
-        public IconImageNode IconNode  { get; private set; }
-        public TextNode      NameNode  { get; private set; }
-        public TextNode      CountNode { get; private set; }
+        public uint           ItemID    { get; init; }
+        public IconImageNode? IconNode  { get; private set; }
+        public TextNode?      NameNode  { get; private set; }
+        public TextNode?      CountNode { get; private set; }
         
         public ItemDisplayNode(uint itemID, float width)
         {
@@ -721,9 +721,9 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
                 Position         = new(width - 20, 4),
                 TextOutlineColor = ColorHelper.GetColor((uint)(itemCount > 20 ? 28 : 17)),
                 FontSize         = 16,
-                SeString         = textBuilder.Build() 
+                SeString         = textBuilder.Build().Encode()
             };
-            Service.AddonController.AttachNode(CountNode, this);
+            CountNode.AttachNode(this);
         }
 
         public void UpdateItemCount()
@@ -735,20 +735,22 @@ public unsafe class AutoSubmarineCollect : DailyModuleBase
                            .AddText(" ");
             textBuilder.AddText($"{itemCount}");
             
-            CountNode.SeString         = textBuilder.Build();
+            CountNode.SeString         = textBuilder.Build().Encode();
             CountNode.TextOutlineColor = ColorHelper.GetColor((uint)(itemCount > 20 ? 28 : 17));
         }
 
-        ~ItemDisplayNode()
+        protected override void Dispose(bool disposing, bool isNativeDestructor)
         {
-            Service.AddonController.DetachNode(IconNode);
+            IconNode?.DetachNode();
             IconNode = null;
             
-            Service.AddonController.DetachNode(NameNode);
+            NameNode?.DetachNode();
             NameNode = null;
             
-            Service.AddonController.DetachNode(CountNode);
+            CountNode?.DetachNode();
             CountNode = null;
+            
+            base.Dispose(disposing, isNativeDestructor);
         }
     }
 

@@ -15,7 +15,7 @@ public unsafe class FastRetainerStore : DailyModuleBase
         Title       = GetLoc("FastRetainerStoreTitle"),
         Description = GetLoc("FastRetainerStoreDescription"),
         Category    = ModuleCategories.UIOperation,
-        Author      = ["YLChen"]
+        Author      = ["YLCHEN"]
     };
     
     private static readonly HashSet<string> PlayerAddonNames   = ["Inventory", "InventoryLarge", "InventoryExpansion"];

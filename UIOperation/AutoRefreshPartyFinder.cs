@@ -113,16 +113,16 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
 
     private static void CleanNodes()
     {
-        Service.AddonController.DetachNode(RefreshIntervalNode);
+        RefreshIntervalNode?.DetachNode();
         RefreshIntervalNode = null;
         
-        Service.AddonController.DetachNode(OnlyInactiveNode);
+        OnlyInactiveNode?.DetachNode();
         OnlyInactiveNode = null;
         
-        Service.AddonController.DetachNode(LayoutNode);
+        LayoutNode?.DetachNode();
         LayoutNode = null;
         
-        Service.AddonController.DetachNode(LeftTimeNode);
+        LeftTimeNode?.DetachNode();
         LeftTimeNode = null;
     }
 
@@ -187,14 +187,14 @@ public unsafe class AutoRefreshPartyFinder : DailyModuleBase
         };
         LayoutNode.AddNode(OnlyInactiveNode, RefreshIntervalNode, LeftTimeNode);
         
-        Service.AddonController.AttachNode(LayoutNode, LookingForGroup->RootNode);
+        LayoutNode.AttachNode(LookingForGroup->RootNode);
     }
 
     private static void UpdateNextRefreshTime(int leftTime)
     {
         if (LeftTimeNode == null) return;
 
-        LeftTimeNode.SeString = $"({leftTime})  ";
+        LeftTimeNode.String = $"({leftTime})  ";
     }
 
     protected override void Uninit()

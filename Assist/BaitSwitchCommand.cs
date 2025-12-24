@@ -15,9 +15,9 @@ public class BaitSwitchCommand : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("BaitSwitchCommandTitle"),
+        Title       = GetLoc("BaitSwitchCommandTitle"),
         Description = GetLoc("BaitSwitchCommandDescription"),
-        Category = ModuleCategories.System,
+        Category    = ModuleCategories.Assist
     };
     
     private const string Command = "bait";

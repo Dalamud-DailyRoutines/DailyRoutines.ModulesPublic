@@ -48,7 +48,7 @@ public class FasterTerritoryTransport : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        ExecuteCommandManager.Register(OnPostUseCommand);
+        ExecuteCommandManager.RegPost(OnPostUseCommand);
         UseActionManager.RegUseActionLocation(OnPostUseActionLocation);
 
         TeleportToAetheryteHook ??= TeleportToAetheryteSig.GetHook<TeleportToAetheryteDelegate>(TeleportToAetheryteDetour);
@@ -123,7 +123,7 @@ public class FasterTerritoryTransport : DailyModuleBase
     {
         DService.Condition.ConditionChange -= OnConditionChanged;
 
-        ExecuteCommandManager.Unregister(OnPostUseCommand);
+        ExecuteCommandManager.Unreg(OnPostUseCommand);
         UseActionManager.Unreg(OnPostUseActionLocation);
         
         TransportThrottler.Clear();

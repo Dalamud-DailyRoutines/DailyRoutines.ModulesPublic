@@ -12,6 +12,8 @@ public unsafe class IgnoreWindowMinSizeLimit : DailyModuleBase
         Category    = ModuleCategories.System,
         Author      = ["Siren"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static int OriginalMinWidth  = 1024;
     private static int OriginalMinHeight = 720;

@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Numerics;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
-using DailyRoutines.Infos;
 using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
@@ -18,11 +16,11 @@ public class FieldEntryCommand : DailyModuleBase
     {
         Title               = GetLoc("FieldEntryCommandTitle"),
         Description         = GetLoc("FieldEntryCommandDescription", Command),
-        Category            = ModuleCategories.General,
+        Category            = ModuleCategories.Assist,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static TaskHelper? TPHelper;
 
@@ -53,14 +51,13 @@ public class FieldEntryCommand : DailyModuleBase
         [3] = LuminaWrapper.GetPlaceName(5301)
     };
 
-    private static readonly Vector3 GangosDefaultPosition                 = new(-33f, 0.15f, -41f);
-    private static readonly Vector3 KuganeDefaultPosition                 = new(-114.3f, -5f, 150f);
-    private static readonly Vector3 DiademDefaultPosition                 = new(-19.6f, -16f, 143f);
-    private static readonly Vector3 LowerLaNosceaDefaultPosition          = new(172, 12, 642);
-    private static readonly Vector3 IslandDefaultPosition                 = new(-269, 40, 228);
-    private static readonly Vector3 CosmicDefaultPosition                 = new(-5.3f, -131.1f, -504.0f);
-    private static readonly Vector3 TuliyollalPhantomVillageEntryPosition = new(165.2f, -18.0f, 35.4f);
-    private static readonly Vector3 PhantomVillagePosition                = new(-71.93f, 5f, -16.02f);
+    private static readonly Vector3 GangosDefaultPosition        = new(-33f, 0.15f, -41f);
+    private static readonly Vector3 KuganeDefaultPosition        = new(-114.3f, -5f, 150f);
+    private static readonly Vector3 DiademDefaultPosition        = new(-19.6f, -16f, 143f);
+    private static readonly Vector3 LowerLaNosceaDefaultPosition = new(172, 12, 642);
+    private static readonly Vector3 IslandDefaultPosition        = new(-269, 40, 228);
+    private static readonly Vector3 CosmicDefaultPosition        = new(-5.3f, -131.1f, -504.0f);
+    private static readonly Vector3 PhantomVillagePosition       = new(-71.93f, 5f, -16.02f);
 
     private static uint RedirectTargetZoneInMoon;
 
@@ -384,27 +381,9 @@ public class FieldEntryCommand : DailyModuleBase
         }
         
         
-        if (GameState.TerritoryType != 1185)
-        {
-            TPHelper.Enqueue(() => MovementManager.TeleportZone(1185));
-            TPHelper.Enqueue(() => GameState.TerritoryType == 1185 && !DService.Condition[ConditionFlag.Jumping] && !MovementManager.IsManagerBusy);
-        }
-        
-        TPHelper.Enqueue(() =>
-        {
-            if (!IsEventIDNearby(131592))
-            {
-                TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(TuliyollalPhantomVillageEntryPosition),                                           weight: 2);
-                TPHelper.Enqueue(() => GameState.TerritoryType == 1185 && !DService.Condition[ConditionFlag.Jumping] && !MovementManager.IsManagerBusy, weight: 2);
-            }
-                
-            return true;
-        });
-        
-        TPHelper.Enqueue(() => IsScreenReady());
-        TPHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 131592).Send());
-        TPHelper.Enqueue(() => ClickSelectYesnoYes());
-        
+        if (GameState.TerritoryType != 1278)
+            TPHelper.Enqueue(() => MovementManager.TeleportZone(1278));
+
         TPHelper.Enqueue(() => GameState.TerritoryType == 1278 && LocalPlayerState.Object != null);
         TPHelper.Enqueue(() =>
         {

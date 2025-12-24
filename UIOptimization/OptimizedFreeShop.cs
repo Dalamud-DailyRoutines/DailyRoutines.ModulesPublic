@@ -22,6 +22,8 @@ public unsafe class OptimizedFreeShop : DailyModuleBase
         Category            = ModuleCategories.UIOptimization,
         ModulesPrerequisite = ["AutoClaimItemIgnoringMismatchJobAndLevel"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig ReceiveEventSig =
         new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 50 4C 8B BC 24 ?? ?? ?? ??");
@@ -92,7 +94,7 @@ public unsafe class OptimizedFreeShop : DailyModuleBase
                         },
                     };
                     IsEnabledNode.Label.TextFlags = (TextFlags)33;
-                    Service.AddonController.AttachNode(IsEnabledNode, FreeShop->RootNode);
+                    IsEnabledNode.AttachNode(FreeShop->RootNode);
                 }
 
                 if (BatchClaimContainerNode == null)
@@ -138,16 +140,16 @@ public unsafe class OptimizedFreeShop : DailyModuleBase
                         BatchClaimContainerNode.AddDummy();
                     }
                     
-                    Service.AddonController.AttachNode(BatchClaimContainerNode, FreeShop->RootNode);
+                    BatchClaimContainerNode.AttachNode(FreeShop->RootNode);
                 }
 
                 
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(IsEnabledNode);
+                IsEnabledNode?.DetachNode();
                 IsEnabledNode = null;
                 
-                Service.AddonController.DetachNode(BatchClaimContainerNode);
+                BatchClaimContainerNode?.DetachNode();
                 BatchClaimContainerNode = null;
                 
                 ClickYesnoHelper?.Abort();

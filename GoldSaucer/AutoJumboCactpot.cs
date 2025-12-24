@@ -83,7 +83,7 @@ public class AutoJumboCactpot : DailyModuleBase
 
             var number = ModuleConfig.NumberMode switch
             {
-                Mode.Random => new Random().Next(0, 9999),
+                Mode.Random => Random.Shared.Next(0, 9999),
                 Mode.Fixed  => Math.Clamp(ModuleConfig.FixedNumber, 0, 9999),
                 _           => 0,
             };

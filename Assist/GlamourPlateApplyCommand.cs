@@ -1,30 +1,23 @@
+using System;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
-using Dalamud.Game.Command;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using System;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class GlamourPlateApplyCommand : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("GlamourPlateApplyCommandTitle"),
+        Title       = GetLoc("GlamourPlateApplyCommandTitle"),
         Description = GetLoc("GlamourPlateApplyCommandDescription"),
-        Category = ModuleCategories.System,
+        Category    = ModuleCategories.Assist,
     };
 
     private const string Command = "gpapply";
 
-    protected override void Init()
-    {
-        CommandManager.AddSubCommand(Command,
-                                             new CommandInfo(OnCommand)
-                                             {
-                                                 HelpMessage = Lang.Get("GlamourPlateApplyCommand-CommandHelp"),
-                                             });
-    }
+    protected override void Init() => 
+        CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("GlamourPlateApplyCommand-CommandHelp") });
 
     private static void OnCommand(string command, string arguments)
     {
@@ -49,5 +42,6 @@ public unsafe class GlamourPlateApplyCommand : DailyModuleBase
         ExecuteCommandManager.ExecuteCommand(ExecuteCommandFlag.EnterGlamourPlateState, 0, 1);
     }
 
-    protected override void Uninit() => CommandManager.RemoveSubCommand(Command);
+    protected override void Uninit() => 
+        CommandManager.RemoveSubCommand(Command);
 }

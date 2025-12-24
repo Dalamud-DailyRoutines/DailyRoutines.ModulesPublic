@@ -15,10 +15,12 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
         Description = GetLoc("FastBLUSpellbookSearchBarDescription"),
         Category    = ModuleCategories.UIOptimization,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static string SearchBarInput = string.Empty;
     
-    private static TextInputNode SearchBarNode;
+    private static TextInputNode? SearchBarNode;
 
     protected override void Init()
     {
@@ -33,7 +35,7 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(SearchBarNode);
+                SearchBarNode?.DetachNode();
                 SearchBarNode = null;
                 break;
             case AddonEvent.PostDraw:
@@ -63,19 +65,19 @@ public unsafe class FastBLUSpellbookSearchBar : DailyModuleBase
                         ShowLimitText = true,
                         OnInputReceived = x =>
                         {
-                            SearchBarInput = x.TextValue;
+                            SearchBarInput = x.ExtractText();
                             ConductSearch(SearchBarInput);
                         },
                         OnInputComplete = x =>
                         {
-                            SearchBarInput = x.TextValue;
+                            SearchBarInput = x.ExtractText();
                             ConductSearch(SearchBarInput);
                         },
                     };
                     SearchBarNode.CurrentTextNode.FontSize =  14;
                     SearchBarNode.CurrentTextNode.Position += new Vector2(0, 3);
                     
-                    Service.AddonController.AttachNode(SearchBarNode, component);
+                    SearchBarNode.AttachNode(component);
                 }
 
                 SearchBarNode.IsVisible = AOZNotebook->AtkValues->Int < 9;

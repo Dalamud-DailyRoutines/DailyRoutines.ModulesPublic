@@ -39,15 +39,15 @@ public unsafe class OptimizedInteraction : DailyModuleBase
     private static Hook<IsObjectInViewRangeDelegate>? IsObjectInViewRangeHook;
 
     // 跳跃中无法进行该操作 / 飞行中无法进行该操作
-    private static readonly CompSig InteractCheck0Sig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 49 8B 00 49 8B C8");
-    private delegate bool InteractCheck0Delegate(nint a1, nint a2, nint a3, nint a4, bool a5);
-    private static Hook<InteractCheck0Delegate>? InteractCheck0Hook;
+    private static readonly CompSig InteractCheck0Sig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 49 8B 00 49 8B C8 49 8B F8 48 8B F2");
+    private delegate        bool InteractCheck0Delegate(nint a1, nint a2, nint a3, nint a4, bool a5);
+    private static          Hook<InteractCheck0Delegate>? InteractCheck0Hook;
 
     // 跳跃中无法进行该操作
     private delegate bool IsPlayerOnJumpingDelegate(nint a1);
 
     private static readonly CompSig IsPlayerOnJumping0Sig =
-        new("E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 8D ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 85");
+        new("83 B9 ?? ?? ?? ?? ?? 0F 95 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 83 B9 ?? ?? ?? ?? ?? 0F 94 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 83 B9");
     private static Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping0Hook;
     private static readonly CompSig IsPlayerOnJumping1Sig = new("E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 83 BF ?? ?? ?? ?? ?? 75 ?? 38 1D");
     private static Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping1Hook;
@@ -58,7 +58,7 @@ public unsafe class OptimizedInteraction : DailyModuleBase
     // 检查目标高低
     private static readonly CompSig CheckTargetPositionSig = new("40 53 57 41 56 48 83 EC ?? 48 8B 02");
     private delegate bool CheckTargetPositionDelegate(
-        EventFramework* framework, GameObject* source, GameObject* target, ushort interactType, bool sendError);
+        EventFramework* framework, GameObject* source, GameObject* target, ushort interactType, bool sendError, byte a6);
     private static Hook<CheckTargetPositionDelegate>? CheckTargetPositionHook;
 
     // 检查目标距离
@@ -147,7 +147,13 @@ public unsafe class OptimizedInteraction : DailyModuleBase
     private static bool IsPlayerOnJumpingDetour(nint a1) => false;
 
     private static bool CheckTargetPositionDetour(
-        EventFramework* framework, GameObject* source, GameObject* target, ushort interactType, bool sendError) => true;
+        EventFramework* framework,
+        GameObject*     source,
+        GameObject*     target,
+        ushort          interactType,
+        bool            sendError,
+        byte            a6)
+        => true;
 
     private static float CheckTargetDistanceDetour(GameObject* localPlayer, GameObject* target) => 0f;
     

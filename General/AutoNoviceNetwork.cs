@@ -87,7 +87,7 @@ public unsafe class AutoNoviceNetwork : DailyModuleBase
         TaskHelper.Enqueue(() =>
         {
             if (PlayerState.Instance()->IsPlayerStateFlagSet(PlayerStateFlag.IsNoviceNetworkAutoJoinEnabled)) return;
-            ChatHelper.SendMessage("/beginnerchannel on");
+            ChatManager.SendMessage("/beginnerchannel on");
         });
 
         TaskHelper.Enqueue(TryJoin);

@@ -12,6 +12,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -27,6 +28,8 @@ public unsafe class AutoCountPlayers : DailyModuleBase
         Description = GetLoc("AutoCountPlayersDescription"),
         Category    = ModuleCategories.General,
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
     private const ImGuiWindowFlags WindowFlags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoTitleBar |
                                                  ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoFocusOnAppearing |
@@ -61,7 +64,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
         Entry.Shown = true;
         Entry.OnClick += _ => Overlay.IsOpen ^= true;
 
-        DService.UIBuilder.Draw += OnDraw;
+        WindowManager.Draw += OnDraw;
 
         PlayersManager.ReceivePlayersAround += OnUpdate;
         PlayersManager.ReceivePlayersTargetingMe += OnPlayersTargetingMeUpdate;
@@ -75,7 +78,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
 
     private static void OnFrameworkUpdate(IFramework framework)
     {
-        if (GameState.TerritoryIntendedUse != 61 ||
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
             AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentMemberList)->IsAgentActive())
             return;
 
@@ -215,7 +218,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
         if (Entry == null) return;
 
         // 新月岛
-        if (GameState.TerritoryIntendedUse == 61)
+        if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
             Entry.Shown = true;
         else
             Entry.Shown = !DService.Condition[ConditionFlag.InCombat] || GameState.IsInPVPArea;
@@ -230,7 +233,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
                      (PlayersManager.PlayersTargetingMe.Count == 0 ? string.Empty : $" ({PlayersManager.PlayersTargetingMe.Count})");
 
         // 新月岛
-        if (GameState.TerritoryIntendedUse == 61)
+        if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
             Entry.Text.Append($" / {GetLoc("AutoCountPlayers-PlayersZoneCount")}: " +
                               $"{((InfoProxy24*)InfoModule.Instance()->GetInfoProxyById((InfoProxyId)24))->EntryCount}");
 
@@ -353,7 +356,7 @@ public unsafe class AutoCountPlayers : DailyModuleBase
     {
         FrameworkManager.Unreg(OnFrameworkUpdate);
         
-        DService.UIBuilder.Draw -= OnDraw;
+        WindowManager.Draw -= OnDraw;
         PlayersManager.ReceivePlayersAround -= OnUpdate;
         PlayersManager.ReceivePlayersTargetingMe -= OnPlayersTargetingMeUpdate;
         

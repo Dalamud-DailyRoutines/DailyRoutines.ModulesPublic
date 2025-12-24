@@ -3,6 +3,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using KamiToolKit.Nodes;
 using KamiToolKit.Classes;
 
@@ -17,10 +18,11 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
-    private static Config             ModuleConfig = null!;
-    private static HorizontalListNode LayoutNode;
-    private static CheckboxNode       CheckboxNode;
-    private static TextButtonNode     ButtonNode;
+    private static Config ModuleConfig = null!;
+    
+    private static HorizontalListNode? LayoutNode;
+    private static CheckboxNode?       CheckboxNode;
+    private static TextButtonNode?     ButtonNode;
 
     protected override void Init()
     {
@@ -72,19 +74,19 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                         Alignment = HorizontalListAnchor.Right
                     };
                     LayoutNode.AddNode(ButtonNode, CheckboxNode);
-                    Service.AddonController.AttachNode(LayoutNode, SalvageItemSelector->RootNode);
+                    LayoutNode.AttachNode(SalvageItemSelector->RootNode);
                 }
 
                 if (Throttler.Throttle("AutoDesynthesizeItems-PostDraw"))
                 {
                     if (TaskHelper.IsBusy)
                     {
-                        ButtonNode.SeString = GetLoc("Stop");
+                        ButtonNode.String = GetLoc("Stop");
                         ButtonNode.OnClick  = () => TaskHelper.Abort();
                     }
                     else
                     {
-                        ButtonNode.SeString = $"{Info.Title}";
+                        ButtonNode.String = $"{Info.Title}";
                         ButtonNode.OnClick  = StartDesynthesizeAll;
                     }
                 }
@@ -92,11 +94,13 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
                 break;
             
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(CheckboxNode);
+                CheckboxNode?.DetachNode();
                 CheckboxNode = null;
-                Service.AddonController.DetachNode(ButtonNode);
+                
+                ButtonNode?.DetachNode();
                 ButtonNode = null;
-                Service.AddonController.DetachNode(LayoutNode);
+                
+                LayoutNode?.DetachNode();
                 LayoutNode = null;
                 
                 TaskHelper.Abort();
@@ -123,6 +127,14 @@ public unsafe class AutoDesynthesizeItems : DailyModuleBase
         if (OccupiedInEvent) return false;
         if (!IsAddonAndNodesReady(SalvageItemSelector)) return false;
 
+        // 背包满了
+        if (IsInventoryFull(PlayerInventories, 3))
+        {
+            RaptureLogModule.Instance()->ShowLogMessage(3974);
+            TaskHelper.Abort();
+            return true;
+        }
+        
         var itemAmount = SalvageItemSelector->AtkValues[9].Int;
         if (itemAmount == 0)
         {

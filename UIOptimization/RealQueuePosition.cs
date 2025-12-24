@@ -1,9 +1,10 @@
 using System;
 using System.Runtime.InteropServices;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
 using Dalamud.Hooking;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -16,6 +17,8 @@ public unsafe class RealQueuePosition : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         Author      = ["逆光", "Nukoooo"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
     private readonly CompSig                              AgentWorldTravelUpdaterSig = new("E8 ?? ?? ?? ?? 40 0A F8 B9 ?? ?? ?? ??");
     private delegate bool                                 AgentWorldTravelUpdateDelegate(nint a1, NumberArrayData* a2, StringArrayData* a3, bool a4);
@@ -86,9 +89,10 @@ public unsafe class RealQueuePosition : DailyModuleBase
         if (a2->IntArray[5] > 0)
             index = 6;
 
-        var position = *(uint*)(agentData + 0x12c);
-        var positionStr = $"{LuminaWrapper.GetAddonText(10988)}: #{position}";
-        a3->SetValue(index, positionStr);
+        var       position    = *(uint*)(agentData + 0x12C);
+        var       positionStr = DService.SeStringEvaluator.Evaluate(LuminaGetter.GetRowOrDefault<Addon>(10039).Text, [position]);
+        using var builder     = new RentedSeStringBuilder();
+        a3->SetValue(index, builder.Builder.Append(LuminaWrapper.GetAddonText(12522)).Append(positionStr).GetViewAsSpan());
         
         var queueTime = TimeSpan.FromSeconds(*(int*)(agentData + 0x128));
         var info      = GetLoc("RealQueuePosition-ETA", @$"{queueTime:mm\:ss}", @$"{ETA - DateTime.Now:mm\:ss}");

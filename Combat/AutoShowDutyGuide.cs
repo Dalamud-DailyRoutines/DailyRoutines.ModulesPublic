@@ -1,46 +1,33 @@
-using System;
 using System.Collections.Generic;
-using System.Net.Http;
-using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
-using DailyRoutines.Managers;
 using DailyRoutines.Windows;
-using Dalamud.Interface.Textures;
-using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoShowDutyGuide : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoShowDutyGuideTitle"),
-        Description = GetLoc("AutoShowDutyGuideDescription"),
-        Category = ModuleCategories.Combat,
+        Title       = "自动显示副本攻略",
+        Description = "进入副本后, 自动以悬浮窗形式显示来自\"新大陆见闻录\"网站的副本攻略",
+        Category    = ModuleCategories.Combat,
     };
 
-    private const string FF14OrgLinkBase = "https://gh.atmoomen.top/novice-network/master/docs/duty/{0}.md";
-
-    private static CancellationTokenSource? CancelSource;
-
+    private const string FF14OrgLinkBase = 
+        "https://gh.atmoomen.top/raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/docs/duty/{0}.md";
+    
     private static Config ModuleConfig = null!;
-
-    private static uint CurrentDuty;
-    private static ISharedImmediateTexture? NoviceIcon;
-
-    private static List<string> GuideText = [];
-
-    private static bool IsOnDebug;
+    
+    private static List<string> GuideData = [];
+    private static bool         IsOnDebug;
 
     protected override void Init()
     {
         ModuleConfig =   LoadConfig<Config>() ?? new();
-        CancelSource ??= new();
-        NoviceIcon   ??= DService.Texture.GetFromGameIcon(new(61523));
-        TaskHelper   ??= new TaskHelper { TimeLimitMS = 60000 };
+        TaskHelper   ??= new TaskHelper { TimeLimitMS = 60_000 };
 
         Overlay ??= new Overlay(this);
         Overlay.Flags &= ~ImGuiWindowFlags.NoTitleBar;
@@ -49,114 +36,108 @@ public class AutoShowDutyGuide : DailyModuleBase
         Overlay.ShowCloseButton = false;
 
         DService.ClientState.TerritoryChanged += OnZoneChange;
-        if (BoundByDuty)
-            OnZoneChange(DService.ClientState.TerritoryType);
+        OnZoneChange(0);
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("WorkTheory")}:");
-        ImGuiOm.HelpMarker(GetLoc("AutoShowDutyGuide-TheoryHelp"), 30f);
-
-        ImGui.SetNextItemWidth(80f * GlobalFontScale);
+        ImGui.SetNextItemWidth(100f * GlobalFontScale);
         ImGui.InputFloat(GetLoc("FontScale"), ref ModuleConfig.FontScale);
         if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);
 
         using (ImRaii.Disabled(BoundByDuty))
         {
-            if (ImGui.Checkbox(GetLoc("AutoShowDutyGuide-DebugMode"), ref IsOnDebug))
+            if (ImGui.Checkbox("调试模式", ref IsOnDebug))
             {
+                TaskHelper.Abort();
+                GuideData.Clear();
+                Overlay.IsOpen = false;
+                
                 if (IsOnDebug) 
-                    OnZoneChange(172);
-                else
-                {
-                    GuideText.Clear();
-                    CurrentDuty = 0;
-                }
+                    TaskHelper.EnqueueAsync(() => GetDutyGuide(1));
             }
+            
+            ImGuiOm.TooltipHover("进入调试模式需要拉取在线数据, 请耐心等待, 切勿频繁开关");
         }
-        
-        ImGuiOm.TooltipHover(GetLoc("AutoShowDutyGuide-DebugModeHelp"));
     }
 
-    protected override void OverlayOnOpen() => ImGui.SetScrollHereY();
+    protected override void OverlayOnOpen() => 
+        ImGui.SetScrollHereY();
 
     protected override void OverlayPreDraw()
     {
-        if (!IsOnDebug && (!BoundByDuty || GuideText.Count <= 0))
+        if (!IsOnDebug && (!BoundByDuty || GuideData.Count <= 0))
         {
             Overlay.IsOpen = false;
-            GuideText.Clear();
+            GuideData.Clear();
+            TaskHelper.Abort();
             return;
         }
 
-        if (GuideText.Count > 0)
-            Overlay.WindowName = $"{GuideText[0]}###AutoShowDutyGuide-GuideWindow";
+        if (GuideData.Count > 0)
+            Overlay.WindowName = $"{GuideData[0]}###AutoShowDutyGuide-GuideWindow";
     }
 
     protected override void OverlayUI()
     {
-        using (FontManager.GetUIFont(ModuleConfig.FontScale).Push())
+        using var font = FontManager.GetUIFont(ModuleConfig.FontScale).Push();
+        
+        if (ImGuiOm.SelectableImageWithText(ImageHelper.GetGameIcon(61523).Handle, 
+                                            ScaledVector2(24f),
+                                            "来源: 新大陆见闻录",
+                                            false))
+            Util.OpenLink($"https://ff14.org/duty/{GameState.ContentFinderCondition}.htm");
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        for (var i = 1; i < GuideData.Count; i++)
         {
-            if (ImGuiOm.SelectableImageWithText(NoviceIcon.GetWrapOrEmpty().Handle, ScaledVector2(24f),
-                                                GetLoc("AutoShowDutyGuide-Source"), false))
-                Util.OpenLink($"https://ff14.org/duty/{CurrentDuty}.htm");
-
-            ImGui.Separator();
-
-            using (ImRaii.TextWrapPos(ImGui.GetWindowWidth()))
+            var       text = GuideData[i];
+            using var id   = ImRaii.PushId($"DutyGuideLine-{i}");
+                
+            ImGui.TextWrapped(text);
+                    
+            if (ImGui.IsItemHovered())
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+                
+            if (ImGui.IsItemClicked())
             {
-                for (var i = 1; i < GuideText.Count; i++)
-                {
-                    var       text = GuideText[i];
-                    using var id   = ImRaii.PushId($"DutyGuideLine-{i}");
-                    
-                    ImGui.Text(text);
-                    
-                    if (ImGui.IsItemHovered())
-                        ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-                    
-                    if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
-                    {
-                        ImGui.SetClipboardText(text);
-                        NotificationSuccess(GetLoc("AutoShowDutyGuide-CopyNotice"));
-                    }
-                    
-                    ImGui.NewLine();
-                }
+                ImGui.SetClipboardText(text);
+                Chat("已将本段攻略内容复制至剪贴板");
             }
+                    
+            ImGui.NewLine();
         }
     }
 
-    private void OnZoneChange(ushort territory)
+    private void OnZoneChange(ushort zone)
     {
-        if (!PresetSheet.Contents.TryGetValue(territory, out var content))
-        {
-            CurrentDuty = 0;
-            GuideText.Clear();
-            Overlay.IsOpen = false;
-            return;
-        }
+        TaskHelper.Abort();
+        GuideData.Clear();
+        Overlay.IsOpen = false;
+        
+        if (GameState.ContentFinderCondition == 0) return;
 
-        DService.Framework.RunOnTick(() => GetDutyGuide(content.RowId), default, default, CancelSource.Token);
+        TaskHelper.EnqueueAsync(() => GetDutyGuide(GameState.ContentFinderCondition));
     }
 
     private async Task GetDutyGuide(uint dutyID)
     {
         try
         {
-            CurrentDuty = dutyID;
             var originalText = await HttpClientHelper.Get().GetStringAsync(string.Format(FF14OrgLinkBase, dutyID));
 
             var plainText = MarkdownToPlainText(originalText);
             if (!string.IsNullOrWhiteSpace(plainText))
             {
-                GuideText      = [.. plainText.Split('\n')];
+                GuideData      = [.. plainText.Split('\n')];
                 Overlay.IsOpen = true;
             }
         }
-        catch (Exception)
+        catch
         {
             // ignored
         }
@@ -165,10 +146,7 @@ public class AutoShowDutyGuide : DailyModuleBase
     protected override void Uninit()
     {
         DService.ClientState.TerritoryChanged -= OnZoneChange;
-        
-        CancelSource?.Cancel();
-        CancelSource?.Dispose();
-        CancelSource = null;
+        GuideData.Clear();
     }
 
     private class Config : ModuleConfiguration

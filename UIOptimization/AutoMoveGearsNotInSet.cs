@@ -19,6 +19,8 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private const string Command = "retrievegears";
 
     private static readonly InventoryType[] ArmoryInventories =
@@ -77,9 +79,9 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
                         Size      = new(48),
                         Position  = new(12, 500),
                         IsVisible = true,
-                        SeString  = new SeStringBuilder().AddIcon(BitmapFontIcon.SwordSheathed).Build(),
+                        SeString  = new SeStringBuilder().AddIcon(BitmapFontIcon.SwordSheathed).Build().Encode(),
                         Tooltip   = GetLoc("AutoMoveGearsNotInSet-Button"),
-                        OnClick   = () => ChatHelper.SendMessage($"/pdr {Command}"),
+                        OnClick   = () => ChatManager.SendMessage($"/pdr {Command}"),
                         IsEnabled = true,
                     };
 
@@ -91,11 +93,11 @@ public class AutoMoveGearsNotInSet : DailyModuleBase
                     backgroundNode.LeftOffset         = 0;
                     backgroundNode.RightOffset        = 0f;
                     
-                    Service.AddonController.AttachNode(Button, ArmouryBoard->RootNode);
+                    Button.AttachNode(ArmouryBoard->RootNode);
                 }
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(Button);
+                Button?.DetachNode();
                 Button = null;
                 break;
         }

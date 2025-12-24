@@ -35,7 +35,7 @@ public unsafe class AutoInventoryTransfer : DailyModuleBase
     {
         if (!IsConflictKeyPressed() || !IsInventoryOpen()) return;
         
-        TaskHelper.Enqueue(() => IsAddonAndNodesReady(ContextMenu));
+        TaskHelper.Enqueue(() => IsAddonAndNodesReady(ContextMenuXIV));
         TaskHelper.Enqueue(() => { ClickContextMenu(MenuTexts); });
         
         return;

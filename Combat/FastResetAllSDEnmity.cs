@@ -25,7 +25,7 @@ public class FastResetAllSDEnmity : DailyModuleBase
     {
         CancelSource ??= new();
 
-        ExecuteCommandManager.Register(OnResetStrikingDummies);
+        ExecuteCommandManager.RegPre(OnResetStrikingDummies);
         CommandManager.AddSubCommand(Command, new CommandInfo(OnCommand)
         {
             HelpMessage = GetLoc("FastResetAllSDEnmity-CommandHelp"),
@@ -68,7 +68,7 @@ public class FastResetAllSDEnmity : DailyModuleBase
 
     protected override void Uninit()
     {
-        ExecuteCommandManager.Unregister(OnResetStrikingDummies);
+        ExecuteCommandManager.Unreg(OnResetStrikingDummies);
         CommandManager.RemoveSubCommand(Command);
 
         CancelSource?.Cancel();

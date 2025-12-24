@@ -19,6 +19,8 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
         Category            = ModuleCategories.UIOptimization,
         ModulesPrerequisite = ["ContentFinderCommand"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private const ImGuiWindowFlags WindowFlags = ImGuiWindowFlags.NoDecoration    | ImGuiWindowFlags.AlwaysAutoResize   |
                                                  ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove             |
@@ -84,8 +86,8 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
                             {
                                 if (ImGui.ImageButton(joinTexture.GetWrapOrEmpty().Handle, new(lineHeight)))
                                 {
-                                    ChatHelper.SendMessage($"/pdrduty {(cachedData.CurrentTab == 0 ? "r" : "n")} {item.CleanName}");
-                                    ChatHelper.SendMessage($"/pdrduty {(cachedData.CurrentTab != 0 ? "r" : "n")} {item.CleanName}");
+                                    ChatManager.SendMessage($"/pdrduty {(cachedData.CurrentTab == 0 ? "r" : "n")} {item.CleanName}");
+                                    ChatManager.SendMessage($"/pdrduty {(cachedData.CurrentTab != 0 ? "r" : "n")} {item.CleanName}");
                                 }                                
                                 ImGuiOm.TooltipHover($"{sharedPrefix}");
                             }
@@ -98,7 +100,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
                                     {
                                         ImGui.SameLine();
                                         if (ImGui.ImageButton(explorerTexture.GetWrapOrEmpty().Handle, new(lineHeight)))
-                                            ChatHelper.SendMessage($"/pdrduty n {item.CleanName} explorer");
+                                            ChatManager.SendMessage($"/pdrduty n {item.CleanName} explorer");
                                         ImGuiOm.TooltipHover($"{sharedPrefix} ({LuminaGetter.GetRow<Addon>(13038)!.Value.Text.ExtractText()})");
                                     }
                                 }
@@ -108,7 +110,7 @@ public unsafe class FastContentsFinderRegister : DailyModuleBase
                                     {
                                         ImGui.SameLine();
                                         if (ImGui.ImageButton(unrestTexture.GetWrapOrEmpty().Handle, new(lineHeight)))
-                                            ChatHelper.SendMessage($"/pdrduty n {item.CleanName} unrest");
+                                            ChatManager.SendMessage($"/pdrduty n {item.CleanName} unrest");
                                         ImGuiOm.TooltipHover($"{sharedPrefix} ({LuminaGetter.GetRow<Addon>(10008)!.Value.Text.ExtractText()})\n" +
                                                              $"[{GetLoc("FastContentsFinderRegister-HoldConflictKeyToToggle")}]");
                                     }

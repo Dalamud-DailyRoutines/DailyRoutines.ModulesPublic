@@ -17,6 +17,8 @@ public class ExpandItemMenuSearch : DailyModuleBase
         Author      = ["HSS"]
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static Config ModuleConfig = null!;
 
     private static readonly UpperContainerItem UpperContainerMenu = new();
@@ -82,14 +84,14 @@ public class ExpandItemMenuSearch : DailyModuleBase
         // 优先搜索幻化
         public bool GlamourPrioritize = true;
 
-        public bool FFXIVSCEnabled;
-        public bool HuijiWikiEnabled;
-        public bool ConsoleGamesWikiEnabled;
-        public bool GarlandToolsDBCNEnabled;
-        public bool GarlandToolsDBEnabled;
-        public bool LodestoneDBEnabled;
-        public bool GamerEscapeWikiEnabled;
-        public bool ERIONESEnabled;
+        public bool FFXIVSCEnabled          = GameState.IsCN || GameState.IsTC;
+        public bool HuijiWikiEnabled        = GameState.IsCN || GameState.IsTC;
+        public bool ConsoleGamesWikiEnabled = GameState.IsGL;
+        public bool GarlandToolsDBCNEnabled = GameState.IsCN || GameState.IsTC;
+        public bool GarlandToolsDBEnabled   = GameState.IsGL;
+        public bool LodestoneDBEnabled      = GameState.IsGL;
+        public bool GamerEscapeWikiEnabled  = GameState.IsGL;
+        public bool ERIONESEnabled          = GameState.IsGL;
     }
 
     private class UpperContainerItem : MenuItemBase

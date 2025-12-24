@@ -10,6 +10,7 @@ using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 调回原版浅蓝界面修改未完全覆盖问题
 public unsafe class AutoSellCards : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -19,11 +20,13 @@ public unsafe class AutoSellCards : DailyModuleBase
         Category            = ModuleCategories.GoldSaucer,
         ModulesPrerequisite = ["InstantLeaveDuty", "ContentFinderCommand"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static HorizontalListNode LayoutNode;
-    private static TextNode           TitleNode;
-    private static TextButtonNode     StartButton;
-    private static TextButtonNode     StopButton;
+    private static HorizontalListNode? LayoutNode;
+    private static TextNode?           TitleNode;
+    private static TextButtonNode?     StartButton;
+    private static TextButtonNode?     StopButton;
     
     private const string Command = "scards";
 
@@ -69,14 +72,14 @@ public unsafe class AutoSellCards : DailyModuleBase
                         Position         = new(15, 465),
                         SeString         = Info.Title
                     };
-                    Service.AddonController.AttachNode(TitleNode, TripleTriadCoinExchange->RootNode);
+                    TitleNode.AttachNode(TripleTriadCoinExchange->RootNode);
                     
                     LayoutNode = new HorizontalListNode
                     {
                         IsVisible = true,
                         Position  = new(15, 495)
                     };
-                    Service.AddonController.AttachNode(LayoutNode, TripleTriadCoinExchange->RootNode);
+                    LayoutNode.AttachNode(TripleTriadCoinExchange->RootNode);
 
                     StartButton = new()
                     {
@@ -126,16 +129,16 @@ public unsafe class AutoSellCards : DailyModuleBase
                 
                 break;
             case AddonEvent.PreFinalize:
-                Service.AddonController.DetachNode(LayoutNode);
+                LayoutNode?.DetachNode();
                 LayoutNode = null;
                 
-                Service.AddonController.DetachNode(StartButton);
+                StartButton?.DetachNode();
                 StartButton = null;
                 
-                Service.AddonController.DetachNode(StopButton);
+                StopButton?.DetachNode();
                 StopButton = null;
                 
-                Service.AddonController.DetachNode(TitleNode);
+                TitleNode?.DetachNode();
                 TitleNode = null;
                 
                 TaskHelper?.Abort();
@@ -164,7 +167,7 @@ public unsafe class AutoSellCards : DailyModuleBase
         // 附近没有可用的幻卡兑换地点
         if (!IsEventIDNearby(721135))
         {
-            TaskHelper.Enqueue(() => ChatHelper.SendMessage("/pdrduty n 195"), "发送九宫幻卡对局室参加申请");
+            TaskHelper.Enqueue(() => ChatManager.SendMessage("/pdrduty n 195"), "发送九宫幻卡对局室参加申请");
             TaskHelper.Enqueue(() => GameState.TerritoryType == 579 && IsScreenReady(), "等待进入九宫幻卡对局室");
         }
 
@@ -175,7 +178,7 @@ public unsafe class AutoSellCards : DailyModuleBase
             if (!IsAddonAndNodesReady(TripleTriadCoinExchange)) return;
             Callback(TripleTriadCoinExchange, true, -1);
         }, "交换完毕, 关闭界面");
-        TaskHelper.Enqueue(() => ChatHelper.SendMessage("/pdr leaveduty"), "离开幻卡对局室");
+        TaskHelper.Enqueue(() => ChatManager.SendMessage("/pdr leaveduty"), "离开幻卡对局室");
     }
 
     private bool? StartHandOver()

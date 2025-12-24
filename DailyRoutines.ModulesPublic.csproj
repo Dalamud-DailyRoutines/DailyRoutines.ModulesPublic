@@ -1,4 +1,4 @@
-﻿<Project Sdk="Dalamud.CN.NET.Sdk/13.1.0">
+﻿<Project Sdk="Dalamud.CN.NET.Sdk/14.0.1">
     
     <PropertyGroup>
         <Authors>AtmoOmen</Authors>
@@ -11,6 +11,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
+        <UseWPF>true</UseWPF>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -18,19 +19,18 @@
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-        <PlatformTarget>AnyCPU</PlatformTarget>
         <UseWindowsForms>true</UseWindowsForms>
         <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
         <BaseOutputPath>$(SolutionDir)bin</BaseOutputPath>
         <SatelliteResourceLanguages>xxx</SatelliteResourceLanguages>
-        <Use_DalamudPackager>false</Use_DalamudPackager>
         <NoWarn>1701;1702;CS0414;CS8601;CS8602;CS8604;CS8603;IDE1006;IDE0300;MSB3270;MSB324;CS0649;CA2211;CS8509;CS8625;MSB3305;CS8618;CS8600;CS8605;CS8620</NoWarn>
         <DebugType>none</DebugType>
         <DebugSymbols>false</DebugSymbols>
+        <Optimize>True</Optimize>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-        <Optimize>True</Optimize>
+    <PropertyGroup>
+        <Use_DalamudPackager>false</Use_DalamudPackager>
     </PropertyGroup>
 
     <ItemGroup>
@@ -38,7 +38,6 @@
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="System.CodeDom" Version="9.0.1" />
         <PackageReference Include="TimeAgo.Core" Version="1.1.0" />
     </ItemGroup>
 

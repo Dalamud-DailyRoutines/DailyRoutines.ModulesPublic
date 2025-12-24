@@ -14,6 +14,8 @@ public unsafe class OptimizedBorderlessWindow : DailyModuleBase
         Description = GetLoc("OptimizedBorderlessWindowDescription"),
         Category    = ModuleCategories.System
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig WindowProcessSig =
         new("40 55 53 56 57 41 54 41 56 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E0");

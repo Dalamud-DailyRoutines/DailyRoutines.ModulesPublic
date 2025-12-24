@@ -26,6 +26,8 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
         Category    = ModuleCategories.UIOptimization
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static readonly CompSig SendInventoryRefreshSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 8B DA 48 8B F1 33 D2 0F B7 FA");
     private delegate        bool                                SendInventoryRefreshDelegate(InventoryManager* instance, int inventoryType);
     private static          Hook<SendInventoryRefreshDelegate>? SendInventoryRefreshHook;
@@ -122,9 +124,10 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
                         },
                         Tooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
                                                        .Append($" {GetLoc("OptimizedFreeCompanyChest-FastMoveHelp")}")
-                                                       .Build(),
+                                                       .Build()
+                                                       .Encode(),
                     };
-                    Service.AddonController.AttachNode(FastMoveNode, FreeCompanyChest->GetNodeById(9));
+                    FastMoveNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
                 FastMoveNode.IsChecked = ModuleConfig.FastMoveItem;
                 FastMoveNode.IsVisible = FreeCompanyChest->AtkValues[1].UInt == 0;
@@ -158,7 +161,8 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
                                                                            .AddRange([NewLinePayload.Payload, NewLinePayload.Payload])
                                                                            .Append(
                                                                                $"{GetLoc("Current")}: {DefaultPages.GetValueOrDefault(ModuleConfig.DefaultPage, LuminaWrapper.GetAddonText(7))}")
-                                                                           .Build();
+                                                                           .Build()
+                                                                           .Encode();
                             DefaultPageNode.HideTooltip();
                             DefaultPageNode.ShowTooltip();
                         },
@@ -167,9 +171,10 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
                                                        .AddRange([NewLinePayload.Payload, NewLinePayload.Payload])
                                                        .Append(
                                                            $"{GetLoc("Current")}: {DefaultPages.GetValueOrDefault(ModuleConfig.DefaultPage, LuminaWrapper.GetAddonText(7))}")
-                                                       .Build(),
+                                                       .Build()
+                                                       .Encode(),
                     };
-                    Service.AddonController.AttachNode(DefaultPageNode, FreeCompanyChest->GetNodeById(9));
+                    DefaultPageNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
                 
                 var gilRadioButton = FreeCompanyChest->GetNodeById(16);
@@ -220,10 +225,10 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
                         AlignmentType    = AlignmentType.Right,
                     };
                     
-                    Service.AddonController.AttachNode(GilIconNode,            ComponentNode);
-                    Service.AddonController.AttachNode(GilItemsValueNode,      ComponentNode);
-                    Service.AddonController.AttachNode(GilItemsValueCountNode, ComponentNode);
-                    Service.AddonController.AttachNode(ComponentNode,          FreeCompanyChest->GetNodeById(9));
+                    GilIconNode.AttachNode(ComponentNode);
+                    GilItemsValueNode.AttachNode(ComponentNode);
+                    GilItemsValueCountNode.AttachNode(ComponentNode);
+                    ComponentNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
                 if (Throttler.Throttle("OptimizedFreeCompanyChest-OnUpdateGilItemsValue", 100))
@@ -231,7 +236,7 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
                     LastTotalPrice = TryGetTotalPrice(out var totalPrice) ? totalPrice : 0;
 
                     ComponentNode.IsVisible         = LastTotalPrice > 0;
-                    GilItemsValueCountNode.SeString = $"{FormatNumber(LastTotalPrice)}\ue049";
+                    GilItemsValueCountNode.String = $"{FormatNumber(LastTotalPrice)}\ue049";
                 }
 
                 break;
@@ -289,10 +294,10 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
     // 处理存取后的右键菜单关闭
     private static void OnAddonContextMenu(AddonEvent type, AddonArgs args)
     {
-        if (!IsNeedToClose || InfosOm.ContextMenu == null) return;
+        if (!IsNeedToClose || InfosOm.ContextMenuXIV == null) return;
 
-        InfosOm.ContextMenu->IsVisible = false;
-        InfosOm.ContextMenu->Close(true);
+        InfosOm.ContextMenuXIV->IsVisible = false;
+        InfosOm.ContextMenuXIV->Close(true);
         IsNeedToClose = false;
     }
     
@@ -314,22 +319,22 @@ public unsafe class OptimizedFreeCompanyChest : DailyModuleBase
 
     private static void ClearNodes()
     {
-        Service.AddonController.DetachNode(FastMoveNode);
+        FastMoveNode?.DetachNode();
         FastMoveNode = null;
         
-        Service.AddonController.DetachNode(DefaultPageNode);
+        DefaultPageNode?.DetachNode();
         DefaultPageNode = null;
         
-        Service.AddonController.DetachNode(ComponentNode);
+        ComponentNode?.DetachNode();
         ComponentNode = null;
         
-        Service.AddonController.DetachNode(GilIconNode);
+        GilIconNode?.DetachNode();
         GilIconNode = null;
         
-        Service.AddonController.DetachNode(GilItemsValueCountNode);
+        GilItemsValueCountNode?.DetachNode();
         GilItemsValueCountNode = null;
         
-        Service.AddonController.DetachNode(GilItemsValueNode);
+        GilItemsValueNode?.DetachNode();
         GilItemsValueNode = null;
     }
     

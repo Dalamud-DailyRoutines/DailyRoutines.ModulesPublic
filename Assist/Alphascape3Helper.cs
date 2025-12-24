@@ -1,18 +1,12 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
-using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class Alphascape3Helper : DailyModuleBase
+public class Alphascape3Helper : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -32,23 +26,23 @@ public unsafe class Alphascape3Helper : DailyModuleBase
         FrameworkManager.Unreg(OnUpdate);
         if (zoneID != 800) return;
         
-        FrameworkManager.Reg(OnUpdate, throttleMS: 1000);
+        FrameworkManager.Reg(OnUpdate, throttleMS: 100);
     }
 
     private static void OnUpdate(IFramework framework)
     {
-        if (DService.ClientState.TerritoryType != 800)
+        if (GameState.TerritoryType != 800)
         {
             FrameworkManager.Unreg(OnUpdate);
             return;
         }
 
-        if (Control.GetLocalPlayer() == null) return;
+        if (DService.ObjectTable.LocalPlayer is null) return;
         
-        var obj = DService.ObjectTable.FirstOrDefault(x => x.ObjectKind == ObjectKind.BattleNpc && x.DataID == 9638);
-        if (obj == null || !obj.IsTargetable) return;
+        var obj = DService.ObjectTable.FirstOrDefault(x => x is { ObjectKind: ObjectKind.BattleNpc, DataID: 9638 });
+        if (obj is not { IsTargetable: true }) return;
 
-        new UseActionPacket(ActionType.Action, 12911, obj.EntityID, Control.GetLocalPlayer()->Rotation).Send();
+        UseActionManager.UseAction(ActionType.Action, 12911, obj.EntityID);
     }
 
     protected override void Uninit()

@@ -15,6 +15,8 @@ public unsafe class BetterPartyFinderSort: DailyModuleBase
         Author      = ["decorwdyun"]
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static readonly CompSig PartyFinderSortCmpSig = new("40 53 48 83 EC 20 0F B6 82 ?? ?? ?? ?? 48 8B DA 38 81 ?? ?? ?? ??");
     private static readonly byte*   PartyFinderSortType   = new CompSig("75 53 0F B6 05 ?? ?? ?? ??").GetStatic<byte>();
     

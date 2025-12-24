@@ -577,73 +577,73 @@ public class AutoReplyChatBot : DailyModuleBase
         switch (originalType)
         {
             case XivChatType.TellIncoming:
-                ChatHelper.SendMessage($"/tell {target} {reply}");
+                ChatManager.SendMessage($"/tell {target} {reply}");
                 break;
             case XivChatType.Party:
-                ChatHelper.SendMessage($"/p {reply}");
+                ChatManager.SendMessage($"/p {reply}");
                 break;
             case XivChatType.FreeCompany:
-                ChatHelper.SendMessage($"/fc {reply}");
+                ChatManager.SendMessage($"/fc {reply}");
                 break;
             case XivChatType.Ls1:
-                ChatHelper.SendMessage($"/l1 {reply}");
+                ChatManager.SendMessage($"/l1 {reply}");
                 break;
             case XivChatType.Ls2:
-                ChatHelper.SendMessage($"/l2 {reply}");
+                ChatManager.SendMessage($"/l2 {reply}");
                 break;
             case XivChatType.Ls3:
-                ChatHelper.SendMessage($"/l3 {reply}");
+                ChatManager.SendMessage($"/l3 {reply}");
                 break;
             case XivChatType.Ls4:
-                ChatHelper.SendMessage($"/l4 {reply}");
+                ChatManager.SendMessage($"/l4 {reply}");
                 break;
             case XivChatType.Ls5:
-                ChatHelper.SendMessage($"/l5 {reply}");
+                ChatManager.SendMessage($"/l5 {reply}");
                 break;
             case XivChatType.Ls6:
-                ChatHelper.SendMessage($"/l6 {reply}");
+                ChatManager.SendMessage($"/l6 {reply}");
                 break;
             case XivChatType.Ls7:
-                ChatHelper.SendMessage($"/l7 {reply}");
+                ChatManager.SendMessage($"/l7 {reply}");
                 break;
             case XivChatType.Ls8:
-                ChatHelper.SendMessage($"/l8 {reply}");
+                ChatManager.SendMessage($"/l8 {reply}");
                 break;
             case XivChatType.CrossLinkShell1:
-                ChatHelper.SendMessage($"/cwlinkshell1 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell1 {reply}");
                 break;
             case XivChatType.CrossLinkShell2:
-                ChatHelper.SendMessage($"/cwlinkshell2 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell2 {reply}");
                 break;
             case XivChatType.CrossLinkShell3:
-                ChatHelper.SendMessage($"/cwlinkshell3 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell3 {reply}");
                 break;
             case XivChatType.CrossLinkShell4:
-                ChatHelper.SendMessage($"/cwlinkshell4 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell4 {reply}");
                 break;
             case XivChatType.CrossLinkShell5:
-                ChatHelper.SendMessage($"/cwlinkshell5 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell5 {reply}");
                 break;
             case XivChatType.CrossLinkShell6:
-                ChatHelper.SendMessage($"/cwlinkshell6 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell6 {reply}");
                 break;
             case XivChatType.CrossLinkShell7:
-                ChatHelper.SendMessage($"/cwlinkshell7 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell7 {reply}");
                 break;
             case XivChatType.CrossLinkShell8:
-                ChatHelper.SendMessage($"/cwlinkshell8 {reply}");
+                ChatManager.SendMessage($"/cwlinkshell8 {reply}");
                 break;
             case XivChatType.Say:
-                ChatHelper.SendMessage($"/say {reply}");
+                ChatManager.SendMessage($"/say {reply}");
                 break;
             case XivChatType.Yell:
-                ChatHelper.SendMessage($"/yell {reply}");
+                ChatManager.SendMessage($"/yell {reply}");
                 break;
             case XivChatType.Shout:
-                ChatHelper.SendMessage($"/shout {reply}");
+                ChatManager.SendMessage($"/shout {reply}");
                 break;
             default:
-                ChatHelper.SendMessage($"/tell {target} {reply}");
+                ChatManager.SendMessage($"/tell {target} {reply}");
                 break;
         }
 

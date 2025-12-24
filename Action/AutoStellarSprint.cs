@@ -4,6 +4,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Lumina.Excel.Sheets;
+using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -33,7 +34,7 @@ public unsafe class AutoStellarSprint : DailyModuleBase
         TaskHelper.Abort();
         FrameworkManager.Unreg(OnFrameworkUpdate);
 
-        if (GameState.TerritoryIntendedUse != 60) return;
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.CosmicExploration) return;
         FrameworkManager.Reg(OnFrameworkUpdate, throttleMS: 2_000);
     }
 
@@ -47,7 +48,7 @@ public unsafe class AutoStellarSprint : DailyModuleBase
     {
         if (!IsScreenReady() || BetweenAreas || OccupiedInEvent) return false;
 
-        if (GameState.TerritoryIntendedUse != 60)
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.CosmicExploration)
         {
             FrameworkManager.Unreg(OnFrameworkUpdate);
             return true;

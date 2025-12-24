@@ -14,6 +14,8 @@ public class AutoManagePeloton : DailyModuleBase
         Category    = ModuleCategories.Action
     };
     
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     protected override void Init() => 
         UseActionManager.RegPreUseAction(OnPreUseAction);
 

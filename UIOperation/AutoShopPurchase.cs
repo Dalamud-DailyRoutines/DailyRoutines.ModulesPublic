@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
+using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -234,10 +235,10 @@ public class AutoShopPurchase : DailyModuleBase
         private static int SetNumberInput;
 
         public ShopPresetDisplayTable() => 
-            DService.UIBuilder.Draw += WindowRenderAddNewPreset;
+            WindowManager.Draw += WindowRenderAddNewPreset;
 
         public void Dispose() => 
-            DService.UIBuilder.Draw -= WindowRenderAddNewPreset;
+            WindowManager.Draw -= WindowRenderAddNewPreset;
 
         public void Draw()
         {
@@ -566,7 +567,7 @@ public class AutoShopPurchase : DailyModuleBase
             Preset = preset;
             LoopCount = loopCount;
             DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, ["SelectYesno", "ShopExchangeItemDialog"], OnAddonYesno);
-            ExecuteCommandManager.Register(OnReceiveCommand);
+            ExecuteCommandManager.RegPost(OnReceiveCommand);
         }
 
         public static async Task<bool> TryExecuteAsync(ShopPurchasePreset preset, int loopCount)
@@ -673,7 +674,7 @@ public class AutoShopPurchase : DailyModuleBase
 
         public void Dispose()
         {
-            ExecuteCommandManager.Unregister(OnReceiveCommand);
+            ExecuteCommandManager.Unreg(OnReceiveCommand);
             DService.AddonLifecycle.UnregisterListener(OnAddonYesno);
 
             TaskHelper.Abort();

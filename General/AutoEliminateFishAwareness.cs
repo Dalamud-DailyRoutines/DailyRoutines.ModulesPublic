@@ -5,6 +5,7 @@ using DailyRoutines.Managers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -94,7 +95,7 @@ public class AutoEliminateFishAwareness : DailyModuleBase
             TaskHelper.Enqueue(() => !OccupiedInEvent,                                                           "等待不在钓鱼状态");
             TaskHelper.Enqueue(() => ExitDuty(753),                                                              "离开副本");
             TaskHelper.Enqueue(() => !BoundByDuty && IsScreenReady() && GameState.TerritoryType != 939,          "等待离开副本");
-            TaskHelper.Enqueue(() => ChatHelper.SendMessage("/pdrfe diadem"),                                    "发送进入指令");
+            TaskHelper.Enqueue(() => ChatManager.SendMessage("/pdrfe diadem"),                                    "发送进入指令");
             TaskHelper.Enqueue(() => GameState.TerritoryType == 939 && DService.ObjectTable.LocalPlayer != null, "等待进入");
             TaskHelper.Enqueue(() => MovementManager.TPSmart_InZone(currentPos),                                 $"传送到原始位置 {currentPos}");
             TaskHelper.DelayNext(500, "等待 500 毫秒");
@@ -114,12 +115,15 @@ public class AutoEliminateFishAwareness : DailyModuleBase
 
         if (ModuleConfig.AutoCast)
             TaskHelper.Enqueue(EnterFishing, "进入钓鱼状态");
+        else
+            TaskHelper.Enqueue(() => ActionManager.Instance()->GetActionStatus(ActionType.Action, 289) == 0, "等待技能抛竿可用");
         
         TaskHelper.Enqueue(() =>
         {
             if (string.IsNullOrWhiteSpace(ModuleConfig.ExtraCommands)) return;
+            
             foreach (var command in ModuleConfig.ExtraCommands.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-                ChatHelper.SendMessage(command);
+                ChatManager.SendMessage(command);
         }, "执行文本指令");
     }
 

@@ -20,6 +20,8 @@ public class BetterStatusTimeDisplay : DailyModuleBase
         Author      = ["Due"]
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static readonly string[] AvailableFormat =
     [
         @"hh\hmm\m",

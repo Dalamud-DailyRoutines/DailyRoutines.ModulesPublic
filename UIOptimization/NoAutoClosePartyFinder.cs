@@ -1,6 +1,5 @@
 using System;
 using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
@@ -15,6 +14,8 @@ public unsafe class NoAutoClosePartyFinder : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         Author      = ["Nyy", "YLCHEN"]
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private delegate        void                               LookingForGroupHideDelegate(AgentLookingForGroup* agent);
     private static readonly CompSig                            LookingForGroupHideSig = new("48 89 5C 24 ?? 57 48 83 EC 20 83 A1 ?? ?? ?? ?? ??");

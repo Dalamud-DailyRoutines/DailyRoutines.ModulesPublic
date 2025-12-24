@@ -35,24 +35,16 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
 
     private static volatile bool   IsModuleActive;
 
-    private static readonly uint LineColor;
-    private static readonly uint DotColor;
-    private static readonly uint TextColor;
-
-    private static nint    GameWindowHandle;
+    private static readonly uint LineColor = KnownColor.LightSkyBlue.ToVector4().ToUInt();
+    private static readonly uint DotColor  = KnownColor.RoyalBlue.ToVector4().ToUInt();
+    private static readonly uint TextColor = KnownColor.Orange.ToVector4().ToUInt();
+    
     private static Vector3 TargetWorldPos;
 
     private static Config          ModuleConfig;
     private static PathFindHelper? PathFindHelper;
     
     private static WindowHook? Hook;
-
-    static RightClickToMoveMode()
-    {
-        DotColor  = KnownColor.RoyalBlue.ToVector4().ToUInt();
-        TextColor = KnownColor.Orange.ToVector4().ToUInt();
-        LineColor = KnownColor.LightSkyBlue.ToVector4().ToUInt();
-    }
 
     protected override void Init()
     {
@@ -76,10 +68,9 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
         {
             PathFindHelper ??= new PathFindHelper { Precision = 1f };
 
-            GameWindowHandle =   Framework.Instance()->GameWindow->WindowHandle;
-            Hook             ??= new(GameWindowHandle, HandleClickResult);
+            Hook ??= new(Framework.Instance()->GameWindow->WindowHandle, HandleClickResult);
 
-            DService.UIBuilder.Draw += OnPosDraw;
+            WindowManager.Draw += OnPosDraw;
         }
         catch
         {
@@ -92,41 +83,48 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
     {
         ConflictKeyText();
         
-        ImGui.Spacing();
+        ImGui.NewLine();
 
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-MoveMode")}:");
-
-        foreach (var moveMode in Enum.GetValues<MoveMode>())
-        {
-            using var disabled = ImRaii.Disabled(ModuleConfig.MoveMode == moveMode ||
-                                                 (moveMode == MoveMode.Vnavmesh && IsPluginEnabled(vnavmeshIPC.InternalName)));
-
-            ImGui.SameLine();
-            if (ImGui.RadioButton(moveMode.ToString(), moveMode == ModuleConfig.MoveMode))
-            {
-                ModuleConfig.MoveMode = moveMode;
-                SaveConfig(ModuleConfig);
-            }
-        }
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-ControlMode")}:");
-
-        foreach (var controlMode in Enum.GetValues<ControlMode>())
-        {
-            using var disabled = ImRaii.Disabled(controlMode == ModuleConfig.ControlMode);
-
-            ImGui.SameLine();
-            if (ImGui.RadioButton(ControlModes[controlMode].Title, controlMode == ModuleConfig.ControlMode))
-            {
-                ModuleConfig.ControlMode = controlMode;
-                SaveConfig(ModuleConfig);
-            }
-        }
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-MoveMode")}");
 
         using (ImRaii.PushIndent())
         {
+            ImGui.Spacing();
+            
+            foreach (var moveMode in Enum.GetValues<MoveMode>())
+            {
+                using var disabled = ImRaii.Disabled(ModuleConfig.MoveMode == moveMode || 
+                                                     (moveMode == MoveMode.vnavmesh && !IsPluginEnabled(vnavmeshIPC.InternalName)));
+
+                ImGui.SameLine();
+                if (ImGui.RadioButton(moveMode.ToString(), moveMode == ModuleConfig.MoveMode))
+                {
+                    ModuleConfig.MoveMode = moveMode;
+                    SaveConfig(ModuleConfig);
+                }
+            }
+        }
+        
+        ImGui.NewLine();
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-ControlMode")}");
+
+        using (ImRaii.PushIndent())
+        {
+            ImGui.Spacing();
+            
+            foreach (var controlMode in Enum.GetValues<ControlMode>())
+            {
+                using var disabled = ImRaii.Disabled(controlMode == ModuleConfig.ControlMode);
+
+                ImGui.SameLine();
+                if (ImGui.RadioButton(ControlModes[controlMode].Title, controlMode == ModuleConfig.ControlMode))
+                {
+                    ModuleConfig.ControlMode = controlMode;
+                    SaveConfig(ModuleConfig);
+                }
+            }
+            
             ImGui.Text(ControlModes[ModuleConfig.ControlMode].Desc);
 
             if (ModuleConfig.ControlMode == ControlMode.KeyRightClick)
@@ -142,7 +140,7 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
                     var validKeys = DService.KeyState.GetValidVirtualKeys();
                     foreach (var keyToSelect in validKeys)
                     {
-                        using var disabled = ImRaii.Disabled(Service.Config.ConflictKey == keyToSelect);
+                        using var disabled = ImRaii.Disabled(DRConfig.Instance().ConflictKey == keyToSelect);
                         if (ImGui.Selectable(keyToSelect.GetFancyName()))
                         {
                             ModuleConfig.ComboKey = keyToSelect;
@@ -152,26 +150,16 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
                 }
             }
         }
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-DisplayLineToTarget")}:");
-
-        ImGui.SameLine();
-        if (ImGui.Checkbox("###DisplayLineToTarget", ref ModuleConfig.DisplayLineToTarget))
-            SaveConfig(ModuleConfig);
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-NoChangeFaceDirection")}:");
-
-        ImGui.SameLine();
-        if (ImGui.Checkbox("###NoChangeFaceDirection", ref ModuleConfig.NoChangeFaceDirection))
-            SaveConfig(ModuleConfig);
         
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-WASDToInterrupt")}:");
+        ImGui.NewLine();
+        
+        if (ImGui.Checkbox($"{GetLoc("RightClickToMoveMode-DisplayLineToTarget")}###DisplayLineToTarget", ref ModuleConfig.DisplayLineToTarget))
+            SaveConfig(ModuleConfig);
 
-        ImGui.SameLine();
-        if (ImGui.Checkbox("###WASDToInterrupt", ref ModuleConfig.WASDToInterrupt))
+        if (ImGui.Checkbox($"{GetLoc("RightClickToMoveMode-NoChangeFaceDirection")}###NoChangeFaceDirection", ref ModuleConfig.NoChangeFaceDirection))
+            SaveConfig(ModuleConfig);
+
+        if (ImGui.Checkbox($"{GetLoc("RightClickToMoveMode-WASDToInterrupt")}###WASDToInterrupt", ref ModuleConfig.WASDToInterrupt))
             SaveConfig(ModuleConfig);
     }
 
@@ -194,17 +182,20 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
         if (!ModuleConfig.DisplayLineToTarget) return;
 
         if (!DService.Gui.WorldToScreen(TargetWorldPos,       out var screenPos) ||
-            !DService.Gui.WorldToScreen(localPlayer.Position, out var localScreenPos)) return;
+            !DService.Gui.WorldToScreen(localPlayer.Position, out var localScreenPos)) 
+            return;
 
         var drawList = ImGui.GetForegroundDrawList();
 
         drawList.AddLine(localScreenPos, screenPos, LineColor, 8f);
         drawList.AddCircleFilled(localScreenPos, 12f, DotColor);
         drawList.AddCircleFilled(screenPos,      12f, DotColor);
-        drawList.AddText(screenPos + ScaledVector2(16f), TextColor,
-                         GetLoc("RightClickToMoveMode-TextDisplay",
-                                TargetWorldPos.ToString("F2"),
-                                MathF.Sqrt(distance).ToString("F2")));
+
+        ImGuiOm.TextOutlined(screenPos + ScaledVector2(16f),
+                             TextColor,
+                             GetLoc("RightClickToMoveMode-TextDisplay",
+                                    $"[{TargetWorldPos.X:F1}, {TargetWorldPos.Y:F1}, {TargetWorldPos.Z:F1}]",
+                                    MathF.Sqrt(distance).ToString("F2")));
     }
     
     private static void OnZoneChanged(ushort obj) => 
@@ -212,8 +203,11 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
 
     private static void GameObjectSetRotationDetour(nint obj, float value)
     {
-        if (obj == (DService.ObjectTable.LocalPlayer?.Address ?? nint.Zero) && ModuleConfig.NoChangeFaceDirection &&
-            TargetWorldPos != default) return;
+        if (ModuleConfig.NoChangeFaceDirection                                         &&
+            obj            == (DService.ObjectTable.LocalPlayer?.Address ?? nint.Zero) &&
+            TargetWorldPos != default)
+            return;
+        
         GameObjectSetRotationHook.Original(obj, value);
     }
 
@@ -221,8 +215,10 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
     {
         if (IsConflictKeyPressed()) return true;
         if (ModuleConfig.WASDToInterrupt && 
-            (DService.KeyState[VirtualKey.W] || DService.KeyState[VirtualKey.A] ||
-             DService.KeyState[VirtualKey.S] || DService.KeyState[VirtualKey.D])) 
+            (DService.KeyState[VirtualKey.W] || 
+             DService.KeyState[VirtualKey.A] ||
+             DService.KeyState[VirtualKey.S] || 
+             DService.KeyState[VirtualKey.D])) 
             return true;
 
         return false;
@@ -248,22 +244,29 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
         }
 
         if (!DService.Gui.ScreenToWorld(ImGui.GetMousePos(), out var worldPos)) return;
-        if (!MovementManager.TryDetectGroundDownwards(worldPos, out var hitInfo, 1024) ?? false)
+        
+        var finalWorldPos = Vector3.Zero;
+        if (IsPluginEnabled(vnavmeshIPC.InternalName) &&
+            vnavmeshIPC.QueryMeshNearestPoint(worldPos, 3, 10) is { } worldPosByNavmesh)
+            finalWorldPos = worldPosByNavmesh;
+        else if (MovementManager.TryDetectGroundDownwards(worldPos, out var hitInfo, 1024) ?? false)
+            finalWorldPos = hitInfo.Point;
+        else 
             return;
 
         StopPathFind();
-        TargetWorldPos = hitInfo.Point;
+        TargetWorldPos = finalWorldPos;
 
         if (AgentMap.Instance()->IsPlayerMoving)
-            ChatHelper.SendMessage("/automove off");
+            ChatManager.SendMessage("/automove off");
         
         switch (ModuleConfig.MoveMode)
         {
             case MoveMode.Game:
-                PathFindHelper.DesiredPosition = hitInfo.Point;
+                PathFindHelper.DesiredPosition = finalWorldPos;
                 PathFindHelper.Enabled         = true;
                 break;
-            case MoveMode.Vnavmesh:
+            case MoveMode.vnavmesh:
                 if (!IsPluginEnabled(vnavmeshIPC.InternalName))
                 {
                     ModuleConfig.MoveMode = MoveMode.Game;
@@ -292,7 +295,7 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
         if (!IsModuleActive) return;
 
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.UIBuilder.Draw               -= OnPosDraw;
+        WindowManager.Draw               -= OnPosDraw;
 
         Hook?.Dispose();
 
@@ -303,7 +306,6 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
         }
 
         TargetWorldPos   = default;
-        GameWindowHandle = nint.Zero;
         IsModuleActive   = false;
     }
 
@@ -320,7 +322,7 @@ public unsafe class RightClickToMoveMode : DailyModuleBase
     public enum MoveMode
     {
         Game,
-        Vnavmesh
+        vnavmesh
     }
 
     public enum ControlMode

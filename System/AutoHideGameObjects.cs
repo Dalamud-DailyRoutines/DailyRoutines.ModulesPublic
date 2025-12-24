@@ -3,6 +3,7 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.Interop;
 using BattleNpcSubKind = Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind;
@@ -88,11 +89,11 @@ public unsafe class AutoHideGameObjects : DailyModuleBase
         if (manager == null) return;
         if (!DService.ClientState.IsLoggedIn) return;
         
-        if (GameState.TerritoryIntendedUse != 61)
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
         {
             if (GameState.ContentFinderCondition != 0 ||
                 GameState.IsInPVPArea                 ||
-                GameState.TerritoryIntendedUse == 49)
+                GameState.TerritoryIntendedUse == TerritoryIntendedUse.IslandSanctuary)
                 return;
         }
 
@@ -100,7 +101,7 @@ public unsafe class AutoHideGameObjects : DailyModuleBase
         var targetAddress = DService.Targets.Target?.Address ?? nint.Zero;
         foreach (var entry in manager->Objects.IndexSorted)
         {
-            if (GameState.TerritoryIntendedUse == 61)
+            if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
             {
                 if ((LocalPlayerState.Object?.Position.Y ?? -100) < 0) continue;
                 if (!ShouldFilterOccultCrescent(entry.Value, targetAddress, ref playerCount)) 
@@ -112,7 +113,7 @@ public unsafe class AutoHideGameObjects : DailyModuleBase
                     continue;
             }
             
-            entry.Value->RenderFlags |= 256;
+            entry.Value->RenderFlags |= (VisibilityFlags)256;
             ProcessedObjects.Add((nint)entry.Value);
         }
     }
@@ -181,7 +182,7 @@ public unsafe class AutoHideGameObjects : DailyModuleBase
 
             if (player.IsDead || player.Address == targetAddress)
             {
-                gameObject->RenderFlags &= ~256;
+                gameObject->RenderFlags &= ~(VisibilityFlags)256;
                 ProcessedObjects.Remove((nint)gameObject);
                 return false;
             }
@@ -222,8 +223,8 @@ public unsafe class AutoHideGameObjects : DailyModuleBase
                 (nint)entry.Value == (LocalPlayerState.Object?.Address ?? nint.Zero) ||
                 !ProcessedObjects.Contains((nint)entry.Value))
                 continue;
-
-            entry.Value->RenderFlags &= ~256;
+            
+            entry.Value->RenderFlags &= ~(VisibilityFlags)256;
         }
         
         ProcessedObjects.Clear();

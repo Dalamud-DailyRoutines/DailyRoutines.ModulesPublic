@@ -1,9 +1,7 @@
 ﻿using DailyRoutines.Abstracts;
-using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
-using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -15,6 +13,8 @@ public unsafe class AutoReplaceLowBlowWithInterject : DailyModuleBase
         Description = GetLoc("AutoReplaceLowBlowWithInterjectDescription"),
         Category    = ModuleCategories.Action
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig                           IsActionReplaceableSig = new("E8 ?? ?? ?? ?? 84 C0 74 68 8B D3");
     private delegate        bool                              IsActionReplaceableDelegate(uint actionID);

@@ -10,6 +10,7 @@ using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 合并成单一投影台模块
 public unsafe class AutoAttireItems : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -19,7 +20,7 @@ public unsafe class AutoAttireItems : DailyModuleBase
         Category    = ModuleCategories.UIOperation
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly List<MirageItemSet> MirageItemSets =
         LuminaGetter.Get<MirageStoreSetItem>()
@@ -140,14 +141,19 @@ public unsafe class AutoAttireItems : DailyModuleBase
     {
         if (!IsAddonAndNodesReady(MiragePrismPrismSetConvert) || TaskHelper.IsBusy) return;
         
-        var slotCount = MiragePrismPrismSetConvert->AtkValues[15].UInt;
+        var slotCount = MiragePrismPrismSetConvert->AtkValues[20].UInt;
         if (slotCount == 0) return;
 
         List<int> slotsToFill = [];
         for (var i = 0; i < slotCount; i++)
         {
-            var inventoryType = MiragePrismPrismSetConvert->AtkValues[20 + (i * 7)].UInt;
+            var inventoryType = MiragePrismPrismSetConvert->AtkValues[25 + (i * 7)].UInt;
             if (inventoryType != 9999) continue;
+            
+            var unkParam0 = MiragePrismPrismSetConvert->AtkValues[26 + (i * 7)].UInt;
+            var unkParam1 = MiragePrismPrismSetConvert->AtkValues[27 + (i * 7)].UInt;
+            if (unkParam0 == unkParam1 && unkParam1 == 0) continue;
+            
             slotsToFill.Add(i);
         }
         if (slotsToFill.Count == 0) return;

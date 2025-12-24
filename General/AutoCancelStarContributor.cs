@@ -1,6 +1,7 @@
 using DailyRoutines.Abstracts;
 using DailyRoutines.Managers;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace DailyRoutines.ModulesPublic;
@@ -36,7 +37,7 @@ public unsafe class AutoCancelStarContributor : DailyModuleBase
         FrameworkManager.Unreg(OnUpdate);
         DService.ClientState.ClassJobChanged -= OnClassJobChanged;
         
-        if (GameState.TerritoryIntendedUse != 60) return;
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.CosmicExploration) return;
         
         FrameworkManager.Reg(OnUpdate, throttleMS: 10_000);
         DService.ClientState.ClassJobChanged  += OnClassJobChanged;
@@ -47,7 +48,7 @@ public unsafe class AutoCancelStarContributor : DailyModuleBase
 
     private static void OnUpdate(IFramework framework)
     {
-        if (GameState.TerritoryIntendedUse != 60)
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.CosmicExploration)
         {
             FrameworkManager.Unreg(OnUpdate);
             return;

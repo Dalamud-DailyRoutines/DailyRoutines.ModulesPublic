@@ -31,7 +31,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         Title               = GetLoc("FastObjectInteractTitle"),
         Description         = GetLoc("FastObjectInteractDescription"),
         Category            = ModuleCategories.UIOptimization,
-        ModulesPrerequisite = ["WorldTravelCommand", "InstanceZoneChangeCommand"]
+        ModulesPrerequisite = ["FastWorldTravel", "FastInstanceZoneChange"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
@@ -383,7 +383,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             if (i == InstancesManager.CurrentInstance) continue;
 
             if (ButtonCenterText($"InstanceChangeWidget_{i}", GetLoc("FastObjectInteract-InstanceAreaChange", i)))
-                ChatHelper.SendMessage($"/pdr insc {i}");
+                ChatManager.SendMessage($"/pdr insc {i}");
         }
     }
 
@@ -398,7 +398,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             if (worldPair.Key == lobbyData.CurrentWorldId) continue;
 
             if (ButtonCenterText($"WorldTravelWidget_{worldPair.Key}", $"{worldPair.Value}{(worldPair.Key == HomeWorld ? " (★)" : "")}"))
-                ChatHelper.SendMessage($"/pdr worldtravel {worldPair.Key}");
+                ChatManager.SendMessage($"/pdr worldtravel {worldPair.Key}");
         }
     }
     
@@ -649,30 +649,33 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         
         private bool ShowContextMenu()
         {
-            var state = false;
-            using (var context = ImRaii.ContextPopupItem($"{GameObject}_{Name}"))
+            var       state   = false;
+            using var context = ImRaii.ContextPopupItem($"{GameObject}_{Name}");
+            if (!context) return state;
+            
+            if (ImGui.MenuItem(GetLoc("FastObjectInteract-AddToBlacklist")))
             {
-                if (context)
+                var cleanName = FastObjectInteractTitleRegex().Replace(Name, string.Empty).Trim();
+                if (ModuleConfig.BlacklistKeys.Add(cleanName))
                 {
-                    if (ImGui.MenuItem(GetLoc("FastObjectInteract-AddToBlacklist")))
-                    {
-                        var cleanName = FastObjectInteractTitleRegex().Replace(Name, string.Empty).Trim();
-                        if (ModuleConfig.BlacklistKeys.Add(cleanName))
-                        {
-                            state             = true;
-                            ForceObjectUpdate = true;
-                        }
-                    }
+                    state             = true;
+                    ForceObjectUpdate = true;
                 }
             }
 
             return state;
         }
         
-        public bool IsReachable() =>
-            EventFramework.Instance()->CheckInteractRange((GameObject*)Control.GetLocalPlayer(), (GameObject*)GameObject, InteractCheckType, false);
+        public bool IsReachable()
+        {
+            var localPlayer   = (GameObject*)Control.GetLocalPlayer();
+            var currentObject = (GameObject*)GameObject;
+            if (localPlayer == null || currentObject == null) return false;
+            
+            return EventFramework.Instance()->CheckInteractRange(localPlayer, currentObject, InteractCheckType, false);
+        }
 
-        
+
         public bool Equals(ObjectToSelect? other)
         {
             if (other is null) return false;
