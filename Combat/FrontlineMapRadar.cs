@@ -17,6 +17,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using LuminaMap = Lumina.Excel.Sheets.Map;
+using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -197,9 +198,18 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
             SaveConfig(ModuleConfig);
         }
 
-        ImGui.Spacing();
+        ImGui.NewLine();
+
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("FrontlineMapRadar-HighlightJobsInPVP"));
         ImGuiOm.HelpMarker(GetLoc("FrontlineMapRadar-HighlightJobsInPVP-Help"));
+
+        ImGui.SetNextItemWidth(200f * GlobalFontScale);
+        ImGui.SliderInt(LuminaWrapper.GetAddonText(15020), ref ModuleConfig.JobIconStyle, 1, 4);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            ModuleConfig.JobIconStyle = Math.Clamp(ModuleConfig.JobIconStyle, 1, 4);
+            SaveConfig(ModuleConfig);
+        }
 
         DrawJobSelectionTable();
     }
@@ -208,12 +218,10 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
     {
         if (ImGui.Checkbox(GetLoc("FrontlineMapRadar-ValidOutsideFrontline"), ref ModuleConfig.ShowOutsideFrontline))
         {
-            if (!ModuleConfig.ShowOutsideFrontline && !SupportedTerritories.Contains(GameState.TerritoryType))
+            if (!ModuleConfig.ShowOutsideFrontline && !IsFrontlineTerritory())
                 PlayerList.Clear();
             SaveConfig(ModuleConfig);
         }
-
-        ImGui.Spacing();
 
         DrawPlayerCategorySettings(
             PlayerIconType.Friend, LuminaWrapper.GetAddonText(2941), KnownColor.Orange,
@@ -271,7 +279,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
             var jobID = job.RowId;
             var isChecked = ModuleConfig.HighlightedJobs.Contains(jobID);
 
-            if (DService.Texture.TryGetFromGameIcon(new(JobIconBaseID + jobID), out var jobIcon))
+            if (DService.Texture.TryGetFromGameIcon(new(GetJobIconBaseID() + jobID), out var jobIcon))
             {
                 var iconSize = ImGui.GetTextLineHeightWithSpacing();
                 ImGui.Image(jobIcon.GetWrapOrEmpty().Handle, new Vector2(iconSize));
@@ -306,8 +314,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
         if (!IsValidToUpdate())
             return;
 
-        var territoryType = GameState.TerritoryType;
-        if (!SupportedTerritories.Contains(territoryType))
+        if (!IsFrontlineTerritory())
             return;
 
         UpdateVisibleMarkerPositions();
@@ -322,7 +329,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
             return;
         }
 
-        var isInSupportedTerritory = SupportedTerritories.Contains(GameState.TerritoryType);
+        var isInSupportedTerritory = IsFrontlineTerritory();
 
         if (!ModuleConfig.ShowOutsideFrontline && !isInSupportedTerritory)
         {
@@ -351,7 +358,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
         ushort recommendedLevel,
         sbyte eventState)
     {
-        if (!SupportedTerritories.Contains(territoryTypeID))
+        if (!IsFrontlineTerritory())
         {
             return SetDataHook!.Original(self, levelID, tooltipString, iconID, x, y, z, radius,
                 territoryTypeID, mapID, placeNameZoneID, placeNameID, recommendedLevel, eventState);
@@ -689,11 +696,10 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
         if (!IsValidToUpdate())
             return;
 
-        var territoryType = GameState.TerritoryType;
-        if (territoryType == 0)
+        if (GameState.TerritoryType == 0)
             return;
 
-        var isInSupportedTerritory = SupportedTerritories.Contains(territoryType);
+        var isInSupportedTerritory = IsFrontlineTerritory();
         var shouldDrawMarkers = isInSupportedTerritory;
         var shouldDrawRadar = ModuleConfig.ShowOutsideFrontline || isInSupportedTerritory;
 
@@ -815,7 +821,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
     {
         if (info.ShowJobIcon)
         {
-            var jobIconID = JobIconBaseID + info.JobID;
+            var jobIconID = GetJobIconBaseID() + info.JobID;
             if (DService.Texture.TryGetFromGameIcon(new(jobIconID), out var jobIcon))
             {
                 var iconSize = ModuleConfig.JobIconSize * ImGui.GetTextLineHeightWithSpacing();
@@ -965,12 +971,16 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
 
     #endregion
 
-    #region 条件检查
+    #region 小工具
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsValidToUpdate() =>
         DService.ObjectTable.LocalPlayer is not null &&
         !DService.Condition[ConditionFlag.BetweenAreas];
+
+    private static bool IsFrontlineTerritory() =>
+        GameState.TerritoryIntendedUse == TerritoryIntendedUse.Frontline;
+
+    private static uint GetJobIconBaseID() => JobIconBaseIDs[Math.Clamp(ModuleConfig.JobIconStyle, 1, 4) - 1];
 
     #endregion
 
@@ -1014,14 +1024,13 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
     #region 常量数据
 
     private const uint   LocalPlayerIconID                   = 60443;
-    private const uint   JobIconBaseID                       = 62000;
     private const int    CacheSuffixLength                   = 4;
     private const int    ControlPointDecreaseIntervalSeconds = 3;
     private const double ControlPointDecreaseFactor          = 0.1;
     private const double ZeroScoreDisplayDuration            = 1.0;
     private const float  PvPLoadingRadius                    = 125f;
 
-    private static readonly HashSet<uint> SupportedTerritories = [431, 888, 1313, 554, 1273];
+    private static readonly uint[] JobIconBaseIDs = [62000, 62100, 62225, 62800];
 
     private static readonly HashSet<uint> CountdownIconIDs =
     [
@@ -1110,6 +1119,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
         // 玩家雷达配置
         public float            DotRadius               = 1.0f;
         public float            JobIconSize             = 1.4f;
+        public int              JobIconStyle            = 1;
         public bool             HideLoadingRangeInPVP   = false;
         public bool             HideFriendlyInPVP       = true;
         public HashSet<uint>    HighlightedJobs         = [];
