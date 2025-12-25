@@ -30,6 +30,8 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
         Author      = ["Rorinnn"]
     };
 
+    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+
     private static Config ModuleConfig = null!;
 
     private static readonly CompSig                 SetDataSig = new("E8 ?? ?? ?? ?? 48 8B 53 ?? 8B 86");
