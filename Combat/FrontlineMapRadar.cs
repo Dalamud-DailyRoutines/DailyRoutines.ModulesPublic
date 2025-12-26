@@ -131,13 +131,13 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
         using var tabBar = ImRaii.TabBar("###FrontlineMapRadarConfigTabs");
         if (!tabBar) return;
 
-        using (var tabItem = ImRaii.TabItem(GetLoc("FrontlineMapRadar-PVPMapMarkers")))
+        using (var tabItem = ImRaii.TabItem(GetLoc("FrontlineMapRadar-PVPMapMarkersSettings")))
         {
             if (tabItem)
                 DrawMarkerConfigUI();
         }
 
-        using (var tabItem = ImRaii.TabItem(GetLoc("FrontlineMapRadar-PVPPlayerRadar")))
+        using (var tabItem = ImRaii.TabItem(GetLoc("FrontlineMapRadar-PVPPlayerRadarSettings")))
         {
             if (tabItem)
                 DrawPVPRadarConfigUI();
