@@ -1024,7 +1024,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
     #region 常量数据
 
     private const uint   LocalPlayerIconID                   = 60443;
-    private const int    CacheSuffixLength                   = 4;
+    private const int    CacheSuffixLength                   = 5;
     private const int    ControlPointDecreaseIntervalSeconds = 3;
     private const double ControlPointDecreaseFactor          = 0.1;
     private const double ZeroScoreDisplayDuration            = 1.0;
