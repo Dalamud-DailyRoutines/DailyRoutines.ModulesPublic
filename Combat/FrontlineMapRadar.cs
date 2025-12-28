@@ -470,16 +470,21 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
         if (!SealRockControlPointScores.TryGetValue(iconID, out var initialScore))
             return;
 
-        if (!ControlPointStates.TryGetValue(position, out var state))
+        if (ControlPointStates.TryGetValue(position, out var state))
         {
-            ControlPointStates[position] = new ControlPointState(iconID, null, initialScore)
+            if (state.IconID != iconID)
+                ControlPointStates.Remove(position);
+            else
             {
-                CurrentPercent = percent
-            };
-            return;
+                state.CurrentPercent = percent;
+                return;
+            }
         }
 
-        state.CurrentPercent = percent;
+        ControlPointStates[position] = new ControlPointState(iconID, null, initialScore)
+        {
+            CurrentPercent = percent
+        };
     }
 
     private static void UpdateAzimSteppeControlPoint(uint iconID, Vector3 position)
@@ -489,9 +494,9 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
 
         var isNeutral = NeutralControlPointIconIDs.Contains(iconID);
 
-        if (ControlPointStates.TryGetValue(position, out var existingState))
+        if (ControlPointStates.TryGetValue(position, out var state))
         {
-            if (existingState.IconID != iconID)
+            if (state.IconID != iconID)
                 ControlPointStates.Remove(position);
             else
                 return;
