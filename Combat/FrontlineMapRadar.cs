@@ -38,10 +38,13 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
     private static readonly CompSig                 SetDataSig = new("E8 ?? ?? ?? ?? 48 8B 53 ?? 8B 86");
     private delegate        MapMarkerData*          SetDataDelegate(
         MapMarkerData* self,
+
         uint levelID,
         Utf8String* tooltipString,
         uint iconID,
-        float x, float y, float z,
+        float x,
+        float y,
+        float z,
         float radius,
         ushort territoryTypeID,
         uint mapID,
@@ -65,19 +68,18 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
     private static readonly List<PlayerRadarInfo>                      PlayerList              = [];
     private static readonly Dictionary<PlayerIconType, float>          CachedDotIconSizes      = [];
     private static readonly List<ClassJob>                             CachedJobs              =
-    [
-        ..LuminaGetter.Get<ClassJob>()
-            .Where(x => x.RowId >= 19 && x.RowId <= 42 && x.RowId != 26 && x.RowId != 29 && x.RowId != 36)
-            .OrderBy(x => x.Role switch
-            {
-                1 => 0, // Tank
-                4 => 1, // Healer
-                2 => 2, // Melee DPS
-                3 => 3, // Ranged DPS
-                _ => 4
-            })
-            .ThenBy(x => x.RowId)
-    ];
+        LuminaGetter.Get<ClassJob>()
+                    .Where(x => x is { IsLimitedJob: false, DohDolJobIndex: -1, ItemSoulCrystal.RowId: > 0 })
+                    .OrderBy(x => x.Role switch
+                    {
+                        1 => 0, // Tank
+                        4 => 1, // Healer
+                        2 => 2, // Melee DPS
+                        3 => 3, // Ranged DPS
+                        _ => 4
+                    })
+                    .ThenBy(x => x.RowId)
+                    .ToList();
 
     #endregion
 
@@ -99,7 +101,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new Config();
+        ModuleConfig = LoadConfig<Config>() ?? new();
         RefreshCachedIconSizes();
 
         SetDataHook ??= SetDataSig.GetHook<SetDataDelegate>(SetDataDetour);
@@ -113,8 +115,6 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
 
     protected override void Uninit()
     {
-        SetDataHook?.Dispose();
-
         DService.ClientState.TerritoryChanged -= OnZoneChanged;
         PlayersManager.ReceivePlayersAround -= OnPlayersAroundUpdate;
         FrameworkManager.Unreg(OnFrameworkUpdate);
@@ -1114,38 +1114,38 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        // 地图标记配置
+        // PVP 地图标记设置
         public float TextScale             = 1.5f;
         public int   TextOffsetY;
         public bool  ShowCountdown         = true;
         public bool  ShowHealthPercent     = true;
         public bool  ShowControlPointScore = true;
 
-        // 玩家雷达配置
+        // PVP 玩家雷达设置
         public float            DotRadius               = 1.0f;
         public float            JobIconSize             = 1.4f;
         public int              JobIconStyle            = 1;
-        public bool             HideLoadingRangeInPVP   = false;
+        public bool             HideLoadingRangeInPVP;
         public bool             HideFriendlyInPVP       = true;
         public HashSet<uint>    HighlightedJobs         = [];
 
-        // 非 PVP 设置
-        public bool ShowOutsideFrontline = false;
+        // 非 PVP 玩家雷达设置
+        public bool ShowOutsideFrontline;
 
-        public bool ShowFriendDots       = false;
+        public bool ShowFriendDots;
         public bool ShowFriendNames      = true;
         public bool ShowFriendJobIcons   = true;
 
-        public bool ShowPartyDots        = false;
+        public bool ShowPartyDots;
         public bool ShowPartyNames       = true;
         public bool ShowPartyJobIcons    = true;
 
         public bool ShowAllianceDots     = true;
-        public bool ShowAllianceNames    = false;
-        public bool ShowAllianceJobIcons = false;
+        public bool ShowAllianceNames;
+        public bool ShowAllianceJobIcons;
 
         public bool ShowOtherDots        = true;
-        public bool ShowOtherNames       = false;
-        public bool ShowOtherJobIcons    = false;
+        public bool ShowOtherNames;
+        public bool ShowOtherJobIcons;
     }
 }
