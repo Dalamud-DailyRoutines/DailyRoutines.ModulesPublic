@@ -14,19 +14,19 @@ using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class MacroPreset : DailyModuleBase
+public unsafe class MacroPresets : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("宏预设管理"),
-        Description = GetLoc("为宏界面添加预设保存、加载、删除功能，支持个人宏和共享宏"),
+        Title       = GetLoc("MacroPresetsTitle"),
+        Description = GetLoc("MacroPresetsDescription"),
         Category    = ModuleCategories.UIOptimization,
         Author      = ["Rorinnn"]
     };
 
     private const int    MacrosPerSet   = 100;
     private const int    MaxMacroLines  = 15;
-    private static readonly string DefaultOption  = GetLoc("未选择");
+    private static readonly string DefaultOption  = LuminaWrapper.GetAddonText(4764); // 未选择
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -47,8 +47,8 @@ public unsafe class MacroPreset : DailyModuleBase
     private static TextButtonNode? OverwriteButtonNode;
     private static TextButtonNode? DeleteButtonNode;
 
-    private static MacroPresetInputAddon? InputDialog;
-    private static MacroPresetConfirmAddon? ConfirmDialog;
+    private static MacroPresetsInputAddon? InputDialog;
+    private static MacroPresetsConfirmAddon? ConfirmDialog;
 
     protected override void Init()
     {
@@ -56,19 +56,19 @@ public unsafe class MacroPreset : DailyModuleBase
 
         ConfigPath = ConfigDirectoryPath;
 
-        InputDialog = new MacroPresetInputAddon
+        InputDialog = new MacroPresetsInputAddon
         {
             Size = new Vector2(300.0f, 150.0f),
-            InternalName = "MacroPresetInputDialog",
-            Title = GetLoc("保存预设"),
+            InternalName = "DRMacroPresetsInputDialog",
+            Title = $"Daily Routines {Info.Title}",
             DepthLayer = 6,
         };
 
-        ConfirmDialog = new MacroPresetConfirmAddon
+        ConfirmDialog = new MacroPresetsConfirmAddon
         {
             Size = new Vector2(300.0f, 130.0f),
-            InternalName = "MacroPresetConfirmDialog",
-            Title = GetLoc("确认操作"),
+            InternalName = "DRMacroPresetsConfirmDialog",
+            Title = $"Daily Routines {Info.Title}",
             DepthLayer = 6,
         };
 
@@ -99,10 +99,10 @@ public unsafe class MacroPreset : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("覆盖预设时需要确认"), ref ModuleConfig.ConfirmOverwrite))
+        if (ImGui.Checkbox(GetLoc("MacroPresets-Config-ConfirmBeforeAction", GetLoc("Overwrite")), ref ModuleConfig.ConfirmOverwrite))
             SaveConfig(ModuleConfig);
 
-        if (ImGui.Checkbox(GetLoc("删除预设时需要确认"), ref ModuleConfig.ConfirmDelete))
+        if (ImGui.Checkbox(GetLoc("MacroPresets-Config-ConfirmBeforeAction", LuminaWrapper.GetAddonText(68)), ref ModuleConfig.ConfirmDelete))
             SaveConfig(ModuleConfig);
     }
 
@@ -134,7 +134,7 @@ public unsafe class MacroPreset : DailyModuleBase
             FontType = FontType.Axis,
             TextFlags = TextFlags.Emboss | TextFlags.AutoAdjustNodeSize,
             TextColor = new Vector4(1, 1, 1, 1),
-            String = GetLoc("预设管理"),
+            String = $"Daily Routines {Info.Title}",
         };
         LabelNode.AttachNode(addon);
 
@@ -144,7 +144,7 @@ public unsafe class MacroPreset : DailyModuleBase
             Size = new Vector2(130.0f, 26.0f),
             MaxListOptions = 10,
             Options = GetPresetNames(),
-            TooltipString = GetLoc("选择要操作的预设"),
+            TooltipString = GetLoc("MacroPresets-Tooltip-SelectPreset"),
             OnOptionSelected = OnPresetSelected,
         };
         PresetDropdownNode.AttachNode(addon);
@@ -153,44 +153,44 @@ public unsafe class MacroPreset : DailyModuleBase
         {
             Position = new Vector2(140.0f, 524.0f),
             Size = new Vector2(60.0f, 30.0f),
-            String = GetLoc("载入"),
+            String = LuminaWrapper.GetAddonText(6140), // 读取
             OnClick = OnLoadPreset,
             IsEnabled = false,
         };
-        LoadButtonNode.CollisionNode.TooltipString = GetLoc("载入选中的预设");
+        LoadButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-ActionPreset", LuminaWrapper.GetAddonText(6140));
         LoadButtonNode.AttachNode(addon);
 
         OverwriteButtonNode = new TextButtonNode
         {
             Position = new Vector2(200.0f, 524.0f),
             Size = new Vector2(60.0f, 30.0f),
-            String = GetLoc("覆盖"),
+            String = GetLoc("Overwrite"),
             OnClick = OnOverwritePreset,
             IsEnabled = false,
         };
-        OverwriteButtonNode.CollisionNode.TooltipString = GetLoc("覆盖选中的预设");
+        OverwriteButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-ActionPreset", GetLoc("Overwrite"));
         OverwriteButtonNode.AttachNode(addon);
 
         DeleteButtonNode = new TextButtonNode
         {
             Position = new Vector2(260.0f, 524.0f),
             Size = new Vector2(60.0f, 30.0f),
-            String = GetLoc("删除"),
+            String = LuminaWrapper.GetAddonText(68), // 删除
             OnClick = OnDeletePreset,
             IsEnabled = false,
         };
-        DeleteButtonNode.CollisionNode.TooltipString = GetLoc("删除选中的预设");
+        DeleteButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-ActionPreset", LuminaWrapper.GetAddonText(68));
         DeleteButtonNode.AttachNode(addon);
 
         SaveButtonNode = new TextButtonNode
         {
             Position = new Vector2(320.0f, 524.0f),
             Size = new Vector2(60.0f, 30.0f),
-            String = GetLoc("保存"),
+            String = LuminaWrapper.GetAddonText(552), // 保存
             OnClick = OnSavePreset,
             IsEnabled = true,
         };
-        SaveButtonNode.CollisionNode.TooltipString = GetLoc("保存当前所有宏为新预设");
+        SaveButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-SaveNewPreset");
         SaveButtonNode.AttachNode(addon);
     }
 
@@ -244,7 +244,7 @@ public unsafe class MacroPreset : DailyModuleBase
     {
         if (InputDialog == null) return;
 
-        InputDialog.PlaceholderString = GetLoc("请输入预设名称");
+        InputDialog.PlaceholderString = GetLoc("MacroPresets-Input-PresetName");
         InputDialog.DefaultString = string.Empty;
         InputDialog.OnInputComplete = newName =>
         {
@@ -267,7 +267,7 @@ public unsafe class MacroPreset : DailyModuleBase
 
         if (ModuleConfig.ConfirmOverwrite && ConfirmDialog != null)
         {
-            ConfirmDialog.Message = GetLoc($"确定要覆盖预设 '{selectedPreset}' 吗？");
+            ConfirmDialog.Message = GetLoc("MacroPresets-Confirm-ActionPreset", GetLoc("Overwrite"), selectedPreset);
             ConfirmDialog.OnConfirm = () => SavePreset(selectedPreset, true);
             ConfirmDialog.Toggle();
         }
@@ -285,7 +285,7 @@ public unsafe class MacroPreset : DailyModuleBase
 
         if (ModuleConfig.ConfirmDelete && ConfirmDialog != null)
         {
-            ConfirmDialog.Message = GetLoc($"确定要删除预设 '{selectedPreset}' 吗？");
+            ConfirmDialog.Message = GetLoc("MacroPresets-Confirm-ActionPreset", LuminaWrapper.GetAddonText(68), selectedPreset);
             ConfirmDialog.OnConfirm = () =>
             {
                 DeletePreset(selectedPreset);
@@ -497,7 +497,7 @@ public unsafe class MacroPreset : DailyModuleBase
 
     #endregion
 
-    private class MacroPresetInputAddon : NativeAddon
+    private class MacroPresetsInputAddon : NativeAddon
     {
         private TextInputNode? inputNode;
         private TextButtonNode? confirmButton;
@@ -528,7 +528,7 @@ public unsafe class MacroPreset : DailyModuleBase
             {
                 Position = new Vector2(ContentStartPosition.X, targetYPos),
                 Size = buttonSize,
-                String = "确定",
+                String = LuminaWrapper.GetAddonText(1), // 确定
                 OnClick = () =>
                 {
                     if (inputNode != null && !string.IsNullOrWhiteSpace(inputNode.String))
@@ -544,14 +544,14 @@ public unsafe class MacroPreset : DailyModuleBase
             {
                 Position = new Vector2(ContentSize.X - buttonSize.X + ContentPadding.X, targetYPos),
                 Size = buttonSize,
-                String = "取消",
+                String = LuminaWrapper.GetAddonText(2), // 取消
                 OnClick = Close,
             };
             cancelButton.AttachNode(this);
         }
     }
 
-    private class MacroPresetConfirmAddon : NativeAddon
+    private class MacroPresetsConfirmAddon : NativeAddon
     {
         private TextNode? messageNode;
         private TextButtonNode? confirmButton;
@@ -583,7 +583,7 @@ public unsafe class MacroPreset : DailyModuleBase
             {
                 Position = new Vector2(ContentStartPosition.X, targetYPos),
                 Size = buttonSize,
-                String = "确定",
+                String = LuminaWrapper.GetAddonText(1), // 确定
                 OnClick = () =>
                 {
                     OnConfirm?.Invoke();
@@ -596,7 +596,7 @@ public unsafe class MacroPreset : DailyModuleBase
             {
                 Position = new Vector2(ContentSize.X - buttonSize.X + ContentPadding.X, targetYPos),
                 Size = buttonSize,
-                String = "取消",
+                String = LuminaWrapper.GetAddonText(2), // 取消
                 OnClick = Close,
             };
             cancelButton.AttachNode(this);
@@ -607,16 +607,16 @@ public unsafe class MacroPreset : DailyModuleBase
 
     private class MacroData
     {
-        public uint IconID { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public List<string> Lines { get; set; } = [];
+        public uint         IconID { get; set; }
+        public string       Name   { get; set; } = string.Empty;
+        public List<string> Lines  { get; set; } = [];
     }
 
     private class PresetData
     {
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime        CreatedAt        { get; set; } = DateTime.Now;
         public List<MacroData> IndividualMacros { get; set; } = [];
-        public List<MacroData> SharedMacros { get; set; } = [];
+        public List<MacroData> SharedMacros     { get; set; } = [];
     }
 
     #endregion
@@ -624,6 +624,6 @@ public unsafe class MacroPreset : DailyModuleBase
     private class Config : ModuleConfiguration
     {
         public bool ConfirmOverwrite = true;
-        public bool ConfirmDelete = true;
+        public bool ConfirmDelete    = true;
     }
 }
