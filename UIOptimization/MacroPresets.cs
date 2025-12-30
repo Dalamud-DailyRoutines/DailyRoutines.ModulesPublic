@@ -144,7 +144,7 @@ public unsafe class MacroPresets : DailyModuleBase
             Size = new Vector2(130.0f, 26.0f),
             MaxListOptions = 10,
             Options = GetPresetNames(),
-            TooltipString = GetLoc("MacroPresets-Tooltip-SelectPreset"),
+            TextTooltip = GetLoc("MacroPresets-Tooltip-SelectPreset"),
             OnOptionSelected = OnPresetSelected,
         };
         PresetDropdownNode.AttachNode(addon);
@@ -157,7 +157,7 @@ public unsafe class MacroPresets : DailyModuleBase
             OnClick = OnLoadPreset,
             IsEnabled = false,
         };
-        LoadButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-ActionPreset", LuminaWrapper.GetAddonText(6140));
+        LoadButtonNode.CollisionNode.TextTooltip = GetLoc("MacroPresets-Tooltip-ActionPreset", LuminaWrapper.GetAddonText(6140));
         LoadButtonNode.AttachNode(addon);
 
         OverwriteButtonNode = new TextButtonNode
@@ -168,7 +168,7 @@ public unsafe class MacroPresets : DailyModuleBase
             OnClick = OnOverwritePreset,
             IsEnabled = false,
         };
-        OverwriteButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-ActionPreset", GetLoc("Overwrite"));
+        OverwriteButtonNode.CollisionNode.TextTooltip = GetLoc("MacroPresets-Tooltip-ActionPreset", GetLoc("Overwrite"));
         OverwriteButtonNode.AttachNode(addon);
 
         DeleteButtonNode = new TextButtonNode
@@ -179,7 +179,7 @@ public unsafe class MacroPresets : DailyModuleBase
             OnClick = OnDeletePreset,
             IsEnabled = false,
         };
-        DeleteButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-ActionPreset", LuminaWrapper.GetAddonText(68));
+        DeleteButtonNode.CollisionNode.TextTooltip = GetLoc("MacroPresets-Tooltip-ActionPreset", LuminaWrapper.GetAddonText(68));
         DeleteButtonNode.AttachNode(addon);
 
         SaveButtonNode = new TextButtonNode
@@ -190,7 +190,7 @@ public unsafe class MacroPresets : DailyModuleBase
             OnClick = OnSavePreset,
             IsEnabled = true,
         };
-        SaveButtonNode.CollisionNode.TooltipString = GetLoc("MacroPresets-Tooltip-SaveNewPreset");
+        SaveButtonNode.CollisionNode.TextTooltip = GetLoc("MacroPresets-Tooltip-SaveNewPreset");
         SaveButtonNode.AttachNode(addon);
     }
 
