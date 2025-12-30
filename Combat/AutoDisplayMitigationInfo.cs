@@ -18,6 +18,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Newtonsoft.Json;
 using LuminaStatus = Lumina.Excel.Sheets.Status;
 
+
 namespace DailyRoutines.ModulesPublic;
 
 public class AutoDisplayMitigationInfo : DailyModuleBase
@@ -32,7 +33,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         Category    = ModuleCategories.Combat,
         Author      = ["HaKu"]
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     // storage
@@ -67,16 +68,16 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         // refresh mitigation status
         FrameworkManager.Reg(OnFrameworkUpdateInterval, throttleMS: 500);
 
-        DService.ClientState.TerritoryChanged += OnZoneChanged;
+        DService.Condition.ConditionChange += OnConditionChanged;
     }
 
     protected override void Uninit()
     {
         // refresh mitigation status
         FrameworkManager.Unreg(OnFrameworkUpdateInterval);
-        
-        DService.ClientState.TerritoryChanged -= OnZoneChanged;
-        OnZoneChanged(0);
+
+        DService.Condition.ConditionChange -= OnConditionChanged;
+        OnConditionChanged(ConditionFlag.InCombat, false);
 
         // draw on party list
         WindowManager.Draw -= Draw;
@@ -253,13 +254,18 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     #region Hooks
 
-    private static void OnZoneChanged(ushort obj)
+    private static void OnConditionChanged(ConditionFlag flag, bool value)
     {
+        if (flag != ConditionFlag.InCombat)
+            return;
+
         PartyMemberIndexCache.Clear();
         MitigationManager.Clear();
         StatusBarManager.Clear();
     }
-    
+
+    private static bool HideStatus => ModuleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat];
+
     private static unsafe void OnFrameworkUpdateInterval(IFramework _)
     {
         if (GameState.IsInPVPArea || Control.GetLocalPlayer() is null)
@@ -275,8 +281,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         MitigationManager.Update();
 
-        var combatInactive = ModuleConfig.OnlyInCombat && !DService.Condition[ConditionFlag.InCombat];
-        if (combatInactive)
+        if (HideStatus)
         {
             StatusBarManager.Clear();
             return;
@@ -431,7 +436,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
     public static unsafe void Draw()
     {
         if (Throttler.Throttle("AutoDisplayMitigationInfo-OnUpdatePartyDrawCondition"))
-            IsNeedToDrawOnPartyList = IsAddonAndNodesReady(PartyList) && !GameState.IsInPVPArea;
+            IsNeedToDrawOnPartyList = IsAddonAndNodesReady(PartyList) && !GameState.IsInPVPArea && !HideStatus;
 
         if (!IsNeedToDrawOnPartyList)
             return;
@@ -756,7 +761,8 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             foreach (var memberActiveStatus in PartyActiveStatus)
             {
                 var activeStatus = memberActiveStatus.Value.Concat(BattleNPCActiveStatus).ToDictionary(kv => kv.Key, kv => kv.Value);
-                PartyMitigationCache.TryAdd(memberActiveStatus.Key, [
+                PartyMitigationCache.TryAdd(memberActiveStatus.Key,
+                [
                     Reduction(activeStatus.Keys.Select(x => x.Info.Physical)),
                     Reduction(activeStatus.Keys.Select(x => x.Info.Magical)),
                     partyShieldCache.GetValueOrDefault(memberActiveStatus.Key, 0)
@@ -779,7 +785,7 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             PartyMitigationSnapshot = [];
         }
 
-        public static bool IsLocalEmpty() => 
+        public static bool IsLocalEmpty() =>
             LocalActiveStatus.Count == 0 && LocalShield == 0 && BattleNPCActiveStatus.Count == 0;
 
         public static float[] FetchLocal()
