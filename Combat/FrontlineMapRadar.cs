@@ -92,7 +92,7 @@ public unsafe partial class FrontlineMapRadar : DailyModuleBase
     {
         get
         {
-            var addon = GetAddonByName("AreaMap");
+            var addon = AreaMap;
             return addon is not null ? *(float*)((byte*)addon + 980) : 1f;
         }
     }
