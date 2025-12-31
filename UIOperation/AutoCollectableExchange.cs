@@ -3,6 +3,7 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
@@ -17,24 +18,28 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
         Description = GetLoc("AutoCollectableExchangeDescription"),
         Category    = ModuleCategories.UIOperation,
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
+
     private static readonly CompSig HandInCollectablesSig =
         new("48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 48 8B 49");
+
     private delegate nint HandInCollectablesDelegate(AgentInterface* agentCollectablesShop);
     private static HandInCollectablesDelegate? HandInCollectables;
+
+    private static bool IsWaitingRefresh;
 
     protected override void Init()
     {
         TaskHelper ??= new();
         Overlay ??= new(this);
-        
+
         HandInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CollectablesShop", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CollectablesShop", OnAddon);
-        if (InfosOm.CollectablesShop != null) 
+        DService.AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "CollectablesShop", OnAddonRefresh);
+        if (InfosOm.CollectablesShop != null)
             OnAddon(AddonEvent.PostSetup, null);
     }
 
@@ -46,10 +51,10 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
             Overlay.IsOpen = false;
             return;
         }
-        
+
         var buttonNode = InfosOm.CollectablesShop->GetNodeById(51);
         if (buttonNode == null) return;
-        
+
         if (buttonNode->IsVisible())
             buttonNode->ToggleVisibility(false);
 
@@ -68,15 +73,18 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
         }
 
         ImGui.SameLine();
-        using (ImRaii.Disabled(!TaskHelper.IsBusy))
+        using (ImRaii.Disabled(!TaskHelper.IsBusy && !IsWaitingRefresh))
         {
-            if (ImGui.Button(GetLoc("Stop"))) 
+            if (ImGui.Button(GetLoc("Stop")))
+            {
+                IsWaitingRefresh = false;
                 TaskHelper.Abort();
+            }
         }
-        
+
         ImGui.SameLine();
         ImGui.TextDisabled("|");
-        
+
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
             ImGui.SameLine();
@@ -85,7 +93,7 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
                 if (ImGui.Button(LuminaGetter.GetRow<Addon>(531)!.Value.Text.ExtractText()))
                     HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
             }
-            
+
             ImGui.SameLine();
             if (ImGui.Button(LuminaGetter.GetRow<InclusionShop>(3801094)!.Value.Unknown0.ExtractText()))
             {
@@ -112,20 +120,75 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
                 return true;
             }
 
-            var list = InfosOm.CollectablesShop->GetComponentNodeById(31)->GetAsAtkComponentList();
-            if (list == null) return false;
+            var node = InfosOm.CollectablesShop->GetComponentNodeById(31);
+            if (node == null) return false;
 
-            if (list->ListLength <= 0)
+            var list = node->GetAsAtkComponentList();
+            if (list == null || list->ListLength <= 0)
             {
                 TaskHelper.Abort();
                 return true;
             }
 
+            if (WouldScripOverflow())
+            {
+                TaskHelper.Abort();
+                return true;
+            }
+
+            IsWaitingRefresh = true;
             HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
             return true;
         }, "ClickExchange");
+    }
 
-        TaskHelper.Enqueue(EnqueueExchange, "EnqueueNewRound");
+    private static bool WouldScripOverflow()
+    {
+        var addon = InfosOm.CollectablesShop;
+        if (addon == null || addon->AtkValuesCount < 35) return false;
+
+        var node = addon->GetComponentNodeById(31);
+        if (node == null) return false;
+
+        var list = node->GetAsAtkComponentList();
+        if (list == null || list->ListLength <= 0) return false;
+
+        var idx = list->SelectedItemIndex;
+        var count = addon->AtkValues[20].UInt;
+        if (idx < 0 || idx >= count) return false;
+
+        var valueIndex = 34 + (11 * idx);
+        if (addon->AtkValuesCount <= valueIndex) return false;
+
+        var itemID = addon->AtkValues[valueIndex].UInt % 50_0000;
+        if (itemID == 0) return false;
+
+        foreach (var row in LuminaGetter.GetSub<CollectablesShopItem>())
+        {
+            foreach (var sub in row)
+            {
+                if (sub.Item.RowId != itemID) continue;
+
+                var scrip = sub.CollectablesShopRewardScrip.ValueNullable;
+                if (scrip is not { Currency: > 0 and <= byte.MaxValue } s) return false;
+
+                var mgr = CurrencyManager.Instance();
+                var scripItem = mgr->GetItemIdBySpecialId((byte)s.Currency);
+                if (scripItem == 0) return false;
+
+                return s.HighReward > mgr->GetItemMaxCount(scripItem) - mgr->GetItemCount(scripItem);
+            }
+        }
+
+        return false;
+    }
+
+    private void OnAddonRefresh(AddonEvent type, AddonArgs args)
+    {
+        if (!IsWaitingRefresh) return;
+
+        IsWaitingRefresh = false;
+        EnqueueExchange();
     }
 
     private static uint GetScriptEventID(uint zone)
@@ -143,7 +206,7 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
     {
         var addon = args.Addon.ToAtkUnitBase();
         if (addon == null) return;
-        
+
         Overlay.IsOpen = type switch
         {
             AddonEvent.PostSetup => true,
@@ -152,6 +215,10 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
         };
     }
 
-    protected override void Uninit() => 
+    protected override void Uninit()
+    {
+        IsWaitingRefresh = false;
         DService.AddonLifecycle.UnregisterListener(OnAddon);
+        DService.AddonLifecycle.UnregisterListener(OnAddonRefresh);
+    }
 }
