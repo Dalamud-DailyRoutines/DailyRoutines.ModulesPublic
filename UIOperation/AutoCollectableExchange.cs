@@ -1,8 +1,11 @@
+using System.Collections.Generic;
 using System.Numerics;
 using DailyRoutines.Abstracts;
+using DailyRoutines.IPC;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -19,10 +22,13 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
         Category    = ModuleCategories.UIOperation,
     };
 
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+
 
     private static readonly CompSig HandInCollectablesSig =
         new("48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 48 8B 49");
+
 
     private delegate nint HandInCollectablesDelegate(AgentInterface* agentCollectablesShop);
     private static HandInCollectablesDelegate? HandInCollectables;
@@ -34,7 +40,9 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
         TaskHelper ??= new();
         Overlay ??= new(this);
 
+
         HandInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
+        CollectableByItemID ??= BuildCollectableDict();
 
         DService.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CollectablesShop", OnAddon);
         DService.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CollectablesShop", OnAddon);
@@ -52,8 +60,10 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
             return;
         }
 
+
         var buttonNode = InfosOm.CollectablesShop->GetNodeById(51);
         if (buttonNode == null) return;
+
 
         if (buttonNode->IsVisible())
             buttonNode->ToggleVisibility(false);
@@ -82,8 +92,10 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
             }
         }
 
+
         ImGui.SameLine();
         ImGui.TextDisabled("|");
+
 
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
@@ -93,6 +105,7 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
                 if (ImGui.Button(LuminaGetter.GetRow<Addon>(531)!.Value.Text.ExtractText()))
                     HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
             }
+
 
             ImGui.SameLine();
             if (ImGui.Button(LuminaGetter.GetRow<InclusionShop>(3801094)!.Value.Unknown0.ExtractText()))
