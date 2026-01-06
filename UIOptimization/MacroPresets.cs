@@ -1,12 +1,8 @@
-// TODO: 等待修改
-/*
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Dalamud.Game.Text.SeStringHandling;
 using DailyRoutines.Abstracts;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -30,15 +26,7 @@ public unsafe class MacroPresets : DailyModuleBase
     private const           int    MAX_MACRO_LINES = 15;
     private static readonly string DefaultOption = LuminaWrapper.GetAddonText(4764); // 未选择
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented          = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     private static Config ModuleConfig = null!;
-
-    private static string ConfigPath = string.Empty;
 
     private static AddonController? MacroController;
 
@@ -54,9 +42,7 @@ public unsafe class MacroPresets : DailyModuleBase
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new Config();
-
-        ConfigPath = ConfigDirectoryPath;
+        ModuleConfig = LoadConfig<Config>() ?? new ();
 
         InputDialog = new MacroPresetsInputAddon
         {
@@ -331,30 +317,15 @@ public unsafe class MacroPresets : DailyModuleBase
 
     #region 预设管理
 
-    private static void SavePreset(string presetName, bool isOverwrite = false)
+    private void SavePreset(string presetName, bool isOverwrite = false)
     {
         var macroModule = RaptureMacroModule.Instance();
         if (macroModule == null) return;
 
-        var directory = GetPresetDirectory();
-        var filePath  = Path.Combine(directory.FullName, $"{presetName}.json");
-
         var createdAt = DateTime.Now;
 
-        if (isOverwrite && File.Exists(filePath))
-        {
-            try
-            {
-                var existingJson = File.ReadAllText(filePath);
-                var existingData = JsonSerializer.Deserialize<PresetData>(existingJson);
-                if (existingData != null)
-                    createdAt = existingData.CreatedAt;
-            }
-            catch
-            {
-                // ignored
-            }
-        }
+        if (isOverwrite && ModuleConfig.Presets.ContainsKey(presetName))
+            createdAt = ModuleConfig.Presets[presetName].CreatedAt;
 
         var presetData = new PresetData
         {
@@ -363,26 +334,18 @@ public unsafe class MacroPresets : DailyModuleBase
             SharedMacros     = ReadMacrosFromMemory(macroModule, 1)
         };
 
-        var json = JsonSerializer.Serialize(presetData, JsonOptions);
-        File.WriteAllText(filePath, json);
+        ModuleConfig.Presets[presetName] = presetData;
+        SaveConfig(ModuleConfig);
     }
 
-    private static void LoadPreset(string presetName)
+    private void LoadPreset(string presetName)
     {
         if (presetName == DefaultOption) return;
 
         var macroModule = RaptureMacroModule.Instance();
         if (macroModule == null) return;
 
-        var directory = GetPresetDirectory();
-        var filePath  = Path.Combine(directory.FullName, $"{presetName}.json");
-
-        if (!File.Exists(filePath)) return;
-
-        var json       = File.ReadAllText(filePath);
-        var presetData = JsonSerializer.Deserialize<PresetData>(json);
-
-        if (presetData == null) return;
+        if (!ModuleConfig.Presets.TryGetValue(presetName, out var presetData)) return;
 
         WriteMacrosToMemory(macroModule, 0, presetData.IndividualMacros);
 
@@ -396,19 +359,18 @@ public unsafe class MacroPresets : DailyModuleBase
             hotbarModule->ReloadAllMacroSlots();
     }
 
-    private static void DeletePreset(string presetName)
+    private void DeletePreset(string presetName)
     {
         if (presetName == DefaultOption) return;
 
-        var directory = GetPresetDirectory();
-        var filePath  = Path.Combine(directory.FullName, $"{presetName}.json");
-
-        if (!File.Exists(filePath)) return;
-
-        File.Delete(filePath);
+        if (ModuleConfig.Presets.ContainsKey(presetName))
+        {
+            ModuleConfig.Presets.Remove(presetName);
+            SaveConfig(ModuleConfig);
+        }
     }
 
-    private static List<MacroData> ReadMacrosFromMemory(RaptureMacroModule* macroModule, uint set)
+    private List<MacroData> ReadMacrosFromMemory(RaptureMacroModule* macroModule, uint set)
     {
         List<MacroData> macros = [];
 
@@ -420,15 +382,12 @@ public unsafe class MacroPresets : DailyModuleBase
             var macroData = new MacroData
             {
                 IconID = macro->IconId,
-                Name   = macro->Name.ToString(),
+                Name   = SeString.Parse(macro->Name.AsSpan()).EncodeWithNullTerminator(),
                 Lines  = []
             };
 
             for (var lineIdx = 0; lineIdx < MAX_MACRO_LINES; lineIdx++)
-            {
-                var line = macro->Lines[lineIdx].ToString();
-                macroData.Lines.Add(line);
-            }
+                macroData.Lines.Add(SeString.Parse(macro->Lines[lineIdx].AsSpan()).EncodeWithNullTerminator());
 
             macros.Add(macroData);
         }
@@ -436,7 +395,7 @@ public unsafe class MacroPresets : DailyModuleBase
         return macros;
     }
 
-    private static void WriteMacrosToMemory(RaptureMacroModule* macroModule, uint set, List<MacroData> macrosData)
+    private void WriteMacrosToMemory(RaptureMacroModule* macroModule, uint set, List<MacroData> macrosData)
     {
         for (uint i = 0; i < MACROS_PER_SET && i < macrosData.Count; i++)
         {
@@ -460,45 +419,14 @@ public unsafe class MacroPresets : DailyModuleBase
 
     #region 工具
 
-    private static List<string> GetPresetNames()
+    private List<string> GetPresetNames()
     {
-        var directory = GetPresetDirectory();
-
-        List<(string Name, DateTime CreatedAt)> presetList = [];
-
-        foreach (var file in directory.EnumerateFiles("*.json"))
-        {
-            try
-            {
-                var json   = File.ReadAllText(file.FullName);
-                var preset = JsonSerializer.Deserialize<PresetData>(json);
-
-                if (preset != null)
-                {
-                    var fileName = Path.GetFileNameWithoutExtension(file.Name);
-                    presetList.Add((fileName, preset.CreatedAt));
-                }
-            }
-            catch
-            {
-                // ignored
-            }
-        }
-
-        var sortedList = presetList.OrderByDescending(x => x.CreatedAt)
-                                   .Select(x => x.Name)
-                                   .ToList();
+        var sortedList = ModuleConfig.Presets
+                                     .OrderByDescending(x => x.Value.CreatedAt)
+                                     .Select(x => x.Key)
+                                     .ToList();
 
         return sortedList.Prepend(DefaultOption).ToList();
-    }
-
-    private static DirectoryInfo GetPresetDirectory()
-    {
-        var directoryInfo = new DirectoryInfo(ConfigPath);
-        if (!directoryInfo.Exists)
-            directoryInfo.Create();
-
-        return directoryInfo;
     }
 
     #endregion
@@ -614,8 +542,8 @@ public unsafe class MacroPresets : DailyModuleBase
     private class MacroData
     {
         public uint         IconID { get; set; }
-        public string       Name   { get; set; } = string.Empty;
-        public List<string> Lines  { get; set; } = [];
+        public byte[]       Name   { get; set; } = [];
+        public List<byte[]> Lines  { get; set; } = [];
     }
 
     private class PresetData
@@ -629,8 +557,8 @@ public unsafe class MacroPresets : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public bool ConfirmOverwrite = true;
-        public bool ConfirmDelete    = true;
+        public bool                           ConfirmOverwrite = true;
+        public bool                           ConfirmDelete    = true;
+        public Dictionary<string, PresetData> Presets          = [];
     }
 }
-*/
