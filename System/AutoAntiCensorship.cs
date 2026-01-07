@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -65,8 +66,14 @@ public unsafe class AutoAntiCensorship : DailyModuleBase
 
     protected override void Init()
     {
+        if (DService.PI.IsPluginEnabled("StarlightBreaker"))
+        {
+            NotificationError("检测到不兼容的插件 StarlightBreaker, 自动反屏蔽词模块已禁用");
+            throw new Exception("检测到不兼容的插件 StarlightBreaker");
+        }
+
         ModuleConfig ??= LoadConfig<Config>() ?? new();
-        
+
         // mov rax, [rcx + XXXX], 因为是四字节所以用 uint
         if (VulgarInstanceOffset == nint.Zero)
             VulgarInstanceOffset = VulgarInstanceOffsetBaseSig.GetStatic();
