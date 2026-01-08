@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using Dalamud.Game.Text.SeStringHandling;
 using DailyRoutines.Abstracts;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -379,15 +378,35 @@ public unsafe class MacroPresets : DailyModuleBase
             var macro = macroModule->GetMacro(set, i);
             if (macro == null) continue;
 
+            var nameSpan = macro->Name.AsSpan();
+            var hasContent = false;
+
+            for (var lineIdx = 0; lineIdx < MAX_MACRO_LINES; lineIdx++)
+            {
+                if (macro->Lines[lineIdx].AsSpan().Length > 0)
+                {
+                    hasContent = true;
+                    break;
+                }
+            }
+
+            // 跳过完全为空的宏
+            if (nameSpan.Length == 0 && macro->IconId == 0 && !hasContent)
+                continue;
+
             var macroData = new MacroData
             {
+                Index  = i,
                 IconID = macro->IconId,
-                Name   = SeString.Parse(macro->Name.AsSpan()).EncodeWithNullTerminator(),
-                Lines  = []
+                Name   = nameSpan.Length > 0 ? [..nameSpan, (byte)0] : null
             };
 
             for (var lineIdx = 0; lineIdx < MAX_MACRO_LINES; lineIdx++)
-                macroData.Lines.Add(SeString.Parse(macro->Lines[lineIdx].AsSpan()).EncodeWithNullTerminator());
+            {
+                var lineSpan = macro->Lines[lineIdx].AsSpan();
+                if (lineSpan.Length > 0)
+                    macroData.Lines.Add([..lineSpan, (byte)0]);
+            }
 
             macros.Add(macroData);
         }
@@ -397,21 +416,33 @@ public unsafe class MacroPresets : DailyModuleBase
 
     private void WriteMacrosToMemory(RaptureMacroModule* macroModule, uint set, List<MacroData> macrosData)
     {
-        for (uint i = 0; i < MACROS_PER_SET && i < macrosData.Count; i++)
+        for (uint i = 0; i < MACROS_PER_SET; i++)
         {
             var macro = macroModule->GetMacro(set, i);
             if (macro == null) continue;
 
-            var data = macrosData[(int)i];
-
             macro->Clear();
+            macro->SetIcon(0);
+        }
+
+        // 根据索引恢复宏数据
+        foreach (var data in macrosData)
+        {
+            if (data.Index >= MACROS_PER_SET) continue;
+
+            var macro = macroModule->GetMacro(set, data.Index);
+            if (macro == null) continue;
 
             macro->SetIcon(data.IconID);
 
-            macro->Name.SetString(data.Name);
+            if (data.Name != null)
+                macro->Name.SetString(data.Name);
 
-            for (var lineIdx = 0; lineIdx < MAX_MACRO_LINES && lineIdx < data.Lines.Count; lineIdx++)
-                macro->Lines[lineIdx].SetString(data.Lines[lineIdx]);
+            for (var lineIdx = 0; lineIdx < data.Lines.Count && lineIdx < MAX_MACRO_LINES; lineIdx++)
+            {
+                if (data.Lines[lineIdx] != null)
+                    macro->Lines[lineIdx].SetString(data.Lines[lineIdx]);
+            }
         }
     }
 
@@ -541,8 +572,9 @@ public unsafe class MacroPresets : DailyModuleBase
 
     private class MacroData
     {
+        public uint         Index  { get; set; }
         public uint         IconID { get; set; }
-        public byte[]       Name   { get; set; } = [];
+        public byte[]?      Name   { get; set; }
         public List<byte[]> Lines  { get; set; } = [];
     }
 
