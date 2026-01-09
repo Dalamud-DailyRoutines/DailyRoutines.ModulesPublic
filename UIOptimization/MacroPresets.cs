@@ -405,7 +405,7 @@ public unsafe class MacroPresets : DailyModuleBase
             {
                 var lineSpan = macro->Lines[lineIdx].AsSpan();
                 if (lineSpan.Length > 0)
-                    macroData.Lines.Add([..lineSpan, (byte)0]);
+                    macroData.Lines[lineIdx] = [..lineSpan, (byte)0];
             }
 
             macros.Add(macroData);
@@ -438,10 +438,10 @@ public unsafe class MacroPresets : DailyModuleBase
             if (data.Name != null)
                 macro->Name.SetString(data.Name);
 
-            for (var lineIdx = 0; lineIdx < data.Lines.Count && lineIdx < MAX_MACRO_LINES; lineIdx++)
+            foreach (var (lineIdx, lineData) in data.Lines)
             {
-                if (data.Lines[lineIdx] != null)
-                    macro->Lines[lineIdx].SetString(data.Lines[lineIdx]);
+                if (lineIdx >= 0 && lineIdx < MAX_MACRO_LINES && lineData != null)
+                    macro->Lines[lineIdx].SetString(lineData);
             }
         }
     }
@@ -572,10 +572,10 @@ public unsafe class MacroPresets : DailyModuleBase
 
     private class MacroData
     {
-        public uint         Index  { get; set; }
-        public uint         IconID { get; set; }
-        public byte[]?      Name   { get; set; }
-        public List<byte[]> Lines  { get; set; } = [];
+        public uint                    Index  { get; set; }
+        public uint                    IconID { get; set; }
+        public byte[]?                 Name   { get; set; }
+        public Dictionary<int, byte[]> Lines  { get; set; } = [];
     }
 
     private class PresetData
