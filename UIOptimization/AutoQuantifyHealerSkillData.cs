@@ -2,9 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using DailyRoutines.Abstracts;
+using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Game.Player;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -14,6 +16,8 @@ using OmenTools;
 using OmenTools.Infos;
 using OmenTools.Managers;
 using OmenTools.Helpers;
+using static OmenTools.Helpers.ThrottlerHelper;
+using static DailyRoutines.Helpers.NotifyHelper;
 
 /***********************************************************************************
  *  参考模块：
@@ -42,19 +46,133 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
 
     // private static Config ModuleConfig = null!;
     private static TooltipModification? ActionModification;
+    private static PlayerStrat Player;
     
     private static readonly HashSet<uint> ValidJobs   = [24, 28, 33, 40];     // 白魔法师、学者、占星术士、贤者
     private static readonly HashSet<uint> ValidLevels = [100];
     
     protected override void Init()
     {
+        DService.Instance().ClientState.ClassJobChanged       += OnClassJobChanged;
+        DService.Instance().ClientState.LevelChanged          += OnLevelChanged;
+        DService.Instance().GameInventory.InventoryChanged    += OnInventoryChanged;
+        
+        TaskHelper ??= new() { TimeoutMS = 1_000 };
+        
         GameTooltipManager.Instance().RegGenerateActionTooltipModifier(ModifyActionTooltip);
+        UpdatePlayerInfo();
     }
 
     protected override void Uninit()
     {
+        DService.Instance().ClientState.ClassJobChanged       -= OnClassJobChanged;
+        DService.Instance().ClientState.LevelChanged          -= OnLevelChanged;
+        DService.Instance().GameInventory.InventoryChanged    -= OnInventoryChanged;
+        
         GameTooltipManager.Instance().Unreg(generateActionModifiers: ModifyActionTooltip);
         GameTooltipManager.Instance().RemoveActionDetail(ActionModification);
+    }
+    
+    private void OnClassJobChanged(uint classJobID) =>
+        UpdatePlayerInfo();
+
+    private void OnLevelChanged(uint classJobId, uint level) =>
+        UpdatePlayerInfo();
+    
+    private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events) =>
+        UpdatePlayerInfo();
+    
+    private void UpdatePlayerInfo()
+    {
+        if (!Throttler.Throttle("AutoQuantifyHealerSkillData-OnUpdatePlayerStrat")) return;
+       
+        TaskHelper.DelayNext(500, "等待 500 毫秒");
+        DService.Instance().Log.Debug($"触发等待，即将更新玩家数据");
+        TaskHelper.Enqueue(() =>
+        {
+            DService.Instance().Log.Debug($"更新玩家数据");
+            Player.Level = LocalPlayerState.CurrentLevel;
+            Player.ClassJob = LocalPlayerState.ClassJob;
+            
+            if (!ValidLevels.Contains(Player.Level))   return;
+            if (!ValidJobs.Contains(Player.ClassJob))  return;
+            
+            bool isCaster = LocalPlayerState.ClassJobData.ClassJobCategory.RowId == 31;
+            var attackValue = DService.Instance().PlayerState.GetAttribute(isCaster ? PlayerAttribute.AttackMagicPotency: PlayerAttribute.AttackPower);
+            
+            var levelModifier = Player.Level switch
+            {
+                70  => (main: 292u, sub: 364u, div: 900u),
+                80  => (main: 340u, sub: 380u, div: 1300u),
+                90  => (main: 390u, sub: 400u, div: 1900u),
+                100 => (main: 440u, sub: 420u, div: 2780u),
+                _   => (main: 0u,   sub: 0u,   div: 0u)
+            };
+            
+            var traitModifier = (LocalPlayerState.ClassJob, LocalPlayerState.ClassJobData) switch
+            {
+                (36, _)                                      => 1.5f, // BlueMage
+                (_, { Role: 3, ClassJobCategory.RowId: 30 }) => 1.2f, // Ranger
+                (_, {          ClassJobCategory.RowId: 31 }) => 1.3f, // Caster
+                _                                            => 1.0f,
+            };
+            
+            var jobModifier = LocalPlayerState.ClassJob switch
+            {
+                19 or 29 or 37 => 100,
+                20 or 30 or 41 => 110,
+                21 or 26 or 32 => 105,
+                34             => 112,
+                _              => 115,
+            };
+            
+            var attackModifier = Player.Level switch
+            {
+                70  => LocalPlayerState.ClassJobData.Role == 1 ? 105u : 125u,
+                80  => LocalPlayerState.ClassJobData.Role == 1 ? 115u : 165u,
+                90  => LocalPlayerState.ClassJobData.Role == 1 ? 156u : 195u,
+                100 => LocalPlayerState.ClassJobData.Role == 1 ? 190u : 237u,
+                _   => 0u
+            };
+            
+            var healModifier = Player.Level switch
+            {
+                70  => 120.0f,
+                80  => 120.8f,
+                90  => 145.8f,
+                100 => 170.8f,
+                _   => 0.0f
+            };
+            
+            var inventoryExcelData = (ushort*)((nint)InventoryManager.Instance() + 9360);
+            var weaponBaseDamage   = inventoryExcelData[isCaster ? 21 : 20] + inventoryExcelData[33];
+            float weaponDamage     = (int)(weaponBaseDamage + (levelModifier.main * jobModifier / 1000f)) / 100f;
+            
+            float detParam  = (int)(140 * 
+                                   (DService.Instance().PlayerState.GetAttribute(PlayerAttribute.Determination) - levelModifier.main) / 
+                                   levelModifier.div) / 1000f;
+            float tenParam  = (int)(112 * 
+                                   (DService.Instance().PlayerState.GetAttribute(PlayerAttribute.Tenacity) - levelModifier.sub) / 
+                                   levelModifier.div) / 1000f;
+            float critParam = (int)((200 * 
+                                     (DService.Instance().PlayerState.GetAttribute(PlayerAttribute.CriticalHit) - levelModifier.sub) / 
+                                     levelModifier.div) + 1400) / 1000f;
+            
+            (int normal, int crit) Calculate(float modifier, float traitMod)
+            {
+                float potency              = (int)(100 + (modifier * (attackValue - levelModifier.main) / levelModifier.main)) / 100f;
+                int   multiplier           = (int)(100 * potency * weaponDamage);
+                uint  potencyWithAttribute = (uint)(multiplier * (1 + detParam) * (1 + tenParam));
+                int   normal               = (int)(potencyWithAttribute * traitMod);
+                int   crit                 = (int)(normal * critParam);
+                
+                return (normal, crit);
+            }
+            
+            Player.HealParam = Calculate(healModifier, isCaster ? traitModifier : 1.0f);
+            Player.DamageParam = Calculate(attackModifier, traitModifier);
+            
+        });
     }
     
     private static void ModifyActionTooltip(AtkUnitBase* addonActionDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
@@ -65,28 +183,24 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
             ActionModification = null;
         }
 
-        if (!ValidLevels.Contains(LocalPlayerState.CurrentLevel)) return;
-        if (!ValidJobs.Contains(LocalPlayerState.ClassJob))       return;
+        if (!ValidLevels.Contains(Player.Level))   return;
+        if (!ValidJobs.Contains(Player.ClassJob))  return;
 
         var hoveredID = AgentActionDetail.Instance()->ActionId;
         if (!ValidSkillsDictionary.TryGetValue(hoveredID, out var skillDict)) return;
-        List<Payload> newDescription = GetNewDescriptionPayloads(hoveredID, skillDict);
+        SeStringBuilder newDescription = GetNewDescriptionPayloads(hoveredID, skillDict);
         
         ActionModification = GameTooltipManager.Instance().AddActionDetail
         (
             hoveredID,
             TooltipActionType.Description,
-            new SeString(newDescription),
+            newDescription.Build(),
             TooltipModifyMode.Overwrite
         );
     }
-    
-    public class Config : ModuleConfiguration
-    {
-    }
 
     #region Description
-    private static List<Payload> GetNewDescriptionPayloads(uint hoveredID, (string, bool isDamageSkill, uint[] ValueUnits) skillDict)
+    private static SeStringBuilder GetNewDescriptionPayloads(uint hoveredID, (string, bool isDamageSkill, uint[] ValueUnits) skillDict)
     {
         var baseSkillValue = skillDict.ValueUnits;
         
@@ -98,31 +212,48 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         return newDescription;
     }
 
-    private static List<Payload> GetNewDescriptionPayloadsDamage(uint[]? baseSkillValue)
+    private static SeStringBuilder GetNewDescriptionPayloadsDamage(uint[]? baseSkillValue)
     {
-        var payloads = new List<Payload>();
-        var damageParam = ProcessOriginNumber(true);
+        var payloads = new SeStringBuilder();
+        var damageParam = Player.DamageParam;
         // TODO
         return null;
     }
 
-    private static void WritePayloads(ref List<Payload> payloads, Colors textColor, string text, Colors prefixColor = Colors.Normal, string prefix = "", bool newLine = true)
+    private static void WritePayloads(ref SeStringBuilder payloads, Colors textColor, string text, Colors prefixColor = Colors.Normal, string prefix = "", bool newLine = true)
     {
         if (prefix != "")
         {
-            payloads.Add(new UIForegroundPayload((ushort)prefixColor));
-            payloads.Add(new TextPayload($"{prefix}："));
+            payloads.AddUiForeground((ushort)prefixColor);
+            payloads.AddText($"{prefix}：");
+            payloads.AddUiForegroundOff();
         }
-        payloads.Add(new UIForegroundPayload((ushort)textColor));
-        payloads.Add(new TextPayload($"{text}"));
+        payloads.AddUiForeground((ushort)textColor);
+        payloads.AddText($"{text}");
         if (newLine)
-            payloads.Add(new NewLinePayload());
+            payloads.Add(NewLinePayload.Payload);
     }
     
-    private static List<Payload> GetNewDescriptionPayloadsHealing(uint[]? bsv)
+    private static void WritePayloadsNew(ref SeStringBuilder textBuilder)
     {
-        var payloads      = new List<Payload>();
-        var healingParam  = ProcessOriginNumber(false);
+        textBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
+        textBuilder.Append($"hello world");
+        textBuilder.Add(NewLinePayload.Payload);
+        textBuilder.AddUiForeground(28);
+        textBuilder.Append($"hello world2");
+        textBuilder.Add(NewLinePayload.Payload);
+        textBuilder.AddUiForegroundOff();
+        textBuilder.AddUiGlow(48);
+        textBuilder.Append($"hello world4");
+        textBuilder.AddUiGlowOff();
+        textBuilder.Add(NewLinePayload.Payload);
+        textBuilder.AppendMacroString($"<if([gnum11<4],evening,morning)>");
+    }
+    
+    private static SeStringBuilder GetNewDescriptionPayloadsHealing(uint[]? bsv)
+    {
+        var payloads      = new SeStringBuilder();
+        var healingParam  = Player.HealParam;
         
         var healingVal    = Math.Floor(bsv[(int)ValueUnitType.HealingVal] / 100d * healingParam.normal);
         var healOverTime  = Math.Floor(bsv[(int)ValueUnitType.HealOverTime] / 100d * healingParam.normal);
@@ -183,152 +314,6 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
     
     #endregion
     
-    #region Calculator
-    private static (double normal, double crit) ProcessOriginNumber(bool isDamageSkill)
-    {
-        var potency = Math.Floor(100 + ((isDamageSkill ? GetAttackModifier() : GetHealModifier()) * (GetAttackPotency() - GetLevelModifier().main) / GetLevelModifier().main)) / 100d;
-        var baseMultiplier = Math.Floor(100 * potency * GetWeaponDamage());
-        var detParam = GetDetParam();
-        var tenParam = GetTenParam();
-        var potencyWithAttribute = Math.Floor(baseMultiplier * (1 + detParam) * (1 + tenParam));
-        
-        var traitModifer = isDamageSkill || IsCaster() ? GetTraitModifier() : 1;
-        var normal = Math.Floor(potencyWithAttribute * traitModifer);
-        var crit = Math.Floor(normal * GetCritParam());
-        
-        return (normal, crit);
-    }
-    #endregion
-
-    #region Modifier
-    public static double GetTraitModifier() 
-    {
-        if (LocalPlayerState.ClassJob is 36) return 1.5;    // 青魔法师
-        if (IsRanger()) return 1.2;
-        if (IsCaster()) return 1.3;
-        return 1;
-    }
-    
-    public static double GetJobModifier()
-    {
-        var jobID = LocalPlayerState.ClassJob;
-        return jobID switch
-        {
-            19 or 29 or 37 => 100,
-            20 or 30 or 41 => 110,
-            21 or 26 or 32 => 105,
-            34             => 112,
-            _              => 115,
-        };
-    }
-    
-    public static double GetAttackModifier()
-    {
-        var level = LocalPlayerState.CurrentLevel;
-        if (IsTank())
-        {
-            return level switch {
-                <= 80 => level + 35,
-                <= 90 => ((level - 80) * 4.1) + 115,
-                _     => ((level - 90) * 3.4) + 156
-            };
-        }
-        else
-        {
-            return level switch {
-                <= 70 => ((level - 50) * 2.5) + 75,
-                <= 80 => ((level - 70) * 4) + 125,
-                <= 90 => ((level - 80) * 3) + 165,
-                _     => ((level - 90) * 4.2) + 195
-            };
-        }
-    }
-
-    private static (int main, int sub, int div) GetLevelModifier()
-    {
-        var level = LocalPlayerState.CurrentLevel;
-        return level switch
-        {
-            70  => (292, 364, 900),
-            80  => (340, 380, 1300),
-            90  => (390, 400, 1900),
-            100 => (440, 420, 2780),
-            _   => (0, 0, 0)
-        };
-    }
-    
-    public static double GetHealModifier()
-    {
-        var level = LocalPlayerState.CurrentLevel;
-        return level switch
-        {
-            < 80 => 120,
-            _    => ((level - 80) * 2.5) + 120.8
-        };
-    }
-    
-    #endregion
-
-    #region JobIdentifier
-
-    private static bool IsCaster()
-    {
-        // 白魔、黑魔、召唤、学者、占星、赤魔、青魔、贤者、画家
-        HashSet<uint> casterJobID = [24, 25, 27, 28, 33, 35, 36, 40, 42];
-        return casterJobID.Contains(LocalPlayerState.ClassJob);
-    }
-    
-    private static bool IsRanger()
-    {
-        // 机工、舞者、诗人
-        HashSet<uint> rangerJobID = [23, 31, 38];
-        return rangerJobID.Contains(LocalPlayerState.ClassJob);
-    }
-    
-    private static bool IsTank()
-    {
-        // 战士、骑士、黑骑、绝枪
-        HashSet<uint> tankJobID = [21, 19, 32, 37];
-        return tankJobID.Contains(LocalPlayerState.ClassJob);
-    }
-
-    #endregion
-
-    #region AttributeParam
-
-    private static double GetAttackPotency() =>
-        DService.Instance().PlayerState.GetAttribute(IsCaster() ? PlayerAttribute.AttackMagicPotency : PlayerAttribute.AttackPower);
-
-    private static double GetWeaponDamage()
-    {
-        var inventoryExcelData = (ushort*)((nint)InventoryManager.Instance() + 9360);
-        var weaponBaseDamage = inventoryExcelData[IsCaster() ? 21 : 20] + inventoryExcelData[33]; // 武器性能 + HQ加成
-        return Math.Floor(weaponBaseDamage + (GetLevelModifier().main * GetJobModifier() / 1000d)) / 100d;
-    }
-
-    private static double GetDetParam()
-    {
-        var det = DService.Instance().PlayerState.GetAttribute(PlayerAttribute.Determination);
-        var detParam = Math.Floor(140d * (det - GetLevelModifier().main) / GetLevelModifier().div) / 1000d;
-        return detParam;
-    }
-    
-    private static double GetTenParam()
-    {
-        var ten = DService.Instance().PlayerState.GetAttribute(PlayerAttribute.Tenacity);
-        var tenParam = Math.Floor(112d * (ten - GetLevelModifier().sub) / GetLevelModifier().div) / 1000d;
-        return tenParam;
-    }
-    
-    private static double GetCritParam()
-    {
-        var crit = DService.Instance().PlayerState.GetAttribute(PlayerAttribute.CriticalHit);
-        var critParam = Math.Floor((200d * (crit - GetLevelModifier().sub) / GetLevelModifier().div) + 1400) / 1000d;
-        return critParam;
-    }
-
-    #endregion
-
     #region 技能字典
 
     private static Dictionary<uint, (string SkillName, bool isDamageSkill, uint[] ValueUnits)> ValidSkillsDictionary = new()
@@ -422,10 +407,10 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
     #endregion
 
     #region ExtraHint
-    private static void AddExtraHint(uint hoveredID, ref List<Payload> payloads)
+    private static void AddExtraHint(uint hoveredID, ref SeStringBuilder payloads)
     {
-        var healingParam = ProcessOriginNumber(false);
-        var damageParam = ProcessOriginNumber(true);
+        var healingParam = Player.HealParam;
+        var damageParam = Player.DamageParam;
         
         switch (hoveredID)
         {
@@ -710,6 +695,15 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         Duration = 32,
         Normal   = 0,
         Hint     = 3,
+    }
+    
+    private struct PlayerStrat
+    {
+        public uint Level;
+        public uint ClassJob;
+        
+        public (int normal, int crit) HealParam;
+        public (int normal, int crit) DamageParam;
     }
     
     #endregion
