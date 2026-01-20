@@ -9,7 +9,9 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Interface.Components;
+using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
@@ -18,6 +20,7 @@ using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Overlay;
+using Bounds = FFXIVClientStructs.FFXIV.Common.Math.Bounds;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -177,11 +180,10 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
     {
         if (!EnemyList->IsAddonAndNodesReady()) return;
         
-        var enemyListArray = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.EnemyList);
+        var enemyListArray = EnemyListNumberArray.Instance();
         if (enemyListArray == null) return;
 
-        var enemyCount = enemyListArray->IntArray[1];
-        if (enemyCount == 0) return;
+        if (enemyListArray->EnemyCount == 0) return;
         
         var nodes = TextNodes;
         if (nodes is not { Count: > 0 })
@@ -194,21 +196,21 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         if (hudArray == null) return;
 
         var isTargetCasting = hudArray->IntArray[69] != -1;
-
-        for (var i = 0; i < MathF.Min(enemyCount, nodes.Count); i++)
+        
+        for (var i = 0; i < MathF.Min(enemyListArray->EnemyCount, nodes.Count); i++)
         {
-            var offset = 8 + i * 6;
+            var info = enemyListArray->Enemies[i];
 
-            var gameObjectID = (ulong)enemyListArray->IntArray[offset];
-            if (gameObjectID is 0 or 0xE0000000) continue;
+            var entityID = (uint)info.EntityId;
+            if (entityID is 0 or 0xE0000000) continue;
 
             var textNode       = nodes[i].TextNode;
             var backgroundNode = nodes[i].BackgroundNode;
             var castBarNode    = nodes[i].CastBarNode;
             var statusNodes    = nodes[i].StatusNodes;
 
-            var gameObj = DService.Instance().ObjectTable.SearchByID(gameObjectID);
-            if (gameObj is not IBattleChara bc || !HaterInfo.TryGetValue(gameObj.EntityID, out var enmity))
+            var gameObj = CharacterManager.Instance()->LookupBattleCharaByEntityId(entityID);
+            if (gameObj == null || !HaterInfo.TryGetValue(gameObj->EntityId, out var enmity))
             {
                 textNode.String             = string.Empty;
                 backgroundNode.IsVisible    = false;
@@ -233,17 +235,18 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             var origCastBarProgressNode = componentNode->Component->UldManager.SearchNodeById(8);
             if (origCastBarNode == null || origCastBarProgressNode == null) continue;
 
-            statusNodes.Position = componentNode->GetNodeState().TopLeft;
-            statusNodes.Scale    = componentNode->GetScale();
+            statusNodes.Scale    = componentNode->GetScale()             - new Vector2(0.1f);
+            statusNodes.Position = componentNode->GetNodeState().TopLeft - new Vector2(0, 1) * statusNodes.Scale;
+            statusNodes.Alpha    = info.ActiveInList ? 1f : 0.5f;
 
             var counter = 0;
 
-            foreach (var status in bc.StatusList)
+            foreach (var status in gameObj->StatusManager.Status)
             {
                 if (counter == 5) break;
 
-                if (status.StatusID == 0) continue;
-                if (status.SourceID != LocalPlayerState.EntityID) continue;
+                if (status.StatusId == 0) continue;
+                if ((uint)status.SourceObject != LocalPlayerState.EntityID) continue;
 
                 var node = statusNodes[counter];
                 node.IsVisible = true;
@@ -260,7 +263,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             statusNodes.ShouldBeVisible = counter > 0;
             
-            var isCasting = bc.IsCasting || isTargetCasting && bc.Address == (TargetManager.Target?.Address ?? nint.Zero);
+            var isCasting = gameObj->IsCasting || isTargetCasting && (nint)gameObj == (TargetManager.Target?.Address ?? nint.Zero);
             if (isCasting)
             {
                 origCastBarNode->SetAlpha(0);
@@ -272,9 +275,9 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                     castBackgroundNode->SetAlpha(0);
 
                 castBarNode.IsVisible          = true;
-                castBarNode.ProgressNode.Width = 105 * (bc.CurrentCastTime / bc.TotalCastTime);
+                castBarNode.ProgressNode.Width = 105 * (gameObj->CastInfo.CurrentCastTime / gameObj->CastInfo.TotalCastTime);
 
-                if (bc.IsCastInterruptible)
+                if (gameObj->CastInfo.Interruptible)
                     castBarNode.AddColor = KnownColor.Red.ToVector4().ToVector3();
                 else
                     castBarNode.AddColor = KnownColor.Yellow.ToVector4().ToVector3() / 255f;
@@ -291,22 +294,22 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             textNode.FontSize = ModuleConfig.FontSize;
 
-            var healthPercentage = (float)bc.CurrentHp / bc.MaxHp * 100f;
+            var healthPercentage = (float)gameObj->Health / gameObj->MaxHealth * 100f;
             if (isCasting)
             {
-                var castTimeLeft = MathF.Max(bc.TotalCastTime - bc.CurrentCastTime, 0f);
+                var castTimeLeft = MathF.Max(gameObj->CastInfo.TotalCastTime - gameObj->CastInfo.CurrentCastTime, 0f);
 
-                textNode.String          = $"{GetCastInfoText(bc.CastActionType, bc.CastActionID, castTimeLeft,healthPercentage)}";
+                textNode.String = $"{GetCastInfoText((ActionType)gameObj->CastInfo.ActionType, gameObj->CastInfo.ActionId, castTimeLeft, healthPercentage)}";
                 backgroundNode.IsVisible = true;
             }
-            else if (!bc.IsTargetable && bc.CurrentHp == bc.MaxHp)
+            else if (!gameObj->GetIsTargetable() && gameObj->Health == gameObj->MaxHealth)
             {
                 textNode.String          = string.Empty;
                 backgroundNode.IsVisible = false;
             }
             else
             {
-                textNode.String          = GetGeneralInfoText((float)bc.CurrentHp / bc.MaxHp * 100, enmity);
+                textNode.String          = GetGeneralInfoText((float)gameObj->Health / gameObj->MaxHealth * 100, enmity);
                 backgroundNode.IsVisible = true;
             }
 
@@ -322,11 +325,8 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             if (!string.IsNullOrWhiteSpace(textNode.String.ToString()))
             {
-                var textHeight = textNode.GetTextDrawSize().Y;
-                var textWidth  = textNode.GetTextDrawSize(false).X;
-
-                backgroundNode.Position = ModuleConfig.TextOffset with { X = textNode.Position.X - 7f };
-                backgroundNode.Size     = new Vector2(textWidth + 7f, textHeight);
+                backgroundNode.Position = ModuleConfig.TextOffset + new Vector2(textNode.Position.X - 7f, -1f);
+                backgroundNode.Size     = textNode.Node->AtkResNode.GetNodeState().Size.WithX(textNode.Width + 15f);
             }
         }
     }
@@ -353,10 +353,9 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                 String        = string.Empty,
                 FontSize      = ModuleConfig.FontSize,
                 IsVisible     = true,
-                Size          = new(160f, 25f),
+                TextFlags     = TextFlags.Edge | TextFlags.Emboss | TextFlags.AutoAdjustNodeSize,
                 AlignmentType = AlignmentType.TopLeft,
                 Position      = new(100, 5),
-                TextFlags     = TextFlags.Edge    | TextFlags.Emboss,
                 NodeFlags     = NodeFlags.Visible | NodeFlags.Enabled | NodeFlags.AnchorTop | NodeFlags.AnchorLeft,
                 LineSpacing   = 20
             };
@@ -576,12 +575,14 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
             TextNode.AttachNode(this);
         }
 
-        public void Update(IStatus status)
+        public void Update(Status status)
         {
-            IconNode.IconId = status.GameData.Value.Icon;
+            if (!LuminaGetter.TryGetRow(status.StatusId, out Lumina.Excel.Sheets.Status row)) return;
+            
+            IconNode.IconId = row.Icon;
             TextNode.SetNumber((int)status.RemainingTime);
 
-            TextTooltip = $"{status.GameData.Value.Name}\n{status.GameData.Value.Description}";
+            TextTooltip = $"{row.Name}\n{row.Description}";
         }
     }
 }

@@ -40,7 +40,7 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
                 break;
             
             case AddonEvent.PreDraw:
-                if (LookingForGroupDetail == null) return;
+                if (!LookingForGroupDetail->IsAddonAndNodesReady()) return;
 
                 var agent = AgentLookingForGroup.Instance();
                 if (agent == null) return;

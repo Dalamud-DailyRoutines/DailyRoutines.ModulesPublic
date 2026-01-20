@@ -168,7 +168,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         using var width = ImRaii.ItemWidth(300f * GlobalFontScale);
         
         changed |= ImGui.Checkbox(GetLoc("FastObjectInteract-WindowInvisibleWhenInteract"), ref ModuleConfig.WindowInvisibleWhenInteract);
-        changed |= ImGui.Checkbox(GetLoc("FastObjectInteract-WindowInvisibleWhenCombat"),   ref ModuleConfig.WindowVisibleWhenCombat);
+        changed |= ImGui.Checkbox(GetLoc("FastObjectInteract-WindowInvisibleWhenCombat"),   ref ModuleConfig.WindowInvisibleWhenCombat);
 
         if (ImGui.Checkbox(GetLoc("FastObjectInteract-LockWindow"), ref ModuleConfig.LockWindow))
         {
@@ -465,7 +465,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         var playerPos = localPlayer->Position;
         var maxAmount = ModuleConfig.MaxDisplayAmount;
 
-        for (var i = 201; i < mgr->Objects.IndexSorted.Length; i++)
+        for (var i = 200; i < mgr->Objects.IndexSorted.Length; i++)
         {
             var objPtr = mgr->Objects.IndexSorted[i];
             if (objPtr == null) continue;
@@ -484,15 +484,14 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             if (IncludeDistance.TryGetValue(kind, out var l)) 
                 limit = l;
 
-            if (distSq > limit * limit) continue;
+            if (distSq > limit) continue;
             
             if (MathF.Abs(obj->Position.Y - playerPos.Y) >= 4) continue;
 
             if (kind == ObjectKind.Treasure)
             {
                 var treasure = (Treasure*)obj;
-                if (treasure->Flags.HasFlag(Treasure.TreasureFlags.FadedOut) ||
-                    treasure->Flags.HasFlag(Treasure.TreasureFlags.Opened))
+                if (treasure->Flags.IsSetAny(Treasure.TreasureFlags.FadedOut, Treasure.TreasureFlags.Opened))
                     continue;
             }
 
@@ -519,7 +518,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
                     continue;
             }
             
-            CurrentObjects.Add(new InteractableObject(obj, name, kind, distSq));
+            CurrentObjects.Add(new(obj, name, kind, distSq));
         }
         
         CurrentObjects.Sort(InteractableObjectComparer.Instance);
@@ -540,13 +539,14 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
     private static bool IsWindowShouldBeOpen()
     {
         if (CurrentObjects.Count == 0) return false;
-        if (ModuleConfig.WindowInvisibleWhenInteract && OccupiedInEvent) return false;
-        if (ModuleConfig.WindowVisibleWhenCombat) return true;
+        
+        if (ModuleConfig.WindowInvisibleWhenInteract && OccupiedInEvent) 
+            return false;
 
-        var isPvP    = GameState.IsInPVPInstance;
-        var inCombat = DService.Instance().Condition[ConditionFlag.InCombat];
+        if (ModuleConfig.WindowInvisibleWhenCombat && DService.Instance().Condition[ConditionFlag.InCombat])
+            return false;
 
-        return isPvP || !inCombat;
+        return true;
     }
 
     private void InteractWithObject(GameObject* obj, ObjectKind kind)
@@ -597,7 +597,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         public float MaxButtonWidth   = 400f;
         public bool  OnlyDisplayInViewRange;
         public bool  WindowInvisibleWhenInteract = true;
-        public bool  WindowVisibleWhenCombat     = true;
+        public bool  WindowInvisibleWhenCombat   = true;
     }
 
     [GeneratedRegex(@"\[.*?\]")]

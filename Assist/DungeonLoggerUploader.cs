@@ -39,8 +39,7 @@ public class DungeonLoggerUploader : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        Cookies            = new();
-        HTTPClientInstance = HTTPClientHelper.Get(new HttpClientHandler { CookieContainer = Cookies }, "DungeonLoggerUploader-Client");
+        EnsureHTTPClient();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().DutyState.DutyCompleted      += OnDutyCompleted;
@@ -96,11 +95,7 @@ public class DungeonLoggerUploader : DailyModuleBase
     {
         if (!IsLoggedIn) return;
 
-        var zoneID = GameState.TerritoryType;
-        if (zoneID == 0) return;
-        
-        var contentFinderCondition = GameState.TerritoryTypeData.ContentFinderCondition;
-        if (contentFinderCondition.RowId == 0) return;
+        if (GameState.TerritoryType == 0 || GameState.ContentFinderCondition == 0) return;
 
         unsafe
         {
@@ -115,7 +110,7 @@ public class DungeonLoggerUploader : DailyModuleBase
         }
         
         InDungeon   = true;
-        DungeonName = contentFinderCondition.Value.Name.ToString();
+        DungeonName = GameState.ContentFinderConditionData.Name.ToString();
         JobName     = LocalPlayerState.ClassJobData.Name.ToString();
 
         if (ModuleConfig.SendChat)
@@ -132,6 +127,7 @@ public class DungeonLoggerUploader : DailyModuleBase
 
     private static async Task LoginAsync(bool showNotification = false)
     {
+        EnsureHTTPClient();
         if (HTTPClientInstance == null                  ||
             string.IsNullOrEmpty(ModuleConfig.Username) ||
             string.IsNullOrEmpty(ModuleConfig.Password))
@@ -176,6 +172,7 @@ public class DungeonLoggerUploader : DailyModuleBase
 
     private static async Task UploadDungeonRecordAsync()
     {
+        EnsureHTTPClient();
         if (HTTPClientInstance == null ||
             string.IsNullOrEmpty(DungeonName))
             return;
@@ -236,6 +233,22 @@ public class DungeonLoggerUploader : DailyModuleBase
             if (ModuleConfig.SendChat)
                 NotificationError($"“随机任务：指导者” 记录上传失败: {ex.Message}");
         }
+    }
+    
+    private static void EnsureHTTPClient()
+    {
+        if (HTTPClientInstance is not null)
+            return;
+
+        Cookies = new CookieContainer();
+
+        var handler = new HttpClientHandler
+        {
+            CookieContainer                           = Cookies,
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+
+        HTTPClientInstance = HTTPClientHelper.Get(handler, "DungeonLoggerUploader-Client-Insecure");
     }
 
     protected override void Uninit()

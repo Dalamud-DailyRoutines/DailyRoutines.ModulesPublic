@@ -5,6 +5,7 @@ using DailyRoutines.Abstracts;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
@@ -918,7 +919,8 @@ public unsafe class OptimizedTargetInfo : DailyModuleBase
                     textNode.TextOutlineColor = outlineColor.W == 0 ? sourceTextNode->EdgeColor.ToVector4() : outlineColor;
 
                     textNode.String = $"{leftCastTime:F2}";
-                    actionNameNode->SetText(LuminaWrapper.GetActionName(target.CastActionID));
+                    if (target.CastActionType == ActionType.Action)
+                        actionNameNode->SetText(LuminaWrapper.GetActionName(target.CastActionID));
                 }
 
                 break;
