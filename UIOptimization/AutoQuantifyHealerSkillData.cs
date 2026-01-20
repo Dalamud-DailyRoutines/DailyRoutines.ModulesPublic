@@ -1,15 +1,19 @@
 using System;
-using System.Collections;
+using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
+using DailyRoutines.Helpers;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Game.Player;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using Newtonsoft.Json;
 
 // 以下using为本地模块加载测试时使用
 using OmenTools;
@@ -29,12 +33,11 @@ using static DailyRoutines.Helpers.NotifyHelper;
  *  目前存在以下技术瓶颈：
  *  1. 等级同步时需读取同步后武器性能
  *  2. 不同等级下，因职业特性导致技能数据变更（85级职业特性：治疗技能效果提高）
- *  3. 目前技能数据、额外提示均存放于模块脚本内，待参考“自动显示减伤信息”模块研究大量数据存放与读取方式
 ***********************************************************************************/
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
+public class AutoQuantifyHealerSkillData : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -43,15 +46,16 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         Category    = ModuleCategories.UIOptimization,
         Author      = ["Usami"]
     };
+    
+    private static CancellationTokenSource? RemoteFetchCancelSource;
 
-    // private static Config ModuleConfig = null!;
     private static TooltipModification? ActionModification;
     private static PlayerStrat Player;
     
     private static readonly HashSet<uint> ValidJobs   = [24, 28, 33, 40];     // 白魔法师、学者、占星术士、贤者
     private static readonly HashSet<uint> ValidLevels = [100];
     
-    protected override void Init()
+    protected override unsafe void Init()
     {
         DService.Instance().ClientState.ClassJobChanged       += OnClassJobChanged;
         DService.Instance().ClientState.LevelChanged          += OnLevelChanged;
@@ -59,15 +63,23 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         
         TaskHelper ??= new() { TimeoutMS = 1_000 };
         
+        RemoteFetchCancelSource = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        _                       = RemoteRepoManager.FetchSkillDataAsync(RemoteFetchCancelSource.Token);
+        _                       = RemoteRepoManager.FetchExtraHintAsync(RemoteFetchCancelSource.Token);
+        
         GameTooltipManager.Instance().RegGenerateActionTooltipModifier(ModifyActionTooltip);
         UpdatePlayerInfo();
     }
 
-    protected override void Uninit()
+    protected override unsafe void Uninit()
     {
         DService.Instance().ClientState.ClassJobChanged       -= OnClassJobChanged;
         DService.Instance().ClientState.LevelChanged          -= OnLevelChanged;
         DService.Instance().GameInventory.InventoryChanged    -= OnInventoryChanged;
+        
+        RemoteFetchCancelSource?.Cancel();
+        RemoteFetchCancelSource?.Dispose();
+        RemoteFetchCancelSource = null;
         
         GameTooltipManager.Instance().Unreg(generateActionModifiers: ModifyActionTooltip);
         GameTooltipManager.Instance().RemoveActionDetail(ActionModification);
@@ -82,15 +94,15 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
     private void OnInventoryChanged(IReadOnlyCollection<InventoryEventArgs> events) =>
         UpdatePlayerInfo();
     
-    private void UpdatePlayerInfo()
+    private unsafe void UpdatePlayerInfo()
     {
         if (!Throttler.Throttle("AutoQuantifyHealerSkillData-OnUpdatePlayerStrat")) return;
        
         TaskHelper.DelayNext(500, "等待 500 毫秒");
-        DService.Instance().Log.Debug($"触发等待，即将更新玩家数据");
+        // DService.Instance().Log.Debug($"触发等待，即将更新玩家数据");
         TaskHelper.Enqueue(() =>
         {
-            DService.Instance().Log.Debug($"更新玩家数据");
+            // DService.Instance().Log.Debug($"更新玩家数据");
             Player.Level = LocalPlayerState.CurrentLevel;
             Player.ClassJob = LocalPlayerState.ClassJob;
             
@@ -171,11 +183,10 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
             
             Player.HealParam = Calculate(healModifier, isCaster ? traitModifier : 1.0f);
             Player.DamageParam = Calculate(attackModifier, traitModifier);
-            
         });
     }
     
-    private static void ModifyActionTooltip(AtkUnitBase* addonActionDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
+    private static unsafe void ModifyActionTooltip(AtkUnitBase* addonActionDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
     {
         if (ActionModification != null)
         {
@@ -187,8 +198,23 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         if (!ValidJobs.Contains(Player.ClassJob))  return;
 
         var hoveredID = AgentActionDetail.Instance()->ActionId;
-        if (!ValidSkillsDictionary.TryGetValue(hoveredID, out var skillDict)) return;
-        SeStringBuilder newDescription = GetNewDescriptionPayloads(hoveredID, skillDict);
+        
+        var skillDataDict = RemoteRepoManager.GetSkillDataInfo();
+        if (skillDataDict.Count == 0)
+        {
+            DService.Instance().Log.Debug($"技能数据字典为空");
+            return;
+        }
+        var skillEntry = skillDataDict
+                         .Where(x => x.Value.ActionID == hoveredID && x.Value.Level >= Player.Level)
+                         .OrderByDescending(x => x.Value.Level)
+                         .FirstOrDefault();
+        var skillData  = skillEntry.Value;
+        var extraHints = RemoteRepoManager.GetExtraHintInfo()
+                                          .Where(x => x.Value.ActionID == hoveredID && x.Value.Level >= Player.Level)
+                                          .OrderBy(x => x.Value.Order)
+                                          .Select(x => x.Value);
+        var newDescription = GetNewDescriptionPayloads(skillData, extraHints);
         
         ActionModification = GameTooltipManager.Instance().AddActionDetail
         (
@@ -198,21 +224,97 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
             TooltipModifyMode.Overwrite
         );
     }
-
-    #region Description
-    private static SeStringBuilder GetNewDescriptionPayloads(uint hoveredID, (string, bool isDamageSkill, uint[] ValueUnits) skillDict)
+    
+    private static class RemoteRepoManager
     {
-        var baseSkillValue = skillDict.ValueUnits;
+        private const string URI = "https://raw.githubusercontent.com/lianying1997/TempRepoScript/refs/heads/main";
         
-        if (baseSkillValue == null)
-            return null;
+        private static FrozenDictionary<uint, SkillData> SkillDataInfo = FrozenDictionary<uint, SkillData>.Empty;
+        private static FrozenDictionary<uint, ExtraHint> ExtraHintInfo = FrozenDictionary<uint, ExtraHint>.Empty;
+        public static FrozenDictionary<uint, SkillData> GetSkillDataInfo() =>
+            !Throttler.Throttle("AutoQuantifyHealerSkillData-GetSkillDataInfo") ? SkillDataInfo : Volatile.Read(ref SkillDataInfo);
+
+        public static FrozenDictionary<uint, ExtraHint> GetExtraHintInfo() =>
+            !Throttler.Throttle("AutoQuantifyHealerSkillData-GetExtraHintInfo") ? ExtraHintInfo : Volatile.Read(ref ExtraHintInfo);
+
+        private static async Task FetchDataAsync<TJson, TData>(
+            CancellationToken ct,
+            string targetFile,
+            string errorMessagePrefix,
+            Func<TJson, uint> getID,
+            Func<TJson, TData> createData,
+            Action<Dictionary<uint, TData>> setResult)
+            where TJson : class
+        {
+            try
+            {
+                var url = $"{URI}/{targetFile}.json";
+                var json = await HTTPClientHelper.Get().GetStringAsync(url, ct).ConfigureAwait(false);
+                var resp = JsonConvert.DeserializeObject<TJson[]>(json);
+                if (resp == null)
+                {
+                    DService.Instance().Log.Error($"{targetFile}解析失败");
+                    return;
+                }
+                var builder = new Dictionary<uint, TData>(resp.Length);
+                foreach (var item in resp)
+                    builder[getID(item)] = createData(item);
+                setResult(builder);
+            }
+
+            catch (OperationCanceledException)
+            {
+                DService.Instance().Log.Error($"[AutoQuantifyHealerSkillData] OperationCanceledException");
+            }
+
+            catch (Exception ex)
+            {
+                DService.Instance().Log.Error($"[AutoQuantifyHealerSkillData] {errorMessagePrefix}解析失败: {ex}");
+            }
+        }
+
+        public static async Task FetchSkillDataAsync(CancellationToken ct)
+        {
+            await FetchDataAsync<SkillDataJson, SkillData>(
+                ct,
+                "skillData",
+                "技能文件",
+                item => item.ID,
+                item => new SkillData(
+                    item.SkillName, item.Category, item.ActionID, item.Level,
+                    item.IsDamageSkill, item.MainVal, item.ContVal, item.Times,
+                    item.MinorVal, item.MitPercent, item.MitType, item.BuffPercent, item.Duration),
+                builder => Volatile.Write(ref SkillDataInfo, builder.ToFrozenDictionary())
+            );
+        }
         
-        var newDescription = skillDict.isDamageSkill ? GetNewDescriptionPayloadsDamage(baseSkillValue) : GetNewDescriptionPayloadsHealing(baseSkillValue);
-        AddExtraHint(hoveredID, ref newDescription);
-        return newDescription;
+        public static async Task FetchExtraHintAsync(CancellationToken ct)
+        {
+            await FetchDataAsync<ExtraHintJson, ExtraHint>(
+                ct,
+                "extraHint",
+                "额外提示文件",
+                item => item.ID,
+                item => new ExtraHint(
+                    item.SkillName, item.Category, item.ActionID, item.Level,
+                    item.TemplateType, item.Value, item.ColorType, item.Description,
+                    item.Order),
+                builder => Volatile.Write(ref ExtraHintInfo, builder.ToFrozenDictionary())
+            );
+        }
     }
 
-    private static SeStringBuilder GetNewDescriptionPayloadsDamage(uint[]? baseSkillValue)
+    #region Description
+    private static SeStringBuilder GetNewDescriptionPayloads(SkillData skillData, IEnumerable<ExtraHint> extraHint)
+    {
+        var newDescription = skillData.IsDamageSkill ?
+                                 GetNewDescriptionPayloadsDamage(skillData) :
+                                 GetNewDescriptionPayloadsHealing(skillData);
+        AddExtraHint(extraHint, ref newDescription);
+        return newDescription;
+    }
+    
+    private static SeStringBuilder GetNewDescriptionPayloadsDamage(SkillData skd)
     {
         var payloads = new SeStringBuilder();
         var damageParam = Player.DamageParam;
@@ -220,7 +322,8 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         return null;
     }
 
-    private static void WritePayloads(ref SeStringBuilder payloads, Colors textColor, string text, Colors prefixColor = Colors.Normal, string prefix = "", bool newLine = true)
+    private static void WritePayloads(ref SeStringBuilder payloads, Colors textColor, string text,
+                                      Colors prefixColor = Colors.Normal, string prefix = "", bool newLine = true)
     {
         if (prefix != "")
         {
@@ -234,451 +337,103 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
             payloads.Add(NewLinePayload.Payload);
     }
     
-    private static void WritePayloadsNew(ref SeStringBuilder textBuilder)
-    {
-        textBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
-        textBuilder.Append($"hello world");
-        textBuilder.Add(NewLinePayload.Payload);
-        textBuilder.AddUiForeground(28);
-        textBuilder.Append($"hello world2");
-        textBuilder.Add(NewLinePayload.Payload);
-        textBuilder.AddUiForegroundOff();
-        textBuilder.AddUiGlow(48);
-        textBuilder.Append($"hello world4");
-        textBuilder.AddUiGlowOff();
-        textBuilder.Add(NewLinePayload.Payload);
-        textBuilder.AppendMacroString($"<if([gnum11<4],evening,morning)>");
-    }
     
-    private static SeStringBuilder GetNewDescriptionPayloadsHealing(uint[]? bsv)
+    private static SeStringBuilder GetNewDescriptionPayloadsHealing(SkillData skd)
     {
         var payloads      = new SeStringBuilder();
         var healingParam  = Player.HealParam;
         
-        var healingVal    = Math.Floor(bsv[(int)ValueUnitType.HealingVal] / 100d * healingParam.normal);
-        var healOverTime  = Math.Floor(bsv[(int)ValueUnitType.HealOverTime] / 100d * healingParam.normal);
-        var times         = bsv[(int)ValueUnitType.Count];
+        var healingVal    = Math.Floor(skd.MainVal / 100d * healingParam.normal);
+        var healOverTime  = Math.Floor(skd.ContVal / 100d * healingParam.normal);
+        var times         = skd.Times;
         var totalHealVal  = healingVal + (healOverTime * times);
         
-        var shieldVal     = Math.Floor(bsv[(int)ValueUnitType.Shield] / 100d * healingParam.normal);
-        var mitPercentVal = bsv[(int)ValueUnitType.Mitigation];
-        var mitTypeStr    = 
-            bsv[(int)ValueUnitType.MitigationType] == (uint)MitigationType.Physical ? "物理" :
-            bsv[(int)ValueUnitType.MitigationType] == (uint)MitigationType.Magic ? "魔法" : "";
-        
-        var healBuff      = bsv[(int)ValueUnitType.HealBuff];
-        var duration      = bsv[(int)ValueUnitType.Duration];
-        
-        for (var i = 0; i < ((ICollection)bsv).Count; i++)
-        {
-            if (bsv[i] == 0) continue;
-            switch (i)
+        var shieldVal     = Math.Floor(skd.MinorVal / 100d * healingParam.normal);
+        var mitPercentVal = skd.MitPercent;
+        var mitTypeStr    = skd.MitType switch
             {
-                case (int)ValueUnitType.HealingVal:
-                    WritePayloads(ref payloads, Colors.Normal, $"{healingVal}", Colors.Healing, "恢复力");
-                    break;
-                
-                case (int)ValueUnitType.HealOverTime:
-                    WritePayloads(ref payloads, Colors.Normal, $"{healOverTime}", Colors.Healing, "持续恢复力", times == 0);
-                    break;
-                
-                case (int)ValueUnitType.Count:
-                    
-                    WritePayloads(ref payloads, Colors.Normal, $" * {times} 跳");
-                    WritePayloads(ref payloads, Colors.Normal, $"{totalHealVal}", Colors.Healing, "总恢复力");
-                    break;
-                
-                case (int)ValueUnitType.Shield:
-                    
-                    WritePayloads(ref payloads, Colors.Normal, $"{shieldVal}", Colors.Shield, "盾值");
-                    break;
-                
-                case (int)ValueUnitType.Mitigation:
-                    
-                    WritePayloads(ref payloads, Colors.Normal, $"{mitPercentVal}% {mitTypeStr}", Colors.Shield, "减伤");
-                    break;
-                
-                case (int)ValueUnitType.HealBuff:
-                    
-                    WritePayloads(ref payloads, Colors.Normal, $"{healBuff}%", Colors.Buff, "治疗量增益");
-                    break;
-                
-                case (int)ValueUnitType.Duration:
-                    
-                    WritePayloads(ref payloads, Colors.Normal, $"{duration} 秒", Colors.Duration, "持续时间");
-                    break;
-            }
+                (uint)MitigationType.Physical => "物理",
+                (uint)MitigationType.Magic => "魔法",
+                _ => ""
+            };
+        
+        var healBuff      = skd.BuffPercent;
+        var duration      = skd.Duration;
+        
+        if (healingVal!= 0)
+            WritePayloads(ref payloads, Colors.Normal, $"{healingVal}", Colors.Healing, "恢复力");
+        if (healOverTime != 0)
+            WritePayloads(ref payloads, Colors.Normal, $"{healOverTime}", Colors.Healing, "持续恢复力", times == 0);
+        if (times != 0)
+        {
+            WritePayloads(ref payloads, Colors.Normal, $" * {times} 跳");
+            WritePayloads(ref payloads, Colors.Normal, $"{totalHealVal}", Colors.Healing, "总恢复力");
         }
+        if (shieldVal != 0)
+            WritePayloads(ref payloads, Colors.Normal, $"{shieldVal}", Colors.Shield, "盾值");
+        if (mitPercentVal != 0)
+            WritePayloads(ref payloads, Colors.Normal, $"{mitPercentVal}% {mitTypeStr}", Colors.Shield, "减伤");
+        if (healBuff != 0)
+            WritePayloads(ref payloads, Colors.Normal, $"{healBuff}%", Colors.Buff, "治疗量增益");
+        if (duration != 0)
+            WritePayloads(ref payloads, Colors.Normal, $"{duration} 秒", Colors.Duration, "持续时间");
+            
         return payloads;
     }
     
     #endregion
-    
-    #region 技能字典
-
-    private static Dictionary<uint, (string SkillName, bool isDamageSkill, uint[] ValueUnits)> ValidSkillsDictionary = new()
-    {
-        // 恢复力，持续恢复力，跳，盾值，减伤，类型（0全部、1魔法、2物理），治疗量增益，持续时间
-        #region 技能字典 白魔法师
-        { 124,   ("医治", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 135,   ("救疗", false, [800, 0, 0, 0, 0, 0, 0, 0]) },
-        { 137,   ("再生", false, [0, 250, 6, 0, 0, 0, 0, 18]) },
-        { 131,   ("愈疗", false, [600, 0, 0, 0, 0, 0, 0, 0]) },
-        { 16531, ("安慰之心", false, [800, 0, 0, 0, 0, 0, 0, 0]) },
-        { 16534, ("狂喜之心", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 37010, ("医养", false, [250, 175, 5, 0, 0, 0, 0, 15]) },
-        { 3569,  ("庇护所", false, [0, 100, 9, 0, 0, 0, 10, 24]) },
-        { 3571,  ("法令", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 3570,  ("神名", false, [700, 0, 0, 0, 0, 0, 0, 0]) },
-        { 7432,  ("神祝祷", false, [0, 0, 0, 500, 0, 0, 0, 15]) },
-        { 7433,  ("全大赦", false, [200, 0, 0, 0, 10, 0, 0, 10]) },
-        { 16536, ("节制", false, [0, 0, 0, 0, 10, 0, 20, 20]) },
-        { 25862, ("礼仪之铃", false, [0, 400, 5, 0, 0, 0, 0, 20]) },
-        { 37011, ("神爱抚", false, [0, 200, 5, 400, 0, 0, 0, 10]) },
-        #endregion
-        
-        #region 技能字典 占星术士
-        { 3600, ("阳星", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 3610, ("福星", false, [800, 0, 0, 0, 0, 0, 0, 0]) },
-        { 3595, ("吉星相位", false, [250, 250, 5, 0, 0, 0, 0, 0]) },
-        { 37030, ("阳星合相", false, [250, 175, 5, 0, 0, 0, 0, 15]) },
-        { 3614, ("先天禀赋", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 3613, ("命运之轮", false, [0, 100, 5, 0, 10, 0, 0, 10]) },
-        { 16553, ("天星冲日", false, [200, 100, 5, 0, 10, 0, 0, 15]) },
-        { 7439, ("地星", false, [720, 0, 0, 0, 0, 0, 0, 10]) },
-        { 16556, ("天星交错", false, [200, 0, 0, 400, 0, 0, 0, 30]) },
-        { 16557, ("天宫图", false, [200, 0, 0, 0, 0, 0, 0, 10]) },
-        { 16559, ("中间学派", false, [0, 0, 0, 0, 0, 0, 20, 30]) },
-        { 25873, ("擢升", false, [500, 0, 0, 0, 10, 0, 0, 8]) },
-        { 37031, ("太阳星座", false, [0, 0, 0, 0, 10, 0, 0, 15]) },
-        { 37024, ("放浪神之箭", false, [0, 0, 0, 0, 0, 0, 10, 15]) },
-        { 37025, ("建筑神之塔", false, [0, 0, 0, 400, 0, 0, 0, 15]) },
-        { 37027, ("世界树之干", false, [0, 0, 0, 0, 10, 0, 0, 15]) },
-        { 37028, ("河流神之瓶", false, [0, 200, 5, 0, 0, 0, 0, 15]) },
-        { 7445, ("王冠之贵妇", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 25874, ("大宇宙", false, [200, 0, 0, 0, 0, 0, 0, 0]) },
-        { 25875, ("小宇宙", false, [200, 0, 0, 0, 0, 0, 0, 0]) },
-        #endregion
-        
-        #region 技能字典 学者
-        { 190,   ("医术", false, [450, 0, 0, 0, 0, 0, 0, 0]) },
-        { 17215, ("朝日召唤", false, [0, 180, 0, 0, 0, 0, 0, 0]) },
-        { 16545, ("炽天召唤", false, [0, 180, 0, 180, 0, 0, 0, 30]) },
-        { 185,   ("鼓舞激励之策", false, [300, 0, 0, 540, 0, 0, 0, 30]) },
-        { 37013, ("意气轩昂之策", false, [200, 0, 0, 360, 0, 0, 0, 30]) },
-        { 16537, ("仙光的低语", false, [0, 80, 7, 0, 0, 0, 0, 21]) },
-        { 16538, ("异想的幻光", false, [0, 0, 0, 0, 5, 1, 10, 20]) },
-        { 189,   ("生命活性法", false, [600, 0, 0, 0, 0, 0, 10, 0]) },
-        { 188,   ("野战治疗阵", false, [0, 100, 6, 0, 10, 0, 0, 15]) },
-        { 3583,  ("不屈不挠之策", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 7434,  ("深谋远虑之策", false, [800, 0, 0, 0, 0, 0, 0, 45]) },
-        { 3587,  ("转化", false, [0, 0, 0, 0, 0, 0, 20, 30]) },
-        { 7437,  ("以太契约", false, [0, 300, 0, 0, 0, 0, 0, 0]) },
-        { 16543, ("异想的祥光", false, [320, 0, 0, 0, 0, 0, 0, 0]) },
-        { 16546, ("慰藉", false, [250, 0, 0, 250, 0, 0, 0, 30]) },
-        { 25868, ("疾风怒涛之计", false, [0, 0, 0, 0, 10, 0, 0, 20]) },
-        { 37014, ("炽天附体", false, [0, 100, 7, 0, 0, 0, 0, 20]) },
-        { 37015, ("显灵之章", false, [360, 0, 0, 648, 0, 0, 0, 30]) },
-        { 37016, ("降临之章", false, [240, 0, 0, 432, 0, 0, 0, 30]) },
-        #endregion
-        
-        #region 技能字典 贤者
-        { 24286, ("预后", false, [300, 0, 0, 0, 0, 0, 0, 0]) },
-        { 37034, ("均衡预后II", false, [100, 0, 0, 360, 0, 0, 0, 30]) },
-        { 24284, ("诊断", false, [450, 0, 0, 0, 0, 0, 0, 0]) },
-        { 24291, ("均衡诊断", false, [300, 0, 0, 540, 0, 0, 0, 30]) },
-        { 24318, ("魂灵风息", false, [600, 0, 0, 0, 0, 0, 0, 0]) },
-        { 24285, ("心关", false, [0, 170, 0, 0, 0, 0, 0, 0]) },
-        { 24296, ("灵橡清汁", false, [600, 0, 0, 0, 0, 0, 0, 0]) },
-        { 24298, ("坚角清汁", false, [0, 100, 5, 0, 10, 0, 0, 15]) },
-        { 24299, ("寄生清汁", false, [400, 0, 0, 0, 0, 0, 0, 0]) },
-        { 24301, ("消化", false, [350, 0, 0, 0, 0, 0, 0, 0]) },
-        { 24302, ("自生II", false, [0, 130, 5, 0, 0, 0, 10, 15]) },
-        { 24303, ("白牛清汁", false, [700, 0, 0, 0, 10, 0, 0, 15]) },
-        { 24305, ("输血", false, [0, 0, 0, 300, 0, 0, 0, 15]) },
-        { 24311, ("泛输血", false, [0, 0, 0, 200, 0, 0, 0, 15]) },
-        { 24310, ("整体论", false, [300, 0, 0, 300, 10, 0, 0, 20]) },
-        { 24317, ("混合", false, [0, 0, 0, 0, 0, 0, 20, 10]) },
-        { 24300, ("活化", false, [0, 0, 0, 0, 0, 0, 50, 30]) },
-        { 37035, ("智慧之爱", false, [0, 150, 0, 0, 0, 0, 20, 20]) },
-        #endregion
-    };
-
-    #endregion
 
     #region ExtraHint
-    private static void AddExtraHint(uint hoveredID, ref SeStringBuilder payloads)
+    
+    private static void AddExtraHint(IEnumerable<ExtraHint> extraHints, ref SeStringBuilder payloads)
     {
-        var healingParam = Player.HealParam;
-        var damageParam = Player.DamageParam;
-        
-        switch (hoveredID)
+        foreach (var hint in extraHints)
         {
-            #region ExtraHint 白魔法师
+            var value = CalculateValue();
+            var hasPrefixAndValue = hint.ColorType != "hint";
+            var prefixColor = hint.ColorType switch
+            {
+                "damage"   => Colors.Damage,
+                "healing"  => Colors.Healing,
+                "duration" => Colors.Duration,
+                "shield"   => Colors.Shield,
+                "buff"     => Colors.Buff,
+                "hint"     => Colors.Hint,
+                _          => Colors.Normal
+            };
+            payloads.AddUiForeground((ushort)prefixColor);
+            payloads.AddText($"{hint.Description}{(hasPrefixAndValue ? "：" : "")}");
+            payloads.AddUiForegroundOff();
+            
+            if (!string.IsNullOrEmpty(value) && value != "0")
+            {
+                payloads.AddUiForeground((ushort)Colors.Normal);
+                payloads.AddText(value);
+                payloads.AddUiForegroundOff();
+            }
+            payloads.Add(new NewLinePayload());
+            
+            string CalculateValue()
+            {
+                if (!float.TryParse(hint.Value, out var val))
+                    return hint.Value;
 
-            case 3571:  // 法令
-                
-                var damage3571 = Math.Floor(400d / 100 * damageParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{damage3571}", Colors.Damage, "威力");
-                break;
-            
-            case 3569:  // 庇护所
-                
-                WritePayloads(ref payloads, Colors.Hint, "治疗量增益Buff存在滞留效应，效果往往额外持续3秒。");
-                break;
-            
-            case 7433:  // 全大赦
-                
-                WritePayloads(ref payloads, Colors.Hint, "使用医治、愈疗、医济/医养、狂喜之心触发额外的恢复效果。");
-                break;
-            
-            case 16536:  // 节制
-                
-                if (LocalPlayerState.CurrentLevel == 100)
-                    WritePayloads(ref payloads, Colors.Hint, "使用后变为“神安抚”。");
-                break;
-            
-            case 25862:  // 礼仪之铃
-                
-                var heal25862 = Math.Floor(200d / 100 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal25862}", Colors.Healing, "持续时间结束单层治疗量");
-                WritePayloads(ref payloads, Colors.Hint, "白魔法师主体每受到一次伤害，触发一次治疗。");
-                break;
-            
-            case 37011:  // 神爱抚
-                
-                WritePayloads(ref payloads, Colors.Hint, "持续恢复效果在盾值消失后触发。");
-                break;
-            
-            #endregion
-            
-            #region ExtraHint 学者
-            
-            case 185:  // 鼓舞激励之策
-                
-                var heal185 = Math.Floor(300d / 100 * healingParam.crit);
-                var shield185 = Math.Floor(540d / 100 * healingParam.crit);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal185}", Colors.Healing, "暴击恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"{shield185}", Colors.Shield, "暴击盾值(鼓舞/激励)");
-                WritePayloads(ref payloads, Colors.Hint, $"展开战术仅展开“鼓舞”盾值。");
-                break;
-            
-            case 37013:  // 意气轩昂之策
-                
-                var shield37013 = Math.Floor(360d / 100 * healingParam.crit);
-                var heal37013 = Math.Floor(200d / 100 * healingParam.crit);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal37013}", Colors.Healing, "暴击恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"{shield37013}", Colors.Shield, "暴击盾值(鼓舞)");
-                break;
-            
-            case 3583:  // 不屈不挠之策
-                
-                var heal3583 = Math.Floor(400d / 100 * healingParam.crit);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal3583}", Colors.Healing, "暴击恢复力");
-                break;
-            
-            case 3587:  // 转化
-                
-                WritePayloads(ref payloads, Colors.Hint, $"无法使用仙女技。");
-                WritePayloads(ref payloads, Colors.Hint, $"仅增益治疗魔法，不包含能力。");
-                break;
-            
-            case 16538:  // 异想的幻光
-                
-                WritePayloads(ref payloads, Colors.Hint, $"仅增益治疗魔法，不包含能力。");
-                break;
-            
-            case 25868:  // 疾风怒涛之计
-                
-                WritePayloads(ref payloads, Colors.Normal, $"10 秒", Colors.Duration, "疾跑效果持续时间");
-                break;
-            
-            case 16545:  // 炽天召唤
-                
-                WritePayloads(ref payloads, Colors.Normal, $"22 秒（含出现动画）", Colors.Duration, "炽天使持续时间");
-                break;
-            
-            case 188:  // 野战治疗阵
-                
-                WritePayloads(ref payloads, Colors.Hint, $"减伤Buff存在滞留效应，效果往往额外持续3秒。");
-                break;
-            
-            case 37015 or 37016:  // 显灵之章 降临之章
-                
-                WritePayloads(ref payloads, Colors.Hint, $"无法响应“秘策”效果。");
-                break;
-            
-            #endregion
-
-            #region ExtraHint 占星术士
-
-            case 3614:  // 先天禀赋
-                
-                var heal3614 = Math.Floor(900d / 100 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal3614}", Colors.Healing, "目标HP 30%以下时恢复力");
-                break;
-            
-            case 3613:  // 命运之轮
-                
-                WritePayloads(ref payloads, Colors.Hint, $"持续展开命运之轮将刷新持续恢复时间，最多展开18秒。");
-                WritePayloads(ref payloads, Colors.Hint, $"减伤持续时间不变。");
-                break;
-            
-            case 7439:  // 地星
-                
-                var damage7439Min = Math.Floor(205d / 100 * damageParam.normal);
-                var damage7439Max = Math.Floor(310d / 100 * damageParam.normal);
-                var heal7439Min = Math.Floor(540d / 100 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{damage7439Max}", Colors.Damage, "巨星主宰威力");
-                WritePayloads(ref payloads, Colors.Normal, $"{heal7439Min}", Colors.Healing, "小地星恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"{damage7439Min}", Colors.Damage, "小地星威力");
-                WritePayloads(ref payloads, Colors.Hint, $"小地星10秒后变为巨星，巨星10秒后自动爆炸。");
-                break;
-
-            case 16557:  // 天宫图
-                
-                var heal16557 = Math.Floor(400d / 100 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal16557}", Colors.Healing, "阳星天宫图恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"30 秒", Colors.Duration, "阳星天宫图持续时间");
-                WritePayloads(ref payloads, Colors.Hint, $"释放阳星相位/阳星合相后变为阳星天宫图。");
-                WritePayloads(ref payloads, Colors.Hint, $"持续时间结束自动触发恢复效果。");
-                break;
-            
-            case 25873:  // 擢升
-                
-                WritePayloads(ref payloads, Colors.Hint, $"持续时间结束自动触发恢复效果。");
-                break;
-            
-            case 25875:  // 小宇宙
-                
-                WritePayloads(ref payloads, Colors.Normal, $"积蓄所受伤害的 50%", Colors.Healing, "额外恢复力");
-                WritePayloads(ref payloads, Colors.Hint, $"持续时间结束自动触发恢复效果。");
-                break;
-            
-            case 25874:  // 大宇宙
-                
-                var damage25874 = Math.Floor(270d / 100 * damageParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{damage25874}", Colors.Damage, "威力");
-                WritePayloads(ref payloads, Colors.Normal, $"40%", Colors.Damage, "额外目标衰减");
-                WritePayloads(ref payloads, Colors.Normal, $"积蓄所受伤害的 50%", Colors.Healing, "额外恢复力");
-                WritePayloads(ref payloads, Colors.Hint, $"持续时间结束自动触发恢复效果。");
-                break;
-            
-            case 37030:  // 阳星合相
-                
-                var shield37030 = Math.Floor(312.5d / 100 * healingParam.crit);
-                WritePayloads(ref payloads, Colors.Normal, $"{shield37030}", Colors.Shield, "中间学派额外盾值");
-                WritePayloads(ref payloads, Colors.Normal, $"30 秒", Colors.Duration, "盾值持续时间");
-                break;
-            
-            case 3595:  // 吉星相位
-                
-                var shield3595 = Math.Floor(625d / 100 * healingParam.crit);
-                WritePayloads(ref payloads, Colors.Normal, $"{shield3595}", Colors.Shield, "吉星相位额外盾值");
-                WritePayloads(ref payloads, Colors.Normal, $"30 秒", Colors.Duration, "盾值持续时间");
-                break;
-            
-            #endregion
-
-            #region ExtraHint 贤者
-
-            case 37034:  // 均衡预后II
-                
-                var shield37034 = Math.Floor(360d / 100 * 1.5 * healingParam.normal);
-                var heal37034 = Math.Floor(100d / 100 * 1.5 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal37034}", Colors.Healing, "活化状态下恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"{shield37034}", Colors.Shield, "活化状态下盾值");
-                WritePayloads(ref payloads, Colors.Hint, $"无视数值覆盖学者“鼓舞”盾值。");
-                break;
-            
-            case 24291:  // 均衡诊断
-                
-                var heal24291 = Math.Floor(300d / 100 * 1.5 * healingParam.normal);
-                var shield24291 = Math.Floor(540d / 100 * 1.5 * healingParam.normal);
-                var heal24291Crit = Math.Floor(300d / 100 * healingParam.crit);
-                var shield24291Crit = Math.Floor(540d / 100 * healingParam.crit);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal24291}", Colors.Healing, "活化状态下恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"{shield24291}", Colors.Shield, "活化状态下盾值");
-                WritePayloads(ref payloads, Colors.Normal, $"{heal24291Crit}", Colors.Healing, "暴击恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"{shield24291Crit}", Colors.Shield, "暴击盾值(均衡/齐衡)");
-                WritePayloads(ref payloads, Colors.Hint, $"无视数值覆盖学者“鼓舞”盾值。");
-                break;
-            
-            case 24285:  // 心关
-                
-                var heal24285 = Math.Floor(170d / 100 * 1.7 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal24285}", Colors.Healing, "拯救状态下持续恢复力");
-                break;
-            
-            case 24318:  // 魂灵风息
-                
-                var heal24318 = Math.Floor(600d / 100 * 1.5 * healingParam.normal);
-                var damage24318 = Math.Floor(380d / 100 * damageParam.normal);
-                WritePayloads(ref payloads, Colors.Normal, $"{heal24318}", Colors.Healing, "活化状态下恢复力");
-                WritePayloads(ref payloads, Colors.Normal, $"{damage24318}", Colors.Damage, "威力");
-                WritePayloads(ref payloads, Colors.Normal, $"40%", Colors.Damage, "额外目标衰减");
-                break;
-            
-            case 24300:  // 活化
-                WritePayloads(ref payloads, Colors.Hint, $"仅作用一次治疗魔法。");
-                WritePayloads(ref payloads, Colors.Hint, $"仅增益治疗魔法，不包含能力。");
-                break;
-            
-            case 24301:  // 消化
-                
-                var heal24301 = Math.Floor(450d / 100 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Hint, $"上述为移除“均衡预后”(群盾)恢复力。");
-                WritePayloads(ref payloads, Colors.Normal, $"{heal24301}", Colors.Healing, "移除“均衡诊断”(单盾)恢复力");
-                break;
-            
-            case 24303:  // 白牛清汁
-                
-                WritePayloads(ref payloads, Colors.Hint, $"无法与尖角清汁(罩子)减伤效果共存。");
-                break;
-            
-            case 24305 or 24311:  // 输血、泛输血
-                
-                var shield24305 = Math.Floor((hoveredID == 24305 ? 1500d : 1000d) / 100 * healingParam.normal);
-                var heal24305 = Math.Floor((hoveredID == 24305 ? 150d : 100d) / 100 * healingParam.normal);
-                WritePayloads(ref payloads, Colors.Hint, $"盾值因伤害消失后，重新附加一层，上限五层。");
-                WritePayloads(ref payloads, Colors.Normal, $"{shield24305}", Colors.Shield, "总盾值");
-                WritePayloads(ref payloads, Colors.Normal, $"{heal24305}", Colors.Healing, "持续时间结束单层治疗量");
-                break;
-            
-            case 24310:  // 整体论
-                
-                WritePayloads(ref payloads, Colors.Normal, $"30 秒", Colors.Duration, "盾值持续时间");
-                break;
-
-            case 37035:  // 智慧之爱
-                
-                WritePayloads(ref payloads, Colors.Hint, $"使用魔法技能触发恢复效果。");
-                WritePayloads(ref payloads, Colors.Hint, $"仅增益治疗魔法，不包含能力。");
-                break;
-            
-            #endregion
-            
-            default:
-                break;
+                var calculated = hint.TemplateType switch
+                {
+                    "damage_norm_calc" => Player.DamageParam.normal * val / 100,
+                    "damage_crit_calc" => Player.DamageParam.crit   * val / 100,
+                    "heal_norm_calc"   => Player.HealParam.normal   * val / 100,
+                    "heal_crit_calc"   => Player.HealParam.crit     * val / 100,
+                    _ => 0
+                };
+                return calculated > 0 ? ((uint)calculated).ToString() : "0";
+            }
         }
     }
     
     #endregion
     
     #region 数组属性
-
-    private enum ValueUnitType : int
-    {
-        HealingVal     = 0,
-        HealOverTime   = 1,
-        Count          = 2,
-        Shield         = 3,
-        Mitigation     = 4,
-        MitigationType = 5,
-        HealBuff       = 6,
-        Duration       = 7,
-    }
-    
     public enum MitigationType: uint
     {
         All      = 0,
@@ -696,7 +451,6 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         Normal   = 0,
         Hint     = 3,
     }
-    
     private struct PlayerStrat
     {
         public uint Level;
@@ -704,6 +458,94 @@ public unsafe class AutoQuantifyHealerSkillData : DailyModuleBase
         
         public (int normal, int crit) HealParam;
         public (int normal, int crit) DamageParam;
+    }
+    
+    private sealed class SkillDataJson
+    {
+        [JsonProperty("ID")]            public uint     ID            { get; private set; }
+        [JsonProperty("SkillName")]     public string   SkillName     { get; private set; }
+        [JsonProperty("Category")]      public string   Category      { get; private set; }
+        [JsonProperty("ActionID")]      public uint     ActionID      { get; private set; }
+        [JsonProperty("Level")]         public uint     Level         { get; private set; }
+        [JsonProperty("IsDamageSkill")] public bool     IsDamageSkill { get; private set; }
+        [JsonProperty("MainVal")]       public uint     MainVal       { get; private set; }
+        [JsonProperty("ContVal")]       public uint     ContVal       { get; private set; }
+        [JsonProperty("Times")]         public uint     Times         { get; private set; }
+        [JsonProperty("MinorVal")]      public uint     MinorVal      { get; private set; }
+        [JsonProperty("MitPercent")]    public uint     MitPercent    { get; private set; }
+        [JsonProperty("MitType")]       public uint     MitType       { get; private set; }
+        [JsonProperty("BuffPercent")]   public uint     BuffPercent   { get; private set; }
+        [JsonProperty("Duration")]      public uint     Duration      { get; private set; }
+    }
+    
+    private readonly struct SkillData
+    (
+        string   skillName    ,
+        string   category     ,
+        uint     actionID     ,
+        uint     level        ,
+        bool     isDamageSkill,
+        uint     mainVal      ,
+        uint     contVal      ,
+        uint     times        ,
+        uint     minorVal     ,
+        uint     mitPercent   ,
+        uint     mitType      ,
+        uint     buffPercent  ,
+        uint     duration     
+    )
+    {
+        public string   SkillName     { get; } = skillName     ;
+        public string   Category      { get; } = category      ;
+        public uint     ActionID      { get; } = actionID      ;
+        public uint     Level         { get; } = level         ;
+        public bool     IsDamageSkill { get; } = isDamageSkill ;
+        public uint     MainVal       { get; } = mainVal       ;
+        public uint     ContVal       { get; } = contVal       ;
+        public uint     Times         { get; } = times         ;
+        public uint     MinorVal      { get; } = minorVal      ;
+        public uint     MitPercent    { get; } = mitPercent    ;
+        public uint     MitType       { get; } = mitType       ;
+        public uint     BuffPercent   { get; } = buffPercent   ;
+        public uint     Duration      { get; } = duration      ;
+    }
+    
+    private sealed class ExtraHintJson
+    {
+        [JsonProperty("ID")]            public uint     ID              { get; private set; }
+        [JsonProperty("SkillName")]     public string   SkillName       { get; private set; }
+        [JsonProperty("Category")]      public string   Category        { get; private set; }
+        [JsonProperty("ActionID")]      public uint     ActionID        { get; private set; }
+        [JsonProperty("Level")]         public uint     Level           { get; private set; }
+        [JsonProperty("TemplateType")]  public string   TemplateType    { get; private set; }
+        [JsonProperty("Value")]         public string   Value           { get; private set; }
+        [JsonProperty("ColorType")]     public string   ColorType       { get; private set; }
+        [JsonProperty("Description")]   public string   Description     { get; private set; }
+        [JsonProperty("Order")]         public uint     Order           { get; private set; }
+    }
+    
+    private readonly struct ExtraHint
+    (
+        string   skillName    ,
+        string   category     ,
+        uint     actionID     ,
+        uint     level    ,
+        string   templateType ,
+        string   value        ,
+        string   colorType    ,
+        string   description  ,
+        uint     order        
+    )
+    {
+        public string   SkillName    { get; } = skillName    ;
+        public string   Category     { get; } = category     ;
+        public uint     ActionID     { get; } = actionID     ;
+        public uint     Level        { get; } = level    ;
+        public string   TemplateType { get; } = templateType ;
+        public string   Value        { get; } = value        ;
+        public string   ColorType    { get; } = colorType    ;
+        public string   Description  { get; } = description  ;
+        public uint     Order        { get; } = order        ;
     }
     
     #endregion
