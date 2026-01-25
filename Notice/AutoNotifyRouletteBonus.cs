@@ -5,8 +5,6 @@ using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Interface.Colors;
-using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 using ContentRoulette = Lumina.Excel.Sheets.ContentRoulette;
@@ -26,22 +24,20 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private const int RouletteBonusArraySize = 11;
+    private const int ROULETTE_BONUS_ARRAY_SIZE = 11;
 
-    private static readonly FrozenDictionary<byte, uint> RouletteIndexToRowID =
-        new Dictionary<byte, uint>
-        {
-            { 1, 1 }, { 2, 2 }, { 3, 3 }, { 4, 4 }, { 5, 5 },
-            { 6, 6 }, { 7, 8 }, { 8, 9 }, { 9, 15 }, { 10, 17 }
-        }.ToFrozenDictionary();
+    private static readonly FrozenDictionary<byte, uint> RouletteIndexToRowID = new Dictionary<byte, uint>
+    {
+        [1] = 1, [2] = 2, [3] = 3, [4] = 4, [5] = 5,
+        [6] = 6, [7] = 8, [8] = 9, [9] = 15, [10] = 17
+    }.ToFrozenDictionary();
 
-    private static readonly FrozenDictionary<ContentsRouletteRole, RoleData> RoleDataMap =
-        new Dictionary<ContentsRouletteRole, RoleData>
-        {
-            { ContentsRouletteRole.Tank, new(BitmapFontIcon.Tank, 37, ImGuiColors.TankBlue, GetLoc("Tank")) },
-            { ContentsRouletteRole.Healer, new(BitmapFontIcon.Healer, 504, ImGuiColors.HealerGreen, GetLoc("Healer")) },
-            { ContentsRouletteRole.Dps, new(BitmapFontIcon.DPS, 545, ImGuiColors.DPSRed, GetLoc("DPS")) }
-        }.ToFrozenDictionary();
+    private static readonly FrozenDictionary<ContentsRouletteRole, RoleData> RoleDataMap = new Dictionary<ContentsRouletteRole, RoleData>
+    {
+        [ContentsRouletteRole.Tank] = new(BitmapFontIcon.Tank, 37, KnownColor.DodgerBlue.ToVector4(), LuminaWrapper.GetAddonText(1082)),
+        [ContentsRouletteRole.Healer] = new(BitmapFontIcon.Healer, 504, KnownColor.LimeGreen.ToVector4(), LuminaWrapper.GetAddonText(1083)),
+        [ContentsRouletteRole.Dps] = new(BitmapFontIcon.DPS, 545, KnownColor.OrangeRed.ToVector4(), LuminaWrapper.GetAddonText(1084))
+    }.ToFrozenDictionary();
 
     private static readonly ContentRoulette[] CachedRoulettes =
         LuminaGetter.Get<ContentRoulette>()
@@ -55,12 +51,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-        TaskHelper ??= new();
-        FrameworkManager.Instance().Reg(OnUpdate, throttleMS: 5_000);
+        GamePacketManager.Instance().RegPostReceivePacket(OnPostReceivePacket);
     }
 
     protected override void Uninit() =>
-        FrameworkManager.Instance().Unreg(OnUpdate);
+        GamePacketManager.Instance().Unreg(OnPostReceivePacket);
 
     protected override void ConfigUI()
     {
@@ -74,24 +69,21 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             ModuleConfig.Save(this);
 
         ImGui.NewLine();
-        ImGui.Separator();
-        ImGui.NewLine();
 
         using var table = ImRaii.Table("RouletteConfigTable", 6,
             ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp);
         if (!table) return;
 
         ImGui.TableSetupColumn(GetLoc("Roulette"), ImGuiTableColumnFlags.NoHeaderLabel, 0.3f);
-        ImGui.TableSetupColumn(GetLoc("Tank"), ImGuiTableColumnFlags.None, 0.1f);
-        ImGui.TableSetupColumn(GetLoc("Healer"), ImGuiTableColumnFlags.None, 0.1f);
-        ImGui.TableSetupColumn(GetLoc("DPS"), ImGuiTableColumnFlags.None, 0.1f);
+        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1082), ImGuiTableColumnFlags.None, 0.1f);
+        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1083), ImGuiTableColumnFlags.None, 0.1f);
+        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1084), ImGuiTableColumnFlags.None, 0.1f);
         ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete"), ImGuiTableColumnFlags.NoHeaderLabel, 0.1f);
         ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-CurrentBouns"), ImGuiTableColumnFlags.None, 0.1f);
         ImGui.TableHeadersRow();
 
         ImGui.TableSetColumnIndex(4);
         ImGui.Text(GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete"));
-        ImGui.SameLine();
         ImGuiOm.HelpMarker(GetLoc("AutoNotifyRouletteBonus-OnlyIncompleteHelp"));
 
         foreach (var roulette in CachedRoulettes)
@@ -101,12 +93,13 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             {
                 config = new RouletteConfig();
                 ModuleConfig.Roulettes[rowID] = config;
+                ModuleConfig.Save(this);
             }
 
-            var isEnabled = (config.Tank || config.Healer || config.DPS);
+            var isEnabled = config.Tank || config.Healer || config.DPS;
 
             ImGui.TableNextRow();
-            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey3, !isEnabled))
+            using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.DarkGray.ToVector4(), !isEnabled))
             {
                 ImGui.TableNextColumn();
                 ImGui.Text(roulette.Name.ToString());
@@ -141,7 +134,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
                 if (LastKnownRoles is not null)
                 {
                     var bonusIndex = roulette.ContentRouletteRoleBonus.RowId;
-                    if (bonusIndex is > 0 and <= 10)
+                    if (bonusIndex is > 0 and < ROULETTE_BONUS_ARRAY_SIZE)
                     {
                         var currentRole = LastKnownRoles[bonusIndex];
                         if (RoleDataMap.TryGetValue(currentRole, out var roleData))
@@ -162,9 +155,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         }
     }
 
-    private void OnUpdate(IFramework _)
+    private void OnPostReceivePacket(int opcode, byte* packet)
     {
         if (!GameState.IsLoggedIn) return;
+        if (opcode != 687) return;
+        if (BoundByDuty) return;
 
         var agent = AgentContentsFinder.Instance();
         if (agent is null) return;
@@ -173,25 +168,22 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
         if (LastKnownRoles is null)
         {
-            LastKnownRoles = new ContentsRouletteRole[RouletteBonusArraySize];
-            Array.Copy(currentRoles, LastKnownRoles, RouletteBonusArraySize);
+            LastKnownRoles = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];
+            Array.Copy(currentRoles, LastKnownRoles, ROULETTE_BONUS_ARRAY_SIZE);
             return;
         }
 
-        for (var index = 1; index <= 10; index++)
+        for (var index = 1; index < ROULETTE_BONUS_ARRAY_SIZE; index++)
         {
-            if (!RouletteIndexToRowID.TryGetValue((byte)index, out var rowId))
-                continue;
-
-            if (!ModuleConfig.Roulettes.TryGetValue(rowId, out var config))
-                continue;
-
             var currentRole = currentRoles[index];
             var lastRole = LastKnownRoles[index];
 
             if (currentRole == lastRole) continue;
 
             LastKnownRoles[index] = currentRole;
+
+            if (!RouletteIndexToRowID.TryGetValue((byte)index, out var rowId)) continue;
+            if (!ModuleConfig.Roulettes.TryGetValue(rowId, out var config)) continue;
 
             var roleIndex = (int)currentRole;
             if (roleIndex > 2) continue;
@@ -200,13 +192,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             {
                 0 => config.Tank,
                 1 => config.Healer,
-                2 => config.DPS
+                _ => config.DPS
             };
 
             if (!shouldAlert) continue;
-
-            if (config.OnlyIncomplete && IsRouletteComplete(rowId))
-                continue;
+            if (config.OnlyIncomplete && IsRouletteComplete(rowId)) continue;
 
             NotifyRoleBonus(rowId, currentRole);
         }
@@ -217,9 +207,10 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         if (!Throttler.Throttle($"AutoNotifyRouletteBonus-{rowID}-{role}", 60_000))
             return;
 
-        var rouletteName = LuminaGetter.TryGetRow<ContentRoulette>(rowID, out var roulette)
-            ? roulette.Name.ToString()
-            : $"{rowID}";
+        if (!LuminaGetter.TryGetRow<ContentRoulette>(rowID, out var roulette))
+            return;
+
+        var rouletteName = roulette.Name.ToString();
 
         if (!RoleDataMap.TryGetValue(role, out var roleData))
             return;
@@ -238,13 +229,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             NotificationInfo($"{rouletteName} -> {roleData.Name}", GetLoc("AutoNotifyRouletteBonus"));
 
         if (ModuleConfig.SendTTS)
-        {
-            var taskKey = $"Speak-{rowID}-{role}";
-            if (Throttler.Throttle($"AutoNotifyRouletteBonus-TTS-{taskKey}", 3_000))
-            {
-                TaskHelper.Enqueue(() => Speak($"{rouletteName} {roleData.Name}"), taskKey);
-            }
-        }
+            Speak($"{rouletteName} {roleData.Name}");
     }
 
     private static bool IsRouletteComplete(uint rowID)
@@ -267,7 +252,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         public bool SendNotification;
         public bool SendTTS;
 
-        public Dictionary<uint, RouletteConfig> Roulettes { get; set; } = [];
+        public Dictionary<uint, RouletteConfig> Roulettes = [];
     }
 
     private class RouletteConfig
