@@ -103,7 +103,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
                 ModuleConfig.Roulettes[rowID] = config;
             }
 
-            var isEnabled = (config.Tank || config.Healer || config.DPS) && ModuleConfig.Enabled;
+            var isEnabled = (config.Tank || config.Healer || config.DPS);
 
             ImGui.TableNextRow();
             using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey3, !isEnabled))
@@ -164,7 +164,6 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
     private void OnUpdate(IFramework _)
     {
-        if (!ModuleConfig.Enabled) return;
         if (!GameState.IsLoggedIn) return;
 
         var agent = AgentContentsFinder.Instance();
@@ -264,7 +263,6 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
     private class Config : ModuleConfiguration
     {
-        public bool Enabled;
         public bool SendChat;
         public bool SendNotification;
         public bool SendTTS;
