@@ -36,7 +36,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     {
         [ContentsRouletteRole.Tank] = new(BitmapFontIcon.Tank, 37, KnownColor.DodgerBlue.ToVector4(), LuminaWrapper.GetAddonText(1082)),
         [ContentsRouletteRole.Healer] = new(BitmapFontIcon.Healer, 504, KnownColor.LimeGreen.ToVector4(), LuminaWrapper.GetAddonText(1083)),
-        [ContentsRouletteRole.Dps] = new(BitmapFontIcon.DPS, 545, KnownColor.OrangeRed.ToVector4(), LuminaWrapper.GetAddonText(1084))
+        [ContentsRouletteRole.Dps] = new(BitmapFontIcon.DPS, 545, KnownColor.OrangeRed.ToVector4(), LuminaWrapper.GetAddonText(2786))
     }.ToFrozenDictionary();
 
     private static readonly ContentRoulette[] CachedRoulettes =
@@ -51,6 +51,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
+        if (LastKnownRoles is null)
+        {
+            LastKnownRoles = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];                                                                                                                 
+            Array.Fill(LastKnownRoles, (ContentsRouletteRole)3);  
+        }
         GamePacketManager.Instance().RegPostReceivePacket(OnPostReceivePacket);
     }
 
@@ -77,7 +82,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         ImGui.TableSetupColumn(GetLoc("Roulette"), ImGuiTableColumnFlags.NoHeaderLabel, 0.3f);
         ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1082), ImGuiTableColumnFlags.None, 0.1f);
         ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1083), ImGuiTableColumnFlags.None, 0.1f);
-        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1084), ImGuiTableColumnFlags.None, 0.1f);
+        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(2786), ImGuiTableColumnFlags.None, 0.1f);
         ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete"), ImGuiTableColumnFlags.NoHeaderLabel, 0.1f);
         ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-CurrentBouns"), ImGuiTableColumnFlags.None, 0.1f);
         ImGui.TableHeadersRow();
@@ -111,7 +116,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
                     {
                         0 => config.Tank,
                         1 => config.Healer,
-                        _ => config.DPS
+                        2 => config.DPS
                     };
 
                     if (ImGui.Checkbox($"##Role_{rowID}_{role}", ref check))
@@ -166,13 +171,6 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
         var currentRoles = agent->ContentRouletteRoleBonuses.ToArray();
 
-        if (LastKnownRoles is null)
-        {
-            LastKnownRoles = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];
-            Array.Copy(currentRoles, LastKnownRoles, ROULETTE_BONUS_ARRAY_SIZE);
-            return;
-        }
-
         for (var index = 1; index < ROULETTE_BONUS_ARRAY_SIZE; index++)
         {
             var currentRole = currentRoles[index];
@@ -192,7 +190,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             {
                 0 => config.Tank,
                 1 => config.Healer,
-                _ => config.DPS
+                2 => config.DPS
             };
 
             if (!shouldAlert) continue;
