@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
+using Dalamud.Hooking;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
@@ -47,6 +49,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
     private static Config ModuleConfig = null!;
     private static ContentsRouletteRole[]? LastKnownRoles;
+    private static bool PendingRefreshAfterDuty;
+
+    private static readonly CompSig SetContentRouletteRoleBonusSig = new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
+    private delegate nint SetContentRouletteRoleBonusDelegate(nint a1, nint a2, uint a3);
+    private static Hook<SetContentRouletteRoleBonusDelegate>? SetContentRouletteRoleBonusHook;
 
     protected override void Init()
     {
@@ -56,11 +63,21 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             LastKnownRoles = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];                                                                                                                 
             Array.Fill(LastKnownRoles, (ContentsRouletteRole)3);  
         }
-        GamePacketManager.Instance().RegPostReceivePacket(OnPostReceivePacket);
+
+        SetContentRouletteRoleBonusHook ??= SetContentRouletteRoleBonusSig.GetHook<SetContentRouletteRoleBonusDelegate>(SetContentRouletteRoleBonusDetour);
+        SetContentRouletteRoleBonusHook.Enable();
+
+        DService.Instance().Condition.ConditionChange += OnConditionChanged;
+        PendingRefreshAfterDuty = DService.Instance().Condition[ConditionFlag.BoundByDuty];
     }
 
-    protected override void Uninit() =>
-        GamePacketManager.Instance().Unreg(OnPostReceivePacket);
+    protected override void Uninit()
+    {
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
+
+        SetContentRouletteRoleBonusHook?.Dispose();
+        SetContentRouletteRoleBonusHook = null;
+    }
 
     protected override void ConfigUI()
     {
@@ -160,12 +177,38 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         }
     }
 
-    private void OnPostReceivePacket(int opcode, byte* packet)
+    private static nint SetContentRouletteRoleBonusDetour(nint a1, nint a2, uint a3)
+    {
+        var result = SetContentRouletteRoleBonusHook.Original(a1, a2, a3);
+        OnRoleBonusUpdated();
+        return result;
+    }
+
+    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    {
+        if (flag != ConditionFlag.BoundByDuty) return;
+        if (value)
+            PendingRefreshAfterDuty = true;
+        else
+            TryRefreshAfterDuty();
+    }
+
+    private static void TryRefreshAfterDuty()
+    {
+        if (!PendingRefreshAfterDuty) return;
+        if (GameState.ContentFinderCondition != 0) return;
+
+        var agent = AgentContentsFinder.Instance();
+        if (agent == null) return;
+        
+        PendingRefreshAfterDuty = false;
+        OnRoleBonusUpdated();
+    }
+
+    private static void OnRoleBonusUpdated()
     {
         if (!GameState.IsLoggedIn) return;
-        if (opcode != 687) return;
-        if (BoundByDuty) return;
-
+        if (GameState.ContentFinderCondition != 0) return;
         var agent = AgentContentsFinder.Instance();
         if (agent is null) return;
 
@@ -200,7 +243,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         }
     }
 
-    private void NotifyRoleBonus(uint rowID, ContentsRouletteRole role)
+    private static void NotifyRoleBonus(uint rowID, ContentsRouletteRole role)
     {
         if (!Throttler.Throttle($"AutoNotifyRouletteBonus-{rowID}-{role}", 60_000))
             return;
