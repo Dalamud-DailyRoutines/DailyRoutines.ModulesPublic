@@ -196,10 +196,6 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     private static void TryRefreshAfterDuty()
     {
         if (!PendingRefreshAfterDuty) return;
-        if (GameState.ContentFinderCondition != 0) return;
-
-        var agent = AgentContentsFinder.Instance();
-        if (agent == null) return;
         
         PendingRefreshAfterDuty = false;
         OnRoleBonusUpdated();
