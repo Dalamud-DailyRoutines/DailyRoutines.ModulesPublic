@@ -52,7 +52,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     private static bool PendingRefreshAfterDuty;
 
     private static readonly CompSig SetContentRouletteRoleBonusSig = new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
-    private delegate nint SetContentRouletteRoleBonusDelegate(nint a1, nint a2, uint a3);
+    private delegate void SetContentRouletteRoleBonusDelegate(AgentContentsFinder* instance, void* data, uint bonusIndex);
     private static Hook<SetContentRouletteRoleBonusDelegate>? SetContentRouletteRoleBonusHook;
 
     protected override void Init()
@@ -177,11 +177,10 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         }
     }
 
-    private static nint SetContentRouletteRoleBonusDetour(nint a1, nint a2, uint a3)
+    private static void SetContentRouletteRoleBonusDetour(AgentContentsFinder* instance, void* data, uint bonusIndex)
     {
-        var result = SetContentRouletteRoleBonusHook.Original(a1, a2, a3);
+        SetContentRouletteRoleBonusHook.Original(instance, data, bonusIndex);
         OnRoleBonusUpdated();
-        return result;
     }
 
     private static void OnConditionChanged(ConditionFlag flag, bool value)
