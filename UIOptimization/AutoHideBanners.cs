@@ -3,6 +3,7 @@ using System.Numerics;
 using DailyRoutines.Abstracts;
 using Dalamud.Hooking;
 using Dalamud.Interface;
+using Dalamud.Plugin.Services;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
@@ -23,6 +24,7 @@ public unsafe class AutoHideBanners : DailyModuleBase
     private static readonly CompSig                        SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
     private delegate        void*                          SetImageTextureDelegate(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID);
     private static          Hook<SetImageTextureDelegate>? SetImageTextureHook;
+    private const           string                         WKSMissionChainAddonName = "_WKSMissionChain";
     
     private static Config ModuleConfig = null!;
 
@@ -42,10 +44,17 @@ public unsafe class AutoHideBanners : DailyModuleBase
         
         SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(SetImageTextureDetour);
         SetImageTextureHook.Enable();
+        FrameworkManager.Instance().Reg(OnFrameworkUpdate);
     }
+
+    protected override void Uninit() =>
+        FrameworkManager.Instance().Unreg(OnFrameworkUpdate);
 
     protected override void ConfigUI()
     {
+        if (ImGui.Checkbox(GetLoc("HideWKSMissionChain"), ref ModuleConfig.HideWKSMissionChain))
+            SaveConfig(ModuleConfig);
+        
         var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - (2 * ImGui.GetStyle().ItemSpacing.X), 400f * GlobalFontScale);
         
         using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, tableSize);
@@ -101,6 +110,18 @@ public unsafe class AutoHideBanners : DailyModuleBase
             }
         }
     }
+    
+    private static void OnFrameworkUpdate(IFramework _)
+    {
+        if (!ModuleConfig.HideWKSMissionChain)
+            return;
+
+        if (!TryGetAddonByName(WKSMissionChainAddonName, out var addon))
+            return;
+
+        if (addon->IsVisible)
+            addon->IsVisible = false;
+    }
 
     private static void* SetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID) => 
         ModuleConfig.HiddenBanners.GetValueOrDefault(bannerID) ? null : SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
@@ -109,13 +130,14 @@ public unsafe class AutoHideBanners : DailyModuleBase
     {
         // true - 隐藏; false - 维持
         public Dictionary<uint, bool> HiddenBanners = [];
+        public bool HideWKSMissionChain = false;
     }
     
     private static readonly List<uint> BannersData =
     [
         120031, 120032, 120055, 120081, 120082, 120083, 120084, 120085, 120086,
         120093, 120094, 120095, 120096, 120141, 120142, 121081, 121082, 121561,
-        121562, 121563, 128370, 128371, 128372, 128373
+        121562, 121563, 128370, 128371, 128372, 128373, 128525, 128526
     ];
 
     private static readonly HashSet<uint> DefaultEnabledBanners = [120031, 120032, 120055, 120095, 120096, 120141, 120142];
