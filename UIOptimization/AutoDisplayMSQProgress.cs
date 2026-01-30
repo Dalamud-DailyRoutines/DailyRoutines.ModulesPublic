@@ -17,7 +17,7 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
         Description = GetLoc("AutoDisplayMSQProgressDescription"),
         Category    = ModuleCategories.UIOptimization
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init()
@@ -27,30 +27,30 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    protected override void Uninit() => 
+    protected override void Uninit() =>
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
         if (!Throttler.Throttle("ScenarioTree", 1_000)) return;
-        
+
         var addon = ScenarioTreeAddon;
         if (!addon->IsAddonAndNodesReady()) return;
 
         if (!TryGetCurrentExpansionMSQProgress(out var result)) return;
         if (result.Remaining == 0) return;
         if (!LuminaGetter.TryGetRow<Quest>(result.FirstIncompleteQuest, out var questData)) return;
-        
+
         var text = $"{questData.Name.ToString()} ({result.Remaining} / {result.PercentComplete:F1}%)";
         addon->AtkValues[7].SetManagedString(text);
         addon->OnRefresh(addon->AtkValuesCount, addon->AtkValues);
 
         var button = addon->GetComponentButtonById(13);
         if (button == null) return;
-        
+
         var textNode = (AtkTextNode*)button->UldManager.SearchNodeById(6);
         if (textNode == null) return;
-        
+
         textNode->SetText(text);
     }
 
@@ -61,30 +61,33 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
         var msqQuests = LuminaGetter.Get<Quest>()
                                     .Where(x => x.JournalGenre.Value.Icon == 61412 && !string.IsNullOrEmpty(x.Name.ToString()))
                                     .ToList();
-        
-        var firstIncompleteID   = (uint)AgentScenarioTree.Instance()->Data->CurrentScenarioQuest + 65536;
+
+        var firstIncompleteID   = (uint)AgentScenarioTree.Instance()->Data->MainScenarioQuestIds[0] + 65536;
         var firstIncompleteData = LuminaGetter.GetRowOrDefault<Quest>(firstIncompleteID);
-        
+
         var currentExpansionQuests = msqQuests
                                      .Where(x => x.JournalGenre.RowId == firstIncompleteData.JournalGenre.RowId)
                                      .OrderBy(x => x.RowId)
                                      .ToList();
-        
+
         var completedCount = 0;
+
         foreach (var quest in currentExpansionQuests)
         {
-            var isCompleted = uiState->IsUnlockLinkUnlockedOrQuestCompleted(
+            var isCompleted = uiState->IsUnlockLinkUnlockedOrQuestCompleted
+            (
                 quest.RowId,
-                quest.TodoParams.Max(x => x.ToDoCompleteSeq));
+                quest.TodoParams.Max(x => x.ToDoCompleteSeq)
+            );
 
             if (isCompleted)
                 completedCount++;
         }
-        
+
         var totalCount = firstIncompleteData.JournalGenre.RowId == 1
                              ? AdjustARRTotalCount(currentExpansionQuests.Count)
                              : currentExpansionQuests.Count;
-        
+
         var remaining = totalCount - completedCount;
         var percentComplete = totalCount > 0
                                   ? completedCount * 100f / totalCount
@@ -108,11 +111,16 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
 
         return adjustedCount - 8;
     }
-    
-    private readonly struct MSQProgressResult(int remaining, float percentComplete, uint firstIncompleteQuest)
+
+    private readonly struct MSQProgressResult
+    (
+        int   remaining,
+        float percentComplete,
+        uint  firstIncompleteQuest
+    )
     {
-        public readonly int   Remaining              = remaining;
-        public readonly float PercentComplete        = percentComplete;
+        public readonly int   Remaining            = remaining;
+        public readonly float PercentComplete      = percentComplete;
         public readonly uint  FirstIncompleteQuest = firstIncompleteQuest;
     }
 }

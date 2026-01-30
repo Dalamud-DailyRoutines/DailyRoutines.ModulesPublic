@@ -59,7 +59,7 @@ public unsafe class AutoFateStart : DailyModuleBase
         if (LocalPlayerState.ClassJobData.DohDolJobIndex != -1)
             return;
         
-        if (packet->Common.BNpcNameId <= 0 || packet->Common.BNpcBaseId <= 0 || packet->Common.ObjectKind != ObjectKind.BattleNpc)
+        if (packet->Common.NameId <= 0 || packet->Common.BaseId <= 0 || packet->Common.ObjectKind != ObjectKind.BattleNpc)
             return;
 
         if (LuminaGetter.GetRow<Fate>(packet->Common.FateId) is not { ClassJobLevel: > 0, Name.IsEmpty: false } row)
