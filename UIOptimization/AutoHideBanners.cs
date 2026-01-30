@@ -114,8 +114,7 @@ public unsafe class AutoHideBanners : DailyModuleBase
     
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
-        if (!ModuleConfig.HideWKSMissionChain)
-            return;
+        if (!ModuleConfig.HideWKSMissionChain) return;
 
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
