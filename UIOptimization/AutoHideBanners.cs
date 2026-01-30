@@ -25,9 +25,9 @@ public unsafe class AutoHideBanners : DailyModuleBase
     private static readonly CompSig                        SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
     private delegate        void*                          SetImageTextureDelegate(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID);
     private static          Hook<SetImageTextureDelegate>? SetImageTextureHook;
-    private const           string                         WKSMissionChainAddonName = "_WKSMissionChain";
     
     private static Config ModuleConfig = null!;
+    private static readonly HashSet<uint> WKSMissionChainBannerIds = [128527, 128528, 128529, 128530, 128531, 128532];
 
     protected override void Init()
     {
@@ -45,7 +45,7 @@ public unsafe class AutoHideBanners : DailyModuleBase
         
         SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(SetImageTextureDetour);
         SetImageTextureHook.Enable();
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, WKSMissionChainAddonName, OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "_WKSMissionChain", OnAddon);
     }
 
     protected override void Uninit() =>
@@ -53,9 +53,6 @@ public unsafe class AutoHideBanners : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("AutoHideBanners-HideWKSMissionChain"), ref ModuleConfig.HideWKSMissionChain))
-            SaveConfig(ModuleConfig);
-        
         var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - (2 * ImGui.GetStyle().ItemSpacing.X), 400f * GlobalFontScale);
         
         using var table = ImRaii.Table("BannerList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, tableSize);
@@ -114,30 +111,60 @@ public unsafe class AutoHideBanners : DailyModuleBase
     
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
-        if (!ModuleConfig.HideWKSMissionChain) return;
-
-        var addon = (AtkUnitBase*)args.Addon.Address;
+        var addon = args.Addon.ToStruct();
         if (addon == null) return;
-        
-        if (addon->IsVisible)
-            addon->IsVisible = false;
+
+        var shouldHide = ShouldHideWKSMissionChain(addon);
+        addon->RootNode->ToggleVisibility(!shouldHide);
     }
 
-    private static void* SetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID) => 
-        ModuleConfig.HiddenBanners.GetValueOrDefault(bannerID) ? null : SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
+    private static bool ShouldHideWKSMissionChain(AtkUnitBase* addon)
+    {
+        for (var i = 0; i < addon->UldManager.NodeListCount; i++)
+        {
+            var node = addon->UldManager.NodeList[i];
+            if (node == null || node->Type != NodeType.Image) continue;
+
+            var iconId = GetImageNodeIconId(node->GetAsAtkImageNode());
+            if (iconId == 0) continue;
+            if (IsWKSMissionChainBannerSelected(iconId)) return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsWKSMissionChainBannerSelected(uint iconId) =>
+        WKSMissionChainBannerIds.Contains(iconId) && ModuleConfig.HiddenBanners.GetValueOrDefault(iconId);
+
+    private static uint GetImageNodeIconId(AtkImageNode* imageNode)
+    {
+        var parts = imageNode->PartsList->Parts;
+        var asset = parts[imageNode->PartId].UldAsset;
+        return asset->AtkTexture.Resource->IconId;
+    }
+
+    private static void* SetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID)
+    {
+        if (IsWKSMissionChainBannerSelected(bannerID))
+            return SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
+
+        return ModuleConfig.HiddenBanners.GetValueOrDefault(bannerID)
+            ? null
+            : SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
+    }
 
     private class Config : ModuleConfiguration
     {
         // true - 隐藏; false - 维持
         public Dictionary<uint, bool> HiddenBanners = [];
-        public bool HideWKSMissionChain = false;
     }
     
     private static readonly List<uint> BannersData =
     [
         120031, 120032, 120055, 120081, 120082, 120083, 120084, 120085, 120086,
         120093, 120094, 120095, 120096, 120141, 120142, 121081, 121082, 121561,
-        121562, 121563, 128370, 128371, 128372, 128373, 128525, 128526
+        121562, 121563, 128370, 128371, 128372, 128373, 128525, 128526,
+        128527, 128528, 128529, 128530, 128531, 128532
     ];
 
     private static readonly HashSet<uint> DefaultEnabledBanners = [120031, 120032, 120055, 120095, 120096, 120141, 120142];
