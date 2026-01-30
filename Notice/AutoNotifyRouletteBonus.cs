@@ -7,6 +7,7 @@ using DailyRoutines.Abstracts;
 using Dalamud.Hooking;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Interface.Textures.TextureWraps;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 using ContentRoulette = Lumina.Excel.Sheets.ContentRoulette;
@@ -36,9 +37,9 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
     private static readonly FrozenDictionary<ContentsRouletteRole, RoleData> RoleDataMap = new Dictionary<ContentsRouletteRole, RoleData>
     {
-        [ContentsRouletteRole.Tank] = new(BitmapFontIcon.Tank, 37, KnownColor.DodgerBlue.ToVector4(), LuminaWrapper.GetAddonText(1082)),
-        [ContentsRouletteRole.Healer] = new(BitmapFontIcon.Healer, 504, KnownColor.LimeGreen.ToVector4(), LuminaWrapper.GetAddonText(1083)),
-        [ContentsRouletteRole.Dps] = new(BitmapFontIcon.DPS, 545, KnownColor.OrangeRed.ToVector4(), LuminaWrapper.GetAddonText(2786))
+        [ContentsRouletteRole.Tank] = new(BitmapFontIcon.Tank, 37, LuminaWrapper.GetAddonText(1082)),
+        [ContentsRouletteRole.Healer] = new(BitmapFontIcon.Healer, 504, LuminaWrapper.GetAddonText(1083)),
+        [ContentsRouletteRole.Dps] = new(BitmapFontIcon.DPS, 545, LuminaWrapper.GetAddonText(2786))
     }.ToFrozenDictionary();
 
     private static readonly ContentRoulette[] CachedRoulettes =
@@ -48,9 +49,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             .ToArray();
 
     private static Config ModuleConfig = null!;
-    private static ContentsRouletteRole[]? LastKnownRoles;
-    private static bool PendingRefreshAfterDuty;
-
+    private static ContentsRouletteRole[] LastKnownRoles = [];
     private static readonly CompSig SetContentRouletteRoleBonusSig = new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
     private delegate void SetContentRouletteRoleBonusDelegate(AgentContentsFinder* instance, void* data, uint bonusIndex);
     private static Hook<SetContentRouletteRoleBonusDelegate>? SetContentRouletteRoleBonusHook;
@@ -58,17 +57,16 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
-        if (LastKnownRoles is null)
+        if (LastKnownRoles.Length != ROULETTE_BONUS_ARRAY_SIZE)
         {
-            LastKnownRoles = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];                                                                                                                 
-            Array.Fill(LastKnownRoles, (ContentsRouletteRole)3);  
+            LastKnownRoles = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];
+            Array.Fill(LastKnownRoles, ContentsRouletteRole.None);
         }
 
         SetContentRouletteRoleBonusHook ??= SetContentRouletteRoleBonusSig.GetHook<SetContentRouletteRoleBonusDelegate>(SetContentRouletteRoleBonusDetour);
         SetContentRouletteRoleBonusHook.Enable();
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
-        PendingRefreshAfterDuty = DService.Instance().Condition[ConditionFlag.BoundByDuty];
     }
 
     protected override void Uninit()
@@ -96,17 +94,40 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp);
         if (!table) return;
 
-        ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-Roulette"), ImGuiTableColumnFlags.NoHeaderLabel, 0.3f);
-        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1082), ImGuiTableColumnFlags.None, 0.1f);
-        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1083), ImGuiTableColumnFlags.None, 0.1f);
-        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(2786), ImGuiTableColumnFlags.None, 0.1f);
-        ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete"), ImGuiTableColumnFlags.NoHeaderLabel, 0.1f);
-        ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-CurrentBouns"), ImGuiTableColumnFlags.None, 0.1f);
-        ImGui.TableHeadersRow();
+        ImGui.TableSetupColumn("##Roulette", ImGuiTableColumnFlags.None, 0.3f);
+        ImGui.TableSetupColumn("##Tank", ImGuiTableColumnFlags.None, 0.1f);
+        ImGui.TableSetupColumn("##Healer", ImGuiTableColumnFlags.None, 0.1f);
+        ImGui.TableSetupColumn("##Dps", ImGuiTableColumnFlags.None, 0.1f);
+        ImGui.TableSetupColumn("##OnlyIncomplete", ImGuiTableColumnFlags.NoHeaderLabel, 0.1f);
+        ImGui.TableSetupColumn("##RoleBonus", ImGuiTableColumnFlags.NoHeaderLabel, 0.1f);
 
-        ImGui.TableSetColumnIndex(4);
-        ImGui.Text(GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete"));
-        ImGuiOm.HelpMarker(GetLoc("AutoNotifyRouletteBonus-OnlyIncompleteHelp"));
+        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+
+        var headerTexts = new[]
+        {
+            LuminaWrapper.GetAddonText(8605),
+            LuminaWrapper.GetAddonText(1082),
+            LuminaWrapper.GetAddonText(1083),
+            LuminaWrapper.GetAddonText(2786),
+            GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete")
+        };
+
+        for (var i = 0; i < headerTexts.Length; i++)
+        {
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(headerTexts[i]);
+            if (i == 4)
+                ImGuiOm.HelpMarker(GetLoc("AutoNotifyRouletteBonus-OnlyIncompleteHelp"));
+        }
+        
+        var texture = DService.Instance().Texture.GetFromGame("ui/uld/ContentsFinder_hr1.tex").GetWrapOrEmpty();
+        var hasRoleBonusTexture = texture is { Width: > 0, Height: > 0 };
+        var invTexSize = hasRoleBonusTexture
+                             ? new Vector2(1f / texture.Width, 1f / texture.Height)
+                             : default;
+        
+        ImGui.TableNextColumn();
+        DrawRoleBonusHeaderIcons(texture, invTexSize, hasRoleBonusTexture);
 
         foreach (var roulette in CachedRoulettes)
         {
@@ -124,7 +145,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.DarkGray.ToVector4(), !isEnabled))
             {
                 ImGui.TableNextColumn();
-                ImGui.Text(roulette.Name.ToString());
+                ImGui.TextUnformatted(roulette.Name.ToString());
 
                 for (var role = 0; role <= 2; role++)
                 {
@@ -153,25 +174,16 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
                     ModuleConfig.Save(this);
 
                 ImGui.TableNextColumn();
-                if (LastKnownRoles is not null)
+                var bonusIndex = roulette.ContentRouletteRoleBonus.RowId;
+                if (bonusIndex is > 0 and < ROULETTE_BONUS_ARRAY_SIZE)
                 {
-                    var bonusIndex = roulette.ContentRouletteRoleBonus.RowId;
-                    if (bonusIndex is > 0 and < ROULETTE_BONUS_ARRAY_SIZE)
-                    {
-                        var currentRole = LastKnownRoles[bonusIndex];
-                        if (RoleDataMap.TryGetValue(currentRole, out var roleData))
-                            ImGui.TextColored(roleData.ImGuiColor, roleData.Name);
-                        else
-                            ImGui.Text("-");
-                    }
-                    else
-                    {
-                        ImGui.Text("-");
-                    }
+                    var currentRole = LastKnownRoles[bonusIndex];
+                    if (!DrawRoleBonusCellIcon(texture, invTexSize, hasRoleBonusTexture, currentRole))
+                        ImGui.TextUnformatted("-");
                 }
                 else
                 {
-                    ImGui.Text("-");
+                    ImGui.TextUnformatted("-");
                 }
             }
         }
@@ -186,18 +198,8 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     private static void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.BoundByDuty) return;
-        if (value)
-            PendingRefreshAfterDuty = true;
-        else
-            TryRefreshAfterDuty();
-    }
-
-    private static void TryRefreshAfterDuty()
-    {
-        if (!PendingRefreshAfterDuty) return;
-        
-        PendingRefreshAfterDuty = false;
-        OnRoleBonusUpdated();
+        if (!value)
+            OnRoleBonusUpdated();
     }
 
     private static void OnRoleBonusUpdated()
@@ -209,7 +211,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
         var currentRoles = agent->ContentRouletteRoleBonuses.ToArray();
 
-        for (var index = 1; index < ROULETTE_BONUS_ARRAY_SIZE; index++)
+        for (byte index = 1; index < ROULETTE_BONUS_ARRAY_SIZE; index++)
         {
             var currentRole = currentRoles[index];
             var lastRole = LastKnownRoles[index];
@@ -218,17 +220,16 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
             LastKnownRoles[index] = currentRole;
 
-            if (!RouletteIndexToRowID.TryGetValue((byte)index, out var rowId)) continue;
+            if (!RouletteIndexToRowID.TryGetValue(index, out var rowId)) continue;
             if (!ModuleConfig.Roulettes.TryGetValue(rowId, out var config)) continue;
 
-            var roleIndex = (int)currentRole;
-            if (roleIndex > 2) continue;
+            if (currentRole > ContentsRouletteRole.Dps) continue;
 
-            var shouldAlert = roleIndex switch
+            var shouldAlert = currentRole switch
             {
-                0 => config.Tank,
-                1 => config.Healer,
-                2 => config.DPS
+                ContentsRouletteRole.Tank => config.Tank,
+                ContentsRouletteRole.Healer => config.Healer,
+                ContentsRouletteRole.Dps => config.DPS,
             };
 
             if (!shouldAlert) continue;
@@ -275,10 +276,48 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         return instanceContent->IsRouletteComplete((byte)rowID);
     }
 
+    private static void DrawRoleBonusHeaderIcons(IDalamudTextureWrap texture, Vector2 invTexSize, bool hasTexture)
+    {
+        if (!hasTexture)
+        {
+            ImGui.TextUnformatted("-");
+            return;
+        }
+
+        for (byte role = 0; role <= 2; role++)
+        {
+            if (role > 0)
+            {
+                ImGui.SameLine();
+                ImGui.TextUnformatted("/");
+                ImGui.SameLine();
+            }
+
+            DrawRoleBonusIcon(texture, invTexSize, role);
+        }
+    }
+    
+    private static bool DrawRoleBonusCellIcon(IDalamudTextureWrap texture, Vector2 invTexSize, bool hasTexture, ContentsRouletteRole role)
+    {
+        if (!hasTexture) return false;
+        if ((byte)role > 2) return false;
+
+        DrawRoleBonusIcon(texture, invTexSize, (byte)role);
+        return true;
+    }
+
+    private static void DrawRoleBonusIcon(IDalamudTextureWrap texture, Vector2 invTexSize, byte role)
+    {
+        var iconPosPx = new Vector2(40f * role, 216f);
+        var uv0 = iconPosPx * invTexSize;
+        var uv1 = (iconPosPx + new Vector2(40f, 40f)) * invTexSize;
+
+        ImGui.Image(texture.Handle, ScaledVector2(15f), uv0, uv1);
+    }
+
     private sealed record RoleData(
         BitmapFontIcon Icon,
         ushort UIColor,
-        Vector4 ImGuiColor,
         string Name
     );
 
