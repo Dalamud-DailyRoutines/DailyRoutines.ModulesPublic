@@ -18,7 +18,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoNotifyRouletteBonus"),
+        Title = GetLoc("AutoNotifyRouletteBonusTitle"),
         Description = GetLoc("AutoNotifyRouletteBonusDescription"),
         Category = ModuleCategories.Notice,
         Author = ["BoxingBunny"]
@@ -96,7 +96,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp);
         if (!table) return;
 
-        ImGui.TableSetupColumn(GetLoc("Roulette"), ImGuiTableColumnFlags.NoHeaderLabel, 0.3f);
+        ImGui.TableSetupColumn(GetLoc("AutoNotifyRouletteBonus-Roulette"), ImGuiTableColumnFlags.NoHeaderLabel, 0.3f);
         ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1082), ImGuiTableColumnFlags.None, 0.1f);
         ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1083), ImGuiTableColumnFlags.None, 0.1f);
         ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(2786), ImGuiTableColumnFlags.None, 0.1f);
@@ -262,7 +262,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         }
 
         if (ModuleConfig.SendNotification)
-            NotificationInfo($"{rouletteName} -> {roleData.Name}", GetLoc("AutoNotifyRouletteBonus"));
+            NotificationInfo($"{rouletteName} -> {roleData.Name}", GetLoc("AutoNotifyRouletteBonusTitle"));
 
         if (ModuleConfig.SendTTS)
             Speak($"{rouletteName} {roleData.Name}");
