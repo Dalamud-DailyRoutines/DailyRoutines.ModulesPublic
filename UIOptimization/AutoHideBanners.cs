@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using System.Numerics;
 using DailyRoutines.Abstracts;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using Dalamud.Interface;
-using Dalamud.Plugin.Services;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
@@ -44,15 +45,15 @@ public unsafe class AutoHideBanners : DailyModuleBase
         
         SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(SetImageTextureDetour);
         SetImageTextureHook.Enable();
-        FrameworkManager.Instance().Reg(OnFrameworkUpdate);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, WKSMissionChainAddonName, OnAddon);
     }
 
     protected override void Uninit() =>
-        FrameworkManager.Instance().Unreg(OnFrameworkUpdate);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("HideWKSMissionChain"), ref ModuleConfig.HideWKSMissionChain))
+        if (ImGui.Checkbox(GetLoc("AutoHideBanners-HideWKSMissionChain"), ref ModuleConfig.HideWKSMissionChain))
             SaveConfig(ModuleConfig);
         
         var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - (2 * ImGui.GetStyle().ItemSpacing.X), 400f * GlobalFontScale);
@@ -111,14 +112,14 @@ public unsafe class AutoHideBanners : DailyModuleBase
         }
     }
     
-    private static void OnFrameworkUpdate(IFramework _)
+    private static void OnAddon(AddonEvent type, AddonArgs args)
     {
         if (!ModuleConfig.HideWKSMissionChain)
             return;
 
-        if (!TryGetAddonByName(WKSMissionChainAddonName, out var addon))
-            return;
-
+        var addon = (AtkUnitBase*)args.Addon.Address;
+        if (addon == null) return;
+        
         if (addon->IsVisible)
             addon->IsVisible = false;
     }
@@ -147,4 +148,3 @@ public unsafe class AutoHideBanners : DailyModuleBase
     private static readonly Vector4 ButtonHoveredColor  = ImGui.ColorConvertU32ToFloat4(ImGui.GetColorU32(ImGuiCol.ButtonHovered)).WithAlpha(0.4f);
     private static readonly Vector4 ButtonSelectedColor = ImGui.ColorConvertU32ToFloat4(ImGui.GetColorU32(ImGuiCol.Button)).WithAlpha(0.6f);
 }
-
