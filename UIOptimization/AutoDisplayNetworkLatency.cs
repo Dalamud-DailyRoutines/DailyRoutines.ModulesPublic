@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Helpers;
+using DailyRoutines.Managers;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Newtonsoft.Json;
@@ -149,6 +150,8 @@ public partial class AutoDisplayNetworkLatency : DailyModuleBase
             using (FontManager.Instance().UIFont80.Push())
             {
                 var locText = $"{info.CountryName} - {info.CityName}";
+                if (Monitor.ISPInfo is { } ispInfo)
+                    locText += $" / {ispInfo.Translated}";
 
                 if (!string.IsNullOrWhiteSpace(locText))
                 {
@@ -290,10 +293,13 @@ public partial class AutoDisplayNetworkLatency : DailyModuleBase
                                               ? $"{observedAddress}:{observedPort} -> {address}:{port}"
                                               : $"{address}:{port}";
 
-                        Entry.Tooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.Meteor)
-                                                             .AddText(tooltipText)
-                                                             .AddText($" ({Monitor.AddressInfo.CountryName} - {Monitor.AddressInfo.CityName})")
-                                                             .Build();
+                        var builder = new SeStringBuilder().AddIcon(BitmapFontIcon.Meteor)
+                                                           .AddText(tooltipText);
+
+                        if (Monitor.AddressInfo is { } info)
+                            builder.AddText($" ({info.CountryName} - {info.CityName})");
+
+                        Entry.Tooltip = builder.Build();
                     }
                 );
 
@@ -318,17 +324,21 @@ public partial class AutoDisplayNetworkLatency : DailyModuleBase
         private unsafe byte* buffer;
         private        int   bufferSize;
 
-        public IPAddress      ServerAddress         { get; private set; } = IPAddress.Loopback;
-        public ushort         ServerPort            { get; private set; }
-        public IPAddress      ObservedServerAddress { get; private set; } = IPAddress.Loopback;
-        public ushort         ObservedServerPort    { get; private set; }
-        public IPLocationDTO? AddressInfo           { get; private set; }
-        public long           LastPing              { get; private set; } = -1;
-        public float[]        History               { get; private set; } = new float[100];
-        public int            HistoryIndex          { get; private set; }
-        public int            FilledCount           { get; private set; }
+        public IPAddress              ServerAddress         { get; private set; } = IPAddress.Loopback;
+        public ushort                 ServerPort            { get; private set; }
+        public IPAddress              ObservedServerAddress { get; private set; } = IPAddress.Loopback;
+        public ushort                 ObservedServerPort    { get; private set; }
+        public IPLocationDTO?         AddressInfo           { get; private set; }
+        public ISPTranslatorResponse? ISPInfo               { get; private set; }
+        public long                   LastPing              { get; private set; } = -1;
+        public float[]                History               { get; private set; } = new float[100];
+        public int                    HistoryIndex          { get; private set; }
+        public int                    FilledCount           { get; private set; }
 
         private int needToRefreshAddress;
+
+        private CancellationTokenSource? ipInfoCancelSource;
+        private Task?                    ipInfoTask;
 
         private const string TARGET_IP_QUERY_API = "http://ip-api.com/json/{0}?lang={1}";
 
@@ -356,13 +366,14 @@ public partial class AutoDisplayNetworkLatency : DailyModuleBase
             {
                 if (UpdateAddressInfo())
                 {
-                    if (IsPublicAddress(ServerAddress) && HTTPClientHelper.Get() is var httpClient)
-                    {
-                        var response = await httpClient.GetStringAsync(string.Format(TARGET_IP_QUERY_API, ServerAddress, CultureInfo.CurrentUICulture));
-                        AddressInfo = JsonConvert.DeserializeObject<IPLocationDTO>(response);
-                    }
+                    if (IsPublicAddress(ServerAddress))
+                        RefreshIPInfo(ServerAddress);
                     else
+                    {
+                        ipInfoCancelSource?.Cancel();
                         AddressInfo = null;
+                        ISPInfo     = null;
+                    }
                 }
 
                 if (ServerAddress.Equals(IPAddress.Loopback))
@@ -386,6 +397,48 @@ public partial class AutoDisplayNetworkLatency : DailyModuleBase
                 HistoryIndex          = (HistoryIndex + 1) % History.Length;
                 if (FilledCount < History.Length) FilledCount++;
             }
+        }
+
+        private void RefreshIPInfo(IPAddress address)
+        {
+            ipInfoCancelSource?.Cancel();
+            ipInfoCancelSource?.Dispose();
+            ipInfoCancelSource = new();
+
+            ISPInfo     = null;
+            AddressInfo = null;
+
+            var token = ipInfoCancelSource.Token;
+            ipInfoTask = Task.Run(async () =>
+            {
+                try
+                {
+                    if (HTTPClientHelper.Get() is not { } httpClient) return;
+
+                    var response = await httpClient.GetStringAsync(string.Format(TARGET_IP_QUERY_API, address, CultureInfo.CurrentUICulture), token);
+                    if (token.IsCancellationRequested) return;
+
+                    if (JsonConvert.DeserializeObject<IPLocationDTO>(response) is { } newInfo)
+                    {
+                        if (token.IsCancellationRequested) return;
+
+                        ISPInfo = await ISPTranslatorRequest.TranslateAsync(newInfo.InternetServiceProvider);
+                        if (await ISPTranslatorRequest.TranslateAsync(newInfo.CityName) is { } cityNameInfo)
+                            newInfo.CityName = cityNameInfo.Translated;
+
+                        AddressInfo = newInfo;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // ignored
+                }
+                catch (Exception)
+                {
+                    AddressInfo = null;
+                    ISPInfo     = null;
+                }
+            }, token);
         }
 
         private bool UpdateAddressInfo()
@@ -788,6 +841,9 @@ public partial class AutoDisplayNetworkLatency : DailyModuleBase
             DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
             Volatile.Write(ref needToRefreshAddress, 0);
+
+            ipInfoCancelSource?.Cancel();
+            ipInfoCancelSource?.Dispose();
 
             pingSender.Dispose();
 
