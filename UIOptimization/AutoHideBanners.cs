@@ -27,7 +27,7 @@ public unsafe class AutoHideBanners : DailyModuleBase
     private static          Hook<SetImageTextureDelegate>? SetImageTextureHook;
     
     private static Config ModuleConfig = null!;
-    private static readonly HashSet<uint> WKSMissionChainBannerIds = [128527, 128528, 128529, 128530, 128531, 128532];
+    private static readonly HashSet<uint> WKSMissionChainBannerIDs = [128527, 128528, 128529, 128530, 128531, 128532];
 
     protected override void Init()
     {
@@ -125,18 +125,18 @@ public unsafe class AutoHideBanners : DailyModuleBase
             var node = addon->UldManager.NodeList[i];
             if (node == null || node->Type != NodeType.Image) continue;
 
-            var iconId = GetImageNodeIconId(node->GetAsAtkImageNode());
-            if (iconId == 0) continue;
-            if (IsWKSMissionChainBannerSelected(iconId)) return true;
+            var iconID = GetImageNodeIconID(node->GetAsAtkImageNode());
+            if (iconID == 0) continue;
+            if (IsWKSMissionChainBannerSelected(iconID)) return true;
         }
 
         return false;
     }
 
-    private static bool IsWKSMissionChainBannerSelected(uint iconId) =>
-        WKSMissionChainBannerIds.Contains(iconId) && ModuleConfig.HiddenBanners.GetValueOrDefault(iconId);
+    private static bool IsWKSMissionChainBannerSelected(uint iconID) =>
+        WKSMissionChainBannerIDs.Contains(iconID) && ModuleConfig.HiddenBanners.GetValueOrDefault(iconID);
 
-    private static uint GetImageNodeIconId(AtkImageNode* imageNode)
+    private static uint GetImageNodeIconID(AtkImageNode* imageNode)
     {
         var parts = imageNode->PartsList->Parts;
         var asset = parts[imageNode->PartId].UldAsset;
