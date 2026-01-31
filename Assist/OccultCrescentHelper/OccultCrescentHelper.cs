@@ -192,7 +192,6 @@ public partial class OccultCrescentHelper : DailyModuleBase
         public float LeftTimeMoveToEvent  = 90;
 
         // 岛 ID
-        public bool IsEnabledIslandIDDTR  = true;
         public bool IsEnabledIslandIDChat = true;
 
         // 修改 HUD
