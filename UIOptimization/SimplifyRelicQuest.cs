@@ -11,13 +11,13 @@ using OmenTools.Helpers;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class easyRelicQuest : DailyModuleBase
+public unsafe class EasyRelicQuest : DailyModuleBase
 {
     // 定义模块基础信息
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("easyRelicQuestTitle"),
-        Description = GetLoc("easyRelicQuestDescription"),
+        Title = GetLoc("EasyRelicQuestTitle"),
+        Description = GetLoc("EasyRelicQuestDescription"),
         Category = ModuleCategories.UIOptimization,
         Author = ["PunishXIV/yimo"]
     };
@@ -114,7 +114,7 @@ public unsafe class easyRelicQuest : DailyModuleBase
                 }
                 catch (Exception e)
                 {
-                    DService.Instance().Log.Error(e, "模块 easyRelicQuest 处理 SelectIconString 插件时发生异常");
+                    DService.Instance().Log.Error(e, "模块 EasyRelicQuest 处理 SelectIconString 插件时发生异常");
                 }
 
                 break;
@@ -140,7 +140,7 @@ public unsafe class easyRelicQuest : DailyModuleBase
                 }
                 catch (Exception e)
                 {
-                    DService.Instance().Log.Error(e, "模块 easyRelicQuest 处理 SelectString 插件时发生异常");
+                    DService.Instance().Log.Error(e, "模块 EasyRelicQuest 处理 SelectString 插件时发生异常");
                 }
 
                 break;
@@ -174,7 +174,7 @@ public unsafe class easyRelicQuest : DailyModuleBase
         }
         catch (Exception e)
         {
-            DService.Instance().Log.Error(e, "模块 easyRelicQuest 更新弹出文本时发生异常");
+            DService.Instance().Log.Error(e, "模块 EasyRelicQuest 更新弹出文本时发生异常");
         }
     }
 }
