@@ -17,6 +17,7 @@ using KamiToolKit.Classes;
 using KamiToolKit.Timelines;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
+using KamiToolKit.Overlay;
 using Lumina.Excel.Sheets;
 using Action = Lumina.Excel.Sheets.Action;
 using ActionKind = FFXIVClientStructs.FFXIV.Client.UI.Agent.ActionKind;
@@ -30,12 +31,13 @@ public partial class OccultCrescentHelper
     {
         private static Hook<AgentShowDelegate>? AgentMKDSupportJobShowHook;
 
-        private static TextButtonNode? BuffButton;
         private static TextButtonNode? SettingButton;
         private static TextButtonNode? SupportJobChangeButton;
         private static IconButtonNode? MapButton;
 
         public static AddonDRMKDSupportJobChange? SupportJobChangeAddon;
+
+        private static OverlayController? OverlayController;
 
         private static int DragDropJobIndex = -1;
         
@@ -46,7 +48,7 @@ public partial class OccultCrescentHelper
         public override void Init()
         {
             OthersTaskHelper ??= new() { TimeoutMS = 30_000 };
-
+            
             var addedJobs        = ModuleConfig.AddonSupportJobOrder.ToHashSet();
             var isAnyNewJobOrder = false;
 
@@ -84,6 +86,32 @@ public partial class OccultCrescentHelper
                 AgentMKDSupportJobShowDetour
             );
             AgentMKDSupportJobShowHook.Enable();
+        }
+        
+        public override void Uninit()
+        {
+            AgentMKDSupportJobShowHook?.Dispose();
+            AgentMKDSupportJobShowHook = null;
+
+            DService.Instance().AddonLifecycle.UnregisterListener(OnActionContents);
+
+            DService.Instance().AddonLifecycle.UnregisterListener(OnLogin);
+
+            DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+            DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+            OnAddon(AddonEvent.PreFinalize, null);
+
+            OthersTaskHelper?.Abort();
+            OthersTaskHelper?.Dispose();
+            OthersTaskHelper = null;
+
+            SupportJobChangeAddon?.Dispose();
+            SupportJobChangeAddon = null;
+            
+            OverlayController?.Dispose();
+            OverlayController = null;
+
+            IsJustLogin = false;
         }
 
         public override void DrawConfig()
@@ -259,31 +287,18 @@ public partial class OccultCrescentHelper
             ImGui.SameLine(0, 8f * GlobalFontScale);
             if (ImGui.Checkbox("###HideDutyCommand", ref ModuleConfig.IsEnabledHideDutyCommand))
                 ModuleConfig.Save(MainModule);
+            
+            ImGui.NewLine();
+            
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal"));
+            ImGuiOm.HelpMarker(GetLoc("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal-Help"), 20f * GlobalFontScale);
+
+            ImGui.SameLine(0, 8f * GlobalFontScale);
+            if (ImGui.Checkbox("###FastUseKnowledgeCrystal", ref ModuleConfig.IsEnabledKnowledgeCrystalFastUse))
+                ModuleConfig.Save(MainModule);
         }
-
-        public override void Uninit()
-        {
-            AgentMKDSupportJobShowHook?.Dispose();
-            AgentMKDSupportJobShowHook = null;
-
-            DService.Instance().AddonLifecycle.UnregisterListener(OnActionContents);
-
-            DService.Instance().AddonLifecycle.UnregisterListener(OnLogin);
-
-            DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-            DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-            OnAddon(AddonEvent.PreFinalize, null);
-
-            OthersTaskHelper?.Abort();
-            OthersTaskHelper?.Dispose();
-            OthersTaskHelper = null;
-
-            SupportJobChangeAddon?.Dispose();
-            SupportJobChangeAddon = null;
-
-            IsJustLogin = false;
-        }
-
+        
         private static void AgentMKDSupportJobShowDetour(AgentInterface* agent)
         {
             if (!ModuleConfig.IsEnabledModifyInfoHUD)
@@ -302,6 +317,9 @@ public partial class OccultCrescentHelper
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
             {
+                OverlayController?.Dispose();
+                OverlayController = null;
+
                 IsJustLogin = false;
 
                 if (GameState.TerritoryType == 1278 && ModuleConfig.IsEnabledAutoEnableDisablePlugins)
@@ -319,9 +337,11 @@ public partial class OccultCrescentHelper
 
                 return;
             }
+            
+            OverlayController ??= new();
+            OverlayController.CreateNode(() => new LongTimeBuffButton());
 
             var islandID = GetIslandID();
-
             if (ModuleConfig.IsEnabledIslandIDChat)
             {
                 var message = new SeStringBuilder()
@@ -388,54 +408,22 @@ public partial class OccultCrescentHelper
                 case AddonEvent.PostDraw:
                     if (MKDInfo == null) return;
 
-                    if (ModuleConfig.IsEnabledModifyInfoHUD && BuffButton == null)
+                    if (ModuleConfig.IsEnabledModifyInfoHUD && SettingButton == null)
                     {
                         var textNode = MKDInfo->GetTextNodeById(19);
                         if (textNode != null)
                             textNode->SetText($"{GetLoc("OccultCrescentHelper-OthersManager-IslandID")}: {GetIslandID()}");
                     }
-                    
-                    if (ModuleConfig.IsEnabledModifyInfoHUD && BuffButton == null)
+
+                    if (ModuleConfig.IsEnabledModifyInfoHUD && SettingButton == null)
                     {
-                        BuffButton = new()
-                        {
-                            Position    = new(-1f, 32f),
-                            Size        = new(48, 24),
-                            IsVisible   = true,
-                            String      = new SeStringBuilder().AddIcon(BitmapFontIcon.ElementalLevel).Build().Encode(),
-                            TextTooltip = GetLoc("OccultCrescentHelper-Command-PBuff-Help"),
-                            OnClick     = () => ChatManager.Instance().SendMessage("/pdr pbuff")
-                        };
-
-                        BuffButton.AddColor      = new(0, 0.1254902f, 0.5019608f);
-                        BuffButton.MultiplyColor = new(0.39215687f);
-
-                        BuffButton.BackgroundNode.IsVisible = false;
-
-                        BuffButton.AttachNode(MKDInfo->GetNodeById(20));
-
-                        var jobButton = MKDInfo->GetComponentButtonById(34);
-                        if (jobButton != null)
-                            jobButton->OwnerNode->SetPositionFloat(0, 56);
-
-                        var starButton = MKDInfo->GetImageNodeById(33);
-                        if (starButton != null)
-                            starButton->SetPositionFloat(0, 12);
-
                         var newJobNotifyButton = MKDInfo->GetImageNodeById(24);
-
                         if (newJobNotifyButton != null)
                         {
                             newJobNotifyButton->ToggleVisibility(false);
                             newJobNotifyButton->SetAlpha(0);
                         }
-                    }
-
-                    if (Throttler.Throttle("OccultCrescentHelper-OthersManager-RefreshBuffButton"))
-                        BuffButton.Alpha = !DService.Instance().Condition[ConditionFlag.InCombat] && CrescentSupportJob.TryFindKnowledgeCrystal(out _) ? 1f : 0.6f;
-
-                    if (ModuleConfig.IsEnabledModifyInfoHUD && SettingButton == null)
-                    {
+                        
                         SettingButton = new()
                         {
                             Position    = new(41, 94),
@@ -497,9 +485,6 @@ public partial class OccultCrescentHelper
 
                     break;
                 case AddonEvent.PreFinalize:
-                    BuffButton?.Dispose();
-                    BuffButton = null;
-
                     SettingButton?.Dispose();
                     SettingButton = null;
 
@@ -1552,6 +1537,50 @@ public partial class OccultCrescentHelper
                         4 => ActionSlotHiddenFlag.Action4,
                         _ => ActionSlotHiddenFlag.Action0
                     };
+                }
+            }
+        }
+
+        private class LongTimeBuffButton : OverlayNode
+        {
+            public override OverlayLayer OverlayLayer     => OverlayLayer.BehindUserInterface;
+            public override bool         HideWithNativeUi => true;
+
+            private readonly TextButtonNode buttonNode;
+
+            public LongTimeBuffButton()
+            {
+                buttonNode = new()
+                {
+                    Size        = new(48, 24),
+                    String      = new SeStringBuilder().AddIcon(BitmapFontIcon.ElementalLevel).Build().Encode(),
+                    TextTooltip = GetLoc("OccultCrescentHelper-Command-PBuff-Help"),
+                    OnClick     = () => ChatManager.Instance().SendMessage("/pdr pbuff"),
+                    Scale       = new(3)
+                };
+                buttonNode.AttachNode(this);
+            }
+
+            protected override void OnUpdate()
+            {
+                if (ModuleConfig.IsEnabledKnowledgeCrystalFastUse                                        &&
+                    GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent                &&
+                    !OccupiedInEvent                                                                     &&
+                    CrescentSupportJob.TryFindKnowledgeCrystal(out var gameObject)                       &&
+                    GameViewHelper.WorldToScreen(gameObject.Position, out var screenPos, out var inView) &&
+                    inView)
+                {
+                    buttonNode.IsEnabled = LocalPlayerState.DistanceToObject2DSquared(gameObject) <= 10;
+
+                    buttonNode.IsVisible = true;
+                    buttonNode.Position  = screenPos - buttonNode.Node->GetNodeState().Size / 2;
+
+                    IsVisible = true;
+                }
+                else
+                {
+                    buttonNode.IsVisible = false;
+                    IsVisible            = false;
                 }
             }
         }

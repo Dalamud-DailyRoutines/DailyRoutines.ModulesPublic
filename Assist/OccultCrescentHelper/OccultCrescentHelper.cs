@@ -196,6 +196,9 @@ public partial class OccultCrescentHelper : DailyModuleBase
 
         // 修改 HUD
         public bool IsEnabledModifyInfoHUD = true;
+        
+        // 显示知见水晶
+        public bool IsEnabledKnowledgeCrystalFastUse = true;
 
         // 辅助武僧
         public bool IsEnabledMonkKickNoMove = true;

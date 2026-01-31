@@ -220,7 +220,8 @@ public partial class OccultCrescentHelper
         // TODO: 使用自由人的探求心技能
         private static void ExecuteBuffSequence()
         {
-            if (!CrescentSupportJob.TryFindKnowledgeCrystal(out _))
+            if (!CrescentSupportJob.TryFindKnowledgeCrystal(out var gameObject) ||
+                LocalPlayerState.DistanceToObject2DSquared(gameObject) > 10)
             {
                 NotificationError(GetLoc("OccultCrescentHelper-OthersManager-Notification-CrystalNotFound"));
                 return;
