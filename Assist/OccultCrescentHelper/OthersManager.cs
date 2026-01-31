@@ -38,9 +38,7 @@ public partial class OccultCrescentHelper
         public static AddonDRMKDSupportJobChange? SupportJobChangeAddon;
 
         private static int DragDropJobIndex = -1;
-
-        private static IDtrBarEntry? Entry;
-
+        
         private static TaskHelper? OthersTaskHelper;
 
         private static bool IsJustLogin;
@@ -97,9 +95,6 @@ public partial class OccultCrescentHelper
 
             using (ImRaii.PushIndent())
             {
-                if (ImGui.Checkbox($"{GetLoc("OccultCrescentHelper-OthersManager-IslandIDInDtr")}", ref ModuleConfig.IsEnabledIslandIDDTR))
-                    ModuleConfig.Save(MainModule);
-
                 if (ImGui.Checkbox($"{GetLoc("OccultCrescentHelper-OthersManager-IslandIDInChat")}", ref ModuleConfig.IsEnabledIslandIDChat))
                     ModuleConfig.Save(MainModule);
             }
@@ -283,9 +278,6 @@ public partial class OccultCrescentHelper
             OthersTaskHelper?.Dispose();
             OthersTaskHelper = null;
 
-            Entry?.Remove();
-            Entry = null;
-
             SupportJobChangeAddon?.Dispose();
             SupportJobChangeAddon = null;
 
@@ -311,9 +303,6 @@ public partial class OccultCrescentHelper
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
             {
                 IsJustLogin = false;
-
-                Entry?.Remove();
-                Entry = null;
 
                 if (GameState.TerritoryType == 1278 && ModuleConfig.IsEnabledAutoEnableDisablePlugins)
                 {
@@ -343,11 +332,7 @@ public partial class OccultCrescentHelper
                               .Build();
                 Chat(message);
             }
-
-            Entry       ??= DService.Instance().DTRBar.Get("DailyRoutines-OccultCrescentHelper-IslandID");
-            Entry.Text  =   $"{GetLoc("OccultCrescentHelper-OthersManager-IslandID")}: {islandID}";
-            Entry.Shown =   ModuleConfig.IsEnabledIslandIDDTR;
-
+            
             if (!IsJustLogin                                                  &&
                 ModuleConfig.IsEnabledModifyDefaultPositionEnterZoneSouthHorn &&
                 BetweenAreas)
@@ -403,6 +388,13 @@ public partial class OccultCrescentHelper
                 case AddonEvent.PostDraw:
                     if (MKDInfo == null) return;
 
+                    if (ModuleConfig.IsEnabledModifyInfoHUD && BuffButton == null)
+                    {
+                        var textNode = MKDInfo->GetTextNodeById(19);
+                        if (textNode != null)
+                            textNode->SetText($"{GetLoc("OccultCrescentHelper-OthersManager-IslandID")}: {GetIslandID()}");
+                    }
+                    
                     if (ModuleConfig.IsEnabledModifyInfoHUD && BuffButton == null)
                     {
                         BuffButton = new()
@@ -503,14 +495,6 @@ public partial class OccultCrescentHelper
                         SupportJobChangeButton.AttachNode(MKDInfo->GetNodeById(20));
                     }
 
-                    if (Throttler.Throttle("OthersManager-OthersManager-IslandID-DTR"))
-                    {
-                        var islandID = GetIslandID();
-                        Entry       ??= DService.Instance().DTRBar.Get("DailyRoutines-OccultCrescentHelper-IslandID");
-                        Entry.Text  =   $"{GetLoc("OccultCrescentHelper-OthersManager-IslandID")}: {islandID}";
-                        Entry.Shown =   ModuleConfig.IsEnabledIslandIDDTR;
-                    }
-
                     break;
                 case AddonEvent.PreFinalize:
                     BuffButton?.Dispose();
@@ -524,9 +508,6 @@ public partial class OccultCrescentHelper
 
                     SupportJobChangeButton?.Dispose();
                     SupportJobChangeButton = null;
-
-                    Entry?.Remove();
-                    Entry = null;
                     break;
             }
         }
