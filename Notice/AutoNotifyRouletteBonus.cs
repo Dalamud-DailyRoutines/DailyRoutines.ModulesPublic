@@ -5,7 +5,6 @@ using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
 using Dalamud.Hooking;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Textures.TextureWraps;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -66,16 +65,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         SetContentRouletteRoleBonusHook ??= SetContentRouletteRoleBonusSig.GetHook<SetContentRouletteRoleBonusDelegate>(SetContentRouletteRoleBonusDetour);
         SetContentRouletteRoleBonusHook.Enable();
 
-        DService.Instance().Condition.ConditionChange += OnConditionChanged;
+        DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
     }
 
-    protected override void Uninit()
-    {
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-
-        SetContentRouletteRoleBonusHook?.Dispose();
-        SetContentRouletteRoleBonusHook = null;
-    }
+    protected override void Uninit() =>
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
     protected override void ConfigUI()
     {
@@ -198,12 +192,8 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         OnRoleBonusUpdated();
     }
 
-    private static void OnConditionChanged(ConditionFlag flag, bool value)
-    {
-        if (flag != ConditionFlag.BoundByDuty) return;
-        if (!value)
-            OnRoleBonusUpdated();
-    }
+    private static void OnZoneChanged(ushort zone) => 
+        OnRoleBonusUpdated();
 
     private static void OnRoleBonusUpdated()
     {
