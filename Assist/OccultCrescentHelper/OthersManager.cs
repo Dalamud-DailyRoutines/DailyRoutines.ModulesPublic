@@ -7,17 +7,16 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
-using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Classes;
-using KamiToolKit.Timelines;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Overlay;
+using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
 using Action = Lumina.Excel.Sheets.Action;
 using ActionKind = FFXIVClientStructs.FFXIV.Client.UI.Agent.ActionKind;
@@ -27,7 +26,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {
-    public unsafe class OthersManager(OccultCrescentHelper mainModule) : BaseIslandModule(mainModule)
+    public unsafe class OthersManager
+    (
+        OccultCrescentHelper mainModule
+    ) : BaseIslandModule(mainModule)
     {
         private static Hook<AgentShowDelegate>? AgentMKDSupportJobShowHook;
 
@@ -40,7 +42,7 @@ public partial class OccultCrescentHelper
         private static OverlayController? OverlayController;
 
         private static int DragDropJobIndex = -1;
-        
+
         private static TaskHelper? OthersTaskHelper;
 
         private static bool IsJustLogin;
@@ -48,7 +50,7 @@ public partial class OccultCrescentHelper
         public override void Init()
         {
             OthersTaskHelper ??= new() { TimeoutMS = 30_000 };
-            
+
             var addedJobs        = ModuleConfig.AddonSupportJobOrder.ToHashSet();
             var isAnyNewJobOrder = false;
 
@@ -87,7 +89,7 @@ public partial class OccultCrescentHelper
             );
             AgentMKDSupportJobShowHook.Enable();
         }
-        
+
         public override void Uninit()
         {
             AgentMKDSupportJobShowHook?.Dispose();
@@ -107,7 +109,7 @@ public partial class OccultCrescentHelper
 
             SupportJobChangeAddon?.Dispose();
             SupportJobChangeAddon = null;
-            
+
             OverlayController?.Dispose();
             OverlayController = null;
 
@@ -287,9 +289,9 @@ public partial class OccultCrescentHelper
             ImGui.SameLine(0, 8f * GlobalFontScale);
             if (ImGui.Checkbox("###HideDutyCommand", ref ModuleConfig.IsEnabledHideDutyCommand))
                 ModuleConfig.Save(MainModule);
-            
+
             ImGui.NewLine();
-            
+
             ImGui.AlignTextToFramePadding();
             ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal"));
             ImGuiOm.HelpMarker(GetLoc("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal-Help"), 20f * GlobalFontScale);
@@ -298,7 +300,7 @@ public partial class OccultCrescentHelper
             if (ImGui.Checkbox("###FastUseKnowledgeCrystal", ref ModuleConfig.IsEnabledKnowledgeCrystalFastUse))
                 ModuleConfig.Save(MainModule);
         }
-        
+
         private static void AgentMKDSupportJobShowDetour(AgentInterface* agent)
         {
             if (!ModuleConfig.IsEnabledModifyInfoHUD)
@@ -337,11 +339,12 @@ public partial class OccultCrescentHelper
 
                 return;
             }
-            
+
             OverlayController ??= new();
             OverlayController.CreateNode(() => new LongTimeBuffButton());
 
             var islandID = GetIslandID();
+
             if (ModuleConfig.IsEnabledIslandIDChat)
             {
                 var message = new SeStringBuilder()
@@ -352,7 +355,7 @@ public partial class OccultCrescentHelper
                               .Build();
                 Chat(message);
             }
-            
+
             if (!IsJustLogin                                                  &&
                 ModuleConfig.IsEnabledModifyDefaultPositionEnterZoneSouthHorn &&
                 BetweenAreas)
@@ -418,12 +421,13 @@ public partial class OccultCrescentHelper
                     if (ModuleConfig.IsEnabledModifyInfoHUD && SettingButton == null)
                     {
                         var newJobNotifyButton = MKDInfo->GetImageNodeById(24);
+
                         if (newJobNotifyButton != null)
                         {
                             newJobNotifyButton->ToggleVisibility(false);
                             newJobNotifyButton->SetAlpha(0);
                         }
-                        
+
                         SettingButton = new()
                         {
                             Position    = new(41, 94),
@@ -1548,6 +1552,9 @@ public partial class OccultCrescentHelper
 
             private readonly TextButtonNode buttonNode;
 
+            private bool    isAnyNearby;
+            private Vector3 nearbyPosition;
+
             public LongTimeBuffButton()
             {
                 buttonNode = new()
@@ -1563,19 +1570,32 @@ public partial class OccultCrescentHelper
 
             protected override void OnUpdate()
             {
-                if (ModuleConfig.IsEnabledKnowledgeCrystalFastUse                                        &&
-                    GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent                &&
-                    !OccupiedInEvent                                                                     &&
-                    CrescentSupportJob.TryFindKnowledgeCrystal(out var gameObject)                       &&
-                    GameViewHelper.WorldToScreen(gameObject.Position, out var screenPos, out var inView) &&
-                    inView)
+                if (ModuleConfig.IsEnabledKnowledgeCrystalFastUse                         &&
+                    GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent &&
+                    !OccupiedInEvent)
                 {
-                    buttonNode.IsEnabled = LocalPlayerState.DistanceToObject2DSquared(gameObject) <= 10;
+                    if (Throttler.Throttle("OccultCrescentHelper-OthersManager-LongTimeBuffButton"))
+                    {
+                        isAnyNearby    = CrescentSupportJob.TryFindKnowledgeCrystal(out var gameObject);
+                        nearbyPosition = isAnyNearby ? gameObject.Position : Vector3.Zero;
+                    }
 
-                    buttonNode.IsVisible = true;
-                    buttonNode.Position  = screenPos - buttonNode.Node->GetNodeState().Size / 2;
+                    if (nearbyPosition != Vector3.Zero &&
+                        GameViewHelper.WorldToScreen(nearbyPosition, out var screenPos, out var inView) &&
+                        inView)
+                    {
+                        buttonNode.IsEnabled = LocalPlayerState.DistanceTo2DSquared(nearbyPosition.ToVector2()) <= 10;
 
-                    IsVisible = true;
+                        buttonNode.IsVisible = true;
+                        buttonNode.Position  = screenPos - buttonNode.Node->GetNodeState().Size / 2;
+
+                        IsVisible = true;
+                    }
+                    else
+                    {
+                        buttonNode.IsVisible = false;
+                        IsVisible            = false;
+                    }
                 }
                 else
                 {

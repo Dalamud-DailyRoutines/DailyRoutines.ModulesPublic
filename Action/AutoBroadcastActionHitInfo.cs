@@ -13,20 +13,22 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
     {
         Title       = GetLoc("AutoBroadcastActionHitInfoTitle"),
         Description = GetLoc("AutoBroadcastActionHitInfoDescription"),
-        Category    = ModuleCategories.Combat,
+        Category    = ModuleCategories.Action,
         Author      = ["Xww"]
     };
-    
+
     private static readonly CompSig ProcessPacketActionEffectSig = new("E8 ?? ?? ?? ?? 48 8B 8D F0 03 00 00");
-    private delegate void ProcessPacketActionEffectDelegate(
+    private delegate void ProcessPacketActionEffectDelegate
+    (
         uint                        sourceID,
         nint                        sourceCharacter,
         nint                        pos,
         ActionEffectHandler.Header* effectHeader,
         ActionEffectHandler.Effect* effectArray,
-        ulong*                      effectTrail);
+        ulong*                      effectTrail
+    );
     private static Hook<ProcessPacketActionEffectDelegate> ProcessPacketActionEffectHook;
-    
+
     private static Config ModuleConfig = null!;
 
     private static readonly ActionSelectCombo WhitelistCombo = new("Whitelist");
@@ -52,7 +54,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
         ImGui.InputText("###DirectHitMessage", ref ModuleConfig.DirectHitPattern);
-        if (ImGui.IsItemDeactivatedAfterEdit()) 
+        if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);
 
         ImGui.AlignTextToFramePadding();
@@ -61,7 +63,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
         ImGui.InputText("###CriticalHitMessage", ref ModuleConfig.CriticalHitPattern);
-        if (ImGui.IsItemDeactivatedAfterEdit()) 
+        if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);
 
         ImGui.AlignTextToFramePadding();
@@ -70,11 +72,11 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalFontScale);
         ImGui.InputText("###DirectCriticalHitMessage", ref ModuleConfig.DirectCriticalHitPattern);
-        if (ImGui.IsItemDeactivatedAfterEdit()) 
+        if (ImGui.IsItemDeactivatedAfterEdit())
             SaveConfig(ModuleConfig);
-        
+
         ScaledDummy(5f);
-        
+
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoBroadcastActionHitInfo-UseTTS")}");
 
@@ -99,13 +101,14 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200f * GlobalFontScale);
+
         if (ModuleConfig.WorkMode
                 ? WhitelistCombo.DrawCheckbox()
                 : BlacklistCombo.DrawCheckbox())
         {
             ModuleConfig.BlacklistActions = BlacklistCombo.SelectedActionIDs;
             ModuleConfig.WhitelistActions = BlacklistCombo.SelectedActionIDs;
-            
+
             SaveConfig(ModuleConfig);
         }
 
@@ -120,8 +123,12 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
             SelectedCombo.DrawRadio();
 
         ImGui.SameLine();
-        using (ImRaii.Disabled(SelectedCombo.SelectedActionID == 0 ||
-                               ModuleConfig.CustomActionName.ContainsKey(SelectedCombo.SelectedActionID)))
+
+        using (ImRaii.Disabled
+               (
+                   SelectedCombo.SelectedActionID == 0 ||
+                   ModuleConfig.CustomActionName.ContainsKey(SelectedCombo.SelectedActionID)
+               ))
         {
             if (ImGuiOm.ButtonIcon("##新增", FontAwesomeIcon.Plus))
             {
@@ -136,10 +143,14 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         ImGui.Spacing();
 
         if (ModuleConfig.CustomActionName.Count < 1) return;
-        if (ImGui.CollapsingHeader(
-                $"{GetLoc("AutoBroadcastActionHitInfo-CustomActionAliasCount", ModuleConfig.CustomActionName.Count)}###CustomActionsCombo"))
+
+        if (ImGui.CollapsingHeader
+            (
+                $"{GetLoc("AutoBroadcastActionHitInfo-CustomActionAliasCount", ModuleConfig.CustomActionName.Count)}###CustomActionsCombo"
+            ))
         {
             var counter = 1;
+
             foreach (var actionNamePair in ModuleConfig.CustomActionName)
             {
                 using var id = ImRaii.PushId($"ActionCustomName_{actionNamePair.Key}");
@@ -160,6 +171,7 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
                 ImGui.TextUnformatted(data.Name.ToString());
 
                 ImGui.SameLine();
+
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, GetLoc("Delete")))
                 {
                     ModuleConfig.CustomActionName.Remove(actionNamePair.Key);
@@ -183,14 +195,20 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         }
     }
 
-    private void ProcessPacketActionEffectDetour(
-        uint   sourceID, nint sourceCharacter, nint pos, ActionEffectHandler.Header* effectHeader, ActionEffectHandler.Effect* effectArray,
-        ulong* effectTrail)
+    private static void ProcessPacketActionEffectDetour
+    (
+        uint                        sourceID,
+        nint                        sourceCharacter,
+        nint                        pos,
+        ActionEffectHandler.Header* effectHeader,
+        ActionEffectHandler.Effect* effectArray,
+        ulong*                      effectTrail
+    )
     {
         ProcessPacketActionEffectHook.Original(sourceID, sourceCharacter, pos, effectHeader, effectArray, effectTrail);
         Parse(sourceID, effectHeader, effectArray);
     }
-    
+
     public static void Parse(uint sourceEntityID, ActionEffectHandler.Header* effectHeader, ActionEffectHandler.Effect* effectArray)
     {
         try
@@ -234,12 +252,12 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
             {
                 case 32 or 64:
                     ContentHintBlue(message, 10);
-                    if (ModuleConfig.UseTTS) 
+                    if (ModuleConfig.UseTTS)
                         Speak(message);
                     break;
                 case 96:
                     ContentHintRed(message, 10);
-                    if (ModuleConfig.UseTTS) 
+                    if (ModuleConfig.UseTTS)
                         Speak(message);
                     break;
             }
@@ -248,9 +266,9 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
         {
             // ignored
         }
-        
+
     }
-    
+
     public class Config : ModuleConfiguration
     {
         // False - 黑名单, True - 白名单
@@ -258,13 +276,13 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
 
         public HashSet<uint> BlacklistActions = [];
         public HashSet<uint> WhitelistActions = [];
-        
+
         public Dictionary<uint, string> CustomActionName = [];
 
         public string DirectHitPattern         = "技能 {0} 触发了直击";
         public string CriticalHitPattern       = "技能 {0} 触发了暴击";
         public string DirectCriticalHitPattern = "技能 {0} 触发了直暴";
-        
+
         public bool UseTTS;
     }
 }
