@@ -24,7 +24,7 @@ public class AutoFilterLogMessage : DailyModuleBase
         ModuleConfig = LoadConfig<Config>() ?? new();
 
         Combo                       ??= new("LogMessage");
-        Combo.SelectedLogMessageIDs =   ModuleConfig.FilteredLogMessages;
+        Combo.SelectedIDs =   ModuleConfig.FilteredLogMessages;
 
         LogMessageManager.Instance().RegPre(OnLogMessage);
     }
@@ -37,7 +37,7 @@ public class AutoFilterLogMessage : DailyModuleBase
         {
             if (Combo.DrawCheckbox())
             {
-                ModuleConfig.FilteredLogMessages = Combo.SelectedLogMessageIDs;
+                ModuleConfig.FilteredLogMessages = Combo.SelectedIDs;
                 ModuleConfig.Save(this);
             }
         }

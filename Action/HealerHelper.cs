@@ -280,7 +280,7 @@ public class HealerHelper : DailyModuleBase
 
         if (ActionSelect.DrawCheckbox())
         {
-            ModuleConfig.EasyHealStorage.ActiveHealActions = ActionSelect.SelectedActionIDs;
+            ModuleConfig.EasyHealStorage.ActiveHealActions = ActionSelect.SelectedIDs;
             SaveConfig(ModuleConfig);
         }
 
@@ -548,7 +548,7 @@ public class HealerHelper : DailyModuleBase
                 ActionSelect ??= new("##ActionSelect", LuminaGetter.Get<LuminaAction>().Where(x => EasyHealService.TargetHealActions.ContainsKey(x.RowId)));
                 if (ModuleConfig.EasyHealStorage.ActiveHealActions.Count == 0)
                     EasyHealService.InitActiveHealActions();
-                ActionSelect.SelectedActionIDs = ModuleConfig.EasyHealStorage.ActiveHealActions;
+                ActionSelect.SelectedIDs = ModuleConfig.EasyHealStorage.ActiveHealActions;
             }
         }
     }

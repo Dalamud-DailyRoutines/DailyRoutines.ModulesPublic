@@ -95,7 +95,7 @@ public unsafe class AutoLogin : DailyModuleBase
                         if (ImGui.SmallButton(GetLoc("AutoLogin-CurrentWorld")))
                         {
                             if (PresetSheet.Worlds.TryGetValue(GameState.CurrentWorld, out var world))
-                                WorldSelectCombo.SelectedWorldID = world.RowId;
+                                WorldSelectCombo.SelectedID = world.RowId;
                         }
 
                         // 角色登录索引选择
@@ -115,8 +115,8 @@ public unsafe class AutoLogin : DailyModuleBase
                     ImGui.SameLine();
                     if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, GetLoc("Add")))
                     {
-                        if (SelectedCharaIndex is < 0 or > 7 || WorldSelectCombo.SelectedWorldID == 0) return;
-                        var info = new LoginInfo(WorldSelectCombo.SelectedWorldID, SelectedCharaIndex);
+                        if (SelectedCharaIndex is < 0 or > 7 || WorldSelectCombo.SelectedID == 0) return;
+                        var info = new LoginInfo(WorldSelectCombo.SelectedID, SelectedCharaIndex);
                         if (!ModuleConfig.LoginInfos.Contains(info))
                         {
                             ModuleConfig.LoginInfos.Add(info);

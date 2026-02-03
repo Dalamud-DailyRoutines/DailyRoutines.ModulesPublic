@@ -127,12 +127,12 @@ public class AutoMovePetPosition : DailyModuleBase
                 var editingZoneID  = schedule.ZoneID;
                 if (!LuminaGetter.TryGetRow<TerritoryType>(editingZoneID, out var zone)) continue;
 
-                ContentSelectCombo.SelectedContentID = zone.ContentFinderCondition.RowId;
+                ContentSelectCombo.SelectedID = zone.ContentFinderCondition.RowId;
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 if (ContentSelectCombo.DrawRadio())
                 {
-                    editingZoneID = ContentSelectCombo.SelectedContent.TerritoryType.RowId;
+                    editingZoneID = ContentSelectCombo.SelectedItem.TerritoryType.RowId;
 
                     var scheduleCopy = schedule.Copy();
                     scheduleCopy.ZoneID = editingZoneID;

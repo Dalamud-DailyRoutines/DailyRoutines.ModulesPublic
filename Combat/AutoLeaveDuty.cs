@@ -26,7 +26,7 @@ public class AutoLeaveDuty : DailyModuleBase
         ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new();
 
-        ContentSelectCombo.SelectedContentIDs = ModuleConfig.BlacklistContent;
+        ContentSelectCombo.SelectedIDs = ModuleConfig.BlacklistContent;
         
         LogMessageManager.Instance().RegPre(OnPreReceiveLogmessage);
 
@@ -55,7 +55,7 @@ public class AutoLeaveDuty : DailyModuleBase
             ImGui.SetNextItemWidth(250f * GlobalFontScale);
             if (ContentSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistContent = ContentSelectCombo.SelectedContentIDs;
+                ModuleConfig.BlacklistContent = ContentSelectCombo.SelectedIDs;
                 SaveConfig(ModuleConfig);
             }
             

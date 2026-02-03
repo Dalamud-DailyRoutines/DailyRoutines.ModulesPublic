@@ -37,7 +37,7 @@ public class AutoTrackStatusOff : DailyModuleBase
         StatusSelectCombo ??= new("Status", LuminaGetter.Get<Status>().Where(x => x.CanStatusOff && !string.IsNullOrEmpty(x.Name.ToString())));
 
         if (ModuleConfig.StatusToMonitor.Count > 0)
-            StatusSelectCombo.SelectedStatusIDs = ModuleConfig.StatusToMonitor.ToHashSet();
+            StatusSelectCombo.SelectedIDs = ModuleConfig.StatusToMonitor.ToHashSet();
 
         CharacterStatusManager.Instance().RegGain(OnGainStatus);
         CharacterStatusManager.Instance().RegLose(OnLoseStatus);
@@ -82,7 +82,7 @@ public class AutoTrackStatusOff : DailyModuleBase
 
             if (StatusSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.StatusToMonitor = StatusSelectCombo.SelectedStatuses.Select(x => x.RowId).ToHashSet();
+                ModuleConfig.StatusToMonitor = StatusSelectCombo.SelectedItems.Select(x => x.RowId).ToHashSet();
                 ModuleConfig.Save(this);
             }
         }

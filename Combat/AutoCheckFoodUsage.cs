@@ -353,10 +353,10 @@ public class AutoCheckFoodUsage : DailyModuleBase
 
             ImGui.TableNextColumn();
             ImGui.SetNextItemWidth(-1f);
-            JobSelectCombo.SelectedJobIDs = preset.ClassJobs.ToHashSet();
+            JobSelectCombo.SelectedIDs = preset.ClassJobs.ToHashSet();
             if (JobSelectCombo.DrawCheckbox())
             {
-                preset.ClassJobs = JobSelectCombo.SelectedJobIDs.ToHashSet();
+                preset.ClassJobs = JobSelectCombo.SelectedIDs.ToHashSet();
                 SaveConfig(ModuleConfig);
             }
         }

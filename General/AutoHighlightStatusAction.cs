@@ -121,11 +121,11 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
         {
-            if (StatusCombo.SelectedStatusID != 0 && ActionCombo.SelectedActionIDs.Count > 0)
+            if (StatusCombo.SelectedID != 0 && ActionCombo.SelectedIDs.Count > 0)
             {
-                ModuleConfig.MonitoredStatus[StatusCombo.SelectedStatusID] = new StatusConfig
+                ModuleConfig.MonitoredStatus[StatusCombo.SelectedID] = new StatusConfig
                 {
-                    BindActions   = ActionCombo.SelectedActionIDs.ToArray(),
+                    BindActions   = ActionCombo.SelectedIDs.ToArray(),
                     Countdown     = ModuleConfig.Countdown,
                     KeepHighlight = KeepHighlightAfterExpire
                 };
@@ -174,7 +174,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                StatusCombo.SelectedStatusID = status;
+                StatusCombo.SelectedID = status;
 
             ImGui.TableNextColumn();
 
@@ -194,7 +194,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                ActionCombo.SelectedActionIDs = statusConfig.BindActions.ToHashSet();
+                ActionCombo.SelectedIDs = statusConfig.BindActions.ToHashSet();
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{statusConfig.Countdown:0.0}");

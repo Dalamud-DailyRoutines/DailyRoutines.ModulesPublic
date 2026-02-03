@@ -57,8 +57,8 @@ public unsafe class AutoCutsceneSkip : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        WhitelistZoneCombo.SelectedZoneIDs = ModuleConfig.WhitelistZones;
-        BlacklistZoneCombo.SelectedZoneIDs = ModuleConfig.BlacklistZones;
+        WhitelistZoneCombo.SelectedIDs = ModuleConfig.WhitelistZones;
+        BlacklistZoneCombo.SelectedIDs = ModuleConfig.BlacklistZones;
 
         CutsceneUnskippablePatch.Set(true);
 
@@ -93,7 +93,7 @@ public unsafe class AutoCutsceneSkip : DailyModuleBase
         {
             if (WhitelistZoneCombo.DrawCheckbox())
             {
-                ModuleConfig.WhitelistZones = WhitelistZoneCombo.SelectedZoneIDs;
+                ModuleConfig.WhitelistZones = WhitelistZoneCombo.SelectedIDs;
                 ModuleConfig.Save(this);
             }
         }
@@ -101,7 +101,7 @@ public unsafe class AutoCutsceneSkip : DailyModuleBase
         {
             if (BlacklistZoneCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistZones = BlacklistZoneCombo.SelectedZoneIDs;
+                ModuleConfig.BlacklistZones = BlacklistZoneCombo.SelectedIDs;
                 ModuleConfig.Save(this);
             }
         }

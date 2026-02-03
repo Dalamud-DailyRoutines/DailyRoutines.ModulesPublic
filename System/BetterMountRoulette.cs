@@ -131,9 +131,9 @@ public class BetterMountRoulette : DailyModuleBase
                 if (ZoneSelector.DrawRadio())
                 {
                     var newMountSet = new HashSet<uint>();
-                    if (ModuleConfig.ZoneRouletteMounts.TryAdd(ZoneSelector.SelectedZoneID, newMountSet))
+                    if (ModuleConfig.ZoneRouletteMounts.TryAdd(ZoneSelector.SelectedID, newMountSet))
                     {
-                        ZoneMounts[ZoneSelector.SelectedZoneID] = new MountListHandler(MasterMountsSearcher, newMountSet);
+                        ZoneMounts[ZoneSelector.SelectedID] = new MountListHandler(MasterMountsSearcher, newMountSet);
                         SaveConfig(ModuleConfig);
                     }
                 }

@@ -325,8 +325,8 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
 
             if (!string.IsNullOrWhiteSpace(textNode.String.ToString()))
             {
-                backgroundNode.Position = ModuleConfig.TextOffset + new Vector2(textNode.Position.X - 7f, -1f);
-                backgroundNode.Size     = textNode.Node->AtkResNode.GetNodeState().Size.WithX(textNode.Width + 15f);
+                backgroundNode.Position = textNode.Position + new Vector2(-7f, -5f);
+                backgroundNode.Size     = new(textNode.Width + 14f + textNode.FontSize - 10, (textNode.FontSize + 2) * 2);
             }
         }
     }
@@ -365,13 +365,13 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
                 TexturePath        = "ui/uld/EnemyList_hr1.tex",
                 TextureCoordinates = new(96, 80),
                 TextureSize        = new(24, 20),
-                Size               = new(160, 10),
-                LeftOffset         = 8,
-                RightOffset        = 8,
+                Size               = new(124, 20),
+                Offsets            = new(0, 0, 8, 8),
                 IsVisible          = true,
                 MultiplyColor      = new(100),
                 Position           = new(75, 6),
-                Alpha              = 0.6f
+                Alpha              = 0.6f,
+                NodeFlags          = NodeFlags.AnchorTop | NodeFlags.AnchorLeft | NodeFlags.EmitsEvents | NodeFlags.Enabled
             };
 
             var castBarNode = new ProgressBarEnemyCastNode
@@ -539,6 +539,7 @@ public unsafe class OptimizedEnemyList : DailyModuleBase
         protected override void OnUpdate()
         {
             IsVisible = ShouldBeVisible                   &&
+                        !GameState.IsInPVPInstance        &&
                         EnemyList->IsAddonAndNodesReady() &&
                         Index < EnemyListNumberArray.Instance()->EnemyCount;
         }

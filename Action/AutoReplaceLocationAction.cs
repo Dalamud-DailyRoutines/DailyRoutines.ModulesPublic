@@ -59,7 +59,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        ContentSelectCombo.SelectedContentIDs = ModuleConfig.BlacklistContents;
+        ContentSelectCombo.SelectedIDs = ModuleConfig.BlacklistContents;
 
         UseActionManager.Instance().RegPreUseActionLocation(OnPreUseActionLocation);
         ExecuteCommandManager.Instance().RegPreComplexLocation(OnPreExecuteCommandComplexLocation);
@@ -126,7 +126,7 @@ public class AutoReplaceLocationAction : DailyModuleBase
             ImGui.SetNextItemWidth(300f * GlobalFontScale);
             if (ContentSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistContents = ContentSelectCombo.SelectedContentIDs.ToHashSet();
+                ModuleConfig.BlacklistContents = ContentSelectCombo.SelectedIDs.ToHashSet();
                 SaveConfig(ModuleConfig);
             }
         }

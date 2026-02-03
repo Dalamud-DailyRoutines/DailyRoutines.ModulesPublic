@@ -89,16 +89,16 @@ public unsafe class AutoReplaceActionAnimation : DailyModuleBase
         ImGui.SameLine(0, 10f * GlobalFontScale);
         if (ImGui.Button(GetLoc("Confirm"), new(ImGui.CalcTextSize(GetLoc("Confirm")).X * 2, ImGui.GetItemRectSize().Y)))
         {
-            if (InputCombo.SelectedAction.RowId != 0 && OutputCombo.SelectedAction.RowId != 0)
+            if (InputCombo.SelectedItem.RowId != 0 && OutputCombo.SelectedItem.RowId != 0)
             {
                 var actionConfig = new ActionConfig
                 {
                     IsEnabled           = true,
-                    ReplacementActionID = OutputCombo.SelectedAction.RowId,
+                    ReplacementActionID = OutputCombo.SelectedItem.RowId,
                     EffectType          = EffectTypeInput
                 };
 
-                ModuleConfig.ActionConfigs[InputCombo.SelectedAction.RowId] = actionConfig;
+                ModuleConfig.ActionConfigs[InputCombo.SelectedItem.RowId] = actionConfig;
                 ModuleConfig.ActionConfigs = ModuleConfig.ActionConfigs
                                                          .OrderBy(x => LuminaGetter.GetRow<Action>(x.Key)?.ClassJobCategory.ValueNullable?.RowId ?? uint.MaxValue)
                                                          .ThenBy(x => x.Key)
@@ -173,7 +173,7 @@ public unsafe class AutoReplaceActionAnimation : DailyModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                InputCombo.SelectedActionID = input;
+                InputCombo.SelectedID = input;
             
             ImGui.TableNextColumn();
             ImGui.TextUnformatted("→");
@@ -195,7 +195,7 @@ public unsafe class AutoReplaceActionAnimation : DailyModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                OutputCombo.SelectedActionID = output;
+                OutputCombo.SelectedID = output;
 
             ImGui.TableNextColumn();
             ImGui.TextColored(KnownColor.Gray.ToVector4(), $"[{GetEffectTypeName(config.EffectType)}]");

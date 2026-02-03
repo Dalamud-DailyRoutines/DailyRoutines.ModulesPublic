@@ -152,14 +152,14 @@ public class AutoNotifySPPlayers : DailyModuleBase
         {
             if (string.IsNullOrWhiteSpace(SelectName)      &&
                 SelectedOnlineStatus.Count            == 0 &&
-                ZoneSelectCombo.SelectedZoneIDs.Count == 0)
+                ZoneSelectCombo.SelectedIDs.Count == 0)
                 return;
 
             var preset = new NotifiedPlayers
             {
                 Name         = SelectName,
                 OnlineStatus = [..SelectedOnlineStatus], // 不这样就有引用关系了
-                Zone         = [..ZoneSelectCombo.SelectedZoneIDs],
+                Zone         = [..ZoneSelectCombo.SelectedIDs],
                 Command      = SelectCommand,
             };
 
@@ -256,7 +256,7 @@ public class AutoNotifySPPlayers : DailyModuleBase
             {
                 SelectName                      = preset.Name;
                 SelectedOnlineStatus            = [.. preset.OnlineStatus];
-                ZoneSelectCombo.SelectedZoneIDs = [.. preset.Zone];
+                ZoneSelectCombo.SelectedIDs = [.. preset.Zone];
                 SelectCommand                   = preset.Command;
 
                 ModuleConfig.NotifiedPlayer.Remove(preset);

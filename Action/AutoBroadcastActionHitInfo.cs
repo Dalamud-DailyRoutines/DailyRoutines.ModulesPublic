@@ -39,8 +39,8 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
 
-        WhitelistCombo.SelectedActionIDs = ModuleConfig.WhitelistActions;
-        BlacklistCombo.SelectedActionIDs = ModuleConfig.BlacklistActions;
+        WhitelistCombo.SelectedIDs = ModuleConfig.WhitelistActions;
+        BlacklistCombo.SelectedIDs = ModuleConfig.BlacklistActions;
 
         ProcessPacketActionEffectHook ??= ProcessPacketActionEffectSig.GetHook<ProcessPacketActionEffectDelegate>(ProcessPacketActionEffectDetour);
         ProcessPacketActionEffectHook.Enable();
@@ -106,8 +106,8 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
                 ? WhitelistCombo.DrawCheckbox()
                 : BlacklistCombo.DrawCheckbox())
         {
-            ModuleConfig.BlacklistActions = BlacklistCombo.SelectedActionIDs;
-            ModuleConfig.WhitelistActions = BlacklistCombo.SelectedActionIDs;
+            ModuleConfig.BlacklistActions = BlacklistCombo.SelectedIDs;
+            ModuleConfig.WhitelistActions = BlacklistCombo.SelectedIDs;
 
             SaveConfig(ModuleConfig);
         }
@@ -126,15 +126,15 @@ public unsafe class AutoBroadcastActionHitInfo : DailyModuleBase
 
         using (ImRaii.Disabled
                (
-                   SelectedCombo.SelectedActionID == 0 ||
-                   ModuleConfig.CustomActionName.ContainsKey(SelectedCombo.SelectedActionID)
+                   SelectedCombo.SelectedID == 0 ||
+                   ModuleConfig.CustomActionName.ContainsKey(SelectedCombo.SelectedID)
                ))
         {
             if (ImGuiOm.ButtonIcon("##新增", FontAwesomeIcon.Plus))
             {
-                if (SelectedCombo.SelectedActionID != 0)
+                if (SelectedCombo.SelectedID != 0)
                 {
-                    ModuleConfig.CustomActionName.TryAdd(SelectedCombo.SelectedActionID, string.Empty);
+                    ModuleConfig.CustomActionName.TryAdd(SelectedCombo.SelectedID, string.Empty);
                     ModuleConfig.Save(this);
                 }
             }

@@ -42,7 +42,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
         ModuleConfig = LoadConfig<Config>() ?? new();
         TaskHelper ??= new() { TimeoutMS = 10_000 };
 
-        ContentSelectCombo.SelectedContentIDs = ModuleConfig.BlacklistContents;
+        ContentSelectCombo.SelectedIDs = ModuleConfig.BlacklistContents;
         
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().ContextMenu.OnMenuOpened     += OnMenuOpen;
@@ -58,7 +58,7 @@ public unsafe class AutoPlayerCommend : DailyModuleBase
             ImGui.SetNextItemWidth(300f * GlobalFontScale);
             if (ContentSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistContents = ContentSelectCombo.SelectedContentIDs.ToHashSet();
+                ModuleConfig.BlacklistContents = ContentSelectCombo.SelectedIDs.ToHashSet();
                 SaveConfig(ModuleConfig);
             }
         }

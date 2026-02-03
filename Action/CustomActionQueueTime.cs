@@ -157,14 +157,14 @@ public class CustomActionQueueTime : DailyModuleBase
         
         ImGui.TextColored(KnownColor.RoyalBlue.ToVector4(), GetLoc("CustomActionQueueTime-CustomDefaultQueueTime"));
 
-        using (ImRaii.Disabled((ActionSelectCombo.SelectedActionID) == 0 || 
-                               ModuleConfig.QueueTime.ContainsKey(ActionSelectCombo.SelectedActionID)))
+        using (ImRaii.Disabled((ActionSelectCombo.SelectedID) == 0 || 
+                               ModuleConfig.QueueTime.ContainsKey(ActionSelectCombo.SelectedID)))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
             {
-                if (ActionSelectCombo.SelectedActionID != 0)
+                if (ActionSelectCombo.SelectedID != 0)
                 {
-                    ModuleConfig.QueueTime.TryAdd(ActionSelectCombo.SelectedActionID, 500f);
+                    ModuleConfig.QueueTime.TryAdd(ActionSelectCombo.SelectedID, 500f);
                     SaveConfig(ModuleConfig);
                 }
             }

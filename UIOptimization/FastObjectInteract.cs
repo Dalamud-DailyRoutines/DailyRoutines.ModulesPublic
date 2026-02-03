@@ -36,7 +36,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
     private static FrozenDictionary<uint, string> ENPCTitle     { get; } = LoadEnpcTitles();
     private static FrozenSet<uint>                ImportantENPC { get; } = LoadImportantEnpcs();
 
-    private static readonly FrozenSet<uint> WorldTravelValidZones = new HashSet<uint> { 132, 129, 130 }.ToFrozenSet();
+    private static readonly FrozenSet<uint> WorldTravelValidZones = new[] { 132U, 129U, 130U }.ToFrozenSet();
 
     private static readonly FrozenDictionary<ObjectKind, float> IncludeDistance = new Dictionary<ObjectKind, float>
     {
@@ -84,7 +84,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
                            ]
                        };
 
-        TaskHelper ??= new() { TimeoutMS = 5_000 };
+        TaskHelper ??= new() { TimeoutMS = 5_000, ShowDebug = true };
 
         Overlay = new Overlay(this, $"##{nameof(FastObjectInteract)}")
         {
@@ -477,7 +477,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             var kind = (ObjectKind)obj->ObjectKind;
             if (!ModuleConfig.SelectedKinds.Contains(kind)) continue;
             
-            var distSq = Vector3.DistanceSquared(playerPos, obj->Position);
+            var distSq = Vector2.DistanceSquared(playerPos.ToVector2(), obj->Position.ToVector2());
             
             var limit = 400f;
             if (IncludeDistance.TryGetValue(kind, out var l)) 
@@ -485,7 +485,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
 
             if (distSq > limit) continue;
             
-            if (MathF.Abs(obj->Position.Y - playerPos.Y) >= 4) continue;
+            if (!DService.Instance().Condition[ConditionFlag.InFlight] && MathF.Abs(obj->Position.Y - playerPos.Y) >= 4) continue;
 
             if (kind == ObjectKind.Treasure)
             {
@@ -513,7 +513,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             
             if (ModuleConfig.OnlyDisplayInViewRange)
             {
-                if (!DService.Instance().GameGUI.WorldToScreen(obj->Position, out _))
+                if (!GameViewHelper.WorldToScreen(obj->Position, out _, out var view) || !view)
                     continue;
             }
             
@@ -553,16 +553,21 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         TaskHelper.RemoveQueueTasks(2);
 
         if (IsOnMount)
+        {
             TaskHelper.Enqueue(() => MovementManager.Dismount(), "DismountInteract", weight: 2);
+            TaskHelper.DelayNext(500, weight: 2);
+        }
 
+        TaskHelper.Enqueue(IsAbleToInteract, "等待可交互状态", weight: 2);
+        
         TaskHelper.Enqueue
         (
             () =>
             {
-                if (IsOnMount || DService.Instance().Condition[ConditionFlag.Jumping] || MovementManager.IsManagerBusy) return false;
+                if (!IsAbleToInteract()) return false;
 
                 TargetSystem.Instance()->Target = obj;
-                return TargetSystem.Instance()->InteractWithObject(obj) != 0;
+                return TargetSystem.Instance()->InteractWithObject(obj, false) != 0;
             },
             "Interact",
             weight: 2
@@ -570,6 +575,11 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
 
         if (kind is ObjectKind.EventObj)
             TaskHelper.Enqueue(() => TargetSystem.Instance()->OpenObjectInteraction(obj), "OpenInteraction", weight: 2);
+        
+        return;
+
+        static bool IsAbleToInteract() =>
+            !IsOnMount && !DService.Instance().Condition.Any(ConditionFlag.Jumping, ConditionFlag.InFlight) && !MovementManager.IsManagerBusy;
     }
 
     private static void LoadWorldData()

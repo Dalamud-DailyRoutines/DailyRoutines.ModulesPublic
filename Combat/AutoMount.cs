@@ -27,8 +27,8 @@ public unsafe class AutoMount : DailyModuleBase
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
         
-        MountSelectCombo.SelectedMountID = ModuleConfig.SelectedMount;
-        ZoneSelectCombo.SelectedZoneIDs  = ModuleConfig.BlacklistZones;
+        MountSelectCombo.SelectedID = ModuleConfig.SelectedMount;
+        ZoneSelectCombo.SelectedIDs = ModuleConfig.BlacklistZones;
 
         TaskHelper ??= new TaskHelper { TimeoutMS = 20000 };
 
@@ -45,7 +45,7 @@ public unsafe class AutoMount : DailyModuleBase
             ImGui.SetNextItemWidth(300f * GlobalFontScale);
             if (MountSelectCombo.DrawRadio())
             {
-                ModuleConfig.SelectedMount = MountSelectCombo.SelectedMountID;
+                ModuleConfig.SelectedMount = MountSelectCombo.SelectedID;
                 SaveConfig(ModuleConfig);
             }
             
@@ -77,7 +77,7 @@ public unsafe class AutoMount : DailyModuleBase
             ImGui.SetNextItemWidth(300f * GlobalFontScale);
             if (ZoneSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistZones = ZoneSelectCombo.SelectedZoneIDs;
+                ModuleConfig.BlacklistZones = ZoneSelectCombo.SelectedIDs;
                 SaveConfig(ModuleConfig);
             }
         }

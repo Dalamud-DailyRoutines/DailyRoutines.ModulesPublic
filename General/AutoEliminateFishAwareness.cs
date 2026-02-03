@@ -41,7 +41,7 @@ public class AutoEliminateFishAwareness : DailyModuleBase
         ModuleConfig =   LoadConfig<Config>() ?? new();
         TaskHelper   ??= new() { TimeoutMS = 30_000, ShowDebug = true };
         
-        ZoneSelectCombo.SelectedZoneIDs = ModuleConfig.BlacklistZones;
+        ZoneSelectCombo.SelectedIDs = ModuleConfig.BlacklistZones;
 
         DService.Instance().Chat.ChatMessage += OnChatMessage;
     }
@@ -55,7 +55,7 @@ public class AutoEliminateFishAwareness : DailyModuleBase
             ImGui.SetNextItemWidth(300f * GlobalFontScale);
             if (ZoneSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistZones = ZoneSelectCombo.SelectedZoneIDs;
+                ModuleConfig.BlacklistZones = ZoneSelectCombo.SelectedIDs;
                 SaveConfig(ModuleConfig);
             }
         }
