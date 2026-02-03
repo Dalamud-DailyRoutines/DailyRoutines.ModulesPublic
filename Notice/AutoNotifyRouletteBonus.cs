@@ -6,6 +6,7 @@ using System.Numerics;
 using DailyRoutines.Abstracts;
 using Dalamud.Hooking;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface.Textures.TextureWraps;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
@@ -18,10 +19,10 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("AutoNotifyRouletteBonusTitle"),
+        Title       = GetLoc("AutoNotifyRouletteBonusTitle"),
         Description = GetLoc("AutoNotifyRouletteBonusDescription"),
-        Category = ModuleCategories.Notice,
-        Author = ["BoxingBunny"]
+        Category    = ModuleCategories.Notice,
+        Author      = ["BoxingBunny"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
@@ -34,11 +35,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         [6] = 6, [7] = 8, [8] = 9, [9] = 15, [10] = 17
     }.ToFrozenDictionary();
 
-    private static readonly FrozenDictionary<ContentsRouletteRole, RoleData> RoleDataMap = new Dictionary<ContentsRouletteRole, RoleData>
+    private static readonly FrozenDictionary<ContentsRouletteRole, BitmapFontIcon> RoleIcons = new Dictionary<ContentsRouletteRole, BitmapFontIcon>
     {
-        [ContentsRouletteRole.Tank] = new(BitmapFontIcon.Tank, 37, LuminaWrapper.GetAddonText(1082)),
-        [ContentsRouletteRole.Healer] = new(BitmapFontIcon.Healer, 504, LuminaWrapper.GetAddonText(1083)),
-        [ContentsRouletteRole.Dps] = new(BitmapFontIcon.DPS, 545, LuminaWrapper.GetAddonText(2786))
+        [ContentsRouletteRole.Tank]   = BitmapFontIcon.Tank,
+        [ContentsRouletteRole.Healer] = BitmapFontIcon.Healer,
+        [ContentsRouletteRole.Dps]    = BitmapFontIcon.DPS
     }.ToFrozenDictionary();
 
     private static readonly ContentRoulette[] CachedRoulettes =
@@ -49,6 +50,10 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
     private static Config ModuleConfig = null!;
     private static ContentsRouletteRole[] LastKnownRoles = [];
+
+    private static readonly Dictionary<uint, DalamudLinkPayload> RouletteLinkPayloads = [];
+    private static readonly Dictionary<uint, byte> RouletteLinkPayloadIds = [];
+
     private static readonly CompSig SetContentRouletteRoleBonusSig = new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
     private delegate void SetContentRouletteRoleBonusDelegate(AgentContentsFinder* instance, void* data, uint bonusIndex);
     private static Hook<SetContentRouletteRoleBonusDelegate>? SetContentRouletteRoleBonusHook;
@@ -68,8 +73,14 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
     }
 
-    protected override void Uninit() =>
+    protected override void Uninit()
+    {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        foreach (var payload in RouletteLinkPayloads.Values)
+            LinkPayloadManager.Instance().Unreg(payload.CommandId);
+        RouletteLinkPayloads.Clear();
+        RouletteLinkPayloadIds.Clear();
+    }
 
     protected override void ConfigUI()
     {
@@ -95,36 +106,38 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         ImGui.TableSetupColumn("##OnlyIncomplete", ImGuiTableColumnFlags.NoHeaderLabel, 0.1f);
         ImGui.TableSetupColumn("##RoleBonus", ImGuiTableColumnFlags.NoHeaderLabel, 0.1f);
 
+        var hasRoleBonusTexture = TryGetTextureInfo("ui/uld/ContentsFinder_hr1.tex", out var roleBonusTexture, out var roleBonusInvTexSize);
+        var hasHeaderTexture = TryGetTextureInfo("ui/uld/Journal_Detail_hr1.tex", out var headerTexture, out var headerInvTexSize);
+        
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
 
-        var headerTexts = new[]
-        {
-            LuminaWrapper.GetAddonText(8605),
-            LuminaWrapper.GetAddonText(1082),
-            LuminaWrapper.GetAddonText(1083),
-            LuminaWrapper.GetAddonText(2786),
-            GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete")
-        };
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(LuminaWrapper.GetAddonText(8605));
 
-        for (var i = 0; i < headerTexts.Length; i++)
-        {
-            ImGui.TableNextColumn();
-            ImGui.TextUnformatted(headerTexts[i]);
-            if (i == 4)
-                ImGuiOm.HelpMarker(GetLoc("AutoNotifyRouletteBonus-OnlyIncompleteHelp"));
-        }
-        
-        var roleBonusTexture = DService.Instance().Texture.GetFromGame("ui/uld/ContentsFinder_hr1.tex").GetWrapOrEmpty();
-        var hasRoleBonusTexture = roleBonusTexture is { Width: > 0, Height: > 0 };
-        var invTexSize = hasRoleBonusTexture
-                             ? new Vector2(1f / roleBonusTexture.Width, 1f / roleBonusTexture.Height)
-                             : default;
+        ImGui.TableNextColumn();
+        if (DService.Instance().Texture.TryGetFromGameIcon(new(62581), out var tankIcon))
+            ImGui.Image(tankIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
+        else
+            ImGui.TextUnformatted("-");
 
-        var headerTexture = DService.Instance().Texture.GetFromGame("ui/uld/Journal_Detail_hr1.tex").GetWrapOrEmpty();
-        var hasHeaderTexture = headerTexture is { Width: > 0, Height: > 0 };
+        ImGui.TableNextColumn();
+        if (DService.Instance().Texture.TryGetFromGameIcon(new(62582), out var healerIcon))
+            ImGui.Image(healerIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
+        else
+            ImGui.TextUnformatted("-");
+
+        ImGui.TableNextColumn();
+        if (DService.Instance().Texture.TryGetFromGameIcon(new(62583), out var dpsIcon))
+            ImGui.Image(dpsIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
+        else
+            ImGui.TextUnformatted("-");
         
         ImGui.TableNextColumn();
-        DrawRoleBonusHeaderIcon(headerTexture, hasHeaderTexture);
+        ImGui.TextUnformatted(GetLoc("AutoNotifyRouletteBonus-OnlyIncomplete"));
+        ImGuiOm.HelpMarker(GetLoc("AutoNotifyRouletteBonus-OnlyIncompleteHelp"));
+
+        ImGui.TableNextColumn();
+        DrawRoleBonusHeaderIcon(headerTexture, headerInvTexSize, hasHeaderTexture);
 
         foreach (var roulette in CachedRoulettes)
         {
@@ -175,7 +188,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
                 if (bonusIndex is > 0 and < ROULETTE_BONUS_ARRAY_SIZE)
                 {
                     var currentRole = LastKnownRoles[bonusIndex];
-                    if (!DrawRoleBonusCellIcon(roleBonusTexture, invTexSize, hasRoleBonusTexture, currentRole))
+                    if (!DrawRoleBonusCellIcon(roleBonusTexture, roleBonusInvTexSize, hasRoleBonusTexture, currentRole))
                         ImGui.TextUnformatted("-");
                 }
                 else
@@ -220,9 +233,9 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
             var shouldAlert = currentRole switch
             {
-                ContentsRouletteRole.Tank => config.Tank,
+                ContentsRouletteRole.Tank   => config.Tank,
                 ContentsRouletteRole.Healer => config.Healer,
-                ContentsRouletteRole.Dps => config.DPS,
+                ContentsRouletteRole.Dps    => config.DPS,
             };
 
             if (!shouldAlert) continue;
@@ -242,24 +255,35 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
 
         var rouletteName = roulette.Name.ToString();
 
-        if (!RoleDataMap.TryGetValue(role, out var roleData))
+        if (!RoleIcons.TryGetValue(role, out var roleIcon))
             return;
 
         if (ModuleConfig.SendChat)
         {
             var message = new SeStringBuilder();
-            message.Append(rouletteName).Append(" -> ");
-            message.AddIcon(roleData.Icon);
-            message.AddUiForeground(roleData.Name, roleData.UIColor);
+            var roleBonusText = GetRoleBonusText(role);
+            var rouletteLinkPayload = GetRouletteLinkPayload(rowID);
+
+            message.AddText($"{roleBonusText} ")
+                   .AddIcon(roleIcon)
+                   .Add(NewLinePayload.Payload)
+                   .AddText($"{GetLoc("Operation")}: ")
+                   .Add(RawPayload.LinkTerminator)
+                   .Add(rouletteLinkPayload)
+                   .AddText("[")
+                   .AddUiForeground(rouletteName, 35)
+                   .AddText("]")
+                   .Add(RawPayload.LinkTerminator);
 
             Chat(message.Build());
         }
 
+        var roleName = GetRoleName(role);
         if (ModuleConfig.SendNotification)
-            NotificationInfo($"{rouletteName} -> {roleData.Name}", GetLoc("AutoNotifyRouletteBonusTitle"));
+            NotificationInfo($"{rouletteName} -> {roleName}", GetLoc("AutoNotifyRouletteBonusTitle"));
 
         if (ModuleConfig.SendTTS)
-            Speak($"{rouletteName} {roleData.Name}");
+            Speak($"{rouletteName} {roleName}");
     }
 
     private static bool IsRouletteComplete(uint rowID)
@@ -268,8 +292,46 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         var instanceContent = InstanceContent.Instance();
         return instanceContent->IsRouletteComplete((byte)rowID);
     }
+    
+    private static string GetRoleBonusText(ContentsRouletteRole role) =>
+        LuminaWrapper.GetAddonText(role switch
+        {
+            ContentsRouletteRole.Tank   => 10997,
+            ContentsRouletteRole.Healer => 10998,
+            ContentsRouletteRole.Dps    => 10999
+        });
 
-    private static void DrawRoleBonusHeaderIcon(IDalamudTextureWrap texture, bool hasTexture)
+    private static string GetRoleName(ContentsRouletteRole role) =>
+        LuminaWrapper.GetAddonText(role switch
+        {
+            ContentsRouletteRole.Tank   => 1082,
+            ContentsRouletteRole.Healer => 1083,
+            ContentsRouletteRole.Dps    => 2786
+        });
+
+    private static DalamudLinkPayload GetRouletteLinkPayload(uint rowID)
+    {
+        if (RouletteLinkPayloads.TryGetValue(rowID, out var payload)) return payload;
+
+        var linkPayload = LinkPayloadManager.Instance().Reg(OnClickRouletteLinkPayload, out var id);
+        RouletteLinkPayloads[rowID] = linkPayload;
+        RouletteLinkPayloadIds[id] = (byte)rowID;
+        return linkPayload;
+    }
+
+    private static void OnClickRouletteLinkPayload(uint id, SeString _)
+    {
+        if (!RouletteLinkPayloadIds.TryGetValue(id, out var rouletteRowID)) return;
+        if (GameState.ContentFinderCondition != 0) return;
+
+        var agent = AgentContentsFinder.Instance();
+        if (agent == null) return;
+
+        agent->OpenRouletteDuty(rouletteRowID);
+        
+    }
+
+    private static void DrawRoleBonusHeaderIcon(IDalamudTextureWrap texture, Vector2 invTexSize, bool hasTexture)
     {
         if (!hasTexture)
         {
@@ -277,11 +339,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
             return;
         }
 
-        var invTexSize = new Vector2(1f / texture.Width, 1f / texture.Height);
-        var iconPosPx = new Vector2(888f, 0f);
-        var uv0 = iconPosPx * invTexSize;
-        var uv1 = (iconPosPx + new Vector2(56f, 56f)) * invTexSize;
-        ImGui.Image(texture.Handle, ScaledVector2(15f), uv0, uv1);
+        DrawIcon(texture, invTexSize, new Vector2(888f, 0f), new Vector2(56f, 56f));
     }
     
     private static bool DrawRoleBonusCellIcon(IDalamudTextureWrap texture, Vector2 invTexSize, bool hasTexture, ContentsRouletteRole role)
@@ -289,24 +347,24 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         if (!hasTexture) return false;
         if ((byte)role > 2) return false;
 
-        DrawRoleBonusIcon(texture, invTexSize, (byte)role);
+        DrawIcon(texture, invTexSize, new Vector2(40f * (byte)role, 216f), new Vector2(40f, 40f));
         return true;
     }
 
-    private static void DrawRoleBonusIcon(IDalamudTextureWrap texture, Vector2 invTexSize, byte role)
+    private static void DrawIcon(IDalamudTextureWrap texture, Vector2 invTexSize, Vector2 iconPosPx, Vector2 sizePx)
     {
-        var iconPosPx = new Vector2(40f * role, 216f);
         var uv0 = iconPosPx * invTexSize;
-        var uv1 = (iconPosPx + new Vector2(40f, 40f)) * invTexSize;
-
-        ImGui.Image(texture.Handle, ScaledVector2(15f), uv0, uv1);
+        var uv1 = (iconPosPx + sizePx) * invTexSize;
+        ImGui.Image(texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()), uv0, uv1);
     }
 
-    private sealed record RoleData(
-        BitmapFontIcon Icon,
-        ushort UIColor,
-        string Name
-    );
+    private static bool TryGetTextureInfo(string path, out IDalamudTextureWrap texture, out Vector2 invTexSize)
+    {
+        texture = DService.Instance().Texture.GetFromGame(path).GetWrapOrEmpty();
+        var hasTexture = texture is { Width: > 0, Height: > 0 };
+        invTexSize = hasTexture ? new Vector2(1f / texture.Width, 1f / texture.Height) : default;
+        return hasTexture;
+    }
 
     private class Config : ModuleConfiguration
     {
