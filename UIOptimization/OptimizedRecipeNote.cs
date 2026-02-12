@@ -1079,11 +1079,12 @@ public class OptimizedRecipeNote : DailyModuleBase
 
             var itemNameNode = new TextNode
             {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String    = LuminaWrapper.GetItemName(ShopInfo.ItemID),
-                FontSize  = 18,
-                Position  = new(0, 6)
+                IsVisible     = true,
+                TextFlags     = TextFlags.AutoAdjustNodeSize,
+                String        = LuminaWrapper.GetItemName(ShopInfo.ItemID),
+                FontSize      = 18,
+                Position      = new(0, 6),
+                AlignmentType = AlignmentType.TopLeft
             };
             itemInfoRow.AddNode(itemNameNode);
 
@@ -1190,11 +1191,12 @@ public class OptimizedRecipeNote : DailyModuleBase
                 {
                     var costIconNode = new IconImageNode
                     {
-                        IsVisible   = true,
-                        Size        = new(28),
-                        IconId      = LuminaWrapper.GetItemIconID(costInfo.ItemID),
-                        Position    = new(-10, -4),
-                        TextTooltip = $"{LuminaWrapper.GetItemName(costInfo.ItemID)}"
+                        IsVisible      = true,
+                        Size           = new(28),
+                        IconId         = LuminaWrapper.GetItemIconID(costInfo.ItemID),
+                        Position       = new(-10, -4),
+                        TextTooltip    = $"{LuminaWrapper.GetItemName(costInfo.ItemID)}",
+                        ImageNodeFlags = ImageNodeFlags.AutoFit
                     };
                     costInfoComponent.AddNode(costIconNode);
 
