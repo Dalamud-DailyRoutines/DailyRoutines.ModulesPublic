@@ -34,8 +34,13 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
 
     private static readonly RetainerWorkerBase[] Workers =
     [
-        new CollectWorker(), new EntrustDupsWorker(), new GilsShareWorker(), new GilsWithdrawWorker(),
-        new RefreshWorker(), new TownDispatchWorker(), new PriceAdjustWorker()
+        new CollectWorker(),
+        new EntrustDupsWorker(),
+        new GilsShareWorker(),
+        new GilsWithdrawWorker(),
+        new RefreshWorker(),
+        new TownDispatchWorker(),
+        new PriceAdjustWorker()
     ];
 
     protected override void Init()
@@ -272,9 +277,11 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
             ImGui.AlignTextToFramePadding();
             ImGui.TextColored(KnownColor.RoyalBlue.ToVector4(), GetLoc("AutoRetainerWork-Dispatch-Title"));
 
-            var imageState = ImageHelper.Instance().TryGetImage(
+            var imageState = ImageHelper.Instance().TryGetImage
+            (
                 "https://gh.atmoomen.top/StaticAssets/main/DailyRoutines/image/AutoRetainersDispatch-1.png",
-                out var imageHandle);
+                out var imageHandle
+            );
             ImGui.SameLine();
             ImGui.TextDisabled(FontAwesomeIcon.InfoCircle.ToIconString());
 
@@ -312,16 +319,24 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
             for (var i = 0; i < entryCount - 1; i++)
             {
                 var tempI = i;
-                TaskHelper.Enqueue(() =>
-                                   {
-                                       if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                       return ClickSelectString(tempI);
-                                   }, $"点击第 {tempI} 位雇员, 拉起市场变更请求");
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return ClickSelectYesnoYes();
-                }, "确认市场变更");
+                TaskHelper.Enqueue
+                (
+                    () =>
+                    {
+                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                        return ClickSelectString(tempI);
+                    },
+                    $"点击第 {tempI} 位雇员, 拉起市场变更请求"
+                );
+                TaskHelper.Enqueue
+                (
+                    () =>
+                    {
+                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                        return ClickSelectYesnoYes();
+                    },
+                    "确认市场变更"
+                );
             }
         }
     }
@@ -366,43 +381,61 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
             var count = GetValidRetainerCount(x => x.Gil > 0, out var validRetainers);
             if (count == 0) return;
 
-            validRetainers.ForEach(index =>
-            {
-                TaskHelper.Enqueue(() =>
-                                   {
-                                       if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                       return EnterRetainer(index);
-                                   }, $"选择进入 {index} 号雇员");
-                TaskHelper.Enqueue(() =>
+            validRetainers.ForEach
+            (index =>
                 {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return ClickSelectString(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
-                }, "选择进入金币管理");
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    if (!Bank->IsAddonAndNodesReady()) return false;
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return EnterRetainer(index);
+                        },
+                        $"选择进入 {index} 号雇员"
+                    );
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return ClickSelectString(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
+                        },
+                        "选择进入金币管理"
+                    );
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            if (!Bank->IsAddonAndNodesReady()) return false;
 
-                    var retainerGils = Bank->AtkValues[6].Int;
-                    var handler      = new ClickBank(Bank);
+                            var retainerGils = Bank->AtkValues[6].Int;
+                            var handler      = new ClickBank(Bank);
 
-                    if (retainerGils == 0)
-                        handler.Cancel();
-                    else
-                    {
-                        handler.DepositInput((uint)retainerGils);
-                        handler.Confirm();
-                    }
+                            if (retainerGils == 0)
+                                handler.Cancel();
+                            else
+                            {
+                                handler.DepositInput((uint)retainerGils);
+                                handler.Confirm();
+                            }
 
-                    Bank->Close(true);
-                    return true;
-                }, "取出所有的金币");
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return LeaveRetainer();
-                }, "回到雇员列表");
-            });
+                            Bank->Close(true);
+                            return true;
+                        },
+                        "取出所有的金币"
+                    );
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return LeaveRetainer();
+                        },
+                        "回到雇员列表"
+                    );
+                }
+            );
         }
     }
 
@@ -482,91 +515,123 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
 
         private static void EnqueueRetainersGilShareMethodFirst(uint index, uint avgAmount)
         {
-            TaskHelper.Enqueue(() =>
-                               {
-                                   if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                   return EnterRetainer(index);
-                               }, $"选择进入 {index} 号雇员");
-            TaskHelper.Enqueue(() =>
-            {
-                if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                return ClickSelectString(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
-            }, "选择进入金币管理");
-            TaskHelper.Enqueue(() =>
-                               {
-                                   if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                   if (!Bank->IsAddonAndNodesReady()) return false;
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    return EnterRetainer(index);
+                },
+                $"选择进入 {index} 号雇员"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    return ClickSelectString(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
+                },
+                "选择进入金币管理"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    if (!Bank->IsAddonAndNodesReady()) return false;
 
-                                   var retainerGils = Bank->AtkValues[6].Int;
-                                   var handler      = new ClickBank(Bank);
+                    var retainerGils = Bank->AtkValues[6].Int;
+                    var handler      = new ClickBank(Bank);
 
-                                   if (retainerGils == avgAmount) // 金币恰好相等
-                                   {
-                                       handler.Cancel();
-                                       Bank->Close(true);
-                                       return true;
-                                   }
+                    if (retainerGils == avgAmount) // 金币恰好相等
+                    {
+                        handler.Cancel();
+                        Bank->Close(true);
+                        return true;
+                    }
 
-                                   if (retainerGils > avgAmount) // 雇员金币多于平均值
-                                   {
-                                       handler.DepositInput((uint)(retainerGils - avgAmount));
-                                       handler.Confirm();
-                                       Bank->Close(true);
-                                       return true;
-                                   }
+                    if (retainerGils > avgAmount) // 雇员金币多于平均值
+                    {
+                        handler.DepositInput((uint)(retainerGils - avgAmount));
+                        handler.Confirm();
+                        Bank->Close(true);
+                        return true;
+                    }
 
-                                   // 雇员金币少于平均值
-                                   handler.Switch();
-                                   handler.DepositInput((uint)(avgAmount - retainerGils));
-                                   handler.Confirm();
-                                   Bank->Close(true);
-                                   return true;
-                               }, $"使用 1 号方法均分 {index} 号雇员的金币");
-            TaskHelper.Enqueue(() =>
-            {
-                if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                return LeaveRetainer();
-            }, "回到雇员列表");
+                    // 雇员金币少于平均值
+                    handler.Switch();
+                    handler.DepositInput((uint)(avgAmount - retainerGils));
+                    handler.Confirm();
+                    Bank->Close(true);
+                    return true;
+                },
+                $"使用 1 号方法均分 {index} 号雇员的金币"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    return LeaveRetainer();
+                },
+                "回到雇员列表"
+            );
         }
 
         private static void EnqueueRetainersGilShareMethodSecond(uint index)
         {
-            TaskHelper.Enqueue(() =>
-                               {
-                                   if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                   return EnterRetainer(index);
-                               }, $"选择进入 {index} 号雇员");
-            TaskHelper.Enqueue(() =>
-            {
-                if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                return ClickSelectString(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
-            }, "选择进入金币管理");
-            TaskHelper.Enqueue(() =>
-                               {
-                                   if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                   if (!Bank->IsAddonAndNodesReady()) return false;
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    return EnterRetainer(index);
+                },
+                $"选择进入 {index} 号雇员"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    return ClickSelectString(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
+                },
+                "选择进入金币管理"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    if (!Bank->IsAddonAndNodesReady()) return false;
 
-                                   var retainerGils = Bank->AtkValues[6].Int;
-                                   var handler      = new ClickBank(Bank);
+                    var retainerGils = Bank->AtkValues[6].Int;
+                    var handler      = new ClickBank(Bank);
 
-                                   if (retainerGils == 0)
-                                       handler.Cancel();
-                                   else
-                                   {
-                                       handler.DepositInput((uint)retainerGils);
-                                       handler.Confirm();
-                                   }
+                    if (retainerGils == 0)
+                        handler.Cancel();
+                    else
+                    {
+                        handler.DepositInput((uint)retainerGils);
+                        handler.Confirm();
+                    }
 
-                                   Bank->Close(true);
-                                   return true;
-                               }, $"使用 2 号方法取出 {index} 号雇员的金币");
+                    Bank->Close(true);
+                    return true;
+                },
+                $"使用 2 号方法取出 {index} 号雇员的金币"
+            );
 
             // 回到雇员列表
-            TaskHelper.Enqueue(() =>
-            {
-                if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                return LeaveRetainer();
-            }, "回到雇员列表");
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    return LeaveRetainer();
+                },
+                "回到雇员列表"
+            );
         }
     }
 
@@ -618,40 +683,62 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
             var count = GetValidRetainerCount(x => x.ItemCount > 0, out var validRetainers);
             if (count == 0) return;
 
-            validRetainers.ForEach(index =>
-            {
-                TaskHelper.Enqueue(() =>
-                                   {
-                                       if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                       return EnterRetainer(index);
-                                   }, $"选择进入 {index} 号雇员");
-                TaskHelper.Enqueue(() =>
+            validRetainers.ForEach
+            (index =>
                 {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return ClickSelectString(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し"]);
-                }, "选择道具管理");
-                TaskHelper.Enqueue(() =>
-                {
-                    if (!RetainerThrottler.Throttle("AutoRetainerEntrustDups", 100)) return false;
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return EnterRetainer(index);
+                        },
+                        $"选择进入 {index} 号雇员"
+                    );
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return ClickSelectString(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し"]);
+                        },
+                        "选择道具管理"
+                    );
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (!RetainerThrottler.Throttle("AutoRetainerEntrustDups", 100)) return false;
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
 
-                    var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Retainer);
-                    if (agent == null || !agent->IsAgentActive()) return false;
-                    AgentId.Retainer.SendEvent(0, 0);
-                    return true;
-                }, "选择同类道具合并提交");
-                TaskHelper.DelayNext(500, "等待同类道具合并提交开始");
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return ExitRetainerInventory();
-                }, "离开雇员背包界面");
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return LeaveRetainer();
-                }, "回到雇员列表");
-            });
+                            var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Retainer);
+                            if (agent == null || !agent->IsAgentActive()) return false;
+                            AgentId.Retainer.SendEvent(0, 0);
+                            return true;
+                        },
+                        "选择同类道具合并提交"
+                    );
+                    TaskHelper.DelayNext(500, "等待同类道具合并提交开始");
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return ExitRetainerInventory();
+                        },
+                        "离开雇员背包界面"
+                    );
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return LeaveRetainer();
+                        },
+                        "回到雇员列表"
+                    );
+                }
+            );
         }
 
         private static void OnEntrustDupsAddons(AddonEvent type, AddonArgs args)
@@ -664,23 +751,28 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
                     args.Addon.ToStruct()->Callback(1);
                     break;
                 case "RetainerItemTransferProgress":
-                    TaskHelper.Enqueue(() =>
-                    {
-                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                        var addon = GetAddonByName("RetainerItemTransferProgress");
-                        if (!addon->IsAddonAndNodesReady()) return false;
-
-                        var progress = addon->AtkValues[2].Float;
-
-                        if (progress == 1)
+                    TaskHelper.Enqueue
+                    (
+                        () =>
                         {
-                            addon->Callback(-2);
-                            addon->Close(true);
-                            return true;
-                        }
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            var addon = GetAddonByName("RetainerItemTransferProgress");
+                            if (!addon->IsAddonAndNodesReady()) return false;
 
-                        return false;
-                    }, "等待同类道具合并提交完成", weight: 2);
+                            var progress = addon->AtkValues[2].Float;
+
+                            if (progress == 1)
+                            {
+                                addon->Callback(-2);
+                                addon->Close(true);
+                                return true;
+                            }
+
+                            return false;
+                        },
+                        "等待同类道具合并提交完成",
+                        weight: 2
+                    );
                     break;
             }
         }
@@ -725,19 +817,29 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
             var count = GetValidRetainerCount(_ => true, out var validRetainers);
             if (count == 0) return;
 
-            validRetainers.ForEach(index =>
-            {
-                TaskHelper.Enqueue(() =>
-                                   {
-                                       if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                       return EnterRetainer(index);
-                                   }, $"选择进入 {index} 号雇员");
-                TaskHelper.Enqueue(() =>
+            validRetainers.ForEach
+            (index =>
                 {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return LeaveRetainer();
-                }, "回到雇员列表");
-            });
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return EnterRetainer(index);
+                        },
+                        $"选择进入 {index} 号雇员"
+                    );
+                    TaskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                            return LeaveRetainer();
+                        },
+                        "回到雇员列表"
+                    );
+                }
+            );
         }
     }
 
@@ -755,7 +857,7 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
 
         public override void Init()
         {
-            TaskHelper ??= new() { TimeoutMS = 15_000 };
+            TaskHelper ??= new() { TimeoutMS = 15_000, ShowDebug = true };
 
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RetainerList", OnRetainerList);
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,  "RetainerList", OnRetainerList);
@@ -807,11 +909,15 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
                     if (!ModuleConfig.AutoRetainerCollect) break;
                     if (!RetainerThrottler.Throttle("AutoRetainerCollect-AFK", 5_000)) return;
 
-                    DService.Instance().Framework.RunOnTick(() =>
-                    {
-                        if (TaskHelper.IsBusy) return;
-                        EnqueueRetainersCollect();
-                    }, TimeSpan.FromSeconds(1));
+                    DService.Instance().Framework.RunOnTick
+                    (
+                        () =>
+                        {
+                            if (TaskHelper.IsBusy) return;
+                            EnqueueRetainersCollect();
+                        },
+                        TimeSpan.FromSeconds(1)
+                    );
                     break;
             }
         }
@@ -821,63 +927,86 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
             if (InterruptByConflictKey(TaskHelper, Module)) return;
 
             var serverTime = Framework.GetServerTime();
-            var count = GetValidRetainerCount(
+            var count = GetValidRetainerCount
+            (
                 x => x.VentureId != 0 && x.VentureComplete != 0 && x.VentureComplete + 1 <= serverTime,
-                out var validRetainers);
+                out var validRetainers
+            );
 
             if (count == 0)
             {
                 if (TaskHelper.IsBusy)
-                    TaskHelper.Enqueue(() => LeaveRetainer(), "确保所有雇员均已返回");
+                    TaskHelper.Enqueue(LeaveRetainer, "确保所有雇员均已返回");
                 return;
             }
 
             foreach (var index in validRetainers)
             {
-                TaskHelper.Enqueue(() =>
-                                   {
-                                       if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                                       return EnterRetainer(index);
-                                   }, $"选择进入 {index} 号雇员");
-
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    if (!SelectString->IsAddonAndNodesReady()) return false;
-
-                    if (!TryScanSelectStringText(VentureCompleteTexts, out var i))
+                TaskHelper.Enqueue
+                (
+                    () =>
                     {
-                        TaskHelper.Abort();
-                        TaskHelper.Enqueue(() => LeaveRetainer(), "回到雇员列表");
+                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                        return EnterRetainer(index);
+                    },
+                    $"选择进入 {index} 号雇员"
+                );
+
+                TaskHelper.Enqueue
+                (
+                    () =>
+                    {
+                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                        if (!SelectString->IsAddonAndNodesReady()) return false;
+                        if (RetainerList != null) return false;
+
+                        if (!TryScanSelectStringText(VentureCompleteTexts, out var i))
+                        {
+                            TaskHelper.Abort();
+                            TaskHelper.Enqueue(LeaveRetainer, "回到雇员列表");
+                            return true;
+                        }
+
+                        return ClickSelectString(i);
+                    },
+                    "确认雇员探险完成"
+                );
+
+                TaskHelper.Enqueue
+                (
+                    () =>
+                    {
+                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                        if (!RetainerTaskResult->IsAddonAndNodesReady()) return false;
+
+                        RetainerTaskResult->Callback(14);
                         return true;
-                    }
+                    },
+                    "重新派遣雇员探险"
+                );
 
-                    return ClickSelectString(i);
-                }, "确认雇员探险完成");
+                TaskHelper.Enqueue
+                (
+                    () =>
+                    {
+                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                        if (!RetainerTaskAsk->IsAddonAndNodesReady()) return false;
 
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    if (!RetainerTaskResult->IsAddonAndNodesReady()) return false;
+                        RetainerTaskAsk->Callback(12);
+                        return true;
+                    },
+                    "确认派遣雇员探险"
+                );
 
-                    RetainerTaskResult->Callback(14);
-                    return true;
-                }, "重新派遣雇员探险");
-
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    if (!RetainerTaskAsk->IsAddonAndNodesReady()) return false;
-
-                    RetainerTaskAsk->Callback(12);
-                    return true;
-                }, "确认派遣雇员探险");
-
-                TaskHelper.Enqueue(() =>
-                {
-                    if (InterruptByConflictKey(TaskHelper, Module)) return true;
-                    return LeaveRetainer();
-                }, "回到雇员列表");
+                TaskHelper.Enqueue
+                (
+                    () =>
+                    {
+                        if (InterruptByConflictKey(TaskHelper, Module)) return true;
+                        return LeaveRetainer();
+                    },
+                    "回到雇员列表"
+                );
             }
 
             TaskHelper.Enqueue(EnqueueRetainersCollect, "重新检查是否有其他雇员需要收取");
@@ -903,15 +1032,18 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
         public abstract void Uninit();
     }
 
-    public class ClickBank(AtkUnitBase* Addon)
+    public class ClickBank
+    (
+        AtkUnitBase* addon
+    )
     {
-        public void Switch() => Addon->Callback(2, 0);
+        public void Switch() => addon->Callback(2, 0);
 
-        public void DepositInput(uint amount) => Addon->Callback(3, amount);
+        public void DepositInput(uint amount) => addon->Callback(3, amount);
 
-        public void Confirm() => Addon->Callback(0, 0);
+        public void Confirm() => addon->Callback(0, 0);
 
-        public void Cancel() => Addon->Callback(1, 0);
+        public void Cancel() => addon->Callback(1, 0);
 
         public static ClickBank Using(AtkUnitBase* addon) => new(addon);
     }
@@ -954,9 +1086,11 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
         物品类型
     }
 
-    private class PriceCheckCondition(
+    private class PriceCheckCondition
+    (
         AbortCondition                           condition,
-        Func<ItemConfig, uint, uint, uint, bool> predicate)
+        Func<ItemConfig, uint, uint, uint, bool> predicate
+    )
     {
         public AbortCondition                           Condition { get; } = condition;
         public Func<ItemConfig, uint, uint, uint, bool> Predicate { get; } = predicate;
@@ -964,47 +1098,65 @@ public unsafe partial class AutoRetainerWork : DailyModuleBase
 
     private static class PriceCheckConditions
     {
-        private static readonly PriceCheckCondition[] conditions =
+        private static readonly PriceCheckCondition[] Conditions =
         [
-            new(AbortCondition.高于最大值,
+            new
+            (
+                AbortCondition.高于最大值,
                 (cfg, _, modified, _) =>
-                    modified > cfg.PriceMaximum),
+                    modified > cfg.PriceMaximum
+            ),
 
-            new(AbortCondition.高于预期值,
+            new
+            (
+                AbortCondition.高于预期值,
                 (cfg, _, modified, _) =>
-                    modified > cfg.PriceExpected),
+                    modified > cfg.PriceExpected
+            ),
 
-            new(AbortCondition.大于可接受降价值,
+            new
+            (
+                AbortCondition.大于可接受降价值,
                 (cfg, orig, modified, _) =>
                     cfg.PriceMaxReduction != 0         &&
                     orig                  != 999999999 &&
                     orig - modified       > 0          &&
-                    orig - modified       > cfg.PriceMaxReduction),
+                    orig - modified       > cfg.PriceMaxReduction
+            ),
 
-            new(AbortCondition.低于收购价,
+            new
+            (
+                AbortCondition.低于收购价,
                 (cfg, _, modified, _) =>
                     LuminaGetter.TryGetRow<Item>(cfg.ItemID, out var itemRow) &&
-                    modified <= itemRow.PriceMid),
+                    modified <= itemRow.PriceMid
+            ),
 
-            new(AbortCondition.低于最小值,
+            new
+            (
+                AbortCondition.低于最小值,
                 (cfg, _, modified, _) =>
-                    modified < cfg.PriceMinimum),
+                    modified < cfg.PriceMinimum
+            ),
 
-            new(AbortCondition.低于预期值,
+            new
+            (
+                AbortCondition.低于预期值,
                 (cfg, _, modified, _) =>
-                    modified < cfg.PriceExpected)
+                    modified < cfg.PriceExpected
+            )
         ];
 
         /// <summary>
         ///     获取所有价格检查条件
         /// </summary>
-        public static IEnumerable<PriceCheckCondition> GetAll() => conditions;
+        public static IEnumerable<PriceCheckCondition> GetAll() => Conditions;
 
         /// <summary>
         ///     根据条件类型获取特定的检查条件
         /// </summary>
         public static PriceCheckCondition Get(AbortCondition condition) =>
-            conditions.FirstOrDefault(x => x.Condition == condition);
+            Conditions.FirstOrDefault(x => x.Condition == condition);
     }
 
     private class Config : ModuleConfiguration
