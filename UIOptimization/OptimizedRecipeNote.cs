@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using DailyRoutines.Abstracts;
 using DailyRoutines.IPC;
-using DailyRoutines.Managers;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
@@ -31,7 +30,7 @@ public class OptimizedRecipeNote : DailyModuleBase
         Title               = GetLoc("OptimizedRecipeNoteTitle"),
         Description         = GetLoc("OptimizedRecipeNoteDescription"),
         Category            = ModuleCategories.UIOptimization,
-        ModulesPrerequisite = ["BetterMarketBoard", "BetterTeleport"]
+        ModulesPrerequisite = ["AutoShowItemNPCShopInfo"]
     };
     
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
@@ -81,9 +80,6 @@ public class OptimizedRecipeNote : DailyModuleBase
         
         AddonActionsPreview.Addon?.Dispose();
         AddonActionsPreview.Addon = null;
-        
-        AddonShopsPreview.Addon?.Dispose();
-        AddonShopsPreview.Addon = null;
         
         CaculationResults.Values.ForEach(x =>
         {
@@ -400,12 +396,12 @@ public class OptimizedRecipeNote : DailyModuleBase
                                 if (item.ItemSearchCategory.RowId > 0 && itemInfo != null)
                                 {
                                     if (!IsConflictKeyPressed())
-                                        AddonShopsPreview.OpenWithData(itemInfo);
+                                        OpenShopListByItemIDIPC.InvokeFunc(item.RowId);
                                     else
                                         ChatManager.Instance().SendMessage($"/pdr market {item.Name}");
                                 }
                                 else if (itemInfo != null)
-                                    AddonShopsPreview.OpenWithData(itemInfo);
+                                    OpenShopListByItemIDIPC.InvokeFunc(item.RowId);
                                 else if (item.ItemSearchCategory.RowId > 0)
                                     ChatManager.Instance().SendMessage($"/pdr market {item.Name}");
                             }
@@ -752,6 +748,9 @@ public class OptimizedRecipeNote : DailyModuleBase
         return data->RecipeId;
     }
 
+    [IPCSubscriber("DailyRoutines.Modules.AutoShowItemNPCShopInfo.OpenByItemID")]
+    private static IPCSubscriber<uint, bool> OpenShopListByItemIDIPC;
+
     private class AddonActionsPreview(TaskHelper taskHelper, CaculationResult result) : NativeAddon
     {
         public static AddonActionsPreview? Addon  { get; set; }
@@ -1024,211 +1023,7 @@ public class OptimizedRecipeNote : DailyModuleBase
                 ExecuteButton.IsEnabled = Synthesis != null && !taskHelper.IsBusy;
         }
     }
-
-    private class AddonShopsPreview : NativeAddon
-    {
-        public static AddonShopsPreview? Addon  { get; set; }
-        
-        private static Task? OpenAddonTask;
-        
-        public static void OpenWithData(ItemShopInfo shopInfo)
-        {
-            if (shopInfo is not { NPCInfos.Count: > 0 }) return;
-            if (OpenAddonTask != null) return;
-            
-            var isAddonExisted = Addon?.IsOpen ?? false;
-            if (Addon != null)
-            {
-                Addon.Dispose();
-                Addon = null;
-            }
-
-            OpenAddonTask = DService.Instance().Framework.RunOnTick(() =>
-            {
-                Addon ??= new(shopInfo)
-                {
-                    InternalName = "DRRecipeNoteShopsPreview",
-                    Title        = GetLoc("OptimizedRecipeNote-ShopList"),
-                    Size         = new(550f, 400f),
-                };
-                Addon.Open();
-            }, TimeSpan.FromMilliseconds(isAddonExisted ? 500 : 0)).ContinueWith(_ => OpenAddonTask = null);
-        }
-        
-        public ItemShopInfo ShopInfo { get; set; }
-        
-        private AddonShopsPreview(ItemShopInfo shopInfo) => 
-            ShopInfo = shopInfo;
-        
-        protected override unsafe void OnSetup(AtkUnitBase* addon)
-        {
-            var itemInfoRow = new HorizontalListNode
-            {
-                IsVisible   = true,
-                Size        = new Vector2(ContentSize.X - 5, 48),
-                Position    = ContentStartPosition + new Vector2(5, 0),
-                ItemSpacing = 5
-            };
-            itemInfoRow.AttachNode(this);
-
-            var itemIconNode = new IconImageNode
-            {
-                IsVisible      = true,
-                Size           = new(48),
-                IconId         = LuminaWrapper.GetItemIconID(ShopInfo.ItemID),
-                ImageNodeFlags = ImageNodeFlags.AutoFit
-            };
-            itemInfoRow.AddNode(itemIconNode);
-
-            var itemNameNode = new TextNode
-            {
-                IsVisible     = true,
-                TextFlags     = TextFlags.AutoAdjustNodeSize,
-                String        = LuminaWrapper.GetItemName(ShopInfo.ItemID),
-                FontSize      = 18,
-                Position      = new(0, 6),
-                AlignmentType = AlignmentType.TopLeft
-            };
-            itemInfoRow.AddNode(itemNameNode);
-
-            if (ShopInfo.GetItem().ItemSearchCategory.RowId > 0)
-            {
-                var marketButtonNode = new IconButtonNode
-                {
-                    IconId      = 60570,
-                    TextTooltip = LuminaWrapper.GetAddonText(548),
-                    Size        = new(32),
-                    Position    = itemInfoRow.Position + new Vector2(itemNameNode.GetTextDrawSize(itemNameNode.String).X + itemIconNode.Size.X + 15f, 2),
-                    IsVisible   = true,
-                    OnClick     = () => ChatManager.Instance().SendMessage($"/pdr market {ShopInfo.GetItem().Name}")
-                };
-                marketButtonNode.AttachNode(this);
-            }
-
-            var scrollingAreaNode = new ScrollingAreaNode<VerticalListNode>
-            {
-                Position          = ContentStartPosition + new Vector2(5, 48),
-                Size              = ContentSize          - new Vector2(5, 48),
-                ContentHeight     = ShopInfo.NPCInfos.Count(x => x.Location != null) * 33,
-                ScrollSpeed       = 100,
-                IsVisible         = true,
-                AutoHideScrollBar = true,
-            };
-            scrollingAreaNode.AttachNode(this);
-
-            var contentNode = scrollingAreaNode.ContentNode;
-            contentNode.ItemSpacing = 3;
-            
-            contentNode.AddDummy(5);
-
-            var testTextNode = new TextNode();
-
-            var longestLocationText = ShopInfo.NPCInfos
-                                              .Where(x => x.Location != null)
-                                              .Select(x => x.Location.GetTerritory().ExtractPlaceName())
-                                              .MaxBy(x => x.Length);
-            var locationColumnWidth = testTextNode.GetTextDrawSize(longestLocationText).X + 40f;
-            
-            var longestNameText = ShopInfo.NPCInfos
-                                          .Select(x => x.Name)
-                                          .MaxBy(x => x.Length);
-            var nameColumnWidth = testTextNode.GetTextDrawSize(longestNameText).X + 5f;
-            
-            foreach (var npcInfo in ShopInfo.NPCInfos.OrderBy(x => x.Location?.TerritoryID == 282))
-            {
-                if (npcInfo.Location == null)
-                    continue;
-                
-                var row = new ResNode
-                {
-                    IsVisible   = true,
-                    Size        = new(contentNode.Width, 30),
-                };
-                contentNode.AddNode(row);
-
-                var npcNameNode = new TextNode
-                {
-                    IsVisible = true,
-                    String    = npcInfo.Name,
-                    Position  = new(0, 4)
-                };
-                npcNameNode.AttachNode(row);
-
-                var locationName = npcInfo.Location.TerritoryID == 282 ? LuminaWrapper.GetAddonText(8495) : npcInfo.Location.GetTerritory().ExtractPlaceName();
-                var npcLocationNode = new TextButtonNode
-                {
-                    IsVisible   = true,
-                    String      = locationName,
-                    Size        = new(locationColumnWidth, 28f),
-                    Position    = new(nameColumnWidth, 0),
-                    IsEnabled   = npcInfo.Location.TerritoryID != 282,
-                    TextTooltip = $"{GetLoc("Mark")} / {LuminaWrapper.GetAddonText(168)} [{GetLoc("ConflictKey")}]",
-                    OnClick = () =>
-                    {
-                        var pos = MapToWorld(new(npcInfo.Location.MapPosition.X, npcInfo.Location.MapPosition.Y), npcInfo.Location.GetMap()).ToVector3(0);
-
-                        var instance = AgentMap.Instance();
-                        instance->SetFlagMapMarker(npcInfo.Location.TerritoryID, npcInfo.Location.MapID, pos);
-
-                        if (!IsConflictKeyPressed())
-                            instance->OpenMap(npcInfo.Location.MapID, npcInfo.Location.TerritoryID, npcInfo.Name);
-                        else
-                        {
-                            var aetheryte = MovementManager.GetNearestAetheryte(pos, npcInfo.Location.TerritoryID);
-                            if (aetheryte != null)
-                                ChatManager.Instance().SendMessage($"/pdrtelepo {aetheryte.Name}");
-                        }
-                    }
-                };
-                npcLocationNode.AttachNode(row);
-
-                var costInfoComponent = new HorizontalListNode
-                {
-                    IsVisible   = true,
-                    Position    = new(nameColumnWidth + locationColumnWidth + 10f, 4),
-                    Size        = new(100, 28),
-                    ItemSpacing = 10
-                };
-
-                foreach (var costInfo in npcInfo.CostInfos)
-                {
-                    var costIconNode = new IconImageNode
-                    {
-                        IsVisible      = true,
-                        Size           = new(28),
-                        IconId         = LuminaWrapper.GetItemIconID(costInfo.ItemID),
-                        Position       = new(-10, -4),
-                        TextTooltip    = $"{LuminaWrapper.GetItemName(costInfo.ItemID)}",
-                        ImageNodeFlags = ImageNodeFlags.AutoFit
-                    };
-                    costInfoComponent.AddNode(costIconNode);
-
-                    var costNode = new TextNode
-                    {
-                        IsVisible = true,
-                        TextFlags = TextFlags.AutoAdjustNodeSize,
-                        String    = costInfo.ToString().Replace(LuminaWrapper.GetItemName(costInfo.ItemID), string.Empty).Trim(),
-                        Position  = new(4, 6)
-                    };
-                    costInfoComponent.AddNode(costNode);
-                }
-                
-                costInfoComponent.AttachNode(row);
-            }
-        }
-
-        protected override unsafe void OnUpdate(AtkUnitBase* addon)
-        {
-            if (DService.Instance().KeyState[VirtualKey.ESCAPE])
-            {
-                Close();
-                
-                if (SystemMenu != null)
-                    SystemMenu->Close(true);
-            }
-        }
-    }
-
+    
     private record CaculationResult(
         List<uint>         Actions,
         uint               RecipeID,
