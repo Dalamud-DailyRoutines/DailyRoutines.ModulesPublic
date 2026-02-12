@@ -743,7 +743,10 @@ public class OptimizedRecipeNote : DailyModuleBase
 
     private static unsafe uint GetCurrentRecipeID()
     {
-        var data = UIState.Instance()->RecipeNote.RecipeList->SelectedRecipe;
+        var recipeList = UIState.Instance()->RecipeNote.RecipeList;
+        if (recipeList == null) return 0;
+        
+        var data = recipeList->SelectedRecipe;
         if (data == null) return 0;
 
         return data->RecipeId;
