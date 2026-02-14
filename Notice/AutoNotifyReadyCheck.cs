@@ -28,7 +28,7 @@ public class AutoNotifyReadyCheck : DailyModuleBase
     protected override void Uninit() => 
         LogMessageManager.Instance().Unreg(OnLogMessage);
 
-    private void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
+    private static void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
     {
         if (!ValidLogMessages.Contains(logMessageID)) return;
         
