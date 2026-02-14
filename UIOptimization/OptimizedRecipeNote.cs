@@ -143,10 +143,12 @@ public class OptimizedRecipeNote : DailyModuleBase
                         resNode2->SetXFloat(0);
                 }
                 break;
+            
             case AddonEvent.PostSetup:
                 if (AddonActionsPreview.Addon?.Nodes is not { Count: > 0 } nodes) return;
                     nodes.ForEach(x => x.Alpha = 1);
                 break;
+            
             case AddonEvent.PostRequestedUpdate:
                 try
                 {
@@ -160,8 +162,9 @@ public class OptimizedRecipeNote : DailyModuleBase
                     // ignored
                 }
                 break;
+            
             case AddonEvent.PostDraw:
-                if (RecipeNoteAddon == null) return;
+                if (!RecipeNoteAddon->IsAddonAndNodesReady()) return;
 
                 if (RecipeCaculationButton == null)
                 {
