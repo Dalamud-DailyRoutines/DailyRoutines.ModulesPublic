@@ -1,11 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
 using DailyRoutines.Abstracts;
-using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Utility;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
-using Lumina.Excel.Sheets;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -20,18 +14,29 @@ public class AutoNotifyCountdown : DailyModuleBase
     };
     
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private static readonly List<string> Countdown = LuminaGetter.GetRowOrDefault<LogMessage>(5255).Text.ToDalamudString().Payloads
-                                                                 .Where(x => x.Type == PayloadType.RawText)
-                                                                 .Select(text => text.ToString() ?? string.Empty).ToList();
 
     private static Config ModuleConfig = null!;
 
     protected override void Init()
     {
         ModuleConfig = LoadConfig<Config>() ?? new();
+
+        LogMessageManager.Instance().RegPost(OnLogMessage);
+    }
+    
+    protected override void Uninit() => 
+        LogMessageManager.Instance().Unreg(OnLogMessage);
+
+    private static void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
+    {
+        if (logMessageID != 5255) return;
+        if (ModuleConfig.OnlyNotifyWhenBackground && GameState.IsForeground) return;
         
-        DService.Instance().Chat.ChatMessage += OnChatMessage;
+        var text = DService.Instance().SeStringEvaluator.EvaluateFromLogMessage(5255, [item.Parameters[0].IntValue, item.SourceObjStrId])
+                           .ExtractText()
+                           .Split("\n")[0];
+        NotificationInfo(text, Lang.Get("AutoNotifyCountdown-NotificationTitle"));
+        Speak(text);
     }
 
     protected override void ConfigUI()
@@ -39,22 +44,6 @@ public class AutoNotifyCountdown : DailyModuleBase
         if (ImGui.Checkbox(GetLoc("OnlyNotifyWhenBackground"), ref ModuleConfig.OnlyNotifyWhenBackground))
             SaveConfig(ModuleConfig);
     }
-
-    private static unsafe void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
-    {
-        if (ModuleConfig.OnlyNotifyWhenBackground && !Framework.Instance()->WindowInactive) return;
-        if ((uint)type != 185) return;
-
-        var msg = message.TextValue;
-        if (Countdown.All(msg.Contains))
-        {
-            NotificationInfo(message.TextValue, Lang.Get("AutoNotifyCountdown-NotificationTitle"));
-            Speak(message.TextValue);
-        }
-    }
-
-    protected override void Uninit() => 
-        DService.Instance().Chat.ChatMessage -= OnChatMessage;
 
     private class Config : ModuleConfiguration
     {
