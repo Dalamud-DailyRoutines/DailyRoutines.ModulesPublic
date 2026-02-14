@@ -31,12 +31,9 @@ public class AutoNotifyCountdown : DailyModuleBase
     {
         if (logMessageID != 5255) return;
         if (ModuleConfig.OnlyNotifyWhenBackground && GameState.IsForeground) return;
-        
-        var text = DService.Instance().SeStringEvaluator.EvaluateFromLogMessage(5255, [item.Parameters[0].IntValue, item.SourceObjStrId])
-                           .ExtractText()
-                           .Split("\n")[0];
-        NotificationInfo(text, Lang.Get("AutoNotifyCountdown-NotificationTitle"));
-        Speak(text);
+
+        NotificationInfo(GetLoc("AutoNotifyCountdown-NotificationTitle"));
+        Speak(GetLoc("AutoNotifyCountdown-NotificationTitle"));
     }
 
     protected override void ConfigUI()
