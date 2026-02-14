@@ -58,7 +58,7 @@ public unsafe class CompanyCreditExchangeMore : DailyModuleBase
             ModuleConfig.Save(this);
     }
 
-    private static void OnPreSendPacket(ref bool isPrevented, int opcode, ref byte* packet, ref ushort priority)
+    private static void OnPreSendPacket(ref bool isPrevented, int  opcode, ref nint packet, ref bool isPrioritize)
     {
         if (opcode != UpstreamOpcode.HandOverItemOpcode) return;
         if (ModuleConfig.OnlyActiveInWorkshop && HousingManager.Instance()->WorkshopTerritory == null) return;

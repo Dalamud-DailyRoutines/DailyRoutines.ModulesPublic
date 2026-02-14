@@ -340,10 +340,10 @@ public partial class OccultCrescentHelper
             TreasureTaskHelper.Enqueue(MoveToNextTreasurePoint, "下一轮开始");
         }
 
-        public static void OnPreSendPacket(ref bool isPrevented, int opcode, ref byte* packet, ref ushort priority)
+        public static void OnPreSendPacket(ref bool isPrevented, int  opcode, ref nint packet, ref bool isPrioritize)
         {
             if (opcode                         != UpstreamOpcode.PositionUpdateInstanceOpcode ||
-                GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent            ||
+                GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent         ||
                 !TreasureTaskHelper.IsBusy)
                 return;
 
