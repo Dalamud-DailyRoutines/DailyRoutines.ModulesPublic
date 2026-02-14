@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using DailyRoutines.Abstracts;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -18,23 +20,19 @@ public class AutoNotifyReadyCheck : DailyModuleBase
     
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static readonly HashSet<ushort> ValidTypes = [57, 313, 569];
-    private static readonly string[] ValidStrings = ["发起了准备确认", "a ready check", "レディチェックを開始しました"];
-
-    protected override void Init() => 
-        DService.Instance().Chat.ChatMessage += OnChatMessage;
-
-    private static void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
-    {
-        if (!ValidTypes.Contains((ushort)type)) return;
-
-        var content = message.TextValue;
-        if (!ValidStrings.Any(x => content.Contains(x, StringComparison.OrdinalIgnoreCase))) return;
-
-        NotificationInfo(content);
-        Speak(content);
-    }
-
+    private static readonly FrozenSet<uint> ValidLogMessages = [3790, 3791];
+    
+    protected override void Init() =>
+        LogMessageManager.Instance().RegPost(OnLogMessage);
+    
     protected override void Uninit() => 
-        DService.Instance().Chat.ChatMessage -= OnChatMessage;
+        LogMessageManager.Instance().Unreg(OnLogMessage);
+
+    private void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
+    {
+        if (!ValidLogMessages.Contains(logMessageID)) return;
+        
+        NotificationInfo(LuminaWrapper.GetLogMessageText(3790));
+        Speak(LuminaWrapper.GetLogMessageText(3790));
+    }
 }
