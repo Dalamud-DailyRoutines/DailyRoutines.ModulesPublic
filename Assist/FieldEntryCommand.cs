@@ -144,7 +144,7 @@ public unsafe class FieldEntryCommand : DailyModuleBase
         }
     }
 
-    public static void OnPreSendPacket(ref bool isPrevented, int opcode, ref byte* packet, ref ushort priority)
+    public static void OnPreSendPacket(ref bool isPrevented, int  opcode, ref nint packet, ref bool isPrioritize)
     {
         if (RedirectTargetZoneInMoon == 0 || GameState.TerritoryType != 959) return;
 
@@ -208,9 +208,9 @@ public unsafe class FieldEntryCommand : DailyModuleBase
                 TPHelper.Enqueue
                 (() =>
                     {
-                        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
+                        if (DService.Instance().ObjectTable.LocalPlayer is null) return false;
 
-                        GamePacketManager.Instance().SendPackt(new EventStartPackt(localPlayer.GameObjectID, 721694));
+                        new EventStartPackt(LocalPlayerState.EntityID, 721694).Send();
                         return true;
                     }
                 );

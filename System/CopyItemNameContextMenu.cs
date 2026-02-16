@@ -1,7 +1,6 @@
 using System;
 using DailyRoutines.Abstracts;
 using DailyRoutines.Infos;
-using DailyRoutines.Managers;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
@@ -18,7 +17,7 @@ public class CopyItemNameContextMenu : DailyModuleBase
         Category    = ModuleCategories.System,
         Author      = ["Nukoooo"]
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly string CopyItemNameString = LuminaWrapper.GetAddonText(159);
@@ -27,10 +26,10 @@ public class CopyItemNameContextMenu : DailyModuleBase
     private static readonly CopyItemNameMenuItem MenuItem        = new(CopyItemNameString);
     private static readonly CopyItemNameMenuItem GlamourMenuItem = new($"{CopyItemNameString} ({GlamoursString})");
 
-    protected override void Init() => 
+    protected override void Init() =>
         DService.Instance().ContextMenu.OnMenuOpened += OnContextMenuOpened;
 
-    protected override void Uninit() => 
+    protected override void Uninit() =>
         DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 
     private static unsafe void OnContextMenuOpened(IMenuOpenedArgs args)
@@ -64,10 +63,10 @@ public class CopyItemNameContextMenu : DailyModuleBase
 
         var contextMenuCounts = contextMenu->EventParams[0].Int;
 
-        const int Start = 8;
-        var       end   = Start + contextMenuCounts;
+        const int START = 8;
+        var       end   = START + contextMenuCounts;
 
-        for (var i = Start; i < end; i++)
+        for (var i = START; i < end; i++)
         {
             var param = contextMenu->EventParams[i];
             var str   = param.GetValueAsString();
@@ -91,39 +90,42 @@ public class CopyItemNameContextMenu : DailyModuleBase
         args.AddMenuItem(GlamourMenuItem.Get());
     }
 
-    private sealed class CopyItemNameMenuItem(string name) : MenuItemBase
+    private sealed class CopyItemNameMenuItem
+    (
+        string name
+    ) : MenuItemBase
     {
         public override string Name       { get; protected set; } = name;
         public override string Identifier { get; protected set; } = nameof(CopyItemNameContextMenu);
-        
+
         protected override bool WithDRPrefix { get; set; } = true;
 
-        private uint ItemID;
-        
+        private uint itemID;
+
         protected override unsafe void OnClicked(IMenuItemClickedArgs args)
         {
             var itemName = string.Empty;
 
-            if (ItemID >= 2000000 && LuminaGetter.TryGetRow<EventItem>(ItemID, out var eventItem))
+            if (itemID >= 2000000 && LuminaGetter.TryGetRow<EventItem>(itemID, out var eventItem))
                 itemName = eventItem.Singular.ToString();
             else
             {
-                ItemID %= 500000;
+                itemID %= 500000;
 
-                if (LuminaGetter.TryGetRow<Item>(ItemID, out var item))
+                if (LuminaGetter.TryGetRow<Item>(itemID, out var item))
                     itemName = item.Name.ToString();
             }
 
             if (string.IsNullOrWhiteSpace(itemName))
                 return;
 
-            RaptureLogModule.Instance()->ShowLogMessageUInt(1632, ItemID);
+            RaptureLogModule.Instance()->ShowLogMessageUInt(1632, itemID);
 
             ImGui.SetClipboardText(itemName);
-            ItemID = 0;
+            itemID = 0;
         }
 
-        public void SetRawItemID(uint id) => 
-            ItemID = id;
+        public void SetRawItemID(uint id) =>
+            itemID = id;
     }
 }

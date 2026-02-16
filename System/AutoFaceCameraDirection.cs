@@ -315,7 +315,7 @@ public unsafe class AutoFaceCameraDirection : DailyModuleBase
         CameraCharaRotation = LockOn ? LockOnRotation : CameraDirHToCharaRotation(camera->DirH);
     }
     
-    private static void OnPreSendPacket(ref bool isPrevented, int opcode, ref byte* packet, ref ushort priority)
+    private static void OnPreSendPacket(ref bool isPrevented, int  opcode, ref nint packet, ref bool isPrioritize)
     {
         if (CacheCamera == null || !ValidOpcodes.Contains(opcode) || ShouldSkipUpdate()) return;
         

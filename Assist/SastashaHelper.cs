@@ -67,7 +67,7 @@ public unsafe class SastashaHelper : DailyModuleBase
         FrameworkManager.Instance().Reg(OnUpdate, 2_000);
     }
 
-    private static void OnPostSendPackt(int opcode, byte* packet, ushort priority)
+    private static void OnPostSendPackt(int opcode, nint packet, bool isPrioritize)
     {
         if (opcode != UpstreamOpcode.EventStartOpcode) return;
         
