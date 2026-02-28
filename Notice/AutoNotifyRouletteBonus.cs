@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using DailyRoutines.Abstracts;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -122,7 +121,10 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         ImGuiOm.HelpMarker(GetLoc("AutoNotifyRouletteBonus-OnlyIncompleteHelp"));
 
         ImGui.TableNextColumn();
-        DrawRoleBonusHeaderIcon(headerTexture, headerInvTexSize, hasHeaderTexture);
+        if (hasHeaderTexture)
+            DrawRoleBonusHeaderIcon(headerTexture, headerInvTexSize);
+        else
+            ImGui.TextUnformatted("-");
 
         foreach (var roulette in CachedRoulettes)
         {
@@ -173,7 +175,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
                 if (bonusIndex is > 0 and < ROULETTE_BONUS_ARRAY_SIZE)
                 {
                     var currentRole = LastKnownRoles[bonusIndex];
-                    if (!DrawRoleBonusCellIcon(roleBonusTexture, roleBonusInvTexSize, hasRoleBonusTexture, currentRole))
+                    if (!hasRoleBonusTexture || !DrawRoleBonusCellIcon(roleBonusTexture, roleBonusInvTexSize, currentRole))
                         ImGui.TextUnformatted("-");
                 }
                 else
@@ -193,7 +195,7 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
     private void OnZoneChanged(ushort _)
     {
         TaskHelper.Abort();
-        TaskHelper.Enqueue(() => UIModule.IsScreenReady() && BetweenAreas);
+        TaskHelper.Enqueue(() => UIModule.IsScreenReady() && !BetweenAreas);
         TaskHelper.Enqueue(() =>
         {
             var agent = AgentContentsFinder.Instance();
@@ -347,20 +349,11 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         return linkPayload;
     }
 
-    private static void DrawRoleBonusHeaderIcon(IDalamudTextureWrap texture, Vector2 invTexSize, bool hasTexture)
-    {
-        if (!hasTexture)
-        {
-            ImGui.TextUnformatted("-");
-            return;
-        }
-
+    private static void DrawRoleBonusHeaderIcon(IDalamudTextureWrap texture, Vector2 invTexSize) =>
         DrawIcon(texture, invTexSize, new(888f, 0f), new(56f, 56f));
-    }
 
-    private static bool DrawRoleBonusCellIcon(IDalamudTextureWrap texture, Vector2 invTexSize, bool hasTexture, ContentsRouletteRole role)
+    private static bool DrawRoleBonusCellIcon(IDalamudTextureWrap texture, Vector2 invTexSize, ContentsRouletteRole role)
     {
-        if (!hasTexture) return false;
         if ((byte)role > 2) return false;
 
         DrawIcon(texture, invTexSize, new(40f * (byte)role, 216f), new(40f, 40f));
@@ -374,12 +367,17 @@ public unsafe class AutoNotifyRouletteBonus : DailyModuleBase
         ImGui.Image(texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()), uv0, uv1);
     }
 
-    private static bool TryGetTextureInfo(string path, out IDalamudTextureWrap texture, out Vector2 invTexSize)
+    private static bool TryGetTextureInfo(string path, out IDalamudTextureWrap? texture, out Vector2 invTexSize)
     {
-        texture = DService.Instance().Texture.GetFromGame(path).GetWrapOrEmpty();
-        var hasTexture = texture is { Width: > 0, Height: > 0 };
-        invTexSize = hasTexture ? new(1f / texture.Width, 1f / texture.Height) : default;
-        return hasTexture;
+        texture = DService.Instance().Texture.GetFromGame(path).GetWrapOrDefault();
+        if (texture == null)
+        {
+            invTexSize = default;
+            return false;
+        }
+
+        invTexSize = new(1f / texture.Width, 1f / texture.Height);
+        return true;
     }
 
     private class Config : ModuleConfiguration
