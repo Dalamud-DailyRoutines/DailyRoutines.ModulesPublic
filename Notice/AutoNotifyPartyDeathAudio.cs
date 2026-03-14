@@ -42,6 +42,8 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         AudioFilePathInput = ModuleConfig.AudioFilePath;
 
         FrameworkManager.Instance().Reg(OnFrameworkUpdate, CHECK_INTERVAL_MS);
+
+        // 切图的时候清掉
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
     }
 
@@ -53,9 +55,12 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         CheckPartyDeaths();
     }
 
+    /// <summary>
+    /// 主逻辑,有人死了就触发
+    /// </summary>
     private unsafe void CheckPartyDeaths()
     {
-        var partyList     = DService.Instance().PartyList;
+        var partyList = DService.Instance().PartyList;
         var localPlayerID = DService.Instance().ObjectTable.LocalPlayer?.EntityID ?? 0;
 
         currentIds.Clear();
@@ -82,9 +87,11 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
             if (!wasDead && isDeadNow)
                 PlayDeathAudio(member.Name.TextValue);
 
+            // 复活处理
+
             deathStates[member.EntityId] = isDeadNow;
         }
-
+        // 不在队里的就清
         toRemove.Clear();
         foreach (var id in deathStates.Keys)
         {
@@ -95,9 +102,12 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         foreach (var id in toRemove)
             deathStates.Remove(id);
     }
-
+    /// <summary>
+    /// 声音播放实现
+    /// </summary>
     private void PlayDeathAudio(string playerName)
     {
+        // 路径检查
         if (!string.IsNullOrEmpty(ModuleConfig.AudioFilePath) && File.Exists(ModuleConfig.AudioFilePath))
         {
             try
@@ -111,6 +121,8 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
             }
         }
 
+        //横幅跟聊天框信息
+
         if (ModuleConfig.ShowScreenHint)
             ContentHintRed(GetLoc("AutoNotifyPartyDeathAudio-PlayerDeadHint", playerName), 50);
 
@@ -118,6 +130,9 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
             Chat(GetLoc("AutoNotifyPartyDeathAudio-PlayerDeadChat", playerName));
     }
 
+    /// <summary>
+    /// 场景切换清理
+    /// </summary>
     private void OnTerritoryChanged(ushort zone)
     {
         deathStates.Clear();
@@ -132,6 +147,7 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
 
         ImGui.Separator();
 
+        // wav 路径。
         ImGui.Text(GetLoc("AutoNotifyPartyDeathAudio-AudioPath"));
         ImGui.SetNextItemWidth(400f * GlobalFontScale);
         ImGui.InputText("###AudioFilePath", ref AudioFilePathInput, 500);
@@ -140,6 +156,7 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Save, GetLoc("AutoNotifyPartyDeathAudio-Save")))
             SaveAudioFilePath();
 
+        // 试听
         if (!string.IsNullOrEmpty(ModuleConfig.AudioFilePath))
         {
             ImGui.SameLine();
