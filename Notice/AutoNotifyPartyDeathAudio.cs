@@ -21,9 +21,9 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyPartyDeathAudio : DailyModuleBase
 {
-    private const int CHECK_INTERVAL_MS = 100;
     private const int CONFIRM_WINDOW_MS = 500;
     private const int MAX_CONFIRM_ATTEMPTS = 5;
+    private const int CONFIRM_INTERVAL_MS = CONFIRM_WINDOW_MS / MAX_CONFIRM_ATTEMPTS;
     private unsafe delegate void HandleActorControlPacketDelegate(uint entityID, uint category, uint arg1, uint arg2, uint arg3, uint arg4, uint arg5, uint arg6, uint arg7, uint arg8, ulong targetID, byte isRecorded);
     private static Hook<HandleActorControlPacketDelegate>? HandleActorControlPacketHook;
 
@@ -31,11 +31,7 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
     private static string AudioFilePathInput = string.Empty;
     private static AutoNotifyPartyDeathAudio? CurrentModule;
 
-    private readonly Dictionary<uint, bool> deathStates = new();
     private readonly Dictionary<uint, PendingConfirm> pendingConfirms = new();
-    private readonly HashSet<uint> currentIds = new();
-    private readonly List<uint> toRemove = new();
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = GetLoc("AutoNotifyPartyDeathAudioTitle"),
@@ -50,7 +46,6 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         ModuleConfig = LoadConfig<Config>() ?? new();
         AudioFilePathInput = ModuleConfig.AudioFilePath;
 
-        FrameworkManager.Instance().Reg(OnFrameworkUpdate, CHECK_INTERVAL_MS);
         HandleActorControlPacketHook ??= DService.Instance().Hook.HookFromAddress<HandleActorControlPacketDelegate>((nint)PacketDispatcher.MemberFunctionPointers.HandleActorControlPacket, HandleActorControlPacketDetour);
         HandleActorControlPacketHook.Enable();
 
@@ -58,73 +53,38 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
     }
 
-    private void OnFrameworkUpdate(IFramework framework)
+    private unsafe bool TryGetObservedState(uint entityID, out string name, out bool isDeadNow)
     {
-        if (!ModuleConfig.IsEnabled)
-            return;
-
-        CheckPartyDeaths();
-    }
-
-    /// <summary>
-    /// 主逻辑
-    /// </summary>
-    private unsafe void CheckPartyDeaths()
-    {
-        var partyList = DService.Instance().PartyList;
         var localPlayer = DService.Instance().ObjectTable.LocalPlayer;
         var localPlayerID = localPlayer?.EntityID ?? 0;
+        name = string.Empty;
+        isDeadNow = false;
 
-        currentIds.Clear();
-
-        if (localPlayer != null)
+        if (entityID == localPlayerID && localPlayer != null)
         {
-            currentIds.Add(localPlayer.EntityID);
-
-            var isDeadNow = localPlayer.IsDead;
-            deathStates[localPlayer.EntityID] = isDeadNow;
-            ProcessPendingConfirm(localPlayer.EntityID, localPlayer.Name.TextValue, isDeadNow, true);
+            name = localPlayer.Name.TextValue;
+            isDeadNow = localPlayer.IsDead;
+            return true;
         }
 
-        foreach (var member in partyList)
+        foreach (var member in DService.Instance().PartyList)
         {
-            if (member.EntityId == 0)
+            if (member.EntityId != entityID)
                 continue;
 
-            currentIds.Add(member.EntityId);
-            var isSelf = member.EntityId == localPlayerID;
-
-            var battleChara = CharacterManager.Instance()->LookupBattleCharaByEntityId(member.EntityId);
+            name = member.Name.TextValue;
+            var battleChara = CharacterManager.Instance()->LookupBattleCharaByEntityId(entityID);
             if (battleChara == null)
-                continue;
+                return false;
 
-            var isDeadNow = battleChara->IsDead();
-
-            if (!deathStates.TryGetValue(member.EntityId, out var wasDead))
-            {
-                deathStates[member.EntityId] = isDeadNow;
-                continue;
-            }
-
-            deathStates[member.EntityId] = isDeadNow;
-            ProcessPendingConfirm(member.EntityId, member.Name.TextValue, isDeadNow, isSelf);
-        }
-        // 不在队里的就清
-        toRemove.Clear();
-        foreach (var id in deathStates.Keys)
-        {
-            if (!currentIds.Contains(id))
-                toRemove.Add(id);
+            isDeadNow = battleChara->IsDead();
+            return true;
         }
 
-        foreach (var id in toRemove)
-        {
-            deathStates.Remove(id);
-            pendingConfirms.Remove(id);
-        }
+        return false;
     }
 
-    private void ProcessPendingConfirm(uint entityID, string name, bool isDeadNow, bool isSelf)
+    private void ProcessPendingConfirm(uint entityID)
     {
         if (!pendingConfirms.TryGetValue(entityID, out var pending))
             return;
@@ -137,13 +97,30 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
 
         pending.Attempts++;
 
-        if (isDeadNow != pending.TargetDead)
+        if (!TryGetObservedState(entityID, out var name, out var isDeadNow))
+        {
+            SchedulePendingConfirm(entityID);
             return;
+        }
+
+        if (isDeadNow != pending.TargetDead)
+        {
+            SchedulePendingConfirm(entityID);
+            return;
+        }
 
         if (pending.TargetDead)
             PlayDeathAudio(name);
 
         pendingConfirms.Remove(entityID);
+    }
+
+    private void SchedulePendingConfirm(uint entityID)
+    {
+        if (!pendingConfirms.ContainsKey(entityID))
+            return;
+
+        DService.Instance().Framework.RunOnTick(() => ProcessPendingConfirm(entityID), TimeSpan.FromMilliseconds(CONFIRM_INTERVAL_MS));
     }
 
     /// <summary>
@@ -157,7 +134,6 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         var name = string.Empty;
         var localPlayerID = DService.Instance().ObjectTable.LocalPlayer?.EntityID ?? 0;
         
-        // 遍历队伍列表，检查当前实体是否为队伍成员，并获取其姓名
         foreach (var member in DService.Instance().PartyList)
         {
             if (member.EntityId != entityID)
@@ -176,16 +152,16 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
         // 检查是否为死亡事件(category=2, arg1=2)，如果是则加入待确认队列(死亡状态)
         if (category == 2 && arg1 == 2)
         {
-            QueuePendingConfirm(entityID, name, isSelf, true);
+            QueuePendingConfirm(entityID, true);
             return;
         }
 
         // 检查是否为复活事件(category=2, arg1=1)，如果是则加入待确认队列(非死亡状态)
         if (category == 2 && arg1 == 1)
-            QueuePendingConfirm(entityID, name, isSelf, false);
+            QueuePendingConfirm(entityID, false);
     }
 
-    private static void QueuePendingConfirm(uint entityID, string name, bool isSelf, bool targetDead)
+    private static void QueuePendingConfirm(uint entityID, bool targetDead)
     {
         if (CurrentModule is not { } module)
             return;
@@ -199,6 +175,8 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
             Attempts = 0,
             ExpiresAt = Environment.TickCount64 + CONFIRM_WINDOW_MS
         };
+
+        module.SchedulePendingConfirm(entityID);
     }
 
     private void PlayDeathAudio(string playerName)
@@ -228,10 +206,7 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
 
     private void OnTerritoryChanged(ushort zone)
     {
-        deathStates.Clear();
         pendingConfirms.Clear();
-        currentIds.Clear();
-        toRemove.Clear();
     }
 
     protected override void ConfigUI()
@@ -359,7 +334,6 @@ public class AutoNotifyPartyDeathAudio : DailyModuleBase
     {
         CurrentModule = null;
         HandleActorControlPacketHook?.Disable();
-        FrameworkManager.Instance().Unreg(OnFrameworkUpdate);
         DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
         base.Uninit();
     }
