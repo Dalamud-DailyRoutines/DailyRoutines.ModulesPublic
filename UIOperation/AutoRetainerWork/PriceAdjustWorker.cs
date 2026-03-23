@@ -1236,7 +1236,7 @@ public unsafe partial class AutoRetainerWork
                 ClickToCopy(listing.BuyerName);
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.PurchaseTime}");
+                ImGui.TextUnformatted($"{listing.PurchaseTime.ToLocalTime():yyyy/MM/dd HH:mm:ss}");
             }
         }
 
