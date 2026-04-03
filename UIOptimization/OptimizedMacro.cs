@@ -70,9 +70,12 @@ public unsafe class OptimizedMacro : ModuleBase
             DepthLayer   = 6
         };
 
-        MacroController          =  new("Macro");
-        MacroController.OnAttach += OnAddonAttach;
-        MacroController.OnDetach += OnAddonDetach;
+        MacroController = new()
+        {
+            AddonName  = "Macro",
+            OnSetup    = OnAddonSetup,
+            OnFinalize = OnAddonFinalize
+        };
 
         MacroController.Enable();
     }
@@ -84,7 +87,7 @@ public unsafe class OptimizedMacro : ModuleBase
         MacroController?.Dispose();
         MacroController = null;
 
-        OnAddonDetach(null);
+        OnAddonFinalize(null);
 
         InputDialog?.Dispose();
         InputDialog = null;
@@ -220,7 +223,7 @@ public unsafe class OptimizedMacro : ModuleBase
         LoadPreset(args);
     }
 
-    private void OnAddonAttach(AtkUnitBase* addon)
+    private void OnAddonSetup(AtkUnitBase* addon)
     {
         if (addon == null) return;
 
@@ -302,7 +305,7 @@ public unsafe class OptimizedMacro : ModuleBase
         ControlListNode.AddNode(SaveButtonNode);
     }
 
-    private static void OnAddonDetach(AtkUnitBase* addon)
+    private static void OnAddonFinalize(AtkUnitBase* addon)
     {
         PresetDropdownNode?.Dispose();
         PresetDropdownNode = null;

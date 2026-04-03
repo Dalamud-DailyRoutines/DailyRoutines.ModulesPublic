@@ -11,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Environment;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
+using KamiToolKit.Premade.Node.Simple;
 using Lumina.Data;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game;

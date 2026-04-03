@@ -1,13 +1,13 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using KamiToolKit.Nodes;
+using KamiToolKit.Premade.Node.Simple;
 using OmenTools.Info.Game.Data;
 using OmenTools.OmenService;
 
@@ -15,7 +15,16 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoMoveGearsNotInSet : ModuleBase
 {
-    private const string Command = "retrievegears";
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = Lang.Get("AutoMoveGearsNotInSetTitle"),
+        Description = Lang.Get("AutoMoveGearsNotInSetDescription"),
+        Category    = ModuleCategory.UIOptimization
+    };
+
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private const string COMMAND = "retrievegears";
 
     private static readonly InventoryType[] ArmoryInventories =
     [
@@ -26,18 +35,9 @@ public class AutoMoveGearsNotInSet : ModuleBase
 
     private static TextButtonNode? Button;
 
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title       = Lang.Get("AutoMoveGearsNotInSetTitle"),
-        Description = Lang.Get("AutoMoveGearsNotInSetDescription"),
-        Category    = ModuleCategory.UIOptimization
-    };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
     protected override void Init()
     {
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("AutoMoveGearsNotInSet-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoMoveGearsNotInSet-CommandHelp") });
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "ArmouryBoard", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "ArmouryBoard", OnAddon);
@@ -48,7 +48,7 @@ public class AutoMoveGearsNotInSet : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
         OnAddon(AddonEvent.PreFinalize, null);
 
-        CommandManager.Instance().RemoveSubCommand(Command);
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
     }
 
     protected override void ConfigUI()
@@ -56,7 +56,7 @@ public class AutoMoveGearsNotInSet : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"/pdr {Command} → {Lang.Get("AutoMoveGearsNotInSet-CommandHelp")}");
+        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("AutoMoveGearsNotInSet-CommandHelp")}");
 
         ImGui.Spacing();
 
@@ -84,7 +84,7 @@ public class AutoMoveGearsNotInSet : ModuleBase
                         IsVisible   = true,
                         String      = new SeStringBuilder().AddIcon(BitmapFontIcon.SwordSheathed).Build().Encode(),
                         TextTooltip = Lang.Get("AutoMoveGearsNotInSet-Button"),
-                        OnClick     = () => ChatManager.Instance().SendMessage($"/pdr {Command}"),
+                        OnClick     = () => ChatManager.Instance().SendMessage($"/pdr {COMMAND}"),
                         IsEnabled   = true
                     };
 
