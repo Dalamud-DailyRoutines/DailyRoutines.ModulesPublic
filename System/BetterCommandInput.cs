@@ -11,17 +11,17 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class BetterCommandInput : ModuleBase
 {
-    private static DateTime LastChatTime = DateTime.MinValue;
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("BetterCommandInputTitle"),
         Description = Lang.Get("BetterCommandInputDescription"),
         Category    = ModuleCategory.System
     };
-
+    
+    private static Config ModuleConfig = null!;
+    
+    private static DateTime LastChatTime = DateTime.MinValue;
+    
     protected override void Init()
     {
         ModuleConfig = Config.Load(this) ?? new();
