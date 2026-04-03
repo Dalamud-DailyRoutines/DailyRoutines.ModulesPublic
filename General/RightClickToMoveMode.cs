@@ -10,13 +10,14 @@ using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using FFXIVClientStructs.FFXIV.Client.System.Input;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class RightClickToMoveMode : ModuleBase
+public class RightClickToMoveMode : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,7 +31,6 @@ public unsafe class RightClickToMoveMode : ModuleBase
     private static volatile bool IsModuleActive;
 
     private static MovementInputController? MovementController;
-    private static WindowHook?              Hook;
 
     protected override void Init()
     {
@@ -41,30 +41,48 @@ public unsafe class RightClickToMoveMode : ModuleBase
         if (IsModuleActive) return;
         IsModuleActive = true;
 
-        try
+        MovementController ??= new()
         {
-            MovementController ??= new()
-            {
-                Precision  = 0.15f,
-                IsAutoMove = true
-            };
+            Precision  = 0.15f,
+            IsAutoMove = true
+        };
 
-            Hook ??= new(Framework.Instance()->GameWindow->WindowHandle, OnMouseClickCaptured);
-
-            WindowManager.Instance().PostDraw += OnDraw;
-        }
-        catch
-        {
-            CleanupResources();
-            throw;
-        }
+        InputIDManager.Instance().RegPostPressed(OnPostPressed);
+        WindowManager.Instance().PostDraw += OnDraw;
     }
-    
-    protected override void Uninit() =>
-        CleanupResources();
-    
+
+    protected override void Uninit()
+    {
+        if (!IsModuleActive) return;
+
+        InputIDManager.Instance().UnregPostPressed(OnPostPressed);
+        
+        SessionManager.Stop();
+        TargetIndicatorRenderer.Reset();
+        
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        WindowManager.Instance().PostDraw                -= OnDraw;
+        
+        if (MovementController != null)
+        {
+            MovementController.Dispose();
+            MovementController = null;
+        }
+        
+        IsModuleActive = false;
+    }
+
     #region 事件
 
+    private static void OnPostPressed(bool result, InputId id)
+    {
+        // 右键
+        if (id != InputId.MOUSE_CANCEL) return;
+        if (!result) return;
+        
+        OnMouseClickCaptured(ImGui.GetMousePos());
+    }
+    
     private static void OnDraw()
     {
         if (!IsModuleActive) return;
@@ -274,60 +292,11 @@ public unsafe class RightClickToMoveMode : ModuleBase
 
     private static bool IsNavmeshAvailable() =>
         DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName) && vnavmeshIPC.GetIsNavReady();
-    
-    private static void CleanupResources()
-    {
-        if (!IsModuleActive) return;
-
-        SessionManager.Stop();
-        TargetIndicatorRenderer.Reset();
-
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        WindowManager.Instance().PostDraw                -= OnDraw;
-
-        Hook?.Dispose();
-        Hook = null;
-
-        if (MovementController != null)
-        {
-            MovementController.Dispose();
-            MovementController = null;
-        }
-        
-        IsModuleActive = false;
-    }
 
     #endregion
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
-
-    private enum ControlMode
-    {
-        RightClick,
-        LeftRightClick,
-        KeyRightClick
-    }
-
-    private enum MoveMode
-    {
-        Game,
-        Navmesh,
-        Smart
-    }
-
-    private enum MoveDriver
-    {
-        Game,
-        Navmesh
-    }
-
-    private enum IndicatorStyle
-    {
-        None,
-        Pulse,
-        Marker
-    }
 
     private sealed class Config : ModuleConfig
     {
@@ -566,134 +535,34 @@ public unsafe class RightClickToMoveMode : ModuleBase
             IsPulseActive       = false;
         }
     }
-
-    private sealed class WindowHook : IDisposable
+    
+    private enum ControlMode
     {
-        private const int WH_MOUSE       = 7;
-        private const int WM_RBUTTONDOWN = 0x0204;
-        private const int WM_ACTIVATE    = 0x0006;
-
-        private static nint                 HookID = nint.Zero;
-        private static Win32MouseProc?      MouseProc;
-        private static nint                 GameWindowHandle;
-        private static Action<Vector2>?     HandleClickCallback;
-        private static bool                 HookEnabled;
-
-        private readonly nint       oldWndProc;
-        private readonly WindowProc windowHookProc;
-
-        public WindowHook(nint windowHandle, Action<Vector2> clickCallback)
-        {
-            GameWindowHandle    = windowHandle;
-            HandleClickCallback = clickCallback;
-            MouseProc           = MouseHookCallback;
-            HookEnabled         = true;
-
-            windowHookProc = WndProc;
-            oldWndProc     = GetWindowLongPtr(GameWindowHandle, -4);
-            SetWindowLongPtr(GameWindowHandle, -4, Marshal.GetFunctionPointerForDelegate(windowHookProc));
-
-            StartHook();
-        }
-
-        public void Dispose()
-        {
-            HookEnabled = false;
-            StopHook();
-
-            if (GameWindowHandle != nint.Zero && oldWndProc != nint.Zero)
-                SetWindowLongPtr(GameWindowHandle, -4, oldWndProc);
-
-            HandleClickCallback = null;
-            MouseProc           = null;
-            GameWindowHandle    = nint.Zero;
-        }
-
-        private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
-        {
-            if (msg == WM_ACTIVATE)
-            {
-                StopHook();
-                StartHook();
-            }
-
-            return CallWindowProc(oldWndProc, hWnd, msg, wParam, lParam);
-        }
-
-        private static void StartHook()
-        {
-            if (GameWindowHandle == nint.Zero || MouseProc == null) return;
-
-            var threadID = GetWindowThreadProcessID(GameWindowHandle, out _);
-            HookID = SetWindowsHookEx(WH_MOUSE, MouseProc, nint.Zero, threadID);
-
-            if (HookID != nint.Zero) return;
-
-            var error = Marshal.GetLastWin32Error();
-            throw new Exception($"Failed to set mouse hook, error code: {error}");
-        }
-
-        private static void StopHook()
-        {
-            if (HookID == nint.Zero) return;
-
-            UnhookWindowsHookEx(HookID);
-            HookID = nint.Zero;
-        }
-
-        private static nint MouseHookCallback(int nCode, nint wParam, nint lParam)
-        {
-            if (!HookEnabled) return CallNextHookEx(nint.Zero, nCode, wParam, lParam);
-
-            var callback = HandleClickCallback;
-            if (nCode >= 0 && HookID != nint.Zero && (int)wParam == WM_RBUTTONDOWN && callback != null)
-            {
-                var mouseStruct = Marshal.PtrToStructure<MouseHook>(lParam);
-                if (mouseStruct.hwnd == GameWindowHandle)
-                    _ = DService.Instance().Framework.RunOnTick(() => callback(ImGui.GetMousePos()));
-            }
-
-            return CallNextHookEx(HookID, nCode, wParam, lParam);
-        }
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "GetWindowThreadProcessId")]
-        private static extern uint GetWindowThreadProcessID(nint hWnd, out uint lpdwProcessID);
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowsHookExW")]
-        private static extern nint SetWindowsHookEx(int idHook, Win32MouseProc lpfn, nint hMod, uint dwThreadID);
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "UnhookWindowsHookEx")]
-        private static extern bool UnhookWindowsHookEx(nint hhk);
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "CallNextHookEx")]
-        private static extern nint CallNextHookEx(nint hhk, int nCode, nint wParam, nint lParam);
-
-        [DllImport("user32.dll", EntryPoint = "ScreenToClient")]
-        private static extern bool ScreenToClient(nint hWnd, ref Vector2 lpPoint);
-
-        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-        private static extern nint GetWindowLongPtr(nint hWnd, int nIndex);
-
-        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-        private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
-
-        [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
-        private static extern nint CallWindowProc(nint lpPrevWndFunc, nint hWnd, uint msg, nint wParam, nint lParam);
-
-        private delegate nint Win32MouseProc(int nCode, nint wParam, nint lParam);
-
-        private delegate nint WindowProc(nint hWnd, uint msg, nint wParam, nint lParam);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct MouseHook
-        {
-            public Vector2 pt;
-            public nint    hwnd;
-            public uint    wHitTestCode;
-            public nint    dwExtraInfo;
-        }
+        RightClick,
+        LeftRightClick,
+        KeyRightClick
     }
 
+    private enum MoveMode
+    {
+        Game,
+        Navmesh,
+        Smart
+    }
+
+    private enum MoveDriver
+    {
+        Game,
+        Navmesh
+    }
+
+    private enum IndicatorStyle
+    {
+        None,
+        Pulse,
+        Marker
+    }
+    
     #region 预置数据
     
     private const float GAME_ARRIVAL_DISTANCE_SQ    = 2.25f;

@@ -6,20 +6,23 @@ using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoConstantlyClick : ModuleBase
 {
-    private const int MaxKey = 512;
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = Lang.Get("AutoConstantlyClickTitle"),
+        Description = Lang.Get("AutoConstantlyClickDescription"),
+        Category    = ModuleCategory.System,
+        Author      = ["AtmoOmen", "KirisameVanilla"]
+    };
+    
+    private const int MAX_KEY = 512;
 
     private static readonly GamepadButtons[] Triggers = [GamepadButtons.L2, GamepadButtons.R2];
-
-    private static readonly CompSig              IsIDKeyPressedSig = new("48 89 5C 24 ?? 56 41 56 41 57 48 83 EC ?? 48 63 C2");
-    private static          Hook<IDKeyDelegate>? IsIDKeyPressedHook;
-
-    private static readonly CompSig        IsInputIDDownSig = new("E8 ?? ?? ?? ?? 4C 8D 76 06");
-    private static          IDKeyDelegate? IsInputIDDown;
 
     private static readonly CompSig               GamepadPollSig = new("40 55 53 57 41 57 48 8D AC 24 58 FC FF FF");
     private static          Hook<ControllerPoll>? GamepadPollHook;
@@ -29,32 +32,22 @@ public unsafe class AutoConstantlyClick : ModuleBase
 
     private static Config ModuleConfig = null!;
 
-    private static readonly HeldInfo[] InputIDInfos = new HeldInfo[MaxKey + 1];
+    private static readonly HeldInfo[] InputIDInfos = new HeldInfo[MAX_KEY + 1];
     private static          long       ThrottleTime = Environment.TickCount64;
     private static          int        RunningTimersCount;
-
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title       = Lang.Get("AutoConstantlyClickTitle"),
-        Description = Lang.Get("AutoConstantlyClickDescription"),
-        Category    = ModuleCategory.System,
-        Author      = ["AtmoOmen", "KirisameVanilla"]
-    };
-
-
+    private static          bool       IsHandlingHotbarClick;
+    
     protected override void Init()
     {
         ModuleConfig = Config.Load(this) ?? new();
 
-        for (var i = 0; i <= MaxKey; i++)
+        for (var i = 0; i <= MAX_KEY; i++)
             InputIDInfos[i] = new HeldInfo();
-
-        IsInputIDDown = IsInputIDDownSig.GetDelegate<IDKeyDelegate>();
-
-        IsIDKeyPressedHook ??= IsIDKeyPressedSig.GetHook<IDKeyDelegate>(IsIDKeyPressedDetour);
 
         CheckHotbarClickedHook ??= CheckHotbarClickedSig.GetHook<CheckHotbarClickedDelegate>(CheckHotbarClickedDetour);
         GamepadPollHook        ??= GamepadPollSig.GetHook<ControllerPoll>(GamepadPollDetour);
+
+        InputIDManager.Instance().RegPrePressed(OnPrePressed);
 
         if (ModuleConfig.MouseMode)
             CheckHotbarClickedHook.Enable();
@@ -119,7 +112,10 @@ public unsafe class AutoConstantlyClick : ModuleBase
         }
     }
 
-    private int GamepadPollDetour(nint gamepadInput)
+    protected override void Uninit() =>
+        InputIDManager.Instance().UnregPrePressed(OnPrePressed);
+
+    private static int GamepadPollDetour(nint gamepadInput)
     {
         var input = (PadDevice*)gamepadInput;
 
@@ -141,17 +137,18 @@ public unsafe class AutoConstantlyClick : ModuleBase
         return GamepadPollHook.Original((nint)input);
     }
 
-    private static byte IsIDKeyPressedDetour(void* data, InputId key)
+    private static void OnPrePressed(ref bool? overrideResult, ref InputId key)
     {
-        if (key is not (>= InputId.HOTBAR_UP and <= InputId.HOTBAR_CONTENTS_ACT_R)) return 0;
+        if (!IsHandlingHotbarClick) return;
+        if (key is not (>= InputId.HOTBAR_UP and <= InputId.HOTBAR_CONTENTS_ACT_R)) return;
 
         var info = InputIDInfos[(int)key];
 
-        var isClicked = IsIDKeyPressedHook.Original(data, key) == 1;
-        var isPressed = IsInputIDDown(data, key)               == 1;
-        var orig      = info.IsReady ? isPressed : isClicked;
+        var isClicked = InputIDManager.Instance().IsInputIDPressed(key);
+        var isPressed = InputIDManager.Instance().IsInputIDDown(key);
+        overrideResult = info.IsReady ? isPressed : isClicked;
 
-        if (orig)
+        if (overrideResult.Value)
             info.RestartLastPress();
         else if (isPressed != info.LastFrameHeld)
         {
@@ -163,17 +160,20 @@ public unsafe class AutoConstantlyClick : ModuleBase
 
         info.LastFrameHeld    = isPressed;
         info.LastFramePressed = isClicked;
-        return (byte)(orig ? 1 : 0);
     }
 
     private static void CheckHotbarClickedDetour(nint a1, byte a2)
     {
-        IsIDKeyPressedHook.Enable();
-        CheckHotbarClickedHook.Original(a1, a2);
-        IsIDKeyPressedHook.Disable();
+        IsHandlingHotbarClick = true;
+        try
+        {
+            CheckHotbarClickedHook.Original(a1, a2);
+        }
+        finally
+        {
+            IsHandlingHotbarClick = false;
+        }
     }
-
-    private delegate byte IDKeyDelegate(void* data, InputId key);
 
     private delegate int ControllerPoll(nint controllerInput);
 
