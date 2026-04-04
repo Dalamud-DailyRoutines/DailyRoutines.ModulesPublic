@@ -336,6 +336,7 @@ public class RightClickToMoveMode : ModuleBase
         {
             var session = Current;
             Current = null;
+            if (session == null) return;
 
             if (MovementController != null)
             {
