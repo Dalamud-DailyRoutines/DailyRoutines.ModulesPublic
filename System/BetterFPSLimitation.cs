@@ -32,13 +32,23 @@ public class BetterFPSLimitation : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private const string COMMAND = "fps";
+    private const string COMMAND        = "fps";
+    private const int    HISTORY_LENGTH = 100;
 
     private static Config ModuleConfig = null!;
 
     private static IDtrBarEntry? Entry;
 
     private static AddonDRBetterFPSLimitation? Addon;
+
+    private static readonly float[] FPSHistory = new float[HISTORY_LENGTH];
+
+    private static int   FPSHistoryIndex;
+    private static int   FPSHistoryFilledCount;
+    private static float CurrentFPS;
+    private static float AverageFPS;
+    private static float MinFPS;
+    private static float MaxFPS;
 
     private static ushort NewThresholdInput = 120;
 
@@ -49,33 +59,28 @@ public class BetterFPSLimitation : ModuleBase
                        {
                            Thresholds = [15, 30, 45, 60, 90, 120]
                        };
-        
-        Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-BetterFPSLimitation");
-        Entry.OnClick =  _ =>
-        {
-            if (Addon == null)
-            {
-                var thresholdGroups = ModuleConfig.Thresholds
-                                                  .Select((value, index) => new { value, index })
-                                                  .GroupBy(x => x.index / 3)
-                                                  .Select(g => g.Select(x => x.value).ToList())
-                                                  .ToList();
+        ResetHistory();
 
-                Addon = new()
-                {
-                    InternalName = "DRBetterFPSLimitation",
-                    Title        = LuminaWrapper.GetAddonText(4032),
-                    Size         = new(250f, 208f + 32f * thresholdGroups.Count)
-                };
-                Addon.SetWindowPosition(ModuleConfig.AddonPosition);
+        Entry ??= DService.Instance().DTRBar.Get("DailyRoutines-BetterFPSLimitation");
+        Entry.OnClick = param =>
+        {
+            switch (param.ClickType)
+            {
+                case MouseClickType.Left:
+                    EnsureAddon();
+                    Addon.Toggle();
+                    break;
+                case MouseClickType.Right:
+                    EnsureOverlay();
+                    Overlay?.Toggle();
+                    break;
             }
-                    
-            Addon.Toggle();
         };
-                
-        Entry.Shown = true;
-        Entry.Text  = LuminaWrapper.GetAddonText(4002);
-        
+
+        Entry.Shown   = true;
+        Entry.Text    = LuminaWrapper.GetAddonText(4002);
+        Entry.Tooltip = Lang.Get("BetterFPSLimitation-DTR-Tooltip");
+
         FrameworkManager.Instance().Reg(OnUpdate, 1_000);
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterFPSLimitation-CommandHelp") });
@@ -86,12 +91,14 @@ public class BetterFPSLimitation : ModuleBase
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
         FrameworkManager.Instance().Unreg(OnUpdate);
-        
+
         Entry?.Remove();
         Entry = null;
-        
+
         Addon?.Dispose();
         Addon = null;
+
+        ResetHistory();
     }
 
     protected override void ConfigUI()
@@ -138,7 +145,74 @@ public class BetterFPSLimitation : ModuleBase
         }
     }
 
-    private static void OnCommand(string command, string args) => Addon.Toggle();
+    protected override unsafe void OverlayUI()
+    {
+        var color = GetFPSColor(CurrentFPS);
+
+        ImGui.SetWindowFontScale(1.5f);
+        ImGui.TextColored(color, $"{CurrentFPS:F0}");
+        ImGui.SetWindowFontScale(1.0f);
+
+        ImGui.SameLine();
+        ImGui.TextColored(color, "FPS");
+
+        ImGui.Spacing();
+        ImGui.Spacing();
+        ImGui.Spacing();
+
+        ImGui.SameLine();
+
+        using (var table = ImRaii.Table("##FPSStatsTable", 4, ImGuiTableFlags.SizingStretchProp))
+        {
+            if (table)
+            {
+                DrawStatColumn("AVG", $"{AverageFPS:F0}",              GetFPSColor(AverageFPS));
+                DrawStatColumn("MIN", $"{MinFPS:F0}",                  GetFPSColor(MinFPS));
+                DrawStatColumn("MAX", $"{MaxFPS:F0}",                  GetFPSColor(MaxFPS));
+                DrawStatColumn("CAP", $"{ModuleConfig.Limitation:F0}", GetCapColor());
+            }
+        }
+
+        using (ImRaii.PushColor(ImPlotCol.AxisBg, new Vector4(0.05f)))
+        using (ImRaii.PushColor(ImPlotCol.FrameBg, Vector4.Zero))
+        using (ImRaii.PushColor(ImPlotCol.AxisGrid, new Vector4(1f, 1f, 1f, 0.05f)))
+        using (ImRaii.PushStyle(ImPlotStyleVar.FillAlpha, 0.25f))
+        using (ImRaii.PushStyle(ImPlotStyleVar.LineWeight, 2f))
+        using (var plot = ImRaii.Plot("##FPSPlot", new(-1), ImPlotFlags.CanvasOnly | ImPlotFlags.NoTitle))
+        {
+            if (!plot)
+                return;
+
+            const ImPlotAxisFlags AXIS_FLAGS = ImPlotAxisFlags.NoLabel | ImPlotAxisFlags.NoTickLabels;
+            ImPlot.SetupAxes((byte*)null, (byte*)null, AXIS_FLAGS, AXIS_FLAGS);
+
+            var yMax = MathF.Max(MathF.Max(MaxFPS, ModuleConfig.Limitation) * 1.25f, 100f);
+            ImPlot.SetupAxesLimits(0, FPSHistory.Length, 0, yMax, ImPlotCond.Always);
+
+            ImPlot.SetupAxisTicks(ImAxis.X1, 0, FPSHistory.Length, 51);
+            ImPlot.SetupAxisTicks(ImAxis.Y1, 0, yMax,              21);
+
+            using (ImRaii.PushColor(ImPlotCol.Line, color)
+                         .Push(ImPlotCol.Fill, color))
+                ImPlot.PlotLine("##FPS", ref FPSHistory[0], FPSHistory.Length, 1.0, 0.0, ImPlotLineFlags.Shaded, FPSHistoryIndex);
+
+            if (AverageFPS <= 0)
+                return;
+
+            var avgColor = KnownColor.White.ToVector4() with { W = 0.6f };
+            var xs       = new double[] { 0, FPSHistory.Length };
+            var ys       = new double[] { AverageFPS, AverageFPS };
+
+            using (ImRaii.PushColor(ImPlotCol.Line, avgColor))
+                ImPlot.PlotLine("##FPSAvg", ref xs[0], ref ys[0], 2);
+        }
+    }
+
+    private static void OnCommand(string command, string args)
+    {
+        EnsureAddon();
+        Addon.Toggle();
+    }
 
     private static unsafe void OnUpdate(IFramework _)
     {
@@ -146,7 +220,10 @@ public class BetterFPSLimitation : ModuleBase
 
         if (Entry == null) return;
 
-        var text = DService.Instance().SeStringEvaluator.EvaluateFromAddon(4002, [(int)Framework.Instance()->FrameRate]).ToDalamudString();
+        CurrentFPS = Math.Max(Framework.Instance()->FrameRate, 0f);
+        RecordFPS(CurrentFPS);
+
+        var text = DService.Instance().SeStringEvaluator.EvaluateFromAddon(4002, [(int)CurrentFPS]).ToDalamudString();
 
         if (ModuleConfig.IsEnabled)
         {
@@ -164,6 +241,123 @@ public class BetterFPSLimitation : ModuleBase
     {
         Device.Instance()->IsFrameRateLimited = ModuleConfig.IsEnabled;
         Device.Instance()->FrameRateLimit     = (short)MathF.Min(ModuleConfig.Limitation + 2, short.MaxValue);
+    }
+
+    private void EnsureOverlay()
+    {
+        if (Overlay != null)
+            return;
+
+        Overlay       =  new(this);
+        Overlay.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
+        Overlay.SizeConstraints = new()
+        {
+            MinimumSize = ScaledVector2(300f, 200f)
+        };
+    }
+
+    private static void EnsureAddon()
+    {
+        if (Addon != null)
+            return;
+
+        var thresholdGroups = ModuleConfig.Thresholds
+                                          .Select((value, index) => new { value, index })
+                                          .GroupBy(x => x.index / 3)
+                                          .Select(g => g.Select(x => x.value).ToList())
+                                          .ToList();
+
+        Addon = new()
+        {
+            InternalName = "DRBetterFPSLimitation",
+            Title        = LuminaWrapper.GetAddonText(4032),
+            Size         = new(250f, 208f + 32f * thresholdGroups.Count)
+        };
+        Addon.SetWindowPosition(ModuleConfig.AddonPosition);
+    }
+
+    private static void ResetHistory()
+    {
+        Array.Clear(FPSHistory);
+        FPSHistoryIndex       = 0;
+        FPSHistoryFilledCount = 0;
+        CurrentFPS            = 0f;
+        AverageFPS            = 0f;
+        MinFPS                = 0f;
+        MaxFPS                = 0f;
+    }
+
+    private static void RecordFPS(float fps)
+    {
+        FPSHistory[FPSHistoryIndex] = fps;
+        FPSHistoryIndex             = (FPSHistoryIndex + 1) % FPSHistory.Length;
+
+        if (FPSHistoryFilledCount < FPSHistory.Length)
+            FPSHistoryFilledCount++;
+
+        if (FPSHistoryFilledCount == 0)
+        {
+            AverageFPS = 0f;
+            MinFPS     = 0f;
+            MaxFPS     = 0f;
+            return;
+        }
+
+        var min = float.MaxValue;
+        var max = 0f;
+        var sum = 0f;
+
+        for (var i = 0; i < FPSHistoryFilledCount; i++)
+        {
+            var value            = FPSHistory[i];
+            if (value < min) min = value;
+            if (value > max) max = value;
+            sum += value;
+        }
+
+        AverageFPS = sum / FPSHistoryFilledCount;
+        MinFPS     = min == float.MaxValue ? 0f : min;
+        MaxFPS     = max;
+    }
+
+    private static Vector4 GetFPSColor(float fps)
+    {
+        if (ModuleConfig.IsEnabled)
+        {
+            if (ModuleConfig.Limitation <= 0)
+                return KnownColor.Gray.ToVector4();
+
+            var ratio = fps / ModuleConfig.Limitation;
+            return ratio switch
+            {
+                >= 0.95f => KnownColor.SpringGreen.ToVector4(),
+                >= 0.75f => KnownColor.Orange.ToVector4(),
+                _        => KnownColor.Red.ToVector4()
+            };
+        }
+
+        return fps switch
+        {
+            >= 60f => KnownColor.SpringGreen.ToVector4(),
+            >= 30f => KnownColor.Orange.ToVector4(),
+            _      => KnownColor.Red.ToVector4()
+        };
+    }
+
+    private static Vector4 GetCapColor() =>
+        ModuleConfig.IsEnabled
+            ? KnownColor.SpringGreen.ToVector4()
+            : KnownColor.Gray.ToVector4();
+
+    private static void DrawStatColumn(string label, string value, Vector4 color)
+    {
+        ImGui.TableNextColumn();
+        ImGui.Spacing();
+        ImGui.TextDisabled(label);
+
+        ImGui.SameLine(0, 8f * GlobalUIScale);
+        using (FontManager.Instance().UIFont120.Push())
+            ImGui.TextColored(color, value);
     }
 
     private class Config : ModuleConfig
