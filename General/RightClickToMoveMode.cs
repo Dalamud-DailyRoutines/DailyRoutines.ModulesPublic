@@ -291,7 +291,7 @@ public class RightClickToMoveMode : ModuleBase
     }
 
     private static bool IsNavmeshAvailable() =>
-        DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName) && vnavmeshIPC.GetIsNavReady();
+        DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) && vnavmeshIPC.GetIsNavReady();
 
     #endregion
 

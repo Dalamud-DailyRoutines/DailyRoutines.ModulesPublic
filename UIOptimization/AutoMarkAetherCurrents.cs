@@ -568,7 +568,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
 
             ImGui.Separator();
 
-            using (ImRaii.Disabled(!DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName)))
+            using (ImRaii.Disabled(!DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME)))
             {
                 if (ImGui.MenuItem($"    {Lang.Get("AutoMarkAetherCurrents-MoveTo")} (vnavmesh)"))
                     MoveTo(TaskHelperMove);

@@ -195,7 +195,7 @@ public partial class OccultCrescentHelper
 
                 // 启用了绿玩移动
                 if (ModuleConfig.IsEnabledMoveToAetheryte                            &&
-                    DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName) &&
+                    DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) &&
                     distance3D <= ModuleConfig.DistanceToMoveToAetheryte)
                 {
                     MoveTaskHelper.Abort();
@@ -272,7 +272,7 @@ public partial class OccultCrescentHelper
 
             // 先回去 然后重复一次这个流程
             if (ModuleConfig.IsEnabledMoveToAetheryte &&
-                DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName))
+                DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME))
             {
                 MoveTaskHelper.Enqueue(() => UseActionManager.Instance().UseActionLocation(ActionType.Action, 41343));
                 MoveTaskHelper.Enqueue(() => UIModule.IsScreenReady() && LocalPlayerState.DistanceTo3D(CrescentAetheryte.ExpeditionBaseCamp.Position) <= 100);
