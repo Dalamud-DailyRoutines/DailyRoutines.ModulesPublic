@@ -136,14 +136,8 @@ public class FastWorldTravel : ModuleBase
         switch (isAdd)
         {
             case true:
-                if (Entry != null)
-                {
-                    Entry.Remove();
-                    Entry = null;
-                }
-
-                Entry         =  DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
-                Entry.OnClick += _ =>
+                Entry         ??=  DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
+                Entry.OnClick = _ =>
                 {
                     Addon ??= new(TaskHelper)
                     {

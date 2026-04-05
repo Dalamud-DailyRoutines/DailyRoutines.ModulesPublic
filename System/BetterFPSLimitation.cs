@@ -51,7 +51,7 @@ public class BetterFPSLimitation : ModuleBase
                        };
         
         Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-BetterFPSLimitation");
-        Entry.OnClick +=  _ =>
+        Entry.OnClick =  _ =>
         {
             if (Addon == null)
             {

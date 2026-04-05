@@ -69,7 +69,7 @@ public unsafe class AutoCountPlayers : ModuleBase
         Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoCountPlayers");
         Entry.Shown   =   true;
         Entry.Text    =   $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: 0";
-        Entry.OnClick +=  _ =>
+        Entry.OnClick =  _ =>
         {
             if (Overlay == null)
             {

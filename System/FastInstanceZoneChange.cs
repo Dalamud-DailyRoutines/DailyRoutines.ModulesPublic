@@ -295,7 +295,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
         {
             case true when Entry == null:
                 Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-FastInstanceZoneChange");
-                Entry.OnClick +=  _ =>
+                Entry.OnClick =  _ =>
                 {
                     Overlay ??= new(this)
                     {
@@ -307,8 +307,8 @@ public unsafe class FastInstanceZoneChange : ModuleBase
                 Entry.Shown   =   false;
                 Entry.Tooltip =   Lang.Get("FastInstanceZoneChange-DtrEntryTooltip");
                 return;
-            case false when Entry != null:
-                Entry.Remove();
+            case false:
+                Entry?.Remove();
                 Entry = null;
                 break;
         }
