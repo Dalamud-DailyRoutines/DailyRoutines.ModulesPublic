@@ -48,7 +48,7 @@ public class FastWorldTravel : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
+
     internal const string COMMAND = "worldtravel";
 
     private static readonly HashSet<uint> WorldTravelValidZones = [132, 129, 130];
@@ -136,21 +136,15 @@ public class FastWorldTravel : ModuleBase
         switch (isAdd)
         {
             case true:
-                Entry         ??=  DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
+                Entry ??= DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
                 Entry.OnClick = _ =>
                 {
-                    Addon ??= new(TaskHelper)
-                    {
-                        InternalName = "DRFastWorldTravel",
-                        Title        = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
-                        Size         = new(GameState.IsCN ? 710f : 180f, 480f)
-                    };
-
+                    EnsureAddon();
                     Addon.Toggle();
                 };
-                Entry.Shown   =  true;
-                Entry.Tooltip =  Lang.Get("FastWorldTravel-DtrEntryTooltip");
-                Entry.Text    =  LuminaWrapper.GetAddonText(12510);
+                Entry.Shown   = true;
+                Entry.Tooltip = Lang.Get("FastWorldTravel-DtrEntryTooltip");
+                Entry.Text    = LuminaWrapper.GetAddonText(12510);
                 return;
             case false when Entry != null:
                 Entry.Remove();
@@ -159,555 +153,14 @@ public class FastWorldTravel : ModuleBase
         }
     }
 
-    private class Config : ModuleConfig
+    private void EnsureAddon()
     {
-        public bool AddDtrEntry      = true;
-        public bool AutoLeaveParty   = true;
-        public bool ReplaceOrigAddon = true;
-    }
-
-    private struct Travel
-    {
-        public uint    CurrentWorldID;
-        public uint    HomeWorldID;
-        public uint    TargetWorldID;
-        public ulong   ContentID;
-        public bool    IsBack;
-        public string  Name;
-        public string? Description;
-    }
-
-    private class AddonDRFastWorldTravel
-    (
-        TaskHelper taskHelper
-    ) : NativeAddon
-    {
-        private static NodeBase TeleportWidget;
-
-        private static readonly Version MinDCTravelerXVersion = new("0.2.3.0");
-
-        private static ContextMenu? ContextMenuService;
-
-        private static bool LastOpenPluginState;
-
-        private static bool LastForegroundState;
-
-        private static Dictionary<uint, TextButtonNode> WorldToButtons = [];
-
-        private static bool IsPluginEnabled =>
-            DService.Instance().PI.IsPluginEnabled("DCTravelerX", MinDCTravelerXVersion);
-
-        private static bool IsPluginValid =>
-            IsPluginEnabled && IsDCTravelerValid;
-
-        protected override unsafe void OnSetup(AtkUnitBase* addon)
+        Addon ??= new(TaskHelper)
         {
-            ContextMenuService = new();
-
-            LastOpenPluginState = IsPluginValid;
-            WorldToButtons.Clear();
-
-            TeleportWidget          = CreateTeleportWidget();
-            TeleportWidget.Position = ContentStartPosition;
-
-            if (GameState.IsCN)
-            {
-                var message = SeString.Empty;
-
-                if (!IsPluginEnabled)
-                {
-                    message = new SeStringBuilder().Append("超域旅行功能依赖 ")
-                                                   .AddUiForeground("DCTravlerX", 32)
-                                                   .Append($" 插件 (版本 {MinDCTravelerXVersion} 及以上)")
-                                                   .Build();
-                }
-                else if (!IsDCTravelerValid)
-                {
-                    message = new SeStringBuilder().Append("无法连接至超域旅行 API, 请确认已安装并启用 ")
-                                                   .AddUiForeground("DCTravlerX", 32)
-                                                   .Append($" 插件 (版本 {MinDCTravelerXVersion} 及以上), 若已启用, 请从 XIVLauncherCN 重启游戏")
-                                                   .Build();
-                }
-
-                if (message != SeString.Empty)
-                {
-                    var pluginHelpNode = new TextNode
-                    {
-                        String           = message.Encode(),
-                        FontSize         = 14,
-                        IsVisible        = true,
-                        Size             = new(150f, 25f),
-                        AlignmentType    = AlignmentType.Center,
-                        Position         = new(305f, -22f),
-                        TextFlags        = TextFlags.Bold | TextFlags.Edge,
-                        TextColor        = ColorHelper.GetColor(50),
-                        TextOutlineColor = ColorHelper.GetColor(32)
-                    };
-                    pluginHelpNode.AttachNode(this);
-                }
-            }
-
-            TeleportWidget.AttachNode(this);
-
-            UpdateWaitTimeInfo();
-        }
-
-        protected override unsafe void OnUpdate(AtkUnitBase* addon)
-        {
-            if (DService.Instance().Condition.IsBoundByDuty)
-            {
-                Close();
-                return;
-            }
-
-            if (!GameState.IsCN) return;
-
-            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate") && LastOpenPluginState != IsPluginValid)
-            {
-                Close();
-
-                taskHelper.Abort();
-                taskHelper.DelayNext(100);
-                taskHelper.Enqueue(() => !IsOpen, "等待界面完全关闭");
-                taskHelper.Enqueue(Open,          "重新打开");
-
-                LastOpenPluginState = IsPluginValid;
-                return;
-            }
-
-            if (LastForegroundState != GameState.IsForeground)
-            {
-                LastForegroundState = GameState.IsForeground;
-
-                Throttler.Shared.Remove("FastWorldTravel-OnAddonUpdate-RequestQueueTime");
-                Throttler.Shared.Remove("FastWorldTravel-OnAddonUpdate-UpdateQueueTime");
-            }
-
-            // 都在后台了就不要 DDOS 拂晓服务器了
-            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate-RequestQueueTime", GameState.IsForeground ? 15_000U : 60_000))
-                RequestWaitTimeInfoUpdate();
-
-            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate-UpdateQueueTime", 1_000))
-                UpdateWaitTimeInfo();
-        }
-
-        protected override unsafe void OnFinalize(AtkUnitBase* addon)
-        {
-            ContextMenuService?.Dispose();
-            ContextMenuService = null;
-        }
-
-        private void RequestWaitTimeInfoUpdate()
-        {
-            DService.Instance().Framework.RunOnTick
-            (async () =>
-                {
-                    if (!IsOpen || !IsPluginValid || WorldToButtons is not { Count: > 0 }) return;
-                    await RequestDCTravelInfo.InvokeFunc();
-                }
-            );
-        }
-
-        private void UpdateWaitTimeInfo()
-        {
-            if (!IsOpen || !IsPluginValid || WorldToButtons is not { Count: > 0 }) return;
-
-            foreach (var (worldID, node) in WorldToButtons)
-            {
-                var time = GetDCTravelWaitTime.InvokeFunc(worldID);
-                if (time == -1) continue;
-
-                var builder = new SeStringBuilder();
-                builder.AddText("超域传送状态:")
-                       .Add(NewLinePayload.Payload)
-                       .AddText("              ");
-
-                switch (time)
-                {
-                    case 0:
-                        builder.AddUiForeground("即刻完成 / 等待 1 分钟以内", 45);
-                        break;
-                    case -999:
-                        builder.AddUiForeground("繁忙 / 无法通行", 518);
-                        break;
-                    default:
-                        builder.AddText("至少需要等待 ")
-                               .AddUiForeground(time.ToString(), 32)
-                               .AddText(" 分钟");
-                        break;
-                }
-
-
-                node.TextTooltip = builder.Build().Encode();
-                var baseColor = time switch
-                {
-                    0    => KnownColor.DarkGreen.ToVector4().ToVector3(),
-                    -999 => KnownColor.DarkRed.ToVector4().ToVector3(),
-                    >= 5 => KnownColor.Brown.ToVector4().ToVector3(),
-                    _    => ColorHelper.GetColor(32).ToVector3()
-                };
-
-                node.AddColor = baseColor;
-            }
-        }
-
-        private static HorizontalListNode CreateTeleportWidget()
-        {
-            var mainLayoutContainer = new HorizontalListNode { IsVisible = true };
-
-            // 当前大区
-            var currentDCWorlds = Sheets.Worlds
-                                        .Where(x => x.Value.DataCenter.RowId == GameState.CurrentDataCenter)
-                                        .ToList();
-            if (currentDCWorlds is not { Count: > 0 }) return mainLayoutContainer;
-
-            var currentDCColumn = CreateDataCenterColumn(currentDCWorlds.First().Value.DataCenter.RowId, currentDCWorlds);
-            mainLayoutContainer.AddNode(currentDCColumn);
-
-            if (!GameState.IsCN)
-                return mainLayoutContainer;
-
-            // 其他大区 (仅国服)
-            var otherDataCenters = Sheets.CNWorlds
-                                         .Where(kvp => kvp.Value.DataCenter.RowId != GameState.CurrentDataCenter)
-                                         .GroupBy(x => x.Value.DataCenter.RowId)
-                                         .ToDictionary(x => x.Key, x => x.ToList());
-
-            foreach (var dataCenter in otherDataCenters)
-            {
-                mainLayoutContainer.AddDummy(25);
-
-                var otherDCColumn = CreateDataCenterColumn(dataCenter.Key, dataCenter.Value);
-                mainLayoutContainer.AddNode(otherDCColumn);
-            }
-
-            return mainLayoutContainer;
-        }
-
-        private static unsafe VerticalListNode CreateDataCenterColumn(uint dcID, List<KeyValuePair<uint, World>> worlds)
-        {
-            var dcName = LuminaWrapper.GetDataCenterName(dcID);
-
-            var column      = new VerticalListNode { IsVisible = true };
-            var totalHeight = 0f;
-
-            column.AddDummy(5f);
-            totalHeight += 5f;
-
-            var header = new TextNode
-            {
-                String        = dcName,
-                FontSize      = 20,
-                IsVisible     = true,
-                Size          = new(150f, 30f),
-                AlignmentType = AlignmentType.Center,
-                TextFlags     = TextFlags.Bold
-            };
-
-            if (dcID != GameState.CurrentDataCenter)
-                header.ShowClickableCursor = true;
-
-            column.AddNode(header);
-            totalHeight += header.Size.Y;
-
-            if (dcID != GameState.CurrentDataCenter)
-            {
-                header.AddEvent
-                (
-                    AtkEventType.MouseClick,
-                    (_, _, _, _, _) =>
-                    {
-                        ContextMenuService.Clear();
-
-                        ContextMenuService.AddItem
-                        (
-                            new()
-                            {
-                                IsEnabled = false,
-                                Name      = $"{dcName}大区",
-                                OnClick   = () => { }
-                            }
-                        );
-
-                        ContextMenuService.AddItem
-                        (
-                            new()
-                            {
-                                IsEnabled = false,
-                                Name = $"当前监控: " +
-                                       $"{(WorldStatusMonitor.GetActiveMonitors().ToList() is { Count: > 0 } list ?
-                                               LuminaWrapper.GetDataCenterName(list.First()) :
-                                               "(无)")}",
-                                OnClick = () => { }
-                            }
-                        );
-
-                        var subMenu = new ContextMenuSubItem
-                        {
-                            OnClick   = () => { },
-                            Name      = "监控通行状态",
-                            IsEnabled = true
-                        };
-
-                        if (WorldStatusMonitor.GetActiveMonitors().Contains(dcID))
-                        {
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    Name    = "移除监控",
-                                    OnClick = () => WorldStatusMonitor.RemoveMonitor(dcID)
-                                }
-                            );
-                        }
-                        else
-                        {
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    IsEnabled = false,
-                                    Name      = "(当目标大区可通行时)",
-                                    OnClick   = () => { }
-                                }
-                            );
-
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    Name = "自动前往",
-                                    OnClick = () =>
-                                    {
-                                        WorldStatusMonitor.Clear();
-
-                                        WorldStatusMonitor.JustGo = true;
-                                        WorldStatusMonitor.AddMonitor(dcID);
-                                    }
-                                }
-                            );
-
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    Name = "发送通知",
-                                    OnClick = () =>
-                                    {
-                                        WorldStatusMonitor.Clear();
-
-                                        WorldStatusMonitor.JustGo = false;
-                                        WorldStatusMonitor.AddMonitor(dcID);
-                                    }
-                                }
-                            );
-                        }
-
-
-                        ContextMenuService.AddItem(subMenu);
-
-                        ContextMenuService.Open();
-                    }
-                );
-            }
-
-            column.AddDummy(15f);
-            totalHeight += 15f;
-
-            foreach (var (worldID, worldData) in worlds)
-            {
-                var worldNameBuilder = new SeStringBuilder().Append(worldData.Name.ToString());
-
-                if (GameState.HomeWorld == worldID)
-                {
-                    worldNameBuilder.Append(" ");
-                    worldNameBuilder.AddIcon(BitmapFontIcon.CrossWorld);
-                }
-
-                var button = new TextButtonNode
-                {
-                    Size      = new(150f, 40f),
-                    IsVisible = true,
-                    String    = worldNameBuilder.Build().Encode(),
-                    OnClick = () =>
-                    {
-                        Addon.Close();
-                        ChatManager.Instance().SendMessage($"/pdr worldtravel {worldData.Name.ToString()}");
-                    },
-                    IsEnabled = GameState.CurrentWorld != worldID && (worldData.DataCenter.RowId == GameState.CurrentDataCenter || IsPluginValid)
-                };
-
-                button.LabelNode.TextOutlineColor = KnownColor.Black.ToVector4();
-                button.LabelNode.TextFlags        = TextFlags.Edge;
-                column.AddNode(button);
-
-                if (GameState.IsCN)
-                    WorldToButtons.Add(worldID, button);
-
-                totalHeight += button.Size.Y;
-
-                column.AddDummy(5f);
-                totalHeight += 5f;
-            }
-
-            column.Size = new(150f, totalHeight);
-
-            return column;
-        }
-    }
-
-    private class WorldMonitor : IDisposable
-    {
-        private readonly ConcurrentDictionary<uint, CancellationTokenSource> activeMonitors = [];
-
-        private readonly Func<uint, (bool, uint)> checkLogicFunc;
-        private readonly Channel<uint>            requestChannel = Channel.CreateUnbounded<uint>();
-
-        private readonly CancellationTokenSource serviceCts = new();
-
-        private bool disposed;
-
-        public WorldMonitor(Func<uint, (bool, uint)> checkLogic)
-        {
-            checkLogicFunc = checkLogic;
-            _              = ProcessChannelRequestsAsync(serviceCts.Token);
-        }
-
-        public bool JustGo { get; set; }
-
-        public void Dispose()
-        {
-            if (disposed) return;
-            disposed = true;
-
-            requestChannel.Writer.TryComplete();
-            serviceCts.Cancel();
-
-            foreach (var kvp in activeMonitors)
-            {
-                try
-                {
-                    kvp.Value.Cancel();
-                }
-                catch
-                {
-                    // ignored
-                }
-            }
-
-            activeMonitors.Clear();
-            serviceCts.Dispose();
-        }
-
-        public void AddMonitor(uint dcID)
-        {
-            if (disposed)
-                throw new ObjectDisposedException(nameof(WorldMonitor));
-
-            if (activeMonitors.ContainsKey(dcID) || serviceCts.IsCancellationRequested)
-                return;
-
-            if (requestChannel.Writer.TryWrite(dcID))
-            {
-                DLog.Debug($"[FastWorldTravel] 开始监控 {LuminaWrapper.GetDataCenterName(dcID)} ({dcID}) 大区状态");
-                NotifyHelper.Instance().Chat
-                    ($"[{Lang.Get("FastWorldTravelTitle")}]\n开始实时监控 [{LuminaWrapper.GetDataCenterName(dcID)}] 大区可通行状态\n检测到可通行时: [{(JustGo ? "直接前往" : "发送通知")}]");
-            }
-        }
-
-        public void RemoveMonitor(uint dcID)
-        {
-            if (disposed) return;
-
-            if (activeMonitors.TryRemove(dcID, out var cts))
-            {
-                DLog.Debug($"[FastWorldTravel] 停止监控 {LuminaWrapper.GetDataCenterName(dcID)} ({dcID}) 大区状态");
-                NotifyHelper.Instance().Chat($"[{Lang.Get("FastWorldTravelTitle")}]\n已停止对 [{LuminaWrapper.GetDataCenterName(dcID)}] 大区可通行状态的实时监控");
-
-                try
-                {
-                    cts.Cancel();
-                }
-                catch (ObjectDisposedException)
-                {
-                    // ignored
-                }
-            }
-        }
-
-        public void Clear()
-        {
-            var monitors = activeMonitors.ToArray();
-            foreach (var monitor in monitors)
-                RemoveMonitor(monitor.Key);
-        }
-
-        public IEnumerable<uint> GetActiveMonitors() =>
-            activeMonitors.Keys;
-
-        private async Task ProcessChannelRequestsAsync(CancellationToken serviceToken)
-        {
-            try
-            {
-                while (await requestChannel.Reader.WaitToReadAsync(serviceToken))
-                {
-                    while (requestChannel.Reader.TryRead(out var serverId))
-                    {
-                        if (activeMonitors.ContainsKey(serverId)) continue;
-
-                        var taskCts = CancellationTokenSource.CreateLinkedTokenSource(serviceToken);
-
-                        if (activeMonitors.TryAdd(serverId, taskCts))
-                            _ = MonitorRoutineAsync(serverId, taskCts);
-                        else
-                            taskCts.Dispose();
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // ignored
-            }
-            catch (Exception ex)
-            {
-                DLog.Error("[FastWorldTravel] 主循环发生预期外错误", ex);
-            }
-        }
-
-        private async Task MonitorRoutineAsync(uint dcID, CancellationTokenSource cts)
-        {
-            try
-            {
-                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-
-                while (await timer.WaitForNextTickAsync(cts.Token))
-                {
-                    if (checkLogicFunc(dcID) is { Item1: true } result)
-                    {
-                        var message = $"大区 [{LuminaWrapper.GetDataCenterName(dcID)}] 已为可通行状态, 停止监控";
-                        NotifyHelper.Instance().Chat(message);
-                        NotifyHelper.Instance().NotificationInfo(message);
-                        NotifyHelper.Speak(message);
-
-                        if (JustGo)
-                            ChatManager.Instance().SendCommand($"/pdr worldtravel {result.Item2}");
-
-                        break;
-                    }
-
-                    await Task.Delay(100).ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                DLog.Debug($"[FastWorldTravel] 对大区 {dcID} 的状态监控已被取消");
-            }
-            finally
-            {
-                activeMonitors.TryRemove(dcID, out _);
-                cts.Dispose();
-            }
-        }
+            InternalName = "DRFastWorldTravel",
+            Title        = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
+            Size         = new(GameState.IsCN ? 710f : 180f, 480f)
+        };
     }
 
     #region 事件
@@ -733,12 +186,14 @@ public class FastWorldTravel : ModuleBase
 
     }
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs args)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs args)
     {
         if (WorldTravelSelect == null) return;
         if (!ModuleConfig.ReplaceOrigAddon) return;
 
         WorldTravelSelect->Close(true);
+
+        EnsureAddon();
         Addon.Open();
     }
 
@@ -773,6 +228,7 @@ public class FastWorldTravel : ModuleBase
 
         if (args.Length == 0)
         {
+            EnsureAddon();
             Addon.Toggle();
             return;
         }
@@ -1138,4 +594,555 @@ public class FastWorldTravel : ModuleBase
     private static IPCSubscriber<uint, int> GetDCTravelWaitTime;
 
     #endregion
+
+    private class Config : ModuleConfig
+    {
+        public bool AddDtrEntry      = true;
+        public bool AutoLeaveParty   = true;
+        public bool ReplaceOrigAddon = true;
+    }
+
+    private struct Travel
+    {
+        public uint    CurrentWorldID;
+        public uint    HomeWorldID;
+        public uint    TargetWorldID;
+        public ulong   ContentID;
+        public bool    IsBack;
+        public string  Name;
+        public string? Description;
+    }
+
+    private class AddonDRFastWorldTravel
+    (
+        TaskHelper taskHelper
+    ) : NativeAddon
+    {
+        private static NodeBase TeleportWidget;
+
+        private static readonly Version MinDCTravelerXVersion = new("0.2.3.0");
+
+        private static ContextMenu? ContextMenuService;
+
+        private static bool LastOpenPluginState;
+
+        private static bool LastForegroundState;
+
+        private static Dictionary<uint, TextButtonNode> WorldToButtons = [];
+
+        private static bool IsPluginEnabled =>
+            DService.Instance().PI.IsPluginEnabled("DCTravelerX", MinDCTravelerXVersion);
+
+        private static bool IsPluginValid =>
+            IsPluginEnabled && IsDCTravelerValid;
+
+        protected override unsafe void OnSetup(AtkUnitBase* addon)
+        {
+            ContextMenuService = new();
+
+            LastOpenPluginState = IsPluginValid;
+            WorldToButtons.Clear();
+
+            TeleportWidget          = CreateTeleportWidget();
+            TeleportWidget.Position = ContentStartPosition;
+
+            if (GameState.IsCN)
+            {
+                var message = SeString.Empty;
+
+                if (!IsPluginEnabled)
+                {
+                    message = new SeStringBuilder().Append("超域旅行功能依赖 ")
+                                                   .AddUiForeground("DCTravlerX", 32)
+                                                   .Append($" 插件 (版本 {MinDCTravelerXVersion} 及以上)")
+                                                   .Build();
+                }
+                else if (!IsDCTravelerValid)
+                {
+                    message = new SeStringBuilder().Append("无法连接至超域旅行 API, 请确认已安装并启用 ")
+                                                   .AddUiForeground("DCTravlerX", 32)
+                                                   .Append($" 插件 (版本 {MinDCTravelerXVersion} 及以上), 若已启用, 请从 XIVLauncherCN 重启游戏")
+                                                   .Build();
+                }
+
+                if (message != SeString.Empty)
+                {
+                    var pluginHelpNode = new TextNode
+                    {
+                        String           = message.Encode(),
+                        FontSize         = 14,
+                        IsVisible        = true,
+                        Size             = new(150f, 25f),
+                        AlignmentType    = AlignmentType.Center,
+                        Position         = new(305f, -22f),
+                        TextFlags        = TextFlags.Bold | TextFlags.Edge,
+                        TextColor        = ColorHelper.GetColor(50),
+                        TextOutlineColor = ColorHelper.GetColor(32)
+                    };
+                    pluginHelpNode.AttachNode(this);
+                }
+            }
+
+            TeleportWidget.AttachNode(this);
+
+            UpdateWaitTimeInfo();
+        }
+
+        protected override unsafe void OnUpdate(AtkUnitBase* addon)
+        {
+            if (DService.Instance().Condition.IsBoundByDuty)
+            {
+                Close();
+                return;
+            }
+
+            if (!GameState.IsCN) return;
+
+            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate") && LastOpenPluginState != IsPluginValid)
+            {
+                Close();
+
+                taskHelper.Abort();
+                taskHelper.DelayNext(100);
+                taskHelper.Enqueue(() => !IsOpen, "等待界面完全关闭");
+                taskHelper.Enqueue(Open,          "重新打开");
+
+                LastOpenPluginState = IsPluginValid;
+                return;
+            }
+
+            if (LastForegroundState != GameState.IsForeground)
+            {
+                LastForegroundState = GameState.IsForeground;
+
+                Throttler.Shared.Remove("FastWorldTravel-OnAddonUpdate-RequestQueueTime");
+                Throttler.Shared.Remove("FastWorldTravel-OnAddonUpdate-UpdateQueueTime");
+            }
+
+            // 都在后台了就不要 DDOS 拂晓服务器了
+            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate-RequestQueueTime", GameState.IsForeground ? 15_000U : 60_000))
+                RequestWaitTimeInfoUpdate();
+
+            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate-UpdateQueueTime", 1_000))
+                UpdateWaitTimeInfo();
+        }
+
+        protected override unsafe void OnFinalize(AtkUnitBase* addon)
+        {
+            ContextMenuService?.Dispose();
+            ContextMenuService = null;
+        }
+
+        private void RequestWaitTimeInfoUpdate()
+        {
+            DService.Instance().Framework.RunOnTick
+            (async () =>
+                {
+                    if (!IsOpen || !IsPluginValid || WorldToButtons is not { Count: > 0 }) return;
+                    await RequestDCTravelInfo.InvokeFunc();
+                }
+            );
+        }
+
+        private void UpdateWaitTimeInfo()
+        {
+            if (!IsOpen || !IsPluginValid || WorldToButtons is not { Count: > 0 }) return;
+
+            foreach (var (worldID, node) in WorldToButtons)
+            {
+                var time = GetDCTravelWaitTime.InvokeFunc(worldID);
+                if (time == -1) continue;
+
+                var builder = new SeStringBuilder();
+                builder.AddText("超域传送状态:")
+                       .Add(NewLinePayload.Payload)
+                       .AddText("              ");
+
+                switch (time)
+                {
+                    case 0:
+                        builder.AddUiForeground("即刻完成 / 等待 1 分钟以内", 45);
+                        break;
+                    case -999:
+                        builder.AddUiForeground("繁忙 / 无法通行", 518);
+                        break;
+                    default:
+                        builder.AddText("至少需要等待 ")
+                               .AddUiForeground(time.ToString(), 32)
+                               .AddText(" 分钟");
+                        break;
+                }
+
+
+                node.TextTooltip = builder.Build().Encode();
+                var baseColor = time switch
+                {
+                    0    => KnownColor.DarkGreen.ToVector4().ToVector3(),
+                    -999 => KnownColor.DarkRed.ToVector4().ToVector3(),
+                    >= 5 => KnownColor.Brown.ToVector4().ToVector3(),
+                    _    => ColorHelper.GetColor(32).ToVector3()
+                };
+
+                node.AddColor = baseColor;
+            }
+        }
+
+        private HorizontalListNode CreateTeleportWidget()
+        {
+            var mainLayoutContainer = new HorizontalListNode { IsVisible = true };
+
+            // 当前大区
+            var currentDCWorlds = Sheets.Worlds
+                                        .Where(x => x.Value.DataCenter.RowId == GameState.CurrentDataCenter)
+                                        .ToList();
+            if (currentDCWorlds is not { Count: > 0 }) return mainLayoutContainer;
+
+            var currentDCColumn = CreateDataCenterColumn(currentDCWorlds.First().Value.DataCenter.RowId, currentDCWorlds);
+            mainLayoutContainer.AddNode(currentDCColumn);
+
+            if (!GameState.IsCN)
+                return mainLayoutContainer;
+
+            // 其他大区 (仅国服)
+            var otherDataCenters = Sheets.CNWorlds
+                                         .Where(kvp => kvp.Value.DataCenter.RowId != GameState.CurrentDataCenter)
+                                         .GroupBy(x => x.Value.DataCenter.RowId)
+                                         .ToDictionary(x => x.Key, x => x.ToList());
+
+            foreach (var dataCenter in otherDataCenters)
+            {
+                mainLayoutContainer.AddDummy(25);
+
+                var otherDCColumn = CreateDataCenterColumn(dataCenter.Key, dataCenter.Value);
+                mainLayoutContainer.AddNode(otherDCColumn);
+            }
+
+            return mainLayoutContainer;
+        }
+
+        private unsafe VerticalListNode CreateDataCenterColumn(uint dcID, List<KeyValuePair<uint, World>> worlds)
+        {
+            var dcName = LuminaWrapper.GetDataCenterName(dcID);
+
+            var column      = new VerticalListNode { IsVisible = true };
+            var totalHeight = 0f;
+
+            column.AddDummy(5f);
+            totalHeight += 5f;
+
+            var header = new TextNode
+            {
+                String        = dcName,
+                FontSize      = 20,
+                IsVisible     = true,
+                Size          = new(150f, 30f),
+                AlignmentType = AlignmentType.Center,
+                TextFlags     = TextFlags.Bold
+            };
+
+            if (dcID != GameState.CurrentDataCenter)
+                header.ShowClickableCursor = true;
+
+            column.AddNode(header);
+            totalHeight += header.Size.Y;
+
+            if (dcID != GameState.CurrentDataCenter)
+            {
+                header.AddEvent
+                (
+                    AtkEventType.MouseClick,
+                    (_, _, _, _, _) =>
+                    {
+                        ContextMenuService.Clear();
+
+                        ContextMenuService.AddItem
+                        (
+                            new()
+                            {
+                                IsEnabled = false,
+                                Name      = $"{dcName}大区",
+                                OnClick   = () => { }
+                            }
+                        );
+
+                        ContextMenuService.AddItem
+                        (
+                            new()
+                            {
+                                IsEnabled = false,
+                                Name = $"当前监控: " +
+                                       $"{(WorldStatusMonitor.GetActiveMonitors().ToList() is { Count: > 0 } list ?
+                                               LuminaWrapper.GetDataCenterName(list.First()) :
+                                               "(无)")}",
+                                OnClick = () => { }
+                            }
+                        );
+
+                        var subMenu = new ContextMenuSubItem
+                        {
+                            OnClick   = () => { },
+                            Name      = "监控通行状态",
+                            IsEnabled = true
+                        };
+
+                        if (WorldStatusMonitor.GetActiveMonitors().Contains(dcID))
+                        {
+                            subMenu.AddItem
+                            (
+                                new()
+                                {
+                                    Name    = "移除监控",
+                                    OnClick = () => WorldStatusMonitor.RemoveMonitor(dcID)
+                                }
+                            );
+                        }
+                        else
+                        {
+                            subMenu.AddItem
+                            (
+                                new()
+                                {
+                                    IsEnabled = false,
+                                    Name      = "(当目标大区可通行时)",
+                                    OnClick   = () => { }
+                                }
+                            );
+
+                            subMenu.AddItem
+                            (
+                                new()
+                                {
+                                    Name = "自动前往",
+                                    OnClick = () =>
+                                    {
+                                        WorldStatusMonitor.Clear();
+
+                                        WorldStatusMonitor.JustGo = true;
+                                        WorldStatusMonitor.AddMonitor(dcID);
+                                    }
+                                }
+                            );
+
+                            subMenu.AddItem
+                            (
+                                new()
+                                {
+                                    Name = "发送通知",
+                                    OnClick = () =>
+                                    {
+                                        WorldStatusMonitor.Clear();
+
+                                        WorldStatusMonitor.JustGo = false;
+                                        WorldStatusMonitor.AddMonitor(dcID);
+                                    }
+                                }
+                            );
+                        }
+
+
+                        ContextMenuService.AddItem(subMenu);
+
+                        ContextMenuService.Open();
+                    }
+                );
+            }
+
+            column.AddDummy(15f);
+            totalHeight += 15f;
+
+            foreach (var (worldID, worldData) in worlds)
+            {
+                var worldNameBuilder = new SeStringBuilder().Append(worldData.Name.ToString());
+
+                if (GameState.HomeWorld == worldID)
+                {
+                    worldNameBuilder.Append(" ");
+                    worldNameBuilder.AddIcon(BitmapFontIcon.CrossWorld);
+                }
+
+                var button = new TextButtonNode
+                {
+                    Size      = new(150f, 40f),
+                    IsVisible = true,
+                    String    = worldNameBuilder.Build().Encode(),
+                    OnClick = () =>
+                    {
+                        Close();
+                        ChatManager.Instance().SendMessage($"/pdr worldtravel {worldData.Name.ToString()}");
+                    },
+                    IsEnabled = GameState.CurrentWorld != worldID && (worldData.DataCenter.RowId == GameState.CurrentDataCenter || IsPluginValid)
+                };
+
+                button.LabelNode.TextOutlineColor = KnownColor.Black.ToVector4();
+                button.LabelNode.TextFlags        = TextFlags.Edge;
+                column.AddNode(button);
+
+                if (GameState.IsCN)
+                    WorldToButtons.Add(worldID, button);
+
+                totalHeight += button.Size.Y;
+
+                column.AddDummy(5f);
+                totalHeight += 5f;
+            }
+
+            column.Size = new(150f, totalHeight);
+
+            return column;
+        }
+    }
+
+    private class WorldMonitor : IDisposable
+    {
+        private readonly ConcurrentDictionary<uint, CancellationTokenSource> activeMonitors = [];
+
+        private readonly Func<uint, (bool, uint)> checkLogicFunc;
+        private readonly Channel<uint>            requestChannel = Channel.CreateUnbounded<uint>();
+
+        private readonly CancellationTokenSource serviceCts = new();
+
+        private bool disposed;
+
+        public WorldMonitor(Func<uint, (bool, uint)> checkLogic)
+        {
+            checkLogicFunc = checkLogic;
+            _              = ProcessChannelRequestsAsync(serviceCts.Token);
+        }
+
+        public bool JustGo { get; set; }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+
+            requestChannel.Writer.TryComplete();
+            serviceCts.Cancel();
+
+            foreach (var kvp in activeMonitors)
+            {
+                try
+                {
+                    kvp.Value.Cancel();
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+
+            activeMonitors.Clear();
+            serviceCts.Dispose();
+        }
+
+        public void AddMonitor(uint dcID)
+        {
+            if (disposed)
+                throw new ObjectDisposedException(nameof(WorldMonitor));
+
+            if (activeMonitors.ContainsKey(dcID) || serviceCts.IsCancellationRequested)
+                return;
+
+            if (requestChannel.Writer.TryWrite(dcID))
+            {
+                DLog.Debug($"[FastWorldTravel] 开始监控 {LuminaWrapper.GetDataCenterName(dcID)} ({dcID}) 大区状态");
+                NotifyHelper.Instance().Chat
+                    ($"[{Lang.Get("FastWorldTravelTitle")}]\n开始实时监控 [{LuminaWrapper.GetDataCenterName(dcID)}] 大区可通行状态\n检测到可通行时: [{(JustGo ? "直接前往" : "发送通知")}]");
+            }
+        }
+
+        public void RemoveMonitor(uint dcID)
+        {
+            if (disposed) return;
+
+            if (activeMonitors.TryRemove(dcID, out var cts))
+            {
+                DLog.Debug($"[FastWorldTravel] 停止监控 {LuminaWrapper.GetDataCenterName(dcID)} ({dcID}) 大区状态");
+                NotifyHelper.Instance().Chat($"[{Lang.Get("FastWorldTravelTitle")}]\n已停止对 [{LuminaWrapper.GetDataCenterName(dcID)}] 大区可通行状态的实时监控");
+
+                try
+                {
+                    cts.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // ignored
+                }
+            }
+        }
+
+        public void Clear()
+        {
+            var monitors = activeMonitors.ToArray();
+            foreach (var monitor in monitors)
+                RemoveMonitor(monitor.Key);
+        }
+
+        public IEnumerable<uint> GetActiveMonitors() =>
+            activeMonitors.Keys;
+
+        private async Task ProcessChannelRequestsAsync(CancellationToken serviceToken)
+        {
+            try
+            {
+                while (await requestChannel.Reader.WaitToReadAsync(serviceToken))
+                {
+                    while (requestChannel.Reader.TryRead(out var serverId))
+                    {
+                        if (activeMonitors.ContainsKey(serverId)) continue;
+
+                        var taskCts = CancellationTokenSource.CreateLinkedTokenSource(serviceToken);
+
+                        if (activeMonitors.TryAdd(serverId, taskCts))
+                            _ = MonitorRoutineAsync(serverId, taskCts);
+                        else
+                            taskCts.Dispose();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // ignored
+            }
+            catch (Exception ex)
+            {
+                DLog.Error("[FastWorldTravel] 主循环发生预期外错误", ex);
+            }
+        }
+
+        private async Task MonitorRoutineAsync(uint dcID, CancellationTokenSource cts)
+        {
+            try
+            {
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+
+                while (await timer.WaitForNextTickAsync(cts.Token))
+                {
+                    if (checkLogicFunc(dcID) is { Item1: true } result)
+                    {
+                        var message = $"大区 [{LuminaWrapper.GetDataCenterName(dcID)}] 已为可通行状态, 停止监控";
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Instance().NotificationInfo(message);
+                        NotifyHelper.Speak(message);
+
+                        if (JustGo)
+                            ChatManager.Instance().SendCommand($"/pdr worldtravel {result.Item2}");
+
+                        break;
+                    }
+
+                    await Task.Delay(100).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                DLog.Debug($"[FastWorldTravel] 对大区 {dcID} 的状态监控已被取消");
+            }
+            finally
+            {
+                activeMonitors.TryRemove(dcID, out _);
+                cts.Dispose();
+            }
+        }
+    }
 }
