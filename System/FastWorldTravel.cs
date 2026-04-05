@@ -37,6 +37,18 @@ namespace DailyRoutines.ModulesPublic;
 
 public class FastWorldTravel : ModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title = Lang.Get("FastWorldTravelTitle"),
+        Description = Lang.Get("FastWorldTravelDescription", COMMAND) +
+                      (!GameState.IsCN ? string.Empty : "\n支持快捷超域旅行并实时显示各服务器超域旅行拥挤度 [国服特供]"),
+        Category            = ModuleCategory.System,
+        ModulesRecommend    = ["InstantReturn", "InstantTeleport"],
+        ModulesPrerequisite = ["InstantLogout"]
+    };
+
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     internal const string COMMAND = "worldtravel";
 
     private static readonly HashSet<uint> WorldTravelValidZones = [132, 129, 130];
@@ -58,18 +70,6 @@ public class FastWorldTravel : ModuleBase
     private static AddonDRFastWorldTravel? Addon;
 
     private static WorldMonitor? WorldStatusMonitor;
-
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title = Lang.Get("FastWorldTravelTitle"),
-        Description = Lang.Get("FastWorldTravelDescription", COMMAND) +
-                      (!GameState.IsCN ? string.Empty : "\n支持快捷超域旅行并实时显示各服务器超域旅行拥挤度 [国服特供]"),
-        Category            = ModuleCategory.System,
-        ModulesRecommend    = ["InstantReturn", "InstantTeleport"],
-        ModulesPrerequisite = ["InstantLogout"]
-    };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override unsafe void Init()
     {
@@ -131,7 +131,7 @@ public class FastWorldTravel : ModuleBase
             ModuleConfig.Save(this);
     }
 
-    private static void HandleDtrEntry(bool isAdd)
+    private void HandleDtrEntry(bool isAdd)
     {
         switch (isAdd)
         {
@@ -143,7 +143,17 @@ public class FastWorldTravel : ModuleBase
                 }
 
                 Entry         =  DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
-                Entry.OnClick += _ => Addon.Toggle();
+                Entry.OnClick += _ =>
+                {
+                    Addon ??= new(TaskHelper)
+                    {
+                        InternalName = "DRFastWorldTravel",
+                        Title        = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
+                        Size         = new(GameState.IsCN ? 710f : 180f, 480f)
+                    };
+
+                    Addon.Toggle();
+                };
                 Entry.Shown   =  true;
                 Entry.Tooltip =  Lang.Get("FastWorldTravel-DtrEntryTooltip");
                 Entry.Text    =  LuminaWrapper.GetAddonText(12510);
@@ -721,19 +731,9 @@ public class FastWorldTravel : ModuleBase
                 Entry.Shown = !DService.Instance().Condition.Any(InvalidConditions);
 
                 if (Entry.Shown)
-                {
-                    Addon?.Dispose();
-                    Addon = new(TaskHelper)
-                    {
-                        InternalName = "DRFastWorldTravel",
-                        Title        = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
-                        Size         = new(GameState.IsCN ? 710f : 180f, 480f)
-                    };
-
                     Entry.Text = new SeStringBuilder().AddIcon(BitmapFontIcon.CrossWorld)
                                                       .Append($"{GameState.CurrentWorldData.Name.ToString()}")
                                                       .Build();
-                }
             }
         }
 

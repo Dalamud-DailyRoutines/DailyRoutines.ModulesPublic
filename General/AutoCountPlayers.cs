@@ -25,6 +25,15 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCountPlayers : ModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = Lang.Get("AutoCountPlayersTitle"),
+        Description = Lang.Get("AutoCountPlayersDescription"),
+        Category    = ModuleCategory.General
+    };
+
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private const ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags.NoScrollbar           |
                                                   ImGuiWindowFlags.AlwaysAutoResize      |
                                                   ImGuiWindowFlags.NoTitleBar            |
@@ -38,10 +47,12 @@ public unsafe class AutoCountPlayers : ModuleBase
                                                   ImGuiWindowFlags.NoScrollWithMouse     |
                                                   ImGuiWindowFlags.NoInputs;
 
-    private static readonly uint                                LineColorBlue = KnownColor.LightSkyBlue.ToUInt();
-    private static readonly uint                                LineColorRed  = KnownColor.Red.ToUInt();
-    private static readonly uint                                DotColor      = KnownColor.RoyalBlue.ToUInt();
-    private static          Hook<InfoProxy24EndRequestDelegate> InfoProxy24EndRequestHook;
+    private static readonly uint LineColorBlue = KnownColor.LightSkyBlue.ToUInt();
+    private static readonly uint LineColorRed  = KnownColor.Red.ToUInt();
+    private static readonly uint DotColor      = KnownColor.RoyalBlue.ToUInt();
+    
+    private delegate void                                InfoProxy24EndRequestDelegate(InfoProxy24* instance);
+    private static   Hook<InfoProxy24EndRequestDelegate> InfoProxy24EndRequestHook;
 
     private static Config        ModuleConfig = null!;
     private static IDtrBarEntry? Entry;
@@ -51,28 +62,25 @@ public unsafe class AutoCountPlayers : ModuleBase
 
     private static string SearchInput = string.Empty;
 
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title       = Lang.Get("AutoCountPlayersTitle"),
-        Description = Lang.Get("AutoCountPlayersDescription"),
-        Category    = ModuleCategory.General
-    };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
     protected override void Init()
     {
         ModuleConfig = Config.Load(this) ?? new();
 
-        Overlay            ??= new(this);
-        Overlay.Flags      &=  ~ImGuiWindowFlags.NoTitleBar;
-        Overlay.Flags      &=  ~ImGuiWindowFlags.AlwaysAutoResize;
-        Overlay.WindowName =   $"{Lang.Get("AutoCountPlayers-PlayersAroundInfo")}###AutoCountPlayers-Overlay";
-
         Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoCountPlayers");
         Entry.Shown   =   true;
         Entry.Text    =   $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: 0";
-        Entry.OnClick +=  _ => Overlay.IsOpen ^= true;
+        Entry.OnClick +=  _ =>
+        {
+            if (Overlay == null)
+            {
+                Overlay            =  new(this);
+                Overlay.Flags      &= ~ImGuiWindowFlags.NoTitleBar;
+                Overlay.Flags      &= ~ImGuiWindowFlags.AlwaysAutoResize;
+                Overlay.WindowName =  $"{Lang.Get("AutoCountPlayers-PlayersAroundInfo")}###AutoCountPlayers-Overlay";
+            }
+
+            Overlay.IsOpen ^= true;
+        };
 
         WindowManager.Instance().PostDraw += OnDraw;
 
@@ -539,9 +547,7 @@ public unsafe class AutoCountPlayers : ModuleBase
             ImGui.End();
         }
     }
-
-    private delegate void InfoProxy24EndRequestDelegate(InfoProxy24* instance);
-
+    
     private class Config : ModuleConfig
     {
         public bool DisplayLineWhenTargetingMe = true;

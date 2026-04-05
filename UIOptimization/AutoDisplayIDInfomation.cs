@@ -22,6 +22,14 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoDisplayIDInfomation : ModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = Lang.Get("AutoDisplayIDInfomationTitle"),
+        Description = Lang.Get("AutoDisplayIDInfomationDescription"),
+        Category    = ModuleCategory.UIOptimization,
+        Author      = ["Middo"]
+    };
+    
     private static Config ModuleConfig = null!;
 
     private static IDtrBarEntry? ZoneInfoEntry;
@@ -31,17 +39,10 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private static TooltipModification? StatusModification;
     private static TooltipModification? WeatherModification;
 
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title       = Lang.Get("AutoDisplayIDInfomationTitle"),
-        Description = Lang.Get("AutoDisplayIDInfomationDescription"),
-        Category    = ModuleCategory.UIOptimization,
-        Author      = ["Middo"]
-    };
-
     protected override void Init()
     {
-        ModuleConfig  =   Config.Load(this) ?? new();
+        ModuleConfig = Config.Load(this) ?? new();
+        
         ZoneInfoEntry ??= DService.Instance().DTRBar.Get("AutoDisplayIDInfomation-ZoneInfo");
 
         GameTooltipManager.Instance().RegGenerateItemTooltipModifier(ModifyItemTooltip);
@@ -56,6 +57,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         DService.Instance().ClientState.MapIdChanged     += OnMapChanged;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
+        
         UpdateDTRInfo();
     }
 

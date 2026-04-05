@@ -25,6 +25,17 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastInstanceZoneChange : ModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title            = Lang.Get("FastInstanceZoneChangeTitle"),
+        Description      = Lang.Get("FastInstanceZoneChangeDescription", COMMAND),
+        Category         = ModuleCategory.System,
+        Author           = ["AtmoOmen", "KirisameVanilla"],
+        ModulesRecommend = ["InstantTeleport"]
+    };
+
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private const string COMMAND = "insc";
 
     // 其他地方也没法换线
@@ -37,26 +48,12 @@ public unsafe class FastInstanceZoneChange : ModuleBase
     private static Config        ModuleConfig = null!;
     private static IDtrBarEntry? Entry;
 
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title            = Lang.Get("FastInstanceZoneChangeTitle"),
-        Description      = Lang.Get("FastInstanceZoneChangeDescription", COMMAND),
-        Category         = ModuleCategory.System,
-        Author           = ["AtmoOmen", "KirisameVanilla"],
-        ModulesRecommend = ["InstantTeleport"]
-    };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
     protected override void Init()
     {
         TaskHelper   ??= new() { TimeoutMS = 30_000, ShowDebug = true };
         ModuleConfig =   Config.Load(this) ?? new();
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("FastInstanceZoneChange-CommandHelp") });
-
-        Overlay            ??= new(this);
-        Overlay.WindowName =   Lang.Get("FastInstanceZoneChangeTitle");
 
         if (ModuleConfig.AddDtrEntry)
         {
@@ -294,20 +291,28 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
     private void HandleDtrEntry(bool isAdd)
     {
-        if (isAdd && Entry == null)
+        switch (isAdd)
         {
-            Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-FastInstanceZoneChange");
-            Entry.OnClick +=  _ => Overlay.IsOpen ^= true;
-            Entry.Shown   =   false;
-            Entry.Tooltip =   Lang.Get("FastInstanceZoneChange-DtrEntryTooltip");
-            return;
+            case true when Entry == null:
+                Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-FastInstanceZoneChange");
+                Entry.OnClick +=  _ =>
+                {
+                    Overlay ??= new(this)
+                    {
+                        WindowName = Lang.Get("FastInstanceZoneChangeTitle")
+                    };
+
+                    Overlay.IsOpen ^= true;
+                };
+                Entry.Shown   =   false;
+                Entry.Tooltip =   Lang.Get("FastInstanceZoneChange-DtrEntryTooltip");
+                return;
+            case false when Entry != null:
+                Entry.Remove();
+                Entry = null;
+                break;
         }
 
-        if (!isAdd && Entry != null)
-        {
-            Entry.Remove();
-            Entry = null;
-        }
     }
 
     public void EnqueueInstanceChange(uint i, uint tryTimes)

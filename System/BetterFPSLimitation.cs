@@ -49,22 +49,33 @@ public class BetterFPSLimitation : ModuleBase
                        {
                            Thresholds = [15, 30, 45, 60, 90, 120]
                        };
-
-        var thresholdGroups = ModuleConfig.Thresholds
-                                          .Select((value, index) => new { value, index })
-                                          .GroupBy(x => x.index / 3)
-                                          .Select(g => g.Select(x => x.value).ToList())
-                                          .ToList();
-
-        Addon ??= new()
+        
+        Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-BetterFPSLimitation");
+        Entry.OnClick +=  _ =>
         {
-            InternalName = "DRBetterFPSLimitation",
-            Title        = LuminaWrapper.GetAddonText(4032),
-            Size         = new(250f, 208f + 32f * thresholdGroups.Count)
-        };
-        Addon.SetWindowPosition(ModuleConfig.AddonPosition);
+            if (Addon == null)
+            {
+                var thresholdGroups = ModuleConfig.Thresholds
+                                                  .Select((value, index) => new { value, index })
+                                                  .GroupBy(x => x.index / 3)
+                                                  .Select(g => g.Select(x => x.value).ToList())
+                                                  .ToList();
 
-        HandleDtrEntry(true);
+                Addon = new()
+                {
+                    InternalName = "DRBetterFPSLimitation",
+                    Title        = LuminaWrapper.GetAddonText(4032),
+                    Size         = new(250f, 208f + 32f * thresholdGroups.Count)
+                };
+                Addon.SetWindowPosition(ModuleConfig.AddonPosition);
+            }
+                    
+            Addon.Toggle();
+        };
+                
+        Entry.Shown = true;
+        Entry.Text  = LuminaWrapper.GetAddonText(4002);
+        
         FrameworkManager.Instance().Reg(OnUpdate, 1_000);
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterFPSLimitation-CommandHelp") });
@@ -75,9 +86,10 @@ public class BetterFPSLimitation : ModuleBase
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
         FrameworkManager.Instance().Unreg(OnUpdate);
-
-        HandleDtrEntry(false);
-
+        
+        Entry?.Remove();
+        Entry = null;
+        
         Addon?.Dispose();
         Addon = null;
     }
@@ -152,29 +164,6 @@ public class BetterFPSLimitation : ModuleBase
     {
         Device.Instance()->IsFrameRateLimited = ModuleConfig.IsEnabled;
         Device.Instance()->FrameRateLimit     = (short)MathF.Min(ModuleConfig.Limitation + 2, short.MaxValue);
-    }
-
-    private static void HandleDtrEntry(bool isAdd)
-    {
-        switch (isAdd)
-        {
-            case true:
-                if (Entry != null)
-                {
-                    Entry.Remove();
-                    Entry = null;
-                }
-
-                Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-BetterFPSLimitation");
-                Entry.OnClick +=  _ => Addon.Toggle();
-                Entry.Shown   =   true;
-                Entry.Text    =   LuminaWrapper.GetAddonText(4002);
-                return;
-            case false when Entry != null:
-                Entry.Remove();
-                Entry = null;
-                break;
-        }
     }
 
     private class Config : ModuleConfig

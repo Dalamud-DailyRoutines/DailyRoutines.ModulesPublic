@@ -27,6 +27,16 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoDisplayMitigationInfo : ModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = Lang.Get("AutoDisplayMitigationInfoTitle"),
+        Description = Lang.Get("AutoDisplayMitigationInfoDescription"),
+        Category    = ModuleCategory.Combat,
+        Author      = ["HaKu"]
+    };
+
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static readonly byte[] DamagePhysicalStr = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
     private static readonly byte[] DamageMagicalStr  = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
 
@@ -39,22 +49,10 @@ public class AutoDisplayMitigationInfo : ModuleBase
     private static bool IsCombatEventsRegistered;
     private static bool IsNeedToDrawOnPartyList;
 
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title       = Lang.Get("AutoDisplayMitigationInfoTitle"),
-        Description = Lang.Get("AutoDisplayMitigationInfoDescription"),
-        Category    = ModuleCategory.Combat,
-        Author      = ["HaKu"]
-    };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
     protected override void Init()
     {
         ModuleConfig = Config.Load(this) ?? new();
-
-        SetOverlay();
-
+        
         RemoteFetchCancelSource = new();
         _                       = RemoteRepoManager.FetchMitigationStatusesAsync(RemoteFetchCancelSource.Token);
 
@@ -245,7 +243,13 @@ public class AutoDisplayMitigationInfo : ModuleBase
         FrameworkManager.Instance().Reg(OnUpdate, 500);
 
         BarEntry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayMitigationInfo");
-        BarEntry.OnClick =   _ => Overlay?.IsOpen ^= true;
+        BarEntry.OnClick =   _ =>
+        {
+            if (Overlay == null)
+                SetOverlay();
+            
+            Overlay.IsOpen ^= true;
+        };
 
         IsCombatEventsRegistered = true;
     }

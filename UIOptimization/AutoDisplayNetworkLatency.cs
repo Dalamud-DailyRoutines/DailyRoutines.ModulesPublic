@@ -20,12 +20,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoDisplayNetworkLatency : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static ServerPingMonitor?       Monitor;
-    private static IDtrBarEntry?            Entry;
-    private static CancellationTokenSource? CancelSource;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("AutoDisplayNetworkLatencyTitle"),
@@ -33,24 +27,36 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         Category        = ModuleCategory.System,
         PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayNetworkLatency-UI.png"]
     };
-
+    
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static Config ModuleConfig = null!;
 
+    private static ServerPingMonitor?       Monitor;
+    private static IDtrBarEntry?            Entry;
+    private static CancellationTokenSource? CancelSource;
+    
     protected override void Init()
     {
         ModuleConfig = Config.Load(this) ?? new();
 
-        Overlay       ??= new(this);
-        Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
-        Overlay.SizeConstraints = new()
-        {
-            MinimumSize = ScaledVector2(300f, 200f)
-        };
-
         CancelSource  ??= new();
         Monitor       ??= new();
         Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayNetworkLatency");
-        Entry.OnClick =   _ => Overlay.Toggle();
+        Entry.OnClick =   _ =>
+        {
+            if (Overlay == null)
+            {
+                Overlay       =  new(this);
+                Overlay.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
+                Overlay.SizeConstraints = new()
+                {
+                    MinimumSize = ScaledVector2(300f, 200f)
+                };
+            }
+
+            Overlay.Toggle();
+        };
 
         Task.Run(MainLoop, CancelSource.Token);
     }
@@ -64,11 +70,8 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         Monitor?.Dispose();
         Monitor = null;
 
-        if (Entry != null)
-        {
-            Entry.Remove();
-            Entry = null;
-        }
+        Entry?.Remove();
+        Entry = null;
     }
 
     protected override void ConfigUI()
