@@ -71,14 +71,7 @@ public unsafe class AutoCountPlayers : ModuleBase
         Entry.Text    =   $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: 0";
         Entry.OnClick =  _ =>
         {
-            if (Overlay == null)
-            {
-                Overlay            =  new(this);
-                Overlay.Flags      &= ~ImGuiWindowFlags.NoTitleBar;
-                Overlay.Flags      &= ~ImGuiWindowFlags.AlwaysAutoResize;
-                Overlay.WindowName =  $"{Lang.Get("AutoCountPlayers-PlayersAroundInfo")}###AutoCountPlayers-Overlay";
-            }
-
+            EnsureOverlay();
             Overlay.IsOpen ^= true;
         };
 
@@ -367,6 +360,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
         if (!Entry.Shown)
         {
+            EnsureOverlay();
             Overlay.IsOpen = false;
             return;
         }
@@ -546,6 +540,16 @@ public unsafe class AutoCountPlayers : ModuleBase
 
             ImGui.End();
         }
+    }
+
+    private void EnsureOverlay()
+    {
+        if (Overlay != null) return;
+        
+        Overlay            =  new(this);
+        Overlay.Flags      &= ~ImGuiWindowFlags.NoTitleBar;
+        Overlay.Flags      &= ~ImGuiWindowFlags.AlwaysAutoResize;
+        Overlay.WindowName =  $"{Lang.Get("AutoCountPlayers-PlayersAroundInfo")}###AutoCountPlayers-Overlay";
     }
     
     private class Config : ModuleConfig
