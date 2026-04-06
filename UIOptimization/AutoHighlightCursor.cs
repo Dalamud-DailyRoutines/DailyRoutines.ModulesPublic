@@ -17,10 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoHighlightCursor : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static OverlayController? Controller;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoHighlightCursorTitle"),
@@ -29,47 +25,50 @@ public class AutoHighlightCursor : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config             config = null!;
+    private OverlayController? controller;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        Controller ??= new();
-        Controller.CreateNode(() => new CursorImageNode());
+        controller ??= new();
+        controller.AddNode(new CursorImageNode(config));
     }
 
     protected override void Uninit()
     {
-        Controller?.Dispose();
-        Controller = null;
+        controller?.Dispose();
+        controller = null;
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox($"{Lang.Get("AutoHighlightCursor-PlayAnimation")}", ref ModuleConfig.PlayAnimation))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox($"{Lang.Get("AutoHighlightCursor-PlayAnimation")}", ref config.PlayAnimation))
+            config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoHighlightCursor-PlayAnimation-Help"));
 
-        if (ImGui.Checkbox($"{Lang.Get("AutoHighlightCursor-HideOnCameraMove")}", ref ModuleConfig.HideOnCameraMove))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox($"{Lang.Get("AutoHighlightCursor-HideOnCameraMove")}", ref config.HideOnCameraMove))
+            config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoHighlightCursor-HideOnCameraMove-Help"));
 
         ImGui.NewLine();
 
         using (ImRaii.ItemWidth(200f * GlobalUIScale))
         {
-            ImGui.ColorPicker4(Lang.Get("Color"), ref ModuleConfig.Color);
+            ImGui.ColorPicker4(Lang.Get("Color"), ref config.Color);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
 
-            if (ImGui.InputFloat(Lang.Get("Size"), ref ModuleConfig.Size))
-                ModuleConfig.Size = MathF.Max(1, ModuleConfig.Size);
+            if (ImGui.InputFloat(Lang.Get("Size"), ref config.Size))
+                config.Size = MathF.Max(1, config.Size);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
 
-            ImGui.InputUInt(Lang.Get("Icon"), ref ModuleConfig.IconID);
+            ImGui.InputUInt(Lang.Get("Icon"), ref config.IconID);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
 
             ImGui.SameLine();
             if (ImGui.Button($"{FontAwesomeIcon.Icons.ToIconString()}"))
@@ -79,19 +78,38 @@ public class AutoHighlightCursor : ModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{Lang.Get("OnlyInCombat")}", ref ModuleConfig.OnlyShowInCombat))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox($"{Lang.Get("OnlyInCombat")}", ref config.OnlyShowInCombat))
+            config.Save(this);
 
-        if (ImGui.Checkbox($"{Lang.Get("OnlyInDuty")}", ref ModuleConfig.OnlyShowInDuty))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox($"{Lang.Get("OnlyInDuty")}", ref config.OnlyShowInDuty))
+            config.Save(this);
+    }
+    
+    private class Config : ModuleConfig
+    {
+        public Vector4 Color            = Vector4.One;
+        public bool    HideOnCameraMove = true;
+        public uint    IconID           = 60498;
+
+        public bool  OnlyShowInCombat = true;
+        public bool  OnlyShowInDuty;
+        public bool  PlayAnimation = true;
+        public float Size          = 96f;
     }
 
     private unsafe class CursorImageNode : OverlayNode
     {
-        private readonly IconImageNode imageNode;
+        public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
+        public override bool         HideWithNativeUi => true;
 
-        public CursorImageNode()
+        private readonly Config moduleConfig;
+        
+        private readonly IconImageNode imageNode;
+        
+        public CursorImageNode(Config config)
         {
+            moduleConfig = config;
+            
             imageNode = new IconImageNode
             {
                 IconId     = 60498,
@@ -126,25 +144,22 @@ public class AutoHighlightCursor : ModuleBase
             );
         }
 
-        public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
-        public override bool         HideWithNativeUi => true;
-
         protected override void OnSizeChanged()
         {
             base.OnSizeChanged();
 
             imageNode.Size   = Size;
-            imageNode.Origin = new Vector2(ModuleConfig.Size / 2.0f);
+            imageNode.Origin = new Vector2(moduleConfig.Size / 2.0f);
         }
 
         protected override void OnUpdate()
         {
-            Size = new Vector2(ModuleConfig.Size);
+            Size = new Vector2(moduleConfig.Size);
 
-            imageNode.Color  = ModuleConfig.Color;
-            imageNode.IconId = ModuleConfig.IconID;
+            imageNode.Color  = moduleConfig.Color;
+            imageNode.IconId = moduleConfig.IconID;
 
-            Timeline?.PlayAnimation(ModuleConfig.PlayAnimation ? 1 : 2);
+            Timeline?.PlayAnimation(moduleConfig.PlayAnimation ? 1 : 2);
 
             ref var cursorData = ref UIInputData.Instance()->CursorInputs;
             Position = new Vector2(cursorData.PositionX, cursorData.PositionY) - imageNode.Size / 2.0f;
@@ -152,29 +167,17 @@ public class AutoHighlightCursor : ModuleBase
             var isLeftHeld  = (cursorData.MouseButtonHeldFlags & MouseButtonFlags.LBUTTON) != 0;
             var isRightHeld = (cursorData.MouseButtonHeldFlags & MouseButtonFlags.RBUTTON) != 0;
 
-            if (ModuleConfig is { OnlyShowInCombat: true } or { OnlyShowInDuty: true })
+            if (moduleConfig is { OnlyShowInCombat: true } or { OnlyShowInDuty: true })
             {
                 var shouldShow = true;
-                shouldShow &= !ModuleConfig.OnlyShowInCombat || DService.Instance().Condition[ConditionFlag.InCombat];
-                shouldShow &= !ModuleConfig.OnlyShowInDuty   || DService.Instance().Condition.IsBoundByDuty;
-                shouldShow &= !ModuleConfig.HideOnCameraMove || !isLeftHeld && !isRightHeld;
+                shouldShow &= !moduleConfig.OnlyShowInCombat || DService.Instance().Condition[ConditionFlag.InCombat];
+                shouldShow &= !moduleConfig.OnlyShowInDuty   || DService.Instance().Condition.IsBoundByDuty;
+                shouldShow &= !moduleConfig.HideOnCameraMove || !isLeftHeld && !isRightHeld;
 
                 IsVisible = shouldShow;
             }
             else
-                IsVisible = !isLeftHeld && !isRightHeld || !ModuleConfig.HideOnCameraMove;
+                IsVisible = !isLeftHeld && !isRightHeld || !moduleConfig.HideOnCameraMove;
         }
-    }
-
-    private class Config : ModuleConfig
-    {
-        public Vector4 Color            = Vector4.One;
-        public bool    HideOnCameraMove = true;
-        public uint    IconID           = 60498;
-
-        public bool  OnlyShowInCombat = true;
-        public bool  OnlyShowInDuty;
-        public bool  PlayAnimation = true;
-        public float Size          = 96f;
     }
 }
