@@ -19,6 +19,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Overlay.UiOverlay;
 using KamiToolKit.Premade.Node.Simple;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
@@ -28,25 +29,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedEnemyList : ModuleBase
 {
-    private static readonly CompSig                                AgentHudUpdateEnemyListSig = new("40 55 57 41 56 48 81 EC ?? ?? ?? ?? 4C 8B F1");
-    private static          Hook<AgentHudUpdateEnemyListDelegate>? AgentHudUpdateEnemyListHook;
-
-    private static Config ModuleConfig = null!;
-
-    private static Dictionary<uint, int> HaterInfo = [];
-
-    private static readonly
-        List<(
-            uint ComponentNodeID,
-            TextNode TextNode,
-            NineGridNode BackgroundNode,
-            ProgressBarEnemyCastNode CastBarNode,
-            IconTextNodesRow StatusNodes
-            )>
-        TextNodes = [];
-
-    private static OverlayController? Controller;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("OptimizedEnemyListTitle"),
@@ -56,12 +38,23 @@ public unsafe class OptimizedEnemyList : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private delegate        void                                   AgentHudUpdateEnemyListDelegate(AgentHUD* agent);
+    private static readonly CompSig                                AgentHudUpdateEnemyListSig = new("40 55 57 41 56 48 81 EC ?? ?? ?? ?? 4C 8B F1");
+    // ReSharper disable once InconsistentNaming
+    private                 Hook<AgentHudUpdateEnemyListDelegate>? AgentHudUpdateEnemyListHook;
+    
+    private Config             config = null!;
+    private OverlayController? controller;
 
+    private          Dictionary<uint, int> haterInfo = [];
+    private readonly List<EnemyListNode>   nodes     = [];
+    
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        Controller ??= new();
+        controller ??= new();
 
         AgentHudUpdateEnemyListHook ??= AgentHudUpdateEnemyListSig.GetHook<AgentHudUpdateEnemyListDelegate>(AgentHudUpdateEnemyListDetour);
         AgentHudUpdateEnemyListHook.Enable();
@@ -77,79 +70,79 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
         ClearTextNodes();
 
-        HaterInfo.Clear();
+        haterInfo.Clear();
 
-        Controller?.Dispose();
-        Controller = null;
+        controller?.Dispose();
+        controller = null;
     }
 
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat2($"{Lang.Get("Offset")}###TextOffsetInput", ref ModuleConfig.TextOffset, format: "%.1f");
+        ImGui.InputFloat2($"{Lang.Get("Offset")}###TextOffsetInput", ref config.TextOffset, format: "%.1f");
 
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputByte($"{Lang.Get("FontSize")}###FontSize", ref ModuleConfig.FontSize);
+        ImGui.InputByte($"{Lang.Get("FontSize")}###FontSize", ref config.FontSize);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.NewLine();
 
-        ModuleConfig.TextColor = ImGuiComponents.ColorPickerWithPalette(0, "###TextColorInput", ModuleConfig.TextColor);
+        config.TextColor = ImGuiComponents.ColorPickerWithPalette(0, "###TextColorInput", config.TextColor);
 
         ImGui.SameLine();
         ImGui.TextUnformatted($"{Lang.Get("Color")} ({Lang.Get("Text")})");
 
-        ModuleConfig.TextEdgeColor = ImGuiComponents.ColorPickerWithPalette(1, "###EdgeColorInput", ModuleConfig.TextEdgeColor);
+        config.TextEdgeColor = ImGuiComponents.ColorPickerWithPalette(1, "###EdgeColorInput", config.TextEdgeColor);
 
         ImGui.SameLine();
         ImGui.TextUnformatted($"{Lang.Get("EdgeColor")} ({Lang.Get("Text")})");
 
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        if (ImGui.SliderFloat($"{Lang.Get("Alpha")} ({Lang.Get("Background")})", ref ModuleConfig.BackgroundAlpha, 0, 1, "%.1f"))
-            ModuleConfig.BackgroundAlpha = Math.Clamp(ModuleConfig.BackgroundAlpha, 0, 1);
+        if (ImGui.SliderFloat($"{Lang.Get("Alpha")} ({Lang.Get("Background")})", ref config.BackgroundAlpha, 0, 1, "%.1f"))
+            config.BackgroundAlpha = Math.Clamp(config.BackgroundAlpha, 0, 1);
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Save, $"{Lang.Get("Save")}"))
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.SameLine();
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Redo, $"{Lang.Get("Reset")}"))
         {
             var newConfig = new Config();
-            ModuleConfig.TextColor       = newConfig.TextColor;
-            ModuleConfig.TextEdgeColor   = newConfig.TextEdgeColor;
-            ModuleConfig.BackgroundAlpha = newConfig.BackgroundAlpha;
+            config.TextColor       = newConfig.TextColor;
+            config.TextEdgeColor   = newConfig.TextEdgeColor;
+            config.BackgroundAlpha = newConfig.BackgroundAlpha;
 
-            ModuleConfig.Save(this);
+            config.Save(this);
         }
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("OptimizedEnemyList-UseCustomGeneralInfo"), ref ModuleConfig.UseCustomizeText))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OptimizedEnemyList-UseCustomGeneralInfo"), ref config.UseCustomizeText))
+            config.Save(this);
 
-        if (ModuleConfig.UseCustomizeText)
+        if (config.UseCustomizeText)
         {
             using (ImRaii.PushIndent())
             using (ImRaii.ItemWidth(300f * GlobalUIScale))
             {
-                ImGui.InputText($"{Lang.Get("General")}##CustomizeTextPatternInput", ref ModuleConfig.CustomTextPattern);
+                ImGui.InputText($"{Lang.Get("General")}##CustomizeTextPatternInput", ref config.CustomTextPattern);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    ModuleConfig.Save(this);
+                    config.Save(this);
 
-                ImGui.InputText($"{LuminaWrapper.GetAddonText(1032)}##CustomizeCastTextPatternInput", ref ModuleConfig.CustomCastTextPattern);
+                ImGui.InputText($"{LuminaWrapper.GetAddonText(1032)}##CustomizeCastTextPatternInput", ref config.CustomCastTextPattern);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    ModuleConfig.Save(this);
+                    config.Save(this);
             }
 
         }
     }
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
@@ -166,18 +159,19 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 break;
 
             case AddonEvent.PreFinalize:
+                DLog.Debug("调用清除");
                 ClearTextNodes();
                 break;
         }
     }
 
-    private static void AgentHudUpdateEnemyListDetour(AgentHUD* agent)
+    private void AgentHudUpdateEnemyListDetour(AgentHUD* agent)
     {
         AgentHudUpdateEnemyListHook.Original(agent);
         UpdateHaterInfo();
     }
 
-    private static void UpdateTextNodes()
+    private void UpdateTextNodes()
     {
         if (!EnemyList->IsAddonAndNodesReady()) return;
 
@@ -185,8 +179,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
         if (enemyListArray == null) return;
 
         if (enemyListArray->EnemyCount == 0) return;
-
-        var nodes = TextNodes;
 
         if (nodes is not { Count: > 0 })
         {
@@ -213,7 +205,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             var gameObj = CharacterManager.Instance()->LookupBattleCharaByEntityId(entityID);
 
-            if (gameObj == null || !HaterInfo.TryGetValue(gameObj->EntityId, out var enmity))
+            if (gameObj == null || !haterInfo.TryGetValue(gameObj->EntityId, out var enmity))
             {
                 textNode.String             = string.Empty;
                 backgroundNode.IsVisible    = false;
@@ -293,11 +285,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 castBarNode.Progress  = 0f;
             }
 
-            textNode.TextColor        = ModuleConfig.TextColor;
-            textNode.TextOutlineColor = ModuleConfig.TextEdgeColor;
-            backgroundNode.Alpha      = ModuleConfig.BackgroundAlpha;
+            textNode.TextColor        = config.TextColor;
+            textNode.TextOutlineColor = config.TextEdgeColor;
+            backgroundNode.Alpha      = config.BackgroundAlpha;
 
-            textNode.FontSize = ModuleConfig.FontSize;
+            textNode.FontSize = config.FontSize;
 
             var healthPercentage = (float)gameObj->Health / gameObj->MaxHealth * 100f;
 
@@ -326,8 +318,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
                     targetNameTextNode->X + targetNameTextNode->GetTextDrawSize().X + 5f,
                     castBarNode.X         + 7f
                 ) +
-                ModuleConfig.TextOffset.X,
-                4 + ModuleConfig.TextOffset.Y
+                config.TextOffset.X,
+                4 + config.TextOffset.Y
             );
 
             if (!string.IsNullOrWhiteSpace(textNode.String.ToString()))
@@ -338,7 +330,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         }
     }
 
-    private static void CreateTextNodes()
+    private void CreateTextNodes()
     {
         if (EnemyList == null) return;
         if (!TryFindButtonNodes(out var buttonNodesPtr)) return;
@@ -359,7 +351,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var textNode = new TextNode
             {
                 String        = string.Empty,
-                FontSize      = ModuleConfig.FontSize,
+                FontSize      = config.FontSize,
                 IsVisible     = true,
                 TextFlags     = TextFlags.Edge | TextFlags.Emboss | TextFlags.AutoAdjustNodeSize,
                 AlignmentType = AlignmentType.TopLeft,
@@ -398,15 +390,15 @@ public unsafe class OptimizedEnemyList : ModuleBase
             castBarNode.AttachNode(node);
 
             var statusNodes = new IconTextNodesRow(5, node->NodeId, counter);
-            Controller.AddNode(statusNodes);
+            controller.AddNode(statusNodes);
 
-            TextNodes.Add(new(node->NodeId, textNode, backgroundNode, castBarNode, statusNodes));
+            nodes.Add(new(node->NodeId, textNode, backgroundNode, castBarNode, statusNodes));
         }
     }
 
-    private static void ClearTextNodes()
+    private void ClearTextNodes()
     {
-        foreach (var (_, textNode, backgroundNode, castBarNode, statusNodes) in TextNodes)
+        foreach (var (_, textNode, backgroundNode, castBarNode, statusNodes) in nodes)
         {
             textNode?.Dispose();
             backgroundNode?.Dispose();
@@ -417,13 +409,13 @@ public unsafe class OptimizedEnemyList : ModuleBase
             statusNodes?.Dispose();
         }
 
-        TextNodes.Clear();
+        nodes.Clear();
     }
 
-    private static void UpdateHaterInfo()
+    private void UpdateHaterInfo()
     {
         var hater = UIState.Instance()->Hater;
-        HaterInfo = hater.Haters
+        haterInfo = hater.Haters
                          .ToArray()
                          .Take(hater.HaterCount)
                          .Where(x => x.EntityId != 0 && x.EntityId != 0xE0000000)
@@ -431,12 +423,12 @@ public unsafe class OptimizedEnemyList : ModuleBase
                          .ToDictionary(x => x.EntityId, x => x.Enmity);
     }
 
-    private static string GetGeneralInfoText(float percentage, int enmity) =>
-        ModuleConfig.UseCustomizeText
-            ? string.Format(ModuleConfig.CustomTextPattern, percentage.ToString("F1"), enmity.ToString())
+    private string GetGeneralInfoText(float percentage, int enmity) =>
+        config.UseCustomizeText
+            ? string.Format(config.CustomTextPattern, percentage.ToString("F1"), enmity.ToString())
             : $"{LuminaWrapper.GetAddonText(232)}: {percentage:F1}% / {LuminaWrapper.GetAddonText(721)}: {enmity.ToString()}%";
 
-    private static string GetCastInfoText(ActionType type, uint actionID, float remainingTime, float percentage)
+    private string GetCastInfoText(ActionType type, uint actionID, float remainingTime, float percentage)
     {
         var actionName = string.Empty;
 
@@ -452,11 +444,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
         var timeText = remainingTime != 0 ? remainingTime.ToString("F1") : "\ue07f\ue07b";
 
-        if (ModuleConfig.UseCustomizeText)
+        if (config.UseCustomizeText)
         {
             return string.Format
             (
-                ModuleConfig.CustomCastTextPattern,
+                config.CustomCastTextPattern,
                 actionName,
                 timeText,
                 percentage.ToString("F1")
@@ -485,9 +477,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         nodes.Reverse();
         return nodes.Count > 0;
     }
-
-    private delegate void AgentHudUpdateEnemyListDelegate(AgentHUD* agent);
-
+    
     private class Config : ModuleConfig
     {
         public float  BackgroundAlpha       = 0.6f;
@@ -502,6 +492,38 @@ public unsafe class OptimizedEnemyList : ModuleBase
         public Vector2 TextOffset    = Vector2.Zero;
 
         public bool UseCustomizeText;
+    }
+
+    private sealed class EnemyListNode
+    (
+        uint                     componentNodeID,
+        TextNode                 textNode,
+        NineGridNode             backgroundNode,
+        ProgressBarEnemyCastNode castBarNode,
+        IconTextNodesRow         statusNodes
+    )
+    {
+        public uint                      ComponentNodeID { get; set; } = componentNodeID;
+        public TextNode?                 TextNode        { get; set; } = textNode;
+        public NineGridNode?             BackgroundNode  { get; set; } = backgroundNode;
+        public ProgressBarEnemyCastNode? CastBarNode     { get; set; } = castBarNode;
+        public IconTextNodesRow?         StatusNodes     { get; set; } = statusNodes;
+        
+        public void Deconstruct
+        (
+            out uint                      componentNodeID,
+            out TextNode?                 textNode,
+            out NineGridNode?             backgroundNode,
+            out ProgressBarEnemyCastNode? castBarNode,
+            out IconTextNodesRow?         statusNodes
+        )
+        {
+            componentNodeID = ComponentNodeID;
+            textNode        = TextNode;
+            backgroundNode  = BackgroundNode;
+            castBarNode     = CastBarNode;
+            statusNodes     = StatusNodes;
+        }
     }
 
     private class IconTextNodesRow : OverlayNode, IEnumerable<IconTextNode>
