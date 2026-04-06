@@ -14,10 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoDisplayPlayerHitbox : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static OverlayController? Controller;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoDisplayPlayerHitboxTitle"),
@@ -27,71 +23,81 @@ public unsafe class AutoDisplayPlayerHitbox : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static bool IsWeaponUnsheathed() =>
-        UIState.Instance()->WeaponState.IsUnsheathed;
+    
+    private Config             config = null!;
+    private OverlayController? controller;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        Controller ??= new();
-        Controller.CreateNode(() => new PlayerDotImageNode());
+        controller ??= new();
+        controller.CreateNode(() => new PlayerDotImageNode(config));
     }
 
     protected override void Uninit()
     {
-        Controller?.Dispose();
-        Controller = null;
+        controller?.Dispose();
+        controller = null;
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("OnlyInCombat"), ref ModuleConfig.OnlyInCombat))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OnlyInCombat"), ref config.OnlyInCombat))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref ModuleConfig.OnlyInDuty))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref config.OnlyInDuty))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("OnlyUnsheathed"), ref ModuleConfig.OnlyUnsheathed))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OnlyUnsheathed"), ref config.OnlyUnsheathed))
+            config.Save(this);
 
         ImGui.NewLine();
 
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.ColorPicker4(Lang.Get("Color"), ref ModuleConfig.Color);
+        ImGui.ColorPicker4(Lang.Get("Color"), ref config.Color);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.NewLine();
 
         using (ImRaii.ItemWidth(300f * GlobalUIScale))
         {
-            if (ImGui.InputFloat(Lang.Get("Size"), ref ModuleConfig.Size))
-                ModuleConfig.Size = MathF.Max(1, ModuleConfig.Size);
+            if (ImGui.InputFloat(Lang.Get("Size"), ref config.Size))
+                config.Size = MathF.Max(1, config.Size);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
 
-            ImGui.InputUInt(Lang.Get("Icon"), ref ModuleConfig.IconID);
+            ImGui.InputUInt(Lang.Get("Icon"), ref config.IconID);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
 
             ImGui.SameLine();
             if (ImGui.Button($"{FontAwesomeIcon.Icons.ToIconString()}"))
                 ChatManager.Instance().SendCommand("/xldata icon");
             ImGuiOm.TooltipHover($"{Lang.Get("IconBrowser")}\n({Lang.Get("IconBrowser-Suggestion")})");
 
-            if (ImGui.InputFloat3(Lang.Get("Offset"), ref ModuleConfig.Offset, 0.1f, 1f, "%.1f"))
-                ModuleConfig.Save(this);
+            if (ImGui.InputFloat3(Lang.Get("Offset"), ref config.Offset, 0.1f, 1f, "%.1f"))
+                config.Save(this);
         }
     }
+    
+    private static bool IsWeaponUnsheathed() =>
+        UIState.Instance()->WeaponState.IsUnsheathed;
 
     private class PlayerDotImageNode : OverlayNode
     {
+        public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
+        public override bool         HideWithNativeUi => false;
+        
+        private readonly Config moduleConfig;
+            
         private readonly IconImageNode imageNode;
 
-        public PlayerDotImageNode()
+        public PlayerDotImageNode(Config config)
         {
+            moduleConfig = config;
+            
             imageNode = new IconImageNode
             {
                 IconId     = 60952,
@@ -99,24 +105,21 @@ public unsafe class AutoDisplayPlayerHitbox : ModuleBase
             };
             imageNode.AttachNode(this);
         }
-
-        public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
-        public override bool         HideWithNativeUi => false;
-
+        
         protected override void OnSizeChanged()
         {
             base.OnSizeChanged();
 
             imageNode.Size   = Size;
-            imageNode.Origin = new Vector2(ModuleConfig.Size / 2.0f);
+            imageNode.Origin = new Vector2(moduleConfig.Size / 2.0f);
         }
 
         protected override void OnUpdate()
         {
-            Size = new Vector2(ModuleConfig.Size);
+            Size = new(moduleConfig.Size);
 
-            imageNode.Color  = ModuleConfig.Color;
-            imageNode.IconId = ModuleConfig.IconID;
+            imageNode.Color  = moduleConfig.Color;
+            imageNode.IconId = moduleConfig.IconID;
 
             Timeline?.PlayAnimation(1);
 
@@ -127,14 +130,14 @@ public unsafe class AutoDisplayPlayerHitbox : ModuleBase
             }
 
             IsVisible = !DService.Instance().Condition[ConditionFlag.Occupied38]                                   &&
-                        (!ModuleConfig.OnlyInCombat   || DService.Instance().Condition[ConditionFlag.InCombat])    &&
-                        (!ModuleConfig.OnlyInDuty     || DService.Instance().Condition[ConditionFlag.BoundByDuty]) &&
-                        (!ModuleConfig.OnlyUnsheathed || IsWeaponUnsheathed());
+                        (!moduleConfig.OnlyInCombat   || DService.Instance().Condition[ConditionFlag.InCombat])    &&
+                        (!moduleConfig.OnlyInDuty     || DService.Instance().Condition[ConditionFlag.BoundByDuty]) &&
+                        (!moduleConfig.OnlyUnsheathed || IsWeaponUnsheathed());
 
             if (!IsVisible)
                 return;
 
-            var   offset = ModuleConfig.Offset;
+            var   offset = moduleConfig.Offset;
             var   angle  = -localPlayer.Rotation;
             float cos    = MathF.Cos(angle), sin = MathF.Sin(angle);
 

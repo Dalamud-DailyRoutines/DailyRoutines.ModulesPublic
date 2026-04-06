@@ -16,8 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoDisplayFateItemCount : ModuleBase
 {
-    private static OverlayController? Controller;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("AutoDisplayFateItemCountTitle"),
@@ -27,21 +25,37 @@ public unsafe class AutoDisplayFateItemCount : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private OverlayController? controller;
 
     protected override void Init()
     {
-        Controller ??= new();
-        Controller.CreateNode(() => new FateInfoNode());
+        controller ??= new();
+        controller.AddNode(new FateInfoNode());
     }
 
     protected override void Uninit()
     {
-        Controller?.Dispose();
-        Controller = null;
+        controller?.Dispose();
+        controller = null;
     }
 
     private class FateInfoNode : OverlayNode
     {
+        public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
+        public override bool         HideWithNativeUi => false;
+
+        private GridNode TableNode { get; set; }
+
+        private HorizontalListNode HeaderNode { get; set; }
+        private IconImageNode      IconNode   { get; set; }
+        private TextNode           NameNode   { get; set; }
+
+        private TextNode HoldLabelNode   { get; set; }
+        private TextNode HoldCountNode   { get; set; }
+        private TextNode HandInLabelNode { get; set; }
+        private TextNode HandInCountNode { get; set; }
+        
         public FateInfoNode()
         {
             Scale = new(1.5f);
@@ -130,21 +144,7 @@ public unsafe class AutoDisplayFateItemCount : ModuleBase
 
             TableNode.AttachNode(this);
         }
-
-        public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
-        public override bool         HideWithNativeUi => false;
-
-        private GridNode TableNode { get; }
-
-        private HorizontalListNode HeaderNode { get; }
-        private IconImageNode      IconNode   { get; }
-        private TextNode           NameNode   { get; }
-
-        private TextNode HoldLabelNode   { get; }
-        private TextNode HoldCountNode   { get; }
-        private TextNode HandInLabelNode { get; }
-        private TextNode HandInCountNode { get; }
-
+        
         protected override void OnUpdate()
         {
             var currentFate = FateManager.Instance()->CurrentFate;
