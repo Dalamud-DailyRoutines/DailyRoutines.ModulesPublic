@@ -855,7 +855,7 @@ public unsafe class OptimizedFriendList : ModuleBase
 
         public override bool IsDisplay(IMenuOpenedArgs args)
         {
-            if ((ModuleManager.IsModuleEnabled("FastWorldTravel") ?? false)                                                              &&
+            if ((ModuleManager.Instance().IsModuleEnabled("FastWorldTravel") ?? false)                                                              &&
                 args is { AddonName: "FriendList", Target: MenuTargetDefault { TargetCharacter.CurrentWorld.RowId: var targetWorldID } } &&
                 targetWorldID != GameState.CurrentWorld)
             {

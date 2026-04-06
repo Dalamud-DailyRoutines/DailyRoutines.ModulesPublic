@@ -11,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using AgentReceiveEventDelegate = OmenTools.Interop.Game.Models.Native.AgentReceiveEventDelegate;
@@ -98,7 +99,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         using (ImRaii.Disabled
                (
                    !IsEligibleForTeleporting &&
-                   MovementManager.SpeedDetectionAreas.Contains(SelectedInfo?.Value.Zone ?? 0)
+                   Sheets.SpeedDetectionZones.ContainsKey(SelectedInfo?.Value.Zone ?? 0)
                ))
         {
             if (ImGui.MenuItem(Lang.Get("Teleport")))
@@ -109,10 +110,10 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
                     case 6 or 7:
                         var posCopy = SelectedInfo?.Value.Position ?? default;
                         EnqueueFirmament();
-                        TaskHelper.Enqueue(() => MovementManager.TPSmart_InZone(posCopy, false, true));
+                        TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(posCopy, false, true));
                         break;
                     default:
-                        MovementManager.TPSmart_BetweenZone(SelectedInfo?.Value.Zone ?? 0, SelectedInfo?.Value.Position ?? default);
+                        MovementManager.Instance().TPSmart_BetweenZone(SelectedInfo?.Value.Zone ?? 0, SelectedInfo?.Value.Position ?? default);
                         break;
                 }
 
@@ -129,7 +130,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
                     EnqueueFirmament();
                     break;
                 default:
-                    MovementManager.TeleportNearestAetheryte
+                    MovementManager.Instance().TeleportNearestAetheryte
                     (
                         SelectedInfo?.Value.Position ?? default,
                         SelectedInfo?.Value.Zone     ?? 0,
@@ -202,12 +203,12 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
     private void EnqueueFirmament()
     {
         // 不在天穹街 → 先去伊修加德基础层
-        TaskHelper.Enqueue(MovementManager.TeleportFirmament);
+        TaskHelper.Enqueue(MovementManager.Instance().TeleportFirmament);
         TaskHelper.Enqueue
         (() => GameState.TerritoryType == 886                        &&
                UIModule.IsScreenReady()                              &&
                !DService.Instance().Condition[ConditionFlag.Jumping] &&
-               !MovementManager.IsManagerBusy
+               !MovementManager.Instance().IsManagerBusy
         );
     }
 

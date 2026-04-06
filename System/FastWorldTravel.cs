@@ -458,7 +458,7 @@ public class FastWorldTravel : ModuleBase
 
     private unsafe void EnqueueLogout()
     {
-        TaskHelper.EnqueueAsync(() => ModuleManager.UnloadAsync(ModuleManager.GetModuleByName("AutoLogin")), "禁用自动登录");
+        TaskHelper.EnqueueAsync(() => ModuleManager.Instance().UnloadAsync(ModuleManager.Instance().GetModuleByName("AutoLogin")), "禁用自动登录");
 
         TaskHelper.DelayNext(500, "等待 500 毫秒");
         TaskHelper.Enqueue(() => ChatManager.Instance().SendCommand("/logout"), "登出游戏");
@@ -534,7 +534,7 @@ public class FastWorldTravel : ModuleBase
                     TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == travelData.ContentID), "选择目标角色");
 
                     if (PluginConfig.Instance().ModuleEnabled.GetValueOrDefault("AutoLogin", false))
-                        TaskHelper.EnqueueAsync(() => ModuleManager.LoadAsync(ModuleManager.GetModuleByName("AutoLogin")), "启用自动登录");
+                        TaskHelper.EnqueueAsync(() => ModuleManager.Instance().LoadAsync(ModuleManager.Instance().GetModuleByName("AutoLogin")), "启用自动登录");
                     return;
                 }
 

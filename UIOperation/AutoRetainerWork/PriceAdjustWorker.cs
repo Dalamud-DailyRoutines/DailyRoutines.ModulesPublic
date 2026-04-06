@@ -2302,7 +2302,7 @@ public unsafe partial class AutoRetainerWork
         /// <returns></returns>
         private static bool IsMarketStuck()
         {
-            if (!ModuleManager.TryGetModuleByName("AutoRefreshMarketSearchResult", out var module) || module == null) return false;
+            if (!ModuleManager.Instance().TryGetModuleByName("AutoRefreshMarketSearchResult", out var module) || module == null) return false;
 
             var type     = module.GetType();
             var property = type.GetProperty("IsMarketStuck", BindingFlags.Public | BindingFlags.Static);

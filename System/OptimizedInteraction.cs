@@ -211,11 +211,11 @@ public unsafe class OptimizedInteraction : ModuleBase
 
         void DismountAndSend(uint eventID)
         {
-            MovementManager.Dismount();
+            MovementManager.Instance().Dismount();
             TaskHelper.Enqueue
             (() =>
                 {
-                    if (MovementManager.IsManagerBusy                        ||
+                    if (MovementManager.Instance().IsManagerBusy                        ||
                         DService.Instance().Condition[ConditionFlag.Mounted] ||
                         DService.Instance().Condition[ConditionFlag.Jumping]) return false;
                     new EventStartPackt(localPlayer.GameObjectID, eventID).Send();

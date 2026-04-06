@@ -632,14 +632,14 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         }
 
         public void TeleportTo() =>
-            MovementManager.TPSmart_BetweenZone(RealTerritory.RowId, Position);
+            MovementManager.Instance().TPSmart_BetweenZone(RealTerritory.RowId, Position);
 
         public void MoveTo(TaskHelper? taskHelper)
         {
             if (taskHelper == null) return;
 
             if (GameState.TerritoryType != RealTerritory.RowId)
-                taskHelper.Enqueue(() => MovementManager.TeleportNearestAetheryte(Position, RealTerritory.RowId));
+                taskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(Position, RealTerritory.RowId));
             taskHelper.Enqueue(() => GameState.TerritoryType == RealTerritory.RowId && UIModule.IsScreenReady());
             taskHelper.Enqueue
             (() =>

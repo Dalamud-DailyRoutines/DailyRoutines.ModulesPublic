@@ -28,7 +28,7 @@ public unsafe class InstantDismount : ModuleBase
 
     private static bool DismountDetour(nint a1, Vector3* location)
     {
-        MovementManager.Dismount();
+        MovementManager.Instance().Dismount();
         return false;
     }
 

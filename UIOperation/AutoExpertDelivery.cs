@@ -153,11 +153,11 @@ public unsafe class AutoExpertDelivery : ModuleBase
         TaskHelper.Enqueue(() => new EventStartPackt(DService.Instance().ObjectTable.LocalPlayer.GameObjectID, info.EventID).Send());
         TaskHelper.Enqueue(() => GrandCompanyExchange->IsAddonAndNodesReady());
 
-        if (isAutoExchange && ModuleManager.IsModuleEnabled(typeof(FastGrandCompanyExchange)))
+        if (isAutoExchange && ModuleManager.Instance().IsModuleEnabled(typeof(FastGrandCompanyExchange)))
         {
-            TaskHelper.Enqueue(() => ModuleManager.GetModule<FastGrandCompanyExchange>().EnqueueByName("default"));
-            TaskHelper.Enqueue(() => ModuleManager.GetModule<FastGrandCompanyExchange>().IsExchanging);
-            TaskHelper.Enqueue(() => !ModuleManager.GetModule<FastGrandCompanyExchange>().IsExchanging);
+            TaskHelper.Enqueue(() => ModuleManager.Instance().GetModule<FastGrandCompanyExchange>().EnqueueByName("default"));
+            TaskHelper.Enqueue(() => ModuleManager.Instance().GetModule<FastGrandCompanyExchange>().IsExchanging);
+            TaskHelper.Enqueue(() => !ModuleManager.Instance().GetModule<FastGrandCompanyExchange>().IsExchanging);
             TaskHelper.Enqueue(() => GrandCompanyExchange->Close(true));
         }
 

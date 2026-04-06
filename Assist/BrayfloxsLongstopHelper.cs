@@ -51,7 +51,7 @@ public class BrayfloxsLongstopHelper : ModuleBase
                 if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
                 if (DService.Instance().Condition.IsBetweenAreas || !UIModule.IsScreenReady()) return false;
 
-                if (ModuleConfig.ValidWhenSolo && (DService.Instance().PartyList.Length > 1 || PlayersManager.PlayersAroundCount > 0))
+                if (ModuleConfig.ValidWhenSolo && (DService.Instance().PartyList.Length > 1 || PlayersManager.Instance().PlayersAroundCount > 0))
                 {
                     TaskHelper.Abort();
                     return true;

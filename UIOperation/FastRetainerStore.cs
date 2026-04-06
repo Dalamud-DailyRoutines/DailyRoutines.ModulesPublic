@@ -196,6 +196,6 @@ public unsafe class FastRetainerStore : ModuleBase
         protected override bool WithDRPrefix { get; set; } = true;
 
         protected override void OnClicked(IMenuItemClickedArgs args) =>
-            ModuleManager.GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
+            ModuleManager.Instance().GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
     }
 }

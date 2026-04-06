@@ -179,12 +179,12 @@ public unsafe class FieldEntryCommand : ModuleBase
         // 不在拉诺西亚低地 → 先去拉诺西亚低地
         if (GameState.TerritoryType != 135)
         {
-            TPHelper.Enqueue(() => MovementManager.TeleportZone(135));
+            TPHelper.Enqueue(() => MovementManager.Instance().TeleportZone(135));
             TPHelper.Enqueue
             (() => GameState.TerritoryType == 135                        &&
                    UIModule.IsScreenReady()                              &&
                    !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                   !MovementManager.IsManagerBusy
+                   !MovementManager.Instance().IsManagerBusy
             );
         }
 
@@ -196,13 +196,13 @@ public unsafe class FieldEntryCommand : ModuleBase
                     {
                         if (!EventFramework.Instance()->IsEventIDNearby(721694))
                         {
-                            TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(LowerLaNosceaDefaultPosition), weight: 2);
+                            TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(LowerLaNosceaDefaultPosition), weight: 2);
                             TPHelper.Enqueue
                             (
                                 () => GameState.TerritoryType == 135                        &&
                                       UIModule.IsScreenReady()                              &&
                                       !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.IsManagerBusy,
+                                      !MovementManager.Instance().IsManagerBusy,
                                 weight: 2
                             );
                         }
@@ -228,7 +228,7 @@ public unsafe class FieldEntryCommand : ModuleBase
 
                 // 等待进入无人岛
                 TPHelper.Enqueue(() => GameState.TerritoryType == 1055 && DService.Instance().ObjectTable.LocalPlayer != null);
-                TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(IslandDefaultPosition));
+                TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(IslandDefaultPosition));
             }
         );
     }
@@ -236,14 +236,14 @@ public unsafe class FieldEntryCommand : ModuleBase
     // 云冠群岛
     private static void EnqueueDiadem()
     {
-        MovementManager.TeleportFirmament();
-        TPHelper.Enqueue(() => GameState.TerritoryType == 886 && !MovementManager.IsManagerBusy);
+        MovementManager.Instance().TeleportFirmament();
+        TPHelper.Enqueue(() => GameState.TerritoryType == 886 && !MovementManager.Instance().IsManagerBusy);
 
         TPHelper.Enqueue
         (() =>
             {
                 TPHelper.Enqueue(() => GameState.TerritoryType == 886 && Control.GetLocalPlayer() != null);
-                TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(DiademDefaultPosition));
+                TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(DiademDefaultPosition));
 
                 TPHelper.Enqueue
                 (() =>
@@ -285,12 +285,12 @@ public unsafe class FieldEntryCommand : ModuleBase
         // 不在黄金港 → 先去黄金港
         if (GameState.TerritoryType != 628)
         {
-            TPHelper.Enqueue(() => MovementManager.TPSmart_BetweenZone(628, KuganeDefaultPosition, false, true));
+            TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(628, KuganeDefaultPosition, false, true));
             TPHelper.Enqueue
             (() => GameState.TerritoryType == 628                        &&
                    UIModule.IsScreenReady()                              &&
                    !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                   !MovementManager.IsManagerBusy
+                   !MovementManager.Instance().IsManagerBusy
             );
         }
 
@@ -302,13 +302,13 @@ public unsafe class FieldEntryCommand : ModuleBase
                     {
                         if (!EventFramework.Instance()->IsEventIDNearby(721355))
                         {
-                            TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(KuganeDefaultPosition), weight: 2);
+                            TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(KuganeDefaultPosition), weight: 2);
                             TPHelper.Enqueue
                             (
                                 () => GameState.TerritoryType == 628                        &&
                                       UIModule.IsScreenReady()                              &&
                                       !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.IsManagerBusy,
+                                      !MovementManager.Instance().IsManagerBusy,
                                 weight: 2
                             );
                         }
@@ -348,12 +348,12 @@ public unsafe class FieldEntryCommand : ModuleBase
         // 不在甘戈斯 → 先去甘戈斯
         if (GameState.TerritoryType != 915)
         {
-            TPHelper.Enqueue(() => MovementManager.TeleportZone(915, false, true));
+            TPHelper.Enqueue(() => MovementManager.Instance().TeleportZone(915, false, true));
             TPHelper.Enqueue
             (() => GameState.TerritoryType == 915                        &&
                    UIModule.IsScreenReady()                              &&
                    !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                   !MovementManager.IsManagerBusy
+                   !MovementManager.Instance().IsManagerBusy
             );
         }
 
@@ -365,13 +365,13 @@ public unsafe class FieldEntryCommand : ModuleBase
                     {
                         if (!EventFramework.Instance()->IsEventIDNearby(721601))
                         {
-                            TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(GangosDefaultPosition), weight: 2);
+                            TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(GangosDefaultPosition), weight: 2);
                             TPHelper.Enqueue
                             (
                                 () => GameState.TerritoryType == 915                        &&
                                       UIModule.IsScreenReady()                              &&
                                       !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.IsManagerBusy,
+                                      !MovementManager.Instance().IsManagerBusy,
                                 weight: 2
                             );
                         }
@@ -413,8 +413,8 @@ public unsafe class FieldEntryCommand : ModuleBase
 
         if (GameState.TerritoryType != 959)
         {
-            TPHelper.Enqueue(() => MovementManager.TPSmart_BetweenZone(959, CosmicDefaultPosition, false, true));
-            TPHelper.Enqueue(() => GameState.TerritoryType == 959 && UIModule.IsScreenReady() && !MovementManager.IsManagerBusy);
+            TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(959, CosmicDefaultPosition, false, true));
+            TPHelper.Enqueue(() => GameState.TerritoryType == 959 && UIModule.IsScreenReady() && !MovementManager.Instance().IsManagerBusy);
         }
 
         TPHelper.Enqueue
@@ -425,13 +425,13 @@ public unsafe class FieldEntryCommand : ModuleBase
                     {
                         if (!EventFramework.Instance()->IsEventIDNearby(327855))
                         {
-                            TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(CosmicDefaultPosition), weight: 2);
+                            TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(CosmicDefaultPosition), weight: 2);
                             TPHelper.Enqueue
                             (
                                 () => GameState.TerritoryType == 959                        &&
                                       UIModule.IsScreenReady()                              &&
                                       !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.IsManagerBusy,
+                                      !MovementManager.Instance().IsManagerBusy,
                                 weight: 2
                             );
                         }
@@ -451,16 +451,16 @@ public unsafe class FieldEntryCommand : ModuleBase
     {
         if (GameState.TerritoryType == 1278) //已经在幻象村了
         {
-            TPHelper.Enqueue(() => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.IsManagerBusy);
+            TPHelper.Enqueue(() => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.Instance().IsManagerBusy);
             TPHelper.Enqueue
             (() =>
                 {
                     if (!EventFramework.Instance()->IsEventIDNearby(721825))
                     {
-                        TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(PhantomVillagePosition), weight: 2);
+                        TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(PhantomVillagePosition), weight: 2);
                         TPHelper.Enqueue
                         (
-                            () => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.IsManagerBusy,
+                            () => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.Instance().IsManagerBusy,
                             weight: 2
                         );
                     }
@@ -478,7 +478,7 @@ public unsafe class FieldEntryCommand : ModuleBase
 
 
         if (GameState.TerritoryType != 1278)
-            TPHelper.Enqueue(() => MovementManager.TeleportZone(1278));
+            TPHelper.Enqueue(() => MovementManager.Instance().TeleportZone(1278));
 
         TPHelper.Enqueue(() => GameState.TerritoryType == 1278 && LocalPlayerState.Object != null);
         TPHelper.Enqueue
@@ -486,10 +486,10 @@ public unsafe class FieldEntryCommand : ModuleBase
             {
                 if (!EventFramework.Instance()->IsEventIDNearby(721825))
                 {
-                    TPHelper.Enqueue(() => MovementManager.TPSmart_InZone(PhantomVillagePosition), weight: 2);
+                    TPHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(PhantomVillagePosition), weight: 2);
                     TPHelper.Enqueue
                     (
-                        () => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.IsManagerBusy,
+                        () => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.Instance().IsManagerBusy,
                         weight: 2
                     );
                 }

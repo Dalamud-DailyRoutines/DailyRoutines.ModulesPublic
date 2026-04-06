@@ -49,11 +49,11 @@ public unsafe class AutoDismount : ModuleBase
 
         TaskHelper.Abort();
 
-        MovementManager.Dismount();
+        MovementManager.Instance().Dismount();
         TaskHelper.Enqueue
         (() =>
             {
-                if (MovementManager.IsManagerBusy || DService.Instance().Condition[ConditionFlag.Mounted]) return false;
+                if (MovementManager.Instance().IsManagerBusy || DService.Instance().Condition[ConditionFlag.Mounted]) return false;
                 return UseActionManager.Instance().UseAction
                 (
                     actionType,

@@ -31,14 +31,14 @@ public class AutoChangeBattleEffectLevel : ModuleBase
     {
         ModuleConfig = Config.Load(this) ?? new();
 
-        PlayersManager.ReceivePlayersAround += OnPlayerReceived;
+        PlayersManager.Instance().ReceivePlayersAround += OnPlayerReceived;
 
         if (GameState.IsLoggedIn)
             OnPlayerReceived([]);
     }
 
     protected override void Uninit() =>
-        PlayersManager.ReceivePlayersAround -= OnPlayerReceived;
+        PlayersManager.Instance().ReceivePlayersAround -= OnPlayerReceived;
 
     protected override void ConfigUI()
     {
@@ -224,7 +224,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         }
         else
         {
-            var playerCount = PlayersManager.PlayersAroundCount;
+            var playerCount = PlayersManager.Instance().PlayersAroundCount;
 
             if (playerCount < ModuleConfig.AroundCountThresholdLow)
                 targetSetting = ModuleConfig.OverworldLow;

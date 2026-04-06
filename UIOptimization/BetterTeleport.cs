@@ -19,6 +19,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
@@ -657,14 +658,14 @@ public unsafe class BetterTeleport : ModuleBase
                 {
                     if (GameState.TerritoryType != ContextMenuTargetZone || IsWithPermission())
                     {
-                        TaskHelper.Enqueue(() => MovementManager.TPSmart_BetweenZone(ContextMenuTargetZone, ContextMenuTargetPos));
+                        TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(ContextMenuTargetZone, ContextMenuTargetPos));
                         TaskHelper.Enqueue
                         (() =>
                             {
-                                if (MovementManager.IsManagerBusy || DService.Instance().ObjectTable.LocalPlayer == null)
+                                if (MovementManager.Instance().IsManagerBusy || DService.Instance().ObjectTable.LocalPlayer == null)
                                     return false;
 
-                                MovementManager.TPGround();
+                                MovementManager.Instance().TPGround();
                                 if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition[ConditionFlag.Jumping]) return false;
 
                                 return true;
@@ -673,13 +674,13 @@ public unsafe class BetterTeleport : ModuleBase
                     }
                     else
                     {
-                        TaskHelper.Enqueue(() => MovementManager.TeleportNearestAetheryte(ContextMenuTargetPos, ContextMenuTargetZone));
+                        TaskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(ContextMenuTargetPos, ContextMenuTargetZone));
                         TaskHelper.Enqueue(() => DService.Instance().Condition.IsBetweenAreas && DService.Instance().ObjectTable.LocalPlayer != null);
                         TaskHelper.Enqueue
                         (() =>
                             {
                                 if (!DService.Instance().Condition.IsBetweenAreas) return true;
-                                MovementManager.TPSmart_InZone(ContextMenuTargetPos, false);
+                                MovementManager.Instance().TPSmart_InZone(ContextMenuTargetPos, false);
                                 return false;
                             }
                         );
@@ -879,23 +880,23 @@ public unsafe class BetterTeleport : ModuleBase
                 return;
             // 天穹街
             case 254:
-                TaskHelper.Enqueue(MovementManager.TeleportFirmament, "天穹街");
+                TaskHelper.Enqueue(MovementManager.Instance().TeleportFirmament, "天穹街");
                 TaskHelper.Enqueue
                 (
                     () => GameState.TerritoryType  == 886  &&
                           Control.GetLocalPlayer() != null &&
-                          !MovementManager.IsManagerBusy,
+                          !MovementManager.Instance().IsManagerBusy,
                     "等待天穹街"
                 );
-                TaskHelper.Enqueue(() => MovementManager.TPSmart_InZone(aetherytePos), "区域内TP");
+                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos), "区域内TP");
                 TaskHelper.Enqueue
                 (
                     () =>
                     {
-                        if (MovementManager.IsManagerBusy || DService.Instance().ObjectTable.LocalPlayer == null)
+                        if (MovementManager.Instance().IsManagerBusy || DService.Instance().ObjectTable.LocalPlayer == null)
                             return false;
 
-                        MovementManager.TPGround();
+                        MovementManager.Instance().TPGround();
                         return true;
                     },
                     "TP到地面"
@@ -908,19 +909,19 @@ public unsafe class BetterTeleport : ModuleBase
                                     : Vector2.Normalize(((Vector3)localPlayer->Position).ToVector2() - aetherytePos.ToVector2());
                 var offset = direction * 10;
 
-                TaskHelper.Enqueue(() => MovementManager.TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos + offset.ToVector3(0)));
+                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos + offset.ToVector3(0)));
 
                 if (isPosDefault)
                 {
                     TaskHelper.Enqueue
                     (() =>
                         {
-                            if (MovementManager.IsManagerBusy                ||
+                            if (MovementManager.Instance().IsManagerBusy                ||
                                 DService.Instance().Condition.IsBetweenAreas ||
                                 !UIModule.IsScreenReady()                    ||
                                 DService.Instance().Condition.Any(ConditionFlag.Mounted))
                                 return false;
-                            MovementManager.TPGround();
+                            MovementManager.Instance().TPGround();
                             return true;
                         }
                     );
@@ -943,19 +944,19 @@ public unsafe class BetterTeleport : ModuleBase
                 offset = direction * 10;
             }
 
-            TaskHelper.Enqueue(() => MovementManager.TPSmart_InZone(aetherytePos + offset));
+            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos + offset));
 
             if (isPosDefault)
             {
                 TaskHelper.Enqueue
                 (() =>
                     {
-                        if (MovementManager.IsManagerBusy                ||
+                        if (MovementManager.Instance().IsManagerBusy                ||
                             DService.Instance().Condition.IsBetweenAreas ||
                             !UIModule.IsScreenReady()                    ||
                             DService.Instance().Condition.Any(ConditionFlag.Mounted))
                             return false;
-                        MovementManager.TPGround();
+                        MovementManager.Instance().TPGround();
                         return true;
                     }
                 );
@@ -987,25 +988,25 @@ public unsafe class BetterTeleport : ModuleBase
                 if (hasRedirect)
                 {
                     TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && Control.GetLocalPlayer() != null);
-                    TaskHelper.Enqueue(() => MovementManager.TPSmart_InZone(aetherytePos));
+                    TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos));
                 }
 
                 return;
             }
 
-            TaskHelper.Enqueue(() => MovementManager.TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
+            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
 
             if (isPosDefault)
             {
                 TaskHelper.Enqueue
                 (() =>
                     {
-                        if (MovementManager.IsManagerBusy                ||
+                        if (MovementManager.Instance().IsManagerBusy                ||
                             DService.Instance().Condition.IsBetweenAreas ||
                             !UIModule.IsScreenReady()                    ||
                             DService.Instance().Condition.Any(ConditionFlag.Mounted))
                             return false;
-                        MovementManager.TPGround();
+                        MovementManager.Instance().TPGround();
                         return true;
                     }
                 );
@@ -1034,7 +1035,7 @@ public unsafe class BetterTeleport : ModuleBase
         if (hasRedirect)
         {
             TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && Control.GetLocalPlayer() != null);
-            TaskHelper.Enqueue(() => MovementManager.TPSmart_InZone(aetherytePos));
+            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos));
         }
     }
 
@@ -1170,7 +1171,7 @@ public unsafe class BetterTeleport : ModuleBase
     }
 
     private static bool IsWithPermission() =>
-        !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || !MovementManager.SpeedDetectionAreas.Contains(GameState.TerritoryType);
+        !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
 
     protected override void Uninit()
     {

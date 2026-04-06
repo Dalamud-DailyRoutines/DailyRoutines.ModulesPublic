@@ -89,7 +89,7 @@ public unsafe class QueueCombatTeleport : ModuleBase
         if (actionType != ActionType.GeneralAction || actionID != 7) return;
         if (GameMain.Instance()->CurrentContentFinderConditionId != 0) return;
         if (!DService.Instance().Condition[ConditionFlag.InCombat]) return;
-        if (ModuleManager.IsModuleEnabled("BetterTeleport") ?? false) return;
+        if (ModuleManager.Instance().IsModuleEnabled("BetterTeleport") ?? false) return;
 
         var agent = AgentTeleport.Instance();
         if (agent == null) return;

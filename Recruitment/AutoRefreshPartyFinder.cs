@@ -144,7 +144,7 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
             OnClick = newState =>
             {
                 ModuleConfig.OnlyInactive = newState;
-                ModuleConfig.Save(ModuleManager.GetModule<AutoRefreshPartyFinder>());
+                ModuleConfig.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
             },
             Position = new(0, 1)
         };
@@ -160,7 +160,7 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
             OnValueUpdate = newValue =>
             {
                 ModuleConfig.RefreshInterval = newValue;
-                ModuleConfig.Save(ModuleManager.GetModule<AutoRefreshPartyFinder>());
+                ModuleConfig.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
 
                 Cooldown = ModuleConfig.RefreshInterval;
                 PFRefreshTimer.Restart();

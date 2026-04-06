@@ -202,7 +202,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
         if (ModuleConfig.TeleportIfNotNearAetheryte && !isAnyAetheryteNearby)
         {
-            TaskHelper.Enqueue(() => MovementManager.TeleportNearestAetheryte(default, GameState.TerritoryType, true), "传送到目标区域最近以太之光", weight: 2);
+            TaskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(default, GameState.TerritoryType, true), "传送到目标区域最近以太之光", weight: 2);
             TaskHelper.DelayNext(500, "等待传送开始", 2);
             TaskHelper.Enqueue
             (
@@ -236,7 +236,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
                     ) ??
                     false)
                 {
-                    MovementManager.TPMountAddress(hitInfo.Point with { Y = hitInfo.Point.Y - 0.5f });
+                    MovementManager.Instance().TPMountAddress(hitInfo.Point with { Y = hitInfo.Point.Y - 0.5f });
                     UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9);
                 }
 

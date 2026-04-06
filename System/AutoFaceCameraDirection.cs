@@ -256,7 +256,7 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
 
         SetLocalRotation((GameObject*)localPlayer.Address, LockOnRotation);
 
-        var moveState = MovementManager.CurrentZoneMoveState;
+        var moveState = MovementManager.Instance().CurrentZoneMoveState;
 
         if (GameState.ContentFinderCondition != 0)
         {
@@ -315,7 +315,7 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         if (currentTick - LastUpdateTick < interval) return;
         LastUpdateTick = currentTick;
 
-        var moveState = MovementManager.CurrentZoneMoveState;
+        var moveState = MovementManager.Instance().CurrentZoneMoveState;
 
         if (isDuty)
         {
@@ -387,7 +387,7 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool ShouldSkipUpdate()
     {
-        if (MovementManager.IsManagerBusy) return true;
+        if (MovementManager.Instance().IsManagerBusy) return true;
 
         var isConflict = PluginConfig.Instance().ConflictKeyBinding.IsPressed();
         return ModuleConfig.WorkMode switch

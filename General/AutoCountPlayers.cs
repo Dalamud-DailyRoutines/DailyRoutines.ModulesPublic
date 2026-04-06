@@ -77,8 +77,8 @@ public unsafe class AutoCountPlayers : ModuleBase
 
         WindowManager.Instance().PostDraw += OnDraw;
 
-        PlayersManager.ReceivePlayersAround      += OnReceivePlayers;
-        PlayersManager.ReceivePlayersTargetingMe += OnPlayersTargetingMeUpdate;
+        PlayersManager.Instance().ReceivePlayersAround      += OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersTargetingMe += OnPlayersTargetingMeUpdate;
 
         var instance = (InfoProxy24*)InfoModule.Instance()->GetInfoProxyById((InfoProxyId)24);
         InfoProxy24EndRequestHook ??= instance->VirtualTable->HookVFuncFromName
@@ -100,8 +100,8 @@ public unsafe class AutoCountPlayers : ModuleBase
         FrameworkManager.Instance().Unreg(OnUpdate);
 
         WindowManager.Instance().PostDraw                       -= OnDraw;
-        PlayersManager.ReceivePlayersAround      -= OnReceivePlayers;
-        PlayersManager.ReceivePlayersTargetingMe -= OnPlayersTargetingMeUpdate;
+        PlayersManager.Instance().ReceivePlayersAround      -= OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersTargetingMe -= OnPlayersTargetingMeUpdate;
 
         foreach (var info in LastTargetingData.Values)
         {
@@ -189,7 +189,7 @@ public unsafe class AutoCountPlayers : ModuleBase
                 using var child = ImRaii.Child("列表", ImGui.GetContentRegionAvail() - ImGui.GetStyle().ItemSpacing, true);
                 if (!child) return;
 
-                foreach (var playerAround in PlayersManager.PlayersAround)
+                foreach (var playerAround in PlayersManager.Instance().PlayersAround)
                 {
                     using var id = ImRaii.PushId($"{playerAround.GameObjectID}");
 
@@ -262,7 +262,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
     private static void OnDraw()
     {
-        if (!ModuleConfig.DisplayLineWhenTargetingMe || PlayersManager.PlayersTargetingMe.Count == 0) return;
+        if (!ModuleConfig.DisplayLineWhenTargetingMe || PlayersManager.Instance().PlayersTargetingMe.Count == 0) return;
 
         if (!GameState.IsForeground) return;
 
@@ -288,7 +288,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
                         ImGui.SameLine();
                         ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 1.2f * GlobalUIScale);
-                        ImGuiOm.TextOutlined(KnownColor.Orange.ToVector4(), $"{PlayersManager.PlayersTargetingMe.Count}", KnownColor.SaddleBrown.ToVector4());
+                        ImGuiOm.TextOutlined(KnownColor.Orange.ToVector4(), $"{PlayersManager.Instance().PlayersTargetingMe.Count}", KnownColor.SaddleBrown.ToVector4());
 
                         if (GameState.ContentFinderCondition == 0)
                         {
@@ -315,7 +315,7 @@ public unsafe class AutoCountPlayers : ModuleBase
         if (!DService.Instance().GameGUI.WorldToScreen(localPlayer->Position, out var localScreenPos))
             localScreenPos = currentWindowSize with { X = currentWindowSize.X / 2 };
 
-        foreach (var playerInfo in PlayersManager.PlayersTargetingMe)
+        foreach (var playerInfo in PlayersManager.Instance().PlayersTargetingMe)
         {
             if (DService.Instance().GameGUI.WorldToScreen(playerInfo.Player.Position, out var screenPos))
                 DrawLine(localScreenPos, screenPos, playerInfo.Player, LineColorRed, $" [{TimeSpan.FromSeconds(playerInfo.TargetingDurationSeconds)}]");
@@ -365,8 +365,8 @@ public unsafe class AutoCountPlayers : ModuleBase
             return;
         }
 
-        Entry.Text = $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: {PlayersManager.PlayersAroundCount}" +
-                     (PlayersManager.PlayersTargetingMe.Count == 0 ? string.Empty : $" ({PlayersManager.PlayersTargetingMe.Count})");
+        Entry.Text = $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: {PlayersManager.Instance().PlayersAroundCount}" +
+                     (PlayersManager.Instance().PlayersTargetingMe.Count == 0 ? string.Empty : $" ({PlayersManager.Instance().PlayersTargetingMe.Count})");
 
         // 新月岛
         if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
@@ -386,14 +386,14 @@ public unsafe class AutoCountPlayers : ModuleBase
 
         var tooltip = new SeStringBuilder();
 
-        if (PlayersManager.PlayersTargetingMe.Count > 0)
+        if (PlayersManager.Instance().PlayersTargetingMe.Count > 0)
         {
             tooltip.AddUiForeground(32)
                    .AddText($"{Lang.Get("AutoCountPlayers-PlayersTargetingMe")}")
                    .AddUiForegroundOff()
                    .Add(NewLinePayload.Payload);
 
-            PlayersManager.PlayersTargetingMe.ForEach
+            PlayersManager.Instance().PlayersTargetingMe.ForEach
             (info =>
                  tooltip.AddText($"{info.Player.Name} (")
                         .AddIcon(info.Player.ClassJob.Value.ToBitmapFontIcon())
@@ -505,7 +505,7 @@ public unsafe class AutoCountPlayers : ModuleBase
     private void InfoProxy24EndRequestDetour(InfoProxy24* proxy)
     {
         InfoProxy24EndRequestHook.Original(proxy);
-        OnReceivePlayers(PlayersManager.PlayersAround);
+        OnReceivePlayers(PlayersManager.Instance().PlayersAround);
     }
 
     private static void DrawLine(Vector2 startPos, Vector2 endPos, ICharacter chara, uint lineColor = 0, string? extraInfo = null)

@@ -611,7 +611,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                     .Where(x => x is { ObjectKind: ObjectKind.EventObj, DataID: 2002737 })
                     .OrderBy(x => Vector2.DistanceSquared(x.Position.ToVector2(), workshopInfo.Position.ToVector2())).FirstOrDefault() is not { } entryObject)
         {
-            MovementManager.TPSmart_InZone(workshopInfo.Position);
+            MovementManager.Instance().TPSmart_InZone(workshopInfo.Position);
             return false;
         }
 
@@ -640,7 +640,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         // 距离房屋入口有点远
         if (LocalPlayerState.DistanceTo3D(entryPos) > 2)
         {
-            MovementManager.TPSmart_InZone(entryPos);
+            MovementManager.Instance().TPSmart_InZone(entryPos);
             return false;
         }
 
@@ -663,7 +663,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         // 没找到入口
         if (!EventFramework.Instance()->IsEventIDNearby(721074))
         {
-            MovementManager.TPSmart_InZone(Vector3.Zero);
+            MovementManager.Instance().TPSmart_InZone(Vector3.Zero);
             return false;
         }
 
@@ -699,7 +699,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             ) ||
             DService.Instance().ObjectTable.SearchByID(gameObjectID) is not { } panelObject)
         {
-            MovementManager.TPSmart_InZone(Vector3.Zero);
+            MovementManager.Instance().TPSmart_InZone(Vector3.Zero);
             return false;
         }
 
@@ -708,7 +708,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         if (LocalPlayerState.DistanceToObject3D(panelObject, false) > 1)
         {
-            MovementManager.TPSmart_InZone(MovementManager.TryDetectGround(realPanelPosition, out var result) ?? false ? result : realPanelPosition);
+            MovementManager.Instance().TPSmart_InZone(MovementManager.TryDetectGround(realPanelPosition, out var result) ?? false ? result : realPanelPosition);
             return false;
         }
 

@@ -170,7 +170,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.RadioButton(MoveModeTitles[moveMode], moveMode == ModuleConfig.MoveMode))
                 {
                     ModuleConfig.MoveMode = moveMode;
-                    ModuleConfig.Save(ModuleManager.GetModule<RightClickToMoveMode>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
 
@@ -198,7 +198,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.RadioButton(ControlModeTitles[controlMode], controlMode == ModuleConfig.ControlMode))
                 {
                     ModuleConfig.ControlMode = controlMode;
-                    ModuleConfig.Save(ModuleManager.GetModule<RightClickToMoveMode>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
 
@@ -223,7 +223,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.Selectable(keyToSelect.GetFancyName()))
                 {
                     ModuleConfig.ComboKey = keyToSelect;
-                    ModuleConfig.Save(ModuleManager.GetModule<RightClickToMoveMode>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
         }
@@ -246,7 +246,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.RadioButton(IndicatorStyleTitles[indicatorStyle], indicatorStyle == ModuleConfig.IndicatorStyle))
                 {
                     ModuleConfig.IndicatorStyle = indicatorStyle;
-                    ModuleConfig.Save(ModuleManager.GetModule<RightClickToMoveMode>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
 
@@ -347,7 +347,7 @@ public class RightClickToMoveMode : ModuleBase
             vnavmeshIPC.StopPathfind();
 
             if (session is { Driver: MoveDriver.Game })
-                MovementManager.SetCurrentControlMode(session.PreviousControlMode);
+                MovementManager.Instance().SetCurrentControlMode(session.PreviousControlMode);
         }
 
         public static void UpdateGame(MoveSession session, Vector3 localPlayerPosition)
@@ -373,8 +373,8 @@ public class RightClickToMoveMode : ModuleBase
         {
             if (MovementController == null) return;
 
-            var previousControlMode = MovementManager.CurrentControlMode;
-            MovementManager.SetCurrentControlMode(MovementControlMode.Normal);
+            var previousControlMode = MovementManager.Instance().CurrentControlMode;
+            MovementManager.Instance().SetCurrentControlMode(MovementControlMode.Normal);
 
             MovementController.DesiredPosition = targetPosition;
             MovementController.Enabled         = true;
@@ -394,7 +394,7 @@ public class RightClickToMoveMode : ModuleBase
             var fly = DService.Instance().Condition[ConditionFlag.InFlight] || DService.Instance().Condition[ConditionFlag.Diving];
             if (!vnavmeshIPC.PathfindAndMoveTo(targetPosition, fly)) return;
 
-            Current = new(targetPosition, MoveDriver.Navmesh, MovementManager.CurrentControlMode);
+            Current = new(targetPosition, MoveDriver.Navmesh, MovementManager.Instance().CurrentControlMode);
             TargetIndicatorRenderer.Trigger(targetPosition);
         }
     }

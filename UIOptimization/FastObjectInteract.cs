@@ -272,7 +272,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
         if (DService.Instance().Condition.IsOnMount)
         {
-            TaskHelper.Enqueue(() => MovementManager.Dismount(), "DismountInteract", weight: 2);
+            TaskHelper.Enqueue(() => MovementManager.Instance().Dismount(), "DismountInteract", weight: 2);
             TaskHelper.DelayNext(500, weight: 2);
         }
 
@@ -300,7 +300,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
         {
             return !DService.Instance().Condition.IsOnMount                                          &&
                    !DService.Instance().Condition.Any(ConditionFlag.Jumping, ConditionFlag.InFlight) &&
-                   !MovementManager.IsManagerBusy;
+                   !MovementManager.Instance().IsManagerBusy;
         }
     }
 

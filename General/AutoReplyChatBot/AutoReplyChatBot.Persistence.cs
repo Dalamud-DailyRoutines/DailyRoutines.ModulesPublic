@@ -56,7 +56,7 @@ public partial class AutoReplyChatBot
 
         try
         {
-            ModuleConfig.Save(ModuleManager.GetModule<AutoReplyChatBot>());
+            ModuleConfig.Save(ModuleManager.Instance().GetModule<AutoReplyChatBot>());
         }
         catch
         {

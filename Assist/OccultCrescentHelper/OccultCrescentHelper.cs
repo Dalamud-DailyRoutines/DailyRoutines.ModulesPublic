@@ -160,13 +160,13 @@ public partial class OccultCrescentHelper : ModuleBase
         (
             () =>
             {
-                MovementManager.TPPlayerAddress(pos);
-                MovementManager.TPMountAddress(pos);
+                MovementManager.Instance().TPPlayerAddress(pos);
+                MovementManager.Instance().TPMountAddress(pos);
             },
             weight: weight
         );
         taskHelper.DelayNext(100, weight: weight);
-        taskHelper.Enqueue(() => MovementManager.TPGround(), weight: weight);
+        taskHelper.Enqueue(() => MovementManager.Instance().TPGround(), weight: weight);
     }
 
     private static unsafe uint GetIslandID() =>

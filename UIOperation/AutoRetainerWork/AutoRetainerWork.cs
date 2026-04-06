@@ -846,7 +846,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     public abstract class RetainerWorkerBase
     {
-        protected static AutoRetainerWork Module => ModuleManager.GetModule<AutoRetainerWork>();
+        protected static AutoRetainerWork Module => ModuleManager.Instance().GetModule<AutoRetainerWork>();
 
         public abstract bool IsWorkerBusy();
 

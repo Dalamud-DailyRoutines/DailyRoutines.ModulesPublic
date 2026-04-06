@@ -374,7 +374,7 @@ public partial class OccultCrescentHelper
                         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
                         if (localPlayer.IsDead) return true;
 
-                        MovementManager.TPPlayerAddress(ModuleConfig.DefaultPositionEnterZoneSouthHorn);
+                        MovementManager.Instance().TPPlayerAddress(ModuleConfig.DefaultPositionEnterZoneSouthHorn);
                         return true;
                     }
                 );
@@ -1375,7 +1375,7 @@ public partial class OccultCrescentHelper
                         OnClick = value =>
                         {
                             ModuleConfig.AddonIsDragRealAction = value;
-                            ModuleConfig.Save(ModuleManager.GetModule<OccultCrescentHelper>());
+                            ModuleConfig.Save(ModuleManager.Instance().GetModule<OccultCrescentHelper>());
 
                             ActionDragDropNodes.ForEach(x => x.Toggle(value));
                         }

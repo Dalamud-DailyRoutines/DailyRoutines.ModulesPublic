@@ -387,7 +387,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
                         Time             = IsTimeCustom() ? GetDisplayTime() : originalSetting.Time,
                         WeatherID        = IsWeatherCustom() ? GetDisplayWeather() : originalSetting.WeatherID
                     };
-                    ModuleConfig.Save(ModuleManager.GetModule<FastSetWeatherTime>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
 
                     var setting = ModuleConfig.ZoneSettings[GameState.TerritoryType];
 
@@ -416,7 +416,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 {
                     if (ModuleConfig.ZoneSettings.Remove(GameState.TerritoryType))
                     {
-                        ModuleConfig.Save(ModuleManager.GetModule<FastSetWeatherTime>());
+                        ModuleConfig.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
                         NotifyHelper.Instance().Chat(Lang.Get("FastSetWeatherTime-Notification-Cleard"));
                     }
                 }

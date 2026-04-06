@@ -259,7 +259,7 @@ public partial class OccultCrescentHelper
                         (() =>
                             {
                                 PlayerController.Instance()->MoveControllerWalk.IsMovementLocked = true;
-                                MovementManager.TPSmooth(OriginalPosition, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
+                                MovementManager.Instance().TPSmooth(OriginalPosition, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
 
                                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
@@ -288,7 +288,7 @@ public partial class OccultCrescentHelper
                         (() =>
                             {
                                 PlayerController.Instance()->MoveControllerWalk.IsMovementLocked = true;
-                                MovementManager.TPSmooth(pos, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
+                                MovementManager.Instance().TPSmooth(pos, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
 
                                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
@@ -411,7 +411,7 @@ public partial class OccultCrescentHelper
             (() =>
                 {
                     PlayerController.Instance()->MoveControllerWalk.IsMovementLocked = true;
-                    MovementManager.TPSmooth(position, 24, foundTreasure, -20);
+                    MovementManager.Instance().TPSmooth(position, 24, foundTreasure, -20);
 
                     if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
@@ -655,7 +655,7 @@ public partial class OccultCrescentHelper
         {
             if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
-            var moveType = (PositionUpdateInstancePacket.MoveType)(MovementManager.CurrentZoneMoveState << 16);
+            var moveType = (PositionUpdateInstancePacket.MoveType)(MovementManager.Instance().CurrentZoneMoveState << 16);
             new PositionUpdateInstancePacket(localPlayer.Rotation, obj.Position, moveType).Send();
             new TreasureOpenPacket(obj.EntityID).Send();
             new PositionUpdateInstancePacket(localPlayer.Rotation, localPlayer.Position, moveType).Send();

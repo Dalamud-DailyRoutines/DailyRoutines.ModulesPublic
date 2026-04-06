@@ -280,7 +280,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 if (ImGui.Checkbox(Lang.Get(menuItem.LocKey), ref value))
                 {
                     menuItem.SetConfig();
-                    ModuleConfig.Save(ModuleManager.GetModule<ExpandPlayerMenuSearch>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<ExpandPlayerMenuSearch>());
                 }
             }
         }

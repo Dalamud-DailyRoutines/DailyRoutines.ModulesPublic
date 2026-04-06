@@ -24,7 +24,7 @@ public class AutoRefocus : ModuleBase
 
         TargetManager.Instance().RegPostSetFocusTarget(OnSetFocusTarget);
         DService.Instance().ClientState.TerritoryChanged += OnZoneChange;
-        PlayersManager.ReceivePlayersAround              += OnReceivePlayerAround;
+        PlayersManager.Instance().ReceivePlayersAround              += OnReceivePlayerAround;
     }
 
     private static unsafe void OnReceivePlayerAround(IReadOnlyList<IPlayerCharacter> characters)
@@ -41,7 +41,7 @@ public class AutoRefocus : ModuleBase
 
     protected override void Uninit()
     {
-        PlayersManager.ReceivePlayersAround              -= OnReceivePlayerAround;
+        PlayersManager.Instance().ReceivePlayersAround              -= OnReceivePlayerAround;
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChange;
         TargetManager.Instance().Unreg(OnSetFocusTarget);
     }

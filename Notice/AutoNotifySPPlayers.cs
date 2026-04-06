@@ -47,11 +47,11 @@ public class AutoNotifySPPlayers : ModuleBase
     {
         ModuleConfig = Config.Load(this) ?? new();
 
-        PlayersManager.ReceivePlayersAround += OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersAround += OnReceivePlayers;
     }
 
     protected override void Uninit() =>
-        PlayersManager.ReceivePlayersAround -= OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersAround -= OnReceivePlayers;
 
     protected override void ConfigUI()
     {

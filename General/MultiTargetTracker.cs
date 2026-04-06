@@ -34,14 +34,14 @@ public class MultiTargetTracker : ModuleBase
     {
         ModuleConfig = Config.Load(this) ?? new();
 
-        PlayersManager.ReceivePlayersAround              += OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersAround              += OnReceivePlayers;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().ContextMenu.OnMenuOpened     += OnMenuOpen;
     }
 
     protected override void Uninit()
     {
-        PlayersManager.ReceivePlayersAround -= OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersAround -= OnReceivePlayers;
         FrameworkManager.Instance().Unreg(OnUpdate);
 
         DService.Instance().ContextMenu.OnMenuOpened     -= OnMenuOpen;
@@ -131,7 +131,7 @@ public class MultiTargetTracker : ModuleBase
     {
         if (ModuleConfig.PermanentTrackedPlayers.Count == 0 && TempTrackedPlayers.Count == 0) return;
 
-        if (PlayersManager.PlayersAroundCount == 0 || !GameState.IsLoggedIn)
+        if (PlayersManager.Instance().PlayersAroundCount == 0 || !GameState.IsLoggedIn)
         {
             FrameworkManager.Instance().Unreg(OnUpdate);
             return;
@@ -139,7 +139,7 @@ public class MultiTargetTracker : ModuleBase
 
         List<(ulong, Vector3)> validPlayers = new(8);
 
-        foreach (var player in PlayersManager.PlayersAround)
+        foreach (var player in PlayersManager.Instance().PlayersAround)
         {
             if (validPlayers.Count >= 8) break;
 
@@ -290,7 +290,7 @@ public class MultiTargetTracker : ModuleBase
                 NotifyHelper.Instance().NotificationSuccess(Lang.Get("Added"));
             }
 
-            ModuleConfig.Save(ModuleManager.GetModule<MultiTargetTracker>());
+            ModuleConfig.Save(ModuleManager.Instance().GetModule<MultiTargetTracker>());
         }
     }
 }

@@ -113,9 +113,9 @@ public class AutoEliminateFishAwareness : ModuleBase
             TaskHelper.Enqueue(() => !DService.Instance().Condition.IsBoundByDuty && UIModule.IsScreenReady() && GameState.TerritoryType != 939, "等待离开副本");
             TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/pdrfe diadem"), "发送进入指令");
             TaskHelper.Enqueue(() => GameState.TerritoryType == 939 && DService.Instance().ObjectTable.LocalPlayer != null, "等待进入");
-            TaskHelper.Enqueue(() => MovementManager.TPSmart_InZone(currentPos), $"传送到原始位置 {currentPos}");
+            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(currentPos), $"传送到原始位置 {currentPos}");
             TaskHelper.DelayNext(500, "等待 500 毫秒");
-            TaskHelper.Enqueue(() => !MovementManager.IsManagerBusy,                                                       "等待传送完毕");
+            TaskHelper.Enqueue(() => !MovementManager.Instance().IsManagerBusy,                                                       "等待传送完毕");
             TaskHelper.Enqueue(() => DService.Instance().ObjectTable.LocalPlayer.ToStruct()->SetRotation(currentRotation), "设置面向");
         }
         else if (!DService.Instance().Condition.IsBoundByDuty)

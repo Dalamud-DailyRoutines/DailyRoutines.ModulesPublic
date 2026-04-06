@@ -410,7 +410,7 @@ public class BetterFPSLimitation : ModuleBase
         protected override unsafe void OnFinalize(AtkUnitBase* addon)
         {
             ModuleConfig.AddonPosition = RootNode.Position;
-            ModuleConfig.Save(ModuleManager.GetModule<BetterFPSLimitation>());
+            ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
             base.OnFinalize(addon);
         }
@@ -433,7 +433,7 @@ public class BetterFPSLimitation : ModuleBase
                 OnClick = newState =>
                 {
                     ModuleConfig.IsEnabled = newState;
-                    ModuleConfig.Save(ModuleManager.GetModule<BetterFPSLimitation>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
                     Update();
                 }
@@ -466,7 +466,7 @@ public class BetterFPSLimitation : ModuleBase
                 OnValueUpdate = newValue =>
                 {
                     ModuleConfig.Limitation = (short)newValue;
-                    ModuleConfig.Save(ModuleManager.GetModule<BetterFPSLimitation>());
+                    ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
                     Update();
                 },
@@ -554,7 +554,7 @@ public class BetterFPSLimitation : ModuleBase
                         {
                             ModuleConfig.Limitation = threshold;
                             ModuleConfig.IsEnabled  = true;
-                            ModuleConfig.Save(ModuleManager.GetModule<BetterFPSLimitation>());
+                            ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
                             FPSInputNode.Value = ModuleConfig.Limitation;
                             FPSInputNode.ValueTextNode.SetNumber(ModuleConfig.Limitation);
