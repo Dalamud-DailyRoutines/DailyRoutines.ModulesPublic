@@ -53,7 +53,8 @@ public partial class OccultCrescentHelper
                                                       ImGuiWindowFlags.NoMove                |
                                                       ImGuiWindowFlags.NoResize              |
                                                       ImGuiWindowFlags.NoScrollWithMouse     |
-                                                      ImGuiWindowFlags.NoInputs;
+                                                      ImGuiWindowFlags.NoInputs              |
+                                                      ImGuiWindowFlags.NoSavedSettings;
 
         private const string COMMAND_TREASURE = "ptreasure";
 
