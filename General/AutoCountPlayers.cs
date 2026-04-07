@@ -45,7 +45,8 @@ public unsafe class AutoCountPlayers : ModuleBase
                                                   ImGuiWindowFlags.NoMove                |
                                                   ImGuiWindowFlags.NoResize              |
                                                   ImGuiWindowFlags.NoScrollWithMouse     |
-                                                  ImGuiWindowFlags.NoInputs;
+                                                  ImGuiWindowFlags.NoInputs              |
+                                                  ImGuiWindowFlags.NoSavedSettings;
 
     private static readonly uint LineColorBlue = KnownColor.LightSkyBlue.ToUInt();
     private static readonly uint LineColorRed  = KnownColor.Red.ToUInt();
