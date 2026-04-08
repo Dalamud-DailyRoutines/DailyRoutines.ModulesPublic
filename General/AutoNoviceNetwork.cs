@@ -16,14 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNoviceNetwork : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static Timer? AfkTimer;
-
-    private static int  TryTimes;
-    private static bool IsJoined;
-    private static bool IsMentor;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNoviceNetworkTitle"),
@@ -32,25 +24,46 @@ public unsafe class AutoNoviceNetwork : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private Config config = null!;
+
+    private Timer? afkTimer;
+
+    private int  tryTimes;
+    private bool isJoined;
+    private bool isMentor;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         TaskHelper ??= new() { TimeoutMS = 5_000 };
 
-        AfkTimer           ??= new(10_000);
-        AfkTimer.Elapsed   +=  OnAfkStateCheck;
-        AfkTimer.AutoReset =   true;
-        AfkTimer.Enabled   =   true;
+        afkTimer           ??= new(10_000);
+        afkTimer.Elapsed   +=  OnAfkStateCheck;
+        afkTimer.AutoReset =   true;
+        afkTimer.Enabled   =   true;
+    }
+    
+    protected override void Uninit()
+    {
+        if (afkTimer != null)
+        {
+            afkTimer?.Stop();
+            afkTimer.Elapsed -= OnAfkStateCheck;
+            afkTimer?.Dispose();
+            afkTimer = null;
+        }
+
+        tryTimes = 0;
     }
 
     protected override void ConfigUI()
     {
         if (Throttler.Shared.Throttle("AutoNoviceNetwork-UpdateInfo", 1000))
         {
-            IsMentor = PlayerState.Instance()->IsMentor();
-            IsJoined = IsInNoviceNetwork();
+            isMentor = PlayerState.Instance()->IsMentor();
+            isJoined = IsInNoviceNetwork();
         }
 
         ImGui.TextUnformatted($"{Lang.Get("AutoNoviceNetwork-JoinState")}:");
@@ -58,22 +71,22 @@ public unsafe class AutoNoviceNetwork : ModuleBase
         ImGui.SameLine();
         ImGui.TextColored
         (
-            IsJoined ? ImGuiColors.HealerGreen : ImGuiColors.DPSRed,
-            IsJoined ? "√" : "×"
+            isJoined ? ImGuiColors.HealerGreen : ImGuiColors.DPSRed,
+            isJoined ? "√" : "×"
         );
 
         ImGui.TextUnformatted($"{Lang.Get("AutoNoviceNetwork-AttemptedTimes")}:");
 
         ImGui.SameLine();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{TryTimes}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{tryTimes}");
 
         ImGui.NewLine();
 
-        using (ImRaii.Disabled(TaskHelper.IsBusy || !IsMentor))
+        using (ImRaii.Disabled(TaskHelper.IsBusy || !isMentor))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
             {
-                TryTimes = 0;
+                tryTimes = 0;
                 TaskHelper.Enqueue(EnqueueARound);
             }
         }
@@ -84,15 +97,15 @@ public unsafe class AutoNoviceNetwork : ModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("AutoNoviceNetwork-TryJoinWhenInactive"), ref ModuleConfig.IsTryJoinWhenInactive))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoNoviceNetwork-TryJoinWhenInactive"), ref config.IsTryJoinWhenInactive))
+            config.Save(this);
 
         ImGuiOm.HelpMarker(Lang.Get("AutoNoviceNetwork-TryJoinWhenInactiveHelp"), 20f * GlobalUIScale);
     }
 
     private void EnqueueARound()
     {
-        if (!(IsMentor = PlayerState.Instance()->IsMentor())) return;
+        if (!(isMentor = PlayerState.Instance()->IsMentor())) return;
 
         TaskHelper.Enqueue
         (() =>
@@ -105,7 +118,7 @@ public unsafe class AutoNoviceNetwork : ModuleBase
         TaskHelper.Enqueue(TryJoin);
 
         TaskHelper.DelayNext(250);
-        TaskHelper.Enqueue(() => TryTimes++);
+        TaskHelper.Enqueue(() => tryTimes++);
 
         TaskHelper.Enqueue
         (() =>
@@ -132,29 +145,18 @@ public unsafe class AutoNoviceNetwork : ModuleBase
 
     private void OnAfkStateCheck(object? sender, ElapsedEventArgs e)
     {
-        if (!(IsMentor = PlayerState.Instance()->IsMentor())) return;
+        if (!(isMentor = PlayerState.Instance()->IsMentor())) return;
 
-        IsJoined = IsInNoviceNetwork();
-        if (IsJoined) return;
+        isJoined = IsInNoviceNetwork();
+        if (isJoined) return;
 
-        if (!ModuleConfig.IsTryJoinWhenInactive         || TaskHelper.IsBusy) return;
+        if (!config.IsTryJoinWhenInactive         || TaskHelper.IsBusy) return;
         if (DService.Instance().Condition.IsBoundByDuty || DService.Instance().Condition.IsOccupiedInEvent) return;
 
         if (LastInputInfo.GetIdleTimeTick() > 10_000 || Framework.Instance()->WindowInactive)
             TryJoin();
     }
-
-    protected override void Uninit()
-    {
-        AfkTimer?.Stop();
-        if (AfkTimer != null)
-            AfkTimer.Elapsed -= OnAfkStateCheck;
-        AfkTimer?.Dispose();
-        AfkTimer = null;
-
-        TryTimes = 0;
-    }
-
+    
     private class Config : ModuleConfig
     {
         public bool IsTryJoinWhenInactive;

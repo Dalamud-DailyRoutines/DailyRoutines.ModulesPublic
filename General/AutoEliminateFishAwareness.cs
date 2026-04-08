@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -19,19 +20,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoEliminateFishAwareness : ModuleBase
 {
-    private const uint TARGET_CONTENT = 195;
-
-    private static readonly HashSet<string> ValidChatMessages = new(StringComparer.OrdinalIgnoreCase)
-    {
-        LuminaWrapper.GetLogMessageText(3516),
-        LuminaWrapper.GetLogMessageText(5517),
-        LuminaWrapper.GetLogMessageText(5518)
-    };
-
-    private static Config ModuleConfig = null!;
-
-    private static readonly ZoneSelectCombo ZoneSelectCombo = new("BlacklistZone");
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoEliminateFishAwarenessTitle"),
@@ -42,15 +30,22 @@ public class AutoEliminateFishAwareness : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
+    private Config config = null!;
+    
+    private readonly ZoneSelectCombo zoneSelectCombo = new("BlacklistZone");
+    
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = 30_000, ShowDebug = true };
 
-        ZoneSelectCombo.SelectedIDs = ModuleConfig.BlacklistZones;
+        zoneSelectCombo.SelectedIDs = config.BlacklistZones;
 
         DService.Instance().Chat.ChatMessage += OnChatMessage;
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().Chat.ChatMessage -= OnChatMessage;
 
     protected override void ConfigUI()
     {
@@ -60,10 +55,10 @@ public class AutoEliminateFishAwareness : ModuleBase
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-            if (ZoneSelectCombo.DrawCheckbox())
+            if (zoneSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistZones = ZoneSelectCombo.SelectedIDs;
-                ModuleConfig.Save(this);
+                config.BlacklistZones = zoneSelectCombo.SelectedIDs;
+                config.Save(this);
             }
         }
 
@@ -74,15 +69,15 @@ public class AutoEliminateFishAwareness : ModuleBase
 
         using (ImRaii.PushIndent())
         {
-            ImGui.InputTextMultiline("###ExtraCommandsInput", ref ModuleConfig.ExtraCommands, 2048, ScaledVector2(400f, 120f));
+            ImGui.InputTextMultiline("###ExtraCommandsInput", ref config.ExtraCommands, 2048, ScaledVector2(400f, 120f));
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("AutoEliminateFishAwareness-AutoCast"), ref ModuleConfig.AutoCast))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoEliminateFishAwareness-AutoCast"), ref config.AutoCast))
+            config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoEliminateFishAwareness-AutoCastHelp"));
     }
 
@@ -95,7 +90,7 @@ public class AutoEliminateFishAwareness : ModuleBase
         ref bool     ishandled
     )
     {
-        if ((ushort)type != 2243 || ModuleConfig.BlacklistZones.Contains(GameState.TerritoryType)) return;
+        if ((ushort)type != 2243 || config.BlacklistZones.Contains(GameState.TerritoryType)) return;
         if (!ValidChatMessages.Contains(message.ToString())) return;
 
         TaskHelper.Abort();
@@ -129,7 +124,7 @@ public class AutoEliminateFishAwareness : ModuleBase
         else
             return;
 
-        if (ModuleConfig.AutoCast)
+        if (config.AutoCast)
             TaskHelper.Enqueue(EnterFishing, "进入钓鱼状态");
         else
             TaskHelper.Enqueue(() => ActionManager.Instance()->GetActionStatus(ActionType.Action, 289) == 0, "等待技能抛竿可用");
@@ -138,9 +133,9 @@ public class AutoEliminateFishAwareness : ModuleBase
         (
             () =>
             {
-                if (string.IsNullOrWhiteSpace(ModuleConfig.ExtraCommands)) return;
+                if (string.IsNullOrWhiteSpace(config.ExtraCommands)) return;
 
-                foreach (var command in ModuleConfig.ExtraCommands.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                foreach (var command in config.ExtraCommands.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
                     ChatManager.Instance().SendMessage(command);
             },
             "执行文本指令"
@@ -173,14 +168,24 @@ public class AutoEliminateFishAwareness : ModuleBase
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fish);
         return DService.Instance().Condition[ConditionFlag.Fishing];
     }
-
-    protected override void Uninit() =>
-        DService.Instance().Chat.ChatMessage -= OnChatMessage;
-
+    
     private class Config : ModuleConfig
     {
         public bool          AutoCast       = true;
         public HashSet<uint> BlacklistZones = [];
         public string        ExtraCommands  = string.Empty;
     }
+    
+    #region 常量
+
+    private const uint TARGET_CONTENT = 195;
+
+    private static readonly FrozenSet<string> ValidChatMessages = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        LuminaWrapper.GetLogMessageText(3516),
+        LuminaWrapper.GetLogMessageText(5517),
+        LuminaWrapper.GetLogMessageText(5518)
+    }.ToFrozenSet();
+
+    #endregion
 }

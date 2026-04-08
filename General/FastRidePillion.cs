@@ -15,14 +15,14 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastRidePillion : ModuleBase
 {
-    private static Hook<AgentReceiveEventDelegate>? AgentContextReceiveEventHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FastRidePillionTitle"),
         Description = Lang.Get("FastRidePillionDescription"),
         Category    = ModuleCategory.General
     };
+
+    private Hook<AgentReceiveEventDelegate>? AgentContextReceiveEventHook;
 
     protected override void Init()
     {
@@ -36,6 +36,9 @@ public unsafe class FastRidePillion : ModuleBase
 
         DService.Instance().Condition.ConditionChange += OnCondition;
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().Condition.ConditionChange -= OnCondition;
 
     private static void OnCondition(ConditionFlag flag, bool value)
     {
@@ -45,7 +48,14 @@ public unsafe class FastRidePillion : ModuleBase
             ContextMenuAddon->Close(true);
     }
 
-    private static AtkValue* AgentContextReceiveEventDetour(AgentInterface* agent, AtkValue* returnValues, AtkValue* values, uint valueCount, ulong eventKind)
+    private AtkValue* AgentContextReceiveEventDetour
+    (
+        AgentInterface* agent,
+        AtkValue*       returnValues,
+        AtkValue*       values,
+        uint            valueCount,
+        ulong           eventKind
+    )
     {
         if (eventKind != 0 || values == null || values->Int != 1 || DService.Instance().Condition.IsOnMount)
             return AgentContextReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
@@ -72,7 +82,4 @@ public unsafe class FastRidePillion : ModuleBase
         chara->RidePillion(10);
         return AgentContextReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().Condition.ConditionChange -= OnCondition;
 }

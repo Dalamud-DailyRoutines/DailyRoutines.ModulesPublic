@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -19,28 +20,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRepair : ModuleBase
 {
-    private static readonly HashSet<ConditionFlag> ValidConditions =
-    [
-        ConditionFlag.InCombat,
-        ConditionFlag.BetweenAreas,
-        ConditionFlag.BetweenAreas51,
-        ConditionFlag.Gathering,
-        ConditionFlag.Crafting
-    ];
-
-    private static readonly HashSet<ExecuteCommandFlag> ValidRepairFlags =
-    [
-        ExecuteCommandFlag.RepairItemNPC,
-        ExecuteCommandFlag.RepairAllItemsNPC,
-        ExecuteCommandFlag.RepairEquippedItemsNPC,
-
-        ExecuteCommandFlag.RepairItem,
-        ExecuteCommandFlag.RepairAllItems,
-        ExecuteCommandFlag.RepairEquippedItems
-    ];
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoRepairTitle"),
@@ -49,22 +28,14 @@ public unsafe class AutoRepair : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private bool IsBusy => TaskHelper?.IsBusy ?? false;
 
-    public bool IsBusy => TaskHelper?.IsBusy ?? false;
-
-    [IPCProvider("DailyRoutines.Modules.AutoRepair.IsBusy")]
-    public bool IsBusyIPC => IsBusy;
-
-    [IPCProvider("DailyRoutines.Modules.AutoRepair.IsNeedToRepair")]
-    public bool IsNeedToRepairIPC =>
-        InventoryType.EquippedItems.TryGetItems(x => x.Condition < ModuleConfig.RepairThreshold * 300f, out _);
-
-    [IPCProvider("DailyRoutines.Modules.AutoRepair.IsAbleToRepair")]
-    public bool IsAbleToRepairIPC => IsAbleToRepair();
-
+    private Config config = null!;
+    
     protected override void Init()
     {
-        ModuleConfig ??= Config.Load(this) ?? new();
+        config ??= Config.Load(this) ?? new();
         TaskHelper   ??= new();
 
         ExecuteCommandManager.Instance().RegPost(OnExecuteCommand);
@@ -73,24 +44,32 @@ public unsafe class AutoRepair : ModuleBase
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
         DService.Instance().DutyState.DutyRecommenced    += OnDutyRecommenced;
     }
-
+    
+    protected override void Uninit()
+    {
+        ExecuteCommandManager.Instance().Unreg(OnExecuteCommand);
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
+        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
+    }
+    
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        ImGui.InputFloat(Lang.Get("AutoRepair-RepairThreshold"), ref ModuleConfig.RepairThreshold, 0, 0, "%.1f");
+        ImGui.InputFloat(Lang.Get("AutoRepair-RepairThreshold"), ref config.RepairThreshold, 0, 0, "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("AutoRepair-AllowNPCRepair"), ref ModuleConfig.AllowNPCRepair))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoRepair-AllowNPCRepair"), ref config.AllowNPCRepair))
+            config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoRepair-AllowNPCRepairHelp"), 100f * GlobalUIScale);
 
-        if (ModuleConfig.AllowNPCRepair)
+        if (config.AllowNPCRepair)
         {
-            if (ImGui.Checkbox(Lang.Get("AutoRepair-PrioritizeNPCRepair"), ref ModuleConfig.PrioritizeNPCRepair))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox(Lang.Get("AutoRepair-PrioritizeNPCRepair"), ref config.PrioritizeNPCRepair))
+                config.Save(this);
             ImGuiOm.HelpMarker(Lang.Get("AutoRepair-PrioritizeNPCRepairHelp"), 100f * GlobalUIScale);
         }
     }
@@ -108,11 +87,11 @@ public unsafe class AutoRepair : ModuleBase
         if (playerState == null || inventoryManager == null) return;
 
         // 没有需要修理的装备
-        if (!InventoryType.EquippedItems.TryGetItems(x => x.Condition < ModuleConfig.RepairThreshold * 300f, out var items))
+        if (!InventoryType.EquippedItems.TryGetItems(x => x.Condition < config.RepairThreshold * 300f, out var items))
             return;
 
         // 优先委托 NPC 修理
-        if (ModuleConfig is { AllowNPCRepair: true, PrioritizeNPCRepair: true } && EventFramework.Instance()->IsEventIDNearby(720915))
+        if (config is { AllowNPCRepair: true, PrioritizeNPCRepair: true } && EventFramework.Instance()->IsEventIDNearby(720915))
         {
             TaskHelper.Abort();
             TaskHelper.Enqueue(() => IsAbleToRepair());
@@ -193,7 +172,7 @@ public unsafe class AutoRepair : ModuleBase
         }
 
         // 附近存在修理工
-        if (ModuleConfig.AllowNPCRepair && itemsUnableToRepair.Count > 0 && EventFramework.Instance()->IsEventIDNearby(720915))
+        if (config.AllowNPCRepair && itemsUnableToRepair.Count > 0 && EventFramework.Instance()->IsEventIDNearby(720915))
         {
             TaskHelper.Enqueue(() => IsAbleToRepair());
             TaskHelper.Enqueue(() => NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoRepair-RepairNotice"), Lang.Get("AutoRepairTitle")));
@@ -217,25 +196,7 @@ public unsafe class AutoRepair : ModuleBase
         !DService.Instance().Condition.IsOnMount         &&
         !DService.Instance().Condition.IsCasting         &&
         ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 6) == 0;
-
-    protected override void Uninit()
-    {
-        ExecuteCommandManager.Instance().Unreg(OnExecuteCommand);
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
-        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
-    }
-
-    [IPCProvider("DailyRoutines.Modules.AutoRepair.EnqueueRepair")]
-    public void EnqueueRepairIPC() => EnqueueRepair();
-
-    private class Config : ModuleConfig
-    {
-        public bool  AllowNPCRepair = true;
-        public bool  PrioritizeNPCRepair;
-        public float RepairThreshold = 20;
-    }
-
+    
     #region 事件
 
     private void OnDutyRecommenced(object? sender, ushort e) =>
@@ -256,6 +217,54 @@ public unsafe class AutoRepair : ModuleBase
 
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.InventoryRefresh);
     }
+
+    #endregion
+    
+    private class Config : ModuleConfig
+    {
+        public bool  AllowNPCRepair = true;
+        public bool  PrioritizeNPCRepair;
+        public float RepairThreshold = 20;
+    }
+    
+    #region 常量
+
+    private static readonly FrozenSet<ConditionFlag> ValidConditions =
+    [
+        ConditionFlag.InCombat,
+        ConditionFlag.BetweenAreas,
+        ConditionFlag.BetweenAreas51,
+        ConditionFlag.Gathering,
+        ConditionFlag.Crafting
+    ];
+
+    private static readonly FrozenSet<ExecuteCommandFlag> ValidRepairFlags =
+    [
+        ExecuteCommandFlag.RepairItemNPC,
+        ExecuteCommandFlag.RepairAllItemsNPC,
+        ExecuteCommandFlag.RepairEquippedItemsNPC,
+
+        ExecuteCommandFlag.RepairItem,
+        ExecuteCommandFlag.RepairAllItems,
+        ExecuteCommandFlag.RepairEquippedItems
+    ];
+
+    #endregion
+    
+    #region IPC
+
+    [IPCProvider("DailyRoutines.Modules.AutoRepair.IsBusy")]
+    public bool IsBusyIPC => IsBusy;
+
+    [IPCProvider("DailyRoutines.Modules.AutoRepair.IsNeedToRepair")]
+    public bool IsNeedToRepairIPC =>
+        InventoryType.EquippedItems.TryGetItems(x => x.Condition < config.RepairThreshold * 300f, out _);
+
+    [IPCProvider("DailyRoutines.Modules.AutoRepair.IsAbleToRepair")]
+    public bool IsAbleToRepairIPC => IsAbleToRepair();
+    
+    [IPCProvider("DailyRoutines.Modules.AutoRepair.EnqueueRepair")]
+    public void EnqueueRepairIPC() => EnqueueRepair();
 
     #endregion
 }

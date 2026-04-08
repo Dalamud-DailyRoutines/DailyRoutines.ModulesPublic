@@ -31,20 +31,26 @@ public unsafe class AutoGardensWork : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
     
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static string SearchSeed      = string.Empty;
-    private static string SearchSoil      = string.Empty;
-    private static string SearchFertilize = string.Empty;
+    private string searchSeed      = string.Empty;
+    private string searchSoil      = string.Empty;
+    private string searchFertilize = string.Empty;
 
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = 10_000 };
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "HousingGardening", OnAddon);
 
         TargetManager.Instance().RegPostSetHardTarget(OnSetHardTarget);
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        TargetManager.Instance().Unreg(OnSetHardTarget);
     }
 
     protected override void ConfigUI()
@@ -89,8 +95,8 @@ public unsafe class AutoGardensWork : ModuleBase
             (
                 "SeedSelectCombo",
                 Sheets.Seeds,
-                ref ModuleConfig.SeedSelected,
-                ref SearchSeed,
+                ref config.SeedSelected,
+                ref searchSeed,
                 x => $"{x.Name.ToString()} ({x.RowId})",
                 [new(LuminaWrapper.GetAddonText(6412), ImGuiTableColumnFlags.WidthStretch, 0)],
                 [
@@ -102,16 +108,16 @@ public unsafe class AutoGardensWork : ModuleBase
                                 icon.Handle,
                                 new(ImGui.GetTextLineHeightWithSpacing()),
                                 x.Name.ToString(),
-                                x.RowId == ModuleConfig.SeedSelected,
+                                x.RowId == config.SeedSelected,
                                 ImGuiSelectableFlags.DontClosePopups | ImGuiSelectableFlags.SpanAllColumns
                             ))
-                            ModuleConfig.SeedSelected = x.RowId;
+                            config.SeedSelected = x.RowId;
                     }
                 ],
                 [x => x.Name.ToString(), x => x.RowId.ToString()],
                 true
             ))
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.SameLine();
         ImGui.TextUnformatted(LuminaWrapper.GetAddonText(6412));
@@ -124,8 +130,8 @@ public unsafe class AutoGardensWork : ModuleBase
                 (
                     "SoilSelectCombo",
                     Sheets.Soils,
-                    ref ModuleConfig.SoilSelected,
-                    ref SearchSoil,
+                    ref config.SoilSelected,
+                    ref searchSoil,
                     x => $"{x.Name.ToString()} ({x.RowId})",
                     [new(LuminaWrapper.GetAddonText(6411), ImGuiTableColumnFlags.WidthStretch, 0)],
                     [
@@ -137,16 +143,16 @@ public unsafe class AutoGardensWork : ModuleBase
                                     icon.Handle,
                                     new(ImGui.GetTextLineHeightWithSpacing()),
                                     x.Name.ToString(),
-                                    x.RowId == ModuleConfig.SeedSelected,
+                                    x.RowId == config.SeedSelected,
                                     ImGuiSelectableFlags.DontClosePopups
                                 ))
-                                ModuleConfig.SoilSelected = x.RowId;
+                                config.SoilSelected = x.RowId;
                         }
                     ],
                     [x => x.Name.ToString(), x => x.RowId.ToString()],
                     true
                 ))
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
 
         ImGui.SameLine();
@@ -197,8 +203,8 @@ public unsafe class AutoGardensWork : ModuleBase
             (
                 "FertilizersSelectCombo",
                 Sheets.Fertilizers,
-                ref ModuleConfig.FertilizerSelected,
-                ref SearchFertilize,
+                ref config.FertilizerSelected,
+                ref searchFertilize,
                 x => $"{x.Name.ToString()} ({x.RowId})",
                 [new(LuminaWrapper.GetAddonText(6417), ImGuiTableColumnFlags.WidthStretch, 0)],
                 [
@@ -209,16 +215,16 @@ public unsafe class AutoGardensWork : ModuleBase
                                 ImageHelper.GetGameIcon(x.Icon).Handle,
                                 new(ImGui.GetTextLineHeightWithSpacing()),
                                 x.Name.ToString(),
-                                x.RowId == ModuleConfig.SeedSelected,
+                                x.RowId == config.SeedSelected,
                                 ImGuiSelectableFlags.DontClosePopups | ImGuiSelectableFlags.SpanAllColumns
                             ))
-                            ModuleConfig.FertilizerSelected = x.RowId;
+                            config.FertilizerSelected = x.RowId;
                     }
                 ],
                 [x => x.Name.ToString(), x => x.RowId.ToString()],
                 true
             ))
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.SameLine();
         ImGui.TextUnformatted(LuminaWrapper.GetAddonText(6417));
@@ -242,28 +248,15 @@ public unsafe class AutoGardensWork : ModuleBase
         if (ImGui.Button($"{FontAwesomeIcon.Stop.ToIconString()} {Lang.Get("Stop")}"))
             TaskHelper.Abort();
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        TargetManager.Instance().Unreg(OnSetHardTarget);
-    }
-
-    private class Config : ModuleConfig
-    {
-        public uint FertilizerSelected;
-        public uint SeedSelected;
-        public uint SoilSelected;
-    }
-
+    
     #region 事件
 
     private void OnAddon(AddonEvent type, AddonArgs args)
     {
-        if (ModuleConfig.SeedSelected == 0 || ModuleConfig.SoilSelected == 0) return;
+        if (config.SeedSelected == 0 || config.SoilSelected == 0) return;
 
-        if (!Inventories.Player.TryGetFirstItem(x => x.ItemId == ModuleConfig.SeedSelected, out var seedItem) ||
-            !Inventories.Player.TryGetFirstItem(x => x.ItemId == ModuleConfig.SoilSelected, out var soilItem))
+        if (!Inventories.Player.TryGetFirstItem(x => x.ItemId == config.SeedSelected, out var seedItem) ||
+            !Inventories.Player.TryGetFirstItem(x => x.ItemId == config.SoilSelected, out var soilItem))
             return;
 
         TaskHelper.Enqueue
@@ -452,8 +445,8 @@ public unsafe class AutoGardensWork : ModuleBase
         if (SelectString != null) return false;
         if (!DService.Instance().Condition[ConditionFlag.OccupiedInQuestEvent]) return true;
 
-        if (ModuleConfig.FertilizerSelected == 0 ||
-            !Inventories.Player.TryGetFirstItem(x => x.ItemId == ModuleConfig.FertilizerSelected, out var fertilizerItem))
+        if (config.FertilizerSelected == 0 ||
+            !Inventories.Player.TryGetFirstItem(x => x.ItemId == config.FertilizerSelected, out var fertilizerItem))
         {
             TaskHelper.Abort();
             return true;
@@ -484,4 +477,11 @@ public unsafe class AutoGardensWork : ModuleBase
     }
 
     #endregion
+    
+    private class Config : ModuleConfig
+    {
+        public uint FertilizerSelected;
+        public uint SeedSelected;
+        public uint SoilSelected;
+    }
 }

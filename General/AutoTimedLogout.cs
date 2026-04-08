@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Diagnostics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -11,25 +12,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoTimedLogout : ModuleBase
 {
-    public enum OperationMode
-    {
-        Logout,
-        ShutdownGame,
-        ShutdownPC
-    }
-
-    private static readonly Dictionary<OperationMode, string> ModeLoc = new()
-    {
-        [OperationMode.Logout]       = Lang.Get("AutoTimedLogout-Mode-Logout"),
-        [OperationMode.ShutdownGame] = Lang.Get("AutoTimedLogout-Mode-ShutdownGame"),
-        [OperationMode.ShutdownPC]   = Lang.Get("AutoTimedLogout-Mode-ShutdownPC")
-    };
-
-    private static int                      CustomMinutes = 30;
-    private static long?                    ScheduledTime;
-    private static OperationMode            CurrentOperation = OperationMode.Logout;
-    private static CancellationTokenSource? CancelSource;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoTimedLogoutTitle"),
@@ -39,18 +21,20 @@ public class AutoTimedLogout : ModuleBase
         Author              = ["Wotou"]
     };
 
-    protected override void Init() =>
-        Abort();
+    private int                      customMinutes = 30;
+    private long?                    scheduledTime;
+    private OperationMode            currentOperation = OperationMode.Logout;
+    private CancellationTokenSource? cancelSource;
 
     protected override void Uninit() =>
         Abort();
 
     protected override void ConfigUI()
     {
-        if (ScheduledTime.HasValue)
+        if (scheduledTime.HasValue)
         {
             var currentTime = Framework.GetServerTime();
-            var remaining   = ScheduledTime.Value - currentTime;
+            var remaining   = scheduledTime.Value - currentTime;
 
             if (remaining > 0)
             {
@@ -58,7 +42,7 @@ public class AutoTimedLogout : ModuleBase
                 var minutes = remaining % 3600 / 60;
                 var seconds = remaining        % 60;
 
-                var operationText = ModeLoc.GetValueOrDefault(CurrentOperation, string.Empty);
+                var operationText = ModeLoc.GetValueOrDefault(currentOperation, string.Empty);
                 ImGui.TextColored(KnownColor.GreenYellow.ToVector4(), $"{operationText}:");
 
                 ImGui.SameLine();
@@ -83,8 +67,8 @@ public class AutoTimedLogout : ModuleBase
                     ImGui.SameLine();
                 isFirst = false;
 
-                if (ImGui.RadioButton(loc, CurrentOperation == operationMode))
-                    CurrentOperation = operationMode;
+                if (ImGui.RadioButton(loc, currentOperation == operationMode))
+                    currentOperation = operationMode;
             }
         }
 
@@ -93,63 +77,63 @@ public class AutoTimedLogout : ModuleBase
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(150f * GlobalUIScale);
-            if (ImGui.InputInt($"{Lang.Get("Minute")}##MinuteInput", ref CustomMinutes, 1, 10))
-                CustomMinutes = Math.Clamp(CustomMinutes, 1, 14400);
+            if (ImGui.InputInt($"{Lang.Get("Minute")}##MinuteInput", ref customMinutes, 1, 10))
+                customMinutes = Math.Clamp(customMinutes, 1, 14400);
 
             if (ImGui.Button($"30 {Lang.Get("Minute")}"))
-                CustomMinutes = 30;
+                customMinutes = 30;
 
             ImGui.SameLine();
             if (ImGui.Button($"1 {Lang.Get("Hour")}"))
-                CustomMinutes = 60;
+                customMinutes = 60;
 
             ImGui.SameLine();
             if (ImGui.Button($"2 {Lang.Get("Hour")}"))
-                CustomMinutes = 120;
+                customMinutes = 120;
 
             ImGui.SameLine();
             if (ImGui.Button($"3 {Lang.Get("Hour")}"))
-                CustomMinutes = 180;
+                customMinutes = 180;
 
             ImGui.SameLine();
             if (ImGui.Button($"6 {Lang.Get("Hour")}"))
-                CustomMinutes = 360;
+                customMinutes = 360;
 
             ImGui.SameLine();
             if (ImGui.Button($"12 {Lang.Get("Hour")}"))
-                CustomMinutes = 720;
+                customMinutes = 720;
 
             ImGui.SameLine();
             if (ImGui.Button($"24 {Lang.Get("Hour")}"))
-                CustomMinutes = 1440;
+                customMinutes = 1440;
         }
 
         ImGui.Spacing();
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Check, Lang.Get("Confirm")))
-            StartWithMinutes(CustomMinutes, CurrentOperation);
+            StartWithMinutes(customMinutes, currentOperation);
     }
 
-    private static void StartWithMinutes(int minutes, OperationMode operation)
+    private void StartWithMinutes(int minutes, OperationMode operation)
     {
         Abort();
-        CurrentOperation = operation;
-        ScheduledTime    = Framework.GetServerTime() + minutes * 60;
+        currentOperation = operation;
+        scheduledTime    = Framework.GetServerTime() + minutes * 60;
 
-        CancelSource = new();
-        _            = WaitForTimer(minutes * 60 * 1000, CancelSource.Token);
+        cancelSource = new();
+        _            = WaitForTimer(minutes * 60 * 1000, cancelSource.Token);
     }
 
-    private static async Task WaitForTimer(int delayMs, CancellationToken token)
+    private async Task WaitForTimer(int delayMs, CancellationToken token)
     {
         try
         {
             await Task.Delay(delayMs, token);
             if (token.IsCancellationRequested) return;
 
-            ScheduledTime = null;
+            scheduledTime = null;
 
-            switch (CurrentOperation)
+            switch (currentOperation)
             {
                 case OperationMode.ShutdownPC:
                     ExecuteShutdownPC();
@@ -191,17 +175,35 @@ public class AutoTimedLogout : ModuleBase
         }
     }
 
-    private static void Abort()
+    private void Abort()
     {
-        ScheduledTime = null;
+        scheduledTime = null;
 
-        if (CancelSource != null)
+        if (cancelSource != null)
         {
-            if (!CancelSource.IsCancellationRequested)
-                CancelSource.Cancel();
+            if (!cancelSource.IsCancellationRequested)
+                cancelSource.Cancel();
 
-            CancelSource.Dispose();
-            CancelSource = null;
+            cancelSource.Dispose();
+            cancelSource = null;
         }
     }
+    
+    private enum OperationMode
+    {
+        Logout,
+        ShutdownGame,
+        ShutdownPC
+    }
+
+    #region 常量
+
+    private static readonly FrozenDictionary<OperationMode, string> ModeLoc = new Dictionary<OperationMode, string>()
+    {
+        [OperationMode.Logout]       = Lang.Get("AutoTimedLogout-Mode-Logout"),
+        [OperationMode.ShutdownGame] = Lang.Get("AutoTimedLogout-Mode-ShutdownGame"),
+        [OperationMode.ShutdownPC]   = Lang.Get("AutoTimedLogout-Mode-ShutdownPC")
+    }.ToFrozenDictionary();
+
+    #endregion
 }

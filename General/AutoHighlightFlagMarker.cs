@@ -17,12 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoHighlightFlagMarker : ModuleBase
 {
-    private static Hook<SetFlagMarkerDelegate>? SetFlagMarkerHook;
-
-    private static Hook<AgentReceiveEventDelegate>? AgentMapReceiveEventHook;
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("AutoHighlightFlagMarkerTitle"),
@@ -30,11 +24,18 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         Category        = ModuleCategory.General,
         ModulesConflict = ["MultiTargetTracker"]
     };
+    
+    private delegate void                         SetFlagMarkerDelegate(AgentMap* agent, uint zoneID, uint mapID, float worldX, float worldZ, uint iconID = 60561);
+    private          Hook<SetFlagMarkerDelegate>? SetFlagMarkerHook;
+
+    private Hook<AgentReceiveEventDelegate>? AgentMapReceiveEventHook;
+
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
-        TaskHelper   ??= new() { TimeoutMS = 15_000 };
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 15_000 };
 
         SetFlagMarkerHook ??= DService.Instance().Hook.HookFromAddress<SetFlagMarkerDelegate>
         (
@@ -53,17 +54,17 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         FrameworkManager.Instance().Reg(OnUpdate, 3000);
     }
-
-    protected override void ConfigUI()
-    {
-        if (ImGui.Checkbox(Lang.Get("AutoHighlightFlagMarker-ConstantlyUpdate"), ref ModuleConfig.ConstantlyUpdate))
-            ModuleConfig.Save(this);
-    }
-
+    
     protected override void Uninit()
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+    }
+
+    protected override void ConfigUI()
+    {
+        if (ImGui.Checkbox(Lang.Get("AutoHighlightFlagMarker-ConstantlyUpdate"), ref config.ConstantlyUpdate))
+            config.Save(this);
     }
 
     private void SetFlagMarkerDetour(AgentMap* agent, uint zoneID, uint mapID, float worldX, float worldZ, uint iconID = 60561)
@@ -132,7 +133,7 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
 
     private void OnUpdate(IFramework _)
     {
-        if (!ModuleConfig.ConstantlyUpdate) return;
+        if (!config.ConstantlyUpdate) return;
 
         if (!IsFlagMarkerValid())
         {
@@ -173,8 +174,6 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
 
         return true;
     }
-
-    private delegate void SetFlagMarkerDelegate(AgentMap* agent, uint zoneID, uint mapID, float worldX, float worldZ, uint iconID = 60561);
 
     private class Config : ModuleConfig
     {

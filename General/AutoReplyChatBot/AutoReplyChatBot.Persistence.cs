@@ -8,7 +8,7 @@ public partial class AutoReplyChatBot
     private static int                      PendingSaveConfig;
     private static CancellationTokenSource? SaveConfigTokenSource;
 
-    private static void RequestSaveConfig(int delayMs = 800)
+    private void RequestSaveConfig(int delayMs = 800)
     {
         if (delayMs < 0) delayMs = 0;
 
@@ -31,7 +31,7 @@ public partial class AutoReplyChatBot
         _ = SaveConfigAfterDelayAsync(delayMs, tokenSource.Token);
     }
 
-    private static async Task SaveConfigAfterDelayAsync(int delayMs, CancellationToken ct)
+    private async Task SaveConfigAfterDelayAsync(int delayMs, CancellationToken ct)
     {
         try
         {
@@ -49,14 +49,14 @@ public partial class AutoReplyChatBot
         FlushSaveConfig();
     }
 
-    private static void FlushSaveConfig()
+    private void FlushSaveConfig()
     {
         if (Interlocked.Exchange(ref PendingSaveConfig, 0) == 0)
             return;
 
         try
         {
-            ModuleConfig.Save(ModuleManager.Instance().GetModule<AutoReplyChatBot>());
+            config.Save(ModuleManager.Instance().GetModule<AutoReplyChatBot>());
         }
         catch
         {

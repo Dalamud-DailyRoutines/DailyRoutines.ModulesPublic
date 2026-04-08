@@ -15,16 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoUseMountAction : ModuleBase
 {
-    private static Config                 ModuleConfig = null!;
-    private static LuminaSearcher<Mount>? MountSearcher;
-
-    private static string MountSearchInput = string.Empty;
-
-    private static uint SelectedActionID;
-    private static uint SelectedMountID;
-
-    private static readonly FrozenSet<ConditionFlag> InvalidConditions = [ConditionFlag.InFlight, ConditionFlag.Diving];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoUseMountActionTitle"),
@@ -33,21 +23,17 @@ public unsafe class AutoUseMountAction : ModuleBase
         Author      = ["逆光", "Bill"]
     };
 
+    private Config config = null!;
+
+    private string mountSearchInput = string.Empty;
+
+    private uint selectedActionID;
+    private uint selectedMountID;
+
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new();
-
-        MountSearcher ??= new
-        (
-            LuminaGetter.Get<Mount>()
-                        .Where(x => x.MountAction.RowId > 0)
-                        .Where(x => x.Icon              > 0)
-                        .Where(x => !string.IsNullOrEmpty(x.Singular.ToString()))
-                        .GroupBy(x => x.Singular.ToString())
-                        .Select(x => x.First()),
-            [x => x.Singular.ToString()]
-        );
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
         UseActionManager.Instance().RegPostUseActionLocation(OnPostUseAction);
@@ -89,7 +75,7 @@ public unsafe class AutoUseMountAction : ModuleBase
                 using (var combo = ImRaii.Combo
                        (
                            $"{LuminaWrapper.GetAddonText(4964)}##MountSelectCombo",
-                           SelectedMountID > 0 && LuminaGetter.TryGetRow(SelectedMountID, out Mount selectedMount)
+                           selectedMountID > 0 && LuminaGetter.TryGetRow(selectedMountID, out Mount selectedMount)
                                ? $"{selectedMount.Singular.ToString()}"
                                : string.Empty,
                            ImGuiComboFlags.HeightLarge
@@ -98,8 +84,8 @@ public unsafe class AutoUseMountAction : ModuleBase
                     if (combo)
                     {
                         ImGui.SetNextItemWidth(-1f);
-                        if (ImGui.InputTextWithHint("###MountSearchInput", Lang.Get("PleaseSearch"), ref MountSearchInput, 128))
-                            MountSearcher?.Search(MountSearchInput);
+                        if (ImGui.InputTextWithHint("###MountSearchInput", Lang.Get("PleaseSearch"), ref mountSearchInput, 128))
+                            MountSearcher?.Search(mountSearchInput);
 
                         if (MountSearcher != null)
                         {
@@ -112,23 +98,23 @@ public unsafe class AutoUseMountAction : ModuleBase
                                         textureWrap.Handle,
                                         new(ImGui.GetTextLineHeightWithSpacing()),
                                         $"{mount.Singular.ToString()}",
-                                        mount.RowId == SelectedMountID
+                                        mount.RowId == selectedMountID
                                     ))
-                                    SelectedMountID = mount.RowId;
+                                    selectedMountID = mount.RowId;
                             }
                         }
                     }
                 }
 
-                if (SelectedMountID > 0                                              &&
-                    LuminaGetter.TryGetRow(SelectedMountID, out Mount mountSelected) &&
+                if (selectedMountID > 0                                              &&
+                    LuminaGetter.TryGetRow(selectedMountID, out Mount mountSelected) &&
                     mountSelected.MountAction.ValueNullable is { Action: { Count: > 0 } actions })
                 {
                     ImGui.SetNextItemWidth(250f * GlobalUIScale);
                     using var combo = ImRaii.Combo
                     (
                         $"{Lang.Get("Action")}###ActionSelectCombo",
-                        LuminaWrapper.GetActionName(SelectedActionID),
+                        LuminaWrapper.GetActionName(selectedActionID),
                         ImGuiComboFlags.None
                     );
 
@@ -144,22 +130,22 @@ public unsafe class AutoUseMountAction : ModuleBase
                                     textureWrap.Handle,
                                     new(ImGui.GetTextLineHeightWithSpacing()),
                                     $"{action.Value.Name}",
-                                    action.RowId == SelectedActionID
+                                    action.RowId == selectedActionID
                                 ))
-                                SelectedActionID = action.RowId;
+                                selectedActionID = action.RowId;
                         }
                     }
                 }
 
                 ImGui.Spacing();
 
-                using (ImRaii.Disabled(SelectedMountID == 0 || SelectedActionID == 0))
+                using (ImRaii.Disabled(selectedMountID == 0 || selectedActionID == 0))
                 {
                     if (ImGui.Button(Lang.Get("Add")))
                     {
-                        var newAction = new MountAction(SelectedMountID, SelectedActionID);
-                        if (ModuleConfig.MountActions.TryAdd(newAction.MountID, newAction))
-                            ModuleConfig.Save(this);
+                        var newAction = new MountAction(selectedMountID, selectedActionID);
+                        if (config.MountActions.TryAdd(newAction.MountID, newAction))
+                            config.Save(this);
 
                         ImGui.CloseCurrentPopup();
                     }
@@ -168,7 +154,7 @@ public unsafe class AutoUseMountAction : ModuleBase
         }
 
         // 显示已配置的动作列表
-        foreach (var kv in ModuleConfig.MountActions)
+        foreach (var kv in config.MountActions)
         {
             var action = kv.Value;
             ImGui.TableNextRow();
@@ -188,8 +174,8 @@ public unsafe class AutoUseMountAction : ModuleBase
 
             if (ImGuiOm.ButtonIcon($"{action.MountID}_Delete", FontAwesomeIcon.TrashAlt))
             {
-                ModuleConfig.MountActions.Remove(action.MountID);
-                ModuleConfig.Save(this);
+                config.MountActions.Remove(action.MountID);
+                config.Save(this);
             }
         }
     }
@@ -203,7 +189,7 @@ public unsafe class AutoUseMountAction : ModuleBase
             else
             {
                 if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer ||
-                    !ModuleConfig.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
+                    !config.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
                 TaskHelper.Enqueue(UseAction);
             }
         }
@@ -213,7 +199,7 @@ public unsafe class AutoUseMountAction : ModuleBase
             if (value)
             {
                 if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer ||
-                    !ModuleConfig.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
+                    !config.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
                 TaskHelper.Enqueue(UseAction);
             }
             else
@@ -227,17 +213,17 @@ public unsafe class AutoUseMountAction : ModuleBase
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
         var mountID = localPlayer.CurrentMount?.RowId ?? 0;
-        if (!ModuleConfig.MountActions.TryGetValue(mountID, out var action) || action.ActionID != actionID) return;
+        if (!config.MountActions.TryGetValue(mountID, out var action) || action.ActionID != actionID) return;
 
         TaskHelper.Enqueue(UseAction);
     }
 
-    private static bool UseAction()
+    private bool UseAction()
     {
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return true;
 
         var mountID = localPlayer.CurrentMount?.RowId ?? 0;
-        if (!ModuleConfig.MountActions.TryGetValue(mountID, out var action)) return true;
+        if (!config.MountActions.TryGetValue(mountID, out var action)) return true;
 
         if (ActionManager.Instance()->GetActionStatus(ActionType.Action, action.ActionID) != 0) return false;
 
@@ -276,4 +262,25 @@ public unsafe class AutoUseMountAction : ModuleBase
         public override int GetHashCode() =>
             (int)MountID;
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<ConditionFlag> InvalidConditions =
+    [
+        ConditionFlag.InFlight,
+        ConditionFlag.Diving
+    ];
+
+    private static readonly LuminaSearcher<Mount> MountSearcher = new
+    (
+        LuminaGetter.Get<Mount>()
+                    .Where(x => x.MountAction.RowId > 0)
+                    .Where(x => x.Icon              > 0)
+                    .Where(x => !string.IsNullOrEmpty(x.Singular.ToString()))
+                    .GroupBy(x => x.Singular.ToString())
+                    .Select(x => x.First()),
+        [x => x.Singular.ToString()]
+    );
+
+    #endregion
 }

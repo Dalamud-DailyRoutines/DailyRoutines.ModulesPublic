@@ -31,37 +31,36 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         Author      = ["Due"]
     };
 
-    private unsafe delegate nint AgentLobbyOnLoginDelegate(AgentLobby* agent);
-
     private static readonly CompSig                          AgentLobbyOnLoginSig = new("E8 ?? ?? ?? ?? 41 C6 45 ?? ?? E9 ?? ?? ?? ?? 83 FB 03");
-    private static          Hook<AgentLobbyOnLoginDelegate>? AgentLobbyOnLoginHook;
+    private unsafe delegate nint                             AgentLobbyOnLoginDelegate(AgentLobby* agent);
+    private                 Hook<AgentLobbyOnLoginDelegate>? AgentLobbyOnLoginHook;
 
-    private static Config           ModuleConfig = null!;
-    private static IDtrBarEntry?    Entry;
-    private static PlaytimeTracker? Tracker;
-    private static DatePicker?      StartDatePicker;
-    private static DatePicker?      EndDatePicker;
-    private static DateTime         QueryStartDate;
-    private static DateTime         QueryEndDate;
+    private Config           config = null!;
+    private IDtrBarEntry?    entry;
+    private PlaytimeTracker? tracker;
+    
+    private DatePicker? startDatePicker;
+    private DatePicker? endDatePicker;
+    private DateTime    queryStartDate;
+    private DateTime    queryEndDate;
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
 
     protected override unsafe void Init()
     {
-        CurrentModule =   this;
-        ModuleConfig  =   Config.Load(this) ?? new();
-        TaskHelper    ??= new();
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new();
 
         EnsureQueryState();
 
         var legacyPath = Path.Join(ConfigDirectoryPath, "PlatimeData.log");
         var storePath  = Path.Join(ConfigDirectoryPath, "PlaytimeData.v2.json");
 
-        Tracker = new PlaytimeTracker(storePath, legacyPath);
-        Tracker.Start();
+        tracker = new PlaytimeTracker(storePath, legacyPath);
+        tracker.Start();
 
-        Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-GameTimeLeft");
-        Entry.OnClick =   OnDTREntryClick;
+        entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-GameTimeLeft");
+        entry.OnClick =   OnDTREntryClick;
 
         UpdateEntryAndTimeInfo();
 
@@ -100,16 +99,16 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
 
         AgentLobbyOnLoginHook?.Disable();
 
-        Entry?.Remove();
-        Entry = null;
+        entry?.Remove();
+        entry = null;
 
-        Tracker?.Dispose();
-        Tracker = null;
+        tracker?.Dispose();
+        tracker = null;
     }
 
     private void OnLogin()
     {
-        Tracker?.OnLogin();
+        tracker?.OnLogin();
         TaskHelper.Enqueue
         (() =>
             {
@@ -124,14 +123,14 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
 
     private void OnLogout(int code, int type)
     {
-        Tracker?.OnLogout();
+        tracker?.OnLogout();
         TaskHelper?.Abort();
     }
 
-    private static void OnUpdate(IFramework _) => 
+    private void OnUpdate(IFramework _) => 
         UpdateEntryAndTimeInfo();
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs _)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs _)
     {
         if (CharaSelect == null) return;
 
@@ -191,19 +190,19 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         );
     }
 
-    private static bool TryUpdateSubscriptionInfo(ulong contentID, in LobbySubscriptionInfo info, out TimeSpan leftMonth, out TimeSpan leftTime)
+    private bool TryUpdateSubscriptionInfo(ulong contentID, in LobbySubscriptionInfo info, out TimeSpan leftMonth, out TimeSpan leftTime)
     {
         var timeInfo = GetLeftTimeSecond(info);
         leftMonth = NormalizeSubscriptionTime(timeInfo.MonthTime);
         leftTime  = NormalizeSubscriptionTime(timeInfo.PointTime);
 
-        if (ModuleConfig.Infos.TryGetValue(contentID, out var current) &&
+        if (config.Infos.TryGetValue(contentID, out var current) &&
             current.LeftMonth == leftMonth                             &&
             current.LeftTime  == leftTime                              &&
             current.Record    != DateTime.MinValue) return false;
 
-        ModuleConfig.Infos[contentID] = new(StandardTimeManager.Instance().Now, leftMonth, leftTime);
-        ModuleConfig.Save(CurrentModule);
+        config.Infos[contentID] = new(StandardTimeManager.Instance().Now, leftMonth, leftTime);
+        config.Save(this);
         return true;
     }
 
@@ -216,32 +215,32 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
     private static int ReadLittleEndian24(ReadOnlySpan<byte> bytes, int offset) =>
         bytes[offset] | bytes[offset + 1] << 8 | bytes[offset + 2] << 16;
 
-    private static void UpdateEntryAndTimeInfo(ulong contentID = 0)
+    private void UpdateEntryAndTimeInfo(ulong contentID = 0)
     {
-        if (Entry == null || Tracker == null || !GameState.IsLoggedIn) return;
+        if (entry == null || tracker == null || !GameState.IsLoggedIn) return;
 
         if (contentID == 0)
             contentID = LocalPlayerState.ContentID;
 
         if (contentID == 0                                           ||
             DService.Instance().Condition[ConditionFlag.InCombat]    ||
-            !ModuleConfig.Infos.TryGetValue(contentID, out var info) ||
+            !config.Infos.TryGetValue(contentID, out var info) ||
             info.Record == DateTime.MinValue                         ||
             info.LeftMonth == TimeSpan.MinValue && info.LeftTime == TimeSpan.MinValue)
         {
-            Entry.Shown = false;
+            entry.Shown = false;
             return;
         }
 
         var isMonth    = info.LeftMonth != TimeSpan.MinValue;
         var expireTime = info.Record + (isMonth ? info.LeftMonth : info.LeftTime);
         var now        = StandardTimeManager.Instance().Now;
-        var stats      = Tracker.Snapshot;
+        var stats      = tracker.Snapshot;
 
         var textBuilder = new SeStringBuilder();
         textBuilder.AddUiForeground($"[{(isMonth ? "月卡" : "点卡")}] ", 25)
                    .AddText($"{expireTime:MM/dd HH:mm}");
-        Entry.Text = textBuilder.Build();
+        entry.Text = textBuilder.Build();
 
         var tooltipBuilder = new SeStringBuilder();
         tooltipBuilder.AddUiForeground("[过期时间]", 28)
@@ -273,8 +272,8 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
                       .AddText("(右键: ")
                       .AddUiForeground("时长充值页面", 34)
                       .AddText(")");
-        Entry.Tooltip = tooltipBuilder.Build();
-        Entry.Shown   = true;
+        entry.Tooltip = tooltipBuilder.Build();
+        entry.Shown   = true;
     }
 
     private static void OnDTREntryClick(DtrInteractionEvent eventData)

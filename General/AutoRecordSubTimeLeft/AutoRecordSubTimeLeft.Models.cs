@@ -7,28 +7,26 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoRecordSubTimeLeft
 {
-    private static AutoRecordSubTimeLeft CurrentModule { get; set; } = null!;
-
-    private static void EnsureQueryState()
+    private void EnsureQueryState()
     {
-        StartDatePicker ??= new(CultureInfo.GetCultureInfo("zh-CN")) { DateFormat = "yyyy 年 MM 月" };
-        EndDatePicker   ??= new(CultureInfo.GetCultureInfo("zh-CN")) { DateFormat = "yyyy 年 MM 月" };
+        startDatePicker ??= new(CultureInfo.GetCultureInfo("zh-CN")) { DateFormat = "yyyy 年 MM 月" };
+        endDatePicker   ??= new(CultureInfo.GetCultureInfo("zh-CN")) { DateFormat = "yyyy 年 MM 月" };
 
-        if (QueryEndDate != default) return;
+        if (queryEndDate != default) return;
 
         var today = StandardTimeManager.Instance().Now.Date;
-        QueryStartDate = today.AddDays(-6);
-        QueryEndDate   = today;
+        queryStartDate = today.AddDays(-6);
+        queryEndDate   = today;
     }
 
-    private static void DrawSubscriptionInfo(ulong contentID)
+    private void DrawSubscriptionInfo(ulong contentID)
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "角色信息");
 
         using var indent = ImRaii.PushIndent();
 
         if (contentID == 0                                           ||
-            !ModuleConfig.Infos.TryGetValue(contentID, out var info) ||
+            !config.Infos.TryGetValue(contentID, out var info) ||
             info.Record == DateTime.MinValue                         ||
             info.LeftMonth == TimeSpan.MinValue && info.LeftTime == TimeSpan.MinValue)
         {
@@ -44,13 +42,13 @@ public partial class AutoRecordSubTimeLeft
         DrawKeyValueRow("点卡剩余时间", FormatTimeSpan(info.LeftTime  == TimeSpan.MinValue ? TimeSpan.Zero : info.LeftTime));
     }
 
-    private static void DrawPlaytimeStatistics()
+    private void DrawPlaytimeStatistics()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "游玩时间信息统计");
 
         using var indent = ImRaii.PushIndent();
         
-        if (Tracker == null)
+        if (tracker == null)
         {
             ImGui.TextColored(KnownColor.Orange.ToVector4(), "游玩时长跟踪器尚未初始化");
             return;
@@ -58,14 +56,14 @@ public partial class AutoRecordSubTimeLeft
 
         DrawRangePresetButtons();
         
-        DrawDatePickerButton("开始日期", "AutoRecordSubTimeLeft-StartDate", ref QueryStartDate, StartDatePicker);
+        DrawDatePickerButton("开始日期", "AutoRecordSubTimeLeft-StartDate", ref queryStartDate, startDatePicker);
         
         ImGui.SameLine();
-        DrawDatePickerButton("结束日期", "AutoRecordSubTimeLeft-EndDate", ref QueryEndDate, EndDatePicker);
+        DrawDatePickerButton("结束日期", "AutoRecordSubTimeLeft-EndDate", ref queryEndDate, endDatePicker);
 
         NormalizeQueryRange();
 
-        var stats = Tracker.QueryRange(QueryStartDate, QueryEndDate);
+        var stats = tracker.QueryRange(queryStartDate, queryEndDate);
 
         ImGui.Spacing();
 
@@ -73,7 +71,7 @@ public partial class AutoRecordSubTimeLeft
         {
             if (summaryTable)
             {
-                DrawKeyValueRow("查询区间",  $"{QueryStartDate:yyyy/MM/dd} - {QueryEndDate:yyyy/MM/dd}");
+                DrawKeyValueRow("查询区间",  $"{queryStartDate:yyyy/MM/dd} - {queryEndDate:yyyy/MM/dd}");
                 DrawKeyValueRow("区间总时长", FormatTimeSpan(stats.Total));
                 DrawKeyValueRow("活跃天数",  $"{stats.ActiveDays} 天");
                 DrawKeyValueRow("日均游玩",  FormatTimeSpan(stats.AveragePerActiveDay));
@@ -117,7 +115,7 @@ public partial class AutoRecordSubTimeLeft
         }
     }
 
-    private static void DrawRangePresetButtons()
+    private void DrawRangePresetButtons()
     {
         if (ImGui.Button("今天"))
             ApplyPresetRange(1);
@@ -133,11 +131,11 @@ public partial class AutoRecordSubTimeLeft
         ImGui.Spacing();
     }
 
-    private static void ApplyPresetRange(int days)
+    private void ApplyPresetRange(int days)
     {
         var today = StandardTimeManager.Instance().Now.Date;
-        QueryEndDate   = today;
-        QueryStartDate = today.AddDays(1 - days);
+        queryEndDate   = today;
+        queryStartDate = today.AddDays(1 - days);
     }
 
     private static void DrawDatePickerButton(string label, string popupID, ref DateTime value, DatePicker picker)
@@ -161,14 +159,14 @@ public partial class AutoRecordSubTimeLeft
 
     }
 
-    private static void NormalizeQueryRange()
+    private void NormalizeQueryRange()
     {
-        QueryStartDate = QueryStartDate.Date;
-        QueryEndDate   = QueryEndDate.Date;
+        queryStartDate = queryStartDate.Date;
+        queryEndDate   = queryEndDate.Date;
 
-        if (QueryStartDate <= QueryEndDate) return;
+        if (queryStartDate <= queryEndDate) return;
 
-        (QueryStartDate, QueryEndDate) = (QueryEndDate, QueryStartDate);
+        (queryStartDate, queryEndDate) = (queryEndDate, queryStartDate);
     }
 
     private static void DrawKeyValueRow(string key, string value)

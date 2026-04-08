@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
@@ -19,23 +20,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoSplitStacks : ModuleBase
 {
-    private const           string  Command      = "/pdrsplit";
-    private static readonly Vector2 CheckboxSize = ScaledVector2(20f);
-
-    private static Config ModuleConfig = null!;
-
-    private static LuminaSearcher<Item>? ItemSearcher;
-
-    private static Item?  SelectedItem;
-    private static string ItemSearchInput  = string.Empty;
-    private static int    SplitAmountInput = 1;
-
-    private static readonly FastSplitItemStack FastSplitItemStackMenu = new();
-
-    private static uint FastSplitItemID;
-
-    private static bool IsNeedToOpen;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoSplitStacksTitle"),
@@ -43,13 +27,18 @@ public unsafe class AutoSplitStacks : ModuleBase
         Category    = ModuleCategory.General
     };
 
-    protected override void Init()
-    {
-        TaskHelper   = new();
-        ModuleConfig = Config.Load(this) ?? new();
+    #region 常量
 
-        ItemSearcher ??= new
+    private const string COMMAND = "/pdrsplit";
+
+    #endregion
+
+    private Config config = null!;
+
+    private readonly ItemSelectCombo itemSelectCombo =
+        new
         (
+            "Item",
             LuminaGetter.Get<Item>()
                         .Where
                         (x => x.FilterGroup != 16 &&
@@ -57,21 +46,45 @@ public unsafe class AutoSplitStacks : ModuleBase
                               !string.IsNullOrEmpty(x.Name.ToString())
                         )
                         .GroupBy(x => x.Name.ToString())
-                        .Select(x => x.First()),
-            [x => x.Name.ToString(), x => x.RowId.ToString()]
+                        .Select(x => x.First())
         );
+    private readonly FastSplitItemStack fastSplitItemStackMenu;
+    
+    private string itemSearchInput  = string.Empty;
+    private int    splitAmountInput = 1;
+    private uint   fastSplitItemID;
+    private bool   isNeedToOpen;
 
-        CommandManager.Instance().AddCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("AutoSplitStacks-CommandHelp") });
+    public AutoSplitStacks() =>
+        fastSplitItemStackMenu = new(this);
+
+    protected override void Init()
+    {
+        TaskHelper   = new();
+        config = Config.Load(this) ?? new();
+
+        CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoSplitStacks-CommandHelp") });
         DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpened;
 
         WindowManager.Instance().PostDraw += OnDraw;
+    }
+    
+    protected override void Uninit()
+    {
+        WindowManager.Instance().PostDraw -= OnDraw;
+
+        CommandManager.Instance().RemoveCommand(COMMAND);
+        DService.Instance().ContextMenu.OnMenuOpened -= OnMenuOpened;
+
+        fastSplitItemID = 0;
+        isNeedToOpen    = false;
     }
 
     private void OnDraw()
     {
         var popupName = $"{Lang.Get("AutoSplitStacks-FastSplit")}###FastSplitPopup";
 
-        if (IsNeedToOpen && !ImGui.IsPopupOpen(popupName))
+        if (isNeedToOpen && !ImGui.IsPopupOpen(popupName))
             ImGui.OpenPopup(popupName);
 
         var isOpen = true;
@@ -81,17 +94,17 @@ public unsafe class AutoSplitStacks : ModuleBase
             ImGui.TextUnformatted($"{Lang.Get("AutoSplitStacks-PleaseInputSplitAmount")}:");
 
             ImGui.SetNextItemWidth(150f * GlobalUIScale);
-            if (ImGui.InputInt("###FastSplitAmountInput", ref SplitAmountInput))
-                SplitAmountInput = Math.Clamp(SplitAmountInput, 1, 998);
+            if (ImGui.InputInt("###FastSplitAmountInput", ref splitAmountInput))
+                splitAmountInput = Math.Clamp(splitAmountInput, 1, 998);
 
             ImGui.SameLine();
 
             if (ImGui.Button(Lang.Get("Confirm")))
             {
-                EnqueueSplit(FastSplitItemID, SplitAmountInput);
+                EnqueueSplit(fastSplitItemID, splitAmountInput);
 
                 ImGui.CloseCurrentPopup();
-                IsNeedToOpen = false;
+                isNeedToOpen = false;
             }
 
             ImGui.SameLine();
@@ -99,7 +112,7 @@ public unsafe class AutoSplitStacks : ModuleBase
             if (ImGui.Button(Lang.Get("Cancel")))
             {
                 ImGui.CloseCurrentPopup();
-                IsNeedToOpen = false;
+                isNeedToOpen = false;
             }
 
             ImGui.EndPopup();
@@ -111,13 +124,13 @@ public unsafe class AutoSplitStacks : ModuleBase
         ImGui.TextColored(KnownColor.LightBlue.ToVector4(), $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"{Command} → {Lang.Get("AutoSplitStacks-CommandHelp")}");
+        ImGui.TextUnformatted($"{COMMAND} → {Lang.Get("AutoSplitStacks-CommandHelp")}");
 
         ImGui.Spacing();
 
         using var table = ImRaii.Table("SplitItem", 4);
         if (!table) return;
-        ImGui.TableSetupColumn("勾选框", ImGuiTableColumnFlags.WidthFixed, CheckboxSize.X);
+        ImGui.TableSetupColumn("勾选框", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeightWithSpacing());
         ImGui.TableSetupColumn("名称",  ImGuiTableColumnFlags.None,       30);
         ImGui.TableSetupColumn("数量",  ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("四个汉字").X);
         ImGui.TableSetupColumn("操作",  ImGuiTableColumnFlags.None,       10);
@@ -138,70 +151,35 @@ public unsafe class AutoSplitStacks : ModuleBase
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(250f * GlobalUIScale);
-
-                    using (var combo = ImRaii.Combo
-                           (
-                               "###ItemSelectCombo",
-                               SelectedItem == null ? "" : SelectedItem.Value.Name.ToString(),
-                               ImGuiComboFlags.HeightLarge
-                           ))
-                    {
-                        if (combo)
-                        {
-                            ImGui.SetNextItemWidth(-1f);
-                            ImGui.InputTextWithHint
-                            (
-                                "###ItemSearchInput",
-                                Lang.Get("PleaseSearch"),
-                                ref ItemSearchInput,
-                                100
-                            );
-                            if (ImGui.IsItemDeactivatedAfterEdit())
-                                ItemSearcher.Search(ItemSearchInput);
-
-                            foreach (var item in ItemSearcher.SearchResult)
-                            {
-                                var icon = ImageHelper.GetGameIcon(item.Icon).Handle;
-                                if (ImGuiOm.SelectableImageWithText
-                                    (
-                                        icon,
-                                        new(ImGui.GetTextLineHeightWithSpacing()),
-                                        item.Name.ToString(),
-                                        item.Equals(SelectedItem)
-                                    ))
-                                    SelectedItem = item;
-                            }
-                        }
-                    }
+                    itemSelectCombo.DrawRadio();
 
                     ImGui.AlignTextToFramePadding();
                     ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Amount")}:");
 
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(250f * GlobalUIScale);
-                    if (ImGui.InputInt("###SplitAmountInput", ref SplitAmountInput))
-                        SplitAmountInput = Math.Clamp(SplitAmountInput, 1, 998);
+                    if (ImGui.InputInt("###SplitAmountInput", ref splitAmountInput))
+                        splitAmountInput = Math.Clamp(splitAmountInput, 1, 998);
                 }
 
                 var itemSize = ImGui.GetItemRectSize();
 
                 ImGui.SameLine();
 
-                using (ImRaii.Disabled(SelectedItem == null))
+                using (ImRaii.Disabled(itemSelectCombo.SelectedID == 0))
                 {
                     if (ImGuiOm.ButtonIconWithTextVertical
                         (
                             FontAwesomeIcon.Plus,
                             Lang.Get("Add"),
-                            buttonSize: new(ImGui.CalcTextSize("三个字").X, itemSize.Y)
+                            buttonSize: new(ImGui.CalcTextSize("四个汉字").X, itemSize.Y)
                         ))
                     {
-                        var newGroup = new SplitGroup(SelectedItem!.Value.RowId, SplitAmountInput);
-
-                        if (!ModuleConfig.SplitGroups.Contains(newGroup))
+                        var newGroup = new SplitGroup(itemSelectCombo.SelectedID, splitAmountInput);
+                        if (!config.SplitGroups.Contains(newGroup))
                         {
-                            ModuleConfig.SplitGroups.Add(newGroup);
-                            ModuleConfig.Save(this);
+                            config.SplitGroups.Add(newGroup);
+                            config.Save(this);
                         }
                     }
                 }
@@ -214,7 +192,7 @@ public unsafe class AutoSplitStacks : ModuleBase
         ImGui.TableNextColumn();
         ImGuiOm.Text(Lang.Get("AutoSplitStacks-SplitAmount"));
 
-        foreach (var group in ModuleConfig.SplitGroups.ToList())
+        foreach (var group in config.SplitGroups.ToList())
         {
             ImGui.TableNextRow();
 
@@ -223,9 +201,9 @@ public unsafe class AutoSplitStacks : ModuleBase
 
             if (ImGui.Checkbox($"###IsEnabled_{group.ItemID}", ref isEnabled))
             {
-                var index = ModuleConfig.SplitGroups.IndexOf(group);
-                ModuleConfig.SplitGroups[index].IsEnabled = isEnabled;
-                ModuleConfig.Save(this);
+                var index = config.SplitGroups.IndexOf(group);
+                config.SplitGroups[index].IsEnabled = isEnabled;
+                config.Save(this);
             }
 
             ImGui.TableNextColumn();
@@ -240,19 +218,19 @@ public unsafe class AutoSplitStacks : ModuleBase
             if (ImGui.BeginPopupContextItem($"{group.ItemID}_AmountEdit"))
             {
                 if (ImGui.IsWindowAppearing())
-                    SplitAmountInput = group.Amount;
+                    splitAmountInput = group.Amount;
 
                 ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Amount")}:");
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(150f * GlobalUIScale);
-                ImGui.InputInt($"###{group.ItemID}AmountEdit", ref SplitAmountInput);
+                ImGui.InputInt($"###{group.ItemID}AmountEdit", ref splitAmountInput);
 
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
-                    var index = ModuleConfig.SplitGroups.IndexOf(group);
-                    ModuleConfig.SplitGroups[index].Amount = SplitAmountInput;
-                    ModuleConfig.Save(this);
+                    var index = config.SplitGroups.IndexOf(group);
+                    config.SplitGroups[index].Amount = splitAmountInput;
+                    config.Save(this);
                 }
 
                 ImGui.EndPopup();
@@ -273,8 +251,8 @@ public unsafe class AutoSplitStacks : ModuleBase
             {
                 if (ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
                 {
-                    ModuleConfig.SplitGroups.Remove(group);
-                    ModuleConfig.Save(this);
+                    config.SplitGroups.Remove(group);
+                    config.Save(this);
                 }
             }
         }
@@ -287,7 +265,7 @@ public unsafe class AutoSplitStacks : ModuleBase
 
         if (int.TryParse(args, out var itemID))
         {
-            var group = ModuleConfig.SplitGroups.FirstOrDefault(x => x.ItemID == itemID);
+            var group = config.SplitGroups.FirstOrDefault(x => x.ItemID == itemID);
             if (group == null) return;
 
             EnqueueSplit(group);
@@ -300,23 +278,23 @@ public unsafe class AutoSplitStacks : ModuleBase
 
         if (!item.Equals(null))
         {
-            var group = ModuleConfig.SplitGroups.FirstOrDefault(x => x.ItemID == item.RowId);
+            var group = config.SplitGroups.FirstOrDefault(x => x.ItemID == item.RowId);
             if (group == null) return;
 
             EnqueueSplit(group);
         }
     }
 
-    private static void OnMenuOpened(IMenuOpenedArgs args)
+    private void OnMenuOpened(IMenuOpenedArgs args)
     {
         if (args.Target is not MenuTargetInventory { TargetItem: not null } iTarget) return;
         if (iTarget.TargetItem.Value.Quantity <= 1) return;
 
-        args.AddMenuItem(FastSplitItemStackMenu.Get());
+        args.AddMenuItem(fastSplitItemStackMenu.Get());
     }
 
-    private void EnqueueSplit(SplitGroup group)
-        => EnqueueSplit(group.ItemID, group.Amount);
+    private void EnqueueSplit(SplitGroup group) => 
+        EnqueueSplit(group.ItemID, group.Amount);
 
     private void EnqueueSplit(uint itemID, int amount)
     {
@@ -424,18 +402,7 @@ public unsafe class AutoSplitStacks : ModuleBase
             weight: 2
         );
     }
-
-    protected override void Uninit()
-    {
-        WindowManager.Instance().PostDraw -= OnDraw;
-
-        CommandManager.Instance().RemoveCommand(Command);
-        DService.Instance().ContextMenu.OnMenuOpened -= OnMenuOpened;
-
-        FastSplitItemID = 0;
-        IsNeedToOpen    = false;
-    }
-
+    
     private class Config : ModuleConfig
     {
         public List<SplitGroup> SplitGroups = [];
@@ -474,7 +441,7 @@ public unsafe class AutoSplitStacks : ModuleBase
         public override int GetHashCode() => (int)ItemID;
     }
 
-    private class FastSplitItemStack : MenuItemBase
+    private class FastSplitItemStack(AutoSplitStacks module) : MenuItemBase
     {
         public override string Name       { get; protected set; } = Lang.Get("AutoSplitStacks-FastSplit");
         public override string Identifier { get; protected set; } = nameof(AutoSplitStacks);
@@ -486,8 +453,8 @@ public unsafe class AutoSplitStacks : ModuleBase
             if (args.Target is not MenuTargetInventory { TargetItem: not null } iTarget) return;
             if (iTarget.TargetItem.Value.Quantity <= 1) return;
 
-            FastSplitItemID = iTarget.TargetItem.Value.ItemId;
-            IsNeedToOpen    = true;
+            module.fastSplitItemID = iTarget.TargetItem.Value.ItemId;
+            module.isNeedToOpen    = true;
         }
     }
 }

@@ -12,25 +12,24 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class SpecialRenderMode : ModuleBase
 {
-    private static readonly ToggleFadeDelegate ToggleFade =
-        new CompSig("E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 8F ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4C 24").GetDelegate<ToggleFadeDelegate>();
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("SpecialRenderModeTitle"),
         Description = Lang.Get("SpecialRenderModeDescription"),
         Category    = ModuleCategory.General
     };
+    
+    private delegate void ToggleFadeDelegate(EnvironmentManager* manager, int a2, float fadeDuration, Vector4* fadeColor);
+    private readonly ToggleFadeDelegate ToggleFade =
+        new CompSig("E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 8F ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4C 24").GetDelegate<ToggleFadeDelegate>();
 
-    protected override void Init() => ModuleConfig = Config.Load(this) ?? new();
+    private Config config = null!;
 
-    protected override void Uninit()
-    {
-        if (ModuleConfig != null)
-            ModuleConfig.Save(this);
-    }
+    protected override void Init() => 
+        config = Config.Load(this) ?? new();
+
+    protected override void Uninit() =>
+        config?.Save(this);
 
     protected override void ConfigUI()
     {
@@ -39,7 +38,7 @@ public unsafe class SpecialRenderMode : ModuleBase
         using (ImRaii.PushId("DisableWorldRenderButAddons"))
         using (ImRaii.PushIndent())
         {
-            var color = ModuleConfig.BackgroundColor;
+            var color = config.BackgroundColor;
 
             if (ImGui.Button(Lang.Get("Enable")))
                 ToggleFade(Framework.Instance()->EnvironmentManager, 1, 0.1f, &color);
@@ -52,7 +51,7 @@ public unsafe class SpecialRenderMode : ModuleBase
             ImGui.TextUnformatted($"{Lang.Get("Color")}:");
 
             ImGui.SameLine();
-            ModuleConfig.BackgroundColor = ImGuiComponents.ColorPickerWithPalette(1, string.Empty, ModuleConfig.BackgroundColor);
+            config.BackgroundColor = ImGuiComponents.ColorPickerWithPalette(1, string.Empty, config.BackgroundColor);
         }
 
         ImGui.NewLine();
@@ -175,9 +174,7 @@ public unsafe class SpecialRenderMode : ModuleBase
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.Nameplates, true);
         }
     }
-
-    private delegate void ToggleFadeDelegate(EnvironmentManager* manager, int a2, float fadeDuration, Vector4* fadeColor);
-
+    
     private class Config : ModuleConfig
     {
         public Vector4 BackgroundColor = KnownColor.LightSkyBlue.ToVector4();

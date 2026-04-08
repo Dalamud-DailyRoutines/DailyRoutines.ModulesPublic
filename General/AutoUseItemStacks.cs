@@ -24,15 +24,16 @@ public unsafe class AutoUseItemStacks : ModuleBase
 
     protected override void Init()
     {
-        TaskHelper                                   ??= new() { TimeoutMS = 5_000 };
+        TaskHelper ??= new() { TimeoutMS = 5_000 };
+        
         DService.Instance().ContextMenu.OnMenuOpened +=  OnContextMenuOpened;
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 
     protected override void ConfigUI() =>
         ImGuiOm.ConflictKeyText();
-
-    protected override void Uninit() =>
-        DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)
     {

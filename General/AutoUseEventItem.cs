@@ -20,29 +20,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoUseEventItem : ModuleBase
 {
-    private static readonly string[] InventoryEventAddons =
-    [
-        "InventoryEventGrid",
-        "InventoryEventGrid0",
-        "InventoryEventGrid0E"
-    ];
-
-    private static readonly Dictionary<uint, HashSet<uint>> QuestRowIDToEventItems =
-        LuminaGetter.Get<EventItem>()
-                    .Where(x => x.Quest.ValueNullable != null && x.Action.ValueNullable != null)
-                    .GroupBy(item => item.Quest.RowId)
-                    .ToDictionary
-                    (
-                        group => group.Key,
-                        group => group.Select(item => item.RowId).ToHashSet()
-                    );
-
-    private static readonly FrozenSet<uint> InvalidLogMessageID =
-    [
-        7732, // 当前状态下无法进行该操作。
-        563   // 无法指定目标。
-    ];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoUseEventItemTitle"),
@@ -182,6 +159,37 @@ public unsafe class AutoUseEventItem : ModuleBase
         return result;
     }
 
+    #region IPC
+
     [IPCProvider("DailyRoutines.Modules.AutoUseEventItem.UseEventItem")]
-    private static void UseEventItem() => OnAddonInventoryEvent();
+    private void UseEventItem() => OnAddonInventoryEvent();
+
+    #endregion
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> InventoryEventAddons =
+    [
+        "InventoryEventGrid",
+        "InventoryEventGrid0",
+        "InventoryEventGrid0E"
+    ];
+
+    private static readonly FrozenDictionary<uint, HashSet<uint>> QuestRowIDToEventItems =
+        LuminaGetter.Get<EventItem>()
+                    .Where(x => x.Quest.ValueNullable != null && x.Action.ValueNullable != null)
+                    .GroupBy(item => item.Quest.RowId)
+                    .ToFrozenDictionary
+                    (
+                        group => group.Key,
+                        group => group.Select(item => item.RowId).ToHashSet()
+                    );
+
+    private static readonly FrozenSet<uint> InvalidLogMessageID =
+    [
+        7732, // 当前状态下无法进行该操作。
+        563   // 无法指定目标。
+    ];
+
+    #endregion
 }

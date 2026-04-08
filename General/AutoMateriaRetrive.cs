@@ -5,6 +5,8 @@ using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Lumina.Excel.Sheets;
+using OmenTools.ImGuiOm.Widgets.Combos;
+using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
@@ -14,105 +16,58 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMateriaRetrive : ModuleBase
 {
-    // TODO: 找一下这个 a6 到底是干什么的
-    private static readonly CompSig                       RetriveMateriaSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 41 8B F8");
-    private static          Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
-
-    private static readonly InventoryType[] Inventories =
-    [
-        InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4,
-        InventoryType.EquippedItems, InventoryType.ArmoryOffHand, InventoryType.ArmoryHead, InventoryType.ArmoryHands,
-        InventoryType.ArmoryWaist, InventoryType.ArmoryLegs, InventoryType.ArmoryFeets, InventoryType.ArmoryEar,
-        InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings, InventoryType.ArmoryMainHand
-    ];
-
-    private static Dictionary<string, Item>? ItemNames;
-    private static Dictionary<string, Item>  ItemNamesAnother = [];
-
-    private static string ItemSearchInput = string.Empty;
-    private static Item?  SelectedItem;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoMateriaRetriveTitle"),
         Description = Lang.Get("AutoMateriaRetriveDescription"),
         Category    = ModuleCategory.General
     };
+    
+    // TODO: 找一下这个 a6 到底是干什么的
+    private static readonly CompSig                       RetriveMateriaSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 41 8B F8");
+    private delegate bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6);
+    private          Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
+
+    private readonly ItemSelectCombo itemSelectCombo = new
+    (
+        "Item",
+        LuminaGetter.Get<Item>()
+                    .Where(x => x.MateriaSlotCount > 0 && !string.IsNullOrEmpty(x.Name.ToString()))
+                    .GroupBy(x => x.Name.ToString())
+                    .Select(x => x.First())
+                    .ToList()
+    );
 
     protected override void Init()
     {
-        ItemNames ??= LuminaGetter.Get<Item>()
-                                  .Where(x => x.MateriaSlotCount > 0 && !string.IsNullOrEmpty(x.Name.ToString()))
-                                  .GroupBy(x => x.Name.ToString())
-                                  .ToDictionary(x => x.Key, x => x.First());
-
-        ItemNamesAnother = ItemNames.Take(10).ToDictionary(x => x.Key, x => x.Value);
-
-        RetriveMateriaHook ??=
-            DService.Instance().Hook.HookFromSignature<RetriveMateriaDelegate>(RetriveMateriaSig.Get(), RetriveMateriaDetour);
-        RetriveMateriaHook.Enable();
         TaskHelper ??= new() { TimeoutMS = 5_000 };
+        
+        RetriveMateriaHook ??= RetriveMateriaSig.GetHook<RetriveMateriaDelegate>(RetriveMateriaDetour);
+        RetriveMateriaHook.Enable();
     }
 
     protected override void ConfigUI()
     {
         ImGuiOm.ConflictKeyText();
 
-        ImGui.Spacing();
+        ImGui.NewLine();
 
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMateriaRetrive-ManuallySelect")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMateriaRetrive-ManuallySelect")}");
 
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(300f * GlobalUIScale);
-
-        if (ImGui.BeginCombo
-            (
-                "###ItemSelectCombo",
-                SelectedItem == null ? string.Empty : SelectedItem.Value.Name.ToString(),
-                ImGuiComboFlags.HeightLargest
-            ))
+        using (ImRaii.PushIndent())
         {
-            ImGui.InputTextWithHint("###GameItemSearchInput", Lang.Get("PleaseSearch"), ref ItemSearchInput, 128);
+            ImGui.SetNextItemWidth(300f * GlobalUIScale);
+            itemSelectCombo.DrawRadio();
 
-            if (ImGui.IsItemDeactivatedAfterEdit())
+            ImGui.SameLine();
+
+            using (ImRaii.Disabled(itemSelectCombo.SelectedID == 0))
             {
-                if (!string.IsNullOrWhiteSpace(ItemSearchInput))
+                if (ImGui.Button(Lang.Get("Start")))
                 {
-                    ItemNamesAnother = ItemNames
-                                       .Where(x => x.Key.Contains(ItemSearchInput, StringComparison.OrdinalIgnoreCase))
-                                       .OrderBy(x => !x.Key.StartsWith(ItemSearchInput))
-                                       .Take(100)
-                                       .ToDictionary(x => x.Key, x => x.Value);
+                    TaskHelper.Abort();
+                    EnqueueRetriveTaskByItemID(itemSelectCombo.SelectedID);
                 }
-            }
-
-            ImGui.Separator();
-
-            foreach (var (itemName, item) in ItemNamesAnother)
-            {
-                if (ImGuiOm.SelectableImageWithText
-                    (
-                        ImageHelper.GetGameIcon(item.Icon).Handle,
-                        ScaledVector2(24f),
-                        itemName,
-                        (SelectedItem?.RowId ?? 0) == item.RowId,
-                        ImGuiSelectableFlags.DontClosePopups
-                    ))
-                    SelectedItem = (SelectedItem?.RowId ?? 0) == item.RowId ? null : item;
-            }
-
-            ImGui.EndCombo();
-        }
-
-        ImGui.SameLine();
-
-        using (ImRaii.Disabled((SelectedItem?.RowId ?? 0) == 0))
-        {
-            if (ImGui.Button(Lang.Get("Start")))
-            {
-                TaskHelper.Abort();
-                EnqueueRetriveTaskByItemID(SelectedItem?.RowId ?? 0);
             }
         }
     }
@@ -132,7 +87,7 @@ public unsafe class AutoMateriaRetrive : ModuleBase
 
                 var instance = InventoryManager.Instance();
 
-                foreach (var inventoryType in Inventories)
+                foreach (var inventoryType in Inventories.PlayerWithArmory)
                 {
                     var container = instance->GetInventoryContainer(inventoryType);
                     if (container == null || !container->IsLoaded) continue;
@@ -189,7 +144,7 @@ public unsafe class AutoMateriaRetrive : ModuleBase
         (
             () =>
             {
-                if (TaskHelper.AbortByConflictKey(this) || OmenTools.Info.Game.Data.Inventories.Player.IsFull())
+                if (TaskHelper.AbortByConflictKey(this) || Inventories.Player.IsFull())
                 {
                     TaskHelper.Abort();
                     return;
@@ -237,7 +192,7 @@ public unsafe class AutoMateriaRetrive : ModuleBase
         );
     }
 
-    private static void Retrive(InventoryType type, short slot)
+    private void Retrive(InventoryType type, short slot)
     {
         var       instance = EventFramework.Instance();
         const int eventID  = 0x390001;
@@ -253,6 +208,4 @@ public unsafe class AutoMateriaRetrive : ModuleBase
 
         return original;
     }
-
-    private delegate bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6);
 }

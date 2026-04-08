@@ -13,16 +13,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoMessageScheduler : ModuleBase
 {
-    public enum TimeMode
-    {
-        LocalTime,
-        EorzeaTime,
-        ServerTime
-    }
-
-    private static Config?       ModuleConfig;
-    private static EditingState? EditingData;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoMessageSchedulerTitle"),
@@ -31,11 +21,14 @@ public class AutoMessageScheduler : ModuleBase
         Author      = ["Wotou"]
     };
 
+    private Config?       config;
+    private EditingState? editingData;
+    
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        foreach (var sched in ModuleConfig.Presets)
+        foreach (var sched in config.Presets)
         {
             sched.IsActive  = false;
             sched.Remaining = sched.Repeat;
@@ -69,7 +62,7 @@ public class AutoMessageScheduler : ModuleBase
 
         if (ImGuiOm.ButtonIconSelectable("AddScheduleButton", FontAwesomeIcon.Plus))
         {
-            EditingData = new EditingState(new());
+            editingData = new EditingState(new());
             ImGui.OpenPopup("EditPresetPopup");
         }
 
@@ -96,11 +89,11 @@ public class AutoMessageScheduler : ModuleBase
 
         var isOpenPopup = false;
 
-        for (var i = 0; i < ModuleConfig.Presets.Count; i++)
+        for (var i = 0; i < config.Presets.Count; i++)
         {
             using var id = ImRaii.PushId(i);
 
-            var sched = ModuleConfig.Presets[i];
+            var sched = config.Presets[i];
 
             ImGui.TableNextRow();
 
@@ -153,7 +146,7 @@ public class AutoMessageScheduler : ModuleBase
 
             if (ImGuiOm.ButtonIcon("Edit", FontAwesomeIcon.Pen, Lang.Get("Edit")))
             {
-                EditingData = new EditingState(sched);
+                editingData = new EditingState(sched);
                 isOpenPopup = true;
             }
 
@@ -161,8 +154,8 @@ public class AutoMessageScheduler : ModuleBase
 
             if (ImGuiOm.ButtonIcon("Delete", FontAwesomeIcon.Trash, $"{Lang.Get("Delete")} (Ctrl)") && ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
             {
-                ModuleConfig.Presets.RemoveAt(i);
-                ModuleConfig.Save(this);
+                config.Presets.RemoveAt(i);
+                config.Save(this);
             }
         }
 
@@ -172,28 +165,28 @@ public class AutoMessageScheduler : ModuleBase
         using var popup = ImRaii.Popup("EditPresetPopup");
         if (!popup) return;
 
-        if (EditingData == null) return;
+        if (editingData == null) return;
 
         ImGui.TextUnformatted($"{Lang.Get("Name")}:");
 
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(200f * GlobalUIScale);
-            ImGui.InputText("##Name", ref EditingData.Name, 64);
+            ImGui.InputText("##Name", ref editingData.Name, 64);
         }
 
         ImGui.TextUnformatted($"{Lang.Get("StartTime")}:");
 
         using (ImRaii.PushIndent())
         {
-            var hourStr = EditingData.StartHour.ToString("D2");
-            var minStr  = EditingData.StartMinute.ToString("D2");
+            var hourStr = editingData.StartHour.ToString("D2");
+            var minStr  = editingData.StartMinute.ToString("D2");
 
             ImGui.SetNextItemWidth(25f * GlobalUIScale);
             if (ImGui.InputText("##StartHour", ref hourStr, 2, ImGuiInputTextFlags.CharsDecimal) &&
                 int.TryParse(hourStr, out var parsedHour)                                        &&
                 parsedHour is >= 0 and <= 23)
-                EditingData.StartHour = parsedHour;
+                editingData.StartHour = parsedHour;
 
             ImGui.SameLine();
             ImGui.AlignTextToFramePadding();
@@ -204,7 +197,7 @@ public class AutoMessageScheduler : ModuleBase
             if (ImGui.InputText("##StartMinute", ref minStr, 2, ImGuiInputTextFlags.CharsDecimal) &&
                 int.TryParse(minStr, out var parsedMin)                                           &&
                 parsedMin is >= 0 and <= 59)
-                EditingData.StartMinute = parsedMin;
+                editingData.StartMinute = parsedMin;
         }
 
         ImGui.TextUnformatted($"{Lang.Get("Interval")} (s):");
@@ -212,8 +205,8 @@ public class AutoMessageScheduler : ModuleBase
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(200f * GlobalUIScale);
-            if (ImGui.InputInt("##Interval", ref EditingData.Interval))
-                EditingData.Interval = Math.Clamp(EditingData.Interval, 1, 864000);
+            if (ImGui.InputInt("##Interval", ref editingData.Interval))
+                editingData.Interval = Math.Clamp(editingData.Interval, 1, 864000);
         }
 
         ImGui.TextUnformatted($"{Lang.Get("AutoMessageScheduler-RepeatTimes")}:");
@@ -221,15 +214,15 @@ public class AutoMessageScheduler : ModuleBase
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(200f * GlobalUIScale);
-            if (ImGui.InputInt("##Repeat", ref EditingData.Repeat))
-                EditingData.Repeat = Math.Clamp(EditingData.Repeat, 1, 14400);
+            if (ImGui.InputInt("##Repeat", ref editingData.Repeat))
+                editingData.Repeat = Math.Clamp(editingData.Repeat, 1, 14400);
         }
 
         ImGui.TextUnformatted($"{Lang.Get("AutoMessageScheduler-TimeMode")}:");
 
         using (ImRaii.PushIndent())
         {
-            var mode = (int)EditingData.Mode;
+            var mode = (int)editingData.Mode;
 
             ImGui.SetNextItemWidth(200f * GlobalUIScale);
             if (ImGui.Combo
@@ -242,31 +235,31 @@ public class AutoMessageScheduler : ModuleBase
                         $"{LuminaWrapper.GetAddonText(1128)}"
                     ]
                 ))
-                EditingData.Mode = (TimeMode)mode;
+                editingData.Mode = (TimeMode)mode;
         }
 
         ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(2581)}:");
         using (ImRaii.PushIndent())
-            ImGui.InputTextMultiline("##Messages", ref EditingData.Message, 1024, new(-1, 100f * GlobalUIScale));
+            ImGui.InputTextMultiline("##Messages", ref editingData.Message, 1024, new(-1, 100f * GlobalUIScale));
 
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Check, Lang.Get("Confirm")) && EditingData.Editing != null)
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Check, Lang.Get("Confirm")) && editingData.Editing != null)
         {
-            EditingData.Editing.Name            = EditingData.Name;
-            EditingData.Editing.StartHour       = Math.Clamp(EditingData.StartHour,   0, 23);
-            EditingData.Editing.StartMinute     = Math.Clamp(EditingData.StartMinute, 0, 59);
-            EditingData.Editing.IntervalSeconds = Math.Max(1, EditingData.Interval);
-            EditingData.Editing.Repeat          = Math.Max(1, EditingData.Repeat);
-            EditingData.Editing.Remaining       = EditingData.Editing.Repeat;
-            EditingData.Editing.MessageText     = EditingData.Message;
-            EditingData.Editing.IsActive        = false;
-            EditingData.Editing.Mode            = EditingData.Mode;
+            editingData.Editing.Name            = editingData.Name;
+            editingData.Editing.StartHour       = Math.Clamp(editingData.StartHour,   0, 23);
+            editingData.Editing.StartMinute     = Math.Clamp(editingData.StartMinute, 0, 59);
+            editingData.Editing.IntervalSeconds = Math.Max(1, editingData.Interval);
+            editingData.Editing.Repeat          = Math.Max(1, editingData.Repeat);
+            editingData.Editing.Remaining       = editingData.Editing.Repeat;
+            editingData.Editing.MessageText     = editingData.Message;
+            editingData.Editing.IsActive        = false;
+            editingData.Editing.Mode            = editingData.Mode;
 
-            if (!ModuleConfig.Presets.Contains(EditingData.Editing))
-                ModuleConfig.Presets.Add(EditingData.Editing);
+            if (!config.Presets.Contains(editingData.Editing))
+                config.Presets.Add(editingData.Editing);
 
-            EditingData = null;
+            editingData = null;
 
-            ModuleConfig.Save(this);
+            config.Save(this);
 
             ImGui.CloseCurrentPopup();
         }
@@ -293,7 +286,7 @@ public class AutoMessageScheduler : ModuleBase
 
     private void OnUpdate(IFramework _)
     {
-        foreach (var sched in ModuleConfig.Presets)
+        foreach (var sched in config.Presets)
         {
             if (!sched.IsActive || sched.Remaining <= 0) continue;
 
@@ -327,12 +320,12 @@ public class AutoMessageScheduler : ModuleBase
         _                   => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
     };
 
-    public class Config : ModuleConfig
+    private class Config : ModuleConfig
     {
         public List<ScheduledMessage> Presets = [];
     }
 
-    public class ScheduledMessage
+    private class ScheduledMessage
     {
         public Guid     ID              = Guid.NewGuid();
         public int      IntervalSeconds = 300;
@@ -360,5 +353,12 @@ public class AutoMessageScheduler : ModuleBase
         public int              Repeat      = scheduledMessage.Repeat;
         public int              StartHour   = scheduledMessage.StartHour;
         public int              StartMinute = scheduledMessage.StartMinute;
+    }
+    
+    private enum TimeMode
+    {
+        LocalTime,
+        EorzeaTime,
+        ServerTime
     }
 }

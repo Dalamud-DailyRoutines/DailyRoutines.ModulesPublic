@@ -22,6 +22,9 @@ public class AutoHandleTeleportStuck : ModuleBase
 
     protected override void Init() =>
         LogMessageManager.Instance().RegPre(OnReceiveLogMessage);
+    
+    protected override void Uninit() =>
+        LogMessageManager.Instance().Unreg(OnReceiveLogMessage);
 
     private static void OnReceiveLogMessage(ref bool isPrevented, ref uint logMessageID, ref LogMessageQueueItem values)
     {
@@ -30,7 +33,4 @@ public class AutoHandleTeleportStuck : ModuleBase
 
         new UseActionPacket(ActionType.GeneralAction, 7, LocalPlayerState.EntityID, 0).Send();
     }
-
-    protected override void Uninit() =>
-        LogMessageManager.Instance().Unreg(OnReceiveLogMessage);
 }

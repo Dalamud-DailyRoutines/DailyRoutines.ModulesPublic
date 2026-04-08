@@ -15,12 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoSummonBuddyChocobo : ModuleBase
 {
-    private const uint GYSAHL_GREENS_ITEM_ID = 4868;
-
-    private static Config ModuleConfig = null!;
-
-    private static bool HasNotifiedInCurrentZone;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoSummonBuddyChocoboTitle"),
@@ -29,9 +23,13 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
         Author      = ["Veever"]
     };
 
+    private Config config = null!;
+
+    private bool hasNotifiedInCurrentZone;
+
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
@@ -46,10 +44,10 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("AutoSummonBuddyChocobo-AutoSwitchStance"), ref ModuleConfig.AutoSwitchStance))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoSummonBuddyChocobo-AutoSwitchStance"), ref config.AutoSwitchStance))
+            config.Save(this);
 
-        if (ModuleConfig.AutoSwitchStance)
+        if (config.AutoSwitchStance)
         {
             using (ImRaii.PushIndent())
             {
@@ -63,10 +61,10 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
                         ImGui.SameLine();
                     isFirst = false;
 
-                    if (ImGui.RadioButton(buddyAction.Name.ToString(), ModuleConfig.Stance == checkPoint))
+                    if (ImGui.RadioButton(buddyAction.Name.ToString(), config.Stance == checkPoint))
                     {
-                        ModuleConfig.Stance = checkPoint;
-                        ModuleConfig.Save(this);
+                        config.Stance = checkPoint;
+                        config.Save(this);
                     }
                 }
             }
@@ -74,19 +72,19 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("AutoSummonBuddyChocobo-NotBattleJobUsingGys"), ref ModuleConfig.NotBattleJobUsingGysahl))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoSummonBuddyChocobo-NotBattleJobUsingGys"), ref config.NotBattleJobUsingGysahl))
+            config.Save(this);
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref ModuleConfig.SendChat))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref ModuleConfig.SendTTS))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref config.SendTTS))
+            config.Save(this);
     }
 
     private void OnZoneChanged(ushort zone)
@@ -148,29 +146,29 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
             DService.Instance().Condition.IsOnMount)
             return;
 
-        if (!ModuleConfig.NotBattleJobUsingGysahl && LocalPlayerState.ClassJobData.DohDolJobIndex != -1)
+        if (!config.NotBattleJobUsingGysahl && LocalPlayerState.ClassJobData.DohDolJobIndex != -1)
             return;
 
         var companionInfo = UIState.Instance()->Buddy.CompanionInfo;
 
         if (companionInfo.TimeLeft > 300)
         {
-            if (ModuleConfig.AutoSwitchStance && companionInfo.ActiveCommand != (int)ModuleConfig.Stance)
-                TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.BuddyAction, (uint)ModuleConfig.Stance));
+            if (config.AutoSwitchStance && companionInfo.ActiveCommand != (int)config.Stance)
+                TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.BuddyAction, (uint)config.Stance));
             return;
         }
 
         if (LocalPlayerState.GetItemCount(GYSAHL_GREENS_ITEM_ID) <= 3)
         {
-            if (HasNotifiedInCurrentZone) return;
-            HasNotifiedInCurrentZone = true;
+            if (hasNotifiedInCurrentZone) return;
+            hasNotifiedInCurrentZone = true;
 
             var notificationMessage = Lang.Get("AutoSummonBuddyChocobo-NotificationMessage");
-            if (ModuleConfig.SendChat)
+            if (config.SendChat)
                 NotifyHelper.Instance().Chat(notificationMessage);
-            if (ModuleConfig.SendNotification)
+            if (config.SendNotification)
                 NotifyHelper.Instance().NotificationInfo(notificationMessage);
-            if (ModuleConfig.SendTTS)
+            if (config.SendTTS)
                 NotifyHelper.Speak(notificationMessage);
 
             return;
@@ -190,7 +188,7 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
 
         TaskHelper?.Abort();
 
-        HasNotifiedInCurrentZone = false;
+        hasNotifiedInCurrentZone = false;
     }
 
     // 因为在鸟棚里的话没可能隔空取出来, 必定要先回去取出然后再召唤, 期间要切换至少三个区域
@@ -217,4 +215,10 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
         public bool          SendTTS;
         public ChocoboStance Stance = ChocoboStance.FreeStance;
     }
+    
+    #region 常量
+
+    private const uint GYSAHL_GREENS_ITEM_ID = 4868;
+
+    #endregion
 }

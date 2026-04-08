@@ -9,17 +9,17 @@ public partial class AutoReplyChatBot
 {
     private void DrawTestChatTab()
     {
-        if (ModuleConfig.TestChatWindows.Count == 0)
+        if (config.TestChatWindows.Count == 0)
         {
             var testGUID = Guid.NewGuid().ToString();
-            ModuleConfig.TestChatWindows[testGUID] = new ChatWindow
+            config.TestChatWindows[testGUID] = new ChatWindow
             {
                 ID          = testGUID,
                 Name        = "Chat Test",
                 Role        = "Tester",
                 HistoryGUID = testGUID
             };
-            ModuleConfig.CurrentActiveChat = testGUID;
+            config.CurrentActiveChat = testGUID;
             RequestSaveConfig();
         }
 
@@ -30,25 +30,25 @@ public partial class AutoReplyChatBot
                 if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing))
                 {
                     var newGUID = Guid.NewGuid().ToString();
-                    ModuleConfig.TestChatWindows[newGUID] = new ChatWindow
+                    config.TestChatWindows[newGUID] = new ChatWindow
                     {
                         ID          = newGUID,
                         Name        = "New Chat",
                         Role        = "NewUser",
                         HistoryGUID = newGUID
                     };
-                    ModuleConfig.CurrentActiveChat = newGUID;
+                    config.CurrentActiveChat = newGUID;
                     RequestSaveConfig();
                 }
 
-                var chatTabs = ModuleConfig.TestChatWindows.ToList();
+                var chatTabs = config.TestChatWindows.ToList();
 
                 foreach (var (id, window) in chatTabs)
                 {
                     var isOpen = true;
 
                     var flags = ImGuiTabItemFlags.None;
-                    if (id == ModuleConfig.CurrentActiveChat)
+                    if (id == config.CurrentActiveChat)
                         flags |= ImGuiTabItemFlags.SetSelected;
 
                     using (var tabItem = ImRaii.TabItem($"{window.Name}###{id}", ref isOpen, flags))
@@ -60,13 +60,13 @@ public partial class AutoReplyChatBot
                     }
 
                     if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
-                        ModuleConfig.CurrentActiveChat = id;
+                        config.CurrentActiveChat = id;
 
-                    if (!isOpen && ModuleConfig.TestChatWindows.Count > 1)
+                    if (!isOpen && config.TestChatWindows.Count > 1)
                     {
-                        ModuleConfig.TestChatWindows.Remove(id);
-                        if (ModuleConfig.CurrentActiveChat == id && ModuleConfig.TestChatWindows.Count > 0)
-                            ModuleConfig.CurrentActiveChat = ModuleConfig.TestChatWindows.Keys.First();
+                        config.TestChatWindows.Remove(id);
+                        if (config.CurrentActiveChat == id && config.TestChatWindows.Count > 0)
+                            config.CurrentActiveChat = config.TestChatWindows.Keys.First();
                         RequestSaveConfig();
                     }
                 }
@@ -75,7 +75,7 @@ public partial class AutoReplyChatBot
 
         ImGui.Spacing();
 
-        if (!ModuleConfig.TestChatWindows.TryGetValue(ModuleConfig.CurrentActiveChat, out var currentWindow))
+        if (!config.TestChatWindows.TryGetValue(config.CurrentActiveChat, out var currentWindow))
             return;
 
         ImGui.AlignTextToFramePadding();
@@ -99,7 +99,7 @@ public partial class AutoReplyChatBot
         if (ImGui.Button($"{Lang.Get("Clear")}"))
         {
             var historyKey = currentWindow.HistoryKey;
-            if (ModuleConfig.Histories.TryGetValue(historyKey, out var historyList))
+            if (config.Histories.TryGetValue(historyKey, out var historyList))
                 historyList.Clear();
         }
 
@@ -115,7 +115,7 @@ public partial class AutoReplyChatBot
             if (child)
             {
                 var historyKey = currentWindow.HistoryKey;
-                var messages   = ModuleConfig.Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
+                var messages   = config.Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
 
                 for (var i = 0; i < messages.Count; i++)
                 {
@@ -160,7 +160,7 @@ public partial class AutoReplyChatBot
                                     {
                                         try
                                         {
-                                            if (ModuleConfig.Histories.TryGetValue(historyKey, out var historyList) && i < historyList.Count)
+                                            if (config.Histories.TryGetValue(historyKey, out var historyList) && i < historyList.Count)
                                             {
                                                 historyList.RemoveAt(i);
                                                 RequestSaveConfig();
@@ -220,7 +220,7 @@ public partial class AutoReplyChatBot
 
                     try
                     {
-                        reply = await GenerateReplyAsync(ModuleConfig, historyKey, ct) ?? string.Empty;
+                        reply = await GenerateReplyAsync(config, historyKey, ct) ?? string.Empty;
                     }
                     catch (OperationCanceledException)
                     {

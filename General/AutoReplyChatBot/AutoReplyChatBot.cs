@@ -10,8 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoReplyChatBot : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoReplyChatBotTitle"),
@@ -21,22 +19,24 @@ public partial class AutoReplyChatBot : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        if (ModuleConfig.SystemPrompts is not { Count: > 0 })
+        if (config.SystemPrompts is not { Count: > 0 })
         {
-            ModuleConfig.SystemPrompts       = [new()];
-            ModuleConfig.SelectedPromptIndex = 0;
+            config.SystemPrompts       = [new()];
+            config.SelectedPromptIndex = 0;
         }
 
         foreach (var contextType in Enum.GetValues<GameContextType>())
-            ModuleConfig.GameContextSettings.TryAdd(contextType, true);
+            config.GameContextSettings.TryAdd(contextType, true);
 
-        ModuleConfig.SystemPrompts = ModuleConfig.SystemPrompts.DistinctBy(x => x.Name).ToList();
-        ModuleConfig.Save(this);
+        config.SystemPrompts = config.SystemPrompts.DistinctBy(x => x.Name).ToList();
+        config.Save(this);
 
         DService.Instance().Chat.ChatMessage += OnChat;
     }
@@ -49,14 +49,14 @@ public partial class AutoReplyChatBot : ModuleBase
         DisposeAllSessions();
     }
 
-    private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+    private void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
-        if (!ModuleConfig.ValidChatTypes.Contains(type)) return;
+        if (!config.ValidChatTypes.Contains(type)) return;
 
         var (playerName, worldID, worldName) = ExtractNameWorld(sender);
         if (string.IsNullOrEmpty(playerName) || string.IsNullOrEmpty(worldName)) return;
         if (playerName == LocalPlayerState.Name    && worldID == GameState.HomeWorld) return;
-        if (type       == XivChatType.TellIncoming && ModuleConfig.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
+        if (type       == XivChatType.TellIncoming && config.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
 
         var userText = message.TextValue;
         if (string.IsNullOrWhiteSpace(userText)) return;

@@ -10,8 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCancelStarContributor : ModuleBase
 {
-    private const uint STAR_CONTRIBUTOR_BUFF_ID = 4409;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoCancelStarContributorTitle"),
@@ -63,4 +61,10 @@ public unsafe class AutoCancelStarContributor : ModuleBase
 
         StatusManager.ExecuteStatusOff(STAR_CONTRIBUTOR_BUFF_ID);
     }
+
+    #region 常量
+
+    private const uint STAR_CONTRIBUTOR_BUFF_ID = 4409;
+
+    #endregion
 }

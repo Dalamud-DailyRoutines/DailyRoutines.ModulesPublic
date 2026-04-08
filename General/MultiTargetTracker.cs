@@ -14,13 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class MultiTargetTracker : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static readonly TempTrackMenuItem      TempTrackItem      = new();
-    private static readonly PermanentTrackMenuItem PermanentTrackItem = new();
-
-    private static readonly HashSet<TrackPlayer> TempTrackedPlayers = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("MultiTargetTrackerTitle"),
@@ -29,7 +22,20 @@ public class MultiTargetTracker : ModuleBase
         Author          = ["KirisameVanilla"],
         ModulesConflict = ["AutoHighlightFlagMarker"]
     };
+    
+    private static Config ModuleConfig = null!;
 
+    private readonly TempTrackMenuItem      tempTrackItem;
+    private readonly PermanentTrackMenuItem permanentTrackItem;
+
+    private readonly HashSet<TrackPlayer> tempTrackedPlayers = [];
+
+    public MultiTargetTracker()
+    {
+        tempTrackItem      = new(this);
+        permanentTrackItem = new();
+    }
+    
     protected override void Init()
     {
         ModuleConfig = Config.Load(this) ?? new();
@@ -47,7 +53,7 @@ public class MultiTargetTracker : ModuleBase
         DService.Instance().ContextMenu.OnMenuOpened     -= OnMenuOpen;
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-        TempTrackedPlayers.Clear();
+        tempTrackedPlayers.Clear();
     }
 
     protected override void ConfigUI()
@@ -107,19 +113,19 @@ public class MultiTargetTracker : ModuleBase
         }
     }
 
-    private static void OnMenuOpen(IMenuOpenedArgs args)
+    private void OnMenuOpen(IMenuOpenedArgs args)
     {
         if (!ShouldMenuOpen(args)) return;
 
-        args.AddMenuItem(TempTrackItem.Get());
-        args.AddMenuItem(PermanentTrackItem.Get());
+        args.AddMenuItem(tempTrackItem.Get());
+        args.AddMenuItem(permanentTrackItem.Get());
     }
 
-    private static void OnZoneChanged(ushort obj) =>
-        TempTrackedPlayers.Clear();
+    private void OnZoneChanged(ushort obj) =>
+        tempTrackedPlayers.Clear();
 
     // 反正不会重复注册大胆造
-    private static void OnReceivePlayers(IReadOnlyList<IPlayerCharacter> characters)
+    private void OnReceivePlayers(IReadOnlyList<IPlayerCharacter> characters)
     {
         if (characters.Count == 0)
             FrameworkManager.Instance().Unreg(OnUpdate);
@@ -127,9 +133,9 @@ public class MultiTargetTracker : ModuleBase
             FrameworkManager.Instance().Reg(OnUpdate);
     }
 
-    private static void OnUpdate(IFramework framework)
+    private void OnUpdate(IFramework framework)
     {
-        if (ModuleConfig.PermanentTrackedPlayers.Count == 0 && TempTrackedPlayers.Count == 0) return;
+        if (ModuleConfig.PermanentTrackedPlayers.Count == 0 && tempTrackedPlayers.Count == 0) return;
 
         if (PlayersManager.Instance().PlayersAroundCount == 0 || !GameState.IsLoggedIn)
         {
@@ -145,7 +151,7 @@ public class MultiTargetTracker : ModuleBase
 
             var isAdd = false;
 
-            foreach (var trackPlayer in TempTrackedPlayers)
+            foreach (var trackPlayer in tempTrackedPlayers)
             {
                 if (trackPlayer.ContentID != player.ContentID) continue;
 
@@ -240,7 +246,7 @@ public class MultiTargetTracker : ModuleBase
         public override string ToString() => $"{ContentID}";
     }
 
-    private class TempTrackMenuItem : MenuItemBase
+    private class TempTrackMenuItem(MultiTargetTracker module) : MenuItemBase
     {
         public override string Name       { get; protected set; } = $"{Lang.Get("MultiTargetTracker-TempTrack")}: {Lang.Get("Add")}/{Lang.Get("Delete")}";
         public override string Identifier { get; protected set; } = nameof(MultiTargetTracker);
@@ -256,9 +262,9 @@ public class MultiTargetTracker : ModuleBase
                 target.TargetHomeWorld.ValueNullable?.Name.ToString()
             );
 
-            if (!TempTrackedPlayers.Add(data))
+            if (!module.tempTrackedPlayers.Add(data))
             {
-                TempTrackedPlayers.Remove(data);
+                module.tempTrackedPlayers.Remove(data);
                 NotifyHelper.Instance().NotificationSuccess(Lang.Get("Deleted"));
             }
             else

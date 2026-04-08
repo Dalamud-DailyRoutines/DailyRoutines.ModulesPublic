@@ -13,28 +13,26 @@ namespace DailyRoutines.Modules;
 
 public class AutoReuseEmote : ModuleBase
 {
-    private const string Command = "remote";
-
-    private static CancellationTokenSource? CancelSource;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoReuseEmoteTitle"),
-        Description = Lang.Get("AutoReuseEmoteDescription", Command, Lang.Get("AutoReuseEmote-CommandHelp")),
+        Description = Lang.Get("AutoReuseEmoteDescription", COMMAND, Lang.Get("AutoReuseEmote-CommandHelp")),
         Category    = ModuleCategory.General,
         Author      = ["Xww"]
     };
 
+    private CancellationTokenSource? cancelSource;
+
     protected override void Init() =>
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("AutoReuseEmote-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoReuseEmote-CommandHelp") });
 
     protected override void Uninit()
     {
-        CommandManager.Instance().RemoveSubCommand(Command);
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
         CancelTokenAndNullify();
     }
 
-    private static void OnCommand(string command, string args)
+    private void OnCommand(string command, string args)
     {
         CancelTokenAndNullify();
 
@@ -50,8 +48,8 @@ public class AutoReuseEmote : ModuleBase
                                  : 2000;
         if (!TryParseEmoteByName(emoteName, out var emoteID)) return;
 
-        CancelSource = new();
-        DService.Instance().Framework.Run(() => UseEmoteByID(emoteID, repeatInterval, CancelSource), CancelSource.Token);
+        cancelSource = new();
+        DService.Instance().Framework.Run(() => UseEmoteByID(emoteID, repeatInterval, cancelSource), cancelSource.Token);
     }
 
     private static unsafe bool TryParseEmoteByName(string name, out ushort id)
@@ -80,16 +78,16 @@ public class AutoReuseEmote : ModuleBase
         return true;
     }
 
-    private static void CancelTokenAndNullify()
+    private void CancelTokenAndNullify()
     {
-        if (CancelSource == null) return;
+        if (cancelSource == null) return;
 
-        CancelSource.Cancel();
-        CancelSource.Dispose();
-        CancelSource = null;
+        cancelSource.Cancel();
+        cancelSource.Dispose();
+        cancelSource = null;
     }
 
-    private static async Task UseEmoteByID(ushort id, int interval, CancellationTokenSource cts)
+    private async Task UseEmoteByID(ushort id, int interval, CancellationTokenSource cts)
     {
         while (!cts.Token.IsCancellationRequested)
         {
@@ -119,4 +117,10 @@ public class AutoReuseEmote : ModuleBase
             await Task.Delay(interval, cts.Token);
         }
     }
+    
+    #region 常量
+
+    private const string COMMAND = "remote";
+
+    #endregion
 }

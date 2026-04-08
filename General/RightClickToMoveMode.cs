@@ -9,7 +9,6 @@ using DailyRoutines.Internal;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game;
@@ -26,26 +25,15 @@ public class RightClickToMoveMode : ModuleBase
         Category    = ModuleCategory.General
     };
 
-    private static Config ModuleConfig = null!;
+    private Config moduleConfig = null!;
 
-    private static volatile bool IsModuleActive;
-
-    private static MovementInputController? MovementController;
+    private readonly MovementInputController movementController = new() { Precision = 0.15f, IsAutoMove = true };
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        moduleConfig = Config.Load(this) ?? new();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
-
-        if (IsModuleActive) return;
-        IsModuleActive = true;
-
-        MovementController ??= new()
-        {
-            Precision  = 0.15f,
-            IsAutoMove = true
-        };
 
         InputIDManager.Instance().RegPostPressed(OnPostPressed);
         WindowManager.Instance().PostDraw += OnDraw;
@@ -53,28 +41,20 @@ public class RightClickToMoveMode : ModuleBase
 
     protected override void Uninit()
     {
-        if (!IsModuleActive) return;
-
         InputIDManager.Instance().UnregPostPressed(OnPostPressed);
         
-        SessionManager.Stop();
+        SessionManager.Stop(this);
         TargetIndicatorRenderer.Reset();
         
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         WindowManager.Instance().PostDraw                -= OnDraw;
         
-        if (MovementController != null)
-        {
-            MovementController.Dispose();
-            MovementController = null;
-        }
-        
-        IsModuleActive = false;
+        movementController.Dispose();
     }
 
     #region 事件
 
-    private static void OnPostPressed(bool result, InputId id)
+    private void OnPostPressed(bool result, InputId id)
     {
         // 右键
         if (id != InputId.MOUSE_CANCEL) return;
@@ -83,50 +63,47 @@ public class RightClickToMoveMode : ModuleBase
         OnMouseClickCaptured(ImGui.GetMousePos());
     }
     
-    private static void OnDraw()
+    private void OnDraw()
     {
-        if (!IsModuleActive) return;
-
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer)
         {
-            SessionManager.Stop();
-            TargetIndicatorRenderer.Draw(null);
+            SessionManager.Stop(this);
+            TargetIndicatorRenderer.Draw(this, null);
             return;
         }
 
         if (IsInterruptKeysPressed())
-            SessionManager.Stop();
+            SessionManager.Stop(this);
 
         if (SessionManager.Current is { } session)
         {
             switch (session.Driver)
             {
                 case MoveDriver.Game:
-                    SessionManager.UpdateGame(session, localPlayer.Position);
+                    SessionManager.UpdateGame(this, session, localPlayer.Position);
                     break;
                 case MoveDriver.Navmesh:
-                    SessionManager.UpdateNavmesh(session, localPlayer.Position);
+                    SessionManager.UpdateNavmesh(this, session, localPlayer.Position);
                     break;
             }
         }
 
-        TargetIndicatorRenderer.Draw(SessionManager.Current);
+        TargetIndicatorRenderer.Draw(this, SessionManager.Current);
     }
     
-    private static void OnZoneChanged(ushort _) 
+    private void OnZoneChanged(ushort _) 
     {
-        SessionManager.Stop();
+        SessionManager.Stop(this);
         TargetIndicatorRenderer.Reset();
     }
     
-    private static void OnMouseClickCaptured(Vector2 clientPosition)
+    private void OnMouseClickCaptured(Vector2 clientPosition)
     {
-        if (!IsModuleActive) return;
-        if (DService.Instance().ObjectTable.LocalPlayer is null || MovementController == null) return;
-        if (!ClickTriggerEvaluator.ShouldHandle(ModuleConfig)) return;
+        if (DService.Instance().ObjectTable.LocalPlayer is null) return;
+        if (!ClickTriggerEvaluator.ShouldHandle(moduleConfig)) return;
         if (!ClickPointResolver.TryResolve(clientPosition, out var targetPosition)) return;
 
-        SessionManager.Start(targetPosition);
+        SessionManager.Start(this, targetPosition);
     }
 
     #endregion
@@ -146,11 +123,11 @@ public class RightClickToMoveMode : ModuleBase
         ImGui.NewLine();
         DrawIndicatorSection();
 
-        if (ImGui.Checkbox($"{Lang.Get("RightClickToMoveMode-WASDToInterrupt")}###WASDToInterrupt", ref ModuleConfig.WASDToInterrupt))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox($"{Lang.Get("RightClickToMoveMode-WASDToInterrupt")}###WASDToInterrupt", ref moduleConfig.WASDToInterrupt))
+            moduleConfig.Save(this);
     }
     
-    private static void DrawMoveModeSection()
+    private void DrawMoveModeSection()
     {
         var navmeshAvailable = IsNavmeshAvailable();
 
@@ -163,25 +140,25 @@ public class RightClickToMoveMode : ModuleBase
             foreach (var moveMode in Enum.GetValues<MoveMode>())
             {
                 var unavailable = moveMode is MoveMode.Navmesh or MoveMode.Smart && !navmeshAvailable;
-                using var disabled = ImRaii.Disabled(unavailable || moveMode == ModuleConfig.MoveMode);
+                using var disabled = ImRaii.Disabled(unavailable || moveMode == moduleConfig.MoveMode);
 
                 ImGui.SameLine();
 
-                if (ImGui.RadioButton(MoveModeTitles[moveMode], moveMode == ModuleConfig.MoveMode))
+                if (ImGui.RadioButton(MoveModeTitles[moveMode], moveMode == moduleConfig.MoveMode))
                 {
-                    ModuleConfig.MoveMode = moveMode;
-                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.MoveMode = moveMode;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
 
-            ImGui.TextUnformatted(MoveModeDescriptions[ModuleConfig.MoveMode]);
+            ImGui.TextUnformatted(MoveModeDescriptions[moduleConfig.MoveMode]);
 
             if (!navmeshAvailable)
                 ImGui.TextDisabled(Lang.Get("RightClickToMoveMode-NavmeshUnavailable"));
         }
     }
 
-    private static void DrawControlModeSection()
+    private void DrawControlModeSection()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RightClickToMoveMode-ControlMode"));
 
@@ -191,27 +168,27 @@ public class RightClickToMoveMode : ModuleBase
 
             foreach (var controlMode in Enum.GetValues<ControlMode>())
             {
-                using var disabled = ImRaii.Disabled(controlMode == ModuleConfig.ControlMode);
+                using var disabled = ImRaii.Disabled(controlMode == moduleConfig.ControlMode);
 
                 ImGui.SameLine();
 
-                if (ImGui.RadioButton(ControlModeTitles[controlMode], controlMode == ModuleConfig.ControlMode))
+                if (ImGui.RadioButton(ControlModeTitles[controlMode], controlMode == moduleConfig.ControlMode))
                 {
-                    ModuleConfig.ControlMode = controlMode;
-                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.ControlMode = controlMode;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
 
-            ImGui.TextUnformatted(ControlModeDescriptions[ModuleConfig.ControlMode]);
+            ImGui.TextUnformatted(ControlModeDescriptions[moduleConfig.ControlMode]);
 
-            if (ModuleConfig.ControlMode != ControlMode.KeyRightClick) return;
+            if (moduleConfig.ControlMode != ControlMode.KeyRightClick) return;
 
             ImGui.AlignTextToFramePadding();
             ImGui.TextUnformatted($"{Lang.Get("RightClickToMoveMode-ComboKey")}:");
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200f * GlobalUIScale);
-            using var combo = ImRaii.Combo("###ComboKeyCombo", ModuleConfig.ComboKey.GetFancyName());
+            using var combo = ImRaii.Combo("###ComboKeyCombo", moduleConfig.ComboKey.GetFancyName());
 
             if (!combo) return;
 
@@ -222,14 +199,14 @@ public class RightClickToMoveMode : ModuleBase
 
                 if (ImGui.Selectable(keyToSelect.GetFancyName()))
                 {
-                    ModuleConfig.ComboKey = keyToSelect;
-                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.ComboKey = keyToSelect;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
         }
     }
 
-    private static void DrawIndicatorSection()
+    private void DrawIndicatorSection()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RightClickToMoveMode-IndicatorStyle"));
 
@@ -239,18 +216,18 @@ public class RightClickToMoveMode : ModuleBase
 
             foreach (var indicatorStyle in Enum.GetValues<IndicatorStyle>())
             {
-                using var disabled = ImRaii.Disabled(indicatorStyle == ModuleConfig.IndicatorStyle);
+                using var disabled = ImRaii.Disabled(indicatorStyle == moduleConfig.IndicatorStyle);
 
                 ImGui.SameLine();
 
-                if (ImGui.RadioButton(IndicatorStyleTitles[indicatorStyle], indicatorStyle == ModuleConfig.IndicatorStyle))
+                if (ImGui.RadioButton(IndicatorStyleTitles[indicatorStyle], indicatorStyle == moduleConfig.IndicatorStyle))
                 {
-                    ModuleConfig.IndicatorStyle = indicatorStyle;
-                    ModuleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.IndicatorStyle = indicatorStyle;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
             }
 
-            ImGui.TextUnformatted(IndicatorStyleDescriptions[ModuleConfig.IndicatorStyle]);
+            ImGui.TextUnformatted(IndicatorStyleDescriptions[moduleConfig.IndicatorStyle]);
         }
     }
 
@@ -270,8 +247,8 @@ public class RightClickToMoveMode : ModuleBase
         return !isBlocked && Vector2.DistanceSquared(localPlayerPosition.ToVector2(), targetPosition.ToVector2()) <= SMART_GAME_DISTANCE_SQ;
     }
     
-    private static MoveDriver ResolveMoveDriver(Vector3 localPlayerPosition, Vector3 targetPosition) =>
-        ModuleConfig.MoveMode switch
+    private MoveDriver ResolveMoveDriver(Vector3 localPlayerPosition, Vector3 targetPosition) =>
+        moduleConfig.MoveMode switch
         {
             MoveMode.Game    => MoveDriver.Game,
             MoveMode.Navmesh => IsNavmeshAvailable() ? MoveDriver.Navmesh : MoveDriver.Game,
@@ -279,11 +256,11 @@ public class RightClickToMoveMode : ModuleBase
             _                => MoveDriver.Game
         };
     
-    private static bool IsInterruptKeysPressed()
+    private bool IsInterruptKeysPressed()
     {
         if (PluginConfig.Instance().ConflictKeyBinding.IsPressed()) return true;
 
-        return ModuleConfig.WASDToInterrupt &&
+        return moduleConfig.WASDToInterrupt &&
                (DService.Instance().KeyState[VirtualKey.W] ||
                 DService.Instance().KeyState[VirtualKey.A] ||
                 DService.Instance().KeyState[VirtualKey.S] ||
@@ -311,38 +288,35 @@ public class RightClickToMoveMode : ModuleBase
     {
         public static MoveSession? Current { get; private set; }
 
-        public static void Start(Vector3 targetPosition)
+        public static void Start(RightClickToMoveMode module, Vector3 targetPosition)
         {
-            if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer || MovementController == null) return;
+            if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
-            Stop();
+            Stop(module);
 
             if (LocalPlayerState.Instance().IsMoving)
                 ChatManager.Instance().SendMessage("/automove off");
 
-            var driver = ResolveMoveDriver(localPlayer.Position, targetPosition);
+            var driver = module.ResolveMoveDriver(localPlayer.Position, targetPosition);
             switch (driver)
             {
                 case MoveDriver.Game:
-                    StartGame(targetPosition);
+                    StartGame(module, targetPosition);
                     break;
                 case MoveDriver.Navmesh:
-                    StartNavmesh(targetPosition);
+                    StartNavmesh(module, targetPosition);
                     break;
             }
         }
 
-        public static void Stop()
+        public static void Stop(RightClickToMoveMode module)
         {
             var session = Current;
             Current = null;
             if (session == null) return;
 
-            if (MovementController != null)
-            {
-                MovementController.Enabled         = false;
-                MovementController.DesiredPosition = default;
-            }
+            module.movementController.Enabled         = false;
+            module.movementController.DesiredPosition = default;
 
             vnavmeshIPC.StopPathfind();
 
@@ -350,52 +324,47 @@ public class RightClickToMoveMode : ModuleBase
                 MovementManager.Instance().SetCurrentControlMode(session.PreviousControlMode);
         }
 
-        public static void UpdateGame(MoveSession session, Vector3 localPlayerPosition)
+        public static void UpdateGame(RightClickToMoveMode module, MoveSession session, Vector3 localPlayerPosition)
         {
             if (Vector2.DistanceSquared(session.Target.ToVector2(), localPlayerPosition.ToVector2()) <= GAME_ARRIVAL_DISTANCE_SQ)
-                Stop();
+                Stop(module);
         }
 
-        public static void UpdateNavmesh(MoveSession session, Vector3 localPlayerPosition)
+        public static void UpdateNavmesh(RightClickToMoveMode module, MoveSession session, Vector3 localPlayerPosition)
         {
             if (Vector2.DistanceSquared(session.Target.ToVector2(), localPlayerPosition.ToVector2()) <= NAVMESH_ARRIVAL_DISTANCE_SQ)
             {
-                Stop();
+                Stop(module);
                 return;
             }
 
             var isBusy = vnavmeshIPC.GetIsPathfindRunning() || vnavmeshIPC.GetIsPathfindInProgress() || vnavmeshIPC.GetIsNavPathfindInProgress();
             if (!isBusy && session.ElapsedSeconds >= 0.15f)
-                Stop();
+                Stop(module);
         }
 
-        private static void StartGame(Vector3 targetPosition)
+        private static void StartGame(RightClickToMoveMode module, Vector3 targetPosition)
         {
-            if (MovementController == null) return;
-
             var previousControlMode = MovementManager.Instance().CurrentControlMode;
             MovementManager.Instance().SetCurrentControlMode(MovementControlMode.Normal);
 
-            MovementController.DesiredPosition = targetPosition;
-            MovementController.Enabled         = true;
+            module.movementController.DesiredPosition = targetPosition;
+            module.movementController.Enabled         = true;
 
             Current = new(targetPosition, MoveDriver.Game, previousControlMode);
-            TargetIndicatorRenderer.Trigger(targetPosition);
+            TargetIndicatorRenderer.Trigger(module, targetPosition);
         }
 
-        private static void StartNavmesh(Vector3 targetPosition)
+        private static void StartNavmesh(RightClickToMoveMode module, Vector3 targetPosition)
         {
-            if (MovementController != null)
-            {
-                MovementController.Enabled         = false;
-                MovementController.DesiredPosition = default;
-            }
+            module.movementController.Enabled         = false;
+            module.movementController.DesiredPosition = default;
             
             var fly = DService.Instance().Condition[ConditionFlag.InFlight] || DService.Instance().Condition[ConditionFlag.Diving];
             if (!vnavmeshIPC.PathfindAndMoveTo(targetPosition, fly)) return;
 
             Current = new(targetPosition, MoveDriver.Navmesh, MovementManager.Instance().CurrentControlMode);
-            TargetIndicatorRenderer.Trigger(targetPosition);
+            TargetIndicatorRenderer.Trigger(module, targetPosition);
         }
     }
 
@@ -452,9 +421,9 @@ public class RightClickToMoveMode : ModuleBase
         private static long    PulseStartedAtTicks;
         private static bool    IsPulseActive;
 
-        public static void Trigger(Vector3 targetPosition)
+        public static void Trigger(RightClickToMoveMode module, Vector3 targetPosition)
         {
-            if (ModuleConfig.IndicatorStyle != IndicatorStyle.Pulse)
+            if (module.moduleConfig.IndicatorStyle != IndicatorStyle.Pulse)
             {
                 ResetPulse();
                 return;
@@ -465,11 +434,11 @@ public class RightClickToMoveMode : ModuleBase
             IsPulseActive        = true;
         }
 
-        public static void Draw(MoveSession? session)
+        public static void Draw(RightClickToMoveMode module, MoveSession? session)
         {
-            if (ModuleConfig.IndicatorStyle == IndicatorStyle.None) return;
+            if (module.moduleConfig.IndicatorStyle == IndicatorStyle.None) return;
 
-            switch (ModuleConfig.IndicatorStyle)
+            switch (module.moduleConfig.IndicatorStyle)
             {
                 case IndicatorStyle.Pulse:
                     DrawPulse();

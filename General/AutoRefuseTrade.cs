@@ -15,13 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRefuseTrade : ModuleBase
 {
-    private static Hook<AgentShowDelegate>? AgentTradeShowHook;
-
-    private static readonly CompSig                     TradeRequestSig = new("48 89 6C 24 ?? 56 57 41 56 48 83 EC ?? 48 8B E9 44 8B F2");
-    private static          Hook<TradeRequestDelegate>? TradeRequestHook;
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoRefuseTradeTitle"),
@@ -30,10 +23,17 @@ public unsafe class AutoRefuseTrade : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private Hook<AgentShowDelegate>? AgentTradeShowHook;
+
+    private delegate int                         TradeRequestDelegate(InventoryManager* instance, uint entityID);
+    private          Hook<TradeRequestDelegate>? TradeRequestHook;
+
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         AgentTradeShowHook ??= DService.Instance().Hook.HookFromAddress<AgentShowDelegate>
         (
@@ -52,28 +52,28 @@ public unsafe class AutoRefuseTrade : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref ModuleConfig.SendChat))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
 
         ImGui.SameLine();
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
 
         ImGui.TextUnformatted(Lang.Get("AutoRefuseTrade-ExtraCommands"));
-        ImGui.InputTextMultiline("###ExtraCommandsInput", ref ModuleConfig.ExtraCommands, 1024, ScaledVector2(300f, 120f));
-        ImGuiOm.TooltipHover(ModuleConfig.ExtraCommands);
+        ImGui.InputTextMultiline("###ExtraCommandsInput", ref config.ExtraCommands, 1024, ScaledVector2(300f, 120f));
+        ImGuiOm.TooltipHover(config.ExtraCommands);
 
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
     }
 
-    private static int TradeRequestDetour(InventoryManager* instance, uint entityID)
+    private int TradeRequestDetour(InventoryManager* instance, uint entityID)
     {
         Throttler.Shared.Throttle("AutoRefuseTrade-Show", 3_000, true);
         return TradeRequestHook.Original(instance, entityID);
     }
 
-    private static void AgentTradeShowDetour(AgentInterface* agent)
+    private void AgentTradeShowDetour(AgentInterface* agent)
     {
         // 没有 Block => 五秒内没有发起交易的请求
         if (Throttler.Shared.Check("AutoRefuseTrade-Show"))
@@ -86,28 +86,26 @@ public unsafe class AutoRefuseTrade : ModuleBase
         AgentTradeShowHook.Original(agent);
     }
 
-    private static void NotifyTradeCancel()
+    private void NotifyTradeCancel()
     {
         var message = Lang.Get("AutoRefuseTrade-Notification");
 
-        if (ModuleConfig.SendNotification)
+        if (config.SendNotification)
         {
             NotifyHelper.Instance().NotificationInfo(message);
             NotifyHelper.Speak(message);
         }
 
-        if (ModuleConfig.SendChat)
+        if (config.SendChat)
             NotifyHelper.Instance().Chat($"{message}\n    ({Lang.Get("Time")}: {StandardTimeManager.Instance().Now.ToShortTimeString()})");
 
-        if (!string.IsNullOrWhiteSpace(ModuleConfig.ExtraCommands))
+        if (!string.IsNullOrWhiteSpace(config.ExtraCommands))
         {
-            foreach (var command in ModuleConfig.ExtraCommands.Split('\n'))
+            foreach (var command in config.ExtraCommands.Split('\n'))
                 ChatManager.Instance().SendMessage(command);
         }
     }
-
-    private delegate int TradeRequestDelegate(InventoryManager* instance, uint entityID);
-
+    
     private class Config : ModuleConfig
     {
         public string ExtraCommands    = string.Empty;

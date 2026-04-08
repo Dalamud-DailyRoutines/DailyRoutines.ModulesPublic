@@ -15,10 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoReadOutTalk : ModuleBase
 {
-    private static Config                             ModuleConfig = null!;
-    private static Hook<ShowBattleTalkDelegate>?      ShowBattleTalkHook;
-    private static Hook<ShowBattleTalkImageDelegate>? ShowBattleTalkImageHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("AutoReadOutTalkTitle"),
@@ -27,9 +23,27 @@ public unsafe class AutoReadOutTalk : ModuleBase
         ModulesConflict = ["AutoTalkSkip"]
     };
 
+    private Config config = null!;
+    
+    private delegate void ShowBattleTalkDelegate(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style);
+    private Hook<ShowBattleTalkDelegate>? ShowBattleTalkHook;
+    
+    private delegate void ShowBattleTalkImageDelegate
+    (
+        UIModule*      module,
+        CStringPointer name,
+        CStringPointer text,
+        float          duration,
+        uint           image,
+        byte           style,
+        int            sound,
+        uint           entityID
+    );
+    private Hook<ShowBattleTalkImageDelegate>? ShowBattleTalkImageHook;
+
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "Talk", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Talk", OnAddon);
@@ -55,13 +69,13 @@ public unsafe class AutoReadOutTalk : ModuleBase
 
         using (ImRaii.PushIndent())
         {
-            ImGui.InputText($"##FormatInput", ref ModuleConfig.Format);
+            ImGui.InputText($"##FormatInput", ref config.Format);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
     }
 
-    private static void ShowBattleTalkDetour(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style)
+    private void ShowBattleTalkDetour(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style)
     {
         ShowBattleTalkHook.Original(module, name, text, duration, style);
 
@@ -71,10 +85,10 @@ public unsafe class AutoReadOutTalk : ModuleBase
         if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(speaker) || duration < 3) return;
 
         CancelBefore();
-        NotifyHelper.Speak(string.Format(ModuleConfig.Format, speaker, line));
+        NotifyHelper.Speak(string.Format(config.Format, speaker, line));
     }
 
-    private static void ShowBattleTalkImageDetour
+    private void ShowBattleTalkImageDetour
     (
         UIModule*      module,
         CStringPointer name,
@@ -96,10 +110,10 @@ public unsafe class AutoReadOutTalk : ModuleBase
         if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(speaker) || duration < 3) return;
 
         CancelBefore();
-        NotifyHelper.Speak(string.Format(ModuleConfig.Format, speaker, line));
+        NotifyHelper.Speak(string.Format(config.Format, speaker, line));
     }
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
@@ -124,7 +138,7 @@ public unsafe class AutoReadOutTalk : ModuleBase
                 if (string.IsNullOrEmpty(line)) return;
 
                 CancelBefore();
-                NotifyHelper.Speak(string.Format(ModuleConfig.Format, speaker, line));
+                NotifyHelper.Speak(string.Format(config.Format, speaker, line));
                 break;
 
             case AddonEvent.PreFinalize:
@@ -136,20 +150,6 @@ public unsafe class AutoReadOutTalk : ModuleBase
 
     private static void CancelBefore() =>
         NotifyHelper.StopSpeak();
-
-    private delegate void ShowBattleTalkDelegate(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style);
-
-    private delegate void ShowBattleTalkImageDelegate
-    (
-        UIModule*      module,
-        CStringPointer name,
-        CStringPointer text,
-        float          duration,
-        uint           image,
-        byte           style,
-        int            sound,
-        uint           entityID
-    );
 
     private class Config : ModuleConfig
     {
