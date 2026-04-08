@@ -1013,7 +1013,7 @@ public unsafe partial class AutoRetainerWork
 
                 using (ImRaii.Disabled(TaskHelper.IsBusy))
                 {
-                    if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2366)!.Value.Text.ToString()))
+                    if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2366)))
                         RetainerSellList->Callback(-1);
                 }
 

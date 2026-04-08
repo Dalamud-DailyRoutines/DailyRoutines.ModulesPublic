@@ -10,8 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class GlamourPlateApplyCommand : ModuleBase
 {
-    private const string Command = "gpapply";
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("GlamourPlateApplyCommandTitle"),
@@ -20,7 +18,10 @@ public unsafe class GlamourPlateApplyCommand : ModuleBase
     };
 
     protected override void Init() =>
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("GlamourPlateApplyCommand-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("GlamourPlateApplyCommand-CommandHelp") });
+    
+    protected override void Uninit() =>
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
 
     private static void OnCommand(string command, string arguments)
     {
@@ -47,6 +48,9 @@ public unsafe class GlamourPlateApplyCommand : ModuleBase
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.EnterGlamourPlateState, 0, 1);
     }
 
-    protected override void Uninit() =>
-        CommandManager.Instance().RemoveSubCommand(Command);
+    #region 常量
+
+    private const string COMMAND = "gpapply";
+
+    #endregion
 }

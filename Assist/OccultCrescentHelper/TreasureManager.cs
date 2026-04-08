@@ -19,7 +19,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {
-    public unsafe class TreasureManager
+    private unsafe class TreasureManager
     (
         OccultCrescentHelper mainModule
     ) : BaseIslandModule(mainModule)
@@ -170,23 +170,23 @@ public partial class OccultCrescentHelper
         {
             using var id = ImRaii.PushId("TreasureManager");
 
-            if (ImGui.Checkbox(Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure"), ref ModuleConfig.IsEnabledAutoOpenTreasure))
-                ModuleConfig.Save(MainModule);
+            if (ImGui.Checkbox(Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure"), ref MainModule.config.IsEnabledAutoOpenTreasure))
+                MainModule.config.Save(MainModule);
             ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-Help"), 20f * GlobalUIScale);
 
-            if (ModuleConfig.IsEnabledAutoOpenTreasure)
+            if (MainModule.config.IsEnabledAutoOpenTreasure)
             {
                 ImGui.SetNextItemWidth(150f * GlobalUIScale);
                 ImGui.SliderFloat
                 (
                     $"{Lang.Get("OccultCrescentHelper-DistanceTo")}",
-                    ref ModuleConfig.DistanceToAutoOpenTreasure,
+                    ref MainModule.config.DistanceToAutoOpenTreasure,
                     1.0f,
                     50f,
                     "%.1f"
                 );
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    ModuleConfig.Save(MainModule);
+                    MainModule.config.Save(MainModule);
                 ImGuiOm.HelpMarker($"{Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-DistanceTo-Help")}", 20f * GlobalUIScale);
             }
 
@@ -224,23 +224,23 @@ public partial class OccultCrescentHelper
             if (ImGui.Checkbox
                 (
                     $"{Lang.Get("OccultCrescentHelper-TreasureManager-ShowLinkLine")} ({LuminaWrapper.GetAddonText(395)})",
-                    ref ModuleConfig.IsEnabledDrawLineToTreasure
+                    ref MainModule.config.IsEnabledDrawLineToTreasure
                 ))
-                ModuleConfig.Save(MainModule);
+                MainModule.config.Save(MainModule);
 
             if (ImGui.Checkbox
                 (
                     $"{Lang.Get("OccultCrescentHelper-TreasureManager-ShowLinkLine")} ({LuminaWrapper.GetEObjName(2014695)})",
-                    ref ModuleConfig.IsEnabledDrawLineToLog
+                    ref MainModule.config.IsEnabledDrawLineToLog
                 ))
-                ModuleConfig.Save(MainModule);
+                MainModule.config.Save(MainModule);
 
             if (ImGui.Checkbox
                 (
                     $"{Lang.Get("OccultCrescentHelper-TreasureManager-ShowLinkLine")} ({LuminaWrapper.GetItemName(48096)})",
-                    ref ModuleConfig.IsEnabledDrawLineToCarrot
+                    ref MainModule.config.IsEnabledDrawLineToCarrot
                 ))
-                ModuleConfig.Save(MainModule);
+                MainModule.config.Save(MainModule);
 
             ImGui.NewLine();
 
@@ -466,7 +466,7 @@ public partial class OccultCrescentHelper
         }
 
         // 绘制连接线和地图
-        private static void OnPosDraw()
+        private void OnPosDraw()
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
 
@@ -482,9 +482,9 @@ public partial class OccultCrescentHelper
                 {
                     switch (treasure.ObjectType)
                     {
-                        case SpecialObjectType.Treasure when !ModuleConfig.IsEnabledDrawLineToTreasure:
-                        case SpecialObjectType.SurveyPoint when !ModuleConfig.IsEnabledDrawLineToLog:
-                        case SpecialObjectType.SurveyPoint when !ModuleConfig.IsEnabledDrawLineToCarrot:
+                        case SpecialObjectType.Treasure when !MainModule.config.IsEnabledDrawLineToTreasure:
+                        case SpecialObjectType.SurveyPoint when !MainModule.config.IsEnabledDrawLineToLog:
+                        case SpecialObjectType.SurveyPoint when !MainModule.config.IsEnabledDrawLineToCarrot:
                             continue;
                     }
 
@@ -553,10 +553,10 @@ public partial class OccultCrescentHelper
         }
 
         // 自动开箱
-        private static void HandleAutoOpenTreasures()
+        private void HandleAutoOpenTreasures()
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
-                !ModuleConfig.IsEnabledAutoOpenTreasure                               ||
+                !MainModule.config.IsEnabledAutoOpenTreasure                          ||
                 DService.Instance().Condition[ConditionFlag.InCombat]                 ||
                 Treasures is not { Count: > 0 } treasures)
                 return;
@@ -573,7 +573,8 @@ public partial class OccultCrescentHelper
                     treasureObj->Flags.HasFlag(Treasure.TreasureFlags.FadedOut))
                     continue;
 
-                if (LocalPlayerState.DistanceTo2D(treasure.Position.ToVector2()) > ModuleConfig.DistanceToAutoOpenTreasure) continue;
+                if (LocalPlayerState.DistanceTo2D(treasure.Position.ToVector2()) > MainModule.config.DistanceToAutoOpenTreasure) 
+                    continue;
 
                 // 一次只开 1 个, 避免移速上限
                 InteractWithTreasure(gameObject);

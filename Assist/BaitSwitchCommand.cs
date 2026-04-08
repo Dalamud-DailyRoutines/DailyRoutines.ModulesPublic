@@ -1,6 +1,6 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
@@ -15,28 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class BaitSwitchCommand : ModuleBase
 {
-    private const string Command = "bait";
-
-    private static readonly Dictionary<uint, (string NameLower, string NamePinyin)> Baits =
-        LuminaGetter.Get<Item>()
-                    .Where(x => x.FilterGroup == 17 && !string.IsNullOrWhiteSpace(x.Name.ToString()))
-                    .ToDictionary
-                    (
-                        x => x.RowId,
-                        x => (x.Name.ToString().ToLower(),
-                                 PinyinHelper.GetPinyin(x.Name.ToString(), string.Empty))
-                    );
-
-    private static readonly Dictionary<uint, (string NameLower, string NamePinyin)> Fishes =
-        LuminaGetter.Get<Item>()
-                    .Where(x => x.FilterGroup == 16 && !string.IsNullOrWhiteSpace(x.Name.ToString()))
-                    .ToDictionary
-                    (
-                        x => x.RowId,
-                        x => (x.Name.ToString().ToLower(),
-                                 PinyinHelper.GetPinyin(x.Name.ToString(), string.Empty))
-                    );
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("BaitSwitchCommandTitle"),
@@ -45,15 +23,15 @@ public class BaitSwitchCommand : ModuleBase
     };
 
     protected override void Init() =>
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("BaitSwitchCommand-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BaitSwitchCommand-CommandHelp") });
 
     protected override void Uninit() =>
-        CommandManager.Instance().RemoveSubCommand(Command);
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
 
     protected override void ConfigUI() =>
         ImGui.TextWrapped(Lang.Get("BaitSwitchCommand-CommandHelpDetailed"));
 
-    public static void OnCommand(string command, string arguments)
+    private static void OnCommand(string command, string arguments)
     {
         arguments = arguments.Trim();
         if (string.IsNullOrWhiteSpace(arguments)) return;
@@ -98,9 +76,9 @@ public class BaitSwitchCommand : ModuleBase
 
     private static bool TryFindItemByName
     (
-        Dictionary<uint, (string NameLower, string NamePinyin)> source,
-        string                                                  itemName,
-        out uint                                                item
+        IDictionary<uint, (string NameLower, string NamePinyin)> source,
+        string                                                   itemName,
+        out uint                                                 item
     )
     {
         item = source
@@ -176,4 +154,30 @@ public class BaitSwitchCommand : ModuleBase
 
         return [itemArray[0], itemArray[1], itemArray[2]];
     }
+
+    #region 常量
+
+    private const string COMMAND = "bait";
+
+    private static readonly FrozenDictionary<uint, (string NameLower, string NamePinyin)> Baits =
+        LuminaGetter.Get<Item>()
+                    .Where(x => x.FilterGroup == 17 && !string.IsNullOrWhiteSpace(x.Name.ToString()))
+                    .ToFrozenDictionary
+                    (
+                        x => x.RowId,
+                        x => (x.Name.ToString().ToLower(),
+                                 PinyinHelper.GetPinyin(x.Name.ToString(), string.Empty))
+                    );
+
+    private static readonly FrozenDictionary<uint, (string NameLower, string NamePinyin)> Fishes =
+        LuminaGetter.Get<Item>()
+                    .Where(x => x.FilterGroup == 16 && !string.IsNullOrWhiteSpace(x.Name.ToString()))
+                    .ToFrozenDictionary
+                    (
+                        x => x.RowId,
+                        x => (x.Name.ToString().ToLower(),
+                                 PinyinHelper.GetPinyin(x.Name.ToString(), string.Empty))
+                    );
+
+    #endregion
 }

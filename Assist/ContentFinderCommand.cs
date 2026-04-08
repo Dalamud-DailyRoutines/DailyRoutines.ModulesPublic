@@ -1,9 +1,9 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
@@ -14,65 +14,27 @@ namespace DailyRoutines.ModulesPublic;
 
 public class ContentFinderCommand : ModuleBase
 {
-    private const string Command = "/pdrduty";
-
-    private static readonly Dictionary<string, (DutyType dutyType, string desc)> DutyTypes =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["normal"]   = (DutyType.Normal, Lang.Get("ContentFinderCommand-DutyType-Normal")),
-            ["n"]        = (DutyType.Normal, Lang.Get("ContentFinderCommand-DutyType-Normal")),
-            ["roulette"] = (DutyType.Roulette, Lang.Get("ContentFinderCommand-DutyType-Roulette")),
-            ["r"]        = (DutyType.Roulette, Lang.Get("ContentFinderCommand-DutyType-Roulette")),
-            ["support"]  = (DutyType.Support, LuminaGetter.GetRow<Addon>(14804)!.Value.Text.ToString()),
-            ["s"]        = (DutyType.Support, LuminaGetter.GetRow<Addon>(14804)!.Value.Text.ToString())
-        };
-
-    private static readonly Dictionary<string, (Action<OptionsWrapper> action, string desc)> OptionSetters =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["supply"] = (wrapper => wrapper.Options.Supply = true,
-                             LuminaGetter.GetRow<Addon>(2519)!.Value.Text.ToString()),
-            ["unrest"] = (wrapper => wrapper.Options.UnrestrictedParty = true,
-                             LuminaGetter.GetRow<Addon>(10008)!.Value.Text.ToString()),
-            ["minil"] = (wrapper => wrapper.Options.MinimalIL = true,
-                            LuminaGetter.GetRow<Addon>(10010)!.Value.Text.ToString()),
-            ["sync"] = (wrapper => wrapper.Options.LevelSync = true,
-                           LuminaGetter.GetRow<Addon>(12696)!.Value.Text.ToString()),
-            ["silence"] = (wrapper => wrapper.Options.SilenceEcho = true,
-                              LuminaGetter.GetRow<Addon>(2266)!.Value.Text.ToString()),
-            ["explorer"] = (wrapper => wrapper.Options.ExplorerMode = true,
-                               LuminaGetter.GetRow<Addon>(13038)!.Value.Text.ToString()),
-            ["limitleveling"] = (wrapper => wrapper.Options.IsLimitedLevelingRoulette = true,
-                                    LuminaGetter.GetRow<Addon>(13030)!.Value.Text.ToString()),
-            ["lootgreed"] = (wrapper => wrapper.Options.LootRules = ContentsFinder.LootRule.GreedOnly,
-                                LuminaGetter.GetRow<Addon>(102627)!.Value.Text.ToString()),
-            ["lootmaster"] = (wrapper => wrapper.Options.LootRules = ContentsFinder.LootRule.Lootmaster,
-                                 LuminaGetter.GetRow<Addon>(11087)!.Value.Text.ToString()),
-            ["lootnormal"] = (wrapper => wrapper.Options.LootRules = ContentsFinder.LootRule.Normal,
-                                 LuminaGetter.GetRow<Addon>(10100)!.Value.Text.ToString())
-        };
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("ContentFinderCommandTitle"),
-        Description = Lang.Get("ContentFinderCommandDescription", Command),
+        Description = Lang.Get("ContentFinderCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() =>
-        CommandManager.Instance().AddCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("ContentFinderCommand-CommandHelp") });
+        CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("ContentFinderCommand-CommandHelp") });
 
     protected override void Uninit() =>
-        CommandManager.Instance().RemoveCommand(Command);
+        CommandManager.Instance().RemoveCommand(COMMAND);
 
     protected override void ConfigUI()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"{Command} {Lang.Get("ContentFinderCommand-CommandHelp")}");
+        ImGui.TextUnformatted($"{COMMAND} {Lang.Get("ContentFinderCommand-CommandHelp")}");
 
         using (ImRaii.PushIndent())
             ImGui.TextUnformatted(Lang.Get("ContentFinderCommand-ArgsHelp"));
@@ -90,7 +52,7 @@ public class ContentFinderCommand : ModuleBase
             RenderTwoRowsTable("Options", OptionSetters, x => x.Value.desc);
     }
 
-    private static void RenderTwoRowsTable<T1, T2>(string id, Dictionary<T1, T2> source, Func<KeyValuePair<T1, T2>, string> right) where T1 : notnull
+    private static void RenderTwoRowsTable<T1, T2>(string id, IDictionary<T1, T2> source, Func<KeyValuePair<T1, T2>, string> right) where T1 : notnull
     {
         var       tableSize = new Vector2(ImGui.GetContentRegionAvail().X * 0.75f, 0);
         using var table     = ImRaii.Table(id, 2, ImGuiTableFlags.Borders, tableSize);
@@ -270,4 +232,36 @@ public class ContentFinderCommand : ModuleBase
         Roulette,
         Support
     }
+
+    #region 常量
+
+    private const string COMMAND = "/pdrduty";
+
+    private static readonly FrozenDictionary<string, (DutyType dutyType, string desc)> DutyTypes =
+        new Dictionary<string, (DutyType dutyType, string desc)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["normal"]   = (DutyType.Normal, Lang.Get("ContentFinderCommand-DutyType-Normal")),
+            ["n"]        = (DutyType.Normal, Lang.Get("ContentFinderCommand-DutyType-Normal")),
+            ["roulette"] = (DutyType.Roulette, Lang.Get("ContentFinderCommand-DutyType-Roulette")),
+            ["r"]        = (DutyType.Roulette, Lang.Get("ContentFinderCommand-DutyType-Roulette")),
+            ["support"]  = (DutyType.Support, LuminaWrapper.GetAddonText(14804)),
+            ["s"]        = (DutyType.Support, LuminaWrapper.GetAddonText(14804))
+        }.ToFrozenDictionary();
+
+    private static readonly FrozenDictionary<string, (Action<OptionsWrapper> action, string desc)> OptionSetters =
+        new Dictionary<string, (Action<OptionsWrapper> action, string desc)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["supply"] = (wrapper => wrapper.Options.Supply = true, LuminaWrapper.GetAddonText(2519)),
+            ["unrest"] = (wrapper => wrapper.Options.UnrestrictedParty = true, LuminaWrapper.GetAddonText(10008)),
+            ["minil"] = (wrapper => wrapper.Options.MinimalIL = true, LuminaWrapper.GetAddonText(10010)),
+            ["sync"] = (wrapper => wrapper.Options.LevelSync = true, LuminaWrapper.GetAddonText(12696)),
+            ["silence"] = (wrapper => wrapper.Options.SilenceEcho = true, LuminaWrapper.GetAddonText(2266)),
+            ["explorer"] = (wrapper => wrapper.Options.ExplorerMode = true, LuminaWrapper.GetAddonText(13038)),
+            ["limitleveling"] = (wrapper => wrapper.Options.IsLimitedLevelingRoulette = true, LuminaWrapper.GetAddonText(13030)),
+            ["lootgreed"] = (wrapper => wrapper.Options.LootRules = ContentsFinder.LootRule.GreedOnly, LuminaWrapper.GetAddonText(102627)),
+            ["lootmaster"] = (wrapper => wrapper.Options.LootRules = ContentsFinder.LootRule.Lootmaster, LuminaWrapper.GetAddonText(11087)),
+            ["lootnormal"] = (wrapper => wrapper.Options.LootRules = ContentsFinder.LootRule.Normal, LuminaWrapper.GetAddonText(10100))
+        }.ToFrozenDictionary();
+
+    #endregion
 }

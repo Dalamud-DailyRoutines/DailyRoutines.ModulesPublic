@@ -95,7 +95,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
 
             using (ImRaii.Disabled(!buttonNode->NodeFlags.HasFlag(NodeFlags.Enabled)))
             {
-                if (ImGui.Button(LuminaGetter.GetRow<Addon>(531)!.Value.Text.ToString()))
+                if (ImGui.Button(LuminaWrapper.GetAddonText(531)))
                     HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
             }
 

@@ -11,22 +11,20 @@ namespace DailyRoutines.ModulesPublic;
 
 public class JobSwitchCommand : ModuleBase
 {
-    private const string Command = "job";
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("JobSwitchCommandTitle"),
-        Description = Lang.Get("JobSwitchCommandDescription", Command),
+        Description = Lang.Get("JobSwitchCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() =>
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("JobSwitchCommand-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("JobSwitchCommand-CommandHelp") });
 
     protected override void Uninit() =>
-        CommandManager.Instance().RemoveSubCommand(Command);
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
 
     private static void OnCommand(string command, string args)
     {
@@ -56,4 +54,10 @@ public class JobSwitchCommand : ModuleBase
             }
         }
     }
+
+    #region 常量
+
+    private const string COMMAND = "job";
+
+    #endregion
 }

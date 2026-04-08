@@ -62,7 +62,7 @@ public class AutoSortItems : ModuleBase
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(LuminaWrapper.GetAddonText(12210));
 
-        var typeText = LuminaGetter.GetRow<Addon>(9448)!.Value.Text.ToString();
+        var typeText = LuminaWrapper.GetAddonText(9448);
 
         DrawTableRow("兵装库 ID", "ID",              ref ModuleConfig.ArmouryChestID,   SortOptions);
         DrawTableRow("兵装库等级",  Lang.Get("Level"), ref ModuleConfig.ArmouryItemLevel, SortOptions);

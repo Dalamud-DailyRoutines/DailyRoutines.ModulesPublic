@@ -18,19 +18,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static AetheryteManager  AetheryteModule;
-    private static CEManager         CEModule;
-    private static TreasureManager   TreasureModule;
-    private static SupportJobManager SupportJobModule;
-    private static OthersManager     OthersModule;
-
-    private static List<BaseIslandModule> Modules = [];
-
-    private static readonly CompSig IslandIDInstanceOffsetSig = new("48 8D 8F ?? ?? ?? ?? 40 0F B6 D5 E8 ?? ?? ?? ?? 8B D3");
-    private static          nint    IslandIDInstanceOffset;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("OccultCrescentHelperTitle"),
@@ -41,10 +28,32 @@ public partial class OccultCrescentHelper : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config config = null!;
 
+    private readonly AetheryteManager  aetheryteModule;
+    private readonly CEManager         ceModule;
+    private readonly TreasureManager   treasureModule;
+    private readonly SupportJobManager supportJobModule;
+    private readonly OthersManager     othersModule;
+
+    private List<BaseIslandModule> modules = [];
+
+    private static readonly CompSig IslandIDInstanceOffsetSig = new("48 8D 8F ?? ?? ?? ?? 40 0F B6 D5 E8 ?? ?? ?? ?? 8B D3");
+    private                 nint    IslandIDInstanceOffset;
+
+    public OccultCrescentHelper()
+    {
+        aetheryteModule  = new(this);
+        ceModule         = new(this);
+        treasureModule   = new(this);
+        supportJobModule = new(this);
+        othersModule     = new(this);
+    }
+    
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         // lea     rcx, [rdi+XXXX], 因为是四字节所以用 uint
         if (IslandIDInstanceOffset == nint.Zero)
@@ -54,15 +63,9 @@ public partial class OccultCrescentHelper : ModuleBase
         Overlay       ??= new(this);
         Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
 
-        AetheryteModule  = new(this);
-        CEModule         = new(this);
-        TreasureModule   = new(this);
-        SupportJobModule = new(this);
-        OthersModule     = new(this);
+        modules = [aetheryteModule, ceModule, treasureModule, supportJobModule, othersModule];
 
-        Modules = [AetheryteModule, CEModule, TreasureModule, SupportJobModule, OthersModule];
-
-        foreach (var module in Modules)
+        foreach (var module in modules)
             module.Init();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
@@ -74,18 +77,18 @@ public partial class OccultCrescentHelper : ModuleBase
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-        foreach (var module in Modules)
+        foreach (var module in modules)
             module.Uninit();
     }
 
-    private static void OnZoneChanged(ushort obj)
+    private void OnZoneChanged(ushort obj)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
         FrameworkManager.Instance().Reg(OnUpdate, 1_000);
     }
 
-    private static void OnUpdate(IFramework framework)
+    private void OnUpdate(IFramework framework)
     {
         if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
         {
@@ -93,7 +96,7 @@ public partial class OccultCrescentHelper : ModuleBase
             return;
         }
 
-        foreach (var module in Modules)
+        foreach (var module in modules)
             module.OnUpdate();
     }
 
@@ -105,31 +108,31 @@ public partial class OccultCrescentHelper : ModuleBase
         using (var aetheryteTab = ImRaii.TabItem($"{LuminaWrapper.GetEObjName(2014664)}"))
         {
             if (aetheryteTab)
-                AetheryteModule.DrawConfig();
+                aetheryteModule.DrawConfig();
         }
 
         using (var ceTab = ImRaii.TabItem("CE / FATE"))
         {
             if (ceTab)
-                CEModule.DrawConfig();
+                ceModule.DrawConfig();
         }
 
         using (var treasureTab = ImRaii.TabItem($"{LuminaWrapper.GetAddonText(395)}"))
         {
             if (treasureTab)
-                TreasureModule.DrawConfig();
+                treasureModule.DrawConfig();
         }
 
         using (var supportJobTab = ImRaii.TabItem($"{LuminaWrapper.GetAddonText(16633)}"))
         {
             if (supportJobTab)
-                SupportJobModule.DrawConfig();
+                supportJobModule.DrawConfig();
         }
 
         using (var othersTab = ImRaii.TabItem($"{LuminaWrapper.GetAddonText(832)}"))
         {
             if (othersTab)
-                OthersModule.DrawConfig();
+                othersModule.DrawConfig();
         }
     }
 
@@ -169,10 +172,10 @@ public partial class OccultCrescentHelper : ModuleBase
         taskHelper.Enqueue(() => MovementManager.Instance().TPGround(), weight: weight);
     }
 
-    private static unsafe uint GetIslandID() =>
+    private unsafe uint GetIslandID() =>
         (uint)*(ulong*)((byte*)GameMain.Instance() + IslandIDInstanceOffset + 1488);
 
-    public class Config : ModuleConfig
+    private class Config : ModuleConfig
     {
         // 辅助职业技能是否为真
         public bool AddonIsDragRealAction = true;
@@ -237,7 +240,7 @@ public partial class OccultCrescentHelper : ModuleBase
         public float                               LeftTimeMoveToEvent             = 90;
     }
 
-    public abstract class BaseIslandModule
+    private abstract class BaseIslandModule
     (
         OccultCrescentHelper mainModule
     )

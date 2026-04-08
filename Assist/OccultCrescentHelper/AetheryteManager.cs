@@ -19,7 +19,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {
-    public class AetheryteManager
+    private class AetheryteManager
     (
         OccultCrescentHelper mainModule
     ) : BaseIslandModule(mainModule)
@@ -92,16 +92,16 @@ public partial class OccultCrescentHelper
 
             ImGui.NewLine();
 
-            if (ImGui.Checkbox($"{Lang.Get("OccultCrescentHelper-PrioritizeMoveTo")}", ref ModuleConfig.IsEnabledMoveToAetheryte))
-                ModuleConfig.Save(MainModule);
+            if (ImGui.Checkbox($"{Lang.Get("OccultCrescentHelper-PrioritizeMoveTo")}", ref MainModule.config.IsEnabledMoveToAetheryte))
+                MainModule.config.Save(MainModule);
             ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-AetheryteManager-PrioritizeMoveTo-Help"), 20f * GlobalUIScale);
 
-            if (ModuleConfig.IsEnabledMoveToAetheryte)
+            if (MainModule.config.IsEnabledMoveToAetheryte)
             {
                 ImGui.SetNextItemWidth(150f * GlobalUIScale);
-                ImGui.SliderFloat($"{Lang.Get("OccultCrescentHelper-DistanceTo")}", ref ModuleConfig.DistanceToMoveToAetheryte, 1f, 100f, "%.1f");
+                ImGui.SliderFloat($"{Lang.Get("OccultCrescentHelper-DistanceTo")}", ref MainModule.config.DistanceToMoveToAetheryte, 1f, 100f, "%.1f");
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    ModuleConfig.Save(MainModule);
+                    MainModule.config.Save(MainModule);
                 ImGuiOm.HelpMarker($"{Lang.Get("OccultCrescentHelper-AetheryteManager-PrioritizeMoveTo-DistanceTo-Help")}", 20f * GlobalUIScale);
             }
 
@@ -125,7 +125,7 @@ public partial class OccultCrescentHelper
             vnavmeshIPC.StopPathfind();
         }
 
-        private static void OnCommandTP(string command, string args)
+        private void OnCommandTP(string command, string args)
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
 
@@ -149,7 +149,7 @@ public partial class OccultCrescentHelper
             UseAetheryte(aetheryte);
         }
 
-        public static unsafe void UseAetheryte(CrescentAetheryte aetheryte)
+        public unsafe void UseAetheryte(CrescentAetheryte aetheryte)
         {
             if (aetheryte == null) return;
 
@@ -194,9 +194,9 @@ public partial class OccultCrescentHelper
                 }
 
                 // 启用了绿玩移动
-                if (ModuleConfig.IsEnabledMoveToAetheryte                            &&
+                if (MainModule.config.IsEnabledMoveToAetheryte                            &&
                     DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) &&
-                    distance3D <= ModuleConfig.DistanceToMoveToAetheryte)
+                    distance3D <= MainModule.config.DistanceToMoveToAetheryte)
                 {
                     MoveTaskHelper.Abort();
 
@@ -271,7 +271,7 @@ public partial class OccultCrescentHelper
             }
 
             // 先回去 然后重复一次这个流程
-            if (ModuleConfig.IsEnabledMoveToAetheryte &&
+            if (MainModule.config.IsEnabledMoveToAetheryte &&
                 DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME))
             {
                 MoveTaskHelper.Enqueue(() => UseActionManager.Instance().UseActionLocation(ActionType.Action, 41343));

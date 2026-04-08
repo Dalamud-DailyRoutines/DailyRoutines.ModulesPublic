@@ -20,7 +20,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {
-    public class SupportJobManager
+    private class SupportJobManager
     (
         OccultCrescentHelper mainModule
     ) : BaseIslandModule(mainModule)
@@ -74,9 +74,9 @@ public partial class OccultCrescentHelper
                 if (ImGui.Checkbox
                     (
                         $"{Lang.Get("OccultCrescentHelper-SupportJobManager-Monk-PhantomKickNoMove")}##NoMoveMonk",
-                        ref ModuleConfig.IsEnabledMonkKickNoMove
+                        ref MainModule.config.IsEnabledMonkKickNoMove
                     ))
-                    ModuleConfig.Save(MainModule);
+                    MainModule.config.Save(MainModule);
                 ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Monk-PhantomKickNoMove-Help"), 20f * GlobalUIScale);
             }
 
@@ -89,17 +89,17 @@ public partial class OccultCrescentHelper
                 if (ImGui.Checkbox
                     (
                         $"{Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageAutoFace")}##BerserkerRageAutoFace",
-                        ref ModuleConfig.IsEnabledBerserkerRageAutoFace
+                        ref MainModule.config.IsEnabledBerserkerRageAutoFace
                     ))
-                    ModuleConfig.Save(MainModule);
+                    MainModule.config.Save(MainModule);
                 ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageAutoFace-Help"), 20f * GlobalUIScale);
 
                 if (ImGui.Checkbox
                     (
                         $"{Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageReplace")}##BerserkerRageReplace",
-                        ref ModuleConfig.IsEnabledBerserkerRageReplace
+                        ref MainModule.config.IsEnabledBerserkerRageReplace
                     ))
-                    ModuleConfig.Save(MainModule);
+                    MainModule.config.Save(MainModule);
                 ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageReplace-Help"), 20f * GlobalUIScale);
             }
 
@@ -121,7 +121,7 @@ public partial class OccultCrescentHelper
             }
         }
 
-        private static void OnPreUseAction
+        private void OnPreUseAction
         (
             ref bool                        isPrevented,
             ref ActionType                  actionType,
@@ -133,7 +133,7 @@ public partial class OccultCrescentHelper
         )
         {
             // 狂战士自动面向
-            if (ModuleConfig.IsEnabledBerserkerRageAutoFace)
+            if (MainModule.config.IsEnabledBerserkerRageAutoFace)
             {
                 if (actionType != ActionType.Action || actionID != 41592) return;
 
@@ -143,7 +143,7 @@ public partial class OccultCrescentHelper
             }
         }
 
-        private static void OnCompleteCast
+        private void OnCompleteCast
         (
             ref bool         isPrevented,
             ref IBattleChara battleChara,
@@ -162,14 +162,14 @@ public partial class OccultCrescentHelper
             if (battleChara.Address != localPlayer.Address) return;
 
             // 武僧无位移
-            if (ModuleConfig.IsEnabledMonkKickNoMove)
+            if (MainModule.config.IsEnabledMonkKickNoMove)
             {
                 if (actionType == ActionType.Action && actionID == 41595)
                     actionID = spellID = 7;
             }
 
             // 狂怒攻击替换
-            if (ModuleConfig.IsEnabledBerserkerRageReplace)
+            if (MainModule.config.IsEnabledBerserkerRageReplace)
             {
                 if (actionType == ActionType.Action && actionID == 41593)
                     actionID = spellID = 3549;

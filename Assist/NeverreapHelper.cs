@@ -13,8 +13,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class NeverreapHelper : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("NeverreapHelperTitle"),
@@ -23,20 +21,25 @@ public class NeverreapHelper : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
-        TaskHelper   ??= new() { TimeoutMS = 30_000 };
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 30_000 };
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("OnlyValidWhenSolo"), ref ModuleConfig.ValidWhenSolo))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OnlyValidWhenSolo"), ref config.ValidWhenSolo))
+            config.Save(this);
     }
 
     private unsafe void OnZoneChanged(ushort zone)
@@ -51,7 +54,7 @@ public class NeverreapHelper : ModuleBase
                 if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
                 if (DService.Instance().Condition.IsBetweenAreas || !UIModule.IsScreenReady()) return false;
 
-                if (ModuleConfig.ValidWhenSolo && (DService.Instance().PartyList.Length > 1 || PlayersManager.Instance().PlayersAroundCount > 0))
+                if (config.ValidWhenSolo && (DService.Instance().PartyList.Length > 1 || PlayersManager.Instance().PlayersAroundCount > 0))
                 {
                     TaskHelper.Abort();
                     return true;
@@ -64,10 +67,7 @@ public class NeverreapHelper : ModuleBase
             }
         );
     }
-
-    protected override void Uninit() =>
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-
+    
     private class Config : ModuleConfig
     {
         public bool ValidWhenSolo = true;

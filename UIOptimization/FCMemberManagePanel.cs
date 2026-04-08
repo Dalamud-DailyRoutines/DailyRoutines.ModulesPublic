@@ -299,24 +299,24 @@ public unsafe class FCMemberManagePanel : ModuleBase
             ImGui.Spacing();
 
             // 冒险者铭牌
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString());
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(15083));
 
             // 个人信息
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString());
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(51));
 
             // 部队信息
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString());
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2807));
 
             // 任命
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString());
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2656)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2656));
 
             // 除名
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString());
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2801));
 
             ImGui.EndPopup();
         }
@@ -338,28 +338,28 @@ public unsafe class FCMemberManagePanel : ModuleBase
                     SelectedMembers.Clear();
 
                 // 冒险者铭牌
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString());
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
+                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(15083));
 
                 // 个人信息
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString(), "SocialDetailB");
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
+                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(51), "SocialDetailB");
 
                 // 部队信息
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString());
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
+                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(2807));
 
                 // 任命
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString());
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2656)))
+                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(2656));
 
                 // 除名
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString()))
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
                 {
                     EnqueueContentMenuClicks
                     (
                         SelectedMembers,
-                        LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString(),
+                        LuminaWrapper.GetAddonText(2801),
                         "SelectYesno",
                         () =>
                         {
@@ -586,7 +586,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
                 ContentID    = data.ContentId,
                 Index        = index,
                 OnlineStatus = (uint)GetOrigOnlineStatusID(data.State),
-                Name         = string.IsNullOrWhiteSpace(data.NameString) ? LuminaGetter.GetRow<Addon>(964)!.Value.Text.ToString() : data.NameString,
+                Name         = string.IsNullOrWhiteSpace(data.NameString) ? LuminaWrapper.GetAddonText(964) : data.NameString,
                 JobIcon      = data.Job == 0 ? null : DService.Instance().Texture.GetFromGameIcon(new(62100U + data.Job)),
                 Job          = data.Job == 0 ? string.Empty : LuminaGetter.GetRow<ClassJob>(data.Job)?.Abbreviation.ToString(),
                 Location = data.Location != 0

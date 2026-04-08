@@ -33,7 +33,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {
-    public unsafe class OthersManager
+    private unsafe class OthersManager
     (
         OccultCrescentHelper mainModule
     ) : BaseIslandModule(mainModule)
@@ -58,18 +58,18 @@ public partial class OccultCrescentHelper
         {
             OthersTaskHelper ??= new() { TimeoutMS = 30_000 };
 
-            var addedJobs        = ModuleConfig.AddonSupportJobOrder.ToHashSet();
+            var addedJobs        = MainModule.config.AddonSupportJobOrder.ToHashSet();
             var isAnyNewJobOrder = false;
 
             foreach (var job in LuminaGetter.Get<MKDSupportJob>())
             {
                 if (addedJobs.Contains(job.RowId)) continue;
-                ModuleConfig.AddonSupportJobOrder.Add(job.RowId);
+                MainModule.config.AddonSupportJobOrder.Add(job.RowId);
                 isAnyNewJobOrder = true;
             }
 
             if (isAnyNewJobOrder)
-                ModuleConfig.Save(MainModule);
+                MainModule.config.Save(MainModule);
 
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "MKDInfo", OnAddon);
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "MKDInfo", OnAddon);
@@ -81,7 +81,7 @@ public partial class OccultCrescentHelper
             DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
             OnZoneChanged(0);
 
-            SupportJobChangeAddon ??= new()
+            SupportJobChangeAddon ??= new(this)
             {
                 InternalName          = "DRMKDSupportJobChange",
                 Title                 = LuminaWrapper.GetAddonText(16658),
@@ -132,8 +132,8 @@ public partial class OccultCrescentHelper
 
             using (ImRaii.PushIndent())
             {
-                if (ImGui.Checkbox($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandIDInChat")}", ref ModuleConfig.IsEnabledIslandIDChat))
-                    ModuleConfig.Save(MainModule);
+                if (ImGui.Checkbox($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandIDInChat")}", ref MainModule.config.IsEnabledIslandIDChat))
+                    MainModule.config.Save(MainModule);
             }
 
             ImGui.NewLine();
@@ -144,15 +144,15 @@ public partial class OccultCrescentHelper
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
 
-            if (ImGui.Checkbox("###ModifyInfoHUD", ref ModuleConfig.IsEnabledModifyInfoHUD))
+            if (ImGui.Checkbox("###ModifyInfoHUD", ref MainModule.config.IsEnabledModifyInfoHUD))
             {
-                ModuleConfig.Save(MainModule);
+                MainModule.config.Save(MainModule);
 
-                if (!ModuleConfig.IsEnabledModifyInfoHUD)
+                if (!MainModule.config.IsEnabledModifyInfoHUD)
                     OnAddon(AddonEvent.PreFinalize, null);
             }
 
-            if (ModuleConfig.IsEnabledModifyInfoHUD)
+            if (MainModule.config.IsEnabledModifyInfoHUD)
             {
                 using (ImRaii.PushIndent())
                 {
@@ -165,23 +165,23 @@ public partial class OccultCrescentHelper
 
                     ImGui.SameLine();
                     if (ImGui.SmallButton(Lang.Get("Save")))
-                        ModuleConfig.Save(MainModule);
+                        MainModule.config.Save(MainModule);
 
                     ImGui.SameLine();
 
                     if (ImGui.SmallButton(Lang.Get("Reset")))
                     {
-                        ModuleConfig.AddonSupportJobOrder = ModuleConfig.AddonSupportJobOrder.Order().ToList();
-                        ModuleConfig.Save(MainModule);
+                        MainModule.config.AddonSupportJobOrder = MainModule.config.AddonSupportJobOrder.Order().ToList();
+                        MainModule.config.Save(MainModule);
                     }
 
                     using (ImRaii.PushIndent())
                     {
-                        var longestJobName = ModuleConfig.AddonSupportJobOrder.Select(LuminaWrapper.GetMKDSupportJobName).MaxBy(x => x.Length);
+                        var longestJobName = MainModule.config.AddonSupportJobOrder.Select(LuminaWrapper.GetMKDSupportJobName).MaxBy(x => x.Length);
 
-                        for (var i = 0; i < ModuleConfig.AddonSupportJobOrder.Count; i++)
+                        for (var i = 0; i < MainModule.config.AddonSupportJobOrder.Count; i++)
                         {
-                            var supportJob = ModuleConfig.AddonSupportJobOrder[i];
+                            var supportJob = MainModule.config.AddonSupportJobOrder[i];
                             var name       = LuminaWrapper.GetMKDSupportJobName(supportJob);
 
                             ImGui.Button(name, new(ImGui.CalcTextSize(longestJobName).X * 2, ImGui.GetTextLineHeightWithSpacing()));
@@ -205,8 +205,8 @@ public partial class OccultCrescentHelper
 
                                     if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && DragDropJobIndex >= 0)
                                     {
-                                        (ModuleConfig.AddonSupportJobOrder[DragDropJobIndex], ModuleConfig.AddonSupportJobOrder[i]) =
-                                            (ModuleConfig.AddonSupportJobOrder[i], ModuleConfig.AddonSupportJobOrder[DragDropJobIndex]);
+                                        (MainModule.config.AddonSupportJobOrder[DragDropJobIndex], MainModule.config.AddonSupportJobOrder[i]) =
+                                            (MainModule.config.AddonSupportJobOrder[i], MainModule.config.AddonSupportJobOrder[DragDropJobIndex]);
 
                                         DragDropJobIndex = -1;
                                     }
@@ -228,24 +228,24 @@ public partial class OccultCrescentHelper
             ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-ModifyDefaultEnterZonePosition-Help"), 20f * GlobalUIScale);
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGui.Checkbox("###ModifyDefaultEnterZonePositionSouthHorn", ref ModuleConfig.IsEnabledModifyDefaultPositionEnterZoneSouthHorn))
-                ModuleConfig.Save(MainModule);
+            if (ImGui.Checkbox("###ModifyDefaultEnterZonePositionSouthHorn", ref MainModule.config.IsEnabledModifyDefaultPositionEnterZoneSouthHorn))
+                MainModule.config.Save(MainModule);
 
-            if (ModuleConfig.IsEnabledModifyDefaultPositionEnterZoneSouthHorn)
+            if (MainModule.config.IsEnabledModifyDefaultPositionEnterZoneSouthHorn)
             {
                 using (ImRaii.PushIndent())
                 {
                     ImGui.SetNextItemWidth(200f * GlobalUIScale);
-                    ImGui.InputFloat3("###DefaultPositionEnterZoneSouthHornInput", ref ModuleConfig.DefaultPositionEnterZoneSouthHorn);
+                    ImGui.InputFloat3("###DefaultPositionEnterZoneSouthHornInput", ref MainModule.config.DefaultPositionEnterZoneSouthHorn);
                     if (ImGui.IsItemDeactivatedAfterEdit())
-                        ModuleConfig.Save(MainModule);
+                        MainModule.config.Save(MainModule);
 
                     ImGui.SameLine();
 
                     if (ImGui.Button($"{Lang.Get("Current")}##SetDefaultPositionEnterZoneSouthHorn"))
                     {
-                        ModuleConfig.DefaultPositionEnterZoneSouthHorn = DService.Instance().ObjectTable.LocalPlayer?.Position ?? default;
-                        ModuleConfig.Save(MainModule);
+                        MainModule.config.DefaultPositionEnterZoneSouthHorn = DService.Instance().ObjectTable.LocalPlayer?.Position ?? default;
+                        MainModule.config.Save(MainModule);
                     }
 
                     var isFirst = true;
@@ -258,8 +258,8 @@ public partial class OccultCrescentHelper
 
                         if (ImGui.Button($"{aetheryte.Name}##SetDefaultPositionEnterZoneSouthHorn"))
                         {
-                            ModuleConfig.DefaultPositionEnterZoneSouthHorn = aetheryte.Position;
-                            ModuleConfig.Save(MainModule);
+                            MainModule.config.DefaultPositionEnterZoneSouthHorn = aetheryte.Position;
+                            MainModule.config.Save(MainModule);
                         }
                     }
                 }
@@ -272,18 +272,18 @@ public partial class OccultCrescentHelper
             ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-AutoEnableDisablePlugins-Help"), 20f * GlobalUIScale);
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGui.Checkbox("###IsEnabledAutoEnableDisablePlugins", ref ModuleConfig.IsEnabledAutoEnableDisablePlugins))
-                ModuleConfig.Save(MainModule);
+            if (ImGui.Checkbox("###IsEnabledAutoEnableDisablePlugins", ref MainModule.config.IsEnabledAutoEnableDisablePlugins))
+                MainModule.config.Save(MainModule);
 
-            if (ModuleConfig.IsEnabledAutoEnableDisablePlugins)
+            if (MainModule.config.IsEnabledAutoEnableDisablePlugins)
             {
                 using (ImRaii.PushIndent())
                 {
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 20f * GlobalUIScale);
-                    ImGui.InputText("###AutoEnableDisablePluginsInput", ref ModuleConfig.AutoEnableDisablePlugins, 1024);
+                    ImGui.InputText("###AutoEnableDisablePluginsInput", ref MainModule.config.AutoEnableDisablePlugins, 1024);
                     if (ImGui.IsItemDeactivatedAfterEdit())
-                        ModuleConfig.Save(MainModule);
-                    ImGuiOm.TooltipHover(ModuleConfig.AutoEnableDisablePlugins);
+                        MainModule.config.Save(MainModule);
+                    ImGuiOm.TooltipHover(MainModule.config.AutoEnableDisablePlugins);
                 }
             }
 
@@ -294,8 +294,8 @@ public partial class OccultCrescentHelper
             ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-HideDutyCommand-Help"), 20f * GlobalUIScale);
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGui.Checkbox("###HideDutyCommand", ref ModuleConfig.IsEnabledHideDutyCommand))
-                ModuleConfig.Save(MainModule);
+            if (ImGui.Checkbox("###HideDutyCommand", ref MainModule.config.IsEnabledHideDutyCommand))
+                MainModule.config.Save(MainModule);
 
             ImGui.NewLine();
 
@@ -304,13 +304,13 @@ public partial class OccultCrescentHelper
             ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal-Help"), 20f * GlobalUIScale);
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGui.Checkbox("###FastUseKnowledgeCrystal", ref ModuleConfig.IsEnabledKnowledgeCrystalFastUse))
-                ModuleConfig.Save(MainModule);
+            if (ImGui.Checkbox("###FastUseKnowledgeCrystal", ref MainModule.config.IsEnabledKnowledgeCrystalFastUse))
+                MainModule.config.Save(MainModule);
         }
 
-        private static void AgentMKDSupportJobShowDetour(AgentInterface* agent)
+        private void AgentMKDSupportJobShowDetour(AgentInterface* agent)
         {
-            if (!ModuleConfig.IsEnabledModifyInfoHUD)
+            if (!MainModule.config.IsEnabledModifyInfoHUD)
             {
                 AgentMKDSupportJobShowHook.Original(agent);
                 return;
@@ -322,7 +322,7 @@ public partial class OccultCrescentHelper
             SupportJobChangeAddon.Toggle();
         }
 
-        private static void OnZoneChanged(ushort zone)
+        private void OnZoneChanged(ushort zone)
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
             {
@@ -331,9 +331,9 @@ public partial class OccultCrescentHelper
 
                 IsJustLogin = false;
 
-                if (GameState.TerritoryType == 1278 && ModuleConfig.IsEnabledAutoEnableDisablePlugins)
+                if (GameState.TerritoryType == 1278 && MainModule.config.IsEnabledAutoEnableDisablePlugins)
                 {
-                    var pluginsNames = ModuleConfig.AutoEnableDisablePlugins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var pluginsNames = MainModule.config.AutoEnableDisablePlugins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
                     foreach (var plugin in pluginsNames)
                     {
@@ -348,11 +348,11 @@ public partial class OccultCrescentHelper
             }
 
             OverlayController ??= new();
-            OverlayController.CreateNode(() => new LongTimeBuffButton());
+            OverlayController.AddNode(new LongTimeBuffButton(this));
 
-            var islandID = GetIslandID();
+            var islandID = MainModule.GetIslandID();
 
-            if (ModuleConfig.IsEnabledIslandIDChat)
+            if (MainModule.config.IsEnabledIslandIDChat)
             {
                 var message = new SeStringBuilder()
                               .AddText($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandID")}: ")
@@ -363,8 +363,8 @@ public partial class OccultCrescentHelper
                 NotifyHelper.Instance().Chat(message);
             }
 
-            if (!IsJustLogin                                                  &&
-                ModuleConfig.IsEnabledModifyDefaultPositionEnterZoneSouthHorn &&
+            if (!IsJustLogin                                                       &&
+                MainModule.config.IsEnabledModifyDefaultPositionEnterZoneSouthHorn &&
                 DService.Instance().Condition.IsBetweenAreas)
             {
                 OthersTaskHelper.Abort();
@@ -374,15 +374,15 @@ public partial class OccultCrescentHelper
                         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
                         if (localPlayer.IsDead) return true;
 
-                        MovementManager.Instance().TPPlayerAddress(ModuleConfig.DefaultPositionEnterZoneSouthHorn);
+                        MovementManager.Instance().TPPlayerAddress(MainModule.config.DefaultPositionEnterZoneSouthHorn);
                         return true;
                     }
                 );
             }
 
-            if (ModuleConfig.IsEnabledAutoEnableDisablePlugins)
+            if (MainModule.config.IsEnabledAutoEnableDisablePlugins)
             {
-                var pluginsNames = ModuleConfig.AutoEnableDisablePlugins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var pluginsNames = MainModule.config.AutoEnableDisablePlugins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
                 foreach (var plugin in pluginsNames)
                 {
@@ -394,7 +394,7 @@ public partial class OccultCrescentHelper
             }
         }
 
-        private static void OnActionContents(AddonEvent type, AddonArgs args)
+        private void OnActionContents(AddonEvent type, AddonArgs args)
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
             if (!Throttler.Shared.Throttle("OccultCrescentHelper-OthersManager-ActionDetail")) return;
@@ -404,7 +404,7 @@ public partial class OccultCrescentHelper
             var resNode = ActionContents->GetNodeById(17);
             if (resNode == null) return;
 
-            resNode->ToggleVisibility(!ModuleConfig.IsEnabledHideDutyCommand);
+            resNode->ToggleVisibility(!MainModule.config.IsEnabledHideDutyCommand);
         }
 
         // 避免登入进来被重定向了
@@ -418,14 +418,14 @@ public partial class OccultCrescentHelper
                 case AddonEvent.PostDraw:
                     if (MKDInfo == null) return;
 
-                    if (ModuleConfig.IsEnabledModifyInfoHUD && SettingButton == null)
+                    if (MainModule.config.IsEnabledModifyInfoHUD && SettingButton == null)
                     {
                         var textNode = MKDInfo->GetTextNodeById(19);
                         if (textNode != null)
-                            textNode->SetText($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandID")}: {GetIslandID()}");
+                            textNode->SetText($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandID")}: {MainModule.GetIslandID()}");
                     }
 
-                    if (ModuleConfig.IsEnabledModifyInfoHUD && SettingButton == null)
+                    if (MainModule.config.IsEnabledModifyInfoHUD && SettingButton == null)
                     {
                         var newJobNotifyButton = MKDInfo->GetImageNodeById(24);
 
@@ -452,7 +452,7 @@ public partial class OccultCrescentHelper
                         SettingButton.AttachNode(MKDInfo->GetNodeById(20));
                     }
 
-                    if (ModuleConfig.IsEnabledModifyInfoHUD && MapButton == null)
+                    if (MainModule.config.IsEnabledModifyInfoHUD && MapButton == null)
                     {
                         MapButton = new()
                         {
@@ -479,7 +479,7 @@ public partial class OccultCrescentHelper
                         MapButton.AttachNode(MKDInfo->GetNodeById(20));
                     }
 
-                    if (ModuleConfig.IsEnabledModifyInfoHUD && SupportJobChangeButton == null)
+                    if (MainModule.config.IsEnabledModifyInfoHUD && SupportJobChangeButton == null)
                     {
                         SupportJobChangeButton = new()
                         {
@@ -508,7 +508,7 @@ public partial class OccultCrescentHelper
             }
         }
 
-        public class AddonDRMKDSupportJobChange : NativeAddon
+        public class AddonDRMKDSupportJobChange(OthersManager manager) : NativeAddon
         {
             private const float LERP_SPEED = 0.2f;
 
@@ -658,7 +658,7 @@ public partial class OccultCrescentHelper
 
                 var counter = -1;
 
-                foreach (var data in LuminaGetter.Get<MKDSupportJob>().OrderBy(x => ModuleConfig.AddonSupportJobOrder.IndexOf(x.RowId)))
+                foreach (var data in LuminaGetter.Get<MKDSupportJob>().OrderBy(x => manager.MainModule.config.AddonSupportJobOrder.IndexOf(x.RowId)))
                 {
                     counter++;
 
@@ -853,7 +853,7 @@ public partial class OccultCrescentHelper
                                 var node = jobActionsContainer[index];
                                 node.IsVisible = index == (int)data.RowId;
                                 if (node is { IsVisible: true, BackgroundNode: null })
-                                    node.LoadNodes(presetJob, isFocused);
+                                    node.LoadNodes(manager, presetJob, isFocused);
                             }
 
                             WindowNode.CollisionNode.Size = WindowNode.CollisionNode.Size with { X = 750 };
@@ -873,7 +873,7 @@ public partial class OccultCrescentHelper
                                 var node = jobActionsContainer[index];
                                 node.IsVisible = index == (int)data.RowId;
                                 if (node is { IsVisible: true, BackgroundNode: null })
-                                    node.LoadNodes(presetJob, isFocused);
+                                    node.LoadNodes(manager, presetJob, isFocused);
                             }
 
                             WindowNode.CollisionNode.Size = WindowNode.CollisionNode.Size with { X = 750 };
@@ -1116,7 +1116,7 @@ public partial class OccultCrescentHelper
                 public CheckboxNode            IsRealActionNode     { get; private set; }
                 public List<SupportActionNode> ActionDragDropNodes  { get; private set; } = [];
 
-                public void LoadNodes(CrescentSupportJob presetJob, bool isCurrentFoucused)
+                public void LoadNodes(OthersManager manager, CrescentSupportJob presetJob, bool isCurrentFoucused)
                 {
                     BackgroundNode = new SimpleNineGridNode
                     {
@@ -1189,7 +1189,7 @@ public partial class OccultCrescentHelper
                             Size      = new(40f)
                         };
 
-                        var dragDropNode = new SupportActionNode(presetJob, this, action.RowId, ActionDragDropNodes.Count, ModuleConfig.AddonIsDragRealAction)
+                        var dragDropNode = new SupportActionNode(presetJob, this, action.RowId, ActionDragDropNodes.Count,manager.MainModule.config.AddonIsDragRealAction)
                         {
                             Size         = new(40f),
                             IsVisible    = true,
@@ -1370,12 +1370,12 @@ public partial class OccultCrescentHelper
                                       .AddText($" {Lang.Get("OccultCrescentHelper-OthersManager-DragRealActionIcon-Help")}")
                                       .Build()
                                       .Encode(),
-                        IsChecked = ModuleConfig.AddonIsDragRealAction,
+                        IsChecked = manager.MainModule.config.AddonIsDragRealAction,
                         IsEnabled = true,
                         OnClick = value =>
                         {
-                            ModuleConfig.AddonIsDragRealAction = value;
-                            ModuleConfig.Save(ModuleManager.Instance().GetModule<OccultCrescentHelper>());
+                            manager.MainModule.config.AddonIsDragRealAction = value;
+                            manager.MainModule.config.Save(ModuleManager.Instance().GetModule<OccultCrescentHelper>());
 
                             ActionDragDropNodes.ForEach(x => x.Toggle(value));
                         }
@@ -1554,13 +1554,16 @@ public partial class OccultCrescentHelper
 
         private class LongTimeBuffButton : OverlayNode
         {
+            private readonly OthersManager manager;
             private readonly TextButtonNode buttonNode;
 
             private bool    isAnyNearby;
             private Vector3 nearbyPosition;
 
-            public LongTimeBuffButton()
+            public LongTimeBuffButton(OthersManager manager)
             {
+                this.manager = manager;
+                
                 buttonNode = new()
                 {
                     Size        = new(48, 24),
@@ -1577,7 +1580,7 @@ public partial class OccultCrescentHelper
 
             protected override void OnUpdate()
             {
-                if (ModuleConfig.IsEnabledKnowledgeCrystalFastUse                         &&
+                if (manager.MainModule.config.IsEnabledKnowledgeCrystalFastUse            &&
                     GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent &&
                     !DService.Instance().Condition.IsOccupiedInEvent)
                 {

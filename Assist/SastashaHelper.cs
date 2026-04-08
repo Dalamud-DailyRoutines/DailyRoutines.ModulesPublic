@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -14,20 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class SastashaHelper : ModuleBase
 {
-    // Book Data ID - Coral Data ID
-    private static readonly Dictionary<uint, (uint CoralDataID, ushort UIColor, ObjectHighlightColor HighlightColor)> BookToCoral = new()
-    {
-        // 蓝珊瑚
-        [2000212] = (2000213, 37, ObjectHighlightColor.Yellow),
-        // 红珊瑚
-        [2001548] = (2000214, 17, ObjectHighlightColor.Green),
-        // 绿珊瑚
-        [2001549] = (2000215, 45, ObjectHighlightColor.Red)
-    };
-
-    private static ulong                CorrectCoralDataID;
-    private static ObjectHighlightColor CorrectCoralHighlightColor;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("SastashaHelperTitle"),
@@ -36,6 +23,9 @@ public unsafe class SastashaHelper : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private ulong                correctCoralDataID;
+    private ObjectHighlightColor correctCoralHighlightColor;
 
     protected override void Init()
     {
@@ -51,8 +41,8 @@ public unsafe class SastashaHelper : ModuleBase
         FrameworkManager.Instance().Unreg(OnUpdate);
         GamePacketManager.Instance().Unreg(OnPostSendPackt);
 
-        CorrectCoralDataID         = 0;
-        CorrectCoralHighlightColor = ObjectHighlightColor.None;
+        correctCoralDataID         = 0;
+        correctCoralHighlightColor = ObjectHighlightColor.None;
     }
 
     private void OnZoneChanged(ushort zone)
@@ -61,8 +51,8 @@ public unsafe class SastashaHelper : ModuleBase
         FrameworkManager.Instance().Unreg(OnUpdate);
         GamePacketManager.Instance().Unreg(OnPostSendPackt);
 
-        CorrectCoralDataID         = 0;
-        CorrectCoralHighlightColor = ObjectHighlightColor.None;
+        correctCoralDataID         = 0;
+        correctCoralHighlightColor = ObjectHighlightColor.None;
 
         if (GameState.TerritoryType != 1036) return;
 
@@ -71,7 +61,7 @@ public unsafe class SastashaHelper : ModuleBase
         FrameworkManager.Instance().Reg(OnUpdate, 2_000);
     }
 
-    private static void OnPostSendPackt(int opcode, nint packet, bool isPrioritize)
+    private void OnPostSendPackt(int opcode, nint packet, bool isPrioritize)
     {
         if (opcode != UpstreamOpcode.EventStartOpcode) return;
 
@@ -80,18 +70,18 @@ public unsafe class SastashaHelper : ModuleBase
             FrameworkManager.Instance().Unreg(OnUpdate);
     }
 
-    private static void OnUpdate(IFramework _)
+    private void OnUpdate(IFramework _)
     {
-        if (CorrectCoralDataID == 0 || CorrectCoralHighlightColor == ObjectHighlightColor.None) return;
+        if (correctCoralDataID == 0 || correctCoralHighlightColor == ObjectHighlightColor.None) return;
 
         if (DService.Instance().ObjectTable.SearchObject
-                (x => x.ObjectKind == ObjectKind.EventObj && x.DataID == CorrectCoralDataID) is not { } coral)
+                (x => x.ObjectKind == ObjectKind.EventObj && x.DataID == correctCoralDataID) is not { } coral)
             return;
 
-        coral.ToStruct()->Highlight(coral.IsTargetable ? CorrectCoralHighlightColor : ObjectHighlightColor.None);
+        coral.ToStruct()->Highlight(coral.IsTargetable ? correctCoralHighlightColor : ObjectHighlightColor.None);
     }
 
-    private static bool GetCorrectCoral()
+    private bool GetCorrectCoral()
     {
         if (!UIModule.IsScreenReady()) return false;
 
@@ -116,8 +106,24 @@ public unsafe class SastashaHelper : ModuleBase
             )
         );
 
-        CorrectCoralDataID         = info.CoralDataID;
-        CorrectCoralHighlightColor = info.HighlightColor;
+        correctCoralDataID         = info.CoralDataID;
+        correctCoralHighlightColor = info.HighlightColor;
         return true;
     }
+
+    #region 常量
+
+    // Book Data ID - Coral Data ID
+    private static readonly FrozenDictionary<uint, (uint CoralDataID, ushort UIColor, ObjectHighlightColor HighlightColor)> BookToCoral =
+        new Dictionary<uint, (uint CoralDataID, ushort UIColor, ObjectHighlightColor HighlightColor)>
+        {
+            // 蓝珊瑚
+            [2000212] = (2000213, 37, ObjectHighlightColor.Yellow),
+            // 红珊瑚
+            [2001548] = (2000214, 17, ObjectHighlightColor.Green),
+            // 绿珊瑚
+            [2001549] = (2000215, 45, ObjectHighlightColor.Red)
+        }.ToFrozenDictionary();
+
+    #endregion
 }

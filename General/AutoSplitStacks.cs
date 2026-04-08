@@ -405,7 +405,7 @@ public unsafe class AutoSplitStacks : ModuleBase
         (
             () =>
             {
-                AddonContextMenuEvent.Select(LuminaGetter.GetRow<Addon>(92)!.Value.Text.ToString());
+                AddonContextMenuEvent.Select(LuminaWrapper.GetAddonText(92));
                 return true;
             },
             weight: 2

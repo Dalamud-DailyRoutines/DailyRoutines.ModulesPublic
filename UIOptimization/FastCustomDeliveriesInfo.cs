@@ -83,7 +83,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
             ImGui.SetWindowPos(ImGui.GetMousePos());
         }
 
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaGetter.GetRow<Addon>(8813)!.Value.Text.ToString());
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(8813));
 
         using (ImRaii.PushIndent())
         {
@@ -142,7 +142,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
             isNeedToClose = true;
         }
 
-        if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(66)!.Value.Text.ToString()))
+        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(66)))
         {
             var instance = AgentMap.Instance();
 
@@ -155,7 +155,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
             isNeedToClose = true;
         }
 
-        if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(1219)!.Value.Text.ToString()) | isNeedToClose)
+        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(1219)) | isNeedToClose)
         {
             Overlay.IsOpen = false;
             SelectedInfo   = null;
