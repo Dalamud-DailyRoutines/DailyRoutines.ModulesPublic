@@ -6,7 +6,7 @@ using Dalamud.Hooking;
 using OmenTools.Interop.Game.Models;
 using OmenTools.Threading;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public class SoundEffectThrottler : ModuleBase
 {

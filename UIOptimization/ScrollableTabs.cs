@@ -12,7 +12,7 @@ using OmenTools.Interop.Game.Helpers;
 using OmenTools.OmenService;
 using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ScrollableTabs : ModuleBase
 {

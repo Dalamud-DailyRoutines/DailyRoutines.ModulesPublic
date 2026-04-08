@@ -20,7 +20,7 @@ using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FCMemberManagePanel : ModuleBase
 {
