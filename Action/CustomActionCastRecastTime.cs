@@ -14,23 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class CustomActionCastRecastTime : ModuleBase
 {
-    private static Hook<GetAdjustedCastTimeDelegate>?   GetAdjustedCastTimeHook;
-    private static Hook<GetAdjustedRecastTimeDelegate>? GetAdjustedRecastTimeHook;
-
-    private static readonly CompSig                            CastInfoUpdateTotalSig = new("48 89 5C 24 ?? 57 48 83 EC ?? 48 8B F9 0F 29 74 24 ?? 0F B6 49");
-    private static          Hook<CastInfoUpdateTotalDelegate>? CastInfoUpdateTotalHook;
-
-    private static readonly CompSig CastTimeCurrentSig = new("F3 44 0F 2C C0 BA ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? F3 44 0F 10 1D");
-    private static          float*  CastTimeCurrent;
-
-    private static Config ModuleConfig = null!;
-
-    private static readonly ActionSelectCombo CastActionCombo = new("CastActionSelect");
-    private static readonly JobSelectCombo    CastJobCombo    = new("CastJobSelect");
-
-    private static readonly ActionSelectCombo RecastActionCombo = new("RecastActionSelect");
-    private static readonly JobSelectCombo    RecastJobCombo    = new("RecastJobSelect");
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("CustomActionCastRecastTimeTitle"),
@@ -39,10 +22,42 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private delegate int GetAdjustedCastTimeDelegate
+    (
+        ActionType                  actionType,
+        uint                        actionID,
+        bool                        applyProc,
+        ActionManager.CastTimeProc* outCastTimeProc
+    );
+    private Hook<GetAdjustedCastTimeDelegate>? GetAdjustedCastTimeHook;
+
+    private delegate int GetAdjustedRecastTimeDelegate
+    (
+        ActionType actionType,
+        uint       actionID,
+        bool       applyClassMechanics
+    );
+    private Hook<GetAdjustedRecastTimeDelegate>? GetAdjustedRecastTimeHook;
+
+    private static readonly CompSig                            CastInfoUpdateTotalSig = new("48 89 5C 24 ?? 57 48 83 EC ?? 48 8B F9 0F 29 74 24 ?? 0F B6 49");
+    private delegate        uint                               CastInfoUpdateTotalDelegate(nint data, uint spellActionID, float process, float processTotal);
+    private                 Hook<CastInfoUpdateTotalDelegate>? CastInfoUpdateTotalHook;
+
+    private static readonly CompSig CastTimeCurrentSig = new("F3 44 0F 2C C0 BA ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? F3 44 0F 10 1D");
+    private                 float*  CastTimeCurrent;
+
+    private Config config = null!;
+
+    private readonly ActionSelectCombo castActionCombo = new("CastActionSelect");
+    private readonly JobSelectCombo    castJobCombo    = new("CastJobSelect");
+
+    private readonly ActionSelectCombo recastActionCombo = new("RecastActionSelect");
+    private readonly JobSelectCombo    recastJobCombo    = new("RecastJobSelect");
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         GetAdjustedCastTimeHook ??=
             DService.Instance().Hook.HookFromMemberFunction
@@ -80,60 +95,60 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
             if (ImGui.InputFloat
                 (
                     $"{Lang.Get("CustomActionCastRecastTime-DefaultReduction")}(ms)###DefaultReduction",
-                    ref ModuleConfig.LongCastTimeReduction,
+                    ref config.LongCastTimeReduction,
                     10,
                     100,
                     "%.0f"
                 ))
             {
-                ModuleConfig.LongCastTimeReduction = MathF.Max(0, ModuleConfig.LongCastTimeReduction);
-                ModuleConfig.Save(this);
+                config.LongCastTimeReduction = MathF.Max(0, config.LongCastTimeReduction);
+                config.Save(this);
             }
 
-            ImGuiOm.HelpMarker(Lang.Get("CustomActionCastRecastTime-DefaultReduction-Help", ModuleConfig.LongCastTimeReduction));
+            ImGuiOm.HelpMarker(Lang.Get("CustomActionCastRecastTime-DefaultReduction-Help", config.LongCastTimeReduction));
 
             ImGui.NewLine();
 
-            using (ImRaii.Disabled(CastActionCombo.SelectedID == 0 || ModuleConfig.CustomCastTimeSet.ContainsKey(CastActionCombo.SelectedID)))
+            using (ImRaii.Disabled(castActionCombo.SelectedID == 0 || config.CustomCastTimeSet.ContainsKey(castActionCombo.SelectedID)))
             {
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
                 {
-                    if (ModuleConfig.CustomCastTimeSet.TryAdd
+                    if (config.CustomCastTimeSet.TryAdd
                         (
-                            CastActionCombo.SelectedID,
-                            ActionManager.GetAdjustedCastTime(ActionType.Action, CastActionCombo.SelectedID)
+                            castActionCombo.SelectedID,
+                            ActionManager.GetAdjustedCastTime(ActionType.Action, castActionCombo.SelectedID)
                         ))
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                 }
             }
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
-            CastActionCombo.DrawRadio();
+            castActionCombo.DrawRadio();
 
-            using (ImRaii.Disabled(CastJobCombo.SelectedID == 0))
+            using (ImRaii.Disabled(castJobCombo.SelectedID == 0))
             {
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, $"{Lang.Get("Add")}##ClassJob") &&
-                    LuminaGetter.TryGetSubRowAll<ClassJobActionUI>(CastJobCombo.SelectedID, out var rows))
+                    LuminaGetter.TryGetSubRowAll<ClassJobActionUI>(castJobCombo.SelectedID, out var rows))
                 {
                     foreach (var actionUI in rows)
                     {
                         if (actionUI.UpgradeAction.RowId == 0 || actionUI.UpgradeAction.Value.Name.IsEmpty) continue;
 
-                        ModuleConfig.CustomCastTimeSet.TryAdd
+                        config.CustomCastTimeSet.TryAdd
                         (
                             actionUI.UpgradeAction.RowId,
                             ActionManager.GetAdjustedCastTime(ActionType.Action, actionUI.UpgradeAction.RowId)
                         );
                     }
 
-                    ModuleConfig.Save(this);
+                    config.Save(this);
                 }
             }
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
-            CastJobCombo.DrawRadio();
+            castJobCombo.DrawRadio();
 
             ImGui.Spacing();
 
@@ -149,7 +164,7 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
                     uint actionToRemove = 0;
 
-                    foreach (var pair in ModuleConfig.CustomCastTimeSet)
+                    foreach (var pair in config.CustomCastTimeSet)
                     {
                         if (!LuminaGetter.TryGetRow<Action>(pair.Key, out var action)) continue;
 
@@ -174,10 +189,10 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
                         var customTime = pair.Value;
                         ImGui.SetNextItemWidth(-1);
                         if (ImGui.InputFloat($"###CustomCastTime_{pair.Key}", ref customTime, 10, 100, "%.0f"))
-                            ModuleConfig.CustomCastTimeSet[pair.Key] = MathF.Max(0, customTime);
+                            config.CustomCastTimeSet[pair.Key] = MathF.Max(0, customTime);
 
                         if (ImGui.IsItemDeactivatedAfterEdit())
-                            ModuleConfig.Save(this);
+                            config.Save(this);
 
                         ImGui.TableNextColumn();
                         if (ImGuiOm.ButtonIcon($"###DeleteCast_{pair.Key}", FontAwesomeIcon.Trash, Lang.Get("Delete")))
@@ -186,8 +201,8 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
                     if (actionToRemove != 0)
                     {
-                        ModuleConfig.CustomCastTimeSet.Remove(actionToRemove);
-                        ModuleConfig.Save(this);
+                        config.CustomCastTimeSet.Remove(actionToRemove);
+                        config.Save(this);
                     }
                 }
             }
@@ -200,44 +215,44 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
         using (ImRaii.PushId("Recast"))
         using (ImRaii.PushIndent())
         {
-            using (ImRaii.Disabled(RecastActionCombo.SelectedID == 0 || ModuleConfig.CustomRecastTimeSet.ContainsKey(RecastActionCombo.SelectedID)))
+            using (ImRaii.Disabled(recastActionCombo.SelectedID == 0 || config.CustomRecastTimeSet.ContainsKey(recastActionCombo.SelectedID)))
             {
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, $"{Lang.Get("Add")}##Action") &&
-                    ModuleConfig.CustomRecastTimeSet.TryAdd
+                    config.CustomRecastTimeSet.TryAdd
                     (
-                        RecastActionCombo.SelectedID,
-                        ActionManager.GetAdjustedRecastTime(ActionType.Action, RecastActionCombo.SelectedID)
+                        recastActionCombo.SelectedID,
+                        ActionManager.GetAdjustedRecastTime(ActionType.Action, recastActionCombo.SelectedID)
                     ))
-                    ModuleConfig.Save(this);
+                    config.Save(this);
             }
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
-            RecastActionCombo.DrawRadio();
+            recastActionCombo.DrawRadio();
 
-            using (ImRaii.Disabled(RecastJobCombo.SelectedID == 0))
+            using (ImRaii.Disabled(recastJobCombo.SelectedID == 0))
             {
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, $"{Lang.Get("Add")}##ClassJob") &&
-                    LuminaGetter.TryGetSubRowAll<ClassJobActionUI>(RecastJobCombo.SelectedID, out var rows))
+                    LuminaGetter.TryGetSubRowAll<ClassJobActionUI>(recastJobCombo.SelectedID, out var rows))
                 {
                     foreach (var actionUI in rows)
                     {
                         if (actionUI.UpgradeAction.RowId == 0 || actionUI.UpgradeAction.Value.Name.IsEmpty) continue;
 
-                        ModuleConfig.CustomRecastTimeSet.TryAdd
+                        config.CustomRecastTimeSet.TryAdd
                         (
                             actionUI.UpgradeAction.RowId,
                             ActionManager.GetAdjustedRecastTime(ActionType.Action, actionUI.UpgradeAction.RowId)
                         );
                     }
 
-                    ModuleConfig.Save(this);
+                    config.Save(this);
                 }
             }
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
-            RecastJobCombo.DrawRadio();
+            recastJobCombo.DrawRadio();
 
             ImGui.Spacing();
 
@@ -253,7 +268,7 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
                     var actionToRemove = -1;
 
-                    foreach (var pair in ModuleConfig.CustomRecastTimeSet)
+                    foreach (var pair in config.CustomRecastTimeSet)
                     {
                         if (!LuminaGetter.TryGetRow<Action>(pair.Key, out var action)) continue;
 
@@ -278,10 +293,10 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
                         var customTime = pair.Value;
                         ImGui.SetNextItemWidth(-1);
                         if (ImGui.InputFloat($"###CustomRecastTime_{pair.Key}", ref customTime, 10, 100, "%.0f"))
-                            ModuleConfig.CustomRecastTimeSet[pair.Key] = MathF.Max(0, customTime);
+                            config.CustomRecastTimeSet[pair.Key] = MathF.Max(0, customTime);
 
                         if (ImGui.IsItemDeactivatedAfterEdit())
-                            ModuleConfig.Save(this);
+                            config.Save(this);
 
                         ImGui.TableNextColumn();
                         if (ImGuiOm.ButtonIcon($"###DeleteRecast_{pair.Key}", FontAwesomeIcon.Trash, Lang.Get("Delete")))
@@ -290,49 +305,49 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
                     if (actionToRemove != -1)
                     {
-                        ModuleConfig.CustomRecastTimeSet.Remove((uint)actionToRemove);
-                        ModuleConfig.Save(this);
+                        config.CustomRecastTimeSet.Remove((uint)actionToRemove);
+                        config.Save(this);
                     }
                 }
             }
         }
     }
 
-    private static int GetAdjustedRecastTimeDetour(ActionType actionType, uint actionID, bool applyClassMechanics)
+    private int GetAdjustedRecastTimeDetour(ActionType actionType, uint actionID, bool applyClassMechanics)
     {
         var orig = GetAdjustedRecastTimeHook.Original(actionType, actionID, applyClassMechanics);
         if (actionType != ActionType.Action) return orig;
 
-        if (ModuleConfig.CustomRecastTimeSet.TryGetValue(actionID, out var customTime))
+        if (config.CustomRecastTimeSet.TryGetValue(actionID, out var customTime))
             return (int)customTime;
 
         return orig;
     }
 
-    private static int GetAdjustedCastTimeDetour(ActionType actionType, uint actionID, bool applyProcess, ActionManager.CastTimeProc* castTimeProc)
+    private int GetAdjustedCastTimeDetour(ActionType actionType, uint actionID, bool applyProcess, ActionManager.CastTimeProc* castTimeProc)
     {
         var orig = GetAdjustedCastTimeHook.Original(actionType, actionID, applyProcess, castTimeProc);
         if (actionType != ActionType.Action) return orig;
 
-        if (ModuleConfig.CustomCastTimeSet.TryGetValue(actionID, out var customTime))
+        if (config.CustomCastTimeSet.TryGetValue(actionID, out var customTime))
             return (int)customTime;
 
         // 咏唱大于复唱
         var recastTime = ActionManager.GetAdjustedRecastTime(actionType, actionID);
         if (recastTime <= orig)
-            return (int)MathF.Max(0, orig - (int)ModuleConfig.LongCastTimeReduction);
+            return (int)MathF.Max(0, orig - (int)config.LongCastTimeReduction);
 
         return orig;
     }
 
-    private static uint CastInfoUpdateTotalDetour(nint data, uint spellActionID, float processTotal, float processStart)
+    private uint CastInfoUpdateTotalDetour(nint data, uint spellActionID, float processTotal, float processStart)
     {
         var actionID   = *(uint*)((byte*)data + 4);
         var actionType = (ActionType)(*((byte*)data + 2));
 
         if (actionID == spellActionID && actionType == ActionType.Action)
         {
-            if (ModuleConfig.CustomCastTimeSet.TryGetValue(actionID, out var customTime))
+            if (config.CustomCastTimeSet.TryGetValue(actionID, out var customTime))
             {
                 processTotal     = customTime / 1000f;
                 *CastTimeCurrent = processTotal;
@@ -343,7 +358,7 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
                 if (recastTime <= processTotal * 1000)
                 {
-                    processTotal     = Math.Max(processTotal - ModuleConfig.LongCastTimeReduction / 1000f, 0);
+                    processTotal     = Math.Max(processTotal - config.LongCastTimeReduction / 1000f, 0);
                     *CastTimeCurrent = processTotal;
                 }
             }
@@ -351,23 +366,6 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
         return CastInfoUpdateTotalHook.Original(data, spellActionID, processTotal, processStart);
     }
-
-    private delegate int GetAdjustedCastTimeDelegate
-    (
-        ActionType                  actionType,
-        uint                        actionID,
-        bool                        applyProc,
-        ActionManager.CastTimeProc* outCastTimeProc
-    );
-
-    private delegate int GetAdjustedRecastTimeDelegate
-    (
-        ActionType actionType,
-        uint       actionID,
-        bool       applyClassMechanics
-    );
-
-    private delegate uint CastInfoUpdateTotalDelegate(nint data, uint spellActionID, float process, float processTotal);
 
     private class Config : ModuleConfig
     {

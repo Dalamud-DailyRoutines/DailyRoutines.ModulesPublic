@@ -17,6 +17,9 @@ public class BanEscToCancelCast : ModuleBase
 
     protected override void Init() =>
         ExecuteCommandManager.Instance().RegPre(OnPreUseCommand);
+    
+    protected override void Uninit() =>
+        ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
 
     private static void OnPreUseCommand
     (
@@ -31,7 +34,4 @@ public class BanEscToCancelCast : ModuleBase
         if (command != ExecuteCommandFlag.CancelCast) return;
         isPrevented = true;
     }
-
-    protected override void Uninit() =>
-        ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
 }

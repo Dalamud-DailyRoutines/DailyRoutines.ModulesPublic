@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -127,7 +128,7 @@ public unsafe class FastRetainerStore : ModuleBase
 
     private static bool TryFindTargetSlot
     (
-        List<InventoryType>                     targetInvs,
+        FrozenSet<InventoryType>                targetInvs,
         uint                                    itemID,
         bool                                    isHQ,
         bool                                    isCollectable,

@@ -597,7 +597,7 @@ public class AutoShopPurchase : ModuleBase
     public class ShopPresetExecutor : IDisposable
     {
         private static          ShopPresetExecutor?        Instance;
-        private static readonly object                     Lock             = new();
+        private static readonly Lock                       Lock             = new();
         private readonly        CancellationTokenSource    CancelSource     = new();
         private readonly        TaskCompletionSource<bool> CompletionSource = new();
         private                 int                        currentLoopCount;
@@ -624,7 +624,7 @@ public class AutoShopPurchase : ModuleBase
             ExecuteCommandManager.Instance().Unreg(OnReceiveCommand);
             DService.Instance().AddonLifecycle.UnregisterListener(OnAddonYesno);
 
-            TaskHelper.Abort();
+            TaskHelper.Dispose();
             IsWaitingRefresh = false;
 
             CancelSource.Cancel();

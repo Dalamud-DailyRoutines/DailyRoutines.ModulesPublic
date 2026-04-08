@@ -17,6 +17,9 @@ public class AutoHolmgangSelf : ModuleBase
 
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnPreUseAction);
 
     private static void OnPreUseAction
     (
@@ -32,7 +35,4 @@ public class AutoHolmgangSelf : ModuleBase
         if (actionType is not ActionType.Action || actionID is not 43) return;
         targetID = 0xE0000000;
     }
-
-    protected override void Uninit() =>
-        UseActionManager.Instance().Unreg(OnPreUseAction);
 }

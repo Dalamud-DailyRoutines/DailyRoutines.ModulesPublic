@@ -17,8 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoActionAlignCamera : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoActionAlignCameraTitle"),
@@ -27,10 +25,12 @@ public unsafe class AutoActionAlignCamera : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new() { ActionReversed = [94, 29494, 24402] };
+        config = Config.Load(this) ?? new() { ActionReversed = [94, 29494, 24402] };
 
         UseActionManager.Instance().RegPreUseActionLocation(OnPreUseAction);
     }
@@ -58,7 +58,7 @@ public unsafe class AutoActionAlignCamera : ModuleBase
         ImGuiOm.Text(FontAwesomeIcon.Undo.ToIconString());
         ImGuiOm.TooltipHover(Lang.Get("AutoActionAlignCamera-ReverseDirection"));
 
-        foreach (var actionPair in ModuleConfig.ActionEnabled)
+        foreach (var actionPair in config.ActionEnabled)
         {
             if (!LuminaGetter.TryGetRow<Action>(actionPair.Key, out var data)) continue;
 
@@ -73,8 +73,8 @@ public unsafe class AutoActionAlignCamera : ModuleBase
 
             if (ImGui.Checkbox($"###{actionPair.Key}", ref isEnabled))
             {
-                ModuleConfig.ActionEnabled[actionPair.Key] = isEnabled;
-                ModuleConfig.Save(this);
+                config.ActionEnabled[actionPair.Key] = isEnabled;
+                config.Save(this);
             }
 
             ImGui.TableNextColumn();
@@ -86,18 +86,18 @@ public unsafe class AutoActionAlignCamera : ModuleBase
             ImGui.TextUnformatted($"{data.Name.ToString()}");
 
             ImGui.TableNextColumn();
-            var isReversed = ModuleConfig.ActionReversed.Contains(actionPair.Key);
+            var isReversed = config.ActionReversed.Contains(actionPair.Key);
 
             if (ImGui.Checkbox($"###{actionPair.Key}-IsReversed", ref isReversed))
             {
-                if (!ModuleConfig.ActionReversed.Remove(actionPair.Key))
-                    ModuleConfig.ActionReversed.Add(actionPair.Key);
-                ModuleConfig.Save(this);
+                if (!config.ActionReversed.Remove(actionPair.Key))
+                    config.ActionReversed.Add(actionPair.Key);
+                config.Save(this);
             }
         }
     }
 
-    private static void OnPreUseAction
+    private void OnPreUseAction
     (
         ref bool       isPrevented,
         ref ActionType type,
@@ -111,13 +111,13 @@ public unsafe class AutoActionAlignCamera : ModuleBase
         if (type != ActionType.Action) return;
 
         var adjustedID = ActionManager.Instance()->GetAdjustedActionId(actionID);
-        if (!ModuleConfig.ActionEnabled.TryGetValue(adjustedID, out var enabled) || !enabled) return;
+        if (!config.ActionEnabled.TryGetValue(adjustedID, out var enabled) || !enabled) return;
 
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
         var transformedRotation = RotationHelper.CameraDirHToChara(CameraManager.Instance()->Camera->DirH);
 
-        if (ModuleConfig.ActionReversed.Contains(adjustedID))
+        if (config.ActionReversed.Contains(adjustedID))
             transformedRotation = RotationHelper.CharaSymmetricTransform(transformedRotation);
 
         if (GameState.ContentFinderCondition != 0)

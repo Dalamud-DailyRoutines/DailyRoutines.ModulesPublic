@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -10,20 +11,26 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoDance : ModuleBase
 {
-    private static readonly HashSet<uint> DanceActions = [15997, 15998];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoDanceTitle"),
         Description = Lang.Get("AutoDanceDescription"),
         Category    = ModuleCategory.Action
     };
-
+    
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 5_000 };
 
         UseActionManager.Instance().RegPostUseActionLocation(OnPostUseAction);
+    }
+    
+    protected override void Uninit()
+    {
+        UseActionManager.Instance().Unreg(OnPostUseAction);
+
+        TaskHelper?.Abort();
+        TaskHelper = null;
     }
 
     private void OnPostUseAction
@@ -72,12 +79,10 @@ public unsafe class AutoDance : ModuleBase
 
         return false;
     }
+    
+    #region 常量
 
-    protected override void Uninit()
-    {
-        UseActionManager.Instance().Unreg(OnPostUseAction);
+    private static readonly FrozenSet<uint> DanceActions = [15997, 15998];
 
-        TaskHelper?.Abort();
-        TaskHelper = null;
-    }
+    #endregion
 }

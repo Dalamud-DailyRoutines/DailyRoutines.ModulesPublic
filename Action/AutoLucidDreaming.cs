@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -13,21 +14,9 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 需要重写触发机制
 public unsafe class AutoLucidDreaming : ModuleBase
 {
-    private const int    ABILITY_LOCK_TIME_MS    = 600;
-    private const float  USE_IN_GCD_WINDOW_START = 60;
-    private const float  USE_IN_GCD_WINDOW_END   = 95;
-    private const uint   LUCID_DREAMING_ID       = 7562;
-    private const ushort TRANSCENDENT_STATUS     = 418;
-
-    private static readonly HashSet<uint> ValidClassJobs = [6, 7, 15, 19, 20, 21, 23, 24, 26, 27, 28, 33, 35, 36, 40];
-
-    private static Config ModuleConfig = null!;
-
-    private static DateTime LastLucidDreamingUseTime = DateTime.MinValue;
-    private static bool     IsAbilityLocked;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoLucidDreamingTitle"),
@@ -35,38 +24,43 @@ public unsafe class AutoLucidDreaming : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["qingsiweisan"]
     };
+    
+    private Config config = null!;
+
+    private DateTime lastLucidDreamingUseTime = DateTime.MinValue;
+    private bool     isAbilityLocked;
 
     protected override void Init()
     {
         TaskHelper   ??= new() { TimeoutMS = 30_000 };
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
 
         CheckAndEnqueue();
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref ModuleConfig.OnlyInDuty))
+        if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref config.OnlyInDuty))
         {
-            ModuleConfig.Save(this);
+            config.Save(this);
             CheckAndEnqueue();
         }
 
         ImGui.SetNextItemWidth(250f * GlobalUIScale);
-        if (ImGui.DragInt("##MpThresholdSlider", ref ModuleConfig.MpThreshold, 100f, 3000, 9000, $"{LuminaWrapper.GetAddonText(233)}: %d"))
-            ModuleConfig.Save(this);
+        if (ImGui.DragInt("##MpThresholdSlider", ref config.MpThreshold, 100f, 3000, 9000, $"{LuminaWrapper.GetAddonText(233)}: %d"))
+            config.Save(this);
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-
+    
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.InCombat) return;
@@ -78,7 +72,7 @@ public unsafe class AutoLucidDreaming : ModuleBase
     {
         TaskHelper.Abort();
 
-        if (ModuleConfig.OnlyInDuty && GameState.ContentFinderCondition == 0 ||
+        if (config.OnlyInDuty && GameState.ContentFinderCondition == 0 ||
             GameState.IsInPVPArea                                            ||
             !DService.Instance().Condition[ConditionFlag.InCombat])
             return;
@@ -111,10 +105,10 @@ public unsafe class AutoLucidDreaming : ModuleBase
 
     private bool PreventAbilityUse()
     {
-        var timeSinceLastUse = (StandardTimeManager.Instance().Now - LastLucidDreamingUseTime).TotalMilliseconds;
+        var timeSinceLastUse = (StandardTimeManager.Instance().Now - lastLucidDreamingUseTime).TotalMilliseconds;
 
         var shouldLock = timeSinceLastUse < ABILITY_LOCK_TIME_MS;
-        IsAbilityLocked = shouldLock;
+        isAbilityLocked = shouldLock;
 
         if (shouldLock)
         {
@@ -132,9 +126,9 @@ public unsafe class AutoLucidDreaming : ModuleBase
 
         var statusManager    = localPlayer->StatusManager;
         var currentMp        = localPlayer->Mana;
-        var timeSinceLastUse = (StandardTimeManager.Instance().Now - LastLucidDreamingUseTime).TotalMilliseconds;
+        var timeSinceLastUse = (StandardTimeManager.Instance().Now - lastLucidDreamingUseTime).TotalMilliseconds;
 
-        if (timeSinceLastUse < ABILITY_LOCK_TIME_MS || currentMp >= ModuleConfig.MpThreshold)
+        if (timeSinceLastUse < ABILITY_LOCK_TIME_MS || currentMp >= config.MpThreshold)
             return true;
 
         // 刚复活的无敌
@@ -166,14 +160,14 @@ public unsafe class AutoLucidDreaming : ModuleBase
         (
             () =>
             {
-                if (IsAbilityLocked) return false;
+                if (isAbilityLocked) return false;
 
                 var result = UseActionManager.Instance().UseActionLocation(ActionType.Action, LUCID_DREAMING_ID);
 
                 if (result)
                 {
-                    LastLucidDreamingUseTime = capturedTime;
-                    if (ModuleConfig.SendNotification && Throttler.Shared.Throttle("AutoLucidDreaming-Notification", 10_000))
+                    lastLucidDreamingUseTime = capturedTime;
+                    if (config.SendNotification && Throttler.Shared.Throttle("AutoLucidDreaming-Notification", 10_000))
                         NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoLucidDreaming-Notification", localPlayer->Mana));
                 }
 
@@ -192,4 +186,16 @@ public unsafe class AutoLucidDreaming : ModuleBase
         public bool OnlyInDuty;
         public bool SendNotification = true;
     }
+    
+    #region 常量
+    
+    private const int    ABILITY_LOCK_TIME_MS    = 600;
+    private const float  USE_IN_GCD_WINDOW_START = 60;
+    private const float  USE_IN_GCD_WINDOW_END   = 95;
+    private const uint   LUCID_DREAMING_ID       = 7562;
+    private const ushort TRANSCENDENT_STATUS     = 418;
+
+    private static readonly FrozenSet<uint> ValidClassJobs = [6, 7, 15, 19, 20, 21, 23, 24, 26, 27, 28, 33, 35, 36, 40];
+    
+    #endregion
 }

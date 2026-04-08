@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -7,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -14,28 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoUseCrafterGathererManual : ModuleBase
 {
-    private static readonly HashSet<uint> Gatherers =
-        LuminaGetter.Get<ClassJob>()
-                    .Where(x => x.ClassJobCategory.RowId == 32)
-                    .Select(x => x.RowId)
-                    .ToHashSet();
-
-    private static readonly HashSet<uint> Crafters =
-        LuminaGetter.Get<ClassJob>()
-                    .Where(x => x.ClassJobCategory.RowId == 33)
-                    .Select(x => x.RowId)
-                    .ToHashSet();
-
-    private static readonly uint[] GathererManuals = [26553, 12668, 4635, 4633];
-    private static readonly uint[] CrafterManuals  = [26554, 12667, 4634, 4632];
-
-    private static readonly HashSet<ConditionFlag> ValidConditions =
-    [
-        ConditionFlag.Crafting, ConditionFlag.Gathering, ConditionFlag.Mounted
-    ];
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoUseCrafterGathererManualTitle"),
@@ -44,9 +24,11 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
         Author      = ["Shiyuvi", "AtmoOmen"]
     };
 
+    private Config config = null!;
+
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = 15_000 };
 
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
@@ -56,13 +38,7 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
 
         EnqueueCheck();
     }
-
-    protected override void ConfigUI()
-    {
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
-    }
-
+    
     protected override void Uninit()
     {
         DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
@@ -71,6 +47,12 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
         DService.Instance().ClientState.LevelChanged     -= OnLevelChanged;
     }
 
+    protected override void ConfigUI()
+    {
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
+    }
+    
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (value || !ValidConditions.Contains(flag)) return;
@@ -101,8 +83,8 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
                     ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) != 0)
                     return false;
 
-                var isGatherer = Gatherers.Contains(localPlayer.ClassJob.RowId);
-                var isCrafter  = Crafters.Contains(localPlayer.ClassJob.RowId);
+                var isGatherer = localPlayer.ClassJob.Value.ToJobType() == ClassJobType.Gatherer;
+                var isCrafter  = localPlayer.ClassJob.Value.ToJobType() == ClassJobType.Crafter;
                 if (!isGatherer && !isCrafter) return true;
 
                 var statusManager = localPlayer.ToStruct()->StatusManager;
@@ -117,7 +99,7 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
                 if (itemID == 0 || !LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) return true;
 
                 UseActionManager.Instance().UseActionLocation(ActionType.Item, itemID, 0xE0000000, default, 0xFFFF);
-                if (ModuleConfig.SendNotification)
+                if (config.SendNotification)
                     NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoUseCrafterGathererManual-Notification", itemRow.Name.ToString()));
                 return true;
             }
@@ -147,4 +129,18 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
     {
         public bool SendNotification = true;
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<ConditionFlag> ValidConditions =
+    [
+        ConditionFlag.Crafting,
+        ConditionFlag.Gathering,
+        ConditionFlag.Mounted
+    ];
+
+    private static readonly FrozenSet<uint> GathererManuals = [26553, 12668, 4635, 4633];
+    private static readonly FrozenSet<uint> CrafterManuals  = [26554, 12667, 4634, 4632];
+    
+    #endregion
 }

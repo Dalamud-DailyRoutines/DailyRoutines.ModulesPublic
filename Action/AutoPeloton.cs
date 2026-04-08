@@ -5,19 +5,13 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using OmenTools.Info.Game.Enums;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoPeloton : ModuleBase
 {
-    private const uint PELOTONING_ACTION_ID = 7557;
-
-    // 诗人 机工 舞者
-    private static readonly HashSet<uint> ValidClassJobs = [23, 31, 38];
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoPelotonTitle"),
@@ -25,11 +19,13 @@ public unsafe class AutoPeloton : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["yamiYori"]
     };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
         TaskHelper   ??= new();
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
 
         LocalPlayerState.Instance().PlayerMoveStateChanged += OnMoveStateChanged;
         CharacterStatusManager.Instance().RegLose(OnLoseStatus);
@@ -43,11 +39,11 @@ public unsafe class AutoPeloton : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref ModuleConfig.OnlyInDuty))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref config.OnlyInDuty))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("AutoPeloton-DisableInWalk"), ref ModuleConfig.DisableInWalk))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoPeloton-DisableInWalk"), ref config.DisableInWalk))
+            config.Save(this);
     }
 
     private void OnLoseStatus(IBattleChara player, ushort id, ushort param, ushort stackCount, ulong sourceID)
@@ -66,19 +62,18 @@ public unsafe class AutoPeloton : ModuleBase
 
     private void CheckAndUsePeloton()
     {
-        if (ModuleConfig.OnlyInDuty && GameState.ContentFinderCondition == 0) return;
+        if (config.OnlyInDuty && GameState.ContentFinderCondition == 0) return;
         if (GameState.IsInPVPArea) return;
         if (DService.Instance().Condition[ConditionFlag.InCombat]) return;
-        if (DService.Instance().Condition.IsBetweenAreas    ||
-            !UIModule.IsScreenReady()                       ||
+        if (!UIModule.IsScreenReady()                       ||
             DService.Instance().Condition.IsOccupiedInEvent ||
-            DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer)
+            DService.Instance().ObjectTable.LocalPlayer is null)
             return;
-        if (!ValidClassJobs.Contains(localPlayer.ClassJob.RowId))
+        if (LocalPlayerState.ClassJobData.ToJobType() != ClassJobType.PhysicalRanged)
             return;
         if (!ActionManager.IsActionUnlocked(PELOTONING_ACTION_ID))
             return;
-        if (ModuleConfig.DisableInWalk && LocalPlayerState.IsWalking)
+        if (config.DisableInWalk && LocalPlayerState.IsWalking)
             return;
 
         TaskHelper.Abort();
@@ -110,4 +105,10 @@ public unsafe class AutoPeloton : ModuleBase
         public bool DisableInWalk = true;
         public bool OnlyInDuty    = true;
     }
+    
+    #region 常量
+    
+    private const uint PELOTONING_ACTION_ID = 7557;
+    
+    #endregion
 }

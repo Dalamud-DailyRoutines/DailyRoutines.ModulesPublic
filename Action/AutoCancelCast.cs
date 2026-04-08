@@ -6,6 +6,7 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.Info.Game.Data;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -16,17 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCancelCast : ModuleBase
 {
-    private static readonly FrozenSet<ObjectKind> ValidObjectKinds =
-    [
-        ObjectKind.Player,
-        ObjectKind.BattleNpc
-    ];
-
-    private static readonly FrozenSet<ConditionFlag> ValidConditions =
-    [
-        ConditionFlag.Casting
-    ];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoCancelCastTitle"),
@@ -35,12 +25,6 @@ public unsafe class AutoCancelCast : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static FrozenSet<uint> TargetAreaActions { get; } =
-        LuminaGetter.Get<LuminaAction>()
-                    .Where(x => x.TargetArea)
-                    .Select(x => x.RowId)
-                    .ToFrozenSet();
 
     protected override void Init() =>
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
@@ -71,8 +55,8 @@ public unsafe class AutoCancelCast : ModuleBase
 
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
-        if (localPlayer.CastActionType != ActionType.Action      ||
-            TargetAreaActions.Contains(localPlayer.CastActionID) ||
+        if (localPlayer.CastActionType != ActionType.Action                ||
+            Sheets.TargetAreaActions.ContainsKey(localPlayer.CastActionID) ||
             !LuminaGetter.TryGetRow(localPlayer.CastActionID, out LuminaAction actionRow))
         {
             FrameworkManager.Instance().Unreg(OnUpdate);
@@ -112,4 +96,19 @@ public unsafe class AutoCancelCast : ModuleBase
                 ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.CancelCast);
         }
     }
+    
+    #region 常量
+    
+    private static readonly FrozenSet<ObjectKind> ValidObjectKinds =
+    [
+        ObjectKind.Player,
+        ObjectKind.BattleNpc
+    ];
+
+    private static readonly FrozenSet<ConditionFlag> ValidConditions =
+    [
+        ConditionFlag.Casting
+    ];
+    
+    #endregion
 }

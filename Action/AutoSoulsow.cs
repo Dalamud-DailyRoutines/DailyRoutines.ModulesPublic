@@ -10,8 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoSoulsow : ModuleBase
 {
-    private static readonly HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoSoulsowTitle"),
@@ -26,6 +24,13 @@ public class AutoSoulsow : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().DutyState.DutyRecommenced    += OnDutyRecommenced;
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
+        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
     }
 
     // 重新挑战
@@ -59,7 +64,7 @@ public class AutoSoulsow : ModuleBase
     {
         if (DService.Instance().Condition.IsBetweenAreas || !UIModule.IsScreenReady() || DService.Instance().Condition.IsOccupiedInEvent) return false;
 
-        if (DService.Instance().Condition[ConditionFlag.InCombat] || LocalPlayerState.ClassJob != 39 || !IsValidPVEDuty())
+        if (DService.Instance().Condition[ConditionFlag.InCombat] || LocalPlayerState.ClassJob != 39 || !GameState.IsInPVEActonZone)
         {
             TaskHelper.Abort();
             return true;
@@ -84,17 +89,5 @@ public class AutoSoulsow : ModuleBase
         TaskHelper.DelayNext(2_000);
         TaskHelper.Enqueue(CheckCurrentJob, "二次检查", weight: 1);
         return true;
-    }
-
-    private static bool IsValidPVEDuty() =>
-        !GameState.IsInPVPArea &&
-        (GameState.ContentFinderCondition == 0 ||
-         !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId));
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
-        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
     }
 }

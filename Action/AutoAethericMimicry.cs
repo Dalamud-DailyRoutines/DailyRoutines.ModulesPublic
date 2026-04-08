@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -15,8 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoAethericMimicry : ModuleBase
 {
-    private static readonly HashSet<uint> Status = [2124, 2125, 2126];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoAethericMimicryTitle"),
@@ -25,7 +24,7 @@ public class AutoAethericMimicry : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
 
@@ -59,10 +58,11 @@ public class AutoAethericMimicry : ModuleBase
     private class AddonDRAutoAethericMimicry : NativeAddon
     {
         public static AddonDRAutoAethericMimicry? Addon;
-        private       IconButtonNode              DPSButton;
-        private       IconButtonNode              HealerButton;
+        
+        private IconButtonNode dpsButton;
+        private IconButtonNode healerButton;
 
-        private IconButtonNode TankButton;
+        private IconButtonNode tankButton;
 
         public static void OpenWithNewInstance()
         {
@@ -90,7 +90,7 @@ public class AutoAethericMimicry : ModuleBase
                 IsVisible = true
             };
 
-            TankButton = new()
+            tankButton = new()
             {
                 Size      = new(50f),
                 IsVisible = true,
@@ -106,9 +106,9 @@ public class AutoAethericMimicry : ModuleBase
                 },
                 TextTooltip = $"{LuminaWrapper.GetActionName(18322)}: {LuminaWrapper.GetAddonText(1082)}"
             };
-            rowOneContainer.AddNode(TankButton);
+            rowOneContainer.AddNode(tankButton);
 
-            HealerButton = new()
+            healerButton = new()
             {
                 Size      = new(53f),
                 IsVisible = true,
@@ -124,9 +124,9 @@ public class AutoAethericMimicry : ModuleBase
                 },
                 TextTooltip = $"{LuminaWrapper.GetActionName(18322)}: {LuminaWrapper.GetAddonText(1083)}"
             };
-            rowOneContainer.AddNode(HealerButton);
+            rowOneContainer.AddNode(healerButton);
 
-            DPSButton = new()
+            dpsButton = new()
             {
                 Size      = new(53f),
                 IsVisible = true,
@@ -142,11 +142,11 @@ public class AutoAethericMimicry : ModuleBase
                 },
                 TextTooltip = $"{LuminaWrapper.GetActionName(18322)}: {LuminaWrapper.GetAddonText(1084)}"
             };
-            rowOneContainer.AddNode(DPSButton);
+            rowOneContainer.AddNode(dpsButton);
 
-            TankButton.IsEnabled   = TryGetChara([1],    out _);
-            HealerButton.IsEnabled = TryGetChara([4],    out _);
-            DPSButton.IsEnabled    = TryGetChara([2, 3], out _);
+            tankButton.IsEnabled   = TryGetChara([1],    out _);
+            healerButton.IsEnabled = TryGetChara([4],    out _);
+            dpsButton.IsEnabled    = TryGetChara([2, 3], out _);
 
             rowOneContainer.AttachNode(this);
         }
@@ -164,9 +164,9 @@ public class AutoAethericMimicry : ModuleBase
 
             if (!Throttler.Shared.Throttle("AutoAethericMimicry-OnUpdateButtons")) return;
 
-            TankButton.IsEnabled   = TryGetChara([1],    out _);
-            HealerButton.IsEnabled = TryGetChara([4],    out _);
-            DPSButton.IsEnabled    = TryGetChara([2, 3], out _);
+            tankButton.IsEnabled   = TryGetChara([1],    out _);
+            healerButton.IsEnabled = TryGetChara([4],    out _);
+            dpsButton.IsEnabled    = TryGetChara([2, 3], out _);
         }
 
         private static bool TryGetChara(HashSet<byte> roles, out IPlayerCharacter? chara)
@@ -205,4 +205,10 @@ public class AutoAethericMimicry : ModuleBase
             );
         }
     }
+    
+    #region 常量
+    
+    private static readonly FrozenSet<uint> Status = [2124, 2125, 2126];
+    
+    #endregion
 }

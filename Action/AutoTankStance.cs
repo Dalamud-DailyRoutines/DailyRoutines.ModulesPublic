@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -10,44 +11,34 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoTankStance : ModuleBase
 {
-    private static readonly HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
-
-    private static readonly Dictionary<uint, (uint Action, uint Status)> TankStanceActions = new()
-    {
-        // 剑术师 / 骑士
-        [1]  = (28, 79),
-        [19] = (28, 79),
-        // 斧术师 / 战士
-        [3]  = (48, 91),
-        [21] = (48, 91),
-        // 暗黑骑士
-        [32] = (3629, 743),
-        // 绝枪战士
-        [37] = (16142, 1833)
-    };
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoTankStanceTitle"),
         Description = Lang.Get("AutoTankStanceDescription"),
         Category    = ModuleCategory.Action
     };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = 30_000 };
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().DutyState.DutyRecommenced    += OnDutyRecommenced;
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
+    }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("AutoTankStance-OnlyAutoStanceWhenOneTank"), ref ModuleConfig.OnlyAutoStanceWhenOneTank))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoTankStance-OnlyAutoStanceWhenOneTank"), ref config.OnlyAutoStanceWhenOneTank))
+            config.Save(this);
 
         ImGuiOm.HelpMarker(Lang.Get("AutoTankStance-OnlyAutoStanceWhenOneTankHelp"));
     }
@@ -56,9 +47,9 @@ public class AutoTankStance : ModuleBase
     {
         TaskHelper.Abort();
 
-        if (!IsValidPVEDuty()) return;
+        if (!GameState.IsInPVEActonZone) return;
 
-        if (ModuleConfig.OnlyAutoStanceWhenOneTank &&
+        if (config.OnlyAutoStanceWhenOneTank &&
             GameState.ContentFinderConditionData.ContentMemberType.Value.TanksPerParty != 1)
             return;
 
@@ -84,21 +75,27 @@ public class AutoTankStance : ModuleBase
 
         return UseActionManager.Instance().UseAction(ActionType.Action, info.Action);
     }
-
-    private static bool IsValidPVEDuty() =>
-        GameState.ContentFinderCondition != 0     &&
-        !GameState.IsInPVPArea                    &&
-        !GameState.ContentFinderConditionData.PvP &&
-        !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId);
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
-    }
-
+    
     private class Config : ModuleConfig
     {
         public bool OnlyAutoStanceWhenOneTank = true;
     }
+
+    #region 常量
+
+    private static readonly FrozenDictionary<uint, (uint Action, uint Status)> TankStanceActions = new Dictionary<uint, (uint Action, uint Status)>
+    {
+        // 剑术师 / 骑士
+        [1]  = (28, 79),
+        [19] = (28, 79),
+        // 斧术师 / 战士
+        [3]  = (48, 91),
+        [21] = (48, 91),
+        // 暗黑骑士
+        [32] = (3629, 743),
+        // 绝枪战士
+        [37] = (16142, 1833)
+    }.ToFrozenDictionary();
+
+    #endregion
 }

@@ -15,20 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoReplaceActionAnimation : ModuleBase
 {
-    public enum EffectType
-    {
-        All,   // 所有目标
-        Self,  // 仅自身
-        Others // 仅他人
-    }
-
-    private static Config ModuleConfig = null!;
-
-    private static ActionSelectCombo InputCombo  = null!;
-    private static ActionSelectCombo OutputCombo = null!;
-
-    private static EffectType EffectTypeInput = EffectType.All;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoReplaceActionAnimationTitle"),
@@ -38,16 +24,16 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
+    private Config config = null!;
+
+    private readonly ActionSelectCombo inputCombo  = new("Input");
+    private readonly ActionSelectCombo outputCombo = new("Output");
+
+    private EffectType effectTypeInput = EffectType.All;
+
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
-
-        if (InputCombo == null || OutputCombo == null)
-        {
-            var source = LuminaGetter.Get<Action>();
-            InputCombo  ??= new("Input", source);
-            OutputCombo ??= new("Output", source);
-        }
+        config = Config.Load(this) ?? new();
 
         UseActionManager.Instance().RegPreCharacterStartCast(OnCharacterStartCast);
         UseActionManager.Instance().RegPreCharacterCompleteCast(OnCharacterCompleteCast);
@@ -65,14 +51,14 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
             using (ImRaii.PushId("Input"))
-                InputCombo.DrawRadio();
+                inputCombo.DrawRadio();
 
             ImGui.SameLine();
             ImGui.TextUnformatted(Lang.Get("Input"));
 
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
             using (ImRaii.PushId("Output"))
-                OutputCombo.DrawRadio();
+                outputCombo.DrawRadio();
 
             ImGui.SameLine();
             ImGui.TextUnformatted(Lang.Get("Output"));
@@ -80,14 +66,14 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
             using (ImRaii.PushId("Output"))
-            using (var combo = ImRaii.Combo("###EffectTypeCombo", GetEffectTypeName(EffectTypeInput)))
+            using (var combo = ImRaii.Combo("###EffectTypeCombo", GetEffectTypeName(effectTypeInput)))
             {
                 if (combo)
                 {
                     foreach (var target in Enum.GetValues<EffectType>())
                     {
-                        if (ImGui.Selectable(GetEffectTypeName(target), target == EffectTypeInput))
-                            EffectTypeInput = target;
+                        if (ImGui.Selectable(GetEffectTypeName(target), target == effectTypeInput))
+                            effectTypeInput = target;
                     }
                 }
             }
@@ -100,27 +86,27 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
 
         if (ImGui.Button(Lang.Get("Confirm"), new(ImGui.CalcTextSize(Lang.Get("Confirm")).X * 2, ImGui.GetItemRectSize().Y)))
         {
-            if (InputCombo.SelectedItem.RowId != 0 && OutputCombo.SelectedItem.RowId != 0)
+            if (inputCombo.SelectedItem.RowId != 0 && outputCombo.SelectedItem.RowId != 0)
             {
                 var actionConfig = new ActionConfig
                 {
                     IsEnabled           = true,
-                    ReplacementActionID = OutputCombo.SelectedItem.RowId,
-                    EffectType          = EffectTypeInput
+                    ReplacementActionID = outputCombo.SelectedItem.RowId,
+                    EffectType          = effectTypeInput
                 };
 
-                ModuleConfig.ActionConfigs[InputCombo.SelectedItem.RowId] = actionConfig;
-                ModuleConfig.ActionConfigs = ModuleConfig.ActionConfigs
+                config.ActionConfigs[inputCombo.SelectedItem.RowId] = actionConfig;
+                config.ActionConfigs = config.ActionConfigs
                                                          .OrderBy(x => LuminaGetter.GetRow<Action>(x.Key)?.ClassJobCategory.ValueNullable?.RowId ?? uint.MaxValue)
                                                          .ThenBy(x => x.Key)
                                                          .ToDictionary(x => x.Key, x => x.Value);
-                ModuleConfig.Save(this);
+                config.Save(this);
             }
         }
 
         ImGui.NewLine();
 
-        if (ModuleConfig.ActionConfigs.Count == 0) return;
+        if (config.ActionConfigs.Count == 0) return;
 
         using var table = ImRaii.Table
         (
@@ -145,10 +131,10 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
 
         var counter = 0;
 
-        foreach (var (input, config) in ModuleConfig.ActionConfigs)
+        foreach (var (input, actionConfig) in config.ActionConfigs)
         {
-            var output    = config.ReplacementActionID;
-            var isEnabled = config.IsEnabled;
+            var output    = actionConfig.ReplacementActionID;
+            var isEnabled = actionConfig.IsEnabled;
 
             if (counter % 2 == 0)
                 ImGui.TableNextRow();
@@ -161,16 +147,16 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
 
             if (ImGui.Checkbox("##Enabled", ref isEnabled))
             {
-                config.IsEnabled = isEnabled;
-                ModuleConfig.Save(this);
+                actionConfig.IsEnabled = isEnabled;
+                this.config.Save(this);
             }
 
             ImGui.SameLine();
 
             if (ImGui.Button(FontAwesomeIcon.TrashAlt.ToIconString()))
             {
-                ModuleConfig.ActionConfigs.Remove(input);
-                ModuleConfig.Save(this);
+                this.config.ActionConfigs.Remove(input);
+                this.config.Save(this);
                 continue;
             }
 
@@ -193,7 +179,7 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                InputCombo.SelectedID = input;
+                inputCombo.SelectedID = input;
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted("→");
@@ -217,10 +203,10 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                OutputCombo.SelectedID = output;
+                outputCombo.SelectedID = output;
 
             ImGui.TableNextColumn();
-            ImGui.TextColored(KnownColor.Gray.ToVector4(), $"[{GetEffectTypeName(config.EffectType)}]");
+            ImGui.TextColored(KnownColor.Gray.ToVector4(), $"[{GetEffectTypeName(actionConfig.EffectType)}]");
 
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
@@ -233,12 +219,12 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
                 {
                     foreach (var target in Enum.GetValues<EffectType>())
                     {
-                        var isSelected = config.EffectType == target;
+                        var isSelected = actionConfig.EffectType == target;
 
                         if (ImGui.Selectable(GetEffectTypeName(target), isSelected))
                         {
-                            config.EffectType = target;
-                            ModuleConfig.Save(this);
+                            actionConfig.EffectType = target;
+                            this.config.Save(this);
                         }
                     }
                 }
@@ -259,7 +245,7 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
         }
     }
 
-    private static void OnCharacterStartCast
+    private void OnCharacterStartCast
     (
         ref bool         isPrevented,
         ref IBattleChara player,
@@ -275,12 +261,12 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
 
         var isSelf = player.Address == (nint)localPlayer;
 
-        if (type != ActionType.Action                                         ||
-            !ModuleConfig.ActionConfigs.TryGetValue(actionID, out var config) ||
-            !config.IsEnabled)
+        if (type != ActionType.Action                                              ||
+            !this.config.ActionConfigs.TryGetValue(actionID, out var actionConfig) ||
+            !actionConfig.IsEnabled)
             return;
 
-        var shouldReplace = config.EffectType switch
+        var shouldReplace = actionConfig.EffectType switch
         {
             EffectType.All    => true,
             EffectType.Self   => isSelf,
@@ -289,10 +275,10 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
         };
         if (!shouldReplace) return;
 
-        actionID = config.ReplacementActionID;
+        actionID = actionConfig.ReplacementActionID;
     }
 
-    private static void OnCharacterCompleteCast
+    private void OnCharacterCompleteCast
     (
         ref bool         isPrevented,
         ref IBattleChara player,
@@ -312,13 +298,13 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
 
         var isSelf = player.Address == (nint)localPlayer;
 
-        if (type != ActionType.Action                                         ||
-            !ModuleConfig.ActionConfigs.TryGetValue(actionID, out var config) ||
-            !config.IsEnabled                                                 ||
-            !LuminaGetter.TryGetRow<Action>(config.ReplacementActionID, out _))
+        if (type != ActionType.Action                                              ||
+            !this.config.ActionConfigs.TryGetValue(actionID, out var actionConfig) ||
+            !actionConfig.IsEnabled                                                ||
+            !LuminaGetter.TryGetRow<Action>(actionConfig.ReplacementActionID, out _))
             return;
 
-        var shouldReplace = config.EffectType switch
+        var shouldReplace = actionConfig.EffectType switch
         {
             EffectType.All    => true,
             EffectType.Self   => isSelf,
@@ -329,10 +315,10 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
 
         if (isSelf                             &&
             TargetManager.Target is { } target &&
-            ActionManager.CanUseActionOnTarget(config.ReplacementActionID, target.ToStruct()))
+            ActionManager.CanUseActionOnTarget(actionConfig.ReplacementActionID, target.ToStruct()))
             animationTargetID = target.GameObjectID;
 
-        actionID = spellID = config.ReplacementActionID;
+        actionID = spellID = actionConfig.ReplacementActionID;
     }
 
     private class Config : ModuleConfig
@@ -340,10 +326,17 @@ public unsafe class AutoReplaceActionAnimation : ModuleBase
         public Dictionary<uint, ActionConfig> ActionConfigs = [];
     }
 
-    public class ActionConfig
+    private class ActionConfig
     {
         public bool       IsEnabled           { get; set; } = true;
         public uint       ReplacementActionID { get; set; }
         public EffectType EffectType          { get; set; } = EffectType.All;
+    }
+    
+    private enum EffectType
+    {
+        All,   // 所有目标
+        Self,  // 仅自身
+        Others // 仅他人
     }
 }

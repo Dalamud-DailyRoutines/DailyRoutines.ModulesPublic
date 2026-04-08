@@ -510,7 +510,7 @@ public unsafe class FieldEntryCommand : ModuleBase
 
         CommandManager.Instance().RemoveCommand(COMMAND);
 
-        TPHelper?.Abort();
+        TPHelper?.Dispose();
         TPHelper = null;
 
         RedirectTargetZoneInMoon = 0;

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -16,26 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class CustomActionQueueTime : ModuleBase
 {
-    public enum DefaultQueueMode
-    {
-        None,
-        Fixed,
-        BasedOnFrameRate
-    }
-
-    private static readonly Dictionary<DefaultQueueMode, string> DefaultQueueModesLoc = new()
-    {
-        [DefaultQueueMode.None]             = Lang.Get("CustomActionQueueTime-DefaultQueueMode-None"),
-        [DefaultQueueMode.Fixed]            = Lang.Get("CustomActionQueueTime-DefaultQueueMode-Fixed"),
-        [DefaultQueueMode.BasedOnFrameRate] = Lang.Get("CustomActionQueueTime-DefaultQueueMode-BasedOnFrameRate")
-    };
-
-    private static Config ModuleConfig = null!;
-
-    private static readonly ActionSelectCombo ActionSelectCombo = new("Action");
-
-    private static float QueueTimeMSInput = 500;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("CustomActionQueueTimeTitle"),
@@ -45,18 +26,27 @@ public class CustomActionQueueTime : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
+    private Config config = null!;
+
+    private readonly ActionSelectCombo actionSelectCombo = new("Action");
+
+    private float queueTimeMSInput = 500;
+
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
         Overlay      = new(this);
 
         Overlay.Flags |= ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMove;
 
         UseActionManager.Instance().RegPreIsActionOffCooldown(OnPreIsActionOffCooldown);
 
-        if (ModuleConfig.DisplayQueueActionOverlay)
+        if (config.DisplayQueueActionOverlay)
             Overlay.IsOpen = true;
     }
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnPreIsActionOffCooldown);
 
     protected override void ConfigUI()
     {
@@ -65,13 +55,13 @@ public class CustomActionQueueTime : ModuleBase
 
         ImGui.SameLine();
 
-        if (ImGui.Checkbox("###DisplayQueueActionOverlay", ref ModuleConfig.DisplayQueueActionOverlay))
+        if (ImGui.Checkbox("###DisplayQueueActionOverlay", ref config.DisplayQueueActionOverlay))
         {
-            Overlay.IsOpen = ModuleConfig.DisplayQueueActionOverlay;
-            ModuleConfig.Save(this);
+            Overlay.IsOpen = config.DisplayQueueActionOverlay;
+            config.Save(this);
         }
 
-        if (ModuleConfig.DisplayQueueActionOverlay)
+        if (config.DisplayQueueActionOverlay)
         {
             ImGui.AlignTextToFramePadding();
             ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("FontScale")}:");
@@ -82,12 +72,12 @@ public class CustomActionQueueTime : ModuleBase
 
                 ImGui.SameLine();
 
-                using (ImRaii.Disabled(ModuleConfig.OverlayFontScale == fontScale))
+                using (ImRaii.Disabled(config.OverlayFontScale == fontScale))
                 {
                     if (ImGui.Button($"{fontScale}"))
                     {
-                        ModuleConfig.OverlayFontScale = fontScale;
-                        ModuleConfig.Save(this);
+                        config.OverlayFontScale = fontScale;
+                        config.Save(this);
                     }
                 }
             }
@@ -113,7 +103,7 @@ public class CustomActionQueueTime : ModuleBase
             if (ImGui.ColorButton
                 (
                     Lang.Get("CustomActionQueueTime-OverlayTextColor"),
-                    ModuleConfig.OverlayFontColor,
+                    config.OverlayFontColor,
                     ImGuiColorEditFlags.AlphaPreview
                 ))
                 ImGui.OpenPopup("OverlayColorPickerPopup");
@@ -125,10 +115,10 @@ public class CustomActionQueueTime : ModuleBase
                     if (ImGui.ColorPicker4
                         (
                             Lang.Get("CustomActionQueueTime-OverlayTextColor"),
-                            ref ModuleConfig.OverlayFontColor,
+                            ref config.OverlayFontColor,
                             ImGuiColorEditFlags.AlphaPreview
                         ))
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                 }
             }
         }
@@ -144,7 +134,7 @@ public class CustomActionQueueTime : ModuleBase
         using (var combo = ImRaii.Combo
                (
                    "###DefaultQueueTimeCombo",
-                   DefaultQueueModesLoc[ModuleConfig.DefaultQueueMode],
+                   DefaultQueueModesLoc[config.DefaultQueueMode],
                    ImGuiComboFlags.HeightLarge
                ))
         {
@@ -154,10 +144,10 @@ public class CustomActionQueueTime : ModuleBase
                 {
                     var loc = DefaultQueueModesLoc[defaultQueueMode];
 
-                    if (ImGui.Selectable(loc, ModuleConfig.DefaultQueueMode == defaultQueueMode))
+                    if (ImGui.Selectable(loc, config.DefaultQueueMode == defaultQueueMode))
                     {
-                        ModuleConfig.DefaultQueueMode = defaultQueueMode;
-                        ModuleConfig.Save(this);
+                        config.DefaultQueueMode = defaultQueueMode;
+                        config.Save(this);
                     }
                 }
             }
@@ -171,13 +161,13 @@ public class CustomActionQueueTime : ModuleBase
 
         ImGui.SameLine();
 
-        if (ModuleConfig.DefaultQueueMode == DefaultQueueMode.Fixed)
+        if (config.DefaultQueueMode == DefaultQueueMode.Fixed)
         {
             ImGui.SetNextItemWidth(150f * GlobalUIScale);
-            if (ImGui.InputFloat("(ms)###FixedDefaultQueueTimeInput", ref ModuleConfig.DefaultQueueTime, 0, 0, "%.1f"))
-                ModuleConfig.DefaultQueueTime = Math.Max(1, ModuleConfig.DefaultQueueTime);
+            if (ImGui.InputFloat("(ms)###FixedDefaultQueueTimeInput", ref config.DefaultQueueTime, 0, 0, "%.1f"))
+                config.DefaultQueueTime = Math.Max(1, config.DefaultQueueTime);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
         else
             ImGui.TextUnformatted($"{GetDefaultQueueTime():F1} (ms)");
@@ -188,16 +178,16 @@ public class CustomActionQueueTime : ModuleBase
 
         using (ImRaii.Disabled
                (
-                   ActionSelectCombo.SelectedID == 0 ||
-                   ModuleConfig.QueueTime.ContainsKey(ActionSelectCombo.SelectedID)
+                   actionSelectCombo.SelectedID == 0 ||
+                   config.QueueTime.ContainsKey(actionSelectCombo.SelectedID)
                ))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
             {
-                if (ActionSelectCombo.SelectedID != 0)
+                if (actionSelectCombo.SelectedID != 0)
                 {
-                    ModuleConfig.QueueTime.TryAdd(ActionSelectCombo.SelectedID, 500f);
-                    ModuleConfig.Save(this);
+                    config.QueueTime.TryAdd(actionSelectCombo.SelectedID, 500f);
+                    config.Save(this);
                 }
             }
         }
@@ -205,7 +195,7 @@ public class CustomActionQueueTime : ModuleBase
         ImGui.SameLine();
         ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-        ActionSelectCombo.DrawRadio();
+        actionSelectCombo.DrawRadio();
 
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
@@ -223,7 +213,7 @@ public class CustomActionQueueTime : ModuleBase
 
         List<uint> actionsToRemove = [];
 
-        foreach (var queueTimePair in ModuleConfig.QueueTime)
+        foreach (var queueTimePair in config.QueueTime)
         {
             if (!LuminaGetter.TryGetRow<Action>(queueTimePair.Key, out var data)) continue;
 
@@ -270,15 +260,15 @@ public class CustomActionQueueTime : ModuleBase
 
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
-                ModuleConfig.QueueTime[queueTimePair.Key] = timeInputMS;
-                ModuleConfig.Save(this);
+                config.QueueTime[queueTimePair.Key] = timeInputMS;
+                config.Save(this);
             }
         }
 
         if (actionsToRemove.Count > 0)
         {
-            actionsToRemove.ForEach(x => ModuleConfig.QueueTime.Remove(x));
-            ModuleConfig.Save(this);
+            actionsToRemove.ForEach(x => config.QueueTime.Remove(x));
+            config.Save(this);
         }
     }
 
@@ -290,8 +280,8 @@ public class CustomActionQueueTime : ModuleBase
         var manager = ActionManager.Instance();
         if (manager == null) return;
 
-        using var font  = FontManager.Instance().GetUIFont(ModuleConfig.OverlayFontScale).Push();
-        using var color = ImRaii.PushColor(ImGuiCol.Text, ModuleConfig.OverlayFontColor);
+        using var font  = FontManager.Instance().GetUIFont(config.OverlayFontScale).Push();
+        using var color = ImRaii.PushColor(ImGuiCol.Text, config.OverlayFontColor);
 
         var actionID   = manager->QueuedActionId;
         var actionType = manager->QueuedActionType;
@@ -322,11 +312,8 @@ public class CustomActionQueueTime : ModuleBase
             manager->QueuedActionType = ActionType.None;
         }
     }
-
-    protected override void Uninit() =>
-        UseActionManager.Instance().Unreg(OnPreIsActionOffCooldown);
-
-    private static void OnPreIsActionOffCooldown
+    
+    private void OnPreIsActionOffCooldown
     (
         ref bool   isPrevented,
         ActionType actionType,
@@ -337,15 +324,15 @@ public class CustomActionQueueTime : ModuleBase
         if (actionType != ActionType.Action) return;
 
         var queueTimeMS =
-            ModuleConfig.QueueTime.TryGetValue(actionID, out var queueTime) ? queueTime : GetDefaultQueueTime();
+            config.QueueTime.TryGetValue(actionID, out var queueTime) ? queueTime : GetDefaultQueueTime();
         queueTimeSecond = queueTimeMS / 1000f;
     }
 
-    private static unsafe float GetDefaultQueueTime() =>
-        ModuleConfig.DefaultQueueMode switch
+    private unsafe float GetDefaultQueueTime() =>
+        config.DefaultQueueMode switch
         {
             DefaultQueueMode.None  => 500,
-            DefaultQueueMode.Fixed => ModuleConfig.DefaultQueueTime,
+            DefaultQueueMode.Fixed => config.DefaultQueueTime,
             DefaultQueueMode.BasedOnFrameRate => Math.Clamp
             (
                 500 + (90 - Framework.Instance()->FrameRate) / 5 * 20,
@@ -355,7 +342,7 @@ public class CustomActionQueueTime : ModuleBase
             _ => 500
         };
 
-    public class Config : ModuleConfig
+    private class Config : ModuleConfig
     {
         public DefaultQueueMode DefaultQueueMode          = DefaultQueueMode.None;
         public float            DefaultQueueTime          = 500f;
@@ -367,4 +354,22 @@ public class CustomActionQueueTime : ModuleBase
         // Action ID - Time (ms)
         public Dictionary<uint, float> QueueTime = [];
     }
+    
+    private enum DefaultQueueMode
+    {
+        None,
+        Fixed,
+        BasedOnFrameRate
+    }
+
+    #region 常量
+
+    private static readonly FrozenDictionary<DefaultQueueMode, string> DefaultQueueModesLoc = new Dictionary<DefaultQueueMode, string>()
+    {
+        [DefaultQueueMode.None]             = Lang.Get("CustomActionQueueTime-DefaultQueueMode-None"),
+        [DefaultQueueMode.Fixed]            = Lang.Get("CustomActionQueueTime-DefaultQueueMode-Fixed"),
+        [DefaultQueueMode.BasedOnFrameRate] = Lang.Get("CustomActionQueueTime-DefaultQueueMode-BasedOnFrameRate")
+    }.ToFrozenDictionary();
+
+    #endregion
 }

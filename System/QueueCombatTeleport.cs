@@ -199,7 +199,7 @@ public unsafe class QueueCombatTeleport : ModuleBase
         ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
         UseActionManager.Instance().Unreg(OnPreUseAction);
 
-        TeleportHelper?.Abort();
+        TeleportHelper?.Dispose();
         TeleportHelper = null;
 
         QueuedTeleport = null;

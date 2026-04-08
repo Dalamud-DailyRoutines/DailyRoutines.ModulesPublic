@@ -5,6 +5,7 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.JobGauge.Types;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -13,11 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoChakraFormShift : ModuleBase
 {
-    private const uint STEELED_MEDITATION = 36940;
-    private const uint FORM_SHIFT         = 4262;
-
-    private static readonly HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoChakraFormShiftTitle"),
@@ -38,7 +34,7 @@ public class AutoChakraFormShift : ModuleBase
     {
         if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition.IsOccupiedInEvent) return false;
 
-        if (LocalPlayerState.ClassJob != 20 || !IsValidPVEDuty())
+        if (LocalPlayerState.ClassJob != 20 || !GameState.IsInPVEActonZone)
         {
             TaskHelper.Abort();
             return true;
@@ -80,11 +76,6 @@ public class AutoChakraFormShift : ModuleBase
         return true;
     }
 
-    private static bool IsValidPVEDuty() =>
-        !GameState.IsInPVPArea &&
-        (GameState.ContentFinderCondition == 0 ||
-         !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId));
-
     // 脱战
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
@@ -117,4 +108,11 @@ public class AutoChakraFormShift : ModuleBase
         DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
         DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
     }
+
+    #region 常量
+
+    private const uint STEELED_MEDITATION = 36940;
+    private const uint FORM_SHIFT         = 4262;
+    
+    #endregion
 }

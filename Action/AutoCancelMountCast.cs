@@ -12,12 +12,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoCancelMountCast : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static CancellationTokenSource? CancelWhenMoveCancelSource;
-
-    private static bool IsOnMountCasting;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title            = Lang.Get("AutoCancelMountCastTitle"),
@@ -26,27 +20,20 @@ public class AutoCancelMountCast : ModuleBase
         Author           = ["Bill"],
         ModulesRecommend = ["BetterMountRoulette"]
     };
+    
+    private Config config = null!;
+
+    private CancellationTokenSource? cancelSource;
+    private bool                     isOnMountCasting;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
     }
-
-    protected override void ConfigUI()
-    {
-        if (ImGui.Checkbox(Lang.Get("AutoCancelMountCast-CancelWhenUseAction"), ref ModuleConfig.CancelWhenUsection))
-            ModuleConfig.Save(this);
-
-        if (ImGui.Checkbox(Lang.Get("AutoCancelMountCast-CancelWhenMove"), ref ModuleConfig.CancelWhenMove))
-            ModuleConfig.Save(this);
-
-        if (ImGui.Checkbox(Lang.Get("AutoCancelMountCast-CancelWhenJump"), ref ModuleConfig.CancelWhenJump))
-            ModuleConfig.Save(this);
-    }
-
+    
     protected override void Uninit()
     {
         DService.Instance().Condition.ConditionChange -= OnConditionChanged;
@@ -55,7 +42,19 @@ public class AutoCancelMountCast : ModuleBase
         OnConditionChanged(ConditionFlag.Casting, false);
     }
 
-    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    protected override void ConfigUI()
+    {
+        if (ImGui.Checkbox(Lang.Get("AutoCancelMountCast-CancelWhenUseAction"), ref config.CancelWhenUsection))
+            config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("AutoCancelMountCast-CancelWhenMove"), ref config.CancelWhenMove))
+            config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("AutoCancelMountCast-CancelWhenJump"), ref config.CancelWhenJump))
+            config.Save(this);
+    }
+    
+    private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         switch (flag)
         {
@@ -67,45 +66,45 @@ public class AutoCancelMountCast : ModuleBase
                             (localPlayer.CastActionType == ActionType.Mount ||
                              localPlayer is { CastActionType: ActionType.GeneralAction, CastActionID: 9 }))
                         {
-                            IsOnMountCasting = true;
+                            isOnMountCasting = true;
 
-                            CancelWhenMoveCancelSource = new();
+                            cancelSource = new();
                             DService.Instance().Framework.RunOnTick
                             (
                                 async () =>
                                 {
-                                    while (ModuleConfig.CancelWhenMove && IsOnMountCasting && !CancelWhenMoveCancelSource.IsCancellationRequested)
+                                    while (config.CancelWhenMove && isOnMountCasting && !cancelSource.IsCancellationRequested)
                                     {
                                         if (LocalPlayerState.Instance().IsMoving)
                                             ExecuteCancelCast();
 
-                                        await Task.Delay(10, CancelWhenMoveCancelSource.Token);
+                                        await Task.Delay(10, cancelSource.Token);
                                     }
                                 },
-                                cancellationToken: CancelWhenMoveCancelSource.Token
+                                cancellationToken: cancelSource.Token
                             ).ContinueWith(t => t.Dispose());
                         }
 
                         break;
                     case false:
-                        IsOnMountCasting = false;
+                        isOnMountCasting = false;
 
-                        CancelWhenMoveCancelSource?.Cancel();
-                        CancelWhenMoveCancelSource?.Dispose();
-                        CancelWhenMoveCancelSource = null;
+                        cancelSource?.Cancel();
+                        cancelSource?.Dispose();
+                        cancelSource = null;
                         break;
                 }
 
                 break;
             case ConditionFlag.Jumping:
-                if (!ModuleConfig.CancelWhenJump || !value) return;
+                if (!config.CancelWhenJump || !value) return;
 
                 ExecuteCancelCast();
                 break;
         }
     }
 
-    private static void OnPreUseAction
+    private void OnPreUseAction
     (
         ref bool                        isPrevented,
         ref ActionType                  actionType,
@@ -116,7 +115,7 @@ public class AutoCancelMountCast : ModuleBase
         ref uint                        comboRouteID
     )
     {
-        if (!ModuleConfig.CancelWhenUsection || !IsOnMountCasting) return;
+        if (!config.CancelWhenUsection || !isOnMountCasting) return;
 
         ExecuteCancelCast();
     }

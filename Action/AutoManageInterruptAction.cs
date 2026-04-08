@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -8,8 +9,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoManageInterruptAction : ModuleBase
 {
-    private static readonly HashSet<uint> InterruptActions = [7538, 7551];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoManageInterruptActionTitle"),
@@ -19,6 +18,9 @@ public class AutoManageInterruptAction : ModuleBase
 
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnPreUseAction);
 
     private static void OnPreUseAction
     (
@@ -37,6 +39,9 @@ public class AutoManageInterruptAction : ModuleBase
         isPrevented = true;
     }
 
-    protected override void Uninit() =>
-        UseActionManager.Instance().Unreg(OnPreUseAction);
+    #region 常量
+
+    private static readonly FrozenSet<uint> InterruptActions = [7538, 7551];
+
+    #endregion
 }

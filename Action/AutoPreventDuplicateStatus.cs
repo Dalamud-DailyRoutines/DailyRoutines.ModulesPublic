@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -19,33 +20,36 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoPreventDuplicateStatus : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoPreventDuplicateStatusTitle"),
         Description = Lang.Get("AutoPreventDuplicateStatusDescription"),
         Category    = ModuleCategory.Action
     };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DuplicateActions.Keys
-                        .Except(ModuleConfig.EnabledActions.Keys)
+                        .Except(config.EnabledActions.Keys)
                         .ToList()
-                        .ForEach(key => ModuleConfig.EnabledActions[key] = true);
+                        .ForEach(key => config.EnabledActions[key] = true);
 
-        ModuleConfig.EnabledActions.Keys
+        config.EnabledActions.Keys
                     .Except(DuplicateActions.Keys)
                     .ToList()
-                    .ForEach(key => ModuleConfig.EnabledActions.Remove(key));
+                    .ForEach(key => config.EnabledActions.Remove(key));
 
-        ModuleConfig.Save(this);
+        config.Save(this);
 
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
     }
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnPreUseAction);
 
     protected override void ConfigUI()
     {
@@ -54,9 +58,9 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150f * GlobalUIScale);
-        ImGui.InputFloat("###OverlapThreshold", ref ModuleConfig.OverlapThreshold, 0, 0, "%.1f");
+        ImGui.InputFloat("###OverlapThreshold", ref config.OverlapThreshold, 0, 0, "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGuiOm.HelpMarker(Lang.Get("AutoPreventDuplicateStatus-OverlapThresholdHelp"));
 
@@ -64,12 +68,12 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("SendNotification")}:");
 
         ImGui.SameLine();
-        if (ImGui.Checkbox("###SendNotification", ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox("###SendNotification", ref config.SendNotification))
+            config.Save(this);
 
         ImGui.Spacing();
 
-        using (var node = ImRaii.TreeNode($"{Lang.Get("Action")}: {ModuleConfig.EnabledActions.Count(x => x.Value)} / {ModuleConfig.EnabledActions.Count}"))
+        using (var node = ImRaii.TreeNode($"{Lang.Get("Action")}: {config.EnabledActions.Count(x => x.Value)} / {config.EnabledActions.Count}"))
         {
             if (node)
             {
@@ -97,12 +101,12 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
                     if (!LuminaGetter.TryGetRow<Action>(actionInfo.Key, out var result)) continue;
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    var isActionEnabled = ModuleConfig.EnabledActions[actionInfo.Key];
+                    var isActionEnabled = config.EnabledActions[actionInfo.Key];
 
                     if (ImGui.Checkbox($"###Is{actionInfo.Key}Enabled", ref isActionEnabled))
                     {
-                        ModuleConfig.EnabledActions[actionInfo.Key] ^= true;
-                        ModuleConfig.Save(this);
+                        config.EnabledActions[actionInfo.Key] ^= true;
+                        config.Save(this);
                     }
 
                     ImGui.SameLine();
@@ -149,7 +153,7 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         );
     }
 
-    private static void OnPreUseAction
+    private void OnPreUseAction
     (
         ref bool                        isPrevented,
         ref ActionType                  actionType,
@@ -164,7 +168,7 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
 
         var adjustedActionID = ActionManager.Instance()->GetAdjustedActionId(actionID);
         if (!DuplicateActions.TryGetValue(adjustedActionID, out var info)                   ||
-            !ModuleConfig.EnabledActions.TryGetValue(adjustedActionID, out var enableState) ||
+            !config.EnabledActions.TryGetValue(adjustedActionID, out var enableState) ||
             !enableState)
             return;
 
@@ -184,19 +188,16 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         if (canTargetSelf && (gameObj == null || !ActionManager.CanUseActionOnTarget(adjustedActionID, gameObj.ToStruct())))
             targetIDDetection = LocalPlayerState.EntityID;
 
-        if (info.ShouldPrevent(targetIDDetection))
+        if (info.ShouldPrevent(this, targetIDDetection))
         {
-            if (ModuleConfig.SendNotification &&
+            if (config.SendNotification &&
                 Throttler.Shared.Throttle($"AutoPreventDuplicateStatus-Notification-{adjustedActionID}", 1_000))
                 NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoPreventDuplicateStatus-PreventedNotification", actionData.Value.Name.ToString(), adjustedActionID));
 
             isPrevented = true;
         }
     }
-
-    protected override void Uninit() =>
-        UseActionManager.Instance().Unreg(OnPreUseAction);
-
+    
     private class Config : ModuleConfig
     {
         public Dictionary<uint, bool> EnabledActions   = [];
@@ -217,7 +218,7 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         DuplicateStatusInfo[]? SecondStatuses = null
     )
     {
-        public bool ShouldPrevent(ulong gameObjectID)
+        public bool ShouldPrevent(AutoPreventDuplicateStatus module, ulong gameObjectID)
         {
             if (SecondStatuses != null)
             {
@@ -225,12 +226,12 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
                 {
                     if (!secondInfo.IsReverse)
                     {
-                        if (secondInfo.HasStatus())
+                        if (secondInfo.HasStatus(module))
                             return false;
                     }
                     else
                     {
-                        if (!secondInfo.HasStatus())
+                        if (!secondInfo.HasStatus(module))
                             return false;
                     }
                 }
@@ -240,12 +241,12 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
             {
                 if (!firstInfo.IsReverse)
                 {
-                    if (firstInfo.HasStatus(gameObjectID))
+                    if (firstInfo.HasStatus(module, gameObjectID))
                         return true;
                 }
                 else
                 {
-                    if (!firstInfo.HasStatus(gameObjectID))
+                    if (!firstInfo.HasStatus(module, gameObjectID))
                         return true;
                 }
             }
@@ -269,15 +270,15 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
 
         public string? GetName() => !Sheets.Statuses.TryGetValue(StatusID, out var rowData) ? null : rowData.Name.ToString();
 
-        public bool HasStatus()
+        public bool HasStatus(AutoPreventDuplicateStatus module)
         {
             switch (DetectType)
             {
                 case DetectType.Self:
-                    return HasStatus(&Control.GetLocalPlayer()->StatusManager);
+                    return HasStatus(module, &Control.GetLocalPlayer()->StatusManager);
                 case DetectType.Target:
                     if (TargetManager.Target is not IBattleChara chara) return false;
-                    return HasStatus(&chara.ToStruct()->StatusManager);
+                    return HasStatus(module, &chara.ToStruct()->StatusManager);
                 case DetectType.Member:
                     if (DService.Instance().PartyList.Length <= 0) return false;
 
@@ -285,7 +286,7 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
                     {
                         if (IBattleChara.Create(partyMember.Address) is not { } member) continue;
 
-                        var state = HasStatus(member.ToStruct()->GetStatusManager());
+                        var state = HasStatus(module, member.ToStruct()->GetStatusManager());
                         if (state) return true;
                     }
 
@@ -295,7 +296,7 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
             }
         }
 
-        public bool HasStatus(ulong gameObjectID)
+        public bool HasStatus(AutoPreventDuplicateStatus module, ulong gameObjectID)
         {
             if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
 
@@ -304,30 +305,30 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
                                   : (BattleChara*)GameObjectManager.Instance()->Objects.GetObjectByGameObjectId(gameObjectID);
             if (battleChara == null) return false;
 
-            return HasStatus(battleChara->GetStatusManager());
+            return HasStatus(module, battleChara->GetStatusManager());
         }
 
-        public bool HasStatus(StatusManager* statusManager)
+        public bool HasStatus(AutoPreventDuplicateStatus module, StatusManager* statusManager)
         {
             if (statusManager == null) return false;
 
             var statusIndex = statusManager->GetStatusIndex(StatusID);
             if (statusIndex == -1) return false;
 
-            return IsPermanent || statusManager->Status[statusIndex].RemainingTime > ModuleConfig.OverlapThreshold;
+            return IsPermanent || statusManager->Status[statusIndex].RemainingTime > module.config.OverlapThreshold;
         }
     }
 
     #region 数据
 
-    private static readonly Dictionary<DetectType, string> DetectTypeLoc = new()
+    private static readonly FrozenDictionary<DetectType, string> DetectTypeLoc = new Dictionary<DetectType, string>()
     {
         [DetectType.Self]   = Lang.Get("AutoPreventDuplicateStatus-Self"),
         [DetectType.Member] = Lang.Get("AutoPreventDuplicateStatus-Member"),
         [DetectType.Target] = Lang.Get("Target")
-    };
+    }.ToFrozenDictionary();
 
-    private static readonly Dictionary<uint, DuplicatePreventInfo> DuplicateActions = new()
+    private static readonly FrozenDictionary<uint, DuplicatePreventInfo> DuplicateActions = new Dictionary<uint, DuplicatePreventInfo>()
     {
         // 牵制
         [7549] = new([new(1195, DetectType.Target)]),
@@ -445,7 +446,7 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         [29414] = new([new(3158, DetectType.Self)]),
         // 魔封魔
         [41624] = new([new(4259, DetectType.Target)])
-    };
+    }.ToFrozenDictionary();
 
     #endregion
 }

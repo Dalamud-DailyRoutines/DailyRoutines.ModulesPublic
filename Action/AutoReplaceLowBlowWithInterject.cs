@@ -11,17 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
 {
-    private const uint LowBlowAction = 7540;
-
-    private static readonly CompSig                           IsActionReplaceableSig = new("E8 ?? ?? ?? ?? 84 C0 74 68 8B D3");
-    private static          Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
-
-    private static readonly CompSig                           GetAdjustedActionIDSig = new("E8 ?? ?? ?? ?? 89 03 8B 03");
-    private static          Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
-
-    private static readonly CompSig                        GetIconIDForSlotSig = new("E8 ?? ?? ?? ?? 85 C0 89 83 ?? ?? ?? ?? 0F 94 C0");
-    private static          Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoReplaceLowBlowWithInterjectTitle"),
@@ -30,6 +19,18 @@ public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig                           IsActionReplaceableSig = new("E8 ?? ?? ?? ?? 84 C0 74 68 8B D3");
+    private delegate        bool                              IsActionReplaceableDelegate(uint actionID);
+    private                 Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
+
+    private static readonly CompSig                           GetAdjustedActionIDSig = new("E8 ?? ?? ?? ?? 89 03 8B 03");
+    private delegate        uint                              GetAdjustedActionIDDelegate(ActionManager* manager, uint actionID);
+    private                 Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
+
+    private static readonly CompSig GetIconIDForSlotSig = new("E8 ?? ?? ?? ?? 85 C0 89 83 ?? ?? ?? ?? 0F 94 C0");
+    private delegate        uint    GetIconIDForSlotDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
+    private                 Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
 
     protected override void Init()
     {
@@ -43,19 +44,19 @@ public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
         GetIconIDForSlotHook.Enable();
     }
 
-    private static bool IsActionReplaceableDetour(uint actionID) =>
-        actionID == LowBlowAction || IsActionReplaceableHook.Original(actionID);
+    private bool IsActionReplaceableDetour(uint actionID) =>
+        actionID == LOW_BLOW_ACTION || IsActionReplaceableHook.Original(actionID);
 
-    private static uint GetAdjustedActionIDDetour(ActionManager* manager, uint actionID) =>
-        actionID == LowBlowAction && IsReplaceNeeded() ? 7538 : GetAdjustedActionIDHook.Original(manager, actionID);
+    private uint GetAdjustedActionIDDetour(ActionManager* manager, uint actionID) =>
+        actionID == LOW_BLOW_ACTION && IsReplaceNeeded() ? 7538 : GetAdjustedActionIDHook.Original(manager, actionID);
 
-    private static uint GetIconIDForSlotDetour
+    private uint GetIconIDForSlotDetour
     (
         RaptureHotbarModule.HotbarSlot*    slot,
         RaptureHotbarModule.HotbarSlotType type,
         uint                               actionID
     ) =>
-        type == RaptureHotbarModule.HotbarSlotType.Action && actionID == LowBlowAction && IsReplaceNeeded()
+        type == RaptureHotbarModule.HotbarSlotType.Action && actionID == LOW_BLOW_ACTION && IsReplaceNeeded()
             ? 808
             : GetIconIDForSlotHook.Original(slot, type, actionID);
 
@@ -63,9 +64,9 @@ public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
         ActionManager.Instance()->IsActionOffCooldown(ActionType.Action, 7538) &&
         TargetManager.Target is IBattleChara { IsCastInterruptible: true };
 
-    private delegate bool IsActionReplaceableDelegate(uint actionID);
+    #region 常量
 
-    private delegate uint GetAdjustedActionIDDelegate(ActionManager* manager, uint actionID);
+    private const uint LOW_BLOW_ACTION = 7540;
 
-    private delegate uint GetIconIDForSlotDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
+    #endregion
 }

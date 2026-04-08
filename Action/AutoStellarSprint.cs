@@ -12,9 +12,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoStellarSprint : ModuleBase
 {
-    private const uint STELLAR_SPRINT = 43357;
-    private const uint SPRINT_STATUS  = 4398;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoStellarSprintTitle"),
@@ -87,4 +84,11 @@ public class AutoStellarSprint : ModuleBase
 
         UseActionManager.Instance().UseAction(ActionType.Action, STELLAR_SPRINT);
     }
+    
+    #region 常量
+
+    private const uint STELLAR_SPRINT = 43357;
+    private const uint SPRINT_STATUS  = 4398;
+
+    #endregion
 }

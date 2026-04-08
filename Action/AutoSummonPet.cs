@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -12,15 +13,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoSummonPet : ModuleBase
 {
-    private static readonly Dictionary<uint, uint> SummonActions = new()
-    {
-        [28] = 17215, // 学者
-        [26] = 25798, // 秘术师 / 召唤师
-        [27] = 25798
-    };
-
-    private static readonly HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoSummonPetTitle"),
@@ -35,6 +27,12 @@ public class AutoSummonPet : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().DutyState.DutyRecommenced    += OnDutyRecommenced;
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+    }
 
     // 重新挑战
     private void OnDutyRecommenced(object? sender, ushort e)
@@ -48,7 +46,7 @@ public class AutoSummonPet : ModuleBase
     {
         TaskHelper.Abort();
 
-        if (!IsValidPVEDuty()) return;
+        if (!GameState.IsInPVEActonZone) return;
 
         TaskHelper.DelayNext(1_000);
         TaskHelper.Enqueue(CheckCurrentJob);
@@ -80,15 +78,15 @@ public class AutoSummonPet : ModuleBase
         TaskHelper.Enqueue(CheckCurrentJob);
         return true;
     }
+    
+    #region 常量
 
-    private static bool IsValidPVEDuty() =>
-        !GameState.IsInPVPArea &&
-        (GameState.ContentFinderCondition == 0 ||
-         !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId));
-
-    protected override void Uninit()
+    private static readonly FrozenDictionary<uint, uint> SummonActions = new Dictionary<uint, uint>()
     {
-        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-    }
+        [28] = 17215, // 学者
+        [26] = 25798, // 秘术师 / 召唤师
+        [27] = 25798
+    }.ToFrozenDictionary();
+
+    #endregion
 }

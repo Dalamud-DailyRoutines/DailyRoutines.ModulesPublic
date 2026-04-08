@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -12,12 +13,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class InstantPlaceLocationAction : ModuleBase
 {
-    // 黑魔纹, 魔纹步, 回退, 回退 (PVP), 螺旋气流, 螺旋气流 (PVP), 星空构想, 胖胖之墙, 逆行 (PVP)
-    private static readonly HashSet<uint> InvalidActions =
-    [
-        3573, 7419, 24403, 29551, 25837, 29669, 34675, 39215, 41507
-    ];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("InstantPlaceLocationActionTitle"),
@@ -27,6 +22,9 @@ public unsafe class InstantPlaceLocationAction : ModuleBase
 
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnPreUseAction);
 
     public static void OnPreUseAction
     (
@@ -75,6 +73,21 @@ public unsafe class InstantPlaceLocationAction : ModuleBase
         return target;
     }
 
-    protected override void Uninit() =>
-        UseActionManager.Instance().Unreg(OnPreUseAction);
+    #region 常量
+
+    // 黑魔纹, 魔纹步, 回退, 回退 (PVP), 螺旋气流, 螺旋气流 (PVP), 星空构想, 胖胖之墙, 逆行 (PVP)
+    private static readonly FrozenSet<uint> InvalidActions =
+    [
+        3573, 
+        7419, 
+        24403,
+        29551, 
+        25837,
+        29669, 
+        34675,
+        39215,
+        41507
+    ];
+
+    #endregion
 }

@@ -23,53 +23,29 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoReplaceLocationAction : ModuleBase
 {
-    // 返回值为 GameObject*, 无对象则为 0
-    private static readonly CompSig                              ParseActionCommandArgSig = new("E8 ?? ?? ?? ?? 33 ED 4C 8B F8");
-    private static          Hook<ParseActionCommandArgDelegate>? ParseActionCommandArgHook;
-
-    private static Config? ModuleConfig;
-
-    // MapID - Markers
-    private static readonly Dictionary<uint, Dictionary<MapMarker, Vector2>> ZoneMapMarkers = [];
-
-    private static bool IsNeedToReplace;
-
-    private static readonly ContentSelectCombo ContentSelectCombo = new("Blakclist");
-
-    static AutoReplaceLocationAction()
-    {
-        LuminaGetter.Get<Map>()
-                    .Where(x => x.TerritoryType is { RowId: > 0, Value.ContentFinderCondition.RowId: > 0 })
-                    .ForEach
-                    (map =>
-                        {
-                            map.GetMapMarkers()
-                               .ForEach
-                               (marker =>
-                                   {
-                                       if (marker.Icon == 60442)
-                                       {
-                                           ZoneMapMarkers.TryAdd(map.RowId, []);
-                                           ZoneMapMarkers[map.RowId].TryAdd(marker, PositionHelper.TextureToWorld(marker.GetPosition(), map));
-                                       }
-                                   }
-                               );
-                        }
-                    );
-    }
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoReplaceLocationActionTitle"),
         Description = Lang.Get("AutoReplaceLocationActionDescription"),
         Category    = ModuleCategory.Action
     };
+    
+    // 返回值为 GameObject*, 无对象则为 0
+    private static readonly CompSig                              ParseActionCommandArgSig = new("E8 ?? ?? ?? ?? 33 ED 4C 8B F8");
+    private delegate        nint                                 ParseActionCommandArgDelegate(nint a1, nint arg, bool a3, bool a4);
+    private                 Hook<ParseActionCommandArgDelegate>? ParseActionCommandArgHook;
 
+    private Config? config;
+    
+    private readonly ContentSelectCombo contentSelectCombo = new("Blakclist");
+
+    private bool isNeedToReplace;
+    
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        ContentSelectCombo.SelectedIDs = ModuleConfig.BlacklistContents;
+        contentSelectCombo.SelectedIDs = config.BlacklistContents;
 
         UseActionManager.Instance().RegPreUseActionLocation(OnPreUseActionLocation);
         ExecuteCommandManager.Instance().RegPreComplexLocation(OnPreExecuteCommandComplexLocation);
@@ -77,10 +53,16 @@ public class AutoReplaceLocationAction : ModuleBase
         ParseActionCommandArgHook ??= ParseActionCommandArgSig.GetHook<ParseActionCommandArgDelegate>(ParseActionCommandArgDetour);
         ParseActionCommandArgHook.Enable();
     }
+    
+    protected override void Uninit()
+    {
+        UseActionManager.Instance().Unreg(OnPreUseActionLocation);
+        ExecuteCommandManager.Instance().Unreg(OnPreExecuteCommandComplexLocation);
+    }
 
     protected override void ConfigUI()
     {
-        if (ModuleConfig == null) return;
+        if (config == null) return;
 
         DrawConfigCustom();
 
@@ -100,15 +82,15 @@ public class AutoReplaceLocationAction : ModuleBase
         using var indent = ImRaii.PushIndent();
 
         // 通知发送
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref ModuleConfig.SendChat))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
 
         // 启用 <center> 命令参数
-        if (ImGui.Checkbox(Lang.Get("AutoReplaceLocationAction-EnableCenterArg"), ref ModuleConfig.EnableCenterArgument))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoReplaceLocationAction-EnableCenterArg"), ref config.EnableCenterArgument))
+            config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoReplaceLocationAction-EnableCenterArgHelp"), 20f * GlobalUIScale);
 
         ImGui.Spacing();
@@ -120,9 +102,9 @@ public class AutoReplaceLocationAction : ModuleBase
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
-            ImGui.InputFloat("###AdjustDistanceInput", ref ModuleConfig.AdjustDistance, 0, 0, "%.1f");
+            ImGui.InputFloat("###AdjustDistanceInput", ref config.AdjustDistance, 0, 0, "%.1f");
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
             ImGuiOm.HelpMarker(Lang.Get("AutoReplaceLocationAction-AdjustDistanceHelp"));
         }
 
@@ -135,10 +117,10 @@ public class AutoReplaceLocationAction : ModuleBase
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-            if (ContentSelectCombo.DrawCheckbox())
+            if (contentSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistContents = ContentSelectCombo.SelectedIDs.ToHashSet();
-                ModuleConfig.Save(this);
+                config.BlacklistContents = contentSelectCombo.SelectedIDs.ToHashSet();
+                config.Save(this);
             }
         }
     }
@@ -150,30 +132,30 @@ public class AutoReplaceLocationAction : ModuleBase
         using var indent = ImRaii.PushIndent();
 
         // 技能启用情况
-        foreach (var actionPair in ModuleConfig.EnabledActions)
+        foreach (var actionPair in config.EnabledActions)
         {
             if (!LuminaGetter.TryGetRow<Action>(actionPair.Key, out var action)) continue;
             var state = actionPair.Value;
 
             if (ImGui.Checkbox($"###{actionPair.Key}_{action.Name.ToString()}", ref state))
             {
-                ModuleConfig.EnabledActions[actionPair.Key] = state;
-                ModuleConfig.Save(this);
+                config.EnabledActions[actionPair.Key] = state;
+                config.Save(this);
             }
 
             ImGui.SameLine();
             ImGuiOm.TextImage(action.Name.ToString(), ImageHelper.GetGameIcon(action.Icon).Handle, ScaledVector2(20f));
         }
 
-        foreach (var actionPair in ModuleConfig.EnabledPetActions)
+        foreach (var actionPair in config.EnabledPetActions)
         {
             if (!LuminaGetter.TryGetRow<PetAction>(actionPair.Key, out var action)) continue;
             var state = actionPair.Value;
 
             if (ImGui.Checkbox($"###{actionPair.Key}_{action.Name.ToString()}", ref state))
             {
-                ModuleConfig.EnabledPetActions[actionPair.Key] = state;
-                ModuleConfig.Save(this);
+                config.EnabledPetActions[actionPair.Key] = state;
+                config.Save(this);
             }
 
             ImGui.SameLine();
@@ -224,9 +206,9 @@ public class AutoReplaceLocationAction : ModuleBase
             {
                 if (ImGui.Button(Lang.Get("AutoReplaceLocationAction-AddFlagMarker")))
                 {
-                    ModuleConfig.CustomMarkers.TryAdd(GameState.Map, []);
-                    ModuleConfig.CustomMarkers[GameState.Map].Add(new(agent->FlagMapMarkers[0].XFloat, agent->FlagMapMarkers[0].YFloat));
-                    ModuleConfig.Save(this);
+                    config.CustomMarkers.TryAdd(GameState.Map, []);
+                    config.CustomMarkers[GameState.Map].Add(new(agent->FlagMapMarkers[0].XFloat, agent->FlagMapMarkers[0].YFloat));
+                    config.Save(this);
 
                     agent->FlagMarkerCount = 0;
                     MarkCenterPoint();
@@ -241,9 +223,9 @@ public class AutoReplaceLocationAction : ModuleBase
 
                 if (ImGui.Button(Lang.Get("AutoReplaceLocationAction-AddPlayerPosition")))
                 {
-                    ModuleConfig.CustomMarkers.TryAdd(GameState.Map, []);
-                    ModuleConfig.CustomMarkers[GameState.Map].Add(localPlayer.Position.ToVector2());
-                    ModuleConfig.Save(this);
+                    config.CustomMarkers.TryAdd(GameState.Map, []);
+                    config.CustomMarkers[GameState.Map].Add(localPlayer.Position.ToVector2());
+                    config.Save(this);
 
                     MarkCenterPoint();
                 }
@@ -253,9 +235,9 @@ public class AutoReplaceLocationAction : ModuleBase
 
             if (ImGui.Button(Lang.Get("DeleteAll")))
             {
-                ModuleConfig.CustomMarkers.TryAdd(GameState.Map, []);
-                ModuleConfig.CustomMarkers[GameState.Map].Clear();
-                ModuleConfig.Save(this);
+                config.CustomMarkers.TryAdd(GameState.Map, []);
+                config.CustomMarkers[GameState.Map].Clear();
+                config.Save(this);
 
                 MarkCenterPoint();
             }
@@ -288,7 +270,7 @@ public class AutoReplaceLocationAction : ModuleBase
             agent->AddMapMarker(mapAutoCenter, 60932);
 
             // 自定义
-            if (ModuleConfig.CustomMarkers.TryGetValue(GameState.MapData.RowId, out var cMarkers))
+            if (config.CustomMarkers.TryGetValue(GameState.MapData.RowId, out var cMarkers))
             {
                 cMarkers.ForEach
                 (x =>
@@ -311,7 +293,7 @@ public class AutoReplaceLocationAction : ModuleBase
         }
     }
 
-    private static void OnPreUseActionLocation
+    private void OnPreUseActionLocation
     (
         ref bool       isPrevented,
         ref ActionType type,
@@ -324,15 +306,15 @@ public class AutoReplaceLocationAction : ModuleBase
     {
         if (type != ActionType.Action) return;
 
-        if (!ModuleConfig.EnabledActions.TryGetValue(actionID, out var isEnabled) || !isEnabled && !IsNeedToReplace)
+        if (!config.EnabledActions.TryGetValue(actionID, out var isEnabled) || !isEnabled && !isNeedToReplace)
         {
-            IsNeedToReplace = false;
+            isNeedToReplace = false;
             return;
         }
 
-        IsNeedToReplace = false;
+        isNeedToReplace = false;
 
-        if (ModuleConfig.BlacklistContents.Contains(GameState.ContentFinderCondition)) return;
+        if (config.BlacklistContents.Contains(GameState.ContentFinderCondition)) return;
         if (!ZoneMapMarkers.TryGetValue(GameState.Map, out var markers))
             markers = [];
 
@@ -347,7 +329,7 @@ public class AutoReplaceLocationAction : ModuleBase
         }
     }
 
-    private static void OnPreExecuteCommandComplexLocation
+    private void OnPreExecuteCommandComplexLocation
     (
         ref bool                      isPrevented,
         ref ExecuteCommandComplexFlag command,
@@ -360,15 +342,15 @@ public class AutoReplaceLocationAction : ModuleBase
     {
         if (command != ExecuteCommandComplexFlag.PetAction || param1 != 3) return;
 
-        if (!ModuleConfig.EnabledPetActions.TryGetValue(3, out var isEnabled) || !isEnabled && !IsNeedToReplace)
+        if (!config.EnabledPetActions.TryGetValue(3, out var isEnabled) || !isEnabled && !isNeedToReplace)
         {
-            IsNeedToReplace = false;
+            isNeedToReplace = false;
             return;
         }
 
-        IsNeedToReplace = false;
+        isNeedToReplace = false;
 
-        if (ModuleConfig.BlacklistContents.Contains(GameState.ContentFinderCondition)) return;
+        if (config.BlacklistContents.Contains(GameState.ContentFinderCondition)) return;
         if (!ZoneMapMarkers.TryGetValue(GameState.Map, out var markers))
             markers = [];
 
@@ -386,23 +368,23 @@ public class AutoReplaceLocationAction : ModuleBase
         }
     }
 
-    private static unsafe nint ParseActionCommandArgDetour(nint a1, nint arg, bool a3, bool a4)
+    private unsafe nint ParseActionCommandArgDetour(nint a1, nint arg, bool a3, bool a4)
     {
         var original = ParseActionCommandArgHook.Original(a1, arg, a3, a4);
-        if (!ModuleConfig.EnableCenterArgument ||
-            ModuleConfig.BlacklistContents.Contains(GameState.ContentFinderCondition)) return original;
+        if (!config.EnableCenterArgument ||
+            config.BlacklistContents.Contains(GameState.ContentFinderCondition)) return original;
 
         var parsedArg = MemoryHelper.ReadSeStringNullTerminated(arg).TextValue;
         if (!parsedArg.Equals("<center>")) return original;
 
-        IsNeedToReplace = true;
+        isNeedToReplace = true;
         return (nint)Control.GetLocalPlayer();
     }
 
     // 自定义中心点场中
-    private static bool HandleCustomLocation(ref Vector3 sourceLocation)
+    private bool HandleCustomLocation(ref Vector3 sourceLocation)
     {
-        if (!ModuleConfig.CustomMarkers.TryGetValue(GameState.Map, out var markers)) return false;
+        if (!config.CustomMarkers.TryGetValue(GameState.Map, out var markers)) return false;
 
         var modifiedLocation = markers
                                .MinBy
@@ -418,7 +400,7 @@ public class AutoReplaceLocationAction : ModuleBase
     }
 
     // 地图标记场中
-    private static bool HandleMapLocation(Dictionary<MapMarker, Vector2>? markers, ref Vector3 sourceLocation)
+    private bool HandleMapLocation(Dictionary<MapMarker, Vector2>? markers, ref Vector3 sourceLocation)
     {
         if (markers is not { Count: > 0 }) return false;
 
@@ -435,7 +417,7 @@ public class AutoReplaceLocationAction : ModuleBase
     }
 
     // 预设场中
-    private static unsafe bool HandlePresetCenterLocation(ref Vector3 sourceLocation)
+    private unsafe bool HandlePresetCenterLocation(ref Vector3 sourceLocation)
     {
         if (!LuminaGetter.TryGetRow<ContentFinderCondition>
                 (GameMain.Instance()->CurrentContentFinderConditionId, out var content) ||
@@ -447,18 +429,18 @@ public class AutoReplaceLocationAction : ModuleBase
         return UpdateLocationIfClose(ref sourceLocation, modifiedLocation);
     }
 
-    private static bool UpdateLocationIfClose(ref Vector3 sourceLocation, Vector3 candidateLocation)
+    private bool UpdateLocationIfClose(ref Vector3 sourceLocation, Vector3 candidateLocation)
     {
         if (Vector3.DistanceSquared(sourceLocation, candidateLocation) >
-            ModuleConfig.AdjustDistance * ModuleConfig.AdjustDistance) return false;
+            config.AdjustDistance * config.AdjustDistance) return false;
 
         sourceLocation = candidateLocation;
         return true;
     }
 
-    private static void NotifyLocationRedirect(Vector3 location)
+    private void NotifyLocationRedirect(Vector3 location)
     {
-        if (ModuleConfig.SendChat)
+        if (config.SendChat)
         {
             var mapPos = PositionHelper.WorldToMap(location.ToVector2(), GameState.MapData);
             NotifyHelper.Instance().Chat
@@ -471,7 +453,7 @@ public class AutoReplaceLocationAction : ModuleBase
             );
         }
 
-        if (ModuleConfig.SendNotification)
+        if (config.SendNotification)
         {
             NotifyHelper.Instance().NotificationSuccess
             (
@@ -483,15 +465,7 @@ public class AutoReplaceLocationAction : ModuleBase
             );
         }
     }
-
-    protected override void Uninit()
-    {
-        UseActionManager.Instance().Unreg(OnPreUseActionLocation);
-        ExecuteCommandManager.Instance().Unreg(OnPreExecuteCommandComplexLocation);
-    }
-
-    private delegate nint ParseActionCommandArgDelegate(nint a1, nint arg, bool a3, bool a4);
-
+    
     private class Config : ModuleConfig
     {
         public float         AdjustDistance    = 15;
@@ -516,4 +490,34 @@ public class AutoReplaceLocationAction : ModuleBase
         public bool SendChat         = true;
         public bool SendNotification = true;
     }
+    
+    #region 常量
+    
+    // MapID - Markers
+    private static Dictionary<uint, Dictionary<MapMarker, Vector2>> ZoneMapMarkers
+    {
+        get
+        {
+            if (field != null) return field;
+
+            field = [];
+
+            foreach (var map in LuminaGetter.Get<Map>()
+                                            .Where(x => x.TerritoryType is { RowId: > 0, Value.ContentFinderCondition.RowId: > 0 }))
+            {
+                foreach (var marker in map.GetMapMarkers())
+                {
+                    if (marker.Icon == 60442)
+                    {
+                        field.TryAdd(map.RowId, []);
+                        field[map.RowId].TryAdd(marker, PositionHelper.TextureToWorld(marker.GetPosition(), map));
+                    }
+                }
+            }
+
+            return field;
+        }
+    }
+    
+    #endregion
 }

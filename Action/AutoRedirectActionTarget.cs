@@ -17,18 +17,18 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRedirectActionTarget : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoRedirectActionTargetTitle"),
         Description = Lang.Get("AutoRedirectActionTargetDescription"),
         Category    = ModuleCategory.Action
     };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
         UseActionManager.Instance().RegPreUseActionLocation(OnPreUseAction);
     }
 
@@ -37,14 +37,14 @@ public unsafe class AutoRedirectActionTarget : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("AutoRedirectActionTarget-RedirectEnemyAction"), ref ModuleConfig.TargetEnemyAction))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoRedirectActionTarget-RedirectEnemyAction"), ref config.TargetEnemyAction))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("AutoRedirectActionTarget-RedirectMemberAction"), ref ModuleConfig.TargetMemberAction))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoRedirectActionTarget-RedirectMemberAction"), ref config.TargetMemberAction))
+            config.Save(this);
     }
 
-    private static void OnPreUseAction
+    private void OnPreUseAction
     (
         ref bool       isPrevented,
         ref ActionType type,
@@ -62,8 +62,8 @@ public unsafe class AutoRedirectActionTarget : ModuleBase
 
         switch (actionRow.CanTargetHostile)
         {
-            case true when !ModuleConfig.TargetEnemyAction:
-            case false when !ModuleConfig.TargetMemberAction:
+            case true when !config.TargetEnemyAction:
+            case false when !config.TargetMemberAction:
                 return;
         }
 
