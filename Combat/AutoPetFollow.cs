@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -13,31 +14,32 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoPetFollow : ModuleBase
 {
-    private static readonly HashSet<uint> ValidClassJobs = [26, 27, 28];
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoPetFollowTitle"),
         Description = Lang.Get("AutoPetFollowDescription"),
         Category    = ModuleCategory.Combat
     };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
     }
 
-    private static unsafe void OnConditionChanged(ConditionFlag flag, bool value)
+    private unsafe void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.InCombat                       ||
             value                                                ||
@@ -54,15 +56,18 @@ public class AutoPetFollow : ModuleBase
 
         ExecuteCommandManager.Instance().ExecuteCommandComplex(ExecuteCommandComplexFlag.PetAction, 0xE0000000, 2);
 
-        if (ModuleConfig.SendNotification && Throttler.Shared.Throttle("AutoPetFollow-SendNotification", 10_000))
+        if (config.SendNotification && Throttler.Shared.Throttle("AutoPetFollow-SendNotification", 10_000))
             NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoPetFollow-Notification"));
     }
-
-    protected override void Uninit() =>
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-
-    public class Config : ModuleConfig
+    
+    private class Config : ModuleConfig
     {
         public bool SendNotification = true;
     }
+    
+    #region 常量
+    
+    private static readonly FrozenSet<uint> ValidClassJobs = [26, 27, 28];
+    
+    #endregion
 }

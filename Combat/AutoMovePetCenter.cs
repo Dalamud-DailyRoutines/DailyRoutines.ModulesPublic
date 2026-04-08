@@ -11,14 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMovePetCenter : ModuleBase
 {
-    private static readonly CompSig ProcessPacketSpawnNPCSig =
-        new
-        (
-            "48 89 5C 24 08 57 48 81 EC 30 04 00 00 48 8B DA 8B F9 E8 ?? ?? ?? ?? 3C 01 75 21 E8 ?? ?? ?? ?? 3C 01 75 18 80 BB 82 00 00 00 02 75 0F 8B 05 ?? ?? ?? ?? 39 43 54 0F 85 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 44 24 28 C7 44 24 20 02 00 00 00"
-        );
-
-    private static Hook<ProcessPacketSpawnNPCDelegate>? ProcessPacketSpawnNPCHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("AutoMovePetCenterTitle"),
@@ -27,6 +19,14 @@ public unsafe class AutoMovePetCenter : ModuleBase
         Author          = ["逆光"],
         ModulesConflict = ["AutoMovePetPosition"]
     };
+    
+    private static readonly CompSig ProcessPacketSpawnNPCSig =
+        new
+        (
+            "48 89 5C 24 08 57 48 81 EC 30 04 00 00 48 8B DA 8B F9 E8 ?? ?? ?? ?? 3C 01 75 21 E8 ?? ?? ?? ?? 3C 01 75 18 80 BB 82 00 00 00 02 75 0F 8B 05 ?? ?? ?? ?? 39 43 54 0F 85 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 44 24 28 C7 44 24 20 02 00 00 00"
+        );
+    private delegate void ProcessPacketSpawnNPCDelegate(uint targetID, byte* packetData);
+    private Hook<ProcessPacketSpawnNPCDelegate>? ProcessPacketSpawnNPCHook;
 
     protected override void Init()
     {
@@ -42,7 +42,7 @@ public unsafe class AutoMovePetCenter : ModuleBase
     private static void OnDutyStarted(object? sender, ushort e) =>
         MovePetToMapCenter(LocalPlayerState.EntityID);
 
-    private static void ProcessPacketSpawnNPCDetour(uint targetID, byte* packetData)
+    private void ProcessPacketSpawnNPCDetour(uint targetID, byte* packetData)
     {
         ProcessPacketSpawnNPCHook.Original(targetID, packetData);
 
@@ -64,6 +64,4 @@ public unsafe class AutoMovePetCenter : ModuleBase
         var pos = PositionHelper.TextureToWorld(new(1024), GameState.MapData).ToPlayerHeight();
         ExecuteCommandManager.Instance().ExecuteCommandComplexLocation(ExecuteCommandComplexFlag.PetAction, pos, 3);
     }
-
-    private delegate void ProcessPacketSpawnNPCDelegate(uint targetID, byte* packetData);
 }

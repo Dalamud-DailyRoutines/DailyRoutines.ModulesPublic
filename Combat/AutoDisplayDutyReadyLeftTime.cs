@@ -14,16 +14,25 @@ public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = Lang.Get("AutoDisplayDutyReadyLeftTimeTitle"),
-        Description     = Lang.Get("AutoDisplayDutyReadyLeftTimeDescription"),
-        Category        = ModuleCategory.Combat,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayDutyReadyLeftTime-UI.png"]
+        Title       = Lang.Get("AutoDisplayDutyReadyLeftTimeTitle"),
+        Description = Lang.Get("AutoDisplayDutyReadyLeftTimeDescription"),
+        Category    = ModuleCategory.Combat,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayDutyReadyLeftTime/preview-1.png"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() =>
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
+    
+    protected override void Uninit()
+    {
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
+        OnConditionChanged(ConditionFlag.WaitingForDuty, false);
+    }
 
     private static void OnConditionChanged(ConditionFlag flag, bool value)
     {
@@ -57,11 +66,5 @@ public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
                .AddUiForegroundOff();
 
         textNode->SetText(builder.Build().EncodeWithNullTerminator());
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-        OnConditionChanged(ConditionFlag.WaitingForDuty, false);
     }
 }

@@ -20,37 +20,47 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoPlayerCommend : ModuleBase
 {
-    private static readonly AssignPlayerCommendationMenu AssignPlayerCommendationItem = new();
-
-    private static Config ModuleConfig = null!;
-
-    private static readonly ContentSelectCombo ContentSelectCombo = new("Content");
-
-    private static ulong AssignedCommendationContentID;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoPlayerCommendTitle"),
         Description = Lang.Get("AutoPlayerCommendDescription"),
         Category    = ModuleCategory.Combat
     };
-
+    
     private static uint MIPDisplayType
     {
         get => DService.Instance().GameConfig.UiConfig.GetUInt("MipDispType");
         set => DService.Instance().GameConfig.UiConfig.Set("MipDispType", value);
     }
 
+    private          Config                       config = null!;
+    private readonly AssignPlayerCommendationMenu menuItem;
+    private readonly ContentSelectCombo           contentSelectCombo = new("Content");
+
+    private ulong assignedContentID;
+
+    public AutoPlayerCommend() =>
+        menuItem = new(this);
+
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
-        TaskHelper   ??= new() { TimeoutMS = 10_000 };
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 10_000 };
 
-        ContentSelectCombo.SelectedIDs = ModuleConfig.BlacklistContents;
+        contentSelectCombo.SelectedIDs = config.BlacklistContents;
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().ContextMenu.OnMenuOpened     += OnMenuOpen;
         DService.Instance().DutyState.DutyCompleted      += OnDutyComplete;
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().ContextMenu.OnMenuOpened     -= OnMenuOpen;
+        DService.Instance().DutyState.DutyCompleted      -= OnDutyComplete;
+
+        assignedContentID = 0;
     }
 
     protected override void ConfigUI()
@@ -61,32 +71,32 @@ public unsafe class AutoPlayerCommend : ModuleBase
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-            if (ContentSelectCombo.DrawCheckbox())
+            if (contentSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistContents = ContentSelectCombo.SelectedIDs.ToHashSet();
-                ModuleConfig.Save(this);
+                config.BlacklistContents = contentSelectCombo.SelectedIDs.ToHashSet();
+                config.Save(this);
             }
         }
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{Lang.Get("AutoPlayerCommend-BlockBlacklistPlayers")}", ref ModuleConfig.AutoIgnoreBlacklistPlayers))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox($"{Lang.Get("AutoPlayerCommend-BlockBlacklistPlayers")}", ref config.AutoIgnoreBlacklistPlayers))
+            config.Save(this);
     }
 
-    private static void OnZoneChanged(ushort zone) =>
-        AssignedCommendationContentID = 0;
+    private void OnZoneChanged(ushort zone) =>
+        assignedContentID = 0;
 
-    private static void OnMenuOpen(IMenuOpenedArgs args)
+    private void OnMenuOpen(IMenuOpenedArgs args)
     {
-        if (!AssignPlayerCommendationItem.IsDisplay(args)) return;
-        args.AddMenuItem(AssignPlayerCommendationItem.Get());
+        if (!menuItem.IsDisplay(args)) return;
+        args.AddMenuItem(menuItem.Get());
     }
 
     private void OnDutyComplete(object? sender, ushort dutyZoneID)
     {
         if (TaskHelper.AbortByConflictKey(this)) return;
-        if (ModuleConfig.BlacklistContents.Contains(GameState.ContentFinderCondition)) return;
+        if (config.BlacklistContents.Contains(GameState.ContentFinderCondition)) return;
         if (DService.Instance().PartyList.Length <= 1) return;
 
         var orig = MIPDisplayType;
@@ -96,25 +106,25 @@ public unsafe class AutoPlayerCommend : ModuleBase
         TaskHelper.Enqueue(() => MIPDisplayType = orig, "还原原始最优队友推荐设置");
     }
 
-    private static bool OpenCommendWindow()
+    private bool OpenCommendWindow()
     {
         var notification    = AddonHelper.GetByName("_Notification");
         var notificationMvp = AddonHelper.GetByName("_NotificationIcMvp");
         if (notification == null && notificationMvp == null) return true;
 
-        if (AssignedCommendationContentID == LocalPlayerState.ContentID)
+        if (assignedContentID == LocalPlayerState.ContentID)
             return true;
 
         notification->Callback(0, 11);
         return true;
     }
 
-    private static bool EnqueueCommendation()
+    private bool EnqueueCommendation()
     {
         if (!VoteMvp->IsAddonAndNodesReady()) return false;
         if (!AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentsMvp)->IsAgentActive()) return false;
 
-        if (AssignedCommendationContentID == LocalPlayerState.ContentID)
+        if (assignedContentID == LocalPlayerState.ContentID)
             return true;
 
         var localPlayer = Control.GetLocalPlayer();
@@ -154,15 +164,15 @@ public unsafe class AutoPlayerCommend : ModuleBase
         // 优先级排序
         var playersToCommend = partyMembers
                                .Where
-                               (x => !ModuleConfig.AutoIgnoreBlacklistPlayers ||
+                               (x => !config.AutoIgnoreBlacklistPlayers ||
                                      InfoProxyBlacklist.Instance()->GetBlockResultType(x.Key.ContentID, 0) == InfoProxyBlacklist.BlockResultType.NotBlocked
                                )
                                // 优先已指定、职业相同或职能相同
                                .OrderByDescending
                                (x =>
                                    {
-                                       if (AssignedCommendationContentID != 0 &&
-                                           x.Key.ContentID               == AssignedCommendationContentID)
+                                       if (assignedContentID != 0 &&
+                                           x.Key.ContentID               == assignedContentID)
                                            return 3;
 
                                        if (selfClassJob == x.Key.ClassJob)
@@ -297,16 +307,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
             4 => PlayerRole.Healer,
             _ => PlayerRole.None
         };
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().ContextMenu.OnMenuOpened     -= OnMenuOpen;
-        DService.Instance().DutyState.DutyCompleted      -= OnDutyComplete;
-
-        AssignedCommendationContentID = 0;
-    }
-
+    
     private enum PlayerRole
     {
         Tank,
@@ -322,7 +323,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
         public HashSet<uint> BlacklistContents          = [];
     }
 
-    private class AssignPlayerCommendationMenu : MenuItemBase
+    private class AssignPlayerCommendationMenu(AutoPlayerCommend module) : MenuItemBase
     {
         public override string Name       { get; protected set; } = Lang.Get("AutoPlayerCommend-AssignPlayerCommend");
         public override string Identifier { get; protected set; } = nameof(AutoPlayerCommend);
@@ -353,7 +354,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
                     : Lang.Get("AutoPlayerCommend-AssignPlayerCommendMessage", playerName, playerWorld.Value.Name.ToString())
             );
 
-            AssignedCommendationContentID = contentID;
+            module.assignedContentID = contentID;
         }
     }
 }

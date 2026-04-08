@@ -12,14 +12,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoShowDutyGuide : ModuleBase
 {
-    private const string FF14OrgLinkBase =
-        "https://gh.atmoomen.top/raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/docs/duty/{0}.md";
-
-    private static Config ModuleConfig = null!;
-
-    private static List<string> GuideData = [];
-    private static bool         IsOnDebug;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = "自动显示副本攻略",
@@ -27,9 +19,14 @@ public class AutoShowDutyGuide : ModuleBase
         Category    = ModuleCategory.Combat
     };
 
+    private Config config = null!;
+
+    private List<string> guideData = [];
+    private bool         isOnDebug;
+
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new TaskHelper { TimeoutMS = 60_000 };
 
         Overlay                 ??= new Overlay(this);
@@ -41,23 +38,29 @@ public class AutoShowDutyGuide : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChange;
         OnZoneChange(0);
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChange;
+        guideData.Clear();
+    }
 
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        ImGui.InputFloat(Lang.Get("FontScale"), ref ModuleConfig.FontScale);
+        ImGui.InputFloat(Lang.Get("FontScale"), ref config.FontScale);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         using (ImRaii.Disabled(DService.Instance().Condition.IsBoundByDuty))
         {
-            if (ImGui.Checkbox("调试模式", ref IsOnDebug))
+            if (ImGui.Checkbox("调试模式", ref isOnDebug))
             {
                 TaskHelper.Abort();
-                GuideData.Clear();
+                guideData.Clear();
                 Overlay.IsOpen = false;
 
-                if (IsOnDebug)
+                if (isOnDebug)
                     TaskHelper.EnqueueAsync(() => GetDutyGuide(1));
             }
 
@@ -70,21 +73,21 @@ public class AutoShowDutyGuide : ModuleBase
 
     protected override void OverlayPreDraw()
     {
-        if (!IsOnDebug && (!DService.Instance().Condition.IsBoundByDuty || GuideData.Count <= 0))
+        if (!isOnDebug && (!DService.Instance().Condition.IsBoundByDuty || guideData.Count <= 0))
         {
             Overlay.IsOpen = false;
-            GuideData.Clear();
+            guideData.Clear();
             TaskHelper.Abort();
             return;
         }
 
-        if (GuideData.Count > 0)
-            Overlay.WindowName = $"{GuideData[0]}###AutoShowDutyGuide-GuideWindow";
+        if (guideData.Count > 0)
+            Overlay.WindowName = $"{guideData[0]}###AutoShowDutyGuide-GuideWindow";
     }
 
     protected override void OverlayUI()
     {
-        using var font = FontManager.Instance().GetUIFont(ModuleConfig.FontScale).Push();
+        using var font = FontManager.Instance().GetUIFont(config.FontScale).Push();
 
         if (ImGuiOm.SelectableImageWithText
             (
@@ -99,9 +102,9 @@ public class AutoShowDutyGuide : ModuleBase
         ImGui.Separator();
         ImGui.Spacing();
 
-        for (var i = 1; i < GuideData.Count; i++)
+        for (var i = 1; i < guideData.Count; i++)
         {
-            var       text = GuideData[i];
+            var       text = guideData[i];
             using var id   = ImRaii.PushId($"DutyGuideLine-{i}");
 
             ImGui.TextWrapped(text);
@@ -122,7 +125,7 @@ public class AutoShowDutyGuide : ModuleBase
     private void OnZoneChange(ushort zone)
     {
         TaskHelper.Abort();
-        GuideData.Clear();
+        guideData.Clear();
         Overlay.IsOpen = false;
 
         if (GameState.ContentFinderCondition == 0) return;
@@ -134,13 +137,13 @@ public class AutoShowDutyGuide : ModuleBase
     {
         try
         {
-            var originalText = await HTTPClientHelper.Instance().Get().GetStringAsync(string.Format(FF14OrgLinkBase, dutyID));
+            var originalText = await HTTPClientHelper.Instance().Get().GetStringAsync(string.Format(FF14_ORG_LINK_BASE, dutyID));
 
             var plainText = originalText.SanitizeMarkdown();
 
             if (!string.IsNullOrWhiteSpace(plainText))
             {
-                GuideData      = [.. plainText.Split('\n')];
+                guideData      = [.. plainText.Split('\n')];
                 Overlay.IsOpen = true;
             }
         }
@@ -149,15 +152,16 @@ public class AutoShowDutyGuide : ModuleBase
             // ignored
         }
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChange;
-        GuideData.Clear();
-    }
-
+    
     private class Config : ModuleConfig
     {
         public float FontScale = 1f;
     }
+    
+    #region 常量
+    
+    private const string FF14_ORG_LINK_BASE =
+        "https://gh.atmoomen.top/raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/docs/duty/{0}.md";
+    
+    #endregion
 }

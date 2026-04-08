@@ -11,10 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoShowFrontlineKillCount : ModuleBase
 {
-    private static uint LastKillCount;
-
-    private static uint Preview = 1;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoShowFrontlineKillCountTitle"),
@@ -23,6 +19,9 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private uint lastKillCount;
+    private uint preview = 1;
 
     protected override void Init()
     {
@@ -33,13 +32,21 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         {
             try
             {
-                LastKillCount = PvPFrontlineGauge->AtkValues[6].UInt;
+                lastKillCount = PvPFrontlineGauge->AtkValues[6].UInt;
             }
             catch
             {
                 // ignored
             }
         }
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+
+        lastKillCount = 0;
     }
 
     protected override void ConfigUI()
@@ -49,16 +56,16 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         using (ImRaii.PushIndent())
         {
             if (ImGui.Button(Lang.Get("Confirm")))
-                DisplayKillCount(Preview);
+                DisplayKillCount(preview);
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            if (ImGui.InputUInt("###PreviewInput", ref Preview, 1, 1))
-                Preview = Math.Clamp(Preview, 1, 99);
+            if (ImGui.InputUInt("###PreviewInput", ref preview, 1, 1))
+                preview = Math.Clamp(preview, 1, 99);
         }
     }
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         if (PvPFrontlineGauge == null) return;
         if (!Throttler.Shared.Throttle("AutoShowFrontlineKillCount-OnUpdate", 100)) return;
@@ -71,16 +78,19 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         }
         catch
         {
-            killCount = LastKillCount;
+            killCount = lastKillCount;
         }
 
-        if (LastKillCount != killCount)
+        if (lastKillCount != killCount)
         {
             DisplayKillCount(killCount);
-            LastKillCount = killCount;
+            lastKillCount = killCount;
         }
     }
-
+    
+    private void OnZoneChanged(ushort obj) =>
+        lastKillCount = 0;
+    
     private static void DisplayKillCount(uint killCount)
     {
         if (AddonHelper.TryGetByName("_Streak", out var addon))
@@ -90,16 +100,5 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         }
 
         UIModule.Instance()->ShowStreak((int)killCount, killCount <= 2 ? 1 : 2);
-    }
-
-    private static void OnZoneChanged(ushort obj) =>
-        LastKillCount = 0;
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-        LastKillCount = 0;
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -13,8 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoDismount : ModuleBase
 {
-    private static readonly HashSet<ActionType> MustDismountActionTypes = [ActionType.Item, ActionType.Ornament];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoDismountTitle"),
@@ -30,6 +29,9 @@ public unsafe class AutoDismount : ModuleBase
 
         UseActionManager.Instance().RegPostUseAction(OnUseAction);
     }
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnUseAction);
 
     private void OnUseAction
     (
@@ -108,7 +110,10 @@ public unsafe class AutoDismount : ModuleBase
 
         return true;
     }
+    
+    #region 常量
 
-    protected override void Uninit() =>
-        UseActionManager.Instance().Unreg(OnUseAction);
+    private static readonly FrozenSet<ActionType> MustDismountActionTypes = [ActionType.Item, ActionType.Ornament];
+
+    #endregion
 }

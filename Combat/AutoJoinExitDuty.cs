@@ -16,9 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoJoinExitDuty : ModuleBase
 {
-    // 伊弗利特讨伐战
-    private const uint TargetContent = 56U;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoJoinExitDutyTitle"),
@@ -57,16 +54,16 @@ public unsafe class AutoJoinExitDuty : ModuleBase
             return;
         }
 
-        if (!LuminaGetter.TryGetRow<ContentFinderCondition>(TargetContent, out var contentData)) return;
+        if (!LuminaGetter.TryGetRow<ContentFinderCondition>(TARGET_CONTENT, out var contentData)) return;
 
-        if (!UIState.IsInstanceContentUnlocked(TargetContent))
+        if (!UIState.IsInstanceContentUnlocked(TARGET_CONTENT))
         {
             NotifyHelper.Instance().NotificationError(Lang.Get("AutoJoinExitDuty-DutyLockedNotice", contentData.Name.ToString()));
             return;
         }
 
         TaskHelper.Abort();
-        EnqueueARound(TargetContent, contentData.AllowExplorerMode);
+        EnqueueARound(TARGET_CONTENT, contentData.AllowExplorerMode);
     }
 
     private void EnqueueARound(uint targetContent, bool isExplorerMode)
@@ -128,4 +125,11 @@ public unsafe class AutoJoinExitDuty : ModuleBase
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty);
         return true;
     }
+
+    #region 常量
+
+    // 伊弗利特讨伐战
+    private const uint TARGET_CONTENT = 56U;
+
+    #endregion
 }

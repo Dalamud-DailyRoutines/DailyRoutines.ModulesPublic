@@ -17,24 +17,24 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMount : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static readonly MountSelectCombo MountSelectCombo = new("Mount");
-    private static readonly ZoneSelectCombo  ZoneSelectCombo  = new("Zone");
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoMountTitle"),
         Description = Lang.Get("AutoMountDescription"),
         Category    = ModuleCategory.Combat
     };
+    
+    private Config config = null!;
+
+    private readonly MountSelectCombo mountSelectCombo = new("Mount");
+    private readonly ZoneSelectCombo  zoneSelectCombo  = new("Zone");
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        MountSelectCombo.SelectedID = ModuleConfig.SelectedMount;
-        ZoneSelectCombo.SelectedIDs = ModuleConfig.BlacklistZones;
+        mountSelectCombo.SelectedID = config.SelectedMount;
+        zoneSelectCombo.SelectedIDs = config.BlacklistZones;
 
         TaskHelper ??= new TaskHelper { TimeoutMS = 20000 };
 
@@ -50,21 +50,21 @@ public unsafe class AutoMount : ModuleBase
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-            if (MountSelectCombo.DrawRadio())
+            if (mountSelectCombo.DrawRadio())
             {
-                ModuleConfig.SelectedMount = MountSelectCombo.SelectedID;
-                ModuleConfig.Save(this);
+                config.SelectedMount = mountSelectCombo.SelectedID;
+                config.Save(this);
             }
 
             ImGui.SameLine();
 
             if (ImGui.Button($"{FontAwesomeIcon.Eraser.ToIconString()} {Lang.Get("Clear")}"))
             {
-                ModuleConfig.SelectedMount = 0;
-                ModuleConfig.Save(this);
+                config.SelectedMount = 0;
+                config.Save(this);
             }
 
-            if (ModuleConfig.SelectedMount == 0 || !LuminaGetter.TryGetRow(ModuleConfig.SelectedMount, out Mount selectedMount))
+            if (config.SelectedMount == 0 || !LuminaGetter.TryGetRow(config.SelectedMount, out Mount selectedMount))
             {
                 if (ImageHelper.TryGetGameIcon(118, out var texture))
                     ImGuiOm.TextImage(LuminaWrapper.GetGeneralActionName(9), texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
@@ -84,10 +84,10 @@ public unsafe class AutoMount : ModuleBase
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-            if (ZoneSelectCombo.DrawCheckbox())
+            if (zoneSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistZones = ZoneSelectCombo.SelectedIDs;
-                ModuleConfig.Save(this);
+                config.BlacklistZones = zoneSelectCombo.SelectedIDs;
+                config.Save(this);
             }
         }
 
@@ -98,29 +98,29 @@ public unsafe class AutoMount : ModuleBase
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
-            if (ImGui.InputInt("ms###AutoMount-Delay", ref ModuleConfig.Delay))
-                ModuleConfig.Delay = Math.Max(0, ModuleConfig.Delay);
+            if (ImGui.InputInt("ms###AutoMount-Delay", ref config.Delay))
+                config.Delay = Math.Max(0, config.Delay);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenZoneChange"), ref ModuleConfig.MountWhenZoneChange))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenZoneChange"), ref config.MountWhenZoneChange))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenGatherEnd"), ref ModuleConfig.MountWhenGatherEnd))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenGatherEnd"), ref config.MountWhenGatherEnd))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenCombatEnd"), ref ModuleConfig.MountWhenCombatEnd))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenCombatEnd"), ref config.MountWhenCombatEnd))
+            config.Save(this);
     }
 
     private void OnZoneChanged(ushort zone)
     {
-        if (!ModuleConfig.MountWhenZoneChange                             ||
+        if (!config.MountWhenZoneChange                             ||
             GameState.TerritoryType == 0                                  ||
-            ModuleConfig.BlacklistZones.Contains(GameState.TerritoryType) ||
+            config.BlacklistZones.Contains(GameState.TerritoryType) ||
             !CanUseMountCurrentZone())
             return;
 
@@ -130,13 +130,13 @@ public unsafe class AutoMount : ModuleBase
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
-        if (ModuleConfig.BlacklistZones.Contains(GameState.TerritoryType)) return;
+        if (config.BlacklistZones.Contains(GameState.TerritoryType)) return;
 
         switch (flag)
         {
-            case ConditionFlag.Gathering when !value && ModuleConfig.MountWhenGatherEnd:
+            case ConditionFlag.Gathering when !value && config.MountWhenGatherEnd:
             case ConditionFlag.InCombat when !value                                 &&
-                                             ModuleConfig.MountWhenCombatEnd        &&
+                                             config.MountWhenCombatEnd        &&
                                              !DService.Instance().ClientState.IsPvP &&
                                              (FateManager.Instance()->CurrentFate           == null ||
                                               FateManager.Instance()->CurrentFate->Progress == 100):
@@ -158,14 +158,14 @@ public unsafe class AutoMount : ModuleBase
         if (DService.Instance().Condition.IsOnMount) return true;
         if (ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 9) != 0) return false;
 
-        if (ModuleConfig.Delay > 0)
-            TaskHelper.DelayNext(ModuleConfig.Delay);
+        if (config.Delay > 0)
+            TaskHelper.DelayNext(config.Delay);
 
         TaskHelper.DelayNext(100);
         TaskHelper.Enqueue
-        (() => ModuleConfig.SelectedMount == 0
+        (() => config.SelectedMount == 0
                    ? UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9)
-                   : UseActionManager.Instance().UseAction(ActionType.Mount,         ModuleConfig.SelectedMount)
+                   : UseActionManager.Instance().UseAction(ActionType.Mount,         config.SelectedMount)
         );
         return true;
     }

@@ -14,40 +14,48 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoLeaveDuty : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static readonly ContentSelectCombo ContentSelectCombo = new("Blacklist");
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoLeaveDutyTitle"),
         Description = Lang.Get("AutoLeaveDutyDescription"),
         Category    = ModuleCategory.Combat
     };
+    
+    private Config config = null!;
+
+    private readonly ContentSelectCombo contentSelectCombo = new("Blacklist");
 
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
-        TaskHelper   ??= new();
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new();
 
-        ContentSelectCombo.SelectedIDs = ModuleConfig.BlacklistContent;
+        contentSelectCombo.SelectedIDs = config.BlacklistContent;
 
         LogMessageManager.Instance().RegPre(OnPreReceiveLogmessage);
 
         DService.Instance().DutyState.DutyCompleted      += OnDutyComplete;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().DutyState.DutyCompleted      -= OnDutyComplete;
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+
+        LogMessageManager.Instance().Unreg(OnPreReceiveLogmessage);
+    }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-ForceToLeave")}###ForceToLeave", ref ModuleConfig.ForceToLeave))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-ForceToLeave")}###ForceToLeave", ref config.ForceToLeave))
+            config.Save(this);
 
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        if (ImGui.InputInt($"{Lang.Get("Delay")} (ms)###DelayInput", ref ModuleConfig.Delay))
-            ModuleConfig.Delay = Math.Max(0, ModuleConfig.Delay);
+        if (ImGui.InputInt($"{Lang.Get("Delay")} (ms)###DelayInput", ref config.Delay))
+            config.Delay = Math.Max(0, config.Delay);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         ImGui.NewLine();
 
@@ -58,33 +66,33 @@ public class AutoLeaveDuty : ModuleBase
         {
             ImGui.SetNextItemWidth(250f * GlobalUIScale);
 
-            if (ContentSelectCombo.DrawCheckbox())
+            if (contentSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.BlacklistContent = ContentSelectCombo.SelectedIDs;
-                ModuleConfig.Save(this);
+                config.BlacklistContent = contentSelectCombo.SelectedIDs;
+                config.Save(this);
             }
 
-            if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties")}###NoLeaveHighEndDuties", ref ModuleConfig.NoLeaveHighEndDuties))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties")}###NoLeaveHighEndDuties", ref config.NoLeaveHighEndDuties))
+                config.Save(this);
             ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-NoLeaveHighEndDutiesHelp"));
         }
     }
 
     private void OnDutyComplete(object? sender, ushort zone)
     {
-        if (ModuleConfig.BlacklistContent.Contains(GameState.ContentFinderCondition))
+        if (config.BlacklistContent.Contains(GameState.ContentFinderCondition))
             return;
 
-        if (ModuleConfig.NoLeaveHighEndDuties &&
+        if (config.NoLeaveHighEndDuties &&
             LuminaGetter.Get<ContentFinderCondition>()
                         .FirstOrDefault(x => x.HighEndDuty && x.TerritoryType.RowId == zone).RowId !=
             0)
             return;
 
-        if (ModuleConfig.Delay > 0)
-            TaskHelper.DelayNext(ModuleConfig.Delay);
+        if (config.Delay > 0)
+            TaskHelper.DelayNext(config.Delay);
 
-        if (!ModuleConfig.ForceToLeave)
+        if (!config.ForceToLeave)
         {
             TaskHelper.Enqueue(() => !DService.Instance().Condition[ConditionFlag.InCombat]);
             TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty));
@@ -102,15 +110,7 @@ public class AutoLeaveDuty : ModuleBase
         if (logMessageID != 914) return;
         isPrevented = true;
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().DutyState.DutyCompleted      -= OnDutyComplete;
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-
-        LogMessageManager.Instance().Unreg(OnPreReceiveLogmessage);
-    }
-
+    
     private class Config : ModuleConfig
     {
         public HashSet<uint> BlacklistContent = [];

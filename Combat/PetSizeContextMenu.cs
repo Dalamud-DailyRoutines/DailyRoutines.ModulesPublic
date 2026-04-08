@@ -12,8 +12,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class PetSizeContextMenu : ModuleBase
 {
-    private static readonly UpperContainerItem ContainerItem = new();
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("PetSizeContextMenuTitle"),
@@ -22,18 +20,20 @@ public unsafe class PetSizeContextMenu : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private readonly UpperContainerItem containerItem = new();
 
     protected override void Init() =>
         DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpened;
 
-    private static void OnMenuOpened(IMenuOpenedArgs args)
-    {
-        if (!ContainerItem.IsDisplay(args)) return;
-        args.AddMenuItem(ContainerItem.Get());
-    }
-
     protected override void Uninit() =>
         DService.Instance().ContextMenu.OnMenuOpened -= OnMenuOpened;
+    
+    private void OnMenuOpened(IMenuOpenedArgs args)
+    {
+        if (!containerItem.IsDisplay(args)) return;
+        args.AddMenuItem(containerItem.Get());
+    }
 
     private class UpperContainerItem : MenuItemBase
     {
@@ -42,8 +42,8 @@ public unsafe class PetSizeContextMenu : ModuleBase
 
         protected override bool IsSubmenu { get; set; } = true;
 
-        protected override void OnClicked(IMenuItemClickedArgs args)
-            => args.OpenSubmenu(Name, ProcessMenuItems());
+        protected override void OnClicked(IMenuItemClickedArgs args) => 
+            args.OpenSubmenu(Name, ProcessMenuItems());
 
         private static List<MenuItem> ProcessMenuItems() =>
         [

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -16,17 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoMovePetPosition : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static readonly HashSet<uint> ValidJobs = [26, 27, 28];
-
-    private static readonly ContentSelectCombo ContentSelectCombo = new("Content");
-
-    private static DateTime BattleStartTime = DateTime.MinValue;
-
-    private static bool                            IsPicking;
-    private static (uint territoryKey, int index)? CurrentPickingRow;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoMovePetPositionTitle"),
@@ -34,10 +24,19 @@ public class AutoMovePetPosition : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Wotou"]
     };
+    
+    private Config config = null!;
+    
+    private readonly ContentSelectCombo contentSelectCombo = new("Content");
+
+    private DateTime battleStartTime = DateTime.MinValue;
+
+    private bool                            isPicking;
+    private (uint territoryKey, int index)? currentPickingRow;
 
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = 30_000 };
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
@@ -74,10 +73,10 @@ public class AutoMovePetPosition : ModuleBase
 
         if (ImGuiOm.ButtonIconSelectable("AddNewPreset", FontAwesomeIcon.Plus))
         {
-            if (!ModuleConfig.PositionSchedules.ContainsKey(1))
-                ModuleConfig.PositionSchedules[1] = [];
+            if (!config.PositionSchedules.ContainsKey(1))
+                config.PositionSchedules[1] = [];
 
-            ModuleConfig.PositionSchedules[1].Add
+            config.PositionSchedules[1].Add
             (
                 new(Guid.NewGuid().ToString())
                 {
@@ -87,7 +86,7 @@ public class AutoMovePetPosition : ModuleBase
                     Position = default
                 }
             );
-            ModuleConfig.Save(this);
+            config.Save(this);
 
             TaskHelper.Abort();
             TaskHelper.Enqueue(SchedulePetMovements);
@@ -109,7 +108,7 @@ public class AutoMovePetPosition : ModuleBase
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("Operation"));
 
-        foreach (var (zoneID, scheduleList) in ModuleConfig.PositionSchedules.ToArray())
+        foreach (var (zoneID, scheduleList) in config.PositionSchedules.ToArray())
         {
             if (scheduleList.Count == 0) continue;
 
@@ -127,7 +126,7 @@ public class AutoMovePetPosition : ModuleBase
                 if (ImGui.Checkbox("##启用", ref enabled))
                 {
                     schedule.Enabled = enabled;
-                    ModuleConfig.Save(this);
+                    config.Save(this);
 
                     TaskHelper.Abort();
                     TaskHelper.Enqueue(SchedulePetMovements);
@@ -136,22 +135,22 @@ public class AutoMovePetPosition : ModuleBase
                 var editingZoneID = schedule.ZoneID;
                 if (!LuminaGetter.TryGetRow<TerritoryType>(editingZoneID, out var zone)) continue;
 
-                ContentSelectCombo.SelectedID = zone.ContentFinderCondition.RowId;
+                contentSelectCombo.SelectedID = zone.ContentFinderCondition.RowId;
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
 
-                if (ContentSelectCombo.DrawRadio())
+                if (contentSelectCombo.DrawRadio())
                 {
-                    editingZoneID = ContentSelectCombo.SelectedItem.TerritoryType.RowId;
+                    editingZoneID = contentSelectCombo.SelectedItem.TerritoryType.RowId;
 
                     var scheduleCopy = schedule.Copy();
                     scheduleCopy.ZoneID = editingZoneID;
 
                     scheduleList.Remove(schedule);
 
-                    ModuleConfig.PositionSchedules.TryAdd(editingZoneID, []);
-                    ModuleConfig.PositionSchedules[editingZoneID].Add(scheduleCopy);
-                    ModuleConfig.Save(this);
+                    config.PositionSchedules.TryAdd(editingZoneID, []);
+                    config.PositionSchedules[editingZoneID].Add(scheduleCopy);
+                    config.Save(this);
 
                     TaskHelper.Abort();
                     TaskHelper.Enqueue(SchedulePetMovements);
@@ -168,7 +167,7 @@ public class AutoMovePetPosition : ModuleBase
                     if (remark != schedule.Note)
                     {
                         schedule.Note = remark;
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
                     }
@@ -186,7 +185,7 @@ public class AutoMovePetPosition : ModuleBase
                     if (timeInSeconds != schedule.DelayS)
                     {
                         schedule.DelayS = timeInSeconds;
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
                     }
@@ -200,7 +199,7 @@ public class AutoMovePetPosition : ModuleBase
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     schedule.Position = pos;
-                    ModuleConfig.Save(this);
+                    config.Save(this);
 
                     TaskHelper.Abort();
                     TaskHelper.Enqueue(SchedulePetMovements);
@@ -218,7 +217,7 @@ public class AutoMovePetPosition : ModuleBase
                     if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
                     {
                         schedule.Position = localPlayer.Position.ToVector2();
-                        ModuleConfig.Save(this);
+                        config.Save(this);
 
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
@@ -227,43 +226,43 @@ public class AutoMovePetPosition : ModuleBase
 
                 ImGui.SameLine();
 
-                if (!IsPicking)
+                if (!isPicking)
                 {
                     if (ImGuiOm.ButtonIcon("鼠标位置", FontAwesomeIcon.MousePointer, Lang.Get("AutoMovePetPosition-GetMouseHelp")))
                     {
-                        IsPicking         = true;
-                        CurrentPickingRow = (zoneID, i);
+                        isPicking         = true;
+                        currentPickingRow = (zoneID, i);
                     }
                 }
                 else
                 {
                     if (ImGuiOm.ButtonIcon("取消鼠标位置读取", FontAwesomeIcon.Times, Lang.Get("Cancel")))
                     {
-                        IsPicking         = false;
-                        CurrentPickingRow = null;
+                        isPicking         = false;
+                        currentPickingRow = null;
                     }
                 }
 
-                if (IsPicking)
+                if (isPicking)
                 {
                     if ((ImGui.IsKeyDown(ImGuiKey.LeftAlt)  || ImGui.IsKeyDown(ImGuiKey.RightAlt)) &&
                         (ImGui.IsKeyDown(ImGuiKey.LeftCtrl) || ImGui.IsKeyDown(ImGuiKey.RightCtrl)))
                     {
                         if (DService.Instance().GameGUI.ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
                         {
-                            var currentPickingZone  = CurrentPickingRow?.territoryKey ?? 0;
-                            var currentPickingIndex = CurrentPickingRow?.index        ?? -1;
+                            var currentPickingZone  = currentPickingRow?.territoryKey ?? 0;
+                            var currentPickingIndex = currentPickingRow?.index        ?? -1;
                             if (currentPickingZone == 0 || currentPickingIndex == -1) continue;
 
-                            ModuleConfig.PositionSchedules
+                            config.PositionSchedules
                                 [currentPickingZone][currentPickingIndex].Position = worldPos.ToVector2();
-                            ModuleConfig.Save(this);
+                            config.Save(this);
 
                             TaskHelper.Abort();
                             TaskHelper.Enqueue(SchedulePetMovements);
 
-                            IsPicking         = false;
-                            CurrentPickingRow = null;
+                            isPicking         = false;
+                            currentPickingRow = null;
                         }
                     }
                 }
@@ -275,7 +274,7 @@ public class AutoMovePetPosition : ModuleBase
                     if (ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
                     {
                         scheduleList.RemoveAt(i);
-                        ModuleConfig.Save(this);
+                        config.Save(this);
 
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
@@ -296,12 +295,12 @@ public class AutoMovePetPosition : ModuleBase
                     if (importedSchedule == null) return;
 
                     var importZoneID = importedSchedule.ZoneID;
-                    ModuleConfig.PositionSchedules.TryAdd(importZoneID, []);
+                    config.PositionSchedules.TryAdd(importZoneID, []);
 
-                    if (!ModuleConfig.PositionSchedules[importZoneID].Contains(importedSchedule))
+                    if (!config.PositionSchedules[importZoneID].Contains(importedSchedule))
                     {
                         scheduleList.Add(importedSchedule);
-                        ModuleConfig.Save(this);
+                        config.Save(this);
 
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
@@ -339,25 +338,25 @@ public class AutoMovePetPosition : ModuleBase
         }
     }
 
-    private static void StartBattleTimer() =>
-        BattleStartTime = StandardTimeManager.Instance().Now;
+    private void StartBattleTimer() =>
+        battleStartTime = StandardTimeManager.Instance().Now;
 
-    private static void ResetBattleTimer() =>
-        BattleStartTime = DateTime.MinValue;
+    private void ResetBattleTimer() =>
+        battleStartTime = DateTime.MinValue;
 
     private void SchedulePetMovements()
     {
         if (!CheckIsEightPlayerDuty()) return;
 
         var zoneID = GameState.TerritoryType;
-        if (!ModuleConfig.PositionSchedules.TryGetValue(zoneID, out var schedulesForThisDuty)) return;
+        if (!config.PositionSchedules.TryGetValue(zoneID, out var schedulesForThisDuty)) return;
 
         if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
         {
             if (!ValidJobs.Contains(localPlayer.ClassJob.RowId)) return;
 
             var enabledSchedules     = schedulesForThisDuty.Where(x => x.Enabled).ToList();
-            var elapsedTimeInSeconds = (StandardTimeManager.Instance().Now - BattleStartTime).TotalSeconds;
+            var elapsedTimeInSeconds = (StandardTimeManager.Instance().Now - battleStartTime).TotalSeconds;
 
             if (DService.Instance().Condition[ConditionFlag.InCombat])
             {
@@ -421,7 +420,7 @@ public class AutoMovePetPosition : ModuleBase
         public Dictionary<uint, List<PositionSchedule>> PositionSchedules = new();
     }
 
-    public class PositionSchedule
+    private class PositionSchedule
     (
         string guid
     ) : IEquatable<PositionSchedule>
@@ -468,4 +467,10 @@ public class AutoMovePetPosition : ModuleBase
         public static bool operator !=(PositionSchedule? left, PositionSchedule? right) =>
             !Equals(left, right);
     }
+    
+    #region 常量
+    
+    private static readonly FrozenSet<uint> ValidJobs = [26, 27, 28];
+    
+    #endregion
 }

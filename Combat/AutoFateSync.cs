@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -15,38 +16,24 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoFateSync : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static CancellationTokenSource? CancelSource;
-
-    private static readonly Dictionary<uint, (uint ActionID, uint StatusID)> TankStanceActions = new()
-    {
-        // 剑术师 / 骑士
-        [1]  = (28, 79),
-        [19] = (28, 79),
-        // 斧术师 / 战士
-        [3]  = (48, 91),
-        [21] = (48, 91),
-        // 暗黑骑士
-        [32] = (3629, 743),
-        // 绝枪战士
-        [37] = (16142, 1833)
-    };
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoFateSyncTitle"),
         Description = Lang.Get("AutoFateSyncDescription"),
         Category    = ModuleCategory.Combat
     };
+    
+    private Config config = null!;
+
+    private CancellationTokenSource? cancelSource;
 
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 30_000 };
 
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        CancelSource ??= new();
+        cancelSource ??= new();
 
         GameState.Instance().EnterFate += OnEnterFate;
     }
@@ -56,35 +43,35 @@ public class AutoFateSync : ModuleBase
         GameState.Instance().EnterFate -= OnEnterFate;
         FrameworkManager.Instance().Unreg(OnFlying);
 
-        if (CancelSource != null)
+        if (cancelSource != null)
         {
-            if (!CancelSource.IsCancellationRequested)
-                CancelSource.Cancel();
-            CancelSource.Dispose();
-            CancelSource = null;
+            if (!cancelSource.IsCancellationRequested)
+                cancelSource.Cancel();
+            cancelSource.Dispose();
+            cancelSource = null;
         }
     }
 
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(50f * GlobalUIScale);
-        if (ImGui.InputFloat(Lang.Get("AutoFateSync-Delay"), ref ModuleConfig.Delay, format: "%.1f"))
-            ModuleConfig.Delay = Math.Max(0, ModuleConfig.Delay);
+        if (ImGui.InputFloat(Lang.Get("AutoFateSync-Delay"), ref config.Delay, format: "%.1f"))
+            config.Delay = Math.Max(0, config.Delay);
 
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
-            ModuleConfig.Save(this);
-            CancelSource.Cancel();
+            config.Save(this);
+            cancelSource.Cancel();
         }
 
         ImGuiOm.HelpMarker(Lang.Get("AutoFateSync-DelayHelp"));
 
-        if (ImGui.Checkbox(Lang.Get("AutoFateSync-IgnoreMounting"), ref ModuleConfig.IgnoreMounting))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoFateSync-IgnoreMounting"), ref config.IgnoreMounting))
+            config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoFateSync-IgnoreMountingHelp"));
 
-        if (ImGui.Checkbox(Lang.Get("AutoFateSync-AutoTankStance"), ref ModuleConfig.AutoTankStance))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoFateSync-AutoTankStance"), ref config.AutoTankStance))
+            config.Save(this);
     }
 
     private void OnEnterFate(uint fateID) =>
@@ -92,7 +79,7 @@ public class AutoFateSync : ModuleBase
 
     private unsafe void HandleFateEnter()
     {
-        if (ModuleConfig.IgnoreMounting && (DService.Instance().Condition[ConditionFlag.InFlight] || DService.Instance().Condition.IsOnMount))
+        if (config.IgnoreMounting && (DService.Instance().Condition[ConditionFlag.InFlight] || DService.Instance().Condition.IsOnMount))
         {
             FrameworkManager.Instance().Reg(OnFlying, 500);
             return;
@@ -100,7 +87,7 @@ public class AutoFateSync : ModuleBase
 
         var manager = FateManager.Instance();
 
-        if (ModuleConfig.Delay > 0)
+        if (config.Delay > 0)
         {
             DService.Instance().Framework.RunOnTick
             (
@@ -110,9 +97,9 @@ public class AutoFateSync : ModuleBase
 
                     ExecuteFateLevelSync(manager->CurrentFate->FateId);
                 },
-                TimeSpan.FromSeconds(ModuleConfig.Delay),
+                TimeSpan.FromSeconds(config.Delay),
                 0,
-                CancelSource.Token
+                cancelSource.Token
             );
 
             return;
@@ -143,7 +130,7 @@ public class AutoFateSync : ModuleBase
 
         TaskHelper.Abort();
 
-        if (ModuleConfig.AutoTankStance)
+        if (config.AutoTankStance)
         {
             TaskHelper.Enqueue
             (() => !DService.Instance().Condition.IsOnMount              &&
@@ -178,4 +165,23 @@ public class AutoFateSync : ModuleBase
         public float Delay          = 3f;
         public bool  IgnoreMounting = true;
     }
+    
+    #region 常量
+
+    private static readonly FrozenDictionary<uint, (uint ActionID, uint StatusID)> TankStanceActions = 
+        new Dictionary<uint, (uint ActionID, uint StatusID)>
+        {
+            // 剑术师 / 骑士
+            [1]  = (28, 79),
+            [19] = (28, 79),
+            // 斧术师 / 战士
+            [3]  = (48, 91),
+            [21] = (48, 91),
+            // 暗黑骑士
+            [32] = (3629, 743),
+            // 绝枪战士
+            [37] = (16142, 1833)
+        }.ToFrozenDictionary();
+
+    #endregion
 }

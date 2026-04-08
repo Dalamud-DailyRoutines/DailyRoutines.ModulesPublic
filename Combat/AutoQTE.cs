@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -22,12 +23,16 @@ public class AutoQTE : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private static readonly string[] QTETypes = ["_QTEKeep", "_QTEMash", "_QTEKeepTime", "_QTEButton"];
-
     protected override void Init()
     {
         InputIDManager.Instance().RegPrePressed(OnPreIsInputIDPressed);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, QTETypes, OnQTEAddon);
+    }
+    
+    protected override void Uninit()
+    {
+        InputIDManager.Instance().UnregPrePressed(OnPreIsInputIDPressed);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnQTEAddon);
     }
 
     private static void OnPreIsInputIDPressed(ref bool? overrideResult, ref InputId id)
@@ -45,10 +50,16 @@ public class AutoQTE : ModuleBase
         KeyEmulationHelper.SendKeypress(Keys.Space);
         AtkStage.Instance()->ClearFocus();
     }
+    
+    #region 常量
 
-    protected override void Uninit()
-    {
-        InputIDManager.Instance().UnregPrePressed(OnPreIsInputIDPressed);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnQTEAddon);
-    }
+    private static readonly FrozenSet<string> QTETypes =
+    [
+        "_QTEKeep",
+        "_QTEMash",
+        "_QTEKeepTime",
+        "_QTEButton"
+    ];
+
+    #endregion
 }

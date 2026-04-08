@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -14,9 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCheckItemLevel : ModuleBase
 {
-    private static readonly HashSet<uint> ValidContentJobCategories = [108, 142, 146];
-    private static readonly HashSet<uint> HaveOffHandJobCategories  = [2, 7, 8, 20];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoCheckItemLevelTitle"),
@@ -30,6 +28,9 @@ public unsafe class AutoCheckItemLevel : ModuleBase
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
     private void OnZoneChanged(ushort zone)
     {
@@ -195,6 +196,10 @@ public unsafe class AutoCheckItemLevel : ModuleBase
         NotifyHelper.Instance().Chat(ssb.Build());
     }
 
-    protected override void Uninit() =>
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+    #region 常量
+
+    private static readonly FrozenSet<uint> ValidContentJobCategories = [108, 142, 146];
+    private static readonly FrozenSet<uint> HaveOffHandJobCategories  = [2, 7, 8, 20];
+
+    #endregion
 }

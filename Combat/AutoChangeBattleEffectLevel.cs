@@ -13,10 +13,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoChangeBattleEffectLevel : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static EffectSetting? LastAppliedSettings;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoChangeBattleEffectLevelTitle"),
@@ -26,10 +22,13 @@ public class AutoChangeBattleEffectLevel : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config         config = null!;
+    private EffectSetting? lastAppliedSettings;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         PlayersManager.Instance().ReceivePlayersAround += OnPlayerReceived;
 
@@ -54,40 +53,40 @@ public class AutoChangeBattleEffectLevel : ModuleBase
                 using (ImRaii.PushIndent())
                 {
                     ImGui.SetNextItemWidth(100f * GlobalUIScale);
-                    ImGui.InputUInt($"{LuminaWrapper.GetAddonText(16347)}##LimitLow", ref ModuleConfig.AroundCountThresholdLow);
+                    ImGui.InputUInt($"{LuminaWrapper.GetAddonText(16347)}##LimitLow", ref config.AroundCountThresholdLow);
                     if (ImGui.IsItemDeactivatedAfterEdit())
-                        ModuleConfig.Save(this);
+                        config.Save(this);
 
                     ImGui.SetNextItemWidth(100f * GlobalUIScale);
-                    ImGui.InputUInt($"{LuminaWrapper.GetAddonText(16346)}##LimitHigh", ref ModuleConfig.AroundCountThresholdHigh);
+                    ImGui.InputUInt($"{LuminaWrapper.GetAddonText(16346)}##LimitHigh", ref config.AroundCountThresholdHigh);
                     if (ImGui.IsItemDeactivatedAfterEdit())
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                 }
 
                 ImGui.NewLine();
 
                 if (ImGui.CollapsingHeader
                     (
-                        $"＜ {DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [ModuleConfig.AroundCountThresholdLow])}",
+                        $"＜ {DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [config.AroundCountThresholdLow])}",
                         ImGuiTreeNodeFlags.DefaultOpen
                     ))
-                    DrawBattleEffectSetting("Low", ModuleConfig.OverworldLow);
+                    DrawBattleEffectSetting("Low", config.OverworldLow);
 
                 if (ImGui.CollapsingHeader
                     (
-                        $"{DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [ModuleConfig.AroundCountThresholdLow])}" +
+                        $"{DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [config.AroundCountThresholdLow])}" +
                         $" ≤ X ≤ "                                                                                                  +
-                        $"{DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [ModuleConfig.AroundCountThresholdHigh])}",
+                        $"{DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [config.AroundCountThresholdHigh])}",
                         ImGuiTreeNodeFlags.DefaultOpen
                     ))
-                    DrawBattleEffectSetting("Medium", ModuleConfig.OverworldMedium);
+                    DrawBattleEffectSetting("Medium", config.OverworldMedium);
 
                 if (ImGui.CollapsingHeader
                     (
-                        $"＞ {DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [ModuleConfig.AroundCountThresholdHigh])}",
+                        $"＞ {DService.Instance().SeStringEvaluator.EvaluateFromAddon(12871, [config.AroundCountThresholdHigh])}",
                         ImGuiTreeNodeFlags.DefaultOpen
                     ))
-                    DrawBattleEffectSetting("High", ModuleConfig.OverworldHigh);
+                    DrawBattleEffectSetting("High", config.OverworldHigh);
             }
         }
 
@@ -98,7 +97,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
                 ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Default"));
 
                 using (ImRaii.PushIndent())
-                    DrawBattleEffectSetting("DefaultDuty", ModuleConfig.DutyDefault);
+                    DrawBattleEffectSetting("DefaultDuty", config.DutyDefault);
 
                 ImGui.NewLine();
 
@@ -107,10 +106,10 @@ public class AutoChangeBattleEffectLevel : ModuleBase
                     var name = contentType.Name.ToString();
                     if (string.IsNullOrEmpty(name)) continue;
 
-                    if (ModuleConfig.DutySpecific.TryAdd(contentType.RowId, new()))
-                        ModuleConfig.Save(this);
+                    if (config.DutySpecific.TryAdd(contentType.RowId, new()))
+                        config.Save(this);
 
-                    var setting = ModuleConfig.DutySpecific[contentType.RowId];
+                    var setting = config.DutySpecific[contentType.RowId];
 
                     if (!ImageHelper.TryGetGameIcon(contentType.Icon, out var image)) continue;
 
@@ -133,7 +132,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         if (ImGuiComponents.ToggleButton("Enable", ref isEnabled))
         {
             setting.IsEnabled = isEnabled;
-            ModuleConfig.Save(this);
+            config.Save(this);
         }
 
         ImGui.SameLine();
@@ -150,7 +149,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         if (DrawBattleEffectLevelCombo(LuminaWrapper.GetAddonText(4087), ref selfSetting))
         {
             setting.Self = selfSetting;
-            ModuleConfig.Save(this);
+            config.Save(this);
         }
 
         ImGui.Spacing();
@@ -160,7 +159,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         if (DrawBattleEffectLevelCombo(LuminaWrapper.GetAddonText(4088), ref partySetting))
         {
             setting.Party = partySetting;
-            ModuleConfig.Save(this);
+            config.Save(this);
         }
 
         ImGui.Spacing();
@@ -170,7 +169,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         if (DrawBattleEffectLevelCombo(LuminaWrapper.GetAddonText(4089), ref otherSetting))
         {
             setting.Other = otherSetting;
-            ModuleConfig.Save(this);
+            config.Save(this);
         }
 
         ImGui.Spacing();
@@ -180,7 +179,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         if (DrawBattleEffectLevelCombo(LuminaWrapper.GetAddonText(4109), ref enemySetting))
         {
             setting.Enemy = enemySetting;
-            ModuleConfig.Save(this);
+            config.Save(this);
         }
     }
 
@@ -210,28 +209,28 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         return returnValue;
     }
 
-    private static void OnPlayerReceived(IReadOnlyList<IPlayerCharacter> characters)
+    private void OnPlayerReceived(IReadOnlyList<IPlayerCharacter> characters)
     {
         EffectSetting? targetSetting = null;
 
         if (GameState.ContentFinderCondition > 0)
         {
-            if (ModuleConfig.DutySpecific.TryGetValue(GameState.ContentFinderConditionData.ContentType.RowId, out var specificConfig) &&
+            if (config.DutySpecific.TryGetValue(GameState.ContentFinderConditionData.ContentType.RowId, out var specificConfig) &&
                 specificConfig.IsEnabled)
                 targetSetting = specificConfig;
 
-            targetSetting ??= ModuleConfig.DutyDefault;
+            targetSetting ??= config.DutyDefault;
         }
         else
         {
             var playerCount = PlayersManager.Instance().PlayersAroundCount;
 
-            if (playerCount < ModuleConfig.AroundCountThresholdLow)
-                targetSetting = ModuleConfig.OverworldLow;
-            else if (playerCount < ModuleConfig.AroundCountThresholdHigh)
-                targetSetting = ModuleConfig.OverworldMedium;
+            if (playerCount < config.AroundCountThresholdLow)
+                targetSetting = config.OverworldLow;
+            else if (playerCount < config.AroundCountThresholdHigh)
+                targetSetting = config.OverworldMedium;
             else
-                targetSetting = ModuleConfig.OverworldHigh;
+                targetSetting = config.OverworldHigh;
         }
 
         if (targetSetting is not { IsEnabled: true }) return;
@@ -239,10 +238,10 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         ApplySetting(targetSetting);
     }
 
-    private static void ApplySetting(EffectSetting? settings)
+    private void ApplySetting(EffectSetting? settings)
     {
         if (settings == null) return;
-        if (LastAppliedSettings != null && settings == LastAppliedSettings)
+        if (lastAppliedSettings != null && settings == lastAppliedSettings)
             return;
 
         try
@@ -252,7 +251,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
             DService.Instance().GameConfig.UiConfig.Set(nameof(UiConfigOption.BattleEffectOther),      (uint)settings.Other);
             DService.Instance().GameConfig.UiConfig.Set(nameof(UiConfigOption.BattleEffectPvPEnemyPc), (uint)settings.Enemy);
 
-            LastAppliedSettings = settings.Clone();
+            lastAppliedSettings = settings.Clone();
         }
         catch
         {

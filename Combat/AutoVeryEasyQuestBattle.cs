@@ -19,6 +19,9 @@ public class AutoVeryEasyQuestBattle : ModuleBase
 
     protected override void Init() =>
         ExecuteCommandManager.Instance().RegPre(OnPreUseCommand);
+    
+    protected override void Uninit() =>
+        ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
 
     private static unsafe void OnPreUseCommand
     (
@@ -40,7 +43,4 @@ public class AutoVeryEasyQuestBattle : ModuleBase
             NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoVeryEasyQuestBattle-Notification"));
         }
     }
-
-    protected override void Uninit() =>
-        ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
 }

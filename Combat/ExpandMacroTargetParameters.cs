@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
@@ -19,36 +20,16 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ExpandMacroTargetParameters : ModuleBase
 {
-    private static readonly CompSig                           ResolvePlaceholderSig = new("E8 ?? ?? ?? ?? 33 ED 4C 8B F8");
-    private static          Hook<ResolvePlaceholderDelegate>? ResolvePlaceholderHook;
-
-    private static readonly Dictionary<string, (string Description, Func<nint> Handler)> Arguments = new()
-    {
-        ["<lowhpmeandmember>"]       = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpMeAndMember"), LowHPMeAndMemberHandler),
-        ["<lowhpmember>"]            = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpMember"), LowHPMemberHandler),
-        ["<lowhpenemy>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpEnemy"), LowHPEnemyHandler),
-        ["<deadmember>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-DeadMember"), DeadMemberHandler),
-        ["<nearmember>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-NearMember"), NearMemberHandler),
-        ["<farmember>"]              = new(Lang.Get("ExpandMacroTargetParameters-Param-FarMember"), FarMemberHandler),
-        ["<nearenemy>"]              = new(Lang.Get("ExpandMacroTargetParameters-Param-NearEnemy"), NearEnemyHandler),
-        ["<farenemy>"]               = new(Lang.Get("ExpandMacroTargetParameters-Param-FarEnemy"), FarEnemyHandler),
-        ["<dispellablemeandmember>"] = new(Lang.Get("ExpandMacroTargetParameters-Param-DispellableMeAndMember"), DispellableMeAndMemberHandler),
-        ["<dispellablemember>"]      = new(Lang.Get("ExpandMacroTargetParameters-Param-DispellableMember"), DispellableMemberHandler)
-    };
-
-    private static readonly Dictionary<string, (string Description, Func<uint, nint> Handler)> StartWithArguments = new()
-    {
-        ["<meandmemberstatus:"] = new(Lang.Get("ExpandMacroTargetParameters-Param-MeAndMemberStatus"), MeAndMemberStatusHandler),
-        ["<memberstatus:"]      = new(Lang.Get("ExpandMacroTargetParameters-Param-MemberStatus"), MemberStatusHandler),
-        ["<enemystatus:"]       = new(Lang.Get("ExpandMacroTargetParameters-Param-EnemyStatus"), EnemyStatusHandler)
-    };
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("ExpandMacroTargetParametersTitle"),
         Description = Lang.Get("ExpandMacroTargetParametersDescription"),
         Category    = ModuleCategory.Combat
     };
+    
+    private static readonly CompSig                           ResolvePlaceholderSig = new("E8 ?? ?? ?? ?? 33 ED 4C 8B F8");
+    private delegate        GameObject*                       ResolvePlaceholderDelegate(PronounModule* module, byte* str, byte a3, byte a4);
+    private                 Hook<ResolvePlaceholderDelegate>? ResolvePlaceholderHook;
 
     protected override void Init()
     {
@@ -101,7 +82,7 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         }
     }
 
-    private static GameObject* ResolvePlaceholderDetour(PronounModule* module, byte* str, byte a3, byte a4)
+    private GameObject* ResolvePlaceholderDetour(PronounModule* module, byte* str, byte a3, byte a4)
     {
         var orig = ResolvePlaceholderHook.Original(module, str, a3, a4);
         if (orig != null) return orig;
@@ -423,6 +404,31 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         target->YalmDistanceFromPlayerX <= 45 &&
         target->YalmDistanceFromPlayerZ <= 45 &&
         (ActionManager.CanUseActionOnTarget(7428, target) || ActionManager.CanUseActionOnTarget(29415, target));
+    
+    #region 常量
 
-    private delegate GameObject* ResolvePlaceholderDelegate(PronounModule* module, byte* str, byte a3, byte a4);
+    private static readonly FrozenDictionary<string, (string Description, Func<nint> Handler)> Arguments =
+        new Dictionary<string, (string Description, Func<nint> Handler)>
+        {
+            ["<lowhpmeandmember>"]       = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpMeAndMember"), LowHPMeAndMemberHandler),
+            ["<lowhpmember>"]            = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpMember"), LowHPMemberHandler),
+            ["<lowhpenemy>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpEnemy"), LowHPEnemyHandler),
+            ["<deadmember>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-DeadMember"), DeadMemberHandler),
+            ["<nearmember>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-NearMember"), NearMemberHandler),
+            ["<farmember>"]              = new(Lang.Get("ExpandMacroTargetParameters-Param-FarMember"), FarMemberHandler),
+            ["<nearenemy>"]              = new(Lang.Get("ExpandMacroTargetParameters-Param-NearEnemy"), NearEnemyHandler),
+            ["<farenemy>"]               = new(Lang.Get("ExpandMacroTargetParameters-Param-FarEnemy"), FarEnemyHandler),
+            ["<dispellablemeandmember>"] = new(Lang.Get("ExpandMacroTargetParameters-Param-DispellableMeAndMember"), DispellableMeAndMemberHandler),
+            ["<dispellablemember>"]      = new(Lang.Get("ExpandMacroTargetParameters-Param-DispellableMember"), DispellableMemberHandler)
+        }.ToFrozenDictionary();
+
+    private static readonly FrozenDictionary<string, (string Description, Func<uint, nint> Handler)> StartWithArguments =
+        new Dictionary<string, (string Description, Func<uint, nint> Handler)>
+        {
+            ["<meandmemberstatus:"] = new(Lang.Get("ExpandMacroTargetParameters-Param-MeAndMemberStatus"), MeAndMemberStatusHandler),
+            ["<memberstatus:"]      = new(Lang.Get("ExpandMacroTargetParameters-Param-MemberStatus"), MemberStatusHandler),
+            ["<enemystatus:"]       = new(Lang.Get("ExpandMacroTargetParameters-Param-EnemyStatus"), EnemyStatusHandler)
+        }.ToFrozenDictionary();
+
+    #endregion
 }

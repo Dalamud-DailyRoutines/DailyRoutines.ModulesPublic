@@ -36,25 +36,21 @@ public class AutoDisplayMitigationInfo : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private static readonly byte[] DamagePhysicalStr = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
-    private static readonly byte[] DamageMagicalStr  = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
 
-    private static Config                   ModuleConfig = null!;
-    private static CancellationTokenSource? RemoteFetchCancelSource;
-    private static IDtrBarEntry?            BarEntry;
+    private          Config          config = null!;
+    private          IDtrBarEntry?   barEntry;
+    private readonly MitigationState state = new();
 
-    private static readonly MitigationState State = new();
+    private readonly CancellationTokenSource? remoteFetchCancelSource = new();
 
-    private static bool IsCombatEventsRegistered;
-    private static bool IsNeedToDrawOnPartyList;
+    private bool isCombatEventsRegistered;
+    private bool isNeedToDrawOnPartyList;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
-        
-        RemoteFetchCancelSource = new();
-        _                       = RemoteRepoManager.FetchMitigationStatusesAsync(RemoteFetchCancelSource.Token);
+        config = Config.Load(this) ?? new();
+
+        _ = RemoteRepoManager.FetchMitigationStatusesAsync(remoteFetchCancelSource.Token);
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
@@ -72,21 +68,20 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
         UnregCombatEvents();
 
-        BarEntry?.Remove();
-        BarEntry = null;
+        barEntry?.Remove();
+        barEntry = null;
 
-        RemoteFetchCancelSource?.Cancel();
-        RemoteFetchCancelSource?.Dispose();
-        RemoteFetchCancelSource = null;
+        remoteFetchCancelSource?.Cancel();
+        remoteFetchCancelSource?.Dispose();
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("TransparentOverlay"), ref ModuleConfig.TransparentOverlay))
+        if (ImGui.Checkbox(Lang.Get("TransparentOverlay"), ref config.TransparentOverlay))
         {
-            ModuleConfig.Save(this);
+            config.Save(this);
 
-            if (ModuleConfig.TransparentOverlay)
+            if (config.TransparentOverlay)
             {
                 Overlay.Flags |= ImGuiWindowFlags.NoBackground;
                 Overlay.Flags |= ImGuiWindowFlags.NoTitleBar;
@@ -98,21 +93,21 @@ public class AutoDisplayMitigationInfo : ModuleBase
             }
         }
 
-        if (ImGui.Checkbox(Lang.Get("ResizeableOverlay"), ref ModuleConfig.ResizeableOverlay))
+        if (ImGui.Checkbox(Lang.Get("ResizeableOverlay"), ref config.ResizeableOverlay))
         {
-            ModuleConfig.Save(this);
+            config.Save(this);
 
-            if (ModuleConfig.ResizeableOverlay)
+            if (config.ResizeableOverlay)
                 Overlay.Flags &= ~ImGuiWindowFlags.NoResize;
             else
                 Overlay.Flags |= ImGuiWindowFlags.NoResize;
         }
 
-        if (ImGui.Checkbox(Lang.Get("MoveableOverlay"), ref ModuleConfig.MoveableOverlay))
+        if (ImGui.Checkbox(Lang.Get("MoveableOverlay"), ref config.MoveableOverlay))
         {
-            ModuleConfig.Save(this);
+            config.Save(this);
 
-            if (!ModuleConfig.MoveableOverlay)
+            if (!config.MoveableOverlay)
             {
                 Overlay.Flags |= ImGuiWindowFlags.NoMove;
                 Overlay.Flags |= ImGuiWindowFlags.NoInputs;
@@ -127,10 +122,10 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
     protected override void OverlayUI()
     {
-        if (State.IsLocalEmpty)
+        if (state.IsLocalEmpty)
             return;
 
-        ImGuiHelpers.SeStringWrapped(BarEntry?.Text?.Encode() ?? []);
+        ImGuiHelpers.SeStringWrapped(barEntry?.Text?.Encode() ?? []);
 
         ImGui.Separator();
 
@@ -145,15 +140,15 @@ public class AutoDisplayMitigationInfo : ModuleBase
         if (!DService.Instance().Texture.TryGetFromGameIcon(new(210405), out var barrierIcon))
             return;
 
-        foreach (var status in State.LocalActiveStatus)
+        foreach (var status in state.LocalActiveStatus)
             DrawStatusRow(status);
 
-        foreach (var status in State.TargetActiveStatus)
+        foreach (var status in state.TargetActiveStatus)
             DrawStatusRow(status);
 
-        if (State.LocalShield > 0)
+        if (state.LocalShield > 0)
         {
-            if (!State.IsLocalEmpty)
+            if (!state.IsLocalEmpty)
                 ImGui.TableNextRow();
 
             ImGui.TableNextRow();
@@ -165,7 +160,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
             ImGui.TextUnformatted($"{Lang.Get("Shield")}");
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{State.LocalShield}");
+            ImGui.TextUnformatted($"{state.LocalShield}");
         }
     }
 
@@ -176,7 +171,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
         Overlay.Flags      &=  ~ImGuiWindowFlags.NoTitleBar;
         Overlay.Flags      &=  ~ImGuiWindowFlags.AlwaysAutoResize;
 
-        if (ModuleConfig.TransparentOverlay)
+        if (config.TransparentOverlay)
         {
             Overlay.Flags |= ImGuiWindowFlags.NoBackground;
             Overlay.Flags |= ImGuiWindowFlags.NoTitleBar;
@@ -187,12 +182,12 @@ public class AutoDisplayMitigationInfo : ModuleBase
             Overlay.Flags &= ~ImGuiWindowFlags.NoTitleBar;
         }
 
-        if (ModuleConfig.ResizeableOverlay)
+        if (config.ResizeableOverlay)
             Overlay.Flags &= ~ImGuiWindowFlags.NoResize;
         else
             Overlay.Flags |= ImGuiWindowFlags.NoResize;
 
-        if (!ModuleConfig.MoveableOverlay)
+        if (!config.MoveableOverlay)
         {
             Overlay.Flags |= ImGuiWindowFlags.NoMove;
             Overlay.Flags |= ImGuiWindowFlags.NoInputs;
@@ -222,13 +217,13 @@ public class AutoDisplayMitigationInfo : ModuleBase
         ImGuiOm.TooltipHover($"{status.StatusID}");
 
         ImGui.TableNextColumn();
-        ImGuiHelpers.SeStringWrapped(DamagePhysicalStr);
+        ImGuiHelpers.SeStringWrapped(DamagePhysicalString);
 
         ImGui.SameLine();
         ImGui.TextUnformatted($"{status.Physical}% ");
 
         ImGui.SameLine();
-        ImGuiHelpers.SeStringWrapped(DamageMagicalStr);
+        ImGuiHelpers.SeStringWrapped(DamageMagicalString);
 
         ImGui.SameLine();
         ImGui.TextUnformatted($"{status.Magical}% ");
@@ -236,14 +231,14 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
     private void RegCombatEvents()
     {
-        if (IsCombatEventsRegistered)
+        if (isCombatEventsRegistered)
             return;
 
         WindowManager.Instance().PostDraw += Draw;
         FrameworkManager.Instance().Reg(OnUpdate, 500);
 
-        BarEntry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayMitigationInfo");
-        BarEntry.OnClick =   _ =>
+        barEntry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayMitigationInfo");
+        barEntry.OnClick =   _ =>
         {
             if (Overlay == null)
                 SetOverlay();
@@ -251,54 +246,54 @@ public class AutoDisplayMitigationInfo : ModuleBase
             Overlay.IsOpen ^= true;
         };
 
-        IsCombatEventsRegistered = true;
+        isCombatEventsRegistered = true;
     }
 
     private void UnregCombatEvents()
     {
-        if (!IsCombatEventsRegistered)
+        if (!isCombatEventsRegistered)
             return;
 
         WindowManager.Instance().PostDraw -= Draw;
         FrameworkManager.Instance().Unreg(OnUpdate);
-        State.Clear();
+        state.Clear();
 
-        if (BarEntry != null)
+        if (barEntry != null)
         {
-            BarEntry.Shown   = false;
-            BarEntry.Tooltip = null;
-            BarEntry.Text    = null;
+            barEntry.Shown   = false;
+            barEntry.Tooltip = null;
+            barEntry.Text    = null;
         }
 
-        IsCombatEventsRegistered = false;
+        isCombatEventsRegistered = false;
     }
 
-    private static void UpdateStatusBar()
+    private void UpdateStatusBar()
     {
-        if (BarEntry == null)
+        if (barEntry == null)
             return;
 
-        if (State.IsLocalEmpty)
+        if (state.IsLocalEmpty)
         {
-            BarEntry.Shown   = false;
-            BarEntry.Tooltip = null;
-            BarEntry.Text    = null;
+            barEntry.Shown   = false;
+            barEntry.Tooltip = null;
+            barEntry.Text    = null;
             return;
         }
 
         var textBuilder  = new SeStringBuilder();
         var firstBarItem = true;
 
-        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamagePhysical, State.LocalPhysical, true);
-        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamageMagical,  State.LocalMagical,  true);
-        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.Tank,           State.LocalShield,   false);
+        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamagePhysical, state.LocalPhysical, true);
+        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamageMagical,  state.LocalMagical,  true);
+        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.Tank,           state.LocalShield,   false);
 
-        BarEntry.Text = textBuilder.Build();
+        barEntry.Text = textBuilder.Build();
 
         var tipBuilder   = new SeStringBuilder();
         var firstTipItem = true;
 
-        foreach (var status in State.LocalActiveStatus)
+        foreach (var status in state.LocalActiveStatus)
         {
             if (!firstTipItem)
                 tipBuilder.Append("\n");
@@ -310,16 +305,16 @@ public class AutoDisplayMitigationInfo : ModuleBase
             firstTipItem = false;
         }
 
-        if (State.LocalShield > 0)
+        if (state.LocalShield > 0)
         {
             if (!firstTipItem)
                 tipBuilder.Append("\n");
             tipBuilder.AddIcon(BitmapFontIcon.Tank);
-            tipBuilder.Append($"{Lang.Get("Shield")}: {State.LocalShield}");
+            tipBuilder.Append($"{Lang.Get("Shield")}: {state.LocalShield}");
             firstTipItem = false;
         }
 
-        foreach (var status in State.TargetActiveStatus)
+        foreach (var status in state.TargetActiveStatus)
         {
             if (!firstTipItem)
                 tipBuilder.Append("\n");
@@ -331,8 +326,8 @@ public class AutoDisplayMitigationInfo : ModuleBase
             firstTipItem = false;
         }
 
-        BarEntry.Tooltip = tipBuilder.Build();
-        BarEntry.Shown   = true;
+        barEntry.Tooltip = tipBuilder.Build();
+        barEntry.Shown   = true;
 
         return;
 
@@ -349,6 +344,165 @@ public class AutoDisplayMitigationInfo : ModuleBase
             first = false;
         }
     }
+    
+    #region 事件
+
+    private void OnZoneChanged(ushort obj)
+    {
+        UnregCombatEvents();
+
+        if (GameState.ContentFinderCondition == 0) return;
+
+        RegCombatEvents();
+    }
+
+    private void OnConditionChanged(ConditionFlag flag, bool value)
+    {
+        if (flag != ConditionFlag.InCombat) return;
+
+        if (value)
+            RegCombatEvents();
+        else
+            UnregCombatEvents();
+    }
+
+    private void OnUpdate(IFramework _)
+    {
+        if (GameState.IsInPVPArea)
+        {
+            UnregCombatEvents();
+            return;
+        }
+
+        if (!DService.Instance().Condition[ConditionFlag.InCombat] && GameState.ContentFinderCondition == 0)
+        {
+            UnregCombatEvents();
+            return;
+        }
+
+        state.Update();
+        UpdateStatusBar();
+    }
+
+    #endregion
+
+    #region PartyList
+
+    private unsafe void Draw()
+    {
+        if (Throttler.Shared.Throttle("AutoDisplayMitigationInfo-OnUpdatePartyDrawCondition"))
+            isNeedToDrawOnPartyList = PartyList->IsAddonAndNodesReady() && !GameState.IsInPVPArea;
+
+        if (!isNeedToDrawOnPartyList)
+            return;
+
+        var drawList = ImGui.GetBackgroundDrawList();
+        var addon    = (AddonPartyList*)PartyList;
+
+        var snapshot = state.PartySnapshot;
+        var count    = snapshot.Length;
+
+        for (var i = 0; i < count; i++)
+        {
+            ref var partyMember = ref addon->PartyMembers[i];
+            if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
+                continue;
+
+            ref readonly var status = ref snapshot[i];
+            DrawMitigationNode(drawList, ref partyMember, status);
+            DrawShieldNode(drawList, ref partyMember, status);
+        }
+    }
+
+    private static unsafe void DrawMitigationNode
+    (
+        ImDrawListPtr                            drawList,
+        ref AddonPartyList.PartyListMemberStruct partyMember,
+        in  PartyMitigationSnapshot              status
+    )
+    {
+        var mitigationValue = MathF.Max(status.Physical, status.Magical);
+        if (mitigationValue <= 0)
+            return;
+
+        var nameNode = partyMember.NameAndBarsContainer;
+        if (nameNode is null || !nameNode->IsVisible())
+            return;
+
+        var nameTextNode = partyMember.Name;
+        if (nameTextNode is null || !nameTextNode->IsVisible())
+            return;
+
+        var partyListAddon = (AddonPartyList*)PartyList;
+        var partyScale     = partyListAddon->Scale;
+
+        using var fontPush = FontManager.Instance().MiedingerMidFont120.Push();
+
+        var text     = $"{mitigationValue:N0}%";
+        var textSize = ImGui.CalcTextSize(text);
+
+        var posX = nameNode->ScreenX + nameNode->GetWidth() * partyScale - textSize.X - 5 * partyScale;
+        var posY = nameNode->ScreenY                                     + 2              * partyScale;
+
+        var pos = new Vector2(posX, posY);
+
+        drawList.AddText(pos + new Vector2(1, 1), 0x9D00A2FF, text);
+        drawList.AddText(pos,                     0xFFFFFFFF, text);
+    }
+
+    private static unsafe void DrawShieldNode
+    (
+        ImDrawListPtr                            drawList,
+        ref AddonPartyList.PartyListMemberStruct partyMember,
+        in  PartyMitigationSnapshot              status
+    )
+    {
+        var shieldValue = status.Shield;
+
+        var hpComponent = partyMember.HPGaugeComponent;
+        if (hpComponent is null || !hpComponent->OwnerNode->IsVisible())
+            return;
+
+        var numNode = hpComponent->GetTextNodeById(2);
+        if (numNode is null || !numNode->IsVisible())
+            return;
+
+        var partyListAddon = (AddonPartyList*)PartyList;
+        var mpNode2        = partyMember.MPGaugeBar->GetTextNodeById(2)->GetAsAtkTextNode();
+        var mpNode3        = partyMember.MPGaugeBar->GetTextNodeById(3)->GetAsAtkTextNode();
+
+        if (shieldValue >= 1e5)
+        {
+            if (mpNode2 is not null && mpNode2->IsVisible())
+                mpNode2->SetAlpha(0);
+            if (mpNode3 is not null && mpNode3->IsVisible())
+                mpNode3->SetAlpha(0);
+        }
+        else
+        {
+            if (mpNode2 is not null && mpNode2->IsVisible())
+                mpNode2->SetAlpha(255);
+            if (mpNode3 is not null && mpNode3->IsVisible())
+                mpNode3->SetAlpha(255);
+        }
+
+        if (shieldValue <= 0)
+            return;
+
+        var partyScale = partyListAddon->Scale;
+
+        using var fontPush = FontManager.Instance().MiedingerMidFont120.Push();
+
+        var text = $"{shieldValue:F0}";
+
+        var posX = numNode->ScreenX                                                    + numNode->GetWidth() * partyListAddon->Scale + 3 * partyScale;
+        var posY = numNode->ScreenY + numNode->GetHeight() * partyListAddon->Scale / 2 - 3f                  * partyScale;
+
+        drawList.AddText(new Vector2(posX + 1, posY + 1), 0x9D00A2FF, text);
+        drawList.AddText(new Vector2(posX,     posY),     0xFFFFFFFF, text);
+    }
+
+    #endregion
 
     private readonly struct MitigationDefinition
     (
@@ -771,162 +925,10 @@ public class AutoDisplayMitigationInfo : ModuleBase
         public float Magical { get; private set; }
     }
 
-    #region 事件
+    #region 常量
 
-    private void OnZoneChanged(ushort obj)
-    {
-        UnregCombatEvents();
-
-        if (GameState.ContentFinderCondition == 0) return;
-
-        RegCombatEvents();
-    }
-
-    private void OnConditionChanged(ConditionFlag flag, bool value)
-    {
-        if (flag != ConditionFlag.InCombat) return;
-
-        if (value)
-            RegCombatEvents();
-        else
-            UnregCombatEvents();
-    }
-
-    private void OnUpdate(IFramework _)
-    {
-        if (GameState.IsInPVPArea)
-        {
-            UnregCombatEvents();
-            return;
-        }
-
-        if (!DService.Instance().Condition[ConditionFlag.InCombat] && GameState.ContentFinderCondition == 0)
-        {
-            UnregCombatEvents();
-            return;
-        }
-
-        State.Update();
-        UpdateStatusBar();
-    }
-
-    #endregion
-
-    #region PartyList
-
-    private static unsafe void Draw()
-    {
-        if (Throttler.Shared.Throttle("AutoDisplayMitigationInfo-OnUpdatePartyDrawCondition"))
-            IsNeedToDrawOnPartyList = PartyList->IsAddonAndNodesReady() && !GameState.IsInPVPArea;
-
-        if (!IsNeedToDrawOnPartyList)
-            return;
-
-        var drawList = ImGui.GetBackgroundDrawList();
-        var addon    = (AddonPartyList*)PartyList;
-
-        var snapshot = State.PartySnapshot;
-        var count    = snapshot.Length;
-
-        for (var i = 0; i < count; i++)
-        {
-            ref var partyMember = ref addon->PartyMembers[i];
-            if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
-                continue;
-
-            ref readonly var status = ref snapshot[i];
-            DrawMitigationNode(drawList, ref partyMember, status);
-            DrawShieldNode(drawList, ref partyMember, status);
-        }
-    }
-
-    private static unsafe void DrawMitigationNode
-    (
-        ImDrawListPtr                            drawList,
-        ref AddonPartyList.PartyListMemberStruct partyMember,
-        in  PartyMitigationSnapshot              status
-    )
-    {
-        var mitigationValue = MathF.Max(status.Physical, status.Magical);
-        if (mitigationValue <= 0)
-            return;
-
-        var nameNode = partyMember.NameAndBarsContainer;
-        if (nameNode is null || !nameNode->IsVisible())
-            return;
-
-        var nameTextNode = partyMember.Name;
-        if (nameTextNode is null || !nameTextNode->IsVisible())
-            return;
-
-        var partyListAddon = (AddonPartyList*)PartyList;
-        var partyScale     = partyListAddon->Scale;
-
-        using var fontPush = FontManager.Instance().MiedingerMidFont120.Push();
-
-        var text     = $"{mitigationValue:N0}%";
-        var textSize = ImGui.CalcTextSize(text);
-
-        var posX = nameNode->ScreenX + nameNode->GetWidth() * partyScale - textSize.X - 5 * partyScale;
-        var posY = nameNode->ScreenY                                     + 2              * partyScale;
-
-        var pos = new Vector2(posX, posY);
-
-        drawList.AddText(pos + new Vector2(1, 1), 0x9D00A2FF, text);
-        drawList.AddText(pos,                     0xFFFFFFFF, text);
-    }
-
-    private static unsafe void DrawShieldNode
-    (
-        ImDrawListPtr                            drawList,
-        ref AddonPartyList.PartyListMemberStruct partyMember,
-        in  PartyMitigationSnapshot              status
-    )
-    {
-        var shieldValue = status.Shield;
-
-        var hpComponent = partyMember.HPGaugeComponent;
-        if (hpComponent is null || !hpComponent->OwnerNode->IsVisible())
-            return;
-
-        var numNode = hpComponent->GetTextNodeById(2);
-        if (numNode is null || !numNode->IsVisible())
-            return;
-
-        var partyListAddon = (AddonPartyList*)PartyList;
-        var mpNode2        = partyMember.MPGaugeBar->GetTextNodeById(2)->GetAsAtkTextNode();
-        var mpNode3        = partyMember.MPGaugeBar->GetTextNodeById(3)->GetAsAtkTextNode();
-
-        if (shieldValue >= 1e5)
-        {
-            if (mpNode2 is not null && mpNode2->IsVisible())
-                mpNode2->SetAlpha(0);
-            if (mpNode3 is not null && mpNode3->IsVisible())
-                mpNode3->SetAlpha(0);
-        }
-        else
-        {
-            if (mpNode2 is not null && mpNode2->IsVisible())
-                mpNode2->SetAlpha(255);
-            if (mpNode3 is not null && mpNode3->IsVisible())
-                mpNode3->SetAlpha(255);
-        }
-
-        if (shieldValue <= 0)
-            return;
-
-        var partyScale = partyListAddon->Scale;
-
-        using var fontPush = FontManager.Instance().MiedingerMidFont120.Push();
-
-        var text = $"{shieldValue:F0}";
-
-        var posX = numNode->ScreenX                                                    + numNode->GetWidth() * partyListAddon->Scale + 3 * partyScale;
-        var posY = numNode->ScreenY + numNode->GetHeight() * partyListAddon->Scale / 2 - 3f                  * partyScale;
-
-        drawList.AddText(new Vector2(posX + 1, posY + 1), 0x9D00A2FF, text);
-        drawList.AddText(new Vector2(posX,     posY),     0xFFFFFFFF, text);
-    }
+    private static byte[] DamagePhysicalString { get; } = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
+    private static byte[] DamageMagicalString  { get; } = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
 
     #endregion
 }

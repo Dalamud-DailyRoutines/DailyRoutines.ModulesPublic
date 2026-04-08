@@ -21,7 +21,7 @@ public unsafe class AutoDisplayFateItemCount : ModuleBase
         Title           = Lang.Get("AutoDisplayFateItemCountTitle"),
         Description     = Lang.Get("AutoDisplayFateItemCountDescription"),
         Category        = ModuleCategory.Combat,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayFateItemCount-UI.png"]
+        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayFateItemCount-UI.png"] // TODO: 仓库迁移
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

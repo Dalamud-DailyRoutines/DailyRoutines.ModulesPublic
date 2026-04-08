@@ -21,39 +21,34 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoCheckFoodUsage : ModuleBase
 {
-    public delegate nint CountdownInitDelegate(nint a1, nint a2);
-
-    private const int FOOD_USAGE_COOLDOWN_SECONDS = 10;
-
-    private static readonly CompSig                      CountdownInitSig = new("48 89 5C 24 10 57 48 83 EC 40 48 8B DA 48 8B F9 48 8B 49 08");
-    private static          Hook<CountdownInitDelegate>? CountdownInitHook;
-
-    private static Config ModuleConfig = null!;
-
-    private static readonly JobSelectCombo JobSelectCombo = new("Job");
-
-    private static uint   SelectedItem;
-    private static string SelectItemSearch = string.Empty;
-    private static bool   SelectItemIsHQ   = true;
-    private static string ZoneSearch       = string.Empty;
-    private static string ConditionSearch  = string.Empty;
-
-    private static Vector2 CheckboxSize = ScaledVector2(20f);
-
-    private static readonly DateTime LastFoodUsageTime = DateTime.MinValue;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoCheckFoodUsageTitle"),
         Description = Lang.Get("AutoCheckFoodUsageDescription"),
         Category    = ModuleCategory.Combat
     };
+    
+    private static readonly CompSig                      CountdownInitSig = new("48 89 5C 24 10 57 48 83 EC 40 48 8B DA 48 8B F9 48 8B 49 08");
+    public delegate         nint                         CountdownInitDelegate(nint a1, nint a2);
+    private                 Hook<CountdownInitDelegate>? CountdownInitHook;
+
+    private Config config = null!;
+
+    private readonly JobSelectCombo jobSelectCombo = new("Job");
+
+    private uint   selectedItem;
+    private string selectItemSearch     = string.Empty;
+    private bool   selectItemIsHQ       = true;
+    private string zoneSearchInput      = string.Empty;
+    private string conditionSearchInput = string.Empty;
+    
+    private readonly DateTime lastFoodUsageTime = DateTime.MinValue;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
         foreach (var checkPoint in Enum.GetValues<FoodCheckpoint>())
-            ModuleConfig.EnabledCheckpoints.TryAdd(checkPoint, false);
+            config.EnabledCheckpoints.TryAdd(checkPoint, false);
 
         TaskHelper ??= new TaskHelper { TimeoutMS = 60_000 };
 
@@ -62,6 +57,12 @@ public class AutoCheckFoodUsage : ModuleBase
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
     }
 
     protected override void ConfigUI()
@@ -75,16 +76,16 @@ public class AutoCheckFoodUsage : ModuleBase
             foreach (var checkPoint in Enum.GetValues<FoodCheckpoint>())
             {
                 ImGui.SameLine();
-                var state = ModuleConfig.EnabledCheckpoints[checkPoint];
+                var state = config.EnabledCheckpoints[checkPoint];
 
                 if (ImGui.Checkbox(checkPoint.ToString(), ref state))
                 {
-                    ModuleConfig.EnabledCheckpoints[checkPoint] = state;
-                    ModuleConfig.Save(this);
+                    config.EnabledCheckpoints[checkPoint] = state;
+                    config.Save(this);
                 }
             }
 
-            if (ModuleConfig.EnabledCheckpoints[FoodCheckpoint.条件变更时])
+            if (config.EnabledCheckpoints[FoodCheckpoint.条件变更时])
             {
                 using (ImRaii.PushIndent())
                 {
@@ -101,21 +102,21 @@ public class AutoCheckFoodUsage : ModuleBase
                     using (var combo = ImRaii.Combo
                            (
                                "###ConditionBeginCombo",
-                               Lang.Get("AutoCheckFoodUsage-SelectedAmount", ModuleConfig.ConditionStart.Count),
+                               Lang.Get("AutoCheckFoodUsage-SelectedAmount", config.ConditionStart.Count),
                                ImGuiComboFlags.HeightLarge
                            ))
                     {
                         if (combo)
                         {
                             if (ImGui.IsWindowAppearing())
-                                ConditionSearch = string.Empty;
+                                conditionSearchInput = string.Empty;
 
                             ImGui.SetNextItemWidth(-1f);
                             ImGui.InputTextWithHint
                             (
                                 "###ConditionBeginSearch",
                                 Lang.Get("PleaseSearch"),
-                                ref ConditionSearch,
+                                ref conditionSearchInput,
                                 128
                             );
                             ImGui.Separator();
@@ -124,19 +125,19 @@ public class AutoCheckFoodUsage : ModuleBase
                             {
                                 if (conditionFlag is ConditionFlag.None or ConditionFlag.NormalConditions) continue;
                                 var conditionName = conditionFlag.ToString();
-                                if (!string.IsNullOrWhiteSpace(ConditionSearch) &&
-                                    !conditionName.Contains(ConditionSearch, StringComparison.OrdinalIgnoreCase))
+                                if (!string.IsNullOrWhiteSpace(conditionSearchInput) &&
+                                    !conditionName.Contains(conditionSearchInput, StringComparison.OrdinalIgnoreCase))
                                     continue;
 
                                 if (ImGui.Selectable
                                     (
                                         $"{conditionName}###{conditionFlag}_Begin",
-                                        ModuleConfig.ConditionStart.Contains(conditionFlag)
+                                        config.ConditionStart.Contains(conditionFlag)
                                     ))
                                 {
-                                    if (!ModuleConfig.ConditionStart.Remove(conditionFlag))
-                                        ModuleConfig.ConditionStart.Add(conditionFlag);
-                                    ModuleConfig.Save(this);
+                                    if (!config.ConditionStart.Remove(conditionFlag))
+                                        config.ConditionStart.Add(conditionFlag);
+                                    config.Save(this);
                                 }
                             }
                         }
@@ -155,17 +156,17 @@ public class AutoCheckFoodUsage : ModuleBase
                     using (var combo = ImRaii.Combo
                            (
                                "###ConditionEndCombo",
-                               Lang.Get("AutoCheckFoodUsage-SelectedAmount", ModuleConfig.ConditionEnd.Count),
+                               Lang.Get("AutoCheckFoodUsage-SelectedAmount", config.ConditionEnd.Count),
                                ImGuiComboFlags.HeightLarge
                            ))
                     {
                         if (combo)
                         {
                             if (ImGui.IsWindowAppearing())
-                                ConditionSearch = string.Empty;
+                                conditionSearchInput = string.Empty;
 
                             ImGui.SetNextItemWidth(-1f);
-                            ImGui.InputTextWithHint("###ConditionEndSearch", Lang.Get("PleaseSearch"), ref ConditionSearch, 128);
+                            ImGui.InputTextWithHint("###ConditionEndSearch", Lang.Get("PleaseSearch"), ref conditionSearchInput, 128);
 
                             ImGui.Separator();
 
@@ -174,15 +175,15 @@ public class AutoCheckFoodUsage : ModuleBase
                                 if (conditionFlag is ConditionFlag.None or ConditionFlag.NormalConditions) continue;
 
                                 var conditionName = conditionFlag.ToString();
-                                if (!string.IsNullOrWhiteSpace(ConditionSearch) &&
-                                    !conditionName.Contains(ConditionSearch, StringComparison.OrdinalIgnoreCase))
+                                if (!string.IsNullOrWhiteSpace(conditionSearchInput) &&
+                                    !conditionName.Contains(conditionSearchInput, StringComparison.OrdinalIgnoreCase))
                                     continue;
 
-                                if (ImGui.Selectable($"{conditionName}###{conditionFlag}_End", ModuleConfig.ConditionEnd.Contains(conditionFlag)))
+                                if (ImGui.Selectable($"{conditionName}###{conditionFlag}_End", config.ConditionEnd.Contains(conditionFlag)))
                                 {
-                                    if (!ModuleConfig.ConditionEnd.Remove(conditionFlag))
-                                        ModuleConfig.ConditionEnd.Add(conditionFlag);
-                                    ModuleConfig.Save(this);
+                                    if (!config.ConditionEnd.Remove(conditionFlag))
+                                        config.ConditionEnd.Add(conditionFlag);
+                                    config.Save(this);
                                 }
                             }
                         }
@@ -200,13 +201,13 @@ public class AutoCheckFoodUsage : ModuleBase
             ImGui.Dummy(Vector2.One);
 
             ImGui.SetNextItemWidth(50f * GlobalUIScale);
-            ImGui.InputInt(Lang.Get("AutoCheckFoodUsage-RefreshThreshold"), ref ModuleConfig.RefreshThreshold);
+            ImGui.InputInt(Lang.Get("AutoCheckFoodUsage-RefreshThreshold"), ref config.RefreshThreshold);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
 
             ImGui.SameLine();
-            if (ImGui.Checkbox(Lang.Get("SendChat"), ref ModuleConfig.SendChat))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+                config.Save(this);
 
             ImGuiOm.HelpMarker(Lang.Get("AutoCheckFoodUsage-RefreshThresholdHelp"));
         }
@@ -214,7 +215,7 @@ public class AutoCheckFoodUsage : ModuleBase
         var       tableSize = (ImGui.GetContentRegionAvail() - ScaledVector2(100f)) with { Y = 0 };
         using var table     = ImRaii.Table("FoodPreset", 4, ImGuiTableFlags.Borders, tableSize);
         if (!table) return;
-        ImGui.TableSetupColumn("添加", ImGuiTableColumnFlags.WidthFixed, CheckboxSize.X);
+        ImGui.TableSetupColumn("添加", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeightWithSpacing());
         ImGui.TableSetupColumn("名称", ImGuiTableColumnFlags.None,       30);
         ImGui.TableSetupColumn("地区", ImGuiTableColumnFlags.None,       30);
         ImGui.TableSetupColumn("职业", ImGuiTableColumnFlags.None,       30);
@@ -241,24 +242,24 @@ public class AutoCheckFoodUsage : ModuleBase
                     (
                         "FoodSelectCombo",
                         Sheets.Food,
-                        ref SelectedItem,
-                        ref SelectItemSearch,
+                        ref selectedItem,
+                        ref selectItemSearch,
                         x => $"{x.Name.ToString()} ({x.RowId})",
                         [new("物品", ImGuiTableColumnFlags.WidthStretch, 0)],
                         [
                             x => () =>
                             {
-                                var icon = ImageHelper.GetGameIcon(x.Icon, SelectItemIsHQ);
+                                var icon = ImageHelper.GetGameIcon(x.Icon, selectItemIsHQ);
 
                                 if (ImGuiOm.SelectableImageWithText
                                     (
                                         icon.Handle,
                                         ScaledVector2(20f),
                                         x.Name.ToString(),
-                                        x.RowId == SelectedItem,
+                                        x.RowId == selectedItem,
                                         ImGuiSelectableFlags.DontClosePopups
                                     ))
-                                    SelectedItem = SelectedItem == x.RowId ? 0 : x.RowId;
+                                    selectedItem = selectedItem == x.RowId ? 0 : x.RowId;
                             }
                         ],
                         [x => x.Name.ToString(), x => x.RowId.ToString()],
@@ -266,18 +267,18 @@ public class AutoCheckFoodUsage : ModuleBase
                     );
 
                     ImGui.SameLine();
-                    ImGui.Checkbox("HQ", ref SelectItemIsHQ);
+                    ImGui.Checkbox("HQ", ref selectItemIsHQ);
 
                     ImGui.SameLine();
 
-                    using (ImRaii.Disabled(SelectedItem == 0))
+                    using (ImRaii.Disabled(selectedItem == 0))
                     {
                         if (ImGui.Button(Lang.Get("Add")))
                         {
-                            var preset = new FoodUsagePreset(SelectedItem, SelectItemIsHQ);
+                            var preset = new FoodUsagePreset(selectedItem, selectItemIsHQ);
 
-                            ModuleConfig.Presets.Add(preset);
-                            ModuleConfig.Save(this);
+                            config.Presets.Add(preset);
+                            config.Save(this);
                         }
                     }
                 }
@@ -293,9 +294,9 @@ public class AutoCheckFoodUsage : ModuleBase
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("AutoCheckFoodUsage-JobRestrictions"));
 
-        for (var i = 0; i < ModuleConfig.Presets.Count; i++)
+        for (var i = 0; i < config.Presets.Count; i++)
         {
-            var       preset = ModuleConfig.Presets[i];
+            var       preset = config.Presets[i];
             using var id     = ImRaii.PushId($"{preset.ItemID}_{preset.IsHQ}_{i}");
 
             ImGui.TableNextRow();
@@ -306,11 +307,9 @@ public class AutoCheckFoodUsage : ModuleBase
             if (ImGui.Checkbox("", ref isEnabled))
             {
                 preset.Enabled = isEnabled;
-                ModuleConfig.Save(this);
+                config.Save(this);
             }
-
-            CheckboxSize = ImGui.GetItemRectSize();
-
+            
             ImGui.TableNextColumn();
             ImGui.Selectable
             (
@@ -323,14 +322,14 @@ public class AutoCheckFoodUsage : ModuleBase
                 {
                     if (i != 0 && ImGui.MenuItem(FontAwesomeIcon.AngleDoubleUp.ToIconString()))
                     {
-                        (ModuleConfig.Presets[i], ModuleConfig.Presets[i - 1]) = (ModuleConfig.Presets[i - 1], ModuleConfig.Presets[i]);
-                        ModuleConfig.Save(this);
+                        (config.Presets[i], config.Presets[i - 1]) = (config.Presets[i - 1], config.Presets[i]);
+                        config.Save(this);
                     }
 
-                    if (i != ModuleConfig.Presets.Count - 1 && ImGui.MenuItem(FontAwesomeIcon.AngleDoubleDown.ToIconString()))
+                    if (i != config.Presets.Count - 1 && ImGui.MenuItem(FontAwesomeIcon.AngleDoubleDown.ToIconString()))
                     {
-                        (ModuleConfig.Presets[i], ModuleConfig.Presets[i + 1]) = (ModuleConfig.Presets[i + 1], ModuleConfig.Presets[i]);
-                        ModuleConfig.Save(this);
+                        (config.Presets[i], config.Presets[i + 1]) = (config.Presets[i + 1], config.Presets[i]);
+                        config.Save(this);
                     }
 
                     ImGui.Separator();
@@ -338,13 +337,13 @@ public class AutoCheckFoodUsage : ModuleBase
                     if (ImGui.MenuItem($"{Lang.Get("AutoCheckFoodUsage-ChangeTo")} {(preset.IsHQ ? "NQ" : "HQ")}"))
                     {
                         preset.IsHQ ^= true;
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                     }
 
                     if (ImGui.MenuItem(Lang.Get("Delete")))
                     {
-                        ModuleConfig.Presets.Remove(preset);
-                        ModuleConfig.Save(this);
+                        config.Presets.Remove(preset);
+                        config.Save(this);
                         break; // 删除后跳出循环，防止修改集合时出错
                     }
                 }
@@ -361,7 +360,7 @@ public class AutoCheckFoodUsage : ModuleBase
                         "ZoneSelectCombo",
                         Sheets.Zones,
                         ref zones,
-                        ref ZoneSearch,
+                        ref zoneSearchInput,
                         [
                             new("区域", ImGuiTableColumnFlags.WidthStretch, 0),
                             new("副本", ImGuiTableColumnFlags.WidthStretch, 0)
@@ -380,7 +379,7 @@ public class AutoCheckFoodUsage : ModuleBase
                                     if (!zones.Remove(x.RowId))
                                     {
                                         zones.Add(x.RowId);
-                                        ModuleConfig.Save(this);
+                                        config.Save(this);
                                     }
                                 }
                             },
@@ -398,7 +397,7 @@ public class AutoCheckFoodUsage : ModuleBase
                     ))
                 {
                     preset.Zones = zones;
-                    ModuleConfig.Save(this);
+                    config.Save(this);
                 }
 
                 ImGuiOm.TooltipHover(Lang.Get("AutoCheckFoodUsage-NoZoneSelectHelp"));
@@ -406,12 +405,12 @@ public class AutoCheckFoodUsage : ModuleBase
 
             ImGui.TableNextColumn();
             ImGui.SetNextItemWidth(-1f);
-            JobSelectCombo.SelectedIDs = preset.ClassJobs.ToHashSet();
+            jobSelectCombo.SelectedIDs = preset.ClassJobs.ToHashSet();
 
-            if (JobSelectCombo.DrawCheckbox())
+            if (jobSelectCombo.DrawCheckbox())
             {
-                preset.ClassJobs = JobSelectCombo.SelectedIDs.ToHashSet();
-                ModuleConfig.Save(this);
+                preset.ClassJobs = jobSelectCombo.SelectedIDs.ToHashSet();
+                config.Save(this);
             }
         }
     }
@@ -514,7 +513,7 @@ public class AutoCheckFoodUsage : ModuleBase
     {
         var original = CountdownInitHook.Original(a1, a2);
 
-        if (ModuleConfig.EnabledCheckpoints[FoodCheckpoint.倒计时开始时] && !GameMain.IsInPvPArea())
+        if (config.EnabledCheckpoints[FoodCheckpoint.倒计时开始时] && !GameMain.IsInPvPArea())
         {
             TaskHelper.Abort();
             TaskHelper.Enqueue(EnqueueFoodRefresh);
@@ -525,7 +524,7 @@ public class AutoCheckFoodUsage : ModuleBase
 
     private void OnZoneChanged(ushort zone)
     {
-        if (!ModuleConfig.EnabledCheckpoints[FoodCheckpoint.区域切换时] || GameMain.IsInPvPArea()) return;
+        if (!config.EnabledCheckpoints[FoodCheckpoint.区域切换时] || GameMain.IsInPvPArea()) return;
 
         TaskHelper.Abort();
         TaskHelper.Enqueue(EnqueueFoodRefresh);
@@ -533,22 +532,16 @@ public class AutoCheckFoodUsage : ModuleBase
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
-        if (!ModuleConfig.EnabledCheckpoints[FoodCheckpoint.条件变更时] ||
+        if (!config.EnabledCheckpoints[FoodCheckpoint.条件变更时] ||
             GameMain.IsInPvPArea()                                 ||
-            (!value || !ModuleConfig.ConditionStart.Contains(flag)) &&
-            (value  || !ModuleConfig.ConditionEnd.Contains(flag)))
+            (!value || !config.ConditionStart.Contains(flag)) &&
+            (value  || !config.ConditionEnd.Contains(flag)))
             return;
 
         TaskHelper.Abort();
         TaskHelper.Enqueue(EnqueueFoodRefresh);
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-    }
-
+    
     private static unsafe bool IsValidState() =>
         !DService.Instance().Condition.IsBetweenAreas       &&
         !DService.Instance().Condition.IsOccupiedInEvent    &&
@@ -557,19 +550,19 @@ public class AutoCheckFoodUsage : ModuleBase
         UIModule.IsScreenReady()                            &&
         ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) == 0;
 
-    private static bool IsCooldownElapsed() =>
-        (StandardTimeManager.Instance().Now - LastFoodUsageTime).TotalSeconds >= FOOD_USAGE_COOLDOWN_SECONDS;
+    private bool IsCooldownElapsed() =>
+        (StandardTimeManager.Instance().Now - lastFoodUsageTime).TotalSeconds >= FOOD_USAGE_COOLDOWN_SECONDS;
 
     private static uint ToFoodRowID(uint id) =>
         LuminaGetter.GetRow<ItemFood>(LuminaGetter.GetRowOrDefault<Item>(id).ItemAction.Value.Data[1])?.RowId ?? 0;
 
-    private static unsafe List<FoodUsagePreset> GetValidPresets()
+    private unsafe List<FoodUsagePreset> GetValidPresets()
     {
         var instance = InventoryManager.Instance();
         var zone     = GameState.TerritoryType;
         if (instance == null || zone == 0) return [];
 
-        return ModuleConfig.Presets
+        return config.Presets
                            .Where
                            (x => x.Enabled                                      &&
                                  (x.Zones.Count == 0 || x.Zones.Contains(zone)) &&
@@ -581,11 +574,11 @@ public class AutoCheckFoodUsage : ModuleBase
                            .ToList();
     }
 
-    private static bool ShouldRefreshFood(TimeSpan remainingTime) =>
-        remainingTime <= TimeSpan.FromSeconds(ModuleConfig.RefreshThreshold) &&
+    private bool ShouldRefreshFood(TimeSpan remainingTime) =>
+        remainingTime <= TimeSpan.FromSeconds(config.RefreshThreshold) &&
         remainingTime <= TimeSpan.FromMinutes(55);
 
-    public class FoodUsagePreset : IEquatable<FoodUsagePreset>
+    private class FoodUsagePreset : IEquatable<FoodUsagePreset>
     {
         public FoodUsagePreset() { }
 
@@ -631,4 +624,10 @@ public class AutoCheckFoodUsage : ModuleBase
         倒计时开始时,
         条件变更时
     }
+
+    #region 常量
+
+    private const int FOOD_USAGE_COOLDOWN_SECONDS = 10;
+
+    #endregion
 }
