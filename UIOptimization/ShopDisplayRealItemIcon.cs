@@ -14,8 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ShopDisplayRealItemIcon : ModuleBase
 {
-    private static List<(uint ID, uint IconID, string Name)> CollectablesShopItemDatas = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("ShopDisplayRealItemIconTitle"),
@@ -24,6 +22,8 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private List<(uint ID, uint IconID, string Name)> collectablesShopItemDatas = [];
 
     protected override void Init()
     {
@@ -66,6 +66,16 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRefresh,  "FreeShop", OnFreeShop);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "FreeShop", OnFreeShop);
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnShop);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnInclusionShop);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnGrandCompanyExchange);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnShopExchange);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnCollectablesShop);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnFreeShop);
+    }
 
     private static void OnFreeShop(AddonEvent type, AddonArgs args)
     {
@@ -85,7 +95,7 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
         }
     }
 
-    private static void OnCollectablesShop(AddonEvent type, AddonArgs args)
+    private void OnCollectablesShop(AddonEvent type, AddonArgs args)
     {
         if (type == AddonEvent.PostDraw &&
             !Throttler.Shared.Throttle("ShopDisplayRealItemIcon-OnCollectablesShop", 100)) return;
@@ -109,10 +119,10 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
                 itemDatas.Add(new(itemID, itemRow.Icon, itemRow.Name.ToString()));
             }
 
-            CollectablesShopItemDatas = itemDatas;
+            collectablesShopItemDatas = itemDatas;
         }
 
-        if (CollectablesShopItemDatas.Count == 0) return;
+        if (collectablesShopItemDatas.Count == 0) return;
 
         var listComponent = (AtkComponentNode*)addon->GetNodeById(28);
         if (listComponent == null) return;
@@ -126,7 +136,7 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
             if (nameNode == null) return;
 
             var name = nameNode->NodeText.ToString().SanitizeSEIcon();
-            var data = CollectablesShopItemDatas.FirstOrDefault(x => x.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+            var data = collectablesShopItemDatas.FirstOrDefault(x => x.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
             if (data == default) continue;
 
             var imageNode = (AtkImageNode*)listItemComponent->Component->UldManager.SearchNodeById(2);
@@ -222,15 +232,5 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
 
             addon->AtkValues[197 + i].SetUInt(itemRow.Icon + (isItemHQ ? 100_0000U : 0U));
         }
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnShop);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnInclusionShop);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnGrandCompanyExchange);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnShopExchange);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnCollectablesShop);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnFreeShop);
     }
 }

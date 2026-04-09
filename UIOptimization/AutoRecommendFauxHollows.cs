@@ -14,11 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRecommendFauxHollows : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static readonly BoardState Board      = new();
-    private static readonly Solver     FauxSolver = new();
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoRecommendFauxHollowsTitle"),
@@ -28,10 +23,15 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config config = null!;
+
+    private readonly BoardState board      = new();
+    private readonly Solver     fauxSolver = new();
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         Overlay ??= new(this);
 
@@ -49,10 +49,10 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("AutoRecommendFauxHollows-PrioritizeSwords"), ref ModuleConfig.PrioritizeSwords))
+        if (ImGui.Checkbox(Lang.Get("AutoRecommendFauxHollows-PrioritizeSwords"), ref config.PrioritizeSwords))
         {
-            FauxSolver.FindSwordsFirst = ModuleConfig.PrioritizeSwords;
-            ModuleConfig.Save(this);
+            fauxSolver.FindSwordsFirst = config.PrioritizeSwords;
+            config.Save(this);
         }
     }
 
@@ -91,15 +91,15 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
         }
     }
 
-    private static void OnUpdate(IFramework framework)
+    private void OnUpdate(IFramework framework)
     {
         var addon = (AddonWeeklyPuzzle*)WeeklyPuzzle;
         if (addon == null || !WeeklyPuzzle->IsAddonAndNodesReady()) return;
 
         var tileState = ParseTileInformation(addon);
-        Board.Update(tileState);
+        board.Update(tileState);
 
-        var solution  = FauxSolver.Solve(Board);
+        var solution  = fauxSolver.Solve(board);
         var bestScore = solution.Max();
         if (bestScore == 0)
             bestScore = -1;
@@ -183,14 +183,14 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
         }
     }
 
-    private static AtkComponentButton* GetTileButton(AddonWeeklyPuzzle* addon, int x, int y)
-        => addon->GameBoard[y][x].Button;
+    private static AtkComponentButton* GetTileButton(AddonWeeklyPuzzle* addon, int x, int y) => 
+        addon->GameBoard[y][x].Button;
 
-    private static AtkImageNode* GetBackgroundImageNode(AtkComponentButton* button)
-        => (AtkImageNode*)button->AtkComponentBase.UldManager.NodeList[3];
+    private static AtkImageNode* GetBackgroundImageNode(AtkComponentButton* button) => 
+        (AtkImageNode*)button->AtkComponentBase.UldManager.NodeList[3];
 
-    private static AtkImageNode* GetIconImageNode(AtkComponentButton* button)
-        => (AtkImageNode*)button->AtkComponentBase.UldManager.NodeList[6];
+    private static AtkImageNode* GetIconImageNode(AtkComponentButton* button) => 
+        (AtkImageNode*)button->AtkComponentBase.UldManager.NodeList[6];
 
     private enum WeeklyPuzzleTexture
     {
@@ -227,7 +227,7 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
         public bool PrioritizeSwords;
     }
 
-    public struct BitMask
+    private struct BitMask
     (
         ulong raw = 0
     )
@@ -436,8 +436,7 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
             _ => -1
         };
     }
-
-
+    
     private class Solver
     {
         public const int CONFIRMED_SWORD     = -2;
@@ -534,7 +533,7 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
         private bool AllHidden(IEnumerable<int> indices, BoardState board) => indices.All(i => board.Tiles[i] == BoardState.Tile.Hidden);
     }
 
-    public class Patterns
+    private class Patterns
     {
         private static readonly Sheet[] KnownBaseSheets =
         [

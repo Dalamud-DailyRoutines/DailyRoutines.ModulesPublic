@@ -19,19 +19,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class MoreMessageFilterPresets : ModuleBase
 {
-    private static readonly CompSig ApplyMessageFilterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 4C 24 ?? 56 57 41 54 41 56 41 57 48 83 EC ?? 45 33 E4");
-    private static readonly ApplyMessageFilterDelegate ApplyMessageFilter = ApplyMessageFilterSig.GetDelegate<ApplyMessageFilterDelegate>();
-
-    private static readonly        CompSig MessageFilterSizeSig = new("FF C5 81 FD ?? ?? ?? ?? 0F 82 ?? ?? ?? ?? 48 8B 0D");
-    private static readonly unsafe int     MessageFilterSize    = ReadCMPImmediateValue((nint)((byte*)MessageFilterSizeSig.ScanText() + 2));
-
-    private static Config ModuleConfig = null!;
-
-    private static int    SelectedFilter;
-    private static string InputPresetName = string.Empty;
-
-    private static readonly ApplyLogFilterMenuItem MenuItem = new();
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("MoreMessageFilterPresetsTitle"),
@@ -39,10 +26,26 @@ public class MoreMessageFilterPresets : ModuleBase
         Category    = ModuleCategory.UIOptimization,
         Author      = ["Ponta"]
     };
+    
+    private static readonly CompSig ApplyMessageFilterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 4C 24 ?? 56 57 41 54 41 56 41 57 48 83 EC ?? 45 33 E4");
+    private delegate        int     ApplyMessageFilterDelegate(nint filters);
+    private readonly        ApplyMessageFilterDelegate ApplyMessageFilter = ApplyMessageFilterSig.GetDelegate<ApplyMessageFilterDelegate>();
 
+    private static readonly        CompSig MessageFilterSizeSig = new("FF C5 81 FD ?? ?? ?? ?? 0F 82 ?? ?? ?? ?? 48 8B 0D");
+    private static readonly unsafe int     MessageFilterSize    = ReadCMPImmediateValue((nint)((byte*)MessageFilterSizeSig.ScanText() + 2));
+
+    private          Config                 config = null!;
+    private readonly ApplyLogFilterMenuItem menuItem;
+
+    private int    selectedFilter;
+    private string inputPresetName = string.Empty;
+    
+    public MoreMessageFilterPresets() =>
+        menuItem = new(this);
+    
     protected override void Init()
     {
-        ModuleConfig                                 =  Config.Load(this) ?? new();
+        config                                 =  Config.Load(this) ?? new();
         DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpened;
     }
 
@@ -76,33 +79,33 @@ public class MoreMessageFilterPresets : ModuleBase
                 ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("MoreMessageFilterPresets-SourceTab"));
 
                 using (ImRaii.PushIndent())
-                using (var combo = ImRaii.Combo("###AddFilterPresetCombo", logTabName[SelectedFilter], ImGuiComboFlags.HeightLarge))
+                using (var combo = ImRaii.Combo("###AddFilterPresetCombo", logTabName[selectedFilter], ImGuiComboFlags.HeightLarge))
                 {
                     if (combo)
                     {
                         for (var i = 0; i < logTabName.Length; ++i)
-                            if (ImGui.Selectable(logTabName[i], SelectedFilter == i))
-                                SelectedFilter = i;
+                            if (ImGui.Selectable(logTabName[i], selectedFilter == i))
+                                selectedFilter = i;
                     }
                 }
 
                 ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Name"));
 
-                var defaultName = $"{Lang.Get("Preset")} {ModuleConfig.Presets.Count + 1}";
-                var name        = InputPresetName.IsNullOrEmpty() ? defaultName : InputPresetName;
+                var defaultName = $"{Lang.Get("Preset")} {config.Presets.Count + 1}";
+                var name        = inputPresetName.IsNullOrEmpty() ? defaultName : inputPresetName;
 
                 using (ImRaii.PushIndent())
                 {
                     if (ImGui.InputText("###PresetNameInput", ref name, 256))
-                        InputPresetName = name;
+                        inputPresetName = name;
                 }
 
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileArchive, Lang.Get("Save")))
                 {
-                    AddFilterPreset(SelectedFilter, name);
-                    ModuleConfig.Save(this);
+                    AddFilterPreset(selectedFilter, name);
+                    config.Save(this);
 
-                    InputPresetName = string.Empty;
+                    inputPresetName = string.Empty;
                     ImGui.CloseCurrentPopup();
                 }
             }
@@ -114,11 +117,11 @@ public class MoreMessageFilterPresets : ModuleBase
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("MoreMessageFilterPresets-TargetTab"));
 
-        for (var i = 0; i < ModuleConfig.Presets.Count; i++)
+        for (var i = 0; i < config.Presets.Count; i++)
         {
             using var id = ImRaii.PushId($"FilterIndex_{i}");
 
-            var preset = ModuleConfig.Presets[i];
+            var preset = config.Presets[i];
 
             ImGui.TableNextRow();
 
@@ -140,7 +143,7 @@ public class MoreMessageFilterPresets : ModuleBase
 
                     if (ImGui.IsItemDeactivatedAfterEdit())
                     {
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                         ImGui.CloseCurrentPopup();
                     }
                 }
@@ -164,25 +167,25 @@ public class MoreMessageFilterPresets : ModuleBase
             if (ImGui.Button(Lang.Get("Apply")))
             {
                 ApplyFilterPresetAndNotify(preset);
-                ModuleConfig.Save(this);
+                config.Save(this);
             }
 
             ImGui.SameLine();
 
             if (ImGui.Button(Lang.Get("Delete")))
             {
-                ModuleConfig.Presets.RemoveAt(i);
-                ModuleConfig.Save(this);
+                config.Presets.RemoveAt(i);
+                config.Save(this);
 
                 break;
             }
         }
     }
 
-    private static void OnMenuOpened(IMenuOpenedArgs args)
+    private void OnMenuOpened(IMenuOpenedArgs args)
     {
-        if (!MenuItem.IsDisplay(args)) return;
-        args.AddMenuItem(MenuItem.Get());
+        if (!menuItem.IsDisplay(args)) return;
+        args.AddMenuItem(menuItem.Get());
     }
 
     private static unsafe string[] GetLogTabName()
@@ -208,7 +211,7 @@ public class MoreMessageFilterPresets : ModuleBase
         return filters + offset;
     }
 
-    private static unsafe void AddFilterPreset(int index, string name)
+    private unsafe void AddFilterPreset(int index, string name)
     {
         var          filters = LogFilterConfig.Instance();
         var          filter  = GetMessageFilter((nint)filters, index);
@@ -217,10 +220,10 @@ public class MoreMessageFilterPresets : ModuleBase
         fixed (byte* dst = preset.PresetValue)
             Buffer.MemoryCopy((void*)filter, dst, MessageFilterSize, MessageFilterSize);
 
-        ModuleConfig.Presets.Add(preset);
+        config.Presets.Add(preset);
     }
 
-    private static unsafe void ApplyFilterPreset(FilterPreset preset, int index)
+    private unsafe void ApplyFilterPreset(FilterPreset preset, int index)
     {
         var filters = LogFilterConfig.Instance();
         var filter  = GetMessageFilter((nint)filters, index);
@@ -232,14 +235,14 @@ public class MoreMessageFilterPresets : ModuleBase
         ApplyMessageFilter((nint)filters);
     }
 
-    private static void ApplyFilterPresetAndNotify(FilterPreset preset, int index)
+    private void ApplyFilterPresetAndNotify(FilterPreset preset, int index)
     {
         ApplyFilterPreset(preset, index);
         NotifyHelper.Instance().NotificationSuccess(Lang.Get("MoreMessageFilterPresets-Notification-Applied", preset.Name, index + 1));
     }
 
-    private static void ApplyFilterPresetAndNotify(FilterPreset preset)
-        => ApplyFilterPresetAndNotify(preset, preset.SelectedFilter);
+    private void ApplyFilterPresetAndNotify(FilterPreset preset) => 
+        ApplyFilterPresetAndNotify(preset, preset.SelectedFilter);
 
     private static int ReadCMPImmediateValue(nint instructionAddress)
     {
@@ -263,10 +266,8 @@ public class MoreMessageFilterPresets : ModuleBase
                 throw new InvalidOperationException("未知的汇编指令");
         }
     }
-
-    private delegate int ApplyMessageFilterDelegate(nint filters);
-
-    private class ApplyLogFilterMenuItem : MenuItemBase
+    
+    private class ApplyLogFilterMenuItem(MoreMessageFilterPresets module) : MenuItemBase
     {
         public override string Name       { get; protected set; } = Lang.Get("MoreMessageFilterPresetsTitle");
         public override string Identifier { get; protected set; } = nameof(MoreMessageFilterPresets);
@@ -278,12 +279,12 @@ public class MoreMessageFilterPresets : ModuleBase
         {
             if (GetSelectedTabIndex() > 3) return;
 
-            args.OpenSubmenu(Name, ProcessMenuItems());
+            args.OpenSubmenu(Name, ProcessMenuItems(module));
         }
 
         public override unsafe bool IsDisplay(IMenuOpenedArgs args)
         {
-            if (ModuleConfig.Presets.Count == 0) return false;
+            if (module.config.Presets.Count == 0) return false;
             if (args.MenuType              != ContextMenuType.Default) return false;
             if (args.AddonName             != "ChatLog") return false;
 
@@ -307,20 +308,20 @@ public class MoreMessageFilterPresets : ModuleBase
             return selectedTabIndex;
         }
 
-        private static List<MenuItem> ProcessMenuItems()
+        private static List<MenuItem> ProcessMenuItems(MoreMessageFilterPresets module)
         {
             var list = new List<MenuItem>();
 
             var selectedTabIndex = GetSelectedTabIndex();
 
-            foreach (var preset in ModuleConfig.Presets)
+            foreach (var preset in module.config.Presets)
             {
                 list.Add
                 (
                     new()
                     {
                         Name      = preset.Name,
-                        OnClicked = _ => ApplyFilterPresetAndNotify(preset, selectedTabIndex)
+                        OnClicked = _ => module.ApplyFilterPresetAndNotify(preset, selectedTabIndex)
                     }
                 );
             }

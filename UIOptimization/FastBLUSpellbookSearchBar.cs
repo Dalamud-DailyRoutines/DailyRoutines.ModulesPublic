@@ -11,10 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastBLUSpellbookSearchBar : ModuleBase
 {
-    private static string SearchBarInput = string.Empty;
-
-    private static TextInputNode? SearchBarNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FastBLUSpellbookSearchBarTitle"),
@@ -24,6 +20,10 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private TextInputNode? searchBarNode;
+    
+    private string searchBarInput = string.Empty;
+
     protected override void Init()
     {
         TaskHelper ??= new();
@@ -31,21 +31,27 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "AOZNotebook", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "AOZNotebook", OnAddon);
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+    }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                SearchBarNode?.Dispose();
-                SearchBarNode = null;
+                searchBarNode?.Dispose();
+                searchBarNode = null;
                 break;
             case AddonEvent.PostDraw:
                 if (AOZNotebook == null) return;
 
-                if (SearchBarNode == null)
+                if (searchBarNode == null)
                 {
-                    ConductSearch(SearchBarInput);
+                    ConductSearch(searchBarInput);
 
                     var component = AOZNotebook->GetComponentNodeById(123);
                     if (component == null) return;
@@ -58,7 +64,7 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
                     if (windowTitleSub != null)
                         windowTitleSub->ToggleVisibility(false);
 
-                    SearchBarNode = new TextInputNode
+                    searchBarNode = new TextInputNode
                     {
                         IsVisible     = true,
                         Position      = new(40, 35),
@@ -67,22 +73,22 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
                         ShowLimitText = true,
                         OnInputReceived = x =>
                         {
-                            SearchBarInput = x.ToString();
-                            ConductSearch(SearchBarInput);
+                            searchBarInput = x.ToString();
+                            ConductSearch(searchBarInput);
                         },
                         OnInputComplete = x =>
                         {
-                            SearchBarInput = x.ToString();
-                            ConductSearch(SearchBarInput);
+                            searchBarInput = x.ToString();
+                            ConductSearch(searchBarInput);
                         }
                     };
-                    SearchBarNode.CurrentTextNode.FontSize =  14;
-                    SearchBarNode.CurrentTextNode.Position += new Vector2(0, 3);
+                    searchBarNode.CurrentTextNode.FontSize =  14;
+                    searchBarNode.CurrentTextNode.Position += new Vector2(0, 3);
 
-                    SearchBarNode.AttachNode(component);
+                    searchBarNode.AttachNode(component);
                 }
 
-                SearchBarNode.IsVisible = AOZNotebook->AtkValues->Int < 9;
+                searchBarNode.IsVisible = AOZNotebook->AtkValues->Int < 9;
                 break;
         }
     }
@@ -113,11 +119,5 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
                 return true;
             }
         );
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
     }
 }

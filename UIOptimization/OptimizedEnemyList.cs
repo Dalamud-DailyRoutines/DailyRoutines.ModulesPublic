@@ -39,9 +39,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private delegate        void                                   AgentHudUpdateEnemyListDelegate(AgentHUD* agent);
     private static readonly CompSig                                AgentHudUpdateEnemyListSig = new("40 55 57 41 56 48 81 EC ?? ?? ?? ?? 4C 8B F1");
-    // ReSharper disable once InconsistentNaming
+    private delegate        void                                   AgentHudUpdateEnemyListDelegate(AgentHUD* agent);
     private                 Hook<AgentHudUpdateEnemyListDelegate>? AgentHudUpdateEnemyListHook;
     
     private Config             config = null!;

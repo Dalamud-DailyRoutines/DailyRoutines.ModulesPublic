@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -25,25 +26,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class QuickChatPanel : ModuleBase
 {
-    private static readonly Dictionary<MacroDisplayMode, string> MacroDisplayModeLoc = new()
-    {
-        [MacroDisplayMode.List]    = Lang.Get("QuickChatPanel-List"),
-        [MacroDisplayMode.Buttons] = Lang.Get("QuickChatPanel-Buttons")
-    };
-
-    private static readonly char[] SeIconChars = Enum.GetValues<SeIconChar>().Select(x => (char)x).ToArray();
-
-    private static Config ModuleConfig = null!;
-
-    private static LuminaSearcher<Item>? Searcher;
-
-    private static string MessageInput   = string.Empty;
-    private static int    DropMacroIndex = -1;
-
-    private static IconButtonNode? ImageButton;
-
-    private static List<PanelTabBase> PanelTabs = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("QuickChatPanelTitle"),
@@ -51,9 +33,20 @@ public unsafe class QuickChatPanel : ModuleBase
         Category    = ModuleCategory.UIOptimization
     };
 
+    private Config config = null!;
+
+    private LuminaSearcher<Item>? searcher;
+
+    private string messageInput   = string.Empty;
+    private int    dropMacroIndex = -1;
+
+    private IconButtonNode? imageButton;
+
+    private List<PanelTabBase> panelTabs = [];
+
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         TaskHelper ??= new() { TimeoutMS = 5_000 };
 
@@ -62,19 +55,19 @@ public unsafe class QuickChatPanel : ModuleBase
         Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
         Overlay.SizeConstraints = new()
         {
-            MinimumSize = new(1, ModuleConfig.OverlayHeight)
+            MinimumSize = new(1, config.OverlayHeight)
         };
 
-        if (ModuleConfig.SoundEffectNotes.Count <= 0)
+        if (config.SoundEffectNotes.Count <= 0)
         {
             for (var i = 1U; i < 17; i++)
-                ModuleConfig.SoundEffectNotes[i] = $"<se.{i}>";
+                config.SoundEffectNotes[i] = $"<se.{i}>";
         }
 
-        Searcher ??= new(LuminaGetter.Get<Item>(), [x => x.Name.ToString(), x => x.RowId.ToString()]);
+        searcher ??= new(LuminaGetter.Get<Item>(), [x => x.Name.ToString(), x => x.RowId.ToString()]);
 
         // 初始化 Panel Tabs
-        PanelTabs =
+        panelTabs =
         [
             new MessageTab(this),
             new MacroTab(this),
@@ -106,27 +99,27 @@ public unsafe class QuickChatPanel : ModuleBase
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
 
-        using (var combo = ImRaii.Combo("###MessagesCombo", Lang.Get("QuickChatPanel-SavedMessagesAmountText", ModuleConfig.SavedMessages.Count)))
+        using (var combo = ImRaii.Combo("###MessagesCombo", Lang.Get("QuickChatPanel-SavedMessagesAmountText", config.SavedMessages.Count)))
         {
             if (combo)
             {
-                ImGui.InputText("###MessageToSaveInput", ref MessageInput, 1000);
+                ImGui.InputText("###MessageToSaveInput", ref messageInput, 1000);
 
                 ImGui.SameLine();
 
                 if (ImGuiOm.ButtonIcon("###MessagesInputAdd", FontAwesomeIcon.Plus))
                 {
-                    if (!ModuleConfig.SavedMessages.Contains(MessageInput))
+                    if (!config.SavedMessages.Contains(messageInput))
                     {
-                        ModuleConfig.SavedMessages.Add(MessageInput);
-                        ModuleConfig.Save(this);
+                        config.SavedMessages.Add(messageInput);
+                        config.Save(this);
                     }
                 }
 
-                if (ModuleConfig.SavedMessages.Count > 0)
+                if (config.SavedMessages.Count > 0)
                     ImGui.Separator();
 
-                foreach (var message in ModuleConfig.SavedMessages.ToList())
+                foreach (var message in config.SavedMessages.ToList())
                 {
                     ImGuiOm.ButtonSelectable(message);
 
@@ -134,7 +127,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     if (!popup) continue;
 
                     if (ImGuiOm.ButtonSelectable(Lang.Get("Delete")))
-                        ModuleConfig.SavedMessages.Remove(message);
+                        config.SavedMessages.Remove(message);
                 }
             }
         }
@@ -152,7 +145,7 @@ public unsafe class QuickChatPanel : ModuleBase
         using (var combo = ImRaii.Combo
                (
                    "###MacroCombo",
-                   Lang.Get("QuickChatPanel-SavedMacrosAmountText", ModuleConfig.SavedMacros.Count),
+                   Lang.Get("QuickChatPanel-SavedMacrosAmountText", config.SavedMacros.Count),
                    ImGuiComboFlags.HeightLargest
                ))
         {
@@ -180,7 +173,7 @@ public unsafe class QuickChatPanel : ModuleBase
             if (combo)
             {
 
-                foreach (var seNote in ModuleConfig.SoundEffectNotes)
+                foreach (var seNote in config.SoundEffectNotes)
                 {
                     using var id = ImRaii.PushId($"{seNote.Key}");
 
@@ -194,10 +187,10 @@ public unsafe class QuickChatPanel : ModuleBase
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200f * GlobalUIScale);
                     if (ImGui.InputText("###SENoteInput", ref note, 32))
-                        ModuleConfig.SoundEffectNotes[seNote.Key] = note;
+                        config.SoundEffectNotes[seNote.Key] = note;
 
                     if (ImGui.IsItemDeactivatedAfterEdit())
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                 }
             }
         }
@@ -211,9 +204,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat2("###ButtonOffsetInput", ref ModuleConfig.ButtonOffset, format: "%.1f");
+        ImGui.InputFloat2("###ButtonOffsetInput", ref config.ButtonOffset, format: "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         // ButtonIcon 行
         ImGui.TableNextRow();
@@ -224,12 +217,12 @@ public unsafe class QuickChatPanel : ModuleBase
 
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputInt("###ButtonIconInput", ref ModuleConfig.ButtonIcon);
+        ImGui.InputInt("###ButtonIconInput", ref config.ButtonIcon);
 
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
-            ModuleConfig.ButtonIcon = Math.Max(ModuleConfig.ButtonIcon, 1);
-            ModuleConfig.Save(this);
+            config.ButtonIcon = Math.Max(config.ButtonIcon, 1);
+            config.Save(this);
         }
 
         // ButtonBackground 行
@@ -241,8 +234,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        if (ImGui.Checkbox("###ButtonBackgroundVisibleInput", ref ModuleConfig.ButtonBackgroundVisible))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox("###ButtonBackgroundVisibleInput", ref config.ButtonBackgroundVisible))
+            config.Save(this);
 
         // FontScale 行
         ImGui.TableNextRow();
@@ -253,12 +246,12 @@ public unsafe class QuickChatPanel : ModuleBase
 
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat("###FontScaleInput", ref ModuleConfig.FontScale, 0, 0, "%.1f");
+        ImGui.InputFloat("###FontScaleInput", ref config.FontScale, 0, 0, "%.1f");
 
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
-            ModuleConfig.FontScale = (float)Math.Clamp(ModuleConfig.FontScale, 0.1, 10f);
-            ModuleConfig.Save(this);
+            config.FontScale = (float)Math.Clamp(config.FontScale, 0.1, 10f);
+            config.Save(this);
         }
 
         // OverlayHeight 行
@@ -270,16 +263,16 @@ public unsafe class QuickChatPanel : ModuleBase
 
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat("###OverlayHeightInput", ref ModuleConfig.OverlayHeight, 0, 0, "%.1f");
+        ImGui.InputFloat("###OverlayHeightInput", ref config.OverlayHeight, 0, 0, "%.1f");
 
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
-            ModuleConfig.OverlayHeight = Math.Clamp(ModuleConfig.OverlayHeight, 100f, 10000f);
-            ModuleConfig.Save(this);
+            config.OverlayHeight = Math.Clamp(config.OverlayHeight, 100f, 10000f);
+            config.Save(this);
 
             Overlay.SizeConstraints = new()
             {
-                MinimumSize = new(1, ModuleConfig.OverlayHeight)
+                MinimumSize = new(1, config.OverlayHeight)
             };
         }
 
@@ -292,9 +285,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat2("###OverlayPosOffsetInput", ref ModuleConfig.OverlayOffset, format: "%.1f");
+        ImGui.InputFloat2("###OverlayPosOffsetInput", ref config.OverlayOffset, format: "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         // OverlayMacroDisplayMode 行
         ImGui.TableNextRow();
@@ -306,16 +299,16 @@ public unsafe class QuickChatPanel : ModuleBase
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
 
-        using (var combo = ImRaii.Combo("###OverlayMacroDisplayModeCombo", MacroDisplayModeLoc[ModuleConfig.OverlayMacroDisplayMode]))
+        using (var combo = ImRaii.Combo("###OverlayMacroDisplayModeCombo", MacroDisplayModeLoc[config.OverlayMacroDisplayMode]))
         {
             if (combo)
             {
                 foreach (MacroDisplayMode mode in Enum.GetValues(typeof(MacroDisplayMode)))
                 {
-                    if (ImGui.Selectable(MacroDisplayModeLoc[mode], mode == ModuleConfig.OverlayMacroDisplayMode))
+                    if (ImGui.Selectable(MacroDisplayModeLoc[mode], mode == config.OverlayMacroDisplayMode))
                     {
-                        ModuleConfig.OverlayMacroDisplayMode = mode;
-                        ModuleConfig.Save(this);
+                        config.OverlayMacroDisplayMode = mode;
+                        config.Save(this);
                     }
                 }
             }
@@ -357,18 +350,18 @@ public unsafe class QuickChatPanel : ModuleBase
                             icon.Handle,
                             new(24),
                             name,
-                            ModuleConfig.SavedMacros.Contains(currentSavedMacro),
+                            config.SavedMacros.Contains(currentSavedMacro),
                             ImGuiSelectableFlags.DontClosePopups
                         ))
                     {
-                        if (!ModuleConfig.SavedMacros.Remove(currentSavedMacro))
+                        if (!config.SavedMacros.Remove(currentSavedMacro))
                         {
-                            ModuleConfig.SavedMacros.Add(currentSavedMacro);
-                            ModuleConfig.Save(this);
+                            config.SavedMacros.Add(currentSavedMacro);
+                            config.Save(this);
                         }
                     }
 
-                    if (!ModuleConfig.SavedMacros.Contains(currentSavedMacro)) continue;
+                    if (!config.SavedMacros.Contains(currentSavedMacro)) continue;
 
                     using (var context = ImRaii.ContextPopupItem("Context"))
                     {
@@ -377,18 +370,18 @@ public unsafe class QuickChatPanel : ModuleBase
                         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("QuickChatPanel-LastUpdateTime")}:");
 
                         ImGui.SameLine();
-                        ImGui.TextUnformatted($"{ModuleConfig.SavedMacros.Find(x => x.Equals(currentSavedMacro))?.LastUpdateTime}");
+                        ImGui.TextUnformatted($"{config.SavedMacros.Find(x => x.Equals(currentSavedMacro))?.LastUpdateTime}");
 
                         ImGui.Separator();
 
                         if (ImGuiOm.SelectableTextCentered(Lang.Get("Refresh")))
                         {
-                            var currentIndex = ModuleConfig.SavedMacros.IndexOf(currentSavedMacro);
+                            var currentIndex = config.SavedMacros.IndexOf(currentSavedMacro);
 
                             if (currentIndex != -1)
                             {
-                                ModuleConfig.SavedMacros[currentIndex] = currentSavedMacro;
-                                ModuleConfig.Save(this);
+                                config.SavedMacros[currentIndex] = currentSavedMacro;
+                                config.Save(this);
                             }
                         }
                     }
@@ -414,14 +407,14 @@ public unsafe class QuickChatPanel : ModuleBase
             return;
         }
 
-        using var font = FontManager.Instance().GetUIFont(ModuleConfig.FontScale).Push();
+        using var font = FontManager.Instance().GetUIFont(config.FontScale).Push();
 
         var itemSpacing = ImGui.GetStyle().ItemSpacing;
 
         var textInputNode = ChatLog->GetNodeById(5);
         var windowNode    = ChatLog->RootNode;
-        var buttonPos     = new Vector2(windowNode->ScreenX + windowNode->Width, textInputNode->ScreenY)    + ModuleConfig.ButtonOffset;
-        ImGui.SetWindowPos(buttonPos with { Y = buttonPos.Y - ImGui.GetWindowSize().Y - 3 * itemSpacing.Y } + ModuleConfig.OverlayOffset);
+        var buttonPos     = new Vector2(windowNode->ScreenX + windowNode->Width, textInputNode->ScreenY)    + config.ButtonOffset;
+        ImGui.SetWindowPos(buttonPos with { Y = buttonPos.Y - ImGui.GetWindowSize().Y - 3 * itemSpacing.Y } + config.OverlayOffset);
 
         var isOpen = true;
         ImGui.SetNextWindowPos(new(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y + ImGui.GetWindowHeight() - itemSpacing.Y));
@@ -465,13 +458,13 @@ public unsafe class QuickChatPanel : ModuleBase
         ImGui.Separator();
     }
 
-    private static void DrawOverlayContent()
+    private void DrawOverlayContent()
     {
         using var tabBar = ImRaii.TabBar("###QuickChatPanel", ImGuiTabBarFlags.Reorderable);
         if (!tabBar) return;
 
         // 使用 PanelTabs 列表绘制所有 Tab
-        foreach (var panelTab in PanelTabs)
+        foreach (var panelTab in panelTabs)
         {
             using var item = ImRaii.TabItem(panelTab.TabName);
             if (item)
@@ -508,60 +501,60 @@ public unsafe class QuickChatPanel : ModuleBase
                 textInputDisplayNode->SetWidth((ushort)(windowNode->Width - textInputNode->Height - 40));
                 textInputNode->SetWidth((ushort)(windowNode->Width        - textInputNode->Height - 40));
 
-                if (ImageButton == null)
+                if (imageButton == null)
                 {
-                    ImageButton = new()
+                    imageButton = new()
                     {
                         Size        = new(textInputNode->Height),
                         IsVisible   = true,
                         IsEnabled   = true,
-                        IconId      = (uint)ModuleConfig.ButtonIcon,
+                        IconId      = (uint)config.ButtonIcon,
                         OnClick     = () => { Overlay.Toggle(); },
                         TextTooltip = Info.Title,
                         Position = new Vector2(textInputNode->Width - textInputNode->Height, 0) +
-                                   ModuleConfig.ButtonOffset
+                                   config.ButtonOffset
                     };
 
-                    ImageButton?.AttachNode(textInputNode);
+                    imageButton?.AttachNode(textInputNode);
                 }
 
                 if (Throttler.Shared.Throttle("QuickChatPanel-UpdateButtonNodes"))
                 {
-                    ImageButton.IconId   = (uint)ModuleConfig.ButtonIcon;
-                    ImageButton.Position = new Vector2(windowNode->Width - 2 * textInputNode->Height, 0) + ModuleConfig.ButtonOffset;
-                    ImageButton.Size     = new(textInputNode->Height);
+                    imageButton.IconId   = (uint)config.ButtonIcon;
+                    imageButton.Position = new Vector2(windowNode->Width - 2 * textInputNode->Height, 0) + config.ButtonOffset;
+                    imageButton.Size     = new(textInputNode->Height);
 
-                    ImageButton.BackgroundNode.IsVisible = ModuleConfig.ButtonBackgroundVisible;
+                    imageButton.BackgroundNode.IsVisible = config.ButtonBackgroundVisible;
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                ImageButton?.Dispose();
-                ImageButton = null;
+                imageButton?.Dispose();
+                imageButton = null;
                 break;
         }
     }
 
     public void SwapMacros(int index1, int index2)
     {
-        (ModuleConfig.SavedMacros[index1], ModuleConfig.SavedMacros[index2]) =
-            (ModuleConfig.SavedMacros[index2], ModuleConfig.SavedMacros[index1]);
+        (config.SavedMacros[index1], config.SavedMacros[index2]) =
+            (config.SavedMacros[index2], config.SavedMacros[index1]);
 
         TaskHelper.Abort();
 
         TaskHelper.DelayNext(500);
-        TaskHelper.Enqueue(() => { ModuleConfig.Save(this); });
+        TaskHelper.Enqueue(() => { config.Save(this); });
     }
 
     public void SwapMessages(int index1, int index2)
     {
-        (ModuleConfig.SavedMessages[index1], ModuleConfig.SavedMessages[index2]) =
-            (ModuleConfig.SavedMessages[index2], ModuleConfig.SavedMessages[index1]);
+        (config.SavedMessages[index1], config.SavedMessages[index2]) =
+            (config.SavedMessages[index2], config.SavedMessages[index1]);
 
         TaskHelper.Abort();
 
         TaskHelper.DelayNext(500);
-        TaskHelper.Enqueue(() => { ModuleConfig.Save(this); });
+        TaskHelper.Enqueue(() => { config.Save(this); });
     }
 
     protected override void Uninit()
@@ -590,7 +583,7 @@ public unsafe class QuickChatPanel : ModuleBase
             textInputNode->SetWidth(width);
         }
 
-        Searcher = null;
+        searcher = null;
     }
 
     public class SavedMacro : IEquatable<SavedMacro>
@@ -656,9 +649,9 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 if (!child) return;
 
-                for (var i = 0; i < ModuleConfig.SavedMessages.Count; i++)
+                for (var i = 0; i < Instance.config.SavedMessages.Count; i++)
                 {
-                    var message = ModuleConfig.SavedMessages[i];
+                    var message = Instance.config.SavedMessages[i];
 
                     var textWidth = ImGui.CalcTextSize(message).X;
                     maxTextWidth = Math.Max(textWidth + 64,       maxTextWidth);
@@ -671,18 +664,18 @@ public unsafe class QuickChatPanel : ModuleBase
                         if (ImGui.BeginDragDropSource())
                         {
                             if (ImGui.SetDragDropPayload("MessageReorder", []))
-                                DropMacroIndex = i;
+                                Instance.dropMacroIndex = i;
                             ImGui.TextColored(ImGuiColors.DalamudYellow, message);
                             ImGui.EndDragDropSource();
                         }
 
                         if (ImGui.BeginDragDropTarget())
                         {
-                            if (DropMacroIndex                                       >= 0 ||
+                            if (Instance.dropMacroIndex                                       >= 0 ||
                                 ImGui.AcceptDragDropPayload("MessageReorder").Handle != null)
                             {
-                                Instance.SwapMessages(DropMacroIndex, i);
-                                DropMacroIndex = -1;
+                                Instance.SwapMessages(Instance.dropMacroIndex, i);
+                                Instance.dropMacroIndex = -1;
                             }
 
                             ImGui.EndDragDropTarget();
@@ -697,7 +690,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
                     ImGuiOm.TooltipHover(Lang.Get("QuickChatPanel-SendMessageHelp"));
 
-                    if (i != ModuleConfig.SavedMessages.Count - 1)
+                    if (i != Instance.config.SavedMessages.Count - 1)
                         ImGui.Separator();
                 }
             }
@@ -726,15 +719,15 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 using (ImRaii.Group())
                 {
-                    for (var i = 0; i < ModuleConfig.SavedMacros.Count; i++)
+                    for (var i = 0; i < Instance.config.SavedMacros.Count; i++)
                     {
-                        var macro = ModuleConfig.SavedMacros[i];
+                        var macro = Instance.config.SavedMacros[i];
 
                         var name = macro.Name;
                         var icon = ImageHelper.GetGameIcon(macro.IconID);
                         if (string.IsNullOrEmpty(name) || icon == null) continue;
 
-                        switch (ModuleConfig.OverlayMacroDisplayMode)
+                        switch (Instance.config.OverlayMacroDisplayMode)
                         {
                             case MacroDisplayMode.List:
                                 if (ImGuiOm.SelectableImageWithText(icon.Handle, new(24), name, false))
@@ -766,35 +759,35 @@ public unsafe class QuickChatPanel : ModuleBase
                             if (ImGui.BeginDragDropSource())
                             {
                                 if (ImGui.SetDragDropPayload("MacroReorder", []))
-                                    DropMacroIndex = i;
+                                    Instance.dropMacroIndex = i;
                                 ImGui.TextColored(ImGuiColors.DalamudYellow, name);
                                 ImGui.EndDragDropSource();
                             }
 
                             if (ImGui.BeginDragDropTarget())
                             {
-                                if (DropMacroIndex                                     >= 0 ||
+                                if (Instance.dropMacroIndex                                     >= 0 ||
                                     ImGui.AcceptDragDropPayload("MacroReorder").Handle != null)
                                 {
-                                    Instance.SwapMacros(DropMacroIndex, i);
-                                    DropMacroIndex = -1;
+                                    Instance.SwapMacros(Instance.dropMacroIndex, i);
+                                    Instance.dropMacroIndex = -1;
                                 }
 
                                 ImGui.EndDragDropTarget();
                             }
                         }
 
-                        switch (ModuleConfig.OverlayMacroDisplayMode)
+                        switch (Instance.config.OverlayMacroDisplayMode)
                         {
                             case MacroDisplayMode.List:
-                                if (i != ModuleConfig.SavedMacros.Count - 1)
+                                if (i != Instance.config.SavedMacros.Count - 1)
                                     ImGui.Separator();
 
                                 break;
                             case MacroDisplayMode.Buttons:
                                 ImGui.SameLine();
                                 if ((i + 1) % 5 == 0)
-                                    ImGui.Dummy(new(20 * ModuleConfig.FontScale));
+                                    ImGui.Dummy(new(20 * Instance.config.FontScale));
                                 break;
                         }
                     }
@@ -825,7 +818,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 using (ImRaii.Group())
                 {
-                    foreach (var seNote in ModuleConfig.SoundEffectNotes)
+                    foreach (var seNote in Instance.config.SoundEffectNotes)
                     {
                         ImGuiOm.ButtonSelectable($"{seNote.Value}###PlaySound{seNote.Key}");
 
@@ -860,9 +853,9 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             ImGui.SetNextItemWidth(-1f);
             if (ImGui.InputTextWithHint("###GameItemSearchInput", Lang.Get("PleaseSearch"), ref ItemSearchInput, 128))
-                Searcher.Search(ItemSearchInput);
+                Instance.searcher.Search(ItemSearchInput);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                Searcher.Search(ItemSearchInput);
+                Instance.searcher.Search(ItemSearchInput);
 
             var maxTextWidth = 300f * GlobalUIScale;
 
@@ -877,7 +870,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     var longestText          = string.Empty;
                     var isConflictKeyHolding = PluginConfig.Instance().ConflictKeyBinding.IsPressed();
 
-                    foreach (var data in Searcher.SearchResult)
+                    foreach (var data in Instance.searcher.SearchResult)
                     {
                         if (!LuminaGetter.TryGetRow(data.RowId, out Item itemData)) continue;
                         if (!DService.Instance().Texture.TryGetFromGameIcon(new(itemData.Icon, isConflictKeyHolding), out var texture)) continue;
@@ -917,26 +910,28 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 using (ImRaii.Group())
                 {
-                    for (var i = 0; i < SeIconChars.Length; i++)
-                    {
-                        var icon = SeIconChars[i];
+                    var counter = -1;
 
-                        if (ImGui.Button($"{icon}", new(96 * ModuleConfig.FontScale)))
+                    foreach (var icon in SeIconChars)
+                    {
+                        counter++;
+                        
+                        if (ImGui.Button($"{icon}", new(96 * Instance.config.FontScale)))
                             ImGui.SetClipboardText(icon.ToString());
 
                         ImGuiOm.TooltipHover($"0x{(int)icon:X4}");
 
                         ImGui.SameLine();
-                        if ((i + 1) % 7 == 0)
-                            ImGui.Dummy(new(20 * ModuleConfig.FontScale));
+                        if ((counter + 1) % 7 == 0)
+                            ImGui.Dummy(new(20 * Instance.config.FontScale));
                     }
                 }
 
                 maxTextWidth = ImGui.GetItemRectSize().X;
-                maxTextWidth = Math.Max(300f * GlobalUIScale, maxTextWidth);
+                maxTextWidth = MathF.Max(300f * GlobalUIScale, maxTextWidth);
             }
 
-            SetWindowSize(Math.Max(350f * GlobalUIScale, maxTextWidth));
+            SetWindowSize(MathF.Max(350f * GlobalUIScale, maxTextWidth));
         }
     }
 
@@ -954,12 +949,24 @@ public unsafe class QuickChatPanel : ModuleBase
 
         public abstract void DrawTabContent();
 
-        protected static void SetWindowSize(float maxTextWidth) =>
-            ImGui.SetWindowSize(new(Math.Max(350f * GlobalUIScale, maxTextWidth), ModuleConfig.OverlayHeight * GlobalUIScale));
+        protected void SetWindowSize(float maxTextWidth) =>
+            ImGui.SetWindowSize(new(Math.Max(350f * GlobalUIScale, maxTextWidth), Instance.config.OverlayHeight * GlobalUIScale));
     }
+    
+    #region 常量
+
+    private static readonly FrozenDictionary<MacroDisplayMode, string> MacroDisplayModeLoc = new Dictionary<MacroDisplayMode, string>
+    {
+        [MacroDisplayMode.List]    = Lang.Get("QuickChatPanel-List"),
+        [MacroDisplayMode.Buttons] = Lang.Get("QuickChatPanel-Buttons")
+    }.ToFrozenDictionary();
+
+    private static readonly FrozenSet<char> SeIconChars = Enum.GetValues<SeIconChar>().Select(x => (char)x).ToFrozenSet();
+
+    #endregion
 }
 
-public static class QuickChatPanelExtensions
+static file class QuickChatPanelExtensions
 {
     public static QuickChatPanel.SavedMacro ToSavedMacro(this RaptureMacroModule.Macro macro)
     {

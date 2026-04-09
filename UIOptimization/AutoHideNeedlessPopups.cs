@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -9,17 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoHideNeedlessPopups : ModuleBase
 {
-    private static readonly HashSet<string> AddonNames =
-    [
-        "_NotificationCircleBook",
-        "AchievementInfo",
-        "RecommendList",
-        "PlayGuide",
-        "HowTo",
-        "WebLauncher",
-        "LicenseViewer"
-    ];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoHideNeedlessPopupsTitle"),
@@ -42,4 +32,19 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
         addon->Close(false);
         addon->FireCloseCallback();
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> AddonNames =
+    [
+        "_NotificationCircleBook",
+        "AchievementInfo",
+        "RecommendList",
+        "PlayGuide",
+        "HowTo",
+        "WebLauncher",
+        "LicenseViewer"
+    ];
+
+    #endregion
 }

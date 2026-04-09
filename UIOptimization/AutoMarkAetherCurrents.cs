@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Interface.Windows;
 using DailyRoutines.Common.Module.Abstractions;
@@ -27,24 +28,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMarkAetherCurrents : ModuleBase
 {
-    public enum PointType
-    {
-        Normal,
-        Quest
-    }
-
-    private static TaskHelper? TaskHelperMove;
-
-    private static readonly List<AetherCurrentPoint> SelectedAetherCurrents = [];
-
-    private static readonly Vector2 ChildSize = ScaledVector2(450f, 150);
-    private static          bool    IsWindowUnlock;
-
-    private static readonly Dictionary<uint, List<ZoneAetherCurrentInfo>> VersionToZoneInfos = [];
-
-    private static bool UseLocalMark = true;
-    private static bool ManualMode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoMarkAetherCurrentsTitle"),
@@ -53,46 +36,25 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
-
+    
     private static bool IsEligibleForTeleporting =>
         !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium;
+    
+    private static Vector2 ChildSize => ScaledVector2(450f, 150);
+    
+    private readonly List<AetherCurrentPoint> selectedAetherCurrents = [];
+    
+    private bool isWindowUnlock;
+    private bool useLocalMark = true;
+    private bool manualMode;
 
     protected override void Init()
     {
-        var acSet = LuminaGetter.Get<AetherCurrentCompFlgSet>()
-                                .Where(x => x.Territory.ValueNullable != null && x.Territory.RowId != 156)
-                                .ToDictionary(x => x.Territory.RowId, x => x.AetherCurrents.ToArray());
-
-        var counter     = 0U;
-        var lastVersion = 0U;
-
-        foreach (var (zone, acArray) in acSet)
-        {
-            if (!LuminaGetter.TryGetRow<TerritoryType>(zone, out var zoneRow)) continue;
-
-            var version = zoneRow.ExVersion.RowId;
-            if (version == 0) continue;
-
-            if (lastVersion != version)
-            {
-                counter     = 0;
-                lastVersion = version;
-            }
-
-            var prasedResult = ZoneAetherCurrentInfo.Parse(zone, counter, acArray);
-            if (prasedResult == null) continue;
-
-            VersionToZoneInfos.TryAdd(version - 1, []);
-            VersionToZoneInfos[version - 1].Add(prasedResult);
-
-            counter++;
-        }
-
         AetherCurrentPoint.RefreshUnlockStates();
 
-        TaskHelperMove ??= new() { TimeoutMS = 30000 };
+        TaskHelper ??= new() { TimeoutMS = 30_000 };
 
-        Overlay       ??= new Overlay(this);
+        Overlay       ??= new(this);
         Overlay.Flags &=  ~ImGuiWindowFlags.NoTitleBar;
         Overlay.Flags |= ImGuiWindowFlags.NoResize          |
                          ImGuiWindowFlags.NoScrollbar       |
@@ -105,12 +67,34 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "AetherCurrent", OnAddon);
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+    }
+    
+    #region 事件
+
+    private void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        var addon = (AtkUnitBase*)args.Addon.Address;
+        if (addon == null) return;
+
+        addon->Close(true);
+        Overlay.IsOpen ^= true;
+    }
+
+    private void OnZoneChanged(ushort zoneID) =>
+        MarkAetherCurrents(zoneID, true, useLocalMark);
+
+    #endregion
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("BetterFateProgressUI-UnlockWindow"), ref IsWindowUnlock))
+        if (ImGui.Checkbox(Lang.Get("BetterFateProgressUI-UnlockWindow"), ref isWindowUnlock))
         {
-            if (IsWindowUnlock)
+            if (isWindowUnlock)
             {
                 Overlay.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
                 Overlay.Flags &= ~ImGuiWindowFlags.NoResize;
@@ -139,7 +123,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         DrawAetherCurrentsTabs();
     }
 
-    private static void DrawMenuBar()
+    private void DrawMenuBar()
     {
         using var fontPush = FontManager.Instance().UIFont.Push();
 
@@ -147,12 +131,12 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         {
             if (ImGui.BeginMenu(Lang.Get("General")))
             {
-                if (ImGui.MenuItem(Lang.Get("ManualMode"), string.Empty, ref ManualMode))
-                    MarkAetherCurrents(GameState.TerritoryType, true, UseLocalMark);
+                if (ImGui.MenuItem(Lang.Get("ManualMode"), string.Empty, ref manualMode))
+                    MarkAetherCurrents(GameState.TerritoryType, true, useLocalMark);
                 ImGuiOm.TooltipHover(Lang.Get("AutoMarkAetherCurrents-ManualModeHelp"));
 
-                if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-UseLocalMark"), string.Empty, ref UseLocalMark))
-                    MarkAetherCurrents(GameState.TerritoryType, true, UseLocalMark);
+                if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-UseLocalMark"), string.Empty, ref useLocalMark))
+                    MarkAetherCurrents(GameState.TerritoryType, true, useLocalMark);
                 ImGuiOm.TooltipHover(Lang.Get("AutoMarkAetherCurrents-UseLocalMarkHelp"));
 
                 ImGui.EndMenu();
@@ -163,10 +147,10 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
             if (ImGui.BeginMenu(LuminaWrapper.GetAddonText(7131)))
             {
                 if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-RefreshDisplay")))
-                    MarkAetherCurrents(GameState.TerritoryType, true, UseLocalMark);
+                    MarkAetherCurrents(GameState.TerritoryType, true, useLocalMark);
 
                 if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-DisplayLeftCurrents")))
-                    MarkAetherCurrents(GameState.TerritoryType, false, UseLocalMark);
+                    MarkAetherCurrents(GameState.TerritoryType, false, useLocalMark);
 
                 if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-RemoveAllWaymarks")))
                 {
@@ -179,22 +163,22 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
 
             ImGui.TextDisabled("|");
 
-            if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-RemoveSelectedAC"), ManualMode && SelectedAetherCurrents.Count > 0))
-                SelectedAetherCurrents.Clear();
+            if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-RemoveSelectedAC"), manualMode && selectedAetherCurrents.Count > 0))
+                selectedAetherCurrents.Clear();
 
             ImGui.TextDisabled("|");
 
             if (ImGui.MenuItem(Lang.Get("AutoMarkAetherCurrents-DisplayNotActivated")))
             {
                 SelectNotActivatedAetherCurrents();
-                MarkAetherCurrents(GameState.TerritoryType, true, UseLocalMark);
+                MarkAetherCurrents(GameState.TerritoryType, true, useLocalMark);
             }
 
             ImGui.EndMenuBar();
         }
     }
 
-    private static void DrawAetherCurrentsTabs()
+    private void DrawAetherCurrentsTabs()
     {
         using var group = ImRaii.Group();
         using var bar   = ImRaii.TabBar("AetherCurrentsTab");
@@ -204,7 +188,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
             DrawAetherCurrentInfoTabItem(version);
     }
 
-    private static void DrawAetherCurrentInfoTabItem(uint version)
+    private void DrawAetherCurrentInfoTabItem(uint version)
     {
         if (!VersionToZoneInfos.TryGetValue(version, out var zoneInfos)) return;
 
@@ -215,7 +199,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
 
         foreach (var zoneInfo in zoneInfos)
         {
-            zoneInfo.Draw();
+            zoneInfo.Draw(this);
 
             if (counter % 2 == 0)
                 ImGui.SameLine();
@@ -224,7 +208,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         }
     }
 
-    private static void MarkAetherCurrents(uint zoneID, bool isFirstPage = true, bool isLocal = true)
+    private void MarkAetherCurrents(uint zoneID, bool isFirstPage = true, bool isLocal = true)
     {
         if (!LuminaGetter.TryGetRow<TerritoryType>(zoneID, out var zoneRow)) return;
         if (!VersionToZoneInfos.TryGetValue(zoneRow.ExVersion.RowId - 1, out var zoneInfos)) return;
@@ -233,8 +217,8 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         foreach (var point in Enum.GetValues<FieldMarkerPoint>())
             MarkingController.Instance()->ClearFieldMarkerLocal(point);
 
-        var thisZoneSelected = SelectedAetherCurrents.Where(x => x.Zone == zoneID).ToList();
-        var finalSet         = thisZoneSelected.Count != 0 || ManualMode ? thisZoneSelected : [..zoneInfo.NormalPoints];
+        var thisZoneSelected = selectedAetherCurrents.Where(x => x.Zone == zoneID).ToList();
+        var finalSet         = thisZoneSelected.Count != 0 || manualMode ? thisZoneSelected : [..zoneInfo.NormalPoints];
 
         var result = finalSet.Skip(finalSet.Count > 8 && !isFirstPage ? 8 : 0).ToList();
 
@@ -245,10 +229,10 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         }
     }
 
-    private static void SelectNotActivatedAetherCurrents()
+    private void SelectNotActivatedAetherCurrents()
     {
-        ManualMode = true;
-        SelectedAetherCurrents.Clear();
+        manualMode = true;
+        selectedAetherCurrents.Clear();
 
         foreach (var zoneInfos in VersionToZoneInfos.Values)
         {
@@ -257,26 +241,15 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
                 foreach (var acPoint in zoneInfo.NormalPoints.Concat(zoneInfo.QuestPoints))
                 {
                     if (AetherCurrentPoint.UnlockStates.TryGetValue(acPoint.DataID, out var state) && !state)
-                        SelectedAetherCurrents.Add(acPoint);
+                        selectedAetherCurrents.Add(acPoint);
                 }
             }
         }
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-        TaskHelperMove?.Abort();
-        TaskHelperMove = null;
-    }
-
+    
     private class ZoneAetherCurrentInfo
     {
         private const string BACKGROUND_ULD_PATH = "ui/uld/FlyingPermission.uld";
-
-        private IDalamudTextureWrap? backgroundTexture;
 
         private ZoneAetherCurrentInfo(uint version, uint counter, uint zoneID)
         {
@@ -293,13 +266,13 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         {
             get
             {
-                if (backgroundTexture != null)
-                    return backgroundTexture;
+                if (field != null)
+                    return field;
 
                 // 3.0 特例
                 var texturePath = $"ui/uld/FlyingPermission{(Version == 0 ? string.Empty : Version + 1)}_hr1.tex";
-                backgroundTexture = DService.Instance().PI.UiBuilder.LoadUld(BACKGROUND_ULD_PATH).LoadTexturePart(texturePath, Counter);
-                return backgroundTexture;
+                field = DService.Instance().PI.UiBuilder.LoadUld(BACKGROUND_ULD_PATH).LoadTexturePart(texturePath, Counter);
+                return field;
             }
         }
 
@@ -336,7 +309,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
             return newInfo;
         }
 
-        public void Draw()
+        public void Draw(AutoMarkAetherCurrents module)
         {
             using (var child = ImRaii.Child
                    (
@@ -352,14 +325,14 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
 
                     DrawZoneName(LuminaWrapper.GetZonePlaceName(Zone));
 
-                    DrawAetherCurrentProgress();
+                    DrawAetherCurrentProgress(module);
                 }
             }
 
             HandleInteraction(Zone);
         }
 
-        private void DrawAetherCurrentProgress()
+        private void DrawAetherCurrentProgress(AutoMarkAetherCurrents module)
         {
             using var fontPush = FontManager.Instance().UIFont80.Push();
 
@@ -375,7 +348,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
                         ImGui.AlignTextToFramePadding();
                         ImGui.TextUnformatted("Q  ");
 
-                        QuestPoints.ForEach(x => x.Draw());
+                        QuestPoints.ForEach(x => x.Draw(module));
                     }
                 }
 
@@ -386,7 +359,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
                         ImGui.AlignTextToFramePadding();
                         ImGui.TextUnformatted("N  ");
 
-                        NormalPoints.ForEach(x => x.Draw());
+                        NormalPoints.ForEach(x => x.Draw(module));
                     }
                 }
             }
@@ -437,6 +410,8 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
 
     private sealed class AetherCurrentPoint : IEquatable<AetherCurrentPoint>
     {
+        public static Dictionary<uint, bool> UnlockStates { get; private set; } = [];
+        
         private AetherCurrentPoint(PointType type, uint zone, uint dataID, uint objectID, Vector3 position)
         {
             Type     = type;
@@ -455,27 +430,12 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
                            : LuminaGetter.GetRow<Quest>(ObjectID)?.IssuerLocation.ValueNullable?.Map.Value)
                 .GetValueOrDefault();
         }
-
-        public static Dictionary<uint, uint> EObjDataSheet { get; } =
-            LuminaGetter.Get<EObj>()
-                        .Where(x => x.Data.RowId != 0)
-                        .DistinctBy(x => x.Data.RowId)
-                        .ToDictionary(x => x.Data.RowId, x => x.RowId);
-
-        public static Dictionary<uint, Vector3> LevelSheet { get; } =
-            LuminaGetter.Get<Level>()
-                        .Where(x => x.Object.Is<EObj>())
-                        .DistinctBy(x => x.Object.RowId)
-                        .ToDictionary(x => x.Object.RowId, x => x.GetPosition());
-
-        public static Dictionary<uint, bool> UnlockStates { get; private set; } = [];
-
+        
         public PointType Type     { get; init; }
         public uint      Zone     { get; init; }
         public uint      DataID   { get; init; }
         public uint      ObjectID { get; init; } // EObj ID 或 Quest ID
         public Vector3   Position { get; init; }
-
 
         public TerritoryType RealTerritory { get; init; }
         public Map           RealMap       { get; init; }
@@ -520,25 +480,25 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
                 UnlockStates[ac] = PlayerState.Instance()->IsAetherCurrentUnlocked(ac);
         }
 
-        public void Draw()
+        public void Draw(AutoMarkAetherCurrents module)
         {
             if (!UnlockStates.TryGetValue(DataID, out var state)) return;
             using var id = ImRaii.PushId($"{DataID}");
 
             ImGui.SameLine();
 
-            if (!ManualMode)
+            if (!module.manualMode)
                 ImGui.Checkbox($"###{DataID}", ref state);
             else
             {
-                state = SelectedAetherCurrents.Contains(this);
+                state = module.selectedAetherCurrents.Contains(this);
 
                 if (ImGui.Checkbox($"###{DataID}", ref state))
                 {
-                    if (SelectedAetherCurrents.Contains(this))
-                        SelectedAetherCurrents.Remove(this);
+                    if (module.selectedAetherCurrents.Contains(this))
+                        module.selectedAetherCurrents.Remove(this);
                     else
-                        SelectedAetherCurrents.Add(this);
+                        module.selectedAetherCurrents.Add(this);
                 }
             }
 
@@ -571,7 +531,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
             using (ImRaii.Disabled(!DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME)))
             {
                 if (ImGui.MenuItem($"    {Lang.Get("AutoMarkAetherCurrents-MoveTo")} (vnavmesh)"))
-                    MoveTo(TaskHelperMove);
+                    MoveTo(module.TaskHelper);
             }
 
             ImGui.Separator();
@@ -646,8 +606,8 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
                 {
                     if (!DService.Instance().Condition.IsOnMount)
                     {
-                        TaskHelperMove.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9), weight: 1);
-                        TaskHelperMove.Enqueue(() => DService.Instance().Condition.IsOnMount,                            weight: 1);
+                        taskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9), weight: 1);
+                        taskHelper.Enqueue(() => DService.Instance().Condition.IsOnMount,                            weight: 1);
                     }
                 }
             );
@@ -665,21 +625,68 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
 
         public static bool operator !=(AetherCurrentPoint? left, AetherCurrentPoint? right) =>
             !Equals(left, right);
+        
+        private static Dictionary<uint, uint> EObjDataSheet { get; } =
+            LuminaGetter.Get<EObj>()
+                        .Where(x => x.Data.RowId != 0)
+                        .DistinctBy(x => x.Data.RowId)
+                        .ToDictionary(x => x.Data.RowId, x => x.RowId);
+
+        private static Dictionary<uint, Vector3> LevelSheet { get; } =
+            LuminaGetter.Get<Level>()
+                        .Where(x => x.Object.Is<EObj>())
+                        .DistinctBy(x => x.Object.RowId)
+                        .ToDictionary(x => x.Object.RowId, x => x.GetPosition());
     }
-
-    #region 事件
-
-    private void OnAddon(AddonEvent type, AddonArgs args)
+    
+    private enum PointType
     {
-        var addon = (AtkUnitBase*)args.Addon.Address;
-        if (addon == null) return;
-
-        addon->Close(true);
-        Overlay.IsOpen ^= true;
+        Normal,
+        Quest
     }
 
-    private static void OnZoneChanged(ushort zoneID) =>
-        MarkAetherCurrents(zoneID, true, UseLocalMark);
+    #region 常量
+
+    private static FrozenDictionary<uint, List<ZoneAetherCurrentInfo>> VersionToZoneInfos
+    {
+        get
+        {
+            if (field != null) return field;
+
+            var dict = new Dictionary<uint, List<ZoneAetherCurrentInfo>>();
+            
+            var acSet = LuminaGetter.Get<AetherCurrentCompFlgSet>()
+                                    .Where(x => x.Territory.ValueNullable != null && x.Territory.RowId != 156)
+                                    .ToDictionary(x => x.Territory.RowId, x => x.AetherCurrents.ToArray());
+
+            var counter     = 0U;
+            var lastVersion = 0U;
+
+            foreach (var (zone, acArray) in acSet)
+            {
+                if (!LuminaGetter.TryGetRow<TerritoryType>(zone, out var zoneRow)) continue;
+
+                var version = zoneRow.ExVersion.RowId;
+                if (version == 0) continue;
+
+                if (lastVersion != version)
+                {
+                    counter     = 0;
+                    lastVersion = version;
+                }
+
+                var prasedResult = ZoneAetherCurrentInfo.Parse(zone, counter, acArray);
+                if (prasedResult == null) continue;
+
+                dict.TryAdd(version - 1, []);
+                dict[version - 1].Add(prasedResult);
+
+                counter++;
+            }
+
+            return field = dict.ToFrozenDictionary();
+        }
+    }
 
     #endregion
 }

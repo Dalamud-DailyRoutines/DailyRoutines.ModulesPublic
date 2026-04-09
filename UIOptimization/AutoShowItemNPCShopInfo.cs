@@ -22,20 +22,20 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoShowItemNPCShopInfo : ModuleBase
 {
-    private static ShopInfoContextMenu ContextMenu = new();
-
-    private static readonly Dictionary<uint, TooltipModification> ItemModifications = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoShowItemNPCShopInfoTitle"),
         Description         = Lang.Get("AutoShowItemNPCShopInfoDescription"),
         Category            = ModuleCategory.UIOptimization,
         ModulesPrerequisite = ["BetterMarketBoard", "BetterTeleport"],
-        PreviewImageURL     = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoShowItemNPCShopInfo-UI.png"]
+        PreviewImageURL     = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoShowItemNPCShopInfo-UI.png"] // TODO: 替换仓库
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private readonly ShopInfoContextMenu contextMenu = new();
+
+    private readonly Dictionary<uint, TooltipModification> itemModifications = [];
 
     protected override void Init()
     {
@@ -49,25 +49,25 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
 
         GameTooltipManager.Instance().Unreg(generateItemModifiers: OnItemTooltipGenerate);
 
-        foreach (var tooltipModification in ItemModifications.Values)
+        foreach (var tooltipModification in itemModifications.Values)
             GameTooltipManager.Instance().RemoveItemDetail(tooltipModification);
-        ItemModifications.Clear();
+        itemModifications.Clear();
 
         AddonShopsPreview.Addon?.Dispose();
         AddonShopsPreview.Addon = null;
     }
 
-    private static void OnMenuOpen(IMenuOpenedArgs args)
+    private void OnMenuOpen(IMenuOpenedArgs args)
     {
-        if (!ContextMenu.IsDisplay(args)) return;
-        args.AddMenuItem(ContextMenu.Get());
+        if (!contextMenu.IsDisplay(args)) return;
+        args.AddMenuItem(contextMenu.Get());
     }
 
-    private static void OnItemTooltipGenerate(AtkUnitBase* addonItemDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
+    private void OnItemTooltipGenerate(AtkUnitBase* addonItemDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
     {
         var itemID = AgentItemDetail.Instance()->ItemId;
 
-        if (ItemModifications.TryGetValue(itemID, out _)) return;
+        if (itemModifications.TryGetValue(itemID, out _)) return;
         if (ItemSourceInfo.GetItemInfo(itemID) is not { } itemInfo) return;
 
         var text = new SeStringBuilder()
@@ -78,7 +78,7 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
                    .AddUiForegroundOff()
                    .Build();
 
-        ItemModifications[itemID] = GameTooltipManager.Instance().AddItemDetail
+        itemModifications[itemID] = GameTooltipManager.Instance().AddItemDetail
         (
             itemID,
             TooltipItemType.ItemDescription,
@@ -86,24 +86,7 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
             TooltipModifyMode.Append
         );
     }
-
-    [IPCProvider("DailyRoutines.Modules.AutoShowItemNPCShopInfo.OpenByItemID")]
-    private static bool OpenByItemID(uint itemID)
-    {
-        if (AddonShopsPreview.Addon is { IsOpen: true } addon &&
-            addon.SourceInfo.ItemID == itemID)
-            AddonShopsPreview.CloseAndClear();
-        else if (ItemSourceInfo.GetItemInfo(itemID) is { } itemInfo)
-            AddonShopsPreview.OpenWithData(itemInfo);
-        else
-        {
-            NotifyHelper.Instance().ChatError(Lang.Get("AutoShowItemNPCShopInfo-Notification-ShopNotFound", itemID));
-            return false;
-        }
-
-        return true;
-    }
-
+    
     private class ShopInfoContextMenu : MenuItemBase
     {
         public override string Name { get; protected set; } = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu");
@@ -354,4 +337,25 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
             }
         }
     }
+    
+    #region IPC
+
+    [IPCProvider("DailyRoutines.Modules.AutoShowItemNPCShopInfo.OpenByItemID")]
+    private static bool OpenByItemID(uint itemID)
+    {
+        if (AddonShopsPreview.Addon is { IsOpen: true } addon &&
+            addon.SourceInfo.ItemID == itemID)
+            AddonShopsPreview.CloseAndClear();
+        else if (ItemSourceInfo.GetItemInfo(itemID) is { } itemInfo)
+            AddonShopsPreview.OpenWithData(itemInfo);
+        else
+        {
+            NotifyHelper.Instance().ChatError(Lang.Get("AutoShowItemNPCShopInfo-Notification-ShopNotFound", itemID));
+            return false;
+        }
+
+        return true;
+    }
+
+    #endregion
 }

@@ -25,25 +25,24 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         Title           = Lang.Get("AutoDisplayNetworkLatencyTitle"),
         Description     = Lang.Get("AutoDisplayNetworkLatencyDescription"),
         Category        = ModuleCategory.System,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayNetworkLatency-UI.png"]
+        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayNetworkLatency-UI.png"] // TODO: 修改仓库
     };
     
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static ServerPingMonitor?       Monitor;
-    private static IDtrBarEntry?            Entry;
-    private static CancellationTokenSource? CancelSource;
+    private          ServerPingMonitor?      monitor;
+    private          IDtrBarEntry?           entry;
+    private readonly CancellationTokenSource cancelSource = new();
     
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        CancelSource  ??= new();
-        Monitor       ??= new();
-        Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayNetworkLatency");
-        Entry.OnClick =   _ =>
+        monitor       ??= new();
+        entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayNetworkLatency");
+        entry.OnClick =   _ =>
         {
             if (Overlay == null)
             {
@@ -58,20 +57,19 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
             Overlay.Toggle();
         };
 
-        Task.Run(MainLoop, CancelSource.Token);
+        Task.Run(MainLoop, cancelSource.Token);
     }
 
     protected override void Uninit()
     {
-        CancelSource?.Cancel();
-        CancelSource?.Dispose();
-        CancelSource = null;
+        cancelSource.Cancel();
+        cancelSource.Dispose();
 
-        Monitor?.Dispose();
-        Monitor = null;
+        monitor?.Dispose();
+        monitor = null;
 
-        Entry?.Remove();
-        Entry = null;
+        entry?.Remove();
+        entry = null;
     }
 
     protected override void ConfigUI()
@@ -80,24 +78,24 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
 
         using (ImRaii.PushIndent())
         {
-            ImGui.InputText("##FormatInput", ref ModuleConfig.Format);
+            ImGui.InputText("##FormatInput", ref config.Format);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
     }
 
     protected override unsafe void OverlayUI()
     {
-        if (Monitor == null) return;
+        if (monitor == null) return;
 
         float min          = 9999f, max = 0f, sum = 0f;
         var   validCount   = 0;
         var   lossCount    = 0;
-        var   totalSamples = Monitor.FilledCount;
+        var   totalSamples = monitor.FilledCount;
 
         for (var i = 0; i < totalSamples; i++)
         {
-            var val = Monitor.History[i];
+            var val = monitor.History[i];
 
             if (val <= 0.1f)
             {
@@ -116,7 +114,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         if (min == 9999f)
             min = 0f;
 
-        var currentPing = Monitor.LastPing;
+        var currentPing = monitor.LastPing;
         var color       = GetPingColor(currentPing);
 
         ImGui.SetWindowFontScale(1.5f);
@@ -128,9 +126,9 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
 
         ImGui.SameLine();
 
-        if (Monitor.ObservedServerPort != 0 && (!Monitor.ObservedServerAddress.Equals(Monitor.ServerAddress) || Monitor.ObservedServerPort != Monitor.ServerPort))
+        if (monitor.ObservedServerPort != 0 && (!monitor.ObservedServerAddress.Equals(monitor.ServerAddress) || monitor.ObservedServerPort != monitor.ServerPort))
         {
-            var observedText   = $"{Monitor.ObservedServerAddress}:{Monitor.ObservedServerPort} → {Monitor.ServerAddress}:{Monitor.ServerPort}";
+            var observedText   = $"{monitor.ObservedServerAddress}:{monitor.ObservedServerPort} → {monitor.ServerAddress}:{monitor.ServerPort}";
             var observedSize   = ImGui.CalcTextSize(observedText);
             var observedAvailX = ImGui.GetContentRegionAvail().X;
             if (observedAvailX > observedSize.X)
@@ -139,7 +137,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         }
         else
         {
-            var ipText = $"{Monitor.ServerAddress}:{Monitor.ServerPort}";
+            var ipText = $"{monitor.ServerAddress}:{monitor.ServerPort}";
             var ipSize = ImGui.CalcTextSize(ipText);
             var availX = ImGui.GetContentRegionAvail().X;
             if (availX > ipSize.X)
@@ -149,12 +147,12 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
 
         var ipRectMax = ImGui.GetItemRectMax();
 
-        if (Monitor.AddressInfo is { } info)
+        if (monitor.AddressInfo is { } info)
         {
             using (FontManager.Instance().UIFont80.Push())
             {
                 var locText = $"{info.CountryName} - {info.CityName}";
-                if (Monitor.ISPInfo is { } ispInfo)
+                if (monitor.ISPInfo is { } ispInfo)
                     locText += $" / {ispInfo.Translated}";
 
                 if (!string.IsNullOrWhiteSpace(locText))
@@ -210,14 +208,14 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                 ImPlot.SetupAxes((byte*)null, (byte*)null, AXIS_FLAGS, AXIS_FLAGS);
 
                 var yMax = MathF.Max(max * 1.25f, 100f);
-                ImPlot.SetupAxesLimits(0, Monitor.History.Length, 0, yMax, ImPlotCond.Always);
+                ImPlot.SetupAxesLimits(0, monitor.History.Length, 0, yMax, ImPlotCond.Always);
 
-                ImPlot.SetupAxisTicks(ImAxis.X1, 0, Monitor.History.Length, 51);
+                ImPlot.SetupAxisTicks(ImAxis.X1, 0, monitor.History.Length, 51);
                 ImPlot.SetupAxisTicks(ImAxis.Y1, 0, yMax,                   21);
 
                 using (ImRaii.PushColor(ImPlotCol.Line, color)
                              .Push(ImPlotCol.Fill, color))
-                    ImPlot.PlotLine("##Ping", ref Monitor.History[0], Monitor.History.Length, 1.0, 0.0, ImPlotLineFlags.Shaded, Monitor.HistoryIndex);
+                    ImPlot.PlotLine("##Ping", ref monitor.History[0], monitor.History.Length, 1.0, 0.0, ImPlotLineFlags.Shaded, monitor.HistoryIndex);
 
                 if (avg > 0)
                 {
@@ -225,7 +223,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
 
                     using (ImRaii.PushColor(ImPlotCol.Line, avgColor))
                     {
-                        var xs = new double[] { 0, Monitor.History.Length };
+                        var xs = new double[] { 0, monitor.History.Length };
                         var ys = new double[] { avg, avg };
                         ImPlot.PlotLine("##Avg", ref xs[0], ref ys[0], 2);
                     }
@@ -258,40 +256,40 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         }
     }
 
-    private static async Task MainLoop()
+    private async Task MainLoop()
     {
         try
         {
             var lastPing = -1L;
 
-            while (!CancelSource!.IsCancellationRequested)
+            while (!cancelSource.IsCancellationRequested)
             {
-                if (Monitor == null || Entry == null) return;
+                if (monitor == null || entry == null) return;
 
                 if (!GameState.IsLoggedIn)
                 {
-                    await Task.Delay(3000, CancelSource.Token);
+                    await Task.Delay(3000, cancelSource.Token);
                     continue;
                 }
 
-                await Monitor.UpdateAsync();
+                await monitor.UpdateAsync();
 
-                var currentPing     = Monitor.LastPing;
-                var address         = Monitor.ServerAddress;
-                var port            = Monitor.ServerPort;
-                var observedAddress = Monitor.ObservedServerAddress;
-                var observedPort    = Monitor.ObservedServerPort;
+                var currentPing     = monitor.LastPing;
+                var address         = monitor.ServerAddress;
+                var port            = monitor.ServerPort;
+                var observedAddress = monitor.ObservedServerAddress;
+                var observedPort    = monitor.ObservedServerPort;
 
                 await DService.Instance().Framework.RunOnTick
                 (() =>
                     {
-                        if (Entry == null || CancelSource.IsCancellationRequested) return;
+                        if (entry == null || cancelSource.IsCancellationRequested) return;
 
-                        Entry.Shown = true;
+                        entry.Shown = true;
 
                         if (lastPing != currentPing)
                         {
-                            Entry.Text = string.Format(ModuleConfig.Format, currentPing);
+                            entry.Text = string.Format(config.Format, currentPing);
                             lastPing   = currentPing;
                         }
 
@@ -302,14 +300,14 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                         var builder = new SeStringBuilder().AddIcon(BitmapFontIcon.Meteor)
                                                            .AddText(tooltipText);
 
-                        if (Monitor.AddressInfo is { } info)
+                        if (monitor.AddressInfo is { } info)
                             builder.AddText($" ({info.CountryName} - {info.CityName})");
 
-                        Entry.Tooltip = builder.Build();
+                        entry.Tooltip = builder.Build();
                     }
                 );
 
-                await Task.Delay(1_000, CancelSource.Token);
+                await Task.Delay(1_000, cancelSource.Token);
             }
         }
         catch

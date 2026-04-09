@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -6,7 +7,6 @@ using DailyRoutines.Manager;
 using DailyRoutines.Verification;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -21,27 +21,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastCustomDeliveriesInfo : ModuleBase
 {
-    private static readonly Dictionary<uint, CustomDeliveryInfo> Infos = new()
-    {
-        [11] = new(11, "尼托维凯", 1190, new(-355.7f, 19.6f, -108.7f)),
-        [10] = new(10, "玛格拉特", 956, new(-52.8f, -29.5f, -61.5f)),
-        [9]  = new(9, "安登", 816, new(-241f, 51f, 615.7f)),
-        [8]  = new(8, "阿梅莉安丝", 962, new(223, 25, -193)),
-        [7]  = new(7, "狄兰达尔伯爵", 886, new(-112, 0, -135)),
-        [6]  = new(6, "艾尔·图", 886, new(110, -20, 0)),
-        [5]  = new(5, "凯·希尔", 820, new(50, 83, -66)),
-        [4]  = new(4, "亚德基拉", 478, new(-64, 206.5f, 22)),
-        [3]  = new(3, "红", 613, new(345, -120, -302)),
-        [2]  = new(2, "梅·娜格", 635, new(162, 13, -88)),
-        [1]  = new(1, "熙洛·阿里亚珀", 478, new(-72, 206.5f, 28))
-    };
-
-    private static Hook<AgentReceiveEventDelegate> AgentSatisfactionListReceiveEventHook;
-
-    private static KeyValuePair<uint, CustomDeliveryInfo>? SelectedInfo;
-
-    private static bool IsNeedToRefresh;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FastCustomDeliveriesInfoTitle"),
@@ -54,22 +33,28 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
     private static bool IsEligibleForTeleporting =>
         !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium;
 
+    private Hook<AgentReceiveEventDelegate> AgentSatisfactionListReceiveEventHook;
+
+    private CustomDeliveryInfo? selectedInfo;
+
+    private bool isNeedToRefresh;
+    
     protected override void Init()
     {
+        Overlay    ??= new(this);
+        TaskHelper ??= new() { TimeoutMS = 30_000 };
+        
         AgentSatisfactionListReceiveEventHook ??= DService.Instance().Hook.HookFromAddress<AgentReceiveEventDelegate>
         (
             AgentModule.Instance()->GetAgentByInternalId(AgentId.SatisfactionList)->VirtualTable->GetVFuncByName("ReceiveEvent"),
             AgentSatisfactionListReceiveEventDetour
         );
         AgentSatisfactionListReceiveEventHook.Enable();
-
-        Overlay    ??= new(this);
-        TaskHelper ??= new() { TimeoutMS = 30_000 };
     }
 
     protected override void OverlayUI()
     {
-        if (SelectedInfo == null)
+        if (selectedInfo == null)
         {
             Overlay.IsOpen = false;
             return;
@@ -77,9 +62,9 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
 
         using var font = FontManager.Instance().UIFont.Push();
 
-        if (ImGui.IsWindowAppearing() || IsNeedToRefresh)
+        if (ImGui.IsWindowAppearing() || isNeedToRefresh)
         {
-            IsNeedToRefresh = false;
+            isNeedToRefresh = false;
             ImGui.SetWindowPos(ImGui.GetMousePos());
         }
 
@@ -88,7 +73,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         using (ImRaii.PushIndent())
         {
             using (FontManager.Instance().UIFont120.Push())
-                ImGui.TextUnformatted(SelectedInfo?.Value.GetRow().Npc.Value.Singular.ToString());
+                ImGui.TextUnformatted(selectedInfo?.GetRow().Npc.Value.Singular.ToString());
         }
 
         ImGui.Separator();
@@ -99,21 +84,21 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         using (ImRaii.Disabled
                (
                    !IsEligibleForTeleporting &&
-                   Sheets.SpeedDetectionZones.ContainsKey(SelectedInfo?.Value.Zone ?? 0)
+                   Sheets.SpeedDetectionZones.ContainsKey(selectedInfo?.Zone ?? 0)
                ))
         {
             if (ImGui.MenuItem(Lang.Get("Teleport")))
             {
-                switch (SelectedInfo?.Key)
+                switch (selectedInfo?.Index)
                 {
                     // 天穹街
                     case 6 or 7:
-                        var posCopy = SelectedInfo?.Value.Position ?? default;
+                        var posCopy = selectedInfo?.Position ?? default;
                         EnqueueFirmament();
                         TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(posCopy, false, true));
                         break;
                     default:
-                        MovementManager.Instance().TPSmart_BetweenZone(SelectedInfo?.Value.Zone ?? 0, SelectedInfo?.Value.Position ?? default);
+                        MovementManager.Instance().TPSmart_BetweenZone(selectedInfo?.Zone ?? 0, selectedInfo?.Position ?? default);
                         break;
                 }
 
@@ -123,7 +108,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
 
         if (ImGui.MenuItem(Lang.Get("FastCustomDeliveriesInfo-TeleportToZone")))
         {
-            switch (SelectedInfo?.Key)
+            switch (selectedInfo?.Index)
             {
                 // 天穹街
                 case 6 or 7:
@@ -132,8 +117,8 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
                 default:
                     MovementManager.Instance().TeleportNearestAetheryte
                     (
-                        SelectedInfo?.Value.Position ?? default,
-                        SelectedInfo?.Value.Zone     ?? 0,
+                        selectedInfo?.Position ?? default,
+                        selectedInfo?.Zone     ?? 0,
                         true
                     );
                     break;
@@ -146,11 +131,11 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         {
             var instance = AgentMap.Instance();
 
-            var zoneID = (uint)SelectedInfo?.Value.Zone!;
+            var zoneID = (uint)selectedInfo?.Zone!;
             var mapID  = LuminaGetter.GetRow<TerritoryType>(zoneID)!.Value.Map.RowId;
 
-            instance->SetFlagMapMarker(zoneID, mapID, (Vector3)SelectedInfo?.Value.Position!);
-            instance->OpenMap(mapID, zoneID, SelectedInfo?.Value.Name ?? string.Empty);
+            instance->SetFlagMapMarker(zoneID, mapID, selectedInfo?.Position ?? default);
+            instance->OpenMap(mapID, zoneID, selectedInfo?.Name ?? string.Empty);
 
             isNeedToClose = true;
         }
@@ -158,7 +143,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         if (ImGui.MenuItem(LuminaWrapper.GetAddonText(1219)) | isNeedToClose)
         {
             Overlay.IsOpen = false;
-            SelectedInfo   = null;
+            selectedInfo   = null;
         }
     }
 
@@ -186,17 +171,15 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         if (!Infos.TryGetValue(customDeliveryIndex, out var customDeliveryInfo))
             return InvokeOriginal();
 
-        SelectedInfo    = new(customDeliveryIndex, customDeliveryInfo);
-        IsNeedToRefresh = true;
+        selectedInfo    = customDeliveryInfo;
+        isNeedToRefresh = true;
         Overlay.IsOpen  = true;
 
         var defaultValue = new AtkValue { Type = ValueType.Bool, Bool = false };
         return &defaultValue;
 
-        AtkValue* InvokeOriginal()
-        {
-            return AgentSatisfactionListReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
-        }
+        AtkValue* InvokeOriginal() =>
+            AgentSatisfactionListReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
     }
 
     // 进入天穹街
@@ -220,21 +203,26 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         Vector3 Position
     )
     {
-        public SatisfactionNpc GetRow()
-            => LuminaGetter.GetRow<SatisfactionNpc>(Index).GetValueOrDefault();
-
-        public byte GetRank()
-        {
-            var instance = SatisfactionSupplyManager.Instance();
-            if (instance == null) return 0;
-
-            return instance->SatisfactionRanks[(int)(Index - 1)];
-        }
-
-        public bool IsUnlocked()
-            => QuestManager.IsQuestComplete(GetRow().QuestRequired.RowId);
-
-        public void OpenSupplyUI() =>
-            RaptureAtkModule.Instance()->OpenSatisfactionSupply(Index);
+        public SatisfactionNpc GetRow() => 
+            LuminaGetter.GetRow<SatisfactionNpc>(Index).GetValueOrDefault();
     }
+    
+    #region 常量
+    
+    private static readonly FrozenDictionary<uint, CustomDeliveryInfo> Infos = new Dictionary<uint, CustomDeliveryInfo>
+    {
+        [11] = new(11, "尼托维凯", 1190, new(-355.7f, 19.6f, -108.7f)),
+        [10] = new(10, "玛格拉特", 956, new(-52.8f, -29.5f, -61.5f)),
+        [9]  = new(9, "安登", 816, new(-241f, 51f, 615.7f)),
+        [8]  = new(8, "阿梅莉安丝", 962, new(223, 25, -193)),
+        [7]  = new(7, "狄兰达尔伯爵", 886, new(-112, 0, -135)),
+        [6]  = new(6, "艾尔·图", 886, new(110, -20, 0)),
+        [5]  = new(5, "凯·希尔", 820, new(50, 83, -66)),
+        [4]  = new(4, "亚德基拉", 478, new(-64, 206.5f, 22)),
+        [3]  = new(3, "红", 613, new(345, -120, -302)),
+        [2]  = new(2, "梅·娜格", 635, new(162, 13, -88)),
+        [1]  = new(1, "熙洛·阿里亚珀", 478, new(-72, 206.5f, 28))
+    }.ToFrozenDictionary();
+    
+    #endregion
 }

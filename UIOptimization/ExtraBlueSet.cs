@@ -15,25 +15,23 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ExtraBlueSet : ModuleBase
 {
-    private const string Command = "exblueset";
-
-    private static Config ModuleConfig = null!;
-
-    private static string NewPresetNameInput = string.Empty;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("ExtraBlueSetTitle"),
-        Description = Lang.Get("ExtraBlueSetDescription", Command),
+        Description = Lang.Get("ExtraBlueSetDescription", COMMAND),
         Category    = ModuleCategory.UIOptimization,
         Author      = ["Marsh"]
     };
+    
+    private Config config = null!;
+
+    private string newPresetNameInput = string.Empty;
 
     protected override void Init()
     {
         Overlay ??= new(this);
 
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "AOZNotebook", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "AOZNotebook", OnAddon);
@@ -41,7 +39,13 @@ public unsafe class ExtraBlueSet : ModuleBase
         if (AOZNotebook->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
 
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("ExtraBlueSet-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("ExtraBlueSet-CommandHelp") });
+    }
+    
+    protected override void Uninit()
+    {
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
     }
 
     protected override void OverlayUI()
@@ -80,13 +84,13 @@ public unsafe class ExtraBlueSet : ModuleBase
         {
             if (popup)
             {
-                ImGui.InputTextWithHint("###NewPresetNameInput", Lang.Get("Name"), ref NewPresetNameInput, 256);
+                ImGui.InputTextWithHint("###NewPresetNameInput", Lang.Get("Name"), ref newPresetNameInput, 256);
 
-                using (ImRaii.Disabled(string.IsNullOrWhiteSpace(NewPresetNameInput)))
+                using (ImRaii.Disabled(string.IsNullOrWhiteSpace(newPresetNameInput)))
                 {
                     if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Check, Lang.Get("Confirm")) &&
-                        !string.IsNullOrWhiteSpace(NewPresetNameInput)                         &&
-                        ModuleConfig.Presets.FirstOrDefault(x => x.Name == NewPresetNameInput) is null)
+                        !string.IsNullOrWhiteSpace(newPresetNameInput)                         &&
+                        config.Presets.FirstOrDefault(x => x.Name == newPresetNameInput) is null)
                     {
                         var manager = ActionManager.Instance();
                         var actions = new uint[24];
@@ -94,18 +98,18 @@ public unsafe class ExtraBlueSet : ModuleBase
                         for (var i = 0; i < 24; i++)
                             actions[i] = manager->GetActiveBlueMageActionInSlot(i);
 
-                        ModuleConfig.Presets.Add
+                        config.Presets.Add
                         (
                             new()
                             {
-                                Name    = NewPresetNameInput,
+                                Name    = newPresetNameInput,
                                 Actions = actions
                             }
                         );
-                        ModuleConfig.Save(this);
+                        config.Save(this);
 
                         ImGui.CloseCurrentPopup();
-                        NewPresetNameInput = string.Empty;
+                        newPresetNameInput = string.Empty;
                     }
                 }
             }
@@ -117,9 +121,9 @@ public unsafe class ExtraBlueSet : ModuleBase
         using var presetList = ImRaii.Child("List", nodeState.Size, true);
         if (!presetList) return;
 
-        for (var i = 0; i < ModuleConfig.Presets.Count; i++)
+        for (var i = 0; i < config.Presets.Count; i++)
         {
-            var preset = ModuleConfig.Presets[i];
+            var preset = config.Presets[i];
 
             using var id    = ImRaii.PushId(i);
             using var group = ImRaii.Group();
@@ -154,8 +158,8 @@ public unsafe class ExtraBlueSet : ModuleBase
                 {
                     if (ImGui.MenuItem($"{Lang.Get("Delete")}"))
                     {
-                        ModuleConfig.Presets.RemoveAt(i);
-                        ModuleConfig.Save(this);
+                        config.Presets.RemoveAt(i);
+                        config.Save(this);
                     }
                 }
             }
@@ -210,28 +214,28 @@ public unsafe class ExtraBlueSet : ModuleBase
         NotifyHelper.Instance().NotificationSuccess(Lang.Get("ExtraBlueSet-Notification", entry.Name));
     }
 
-    private static void OnCommand(string command, string args)
+    private void OnCommand(string command, string args)
     {
         args = args.Trim();
-        if (string.IsNullOrWhiteSpace(args) || ModuleConfig.Presets.FirstOrDefault(x => x.Name == args) is not { } preset) return;
+        if (string.IsNullOrWhiteSpace(args) || config.Presets.FirstOrDefault(x => x.Name == args) is not { } preset) return;
 
         ApplyCustomPreset(preset);
     }
-
-    protected override void Uninit()
-    {
-        CommandManager.Instance().RemoveSubCommand(Command);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-    }
-
-    public class BlueMagePresetEntry
+    
+    private class BlueMagePresetEntry
     {
         public string Name    { get; set; } = string.Empty;
         public uint[] Actions { get; set; } = new uint[24];
     }
 
-    public class Config : ModuleConfig
+    private class Config : ModuleConfig
     {
-        public List<BlueMagePresetEntry> Presets { get; set; } = [];
+        public List<BlueMagePresetEntry> Presets = [];
     }
+    
+    #region 常量
+
+    private const string COMMAND = "exblueset";
+
+    #endregion
 }

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -20,48 +21,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedTargetInfo : ModuleBase
 {
-    public enum DisplayFormat
-    {
-        FullNumber,
-        FullNumberSeparators,
-        ChineseFull,
-        ChineseZeroPrecision,
-        ChineseOnePrecision,
-        ChineseTwoPrecision,
-        ZeroPrecision,
-        OnePrecision,
-        TwoPrecision
-    }
-
-    private static Config ModuleConfig = null!;
-
-    private static TextNode? TargetHPTextNode;
-    private static TextNode? FocusTargetHPTextNode;
-    private static TextNode? MainTargetSplitHPTextNode;
-
-    private static TextNode? TargetCastBarTextNode;
-    private static TextNode? TargetSplitCastBarTextNode;
-    private static TextNode? FocusTargetCastBarTextNode;
-
-    private static TextButtonNode? ClearFocusButtonNode;
-
-    private static int NumberPreview = 12345678;
-
-    private static int CurrentSecondRowOffset = 41;
-
-    private static readonly Dictionary<DisplayFormat, string> DisplayFormatLoc = new()
-    {
-        [DisplayFormat.FullNumber]           = Lang.Get("OptimizedTargetInfo-FullNumber"),
-        [DisplayFormat.FullNumberSeparators] = Lang.Get("OptimizedTargetInfo-FullNumberSeparators"),
-        [DisplayFormat.ChineseFull]          = Lang.Get("OptimizedTargetInfo-ChineseFull"),
-        [DisplayFormat.ChineseZeroPrecision] = Lang.Get("OptimizedTargetInfo-ChineseZeroPrecision"),
-        [DisplayFormat.ChineseOnePrecision]  = Lang.Get("OptimizedTargetInfo-ChineseOnePrecision"),
-        [DisplayFormat.ChineseTwoPrecision]  = Lang.Get("OptimizedTargetInfo-ChineseTwoPrecision"),
-        [DisplayFormat.ZeroPrecision]        = Lang.Get("OptimizedTargetInfo-ZeroPrecision"),
-        [DisplayFormat.OnePrecision]         = Lang.Get("OptimizedTargetInfo-OnePrecision"),
-        [DisplayFormat.TwoPrecision]         = Lang.Get("OptimizedTargetInfo-TwoPrecision")
-    };
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("OptimizedTargetInfoTitle"),
@@ -71,9 +30,25 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private Config config = null!;
+
+    private TextNode? targetHPTextNode;
+    private TextNode? focusTargetHPTextNode;
+    private TextNode? mainTargetSplitHPTextNode;
+
+    private TextNode? targetCastBarTextNode;
+    private TextNode? targetSplitCastBarTextNode;
+    private TextNode? focusTargetCastBarTextNode;
+
+    private TextButtonNode? clearFocusButtonNode;
+
+    private int numberPreview = 12345678;
+
+    private int currentSecondRowOffset = 41;
+
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_TargetInfo", OnAddonTargetInfo);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_TargetInfo", OnAddonTargetInfo);
@@ -136,8 +111,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         using (var combo = ImRaii.Combo
                (
                    "###DisplayFormatCombo",
-                   $"{DisplayFormatLoc.GetValueOrDefault(ModuleConfig.DisplayFormat, Lang.Get("OptimizedTargetInfo-UnknownDisplayFormat"))} " +
-                   $"({FormatNumber((uint)NumberPreview, ModuleConfig.DisplayFormat)})",
+                   $"{DisplayFormatLoc.GetValueOrDefault(config.DisplayFormat, Lang.Get("OptimizedTargetInfo-UnknownDisplayFormat"))} " +
+                   $"({FormatNumber((uint)numberPreview, config.DisplayFormat)})",
                    ImGuiComboFlags.HeightLarge
                ))
         {
@@ -148,8 +123,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(-1f);
-                if (ImGui.InputInt("###PreviewNumberInput", ref NumberPreview))
-                    NumberPreview = (int)Math.Clamp(NumberPreview, 0, uint.MaxValue);
+                if (ImGui.InputInt("###PreviewNumberInput", ref numberPreview))
+                    numberPreview = (int)Math.Clamp(numberPreview, 0, uint.MaxValue);
 
                 ImGui.Separator();
                 ImGui.Spacing();
@@ -159,12 +134,12 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                     if (ImGui.Selectable
                         (
                             $"{DisplayFormatLoc.GetValueOrDefault(displayFormat, Lang.Get("OptimizedTargetInfo-UnknownDisplayFormat"))} " +
-                            $"({FormatNumber((uint)NumberPreview, displayFormat)})##FormatSelect",
-                            ModuleConfig.DisplayFormat == displayFormat
+                            $"({FormatNumber((uint)numberPreview, displayFormat)})##FormatSelect",
+                            config.DisplayFormat == displayFormat
                         ))
                     {
-                        ModuleConfig.DisplayFormat = displayFormat;
-                        ModuleConfig.Save(this);
+                        config.DisplayFormat = displayFormat;
+                        config.Save(this);
                     }
                 }
             }
@@ -176,9 +151,9 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(400f * GlobalUIScale);
-            ImGui.InputText("###DisplayStringFormatInput", ref ModuleConfig.DisplayFormatString, 128);
+            ImGui.InputText("###DisplayStringFormatInput", ref config.DisplayFormatString, 128);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
             ImGuiOm.HelpMarker(Lang.Get("OptimizedTargetInfo-DisplayStringFormatHelp"));
         }
 
@@ -189,14 +164,14 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         (
             LuminaWrapper.GetAddonText(1030),
             "Target",
-            ref ModuleConfig.AlignLeft,
-            ref ModuleConfig.Position,
-            ref ModuleConfig.CustomColor,
-            ref ModuleConfig.OutlineColor,
-            ref ModuleConfig.FontSize,
-            ref ModuleConfig.HideAutoAttack,
+            ref config.AlignLeft,
+            ref config.Position,
+            ref config.CustomColor,
+            ref config.OutlineColor,
+            ref config.FontSize,
+            ref config.HideAutoAttack,
             true,
-            ref ModuleConfig.IsEnabled
+            ref config.IsEnabled
         );
 
         ImGui.NewLine();
@@ -206,14 +181,14 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         (
             LuminaWrapper.GetAddonText(1110),
             "Focus",
-            ref ModuleConfig.FocusAlignLeft,
-            ref ModuleConfig.FocusPosition,
-            ref ModuleConfig.FocusCustomColor,
-            ref ModuleConfig.FocusOutlineColor,
-            ref ModuleConfig.FocusFontSize,
-            ref ModuleConfig.HideAutoAttack,
+            ref config.FocusAlignLeft,
+            ref config.FocusPosition,
+            ref config.FocusCustomColor,
+            ref config.FocusOutlineColor,
+            ref config.FocusFontSize,
+            ref config.HideAutoAttack,
             false,
-            ref ModuleConfig.FocusIsEnabled
+            ref config.FocusIsEnabled
         );
 
         ImGui.NewLine();
@@ -223,14 +198,14 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         (
             LuminaWrapper.GetAddonText(1032),
             "CastBar",
-            ref ModuleConfig.CastBarAlignLeft,
-            ref ModuleConfig.CastBarPosition,
-            ref ModuleConfig.CastBarCustomColor,
-            ref ModuleConfig.CastBarOutlineColor,
-            ref ModuleConfig.CastBarFontSize,
-            ref ModuleConfig.HideAutoAttack,
+            ref config.CastBarAlignLeft,
+            ref config.CastBarPosition,
+            ref config.CastBarCustomColor,
+            ref config.CastBarOutlineColor,
+            ref config.CastBarFontSize,
+            ref config.HideAutoAttack,
             false,
-            ref ModuleConfig.CastBarIsEnabled
+            ref config.CastBarIsEnabled
         );
 
         ImGui.NewLine();
@@ -240,14 +215,14 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         (
             $"{LuminaWrapper.GetAddonText(1110)} {LuminaWrapper.GetAddonText(1032)}",
             "FocusCastBar",
-            ref ModuleConfig.FocusCastBarAlignLeft,
-            ref ModuleConfig.FocusCastBarPosition,
-            ref ModuleConfig.FocusCastBarCustomColor,
-            ref ModuleConfig.FocusCastBarOutlineColor,
-            ref ModuleConfig.FocusCastBarFontSize,
-            ref ModuleConfig.HideAutoAttack,
+            ref config.FocusCastBarAlignLeft,
+            ref config.FocusCastBarPosition,
+            ref config.FocusCastBarCustomColor,
+            ref config.FocusCastBarOutlineColor,
+            ref config.FocusCastBarFontSize,
+            ref config.HideAutoAttack,
             false,
-            ref ModuleConfig.FocusCastBarIsEnabled
+            ref config.FocusCastBarIsEnabled
         );
 
         ImGui.NewLine();
@@ -260,30 +235,30 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
 
-            if (ImGui.Checkbox($"{Lang.Get("Enable")}", ref ModuleConfig.StatusIsEnabled))
+            if (ImGui.Checkbox($"{Lang.Get("Enable")}", ref config.StatusIsEnabled))
             {
-                ModuleConfig.Save(this);
+                config.Save(this);
 
-                if (!ModuleConfig.StatusIsEnabled)
+                if (!config.StatusIsEnabled)
                 {
                     OnAddonTargetInfoCastBar(AddonEvent.PreFinalize, null);
                     OnAddonTargetInfoBuffDebuff(AddonEvent.PreFinalize, null);
                 }
             }
 
-            if (!ModuleConfig.StatusIsEnabled) return;
+            if (!config.StatusIsEnabled) return;
 
             ImGui.Spacing();
 
             using (ImRaii.PushIndent())
             {
                 ImGui.SetNextItemWidth(150f * GlobalUIScale);
-                if (ImGui.InputFloat($"{Lang.Get("Scale")}", ref ModuleConfig.StatusScale, 0.1f, 0.1f, "%.2f"))
-                    ModuleConfig.StatusScale = Math.Clamp(ModuleConfig.StatusScale, 0.1f, 10f);
+                if (ImGui.InputFloat($"{Lang.Get("Scale")}", ref config.StatusScale, 0.1f, 0.1f, "%.2f"))
+                    config.StatusScale = Math.Clamp(config.StatusScale, 0.1f, 10f);
 
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
-                    ModuleConfig.Save(this);
+                    config.Save(this);
 
                     OnAddonTargetInfoCastBar(AddonEvent.PreFinalize, null);
                     OnAddonTargetInfoBuffDebuff(AddonEvent.PreFinalize, null);
@@ -300,19 +275,19 @@ public unsafe class OptimizedTargetInfo : ModuleBase
             ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("OptimizedTargetInfo-ClearFocusTarget")}");
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGui.Checkbox($"{Lang.Get("Enable")}", ref ModuleConfig.ClearFocusIsEnabled))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox($"{Lang.Get("Enable")}", ref config.ClearFocusIsEnabled))
+                config.Save(this);
 
-            if (!ModuleConfig.ClearFocusIsEnabled) return;
+            if (!config.ClearFocusIsEnabled) return;
 
             ImGui.Spacing();
 
             using (ImRaii.PushIndent())
             {
                 ImGui.SetNextItemWidth(150f * GlobalUIScale);
-                ImGui.InputFloat2($"{Lang.Get("OptimizedTargetInfo-PosOffset")}", ref ModuleConfig.ClearFocusPosition, format: "%.2f");
+                ImGui.InputFloat2($"{Lang.Get("OptimizedTargetInfo-PosOffset")}", ref config.ClearFocusPosition, format: "%.2f");
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    ModuleConfig.Save(this);
+                    config.Save(this);
             }
         }
     }
@@ -338,7 +313,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
         ImGui.SameLine(0, 8f * GlobalUIScale);
         if (ImGui.Checkbox($"{Lang.Get("Enable")}", ref isEnabled))
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         if (!isEnabled) return;
 
@@ -347,7 +322,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         using var indent = ImRaii.PushIndent();
 
         if (ImGui.Checkbox($"{Lang.Get("OptimizedTargetInfo-AlignLeft")}###AlignLeft", ref alignLeft))
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         if (ImGui.ColorButton($"###{prefix}CustomColorButton", customColor))
             ImGui.OpenPopup($"{prefix}CustomColorPopup");
@@ -362,7 +337,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
             {
                 ImGui.ColorPicker4($"###{prefix}CustomColor", ref customColor);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    ModuleConfig.Save(this);
+                    config.Save(this);
             }
         }
 
@@ -379,45 +354,181 @@ public unsafe class OptimizedTargetInfo : ModuleBase
             {
                 ImGui.ColorPicker4($"###{prefix}OutlineColor", ref outlineColor);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    ModuleConfig.Save(this);
+                    config.Save(this);
             }
         }
 
         if (showHideAutoAttack)
         {
             if (ImGui.Checkbox($"{Lang.Get("OptimizedTargetInfo-HideAutoAttackIcon")}###{prefix}HideAutoAttackIcon", ref hideAutoAttack))
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
 
         ImGui.SetNextItemWidth(150f * GlobalUIScale);
         ImGui.InputFloat2($"{Lang.Get("OptimizedTargetInfo-PosOffset")}###Position", ref position, format: "%.2f");
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         var fontSizeInt = (int)fontSize;
         ImGui.SetNextItemWidth(150f * GlobalUIScale);
         if (ImGui.SliderInt($"{Lang.Get("FontScale")}###FontSize", ref fontSizeInt, 1, 32))
             fontSize = (byte)fontSizeInt;
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
+    }
+    
+    #region 事件
+
+    private static void OnAddonCastBarEnemy(AddonEvent type, AddonArgs args) =>
+        HandleAddonEventCastBarEnemy(type);
+
+    private void OnAddonTargetInfo(AddonEvent type, AddonArgs args)
+    {
+        HandleAddonEventTargetInfo
+        (
+            type,
+            config.IsEnabled,
+            config.HideAutoAttack,
+            18,
+            TargetInfo,
+            ref targetHPTextNode,
+            16,
+            19,
+            config.Position,
+            config.AlignLeft,
+            config.FontSize,
+            config.CustomColor,
+            config.OutlineColor,
+            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
+            (width, height) => new Vector2(width - 5, height + 2)
+        );
+
+        HandleAddonEventCastBar
+        (
+            type,
+            config.CastBarIsEnabled,
+            TargetInfo,
+            ref targetCastBarTextNode,
+            10,
+            12,
+            config.CastBarPosition,
+            config.CastBarAlignLeft,
+            config.CastBarFontSize,
+            config.CastBarCustomColor,
+            config.CastBarOutlineColor,
+            12,
+            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
+            (width, height) => new Vector2(width - 5, height)
+        );
+
+        HandleAddonEventTargetStatus(type, TargetInfo, 32);
     }
 
+    private void OnAddonTargetInfoSplitTarget(AddonEvent type, AddonArgs args)
+    {
+        HandleAddonEventTargetInfo
+        (
+            type,
+            config.IsEnabled,
+            config.HideAutoAttack,
+            12,
+            TargetInfoMainTarget,
+            ref mainTargetSplitHPTextNode,
+            10,
+            13,
+            config.Position,
+            config.AlignLeft,
+            config.FontSize,
+            config.CustomColor,
+            config.OutlineColor,
+            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
+            (width, height) => new Vector2(width - 5, height + 2)
+        );
+    }
 
-    private static void HandleAddonEventFocusTargetControl(AddonEvent type)
+    private void OnAddonFocusTargetInfo(AddonEvent type, AddonArgs args)
+    {
+        HandleAddonEventTargetInfo
+        (
+            type,
+            config.FocusIsEnabled,
+            false,
+            0,
+            FocusTargetInfo,
+            ref focusTargetHPTextNode,
+            10,
+            18,
+            config.FocusPosition,
+            config.FocusAlignLeft,
+            config.FocusFontSize,
+            config.FocusCustomColor,
+            config.FocusOutlineColor,
+            () => TargetManager.FocusTarget as IBattleChara,
+            (width, height) => new Vector2(width - 5, height + 2)
+        );
+
+        HandleAddonEventCastBar
+        (
+            type,
+            config.FocusCastBarIsEnabled,
+            FocusTargetInfo,
+            ref focusTargetCastBarTextNode,
+            3,
+            5,
+            config.FocusCastBarPosition,
+            config.FocusCastBarAlignLeft,
+            config.FocusCastBarFontSize,
+            config.FocusCastBarCustomColor,
+            config.FocusCastBarOutlineColor,
+            5,
+            () => TargetManager.FocusTarget as IBattleChara,
+            (width, height) => new Vector2(width - 5, height)
+        );
+
+        HandleAddonEventFocusTargetControl(type);
+    }
+
+    private void OnAddonTargetInfoCastBar(AddonEvent type, AddonArgs args)
+    {
+        HandleAddonEventCastBar
+        (
+            type,
+            config.CastBarIsEnabled,
+            TargetInfoCastBar,
+            ref targetSplitCastBarTextNode,
+            2,
+            4,
+            config.CastBarPosition,
+            config.CastBarAlignLeft,
+            config.CastBarFontSize,
+            config.CastBarCustomColor,
+            config.CastBarOutlineColor,
+            4,
+            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
+            (width, height) => new Vector2(width - 5, height)
+        );
+    }
+
+    private void OnAddonTargetInfoBuffDebuff(AddonEvent type, AddonArgs args) =>
+        HandleAddonEventTargetStatus(type, TargetInfoBuffDebuff, 31);
+
+    #endregion
+    
+    private void HandleAddonEventFocusTargetControl(AddonEvent type)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                ClearFocusButtonNode?.Dispose();
-                ClearFocusButtonNode = null;
+                clearFocusButtonNode?.Dispose();
+                clearFocusButtonNode = null;
                 break;
 
             case AddonEvent.PostRequestedUpdate:
                 if (!FocusTargetInfo->IsAddonAndNodesReady()) return;
 
-                if (ClearFocusButtonNode == null)
+                if (clearFocusButtonNode == null)
                 {
-                    ClearFocusButtonNode = new()
+                    clearFocusButtonNode = new()
                     {
                         IsVisible   = true,
                         Size        = new(32),
@@ -426,18 +537,18 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                         TextTooltip = Lang.Get("OptimizedTargetInfo-ClearFocusTarget"),
                         OnClick     = () => TargetSystem.Instance()->SetFocusTargetByObjectId(0xE0000000)
                     };
-                    ClearFocusButtonNode.BackgroundNode.IsVisible = false;
-                    ClearFocusButtonNode.AttachNode(FocusTargetInfo->RootNode);
+                    clearFocusButtonNode.BackgroundNode.IsVisible = false;
+                    clearFocusButtonNode.AttachNode(FocusTargetInfo->RootNode);
                 }
 
-                ClearFocusButtonNode.IsVisible = ModuleConfig.ClearFocusIsEnabled;
-                ClearFocusButtonNode.Position  = new Vector2(-13, 12) + ModuleConfig.ClearFocusPosition;
+                clearFocusButtonNode.IsVisible = config.ClearFocusIsEnabled;
+                clearFocusButtonNode.Position  = new Vector2(-13, 12) + config.ClearFocusPosition;
                 break;
         }
     }
 
     // 状态效果
-    private static void HandleAddonEventTargetStatus(AddonEvent type, AtkUnitBase* addon, int statusNodeStartIndex)
+    private void HandleAddonEventTargetStatus(AddonEvent type, AtkUnitBase* addon, int statusNodeStartIndex)
     {
         if (!addon->IsAddonAndNodesReady()) return;
 
@@ -462,7 +573,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
                 addon->UldManager.NodeList[statusNodeStartIndex - 30]->DrawFlags |= 0x4;
 
-                CurrentSecondRowOffset = 41;
+                currentSecondRowOffset = 41;
                 break;
 
             case AddonEvent.PostDraw:
@@ -473,7 +584,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                 HandleAddonEventTargetStatus(AddonEvent.PostRequestedUpdate, addon, statusNodeStartIndex);
                 break;
             case AddonEvent.PostRequestedUpdate:
-                if (!ModuleConfig.StatusIsEnabled || TargetManager.Target is not IBattleChara target)
+                if (!config.StatusIsEnabled || TargetManager.Target is not IBattleChara target)
                     return;
 
                 var playerStatusCount = 0;
@@ -484,8 +595,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                         playerStatusCount++;
                 }
 
-                var adjustOffsetY = -(int)(41 * (ModuleConfig.StatusScale - 1.0f) / 4.5);
-                var xIncrement    = (int)((ModuleConfig.StatusScale - 1.0f) * 25);
+                var adjustOffsetY = -(int)(41 * (config.StatusScale - 1.0f) / 4.5);
+                var xIncrement    = (int)((config.StatusScale - 1.0f) * 25);
 
                 var growingOffsetX = 0;
 
@@ -498,8 +609,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
                     if (i < playerStatusCount)
                     {
-                        node->ScaleX   =  ModuleConfig.StatusScale;
-                        node->ScaleY   =  ModuleConfig.StatusScale;
+                        node->ScaleX   =  config.StatusScale;
+                        node->ScaleY   =  config.StatusScale;
                         node->Y        =  adjustOffsetY;
                         growingOffsetX += xIncrement;
                     }
@@ -513,9 +624,9 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                     node->DrawFlags |= 0x1;
                 }
 
-                var newSecondRowOffset = playerStatusCount > 0 ? (int)(ModuleConfig.StatusScale * 41) : 41;
+                var newSecondRowOffset = playerStatusCount > 0 ? (int)(config.StatusScale * 41) : 41;
 
-                if (newSecondRowOffset != CurrentSecondRowOffset)
+                if (newSecondRowOffset != currentSecondRowOffset)
                 {
                     for (var i = statusNodeStartIndex - 15; i >= statusNodeStartIndex - 29; i--)
                     {
@@ -523,7 +634,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                         addon->UldManager.NodeList[i]->DrawFlags |= 0x1;
                     }
 
-                    CurrentSecondRowOffset = newSecondRowOffset;
+                    currentSecondRowOffset = newSecondRowOffset;
                 }
 
                 addon->UldManager.NodeList[statusNodeStartIndex - 30]->DrawFlags |= 0x4;
@@ -596,7 +707,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
     }
 
     // 目标信息
-    private static void HandleAddonEventTargetInfo
+    private void HandleAddonEventTargetInfo
     (
         AddonEvent                type,
         bool                      isEnabled,
@@ -700,7 +811,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
                     textNode.String = string.Format
                     (
-                        ModuleConfig.DisplayFormatString,
+                        config.DisplayFormatString,
                         FormatNumber(target.MaxHp),
                         FormatNumber(target.CurrentHp)
                     );
@@ -821,10 +932,9 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         }
     }
 
-
-    private static string FormatNumber(uint num, DisplayFormat? displayFormat = null)
+    private string FormatNumber(uint num, DisplayFormat? displayFormat = null)
     {
-        displayFormat ??= ModuleConfig.DisplayFormat;
+        displayFormat ??= config.DisplayFormat;
 
         switch (displayFormat)
         {
@@ -918,142 +1028,34 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         public bool  StatusIsEnabled = true;
         public float StatusScale     = 1.4f;
     }
-
-
-    #region 事件
-
-    private static void OnAddonCastBarEnemy(AddonEvent type, AddonArgs args) =>
-        HandleAddonEventCastBarEnemy(type);
-
-    private static void OnAddonTargetInfo(AddonEvent type, AddonArgs args)
+    
+    private enum DisplayFormat
     {
-        HandleAddonEventTargetInfo
-        (
-            type,
-            ModuleConfig.IsEnabled,
-            ModuleConfig.HideAutoAttack,
-            18,
-            TargetInfo,
-            ref TargetHPTextNode,
-            16,
-            19,
-            ModuleConfig.Position,
-            ModuleConfig.AlignLeft,
-            ModuleConfig.FontSize,
-            ModuleConfig.CustomColor,
-            ModuleConfig.OutlineColor,
-            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
-            (width, height) => new Vector2(width - 5, height + 2)
-        );
-
-        HandleAddonEventCastBar
-        (
-            type,
-            ModuleConfig.CastBarIsEnabled,
-            TargetInfo,
-            ref TargetCastBarTextNode,
-            10,
-            12,
-            ModuleConfig.CastBarPosition,
-            ModuleConfig.CastBarAlignLeft,
-            ModuleConfig.CastBarFontSize,
-            ModuleConfig.CastBarCustomColor,
-            ModuleConfig.CastBarOutlineColor,
-            12,
-            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
-            (width, height) => new Vector2(width - 5, height)
-        );
-
-        HandleAddonEventTargetStatus(type, TargetInfo, 32);
+        FullNumber,
+        FullNumberSeparators,
+        ChineseFull,
+        ChineseZeroPrecision,
+        ChineseOnePrecision,
+        ChineseTwoPrecision,
+        ZeroPrecision,
+        OnePrecision,
+        TwoPrecision
     }
 
-    private static void OnAddonTargetInfoSplitTarget(AddonEvent type, AddonArgs args)
+    #region 常量
+
+    private static readonly FrozenDictionary<DisplayFormat, string> DisplayFormatLoc = new Dictionary<DisplayFormat, string>
     {
-        HandleAddonEventTargetInfo
-        (
-            type,
-            ModuleConfig.IsEnabled,
-            ModuleConfig.HideAutoAttack,
-            12,
-            TargetInfoMainTarget,
-            ref MainTargetSplitHPTextNode,
-            10,
-            13,
-            ModuleConfig.Position,
-            ModuleConfig.AlignLeft,
-            ModuleConfig.FontSize,
-            ModuleConfig.CustomColor,
-            ModuleConfig.OutlineColor,
-            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
-            (width, height) => new Vector2(width - 5, height + 2)
-        );
-    }
-
-    private static void OnAddonFocusTargetInfo(AddonEvent type, AddonArgs args)
-    {
-        HandleAddonEventTargetInfo
-        (
-            type,
-            ModuleConfig.FocusIsEnabled,
-            false,
-            0,
-            FocusTargetInfo,
-            ref FocusTargetHPTextNode,
-            10,
-            18,
-            ModuleConfig.FocusPosition,
-            ModuleConfig.FocusAlignLeft,
-            ModuleConfig.FocusFontSize,
-            ModuleConfig.FocusCustomColor,
-            ModuleConfig.FocusOutlineColor,
-            () => TargetManager.FocusTarget as IBattleChara,
-            (width, height) => new Vector2(width - 5, height + 2)
-        );
-
-        HandleAddonEventCastBar
-        (
-            type,
-            ModuleConfig.FocusCastBarIsEnabled,
-            FocusTargetInfo,
-            ref FocusTargetCastBarTextNode,
-            3,
-            5,
-            ModuleConfig.FocusCastBarPosition,
-            ModuleConfig.FocusCastBarAlignLeft,
-            ModuleConfig.FocusCastBarFontSize,
-            ModuleConfig.FocusCastBarCustomColor,
-            ModuleConfig.FocusCastBarOutlineColor,
-            5,
-            () => TargetManager.FocusTarget as IBattleChara,
-            (width, height) => new Vector2(width - 5, height)
-        );
-
-        HandleAddonEventFocusTargetControl(type);
-    }
-
-    private static void OnAddonTargetInfoCastBar(AddonEvent type, AddonArgs args)
-    {
-        HandleAddonEventCastBar
-        (
-            type,
-            ModuleConfig.CastBarIsEnabled,
-            TargetInfoCastBar,
-            ref TargetSplitCastBarTextNode,
-            2,
-            4,
-            ModuleConfig.CastBarPosition,
-            ModuleConfig.CastBarAlignLeft,
-            ModuleConfig.CastBarFontSize,
-            ModuleConfig.CastBarCustomColor,
-            ModuleConfig.CastBarOutlineColor,
-            4,
-            () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
-            (width, height) => new Vector2(width - 5, height)
-        );
-    }
-
-    private static void OnAddonTargetInfoBuffDebuff(AddonEvent type, AddonArgs args) =>
-        HandleAddonEventTargetStatus(type, TargetInfoBuffDebuff, 31);
+        [DisplayFormat.FullNumber]           = Lang.Get("OptimizedTargetInfo-FullNumber"),
+        [DisplayFormat.FullNumberSeparators] = Lang.Get("OptimizedTargetInfo-FullNumberSeparators"),
+        [DisplayFormat.ChineseFull]          = Lang.Get("OptimizedTargetInfo-ChineseFull"),
+        [DisplayFormat.ChineseZeroPrecision] = Lang.Get("OptimizedTargetInfo-ChineseZeroPrecision"),
+        [DisplayFormat.ChineseOnePrecision]  = Lang.Get("OptimizedTargetInfo-ChineseOnePrecision"),
+        [DisplayFormat.ChineseTwoPrecision]  = Lang.Get("OptimizedTargetInfo-ChineseTwoPrecision"),
+        [DisplayFormat.ZeroPrecision]        = Lang.Get("OptimizedTargetInfo-ZeroPrecision"),
+        [DisplayFormat.OnePrecision]         = Lang.Get("OptimizedTargetInfo-OnePrecision"),
+        [DisplayFormat.TwoPrecision]         = Lang.Get("OptimizedTargetInfo-TwoPrecision")
+    }.ToFrozenDictionary();
 
     #endregion
 }

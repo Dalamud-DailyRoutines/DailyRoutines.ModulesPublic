@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using System.Text;
 using DailyRoutines.Common.Extensions;
@@ -34,37 +35,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class OptimizedRecipeNote : ModuleBase
 {
-    private static readonly Dictionary<uint, CaculationResult> CaculationResults = [];
-
-    private static readonly Dictionary<uint, List<Recipe>> SameItemRecipes =
-        LuminaGetter.Get<Recipe>()
-                    .GroupBy(x => x.ItemResult.RowId)
-                    .DistinctBy(x => x.Key)
-                    .Where(x => x.Key > 0 && x.Count() > 1)
-                    .ToDictionary(x => x.Key, x => x.DistinctBy(d => d.CraftType.RowId).ToList());
-
-    private static TextButtonNode?    RecipeCaculationButton;
-    private static TextButtonNode?    SwitchJobButton;
-    private static TextureButtonNode? ClearSearchButton;
-
-    private static TextButtonNode?      DisplayOthersButton;
-    private static HorizontalListNode?  DisplayOthersIconsLayout;
-    private static List<IconButtonNode> DisplayOthersJobButtons = [];
-
-    private static List<IconButtonNode> GetShopInfoButtons = [];
-
-    private static TextButtonNode? LevelRecipeButton;
-    private static TextButtonNode? SpecialRecipeButton;
-    private static TextButtonNode? MasterRecipeButton;
-
-    private static DalamudLinkPayload? InstallRaphaelLinkPayload;
-    private static Task?               InstallRaphaelTask;
-
-    private static uint LastRecipeID;
-
-    [IPCSubscriber("DailyRoutines.Modules.AutoShowItemNPCShopInfo.OpenByItemID")]
-    private static IPCSubscriber<uint, bool> OpenShopListByItemIDIPC;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("OptimizedRecipeNoteTitle"),
@@ -74,6 +44,27 @@ public class OptimizedRecipeNote : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private readonly Dictionary<uint, CaculationResult> caculationResults = [];
+
+    private TextButtonNode?    recipeCaculationButton;
+    private TextButtonNode?    switchJobButton;
+    private TextureButtonNode? clearSearchButton;
+
+    private TextButtonNode?      displayOthersButton;
+    private HorizontalListNode?  displayOthersIconsLayout;
+    private List<IconButtonNode> displayOthersJobButtons = [];
+
+    private List<IconButtonNode> getShopInfoButtons = [];
+
+    private TextButtonNode? levelRecipeButton;
+    private TextButtonNode? specialRecipeButton;
+    private TextButtonNode? masterRecipeButton;
+
+    private DalamudLinkPayload? installRaphaelLinkPayload;
+    private Task?               installRaphaelTask;
+
+    private uint lastRecipeID;
 
     protected override void Init()
     {
@@ -93,18 +84,18 @@ public class OptimizedRecipeNote : ModuleBase
         AddonActionsPreview.Addon?.Dispose();
         AddonActionsPreview.Addon = null;
 
-        CaculationResults.Values.ForEach
+        caculationResults.Values.ForEach
         (x =>
             {
                 LinkPayloadManager.Instance().Unreg(x.CopyLinkPayload.CommandId);
                 LinkPayloadManager.Instance().Unreg(x.PreviewLinkPayload.CommandId);
             }
         );
-        CaculationResults.Clear();
+        caculationResults.Clear();
 
-        if (InstallRaphaelLinkPayload != null)
-            LinkPayloadManager.Instance().Unreg(InstallRaphaelLinkPayload.CommandId);
-        InstallRaphaelTask = null;
+        if (installRaphaelLinkPayload != null)
+            LinkPayloadManager.Instance().Unreg(installRaphaelLinkPayload.CommandId);
+        installRaphaelTask = null;
     }
 
     private unsafe void OnAddon(AddonEvent type, AddonArgs args)
@@ -112,35 +103,35 @@ public class OptimizedRecipeNote : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                RecipeCaculationButton?.Dispose();
-                RecipeCaculationButton = null;
+                recipeCaculationButton?.Dispose();
+                recipeCaculationButton = null;
 
-                SwitchJobButton?.Dispose();
-                SwitchJobButton = null;
+                switchJobButton?.Dispose();
+                switchJobButton = null;
 
-                DisplayOthersButton?.Dispose();
-                DisplayOthersButton = null;
+                displayOthersButton?.Dispose();
+                displayOthersButton = null;
 
-                DisplayOthersIconsLayout?.Dispose();
-                DisplayOthersIconsLayout = null;
+                displayOthersIconsLayout?.Dispose();
+                displayOthersIconsLayout = null;
 
-                DisplayOthersJobButtons.ForEach(x => x?.Dispose());
-                DisplayOthersJobButtons.Clear();
+                displayOthersJobButtons.ForEach(x => x?.Dispose());
+                displayOthersJobButtons.Clear();
 
-                ClearSearchButton?.Dispose();
-                ClearSearchButton = null;
+                clearSearchButton?.Dispose();
+                clearSearchButton = null;
 
-                GetShopInfoButtons.ForEach(x => x?.Dispose());
-                GetShopInfoButtons.Clear();
+                getShopInfoButtons.ForEach(x => x?.Dispose());
+                getShopInfoButtons.Clear();
 
-                LevelRecipeButton?.Dispose();
-                LevelRecipeButton = null;
+                levelRecipeButton?.Dispose();
+                levelRecipeButton = null;
 
-                SpecialRecipeButton?.Dispose();
-                SpecialRecipeButton = null;
+                specialRecipeButton?.Dispose();
+                specialRecipeButton = null;
 
-                MasterRecipeButton?.Dispose();
-                MasterRecipeButton = null;
+                masterRecipeButton?.Dispose();
+                masterRecipeButton = null;
 
                 if (RecipeNoteAddon != null)
                 {
@@ -168,7 +159,7 @@ public class OptimizedRecipeNote : ModuleBase
                 try
                 {
                     if (!AgentRecipeNote.Instance()->RecipeSearchOpen)
-                        LastRecipeID = GetCurrentRecipeID();
+                        lastRecipeID = GetCurrentRecipeID();
 
                     UpdateRecipeAddonButton();
                 }
@@ -182,15 +173,15 @@ public class OptimizedRecipeNote : ModuleBase
             case AddonEvent.PostDraw:
                 if (!RecipeNoteAddon->IsAddonAndNodesReady()) return;
 
-                if (RecipeCaculationButton == null)
+                if (recipeCaculationButton == null)
                 {
-                    RecipeCaculationButton = new()
+                    recipeCaculationButton = new()
                     {
                         Position = new(228, 490),
                         Size     = new(140, 32),
                         String   = Lang.Get("OptimizedRecipeNote-Button-CaculateRecipe")
                     };
-                    RecipeCaculationButton.OnClick = () =>
+                    recipeCaculationButton.OnClick = () =>
                     {
                         if (!DService.Instance().PI.IsPluginEnabled(RaphaelIPC.INTERNAL_NAME))
                         {
@@ -208,7 +199,7 @@ public class OptimizedRecipeNote : ModuleBase
                         var craftsmanship = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.Craftsmanship);
                         var control       = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.Control);
                         var id            = RaphaelIPC.StartCalculation();
-                        RecipeCaculationButton.IsEnabled = false;
+                        recipeCaculationButton.IsEnabled = false;
                         TaskHelper.Enqueue
                         (
                             () =>
@@ -218,11 +209,11 @@ public class OptimizedRecipeNote : ModuleBase
                                 switch (response.Status)
                                 {
                                     case RaphaelCalculationStatus.Success:
-                                        RecipeCaculationButton.IsEnabled = true;
+                                        recipeCaculationButton.IsEnabled = true;
 
                                         var copyLinkPayload    = LinkPayloadManager.Instance().Reg(OnClickCopyPayload,    out _);
                                         var previewLinkPayload = LinkPayloadManager.Instance().Reg(OnClickPreviewPayload, out _);
-                                        CaculationResults[id] = new
+                                        caculationResults[id] = new
                                         (
                                             response.Actions,
                                             recipeID,
@@ -232,10 +223,10 @@ public class OptimizedRecipeNote : ModuleBase
                                             copyLinkPayload,
                                             previewLinkPayload
                                         );
-                                        PrintActionsMessage(CaculationResults[id]);
+                                        PrintActionsMessage(caculationResults[id]);
                                         return true;
                                     case RaphaelCalculationStatus.Failed:
-                                        RecipeCaculationButton.IsEnabled = true;
+                                        recipeCaculationButton.IsEnabled = true;
                                         TaskHelper.Abort();
                                         return true;
                                     default:
@@ -246,18 +237,18 @@ public class OptimizedRecipeNote : ModuleBase
                         );
                     };
 
-                    RecipeCaculationButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
+                    recipeCaculationButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
                 }
 
-                if (SwitchJobButton == null)
+                if (switchJobButton == null)
                 {
-                    SwitchJobButton = new()
+                    switchJobButton = new()
                     {
                         Position = new(228, 490),
                         Size     = new(140, 32),
                         String   = Lang.Get("OptimizedRecipeNote-Button-SwitchJob")
                     };
-                    SwitchJobButton.OnClick = () =>
+                    switchJobButton.OnClick = () =>
                     {
                         if (!DService.Instance().PI.IsPluginEnabled(RaphaelIPC.INTERNAL_NAME))
                         {
@@ -283,12 +274,12 @@ public class OptimizedRecipeNote : ModuleBase
                         TaskHelper.Enqueue(() => AgentRecipeNote.Instance()->OpenRecipeByRecipeId(recipeID));
                     };
 
-                    SwitchJobButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
+                    switchJobButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
                 }
 
-                if (DisplayOthersButton == null)
+                if (displayOthersButton == null)
                 {
-                    DisplayOthersButton = new()
+                    displayOthersButton = new()
                     {
                         Position  = new(0, -32),
                         Size      = new(140, 32),
@@ -313,13 +304,13 @@ public class OptimizedRecipeNote : ModuleBase
                         }
                     };
 
-                    DisplayOthersButton.LabelNode.AutoAdjustTextSize();
-                    DisplayOthersButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
+                    displayOthersButton.LabelNode.AutoAdjustTextSize();
+                    displayOthersButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
                 }
 
-                if (DisplayOthersIconsLayout == null)
+                if (displayOthersIconsLayout == null)
                 {
-                    DisplayOthersIconsLayout = new()
+                    displayOthersIconsLayout = new()
                     {
                         IsVisible   = true,
                         ItemSpacing = 5,
@@ -368,16 +359,16 @@ public class OptimizedRecipeNote : ModuleBase
                         iconButtonNode.ImageNode.IsVisible      = false;
                         iconNode.AttachNode(iconButtonNode);
 
-                        DisplayOthersJobButtons.Add(iconButtonNode);
-                        DisplayOthersIconsLayout.AddNode(iconButtonNode);
+                        displayOthersJobButtons.Add(iconButtonNode);
+                        displayOthersIconsLayout.AddNode(iconButtonNode);
                     }
 
-                    DisplayOthersIconsLayout.AttachNode(RecipeNoteAddon->GetNodeById(57));
+                    displayOthersIconsLayout.AttachNode(RecipeNoteAddon->GetNodeById(57));
                 }
 
-                if (ClearSearchButton == null)
+                if (clearSearchButton == null)
                 {
-                    ClearSearchButton = new()
+                    clearSearchButton = new()
                     {
                         IsVisible          = true,
                         Position           = new(130, 25),
@@ -387,19 +378,19 @@ public class OptimizedRecipeNote : ModuleBase
                         TextureSize        = new(28),
                         OnClick = () =>
                         {
-                            if (LastRecipeID == 0) return;
+                            if (lastRecipeID == 0) return;
 
                             var agent = AgentRecipeNote.Instance();
                             if (!agent->RecipeSearchOpen) return;
 
-                            agent->OpenRecipeByRecipeId(LastRecipeID);
+                            agent->OpenRecipeByRecipeId(lastRecipeID);
                         }
                     };
 
-                    ClearSearchButton.AttachNode(RecipeNoteAddon->GetNodeById(24));
+                    clearSearchButton.AttachNode(RecipeNoteAddon->GetNodeById(24));
                 }
 
-                if (GetShopInfoButtons.Count == 0)
+                if (getShopInfoButtons.Count == 0)
                 {
                     for (var i = 0U; i < 6; i++)
                     {
@@ -452,14 +443,14 @@ public class OptimizedRecipeNote : ModuleBase
                         backgroundNode.LeftOffset         = 0;
                         backgroundNode.RightOffset        = 0;
 
-                        GetShopInfoButtons.Add(buttonNode);
+                        getShopInfoButtons.Add(buttonNode);
                         buttonNode.AttachNode(componentNode);
                     }
                 }
 
-                if (LevelRecipeButton == null)
+                if (levelRecipeButton == null)
                 {
-                    LevelRecipeButton = new()
+                    levelRecipeButton = new()
                     {
                         IsVisible   = true,
                         Position    = new(0, 32),
@@ -479,13 +470,13 @@ public class OptimizedRecipeNote : ModuleBase
                             }
                         }
                     };
-                    LevelRecipeButton.BackgroundNode.IsVisible = false;
-                    LevelRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(32));
+                    levelRecipeButton.BackgroundNode.IsVisible = false;
+                    levelRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(32));
                 }
 
-                if (SpecialRecipeButton == null)
+                if (specialRecipeButton == null)
                 {
-                    SpecialRecipeButton = new()
+                    specialRecipeButton = new()
                     {
                         IsVisible   = true,
                         Position    = new(50, 32),
@@ -505,13 +496,13 @@ public class OptimizedRecipeNote : ModuleBase
                             }
                         }
                     };
-                    SpecialRecipeButton.BackgroundNode.IsVisible = false;
-                    SpecialRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(32));
+                    specialRecipeButton.BackgroundNode.IsVisible = false;
+                    specialRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(32));
                 }
 
-                if (MasterRecipeButton == null)
+                if (masterRecipeButton == null)
                 {
-                    MasterRecipeButton = new()
+                    masterRecipeButton = new()
                     {
                         IsVisible   = true,
                         Position    = new(102, 32),
@@ -531,8 +522,8 @@ public class OptimizedRecipeNote : ModuleBase
                             }
                         }
                     };
-                    MasterRecipeButton.BackgroundNode.IsVisible = false;
-                    MasterRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(32));
+                    masterRecipeButton.BackgroundNode.IsVisible = false;
+                    masterRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(32));
                 }
 
                 if (Throttler.Shared.Throttle("OptimizedRecipeNote-UpdateAddon", 1000))
@@ -542,7 +533,7 @@ public class OptimizedRecipeNote : ModuleBase
         }
     }
 
-    private static void OnClickInstallRaphaelPayload(uint id, SeString _)
+    private void OnClickInstallRaphaelPayload(uint id, SeString _)
     {
         if (DService.Instance().PI.InstalledPlugins.Any(x => x.InternalName == "Raphael.Dalamud"))
         {
@@ -550,9 +541,9 @@ public class OptimizedRecipeNote : ModuleBase
             return;
         }
 
-        if (InstallRaphaelTask != null) return;
+        if (installRaphaelTask != null) return;
 
-        InstallRaphaelTask = DService.Instance().Framework
+        installRaphaelTask = DService.Instance().Framework
                                      .RunOnTick
                                      (async () => await DalamudReflector.AddPlugin
                                                   (
@@ -560,19 +551,19 @@ public class OptimizedRecipeNote : ModuleBase
                                                       "Raphael.Dalamud"
                                                   )
                                      )
-                                     .ContinueWith(_ => InstallRaphaelTask = null);
+                                     .ContinueWith(_ => installRaphaelTask = null);
     }
 
     private void OnClickPreviewPayload(uint id, SeString _)
     {
-        if (CaculationResults.FirstOrDefault(x => x.Value.PreviewLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
+        if (caculationResults.FirstOrDefault(x => x.Value.PreviewLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
 
         AddonActionsPreview.OpenWithActions(TaskHelper, result.Value);
     }
 
-    private static void OnClickCopyPayload(uint id, SeString _)
+    private void OnClickCopyPayload(uint id, SeString _)
     {
-        if (CaculationResults.FirstOrDefault(x => x.Value.CopyLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
+        if (caculationResults.FirstOrDefault(x => x.Value.CopyLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
 
         var builder = new StringBuilder();
         foreach (var action in result.Value.Actions)
@@ -582,21 +573,21 @@ public class OptimizedRecipeNote : ModuleBase
         NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}");
     }
 
-    private static unsafe void UpdateRecipeAddonButton()
+    private unsafe void UpdateRecipeAddonButton()
     {
         if (RecipeNoteAddon == null) return;
         if (!DService.Instance().PI.IsPluginEnabled(RaphaelIPC.INTERNAL_NAME)) return;
 
-        ClearSearchButton.IsVisible = AgentRecipeNote.Instance()->RecipeSearchOpen && LastRecipeID != 0;
+        clearSearchButton.IsVisible = AgentRecipeNote.Instance()->RecipeSearchOpen && lastRecipeID != 0;
 
         var recipeID = GetCurrentRecipeID();
 
         if (recipeID == 0 || !LuminaGetter.TryGetRow(recipeID, out Recipe recipe))
         {
-            RecipeCaculationButton.IsVisible   = false;
-            SwitchJobButton.IsVisible          = false;
-            DisplayOthersButton.IsVisible      = false;
-            DisplayOthersIconsLayout.IsVisible = false;
+            recipeCaculationButton.IsVisible   = false;
+            switchJobButton.IsVisible          = false;
+            displayOthersButton.IsVisible      = false;
+            displayOthersIconsLayout.IsVisible = false;
             return;
         }
 
@@ -627,14 +618,14 @@ public class OptimizedRecipeNote : ModuleBase
         if (resNodeProgress != null)
             resNodeProgress->SetAlpha(0);
 
-        for (var d = 0; d < GetShopInfoButtons.Count; d++)
+        for (var d = 0; d < getShopInfoButtons.Count; d++)
         {
             if (!recipe.Ingredient[d].IsValid) break;
 
             var item     = recipe.Ingredient[d].Value;
             var itemInfo = ItemSourceInfo.GetItemInfo(item.RowId);
 
-            var button     = GetShopInfoButtons[d];
+            var button     = getShopInfoButtons[d];
             var sourceText = string.Empty;
 
             button.X = -6 + (maxIngredientAmount >= 10 ? -20 : 0);
@@ -669,14 +660,14 @@ public class OptimizedRecipeNote : ModuleBase
 
         if (SameItemRecipes.TryGetValue(recipe.ItemResult.RowId, out var allRecipes))
         {
-            DisplayOthersButton.IsVisible      = true;
-            DisplayOthersIconsLayout.IsVisible = true;
+            displayOthersButton.IsVisible      = true;
+            displayOthersIconsLayout.IsVisible = true;
 
             var allCraftTypes = allRecipes.ToDictionary(x => x.CraftType.RowId, x => x.RowId);
 
             for (var i = 0U; i < 8; i++)
             {
-                var node = DisplayOthersJobButtons[(int)i];
+                var node = displayOthersJobButtons[(int)i];
 
                 if (allCraftTypes.TryGetValue(i, out var otherRecipeID))
                 {
@@ -700,14 +691,14 @@ public class OptimizedRecipeNote : ModuleBase
         }
         else
         {
-            DisplayOthersButton.IsVisible      = false;
-            DisplayOthersIconsLayout.IsVisible = false;
+            displayOthersButton.IsVisible      = false;
+            displayOthersIconsLayout.IsVisible = false;
         }
 
         if (recipe.CraftType.RowId != LocalPlayerState.ClassJob - 8)
         {
-            RecipeCaculationButton.IsVisible = false;
-            SwitchJobButton.IsVisible        = true;
+            recipeCaculationButton.IsVisible = false;
+            switchJobButton.IsVisible        = true;
 
             for (var i = 102U; i < 105; i++)
             {
@@ -718,8 +709,8 @@ public class OptimizedRecipeNote : ModuleBase
         }
         else
         {
-            RecipeCaculationButton.IsVisible = true;
-            SwitchJobButton.IsVisible        = false;
+            recipeCaculationButton.IsVisible = true;
+            switchJobButton.IsVisible        = false;
 
             for (var i = 102U; i < 105; i++)
             {
@@ -766,16 +757,16 @@ public class OptimizedRecipeNote : ModuleBase
         NotifyHelper.Instance().Chat(builder.Build());
     }
 
-    private static void PrintInstallRaphaelPluginMessage()
+    private void PrintInstallRaphaelPluginMessage()
     {
-        InstallRaphaelLinkPayload ??= LinkPayloadManager.Instance().Reg(OnClickInstallRaphaelPayload, out _);
+        installRaphaelLinkPayload ??= LinkPayloadManager.Instance().Reg(OnClickInstallRaphaelPayload, out _);
 
         var message = new SeStringBuilder().AddIcon(BitmapFontIcon.Warning)
                                            .AddText($" {Lang.Get("OptimizedRecipeNote-Message-InstallRapheal")}")
                                            .Add(NewLinePayload.Payload)
                                            .AddText($"{Lang.Get("Operation")}: ")
                                            .Add(RawPayload.LinkTerminator)
-                                           .Add(InstallRaphaelLinkPayload)
+                                           .Add(installRaphaelLinkPayload)
                                            .AddText("[")
                                            .AddUiForeground(35)
                                            .AddText($"{Lang.Get("Enable")} / {Lang.Get("Install")}")
@@ -1099,4 +1090,22 @@ public class OptimizedRecipeNote : ModuleBase
         public ClassJob GetJob() =>
             LuminaGetter.GetRow<ClassJob>(GetRecipe().CraftType.RowId + 8).GetValueOrDefault();
     }
+    
+    #region IPC
+
+    [IPCSubscriber("DailyRoutines.Modules.AutoShowItemNPCShopInfo.OpenByItemID")]
+    private static IPCSubscriber<uint, bool> OpenShopListByItemIDIPC;
+
+    #endregion
+    
+    #region 常量
+
+    private static readonly FrozenDictionary<uint, List<Recipe>> SameItemRecipes =
+        LuminaGetter.Get<Recipe>()
+                    .GroupBy(x => x.ItemResult.RowId)
+                    .DistinctBy(x => x.Key)
+                    .Where(x => x.Key > 0 && x.Count() > 1)
+                    .ToFrozenDictionary(x => x.Key, x => x.DistinctBy(d => d.CraftType.RowId).ToList());
+
+    #endregion
 }

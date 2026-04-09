@@ -16,10 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class BetterBlueSetLoad : ModuleBase
 {
-    private const string Command = "blueset";
-
-    private static Hook<AgentReceiveEventDelegate>? AgentAozNotebookReceiveEventHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("BetterBlueSetLoadTitle"),
@@ -28,6 +24,8 @@ public unsafe class BetterBlueSetLoad : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Hook<AgentReceiveEventDelegate>? AgentAozNotebookReceiveEventHook;
 
     protected override void Init()
     {
@@ -39,7 +37,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
             );
         AgentAozNotebookReceiveEventHook.Enable();
 
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("BetterBlueSetLoad-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterBlueSetLoad-CommandHelp") });
     }
 
     protected override void ConfigUI()
@@ -47,10 +45,10 @@ public unsafe class BetterBlueSetLoad : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"/pdr {Command} → {Lang.Get("BetterBlueSetLoad-CommandHelp")}");
+        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("BetterBlueSetLoad-CommandHelp")}");
     }
 
-    private static AtkValue* AgentAozNotebookReceiveEventDetour
+    private AtkValue* AgentAozNotebookReceiveEventDetour
     (
         AgentInterface* agent,
         AtkValue*       returnvalues,
@@ -165,4 +163,10 @@ public unsafe class BetterBlueSetLoad : ModuleBase
 
         blueModule->LoadActiveSetHotBars(index);
     }
+
+    #region 常量
+
+    private const string COMMAND = "blueset";
+
+    #endregion
 }

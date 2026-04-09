@@ -10,13 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class LargerIME : ModuleBase
 {
-    private static readonly CompSig TextInputReceiveEventSig =
-        new("4C 8B DC 55 53 57 41 54 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B 9D ?? ?? ?? ??");
-
-    private static Hook<TextInputReceiveEventDelegate>? TextInputReceiveEventHook;
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("LargerIMETitle"),
@@ -25,10 +18,24 @@ public unsafe class LargerIME : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig TextInputReceiveEventSig =
+        new("4C 8B DC 55 53 57 41 54 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B 9D ?? ?? ?? ??");
+    private delegate void TextInputReceiveEventDelegate
+    (
+        AtkComponentTextInput* component,
+        AtkEventType           eventType,
+        int                    i,
+        AtkEvent*              atkEvent,
+        AtkEventData*          eventData
+    );
+    private Hook<TextInputReceiveEventDelegate>? TextInputReceiveEventHook;
+
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         TextInputReceiveEventHook ??= TextInputReceiveEventSig.GetHook<TextInputReceiveEventDelegate>(TextInputReceiveEventDetour);
         TextInputReceiveEventHook.Enable();
@@ -37,13 +44,13 @@ public unsafe class LargerIME : ModuleBase
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        if (ImGui.InputFloat($"{Lang.Get("Scale")}###FontScaleInput", ref ModuleConfig.Scale, 0.1f, 1, "%.1f"))
-            ModuleConfig.Scale = MathF.Max(0.1f, ModuleConfig.Scale);
+        if (ImGui.InputFloat($"{Lang.Get("Scale")}###FontScaleInput", ref config.Scale, 0.1f, 1, "%.1f"))
+            config.Scale = MathF.Max(0.1f, config.Scale);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
     }
 
-    private static void TextInputReceiveEventDetour
+    private void TextInputReceiveEventDetour
     (
         AtkComponentTextInput* component,
         AtkEventType           eventType,
@@ -57,18 +64,15 @@ public unsafe class LargerIME : ModuleBase
         ModifyTextInputComponent(component);
     }
 
-    private static void ModifyTextInputComponent(AtkComponentTextInput* component)
+    private void ModifyTextInputComponent(AtkComponentTextInput* component)
     {
         if (component == null) return;
 
         var imeBackground = component->AtkComponentInputBase.AtkComponentBase.UldManager.SearchNodeById(4);
         if (imeBackground == null) return;
 
-        imeBackground->SetScale(ModuleConfig.Scale, ModuleConfig.Scale);
+        imeBackground->SetScale(config.Scale, config.Scale);
     }
-
-    private delegate void TextInputReceiveEventDelegate
-        (AtkComponentTextInput* component, AtkEventType eventType, int i, AtkEvent* atkEvent, AtkEventData* eventData);
 
     private class Config : ModuleConfig
     {

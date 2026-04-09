@@ -24,36 +24,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastSetWeatherTime : ModuleBase
 {
-    private const uint   MAX_TIME = 60 * 60 * 24;
-    private const string COMMAND  = "wt";
-
-    private const string NAVI_MAP_IMAGE_URL =
-        "https://raw.githubusercontent.com/AtmoOmen/StaticAssets/refs/heads/main/DailyRoutines/image/FastSetWeatherTime-NaviMap.png";
-
-    // mov eax, 0
-    private static readonly MemoryPatchWithPointer<uint> RenderSunlightShadowPatch =
-        new("49 0F BE 40 ?? 84 C0", [0xB8, 0x00, 0x00, 0x00, 0x00], pointerOffset: 1);
-
-    // mov dl, 0, nop, nop
-    private static readonly MemoryPatchWithPointer<byte> RenderWeatherPatch =
-        new("48 89 5C 24 ?? 57 48 83 EC 30 80 B9 ?? ?? ?? ?? ?? 49 8B F8 0F 29 74 24 ?? 48 8B D9 0F 28 F1", [0xB2, 0x00, 0x90, 0x90], 0x55, 1);
-
-    // mov r9, 0
-    private static readonly MemoryPatchWithPointer<uint> RenderTimePatch =
-        new("48 89 5C 24 ?? 57 48 83 EC 30 4C 8B 15", [0x49, 0xC7, 0xC1, 0x00, 0x00, 0x00, 0x00], 0x19, 3);
-
-    private static readonly CompSig PlayWeatherSoundSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC ?? 45 33 F6 0F 29 74 24");
-
-    private static Hook<PlayWeatherSoundDelegate> PlayWeatherSoundHook;
-
-    private static readonly CompSig UpdateBgmSituationSig = new("48 89 5C 24 ?? 57 48 83 EC 20 B8 ?? ?? ?? ?? 49 8B F9 41 8B D8");
-
-    private static Hook<UpdateBgmSituationDelegate> UpdateBgmSituationHook;
-
-    private static TextButtonNode? OpenButton;
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FastSetWeatherTimeTitle"),
@@ -62,6 +32,26 @@ public unsafe class FastSetWeatherTime : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig                        PlayWeatherSoundSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC ?? 45 33 F6 0F 29 74 24");
+    private delegate        void*                          PlayWeatherSoundDelegate(void* manager, byte weatherID, void* a3, void* a4);
+    private                 Hook<PlayWeatherSoundDelegate> PlayWeatherSoundHook;
+
+    private static readonly CompSig                          UpdateBgmSituationSig = new("48 89 5C 24 ?? 57 48 83 EC 20 B8 ?? ?? ?? ?? 49 8B F9 41 8B D8");
+    private delegate        void*                            UpdateBgmSituationDelegate(void* manager, ushort bgmSituationID, int column, void* a4, void* a5);
+    private                 Hook<UpdateBgmSituationDelegate> UpdateBgmSituationHook;
+    
+    // mov eax, 0
+    private readonly MemoryPatchWithPointer<uint> renderSunlightShadowPatch =
+        new("49 0F BE 40 ?? 84 C0", [0xB8, 0x00, 0x00, 0x00, 0x00], pointerOffset: 1);
+
+    // mov dl, 0, nop, nop
+    private readonly MemoryPatchWithPointer<byte> renderWeatherPatch =
+        new("48 89 5C 24 ?? 57 48 83 EC 30 80 B9 ?? ?? ?? ?? ?? 49 8B F8 0F 29 74 24 ?? 48 8B D9 0F 28 F1", [0xB2, 0x00, 0x90, 0x90], 0x55, 1);
+
+    // mov r9, 0
+    private readonly MemoryPatchWithPointer<uint> renderTimePatch =
+        new("48 89 5C 24 ?? 57 48 83 EC 30 4C 8B 15", [0x49, 0xC7, 0xC1, 0x00, 0x00, 0x00, 0x00], 0x19, 3);
 
     private static uint RealTime
     {
@@ -75,21 +65,25 @@ public unsafe class FastSetWeatherTime : ModuleBase
     private static byte RealWeather =>
         *(byte*)((nint)EnvManager.Instance() + 0x26);
 
-    private static byte CustomWeather
+    private byte CustomWeather
     {
-        get => RenderWeatherPatch.CurrentValue;
-        set => RenderWeatherPatch.Set(value);
+        get => renderWeatherPatch.CurrentValue;
+        set => renderWeatherPatch.Set(value);
     }
 
-    private static uint CustomTime
+    private uint CustomTime
     {
-        get => RenderTimePatch.CurrentValue;
-        set => RenderTimePatch.Set(value);
+        get => renderTimePatch.CurrentValue;
+        set => renderTimePatch.Set(value);
     }
+    
+    private Config config = null!;
+    
+    private TextButtonNode? openButton;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         PlayWeatherSoundHook ??= PlayWeatherSoundSig.GetHook<PlayWeatherSoundDelegate>(PlayWeatherSoundDetour);
         PlayWeatherSoundHook.Enable();
@@ -99,7 +93,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
 
-        AddonDRFastSetWeather.Addon = new()
+        AddonDRFastSetWeather.Addon = new(this)
         {
             InternalName = "DRFastSetWeather",
             Title        = $"{Lang.Get("Weather")} & {Lang.Get("Time")}",
@@ -143,17 +137,184 @@ public unsafe class FastSetWeatherTime : ModuleBase
             }
         }
     }
+    
+    #region 事件
 
-    private delegate void* PlayWeatherSoundDelegate(void* manager, byte weatherID, void* a3, void* a4);
+    private void* PlayWeatherSoundDetour(void* manager, byte weatherID, void* a3, void* a4)
+    {
+        if (IsWeatherCustom())
+            weatherID = GetDisplayWeather();
 
-    private delegate void* UpdateBgmSituationDelegate(void* manager, ushort bgmSituationID, int column, void* a4, void* a5);
+        return PlayWeatherSoundHook.Original(manager, weatherID, a3, a4);
+    }
+
+    private void* UpdateBgmSituationDetour(void* manager, ushort bgmSituationID, int column, void* a4, void* a5)
+    {
+        if (IsTimeCustom() && column != 3)
+        {
+            var seconds = CustomTime % 86400;
+            var isDay   = seconds is >= 21600 and < 64800;
+            column = isDay ? 1 : 2;
+        }
+
+        return UpdateBgmSituationHook.Original(manager, bgmSituationID, column, a4, a5);
+    }
+
+    private void OnZoneChanged(ushort _)
+    {
+        config.ZoneSettings.TryGetValue(GameState.TerritoryType, out var info);
+
+        if (info is { IsWeatherEnabled: true, WeatherID: not 255 })
+            ToggleWeather(true, info.WeatherID);
+        else
+            ToggleWeather(false);
+
+        if (info is { IsTimeEnabled: true })
+            ToggleTime(true, info.Time);
+        else
+            ToggleTime(false);
+    }
+
+    private void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        switch (type)
+        {
+            case AddonEvent.PreFinalize:
+                openButton?.Dispose();
+                openButton = null;
+                break;
+
+            case AddonEvent.PostRequestedUpdate:
+                if (!NaviMap->IsAddonAndNodesReady()) return;
+
+                if (openButton == null)
+                {
+                    openButton = new()
+                    {
+                        Position  = new(158, 24),
+                        Size      = new(36),
+                        IsVisible = true,
+                        String    = string.Empty,
+                        OnClick   = () => AddonDRFastSetWeather.Addon.Toggle()
+                    };
+
+                    openButton.BackgroundNode.IsVisible = false;
+                    openButton.AttachNode(NaviMap->RootNode);
+                }
+
+                openButton.TextTooltip = LuminaGetter.GetRowOrDefault<Weather>(GetDisplayWeather()).Name;
+                break;
+        }
+    }
+
+    private static void OnCommand(string command, string args) =>
+        AddonDRFastSetWeather.Addon.Toggle();
+
+    #endregion
+
+    #region 控制
+
+    private void ToggleWeather(bool isEnabled, byte weatherID = 255)
+    {
+        if (!isEnabled || weatherID == 255)
+            DisableCustomWeather();
+        else
+        {
+            EnableCustomWeather();
+            CustomWeather = weatherID;
+        }
+    }
+
+    private void EnableCustomWeather()
+    {
+        if (IsWeatherCustom()) return;
+
+        renderWeatherPatch.Enable();
+        renderSunlightShadowPatch.Enable();
+    }
+
+    private void DisableCustomWeather()
+    {
+        if (!IsWeatherCustom()) return;
+
+        renderWeatherPatch.Disable();
+        renderSunlightShadowPatch.Disable();
+    }
+
+    private void ToggleTime(bool isEnabled, uint time = 0)
+    {
+        if (!isEnabled)
+            DisableCustomTime();
+        else
+        {
+            EnableCustomTime();
+            CustomTime = time;
+        }
+    }
+
+    private void EnableCustomTime()
+    {
+        if (IsTimeCustom()) return;
+        renderTimePatch.Enable();
+    }
+
+    private void DisableCustomTime()
+    {
+        if (!IsTimeCustom()) return;
+        renderTimePatch.Disable();
+    }
+
+    #endregion
+
+    #region 工具
+
+    private byte GetDisplayWeather() =>
+        IsWeatherCustom() ? CustomWeather : RealWeather;
+
+    private uint GetDisplayTime() =>
+        IsTimeCustom() ? CustomTime : RealTime;
+
+    private bool IsWeatherCustom() =>
+        renderWeatherPatch.IsEnabled;
+
+    private bool IsTimeCustom() =>
+        renderTimePatch.IsEnabled;
+
+    private static (List<byte> WeatherList, string ENVBFile) ParseLVB(ushort zoneID)
+    {
+        var weathers = new List<byte>();
+
+        try
+        {
+            var file = DService.Instance().Data.GetFile<LVBFile>($"bg/{LuminaGetter.GetRowOrDefault<TerritoryType>(zoneID).Bg}.lvb");
+            if (file?.WeatherIDs == null || file.WeatherIDs.Length == 0)
+                return ([], string.Empty);
+
+            foreach (var weather in file.WeatherIDs)
+            {
+                if (weather is > 0 and < 255)
+                    weathers.Add((byte)weather);
+            }
+
+            weathers.Sort();
+            return (weathers, file.ENVBFile);
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return ([], string.Empty);
+    }
+
+    #endregion
 
     private class Config : ModuleConfig
     {
         public Dictionary<uint, ZoneSetting> ZoneSettings = [];
     }
 
-    private class AddonDRFastSetWeather : NativeAddon
+    private class AddonDRFastSetWeather(FastSetWeatherTime module) : NativeAddon
     {
         private TextButtonNode? clearButtonNode;
 
@@ -231,13 +392,13 @@ public unsafe class FastSetWeatherTime : ModuleBase
                         IconId    = (uint)weatherRow.Icon,
                         OnClick = () =>
                         {
-                            if (IsWeatherCustom() && GetDisplayWeather() == weather)
-                                ToggleWeather(false);
+                            if (module.IsWeatherCustom() && module.GetDisplayWeather() == weather)
+                                module.ToggleWeather(false);
                             else
-                                ToggleWeather(true, weather);
+                                module.ToggleWeather(true, weather);
 
                             foreach (var (id, (_, enabledIcon)) in weatherButtons)
-                                enabledIcon.IsVisible = IsWeatherCustom() && GetDisplayWeather() == id;
+                                enabledIcon.IsVisible = module.IsWeatherCustom() && module.GetDisplayWeather() == id;
                         },
                         TextTooltip = $"{weatherRow.Name}"
                     };
@@ -248,7 +409,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
                         TextureSize        = new(36),
                         Size               = new(22),
                         Position           = new(22, 24),
-                        IsVisible          = IsWeatherCustom() && GetDisplayWeather() == weather
+                        IsVisible          = module.IsWeatherCustom() && module.GetDisplayWeather() == weather
                     };
                     enabledIconNode.AttachNode(weatherButton);
 
@@ -278,10 +439,10 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 IsVisible = true,
                 String    = Lang.Get("FastSetWeatherTime-Addon-ModifyTime"),
                 Size      = new(100, 28),
-                IsChecked = IsTimeCustom(),
+                IsChecked = module.IsTimeCustom(),
                 OnClick = x =>
                 {
-                    ToggleTime(x, RealTime);
+                    module.ToggleTime(x, RealTime);
                     timeNode.Value = (int)RealTime;
                 }
             };
@@ -290,12 +451,12 @@ public unsafe class FastSetWeatherTime : ModuleBase
             timeNode = new()
             {
                 Range = new(0, (int)(MAX_TIME - 1)),
-                Value = (int)GetDisplayTime(),
+                Value = (int)module.GetDisplayTime(),
                 Size  = new(Size.X - ContentStartPosition.X, 28),
                 OnValueChanged = x =>
                 {
-                    if (!IsTimeCustom()) return;
-                    ToggleTime(true, (uint)x);
+                    if (!module.IsTimeCustom()) return;
+                    module.ToggleTime(true, (uint)x);
                 }
             };
 
@@ -315,11 +476,11 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 Size = new(78f, 30f),
                 OnValueUpdate = hour =>
                 {
-                    if (!IsTimeCustom()) return;
+                    if (!module.IsTimeCustom()) return;
 
-                    var span = TimeSpan.FromSeconds(GetDisplayTime());
-                    ToggleTime(true, (uint)(span.Minutes * 60 + span.Seconds + hour * 60 * 60));
-                    timeNode.Value = (int)GetDisplayTime();
+                    var span = TimeSpan.FromSeconds(module.GetDisplayTime());
+                    module.ToggleTime(true, (uint)(span.Minutes * 60 + span.Seconds + hour * 60 * 60));
+                    timeNode.Value = (int)module.GetDisplayTime();
                 }
             };
 
@@ -331,11 +492,11 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 Size = new(78f, 30f),
                 OnValueUpdate = minute =>
                 {
-                    if (!IsTimeCustom()) return;
+                    if (!module.IsTimeCustom()) return;
 
-                    var span = TimeSpan.FromSeconds(GetDisplayTime());
-                    ToggleTime(true, (uint)(minute * 60 + span.Seconds + span.Hours * 60 * 60));
-                    timeNode.Value = (int)GetDisplayTime();
+                    var span = TimeSpan.FromSeconds(module.GetDisplayTime());
+                    module.ToggleTime(true, (uint)(minute * 60 + span.Seconds + span.Hours * 60 * 60));
+                    timeNode.Value = (int)module.GetDisplayTime();
                 }
             };
 
@@ -347,11 +508,11 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 Size = new(78f, 30f),
                 OnValueUpdate = second =>
                 {
-                    if (!IsTimeCustom()) return;
+                    if (!module.IsTimeCustom()) return;
 
-                    var span = TimeSpan.FromSeconds(GetDisplayTime());
-                    ToggleTime(true, (uint)(span.Minutes * 60 + second + span.Hours * 60 * 60));
-                    timeNode.Value = (int)GetDisplayTime();
+                    var span = TimeSpan.FromSeconds(module.GetDisplayTime());
+                    module.ToggleTime(true, (uint)(span.Minutes * 60 + second + span.Hours * 60 * 60));
+                    timeNode.Value = (int)module.GetDisplayTime();
                 }
             };
 
@@ -377,19 +538,19 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 Size   = new(operationRow.Width / 2 - 5f, 30),
                 OnClick = () =>
                 {
-                    if (!IsTimeCustom() && !IsWeatherCustom()) return;
+                    if (!module.IsTimeCustom() && !module.IsWeatherCustom()) return;
 
-                    var originalSetting = ModuleConfig.ZoneSettings.TryGetValue(GameState.TerritoryType, out var data) ? data : new();
-                    ModuleConfig.ZoneSettings[GameState.TerritoryType] = new()
+                    var originalSetting = module.config.ZoneSettings.TryGetValue(GameState.TerritoryType, out var data) ? data : new();
+                    module.config.ZoneSettings[GameState.TerritoryType] = new()
                     {
-                        IsTimeEnabled    = IsTimeCustom()    || originalSetting.IsTimeEnabled,
-                        IsWeatherEnabled = IsWeatherCustom() || originalSetting.IsWeatherEnabled,
-                        Time             = IsTimeCustom() ? GetDisplayTime() : originalSetting.Time,
-                        WeatherID        = IsWeatherCustom() ? GetDisplayWeather() : originalSetting.WeatherID
+                        IsTimeEnabled    = module.IsTimeCustom()    || originalSetting.IsTimeEnabled,
+                        IsWeatherEnabled = module.IsWeatherCustom() || originalSetting.IsWeatherEnabled,
+                        Time             = module.IsTimeCustom() ? module.GetDisplayTime() : originalSetting.Time,
+                        WeatherID        = module.IsWeatherCustom() ? module.GetDisplayWeather() : originalSetting.WeatherID
                     };
-                    ModuleConfig.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
+                    module.config.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
 
-                    var setting = ModuleConfig.ZoneSettings[GameState.TerritoryType];
+                    var setting = module.config.ZoneSettings[GameState.TerritoryType];
 
                     var message = Lang.Get
                     (
@@ -414,9 +575,9 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 Size   = new(operationRow.Width / 2 - 5f, 30),
                 OnClick = () =>
                 {
-                    if (ModuleConfig.ZoneSettings.Remove(GameState.TerritoryType))
+                    if (module.config.ZoneSettings.Remove(GameState.TerritoryType))
                     {
-                        ModuleConfig.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
+                        module.config.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
                         NotifyHelper.Instance().Chat(Lang.Get("FastSetWeatherTime-Notification-Cleard"));
                     }
                 }
@@ -441,10 +602,10 @@ public unsafe class FastSetWeatherTime : ModuleBase
         {
             if (timeNode != null && hourInputNode != null && minuteInputNode != null && secondInputNode != null)
             {
-                if (!IsTimeCustom())
-                    timeNode.Value = (int)GetDisplayTime();
+                if (!module.IsTimeCustom())
+                    timeNode.Value = (int)module.GetDisplayTime();
 
-                var span = TimeSpan.FromSeconds(GetDisplayTime());
+                var span = TimeSpan.FromSeconds(module.GetDisplayTime());
                 hourInputNode.Value   = span.Hours;
                 minuteInputNode.Value = span.Minutes;
                 secondInputNode.Value = span.Seconds;
@@ -452,182 +613,11 @@ public unsafe class FastSetWeatherTime : ModuleBase
 
             if (saveButtonNode != null && clearButtonNode != null)
             {
-                saveButtonNode.IsEnabled  = GameState.TerritoryType > 0 && (IsTimeCustom() || IsWeatherCustom());
-                clearButtonNode.IsEnabled = ModuleConfig.ZoneSettings.ContainsKey(GameState.TerritoryType);
+                saveButtonNode.IsEnabled  = GameState.TerritoryType > 0 && (module.IsTimeCustom() || module.IsWeatherCustom());
+                clearButtonNode.IsEnabled = module.config.ZoneSettings.ContainsKey(GameState.TerritoryType);
             }
         }
     }
-
-    #region 事件
-
-    private static void* PlayWeatherSoundDetour(void* manager, byte weatherID, void* a3, void* a4)
-    {
-        if (IsWeatherCustom())
-            weatherID = GetDisplayWeather();
-
-        return PlayWeatherSoundHook.Original(manager, weatherID, a3, a4);
-    }
-
-    private static void* UpdateBgmSituationDetour(void* manager, ushort bgmSituationID, int column, void* a4, void* a5)
-    {
-        if (IsTimeCustom() && column != 3)
-        {
-            var seconds = CustomTime % 86400;
-            var isDay   = seconds is >= 21600 and < 64800;
-            column = isDay ? 1 : 2;
-        }
-
-        return UpdateBgmSituationHook.Original(manager, bgmSituationID, column, a4, a5);
-    }
-
-    private static void OnZoneChanged(ushort _)
-    {
-        ModuleConfig.ZoneSettings.TryGetValue(GameState.TerritoryType, out var info);
-
-        if (info is { IsWeatherEnabled: true, WeatherID: not 255 })
-            ToggleWeather(true, info.WeatherID);
-        else
-            ToggleWeather(false);
-
-        if (info is { IsTimeEnabled: true })
-            ToggleTime(true, info.Time);
-        else
-            ToggleTime(false);
-    }
-
-    private static void OnAddon(AddonEvent type, AddonArgs args)
-    {
-        switch (type)
-        {
-            case AddonEvent.PreFinalize:
-                OpenButton?.Dispose();
-                OpenButton = null;
-                break;
-
-            case AddonEvent.PostRequestedUpdate:
-                if (!NaviMap->IsAddonAndNodesReady()) return;
-
-                if (OpenButton == null)
-                {
-                    OpenButton = new()
-                    {
-                        Position  = new(158, 24),
-                        Size      = new(36),
-                        IsVisible = true,
-                        String    = string.Empty,
-                        OnClick   = () => AddonDRFastSetWeather.Addon.Toggle()
-                    };
-
-                    OpenButton.BackgroundNode.IsVisible = false;
-                    OpenButton.AttachNode(NaviMap->RootNode);
-                }
-
-                OpenButton.TextTooltip = LuminaGetter.GetRowOrDefault<Weather>(GetDisplayWeather()).Name;
-                break;
-        }
-    }
-
-    private static void OnCommand(string command, string args) =>
-        AddonDRFastSetWeather.Addon.Toggle();
-
-    #endregion
-
-    #region 控制
-
-    private static void ToggleWeather(bool isEnabled, byte weatherID = 255)
-    {
-        if (!isEnabled || weatherID == 255)
-            DisableCustomWeather();
-        else
-        {
-            EnableCustomWeather();
-            CustomWeather = weatherID;
-        }
-    }
-
-    private static void EnableCustomWeather()
-    {
-        if (IsWeatherCustom()) return;
-
-        RenderWeatherPatch.Enable();
-        RenderSunlightShadowPatch.Enable();
-    }
-
-    private static void DisableCustomWeather()
-    {
-        if (!IsWeatherCustom()) return;
-
-        RenderWeatherPatch.Disable();
-        RenderSunlightShadowPatch.Disable();
-    }
-
-    private static void ToggleTime(bool isEnabled, uint time = 0)
-    {
-        if (!isEnabled)
-            DisableCustomTime();
-        else
-        {
-            EnableCustomTime();
-            CustomTime = time;
-        }
-    }
-
-    private static void EnableCustomTime()
-    {
-        if (IsTimeCustom()) return;
-        RenderTimePatch.Enable();
-    }
-
-    private static void DisableCustomTime()
-    {
-        if (!IsTimeCustom()) return;
-        RenderTimePatch.Disable();
-    }
-
-    #endregion
-
-    #region 工具
-
-    private static byte GetDisplayWeather() =>
-        IsWeatherCustom() ? CustomWeather : RealWeather;
-
-    private static uint GetDisplayTime() =>
-        IsTimeCustom() ? CustomTime : RealTime;
-
-    private static bool IsWeatherCustom() =>
-        RenderWeatherPatch.IsEnabled;
-
-    private static bool IsTimeCustom() =>
-        RenderTimePatch.IsEnabled;
-
-    private static (List<byte> WeatherList, string ENVBFile) ParseLVB(ushort zoneID)
-    {
-        var weathers = new List<byte>();
-
-        try
-        {
-            var file = DService.Instance().Data.GetFile<LVBFile>($"bg/{LuminaGetter.GetRowOrDefault<TerritoryType>(zoneID).Bg}.lvb");
-            if (file?.WeatherIDs == null || file.WeatherIDs.Length == 0)
-                return ([], string.Empty);
-
-            foreach (var weather in file.WeatherIDs)
-            {
-                if (weather is > 0 and < 255)
-                    weathers.Add((byte)weather);
-            }
-
-            weathers.Sort();
-            return (weathers, file.ENVBFile);
-        }
-        catch
-        {
-            // ignored
-        }
-
-        return ([], string.Empty);
-    }
-
-    #endregion
 
     #region 自定义类
 
@@ -672,6 +662,16 @@ public unsafe class FastSetWeatherTime : ModuleBase
             }
         }
     }
+
+    #endregion
+    
+    #region 常量
+
+    private const uint   MAX_TIME = 60 * 60 * 24;
+    private const string COMMAND  = "wt";
+
+    private const string NAVI_MAP_IMAGE_URL =
+        "https://raw.githubusercontent.com/AtmoOmen/StaticAssets/refs/heads/main/DailyRoutines/image/FastSetWeatherTime-NaviMap.png";
 
     #endregion
 }

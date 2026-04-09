@@ -21,17 +21,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class OptimizedLetter : ModuleBase
 {
-    [IPCSubscriber("DailyRoutines.Modules.OptimizedFriendlist.GetRemarkByContentID", DefaultValue = "")]
-    private static IPCSubscriber<ulong, string> GetRemarkByContentID;
-
-    [IPCSubscriber("DailyRoutines.Modules.OptimizedFriendlist.GetNicknameByContentID", DefaultValue = "")]
-    private static IPCSubscriber<ulong, string> GetNicknameByContentID;
-
-    private static AddonDROptimizedLetter? Addon;
-
-    private static TextInputNode?      TextInputButton;
-    private static TextButtonListNode? ListNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("OptimizedLetterTitle"),
@@ -41,10 +30,15 @@ public class OptimizedLetter : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private AddonDROptimizedLetter? addon;
+
+    private TextInputNode?      textInputButton;
+    private TextButtonListNode? listNode;
+
     protected override void Init()
     {
         TaskHelper ??= new();
-        Addon ??= new(TaskHelper)
+        addon ??= new(TaskHelper)
         {
             InternalName = "DROptimizedLetter",
             Title        = Info.Title,
@@ -66,42 +60,42 @@ public class OptimizedLetter : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonLetterAddress);
         OnAddonLetterAddress(AddonEvent.PreFinalize, null);
 
-        Addon?.Dispose();
-        Addon = null;
+        addon?.Dispose();
+        addon = null;
     }
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs? args)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
-        if (Addon.IsOpen || !LetterList->IsAddonAndNodesReady()) return;
-        Addon.Open();
+        if (addon.IsOpen || !LetterList->IsAddonAndNodesReady()) return;
+        addon.Open();
     }
 
-    private static unsafe void OnAddonLetterAddress(AddonEvent type, AddonArgs args)
+    private unsafe void OnAddonLetterAddress(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                TextInputButton?.Dispose();
-                TextInputButton = null;
+                textInputButton?.Dispose();
+                textInputButton = null;
 
-                ListNode?.Dispose();
-                ListNode = null;
+                listNode?.Dispose();
+                listNode = null;
                 break;
 
             case AddonEvent.PostDraw:
                 if (LetterAddress == null) return;
 
-                if (TextInputButton == null)
+                if (textInputButton == null)
                 {
-                    TextInputButton = new()
+                    textInputButton = new()
                     {
                         IsVisible = true,
                         Size      = new(200, 30),
                         Position  = new(18, 38),
                         OnInputReceived = name =>
                         {
-                            ListNode?.Dispose();
-                            ListNode = null;
+                            listNode?.Dispose();
+                            listNode = null;
 
                             List<string> names = [];
 
@@ -123,7 +117,7 @@ public class OptimizedLetter : ModuleBase
 
                             if (names.Count == 0) return;
 
-                            ListNode = new()
+                            listNode = new()
                             {
                                 IsVisible  = true,
                                 Position   = new(16, 68),
@@ -144,18 +138,18 @@ public class OptimizedLetter : ModuleBase
                             };
 
                             if (names.Count <= 8)
-                                ListNode.ScrollBarNode.IsVisible = false;
+                                listNode.ScrollBarNode.IsVisible = false;
 
-                            ListNode.AttachNode(LetterAddress->RootNode);
+                            listNode.AttachNode(LetterAddress->RootNode);
                         }
                     };
-                    TextInputButton.AttachNode(LetterAddress->RootNode);
+                    textInputButton.AttachNode(LetterAddress->RootNode);
                 }
 
-                if (ListNode != null)
+                if (listNode != null)
                 {
-                    var shouldDisplay = !string.IsNullOrWhiteSpace(TextInputButton.String.ToString());
-                    ListNode.IsVisible = shouldDisplay;
+                    var shouldDisplay = !string.IsNullOrWhiteSpace(textInputButton.String.ToString());
+                    listNode.IsVisible = shouldDisplay;
                 }
 
                 break;
@@ -342,4 +336,14 @@ public class OptimizedLetter : ModuleBase
             return letters.Count > 0;
         }
     }
+    
+    #region IPC
+
+    [IPCSubscriber("DailyRoutines.Modules.OptimizedFriendlist.GetRemarkByContentID", DefaultValue = "")]
+    private IPCSubscriber<ulong, string> GetRemarkByContentID;
+
+    [IPCSubscriber("DailyRoutines.Modules.OptimizedFriendlist.GetNicknameByContentID", DefaultValue = "")]
+    private IPCSubscriber<ulong, string> GetNicknameByContentID;
+
+    #endregion
 }

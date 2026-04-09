@@ -15,28 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoHideBanners : ModuleBase
 {
-    private static readonly FrozenSet<uint> WKSMissionChainBannerIDs = [128527, 128528, 128529, 128530, 128531, 128532];
-
-    private static readonly CompSig                        SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
-    private static          Hook<SetImageTextureDelegate>? SetImageTextureHook;
-
-    private static Config ModuleConfig = null!;
-
-    private static readonly List<uint> BannersData =
-    [
-        120031, 120032, 120055, 120081, 120082, 120083, 120084, 120085, 120086,
-        120093, 120094, 120095, 120096, 120141, 120142, 121081, 121082, 121561,
-        121562, 121563, 128370, 128371, 128372, 128373, 128525, 128526,
-        128527, 128528, 128529, 128530, 128531, 128532
-    ];
-
-    private static readonly HashSet<uint> DefaultEnabledBanners = [120031, 120032, 120055, 120095, 120096, 120141, 120142];
-
-    private static readonly Vector4 ButtonNormalColor   = ImGui.GetColorU32(ImGuiCol.Button).ToVector4().WithAlpha(0f);
-    private static readonly Vector4 ButtonActiveColor   = ImGui.GetColorU32(ImGuiCol.ButtonActive).ToVector4().WithAlpha(0.8f);
-    private static readonly Vector4 ButtonHoveredColor  = ImGui.GetColorU32(ImGuiCol.ButtonHovered).ToVector4().WithAlpha(0.4f);
-    private static readonly Vector4 ButtonSelectedColor = ImGui.GetColorU32(ImGuiCol.Button).ToVector4().WithAlpha(0.6f);
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoHideBannersTitle"),
@@ -46,21 +24,27 @@ public unsafe class AutoHideBanners : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig                        SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
+    private delegate        void*                          SetImageTextureDelegate(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID);
+    private                 Hook<SetImageTextureDelegate>? SetImageTextureHook;
+
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         var isAnyAdded = false;
 
         foreach (var bannerID in BannersData)
         {
-            if (!ModuleConfig.HiddenBanners.TryAdd(bannerID, DefaultEnabledBanners.Contains(bannerID))) continue;
+            if (!config.HiddenBanners.TryAdd(bannerID, DefaultEnabledBanners.Contains(bannerID))) continue;
             isAnyAdded = true;
         }
 
         if (isAnyAdded)
-            ModuleConfig.Save(this);
+            config.Save(this);
 
         SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(SetImageTextureDetour);
         SetImageTextureHook.Enable();
@@ -121,17 +105,17 @@ public unsafe class AutoHideBanners : ModuleBase
         using (ImRaii.PushColor(ImGuiCol.Button, ButtonNormalColor))
         using (ImRaii.PushColor(ImGuiCol.ButtonActive, ButtonActiveColor))
         using (ImRaii.PushColor(ImGuiCol.ButtonHovered, ButtonHoveredColor))
-        using (ImRaii.PushColor(ImGuiCol.Button, ButtonSelectedColor, ModuleConfig.HiddenBanners.GetValueOrDefault(bannerID)))
+        using (ImRaii.PushColor(ImGuiCol.Button, ButtonSelectedColor, config.HiddenBanners.GetValueOrDefault(bannerID)))
         {
             if (ImGui.Button($"##{bannerID}_{cursorPos}", size))
             {
-                ModuleConfig.HiddenBanners[bannerID] ^= true;
-                ModuleConfig.Save(this);
+                config.HiddenBanners[bannerID] ^= true;
+                config.Save(this);
             }
         }
     }
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         var addon = args.Addon.ToStruct();
         if (addon == null) return;
@@ -140,17 +124,17 @@ public unsafe class AutoHideBanners : ModuleBase
         addon->Hide(true, true, 1);
     }
 
-    private static void* SetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID)
+    private void* SetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID)
     {
         if (IsWKSMissionChainBannerSelected(bannerID))
             return SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
 
-        return ModuleConfig.HiddenBanners.GetValueOrDefault(bannerID)
+        return config.HiddenBanners.GetValueOrDefault(bannerID)
                    ? null
                    : SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
     }
 
-    private static bool ShouldHideWKSMissionChain(AtkUnitBase* addon)
+    private bool ShouldHideWKSMissionChain(AtkUnitBase* addon)
     {
         var imageNode = addon->UldManager.SearchSimpleNodeByType<AtkImageNode>(NodeType.Image);
         if (imageNode == null) return false;
@@ -161,14 +145,33 @@ public unsafe class AutoHideBanners : ModuleBase
         return IsWKSMissionChainBannerSelected(iconID);
     }
 
-    private static bool IsWKSMissionChainBannerSelected(uint iconID) =>
-        WKSMissionChainBannerIDs.Contains(iconID) && ModuleConfig.HiddenBanners.GetValueOrDefault(iconID);
-
-    private delegate void* SetImageTextureDelegate(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID);
-
+    private bool IsWKSMissionChainBannerSelected(uint iconID) =>
+        WKSMissionChainBannerIDs.Contains(iconID) && config.HiddenBanners.GetValueOrDefault(iconID);
+    
     private class Config : ModuleConfig
     {
         // true - 隐藏; false - 维持
         public Dictionary<uint, bool> HiddenBanners = [];
     }
+    
+    #region 常量
+
+    private static readonly List<uint> BannersData =
+    [
+        120031, 120032, 120055, 120081, 120082, 120083, 120084, 120085, 120086,
+        120093, 120094, 120095, 120096, 120141, 120142, 121081, 121082, 121561,
+        121562, 121563, 128370, 128371, 128372, 128373, 128525, 128526,
+        128527, 128528, 128529, 128530, 128531, 128532
+    ];
+    
+    private static readonly FrozenSet<uint> WKSMissionChainBannerIDs = [128527, 128528, 128529, 128530, 128531, 128532];
+
+    private static readonly FrozenSet<uint> DefaultEnabledBanners = [120031, 120032, 120055, 120095, 120096, 120141, 120142];
+
+    private static readonly Vector4 ButtonNormalColor   = ImGui.GetColorU32(ImGuiCol.Button).ToVector4().WithAlpha(0f);
+    private static readonly Vector4 ButtonActiveColor   = ImGui.GetColorU32(ImGuiCol.ButtonActive).ToVector4().WithAlpha(0.8f);
+    private static readonly Vector4 ButtonHoveredColor  = ImGui.GetColorU32(ImGuiCol.ButtonHovered).ToVector4().WithAlpha(0.4f);
+    private static readonly Vector4 ButtonSelectedColor = ImGui.GetColorU32(ImGuiCol.Button).ToVector4().WithAlpha(0.6f);
+
+    #endregion
 }

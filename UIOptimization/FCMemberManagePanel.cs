@@ -24,27 +24,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FCMemberManagePanel : ModuleBase
 {
-    private static TaskHelper? ContextTaskHelper;
-
-    private static readonly Throttler<string> Throttler = new();
-
-    private static readonly Dictionary<ulong, FreeCompanyMemberInfo> CharacterDataDict = [];
-    private static readonly HashSet<FreeCompanyMemberInfo>           SelectedMembers   = [];
-
-    private static readonly CompSig AgentFCReceiveEventInternalSig =
-        new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 41 56 48 83 EC ?? 48 8B F1 48 8B DA");
-
-    private static AgentFCReceiveEventInternalDelegate? AgentFCReceiveEventInternal;
-
-    private static readonly CompSig OpenFCMemberContextMenuSig = new("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 48 8D 4F 10 E8 ?? ?? ?? ?? 44 8B 43 20");
-    private static          OpenFCMemberContextMenuDelegate? OpenFCMemberContextMenu;
-
-    private static uint FCTotalMembersCount;
-    private static int  CurrentFCMemberPage;
-
-    private static bool   IsReverse;
-    private static string FilterMemberName = string.Empty;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FCMemberManagePanelTitle"),
@@ -52,11 +31,30 @@ public unsafe class FCMemberManagePanel : ModuleBase
         Category    = ModuleCategory.UIOptimization
     };
 
-    private static List<FreeCompanyMemberInfo> CharacterDataDisplay => FilterAndSortCharacterData();
+    private static readonly CompSig AgentFCReceiveEventInternalSig =
+        new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 41 56 48 83 EC ?? 48 8B F1 48 8B DA");
+    private delegate nint AgentFCReceiveEventInternalDelegate(AgentFreeCompany* agent, nint a2);
+    private static   AgentFCReceiveEventInternalDelegate? AgentFCReceiveEventInternal;
+
+    // TODO: 等待 FFCS 更新 AgentFreeCompany.OpenContextMenuForMember
+    private static readonly CompSig OpenFCMemberContextMenuSig = new("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 48 8D 4F 10 E8 ?? ?? ?? ?? 44 8B 43 20");
+    private delegate        void    OpenFCMemberContextMenuDelegate(AgentFreeCompany* agent, ushort index);
+    private static          OpenFCMemberContextMenuDelegate? OpenFCMemberContextMenu;
+    
+    private readonly Dictionary<ulong, FreeCompanyMemberInfo> characterDataDict = [];
+    private readonly HashSet<FreeCompanyMemberInfo>           selectedMembers   = [];
+
+    private uint fcTotalMembersCount;
+    private int  currentFCMemberPage;
+
+    private bool   isReverse;
+    private string filterMemberName = string.Empty;
+
+    private List<FreeCompanyMemberInfo> characterDataDisplay = [];
 
     protected override void Init()
     {
-        ContextTaskHelper ??= new() { TimeoutMS = 3000 };
+        TaskHelper ??= new() { TimeoutMS = 3000 };
 
         OpenFCMemberContextMenu ??=
             Marshal.GetDelegateForFunctionPointer<OpenFCMemberContextMenuDelegate>(OpenFCMemberContextMenuSig.ScanText());
@@ -82,9 +80,6 @@ public unsafe class FCMemberManagePanel : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonMember);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonYesno);
 
-        ContextTaskHelper?.Abort();
-        ContextTaskHelper = null;
-
         ResetAllExistedData();
     }
 
@@ -92,21 +87,21 @@ public unsafe class FCMemberManagePanel : ModuleBase
     {
         if (!DService.Instance().ClientState.IsLoggedIn) return;
 
-        if (FCTotalMembersCount == 0 && Throttler.Throttle("GetFCTotalMembersCount", 1_000))
+        if (fcTotalMembersCount == 0 && Throttler.Shared.Throttle("FCMemberManagePanel-GetFCTotalMembersCount", 1_000))
         {
             var instance = InfoProxyFreeCompany.Instance();
             instance->RequestData();
-            FCTotalMembersCount = instance->TotalMembers;
+            fcTotalMembersCount = instance->TotalMembers;
         }
 
-        if (FCTotalMembersCount != 0 && Throttler.Throttle("SubstituteFCMembersData", 1_000))
+        if (fcTotalMembersCount != 0 && Throttler.Shared.Throttle("FCMemberManagePanel-SubstituteFCMembersData", 1_000))
         {
             var agent          = AgentFreeCompany.Instance();
             var memberInstance = agent->InfoProxyFreeCompanyMember;
 
-            CurrentFCMemberPage = agent->CurrentMemberPageIndex;
+            currentFCMemberPage = agent->CurrentMemberPageIndex;
 
-            if (Throttler.Throttle("Re-RequestMembersInfo", 3_000))
+            if (Throttler.Shared.Throttle("FCMemberManagePanel-RerequestMembersInfo", 3_000))
             {
                 var source = memberInstance->CharDataSpan;
 
@@ -115,7 +110,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
                     var newData = FreeCompanyMemberInfo.Parse(source[i], i);
                     if (string.IsNullOrWhiteSpace(newData.Name)) continue;
 
-                    if (CharacterDataDict.TryGetValue(newData.ContentID, out var existingData))
+                    if (characterDataDict.TryGetValue(newData.ContentID, out var existingData))
                     {
                         var changes = existingData.UpdateFrom(newData);
 
@@ -130,8 +125,10 @@ public unsafe class FCMemberManagePanel : ModuleBase
                         }
                     }
                     else
-                        CharacterDataDict[newData.ContentID] = newData;
+                        characterDataDict[newData.ContentID] = newData;
                 }
+
+                characterDataDisplay = FilterAndSortCharacterData();
             }
         }
     }
@@ -141,15 +138,15 @@ public unsafe class FCMemberManagePanel : ModuleBase
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("FCMemberManagePanel-CurrentPage")}:");
 
-        var pageAmount = ((int)FCTotalMembersCount + 199) / 200;
+        var pageAmount = ((int)fcTotalMembersCount + 199) / 200;
 
         for (var i = 0; i < pageAmount; i++)
         {
             ImGui.SameLine();
 
-            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.TankBlue, i == CurrentFCMemberPage))
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.TankBlue, i == currentFCMemberPage))
             {
-                using (ImRaii.Disabled(i == CurrentFCMemberPage))
+                using (ImRaii.Disabled(i == currentFCMemberPage))
                 {
                     if (ImGui.Button(Lang.Get("FCMemberManagePanel-PageDisplay", i + 1)))
                         SwitchFreeCompanyMemberListPage(i);
@@ -173,10 +170,10 @@ public unsafe class FCMemberManagePanel : ModuleBase
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         DrawHeaderRow();
 
-        foreach (var data in CharacterDataDisplay)
+        foreach (var data in characterDataDisplay)
         {
             using var id       = ImRaii.PushId(data.ContentID.ToString());
-            var       selected = SelectedMembers.Contains(data);
+            var       selected = selectedMembers.Contains(data);
 
             ImGui.TableNextRow();
 
@@ -184,8 +181,8 @@ public unsafe class FCMemberManagePanel : ModuleBase
 
             if (ImGui.Selectable($"{data.Index}", selected, ImGuiSelectableFlags.SpanAllColumns))
             {
-                if (!SelectedMembers.Remove(data))
-                    SelectedMembers.Add(data);
+                if (!selectedMembers.Remove(data))
+                    selectedMembers.Add(data);
             }
 
             DrawSingleContextMenu(data);
@@ -231,29 +228,37 @@ public unsafe class FCMemberManagePanel : ModuleBase
         }
     }
 
-    private static void DrawHeaderRow()
+    private void DrawHeaderRow()
     {
         ImGui.TableNextColumn();
-        var arrowButton = IsReverse
+        var arrowButton = isReverse
                               ? ImGui.Button(FontAwesomeIcon.ArrowUp.ToIconString())
                               : ImGui.Button(FontAwesomeIcon.ArrowDown.ToIconString());
         if (arrowButton)
-            IsReverse ^= true;
+        {
+            isReverse            ^= true;
+            characterDataDisplay =  FilterAndSortCharacterData();
+        }
 
         ImGui.TableNextColumn();
         ImGui.Selectable(Lang.Get("Name"));
 
-        if (ImGui.BeginPopupContextItem("NameSearch_Popup"))
+        using (var context = ImRaii.ContextPopupItem("NameSearch_Popup"))
         {
-            ImGui.SetNextItemWidth(200f * GlobalUIScale);
-            ImGui.InputTextWithHint
-            (
-                "###NameSearchInput",
-                Lang.Get("PleaseSearch"),
-                ref FilterMemberName,
-                128
-            );
-            ImGui.EndPopup();
+            if (context)
+            {
+                ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                ImGui.InputTextWithHint
+                (
+                    "###NameSearchInput",
+                    Lang.Get("PleaseSearch"),
+                    ref filterMemberName,
+                    128
+                );
+
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    characterDataDisplay = FilterAndSortCharacterData();
+            }
         }
 
         ImGui.TableNextColumn();
@@ -268,28 +273,9 @@ public unsafe class FCMemberManagePanel : ModuleBase
 
         DrawMultiContextMenu();
     }
-
-    private static List<FreeCompanyMemberInfo> FilterAndSortCharacterData()
-    {
-        var filteredList = string.IsNullOrWhiteSpace(FilterMemberName)
-                               ? CharacterDataDict.Values.ToList()
-                               : CharacterDataDict.Values
-                                                  .Where(member => member.Name.Contains(FilterMemberName, StringComparison.OrdinalIgnoreCase))
-                                                  .ToList();
-
-        filteredList.Sort
-        ((a, b) =>
-            {
-                var comparison = a.Index.CompareTo(b.Index);
-                return IsReverse ? -comparison : comparison;
-            }
-        );
-
-        return filteredList;
-    }
-
+    
     // 不能用 ImRaii - 会导致延迟执行产生的数据错误
-    private static void DrawSingleContextMenu(FreeCompanyMemberInfo data)
+    private void DrawSingleContextMenu(FreeCompanyMemberInfo data)
     {
         if (ImGui.BeginPopupContextItem($"{data.ContentID}_Popup"))
         {
@@ -322,48 +308,48 @@ public unsafe class FCMemberManagePanel : ModuleBase
         }
     }
 
-    private static void DrawMultiContextMenu()
+    private void DrawMultiContextMenu()
     {
         if (ImGui.BeginPopupContextItem("Multi_Popup"))
         {
-            ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-SelectedMembers", SelectedMembers.Count));
+            ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-SelectedMembers", selectedMembers.Count));
 
             ImGui.Separator();
             ImGui.Spacing();
 
-            using (ImRaii.Disabled(SelectedMembers.Count == 0))
+            using (ImRaii.Disabled(selectedMembers.Count == 0))
             {
                 // 清除已选
                 if (ImGui.MenuItem(Lang.Get("Clear")))
-                    SelectedMembers.Clear();
+                    selectedMembers.Clear();
 
                 // 冒险者铭牌
                 if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(15083));
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(15083));
 
                 // 个人信息
                 if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(51), "SocialDetailB");
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(51), "SocialDetailB");
 
                 // 部队信息
                 if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(2807));
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(2807));
 
                 // 任命
                 if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2656)))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaWrapper.GetAddonText(2656));
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(2656));
 
                 // 除名
                 if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
                 {
                     EnqueueContentMenuClicks
                     (
-                        SelectedMembers,
+                        selectedMembers,
                         LuminaWrapper.GetAddonText(2801),
                         "SelectYesno",
                         () =>
                         {
-                            ContextTaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes(), weight: 1);
+                            TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes(), weight: 1);
                             return true;
                         }
                     );
@@ -394,15 +380,15 @@ public unsafe class FCMemberManagePanel : ModuleBase
         }
     }
 
-    private static void OnAddonYesno(AddonEvent type, AddonArgs args)
+    private void OnAddonYesno(AddonEvent type, AddonArgs args)
     {
-        if (!ContextTaskHelper.IsBusy || args.Addon == nint.Zero) return;
+        if (!TaskHelper.IsBusy || args.Addon == nint.Zero) return;
 
         var addon = args.Addon.ToStruct();
         addon->Callback(0);
     }
 
-    private static void EnqueueContentMenuClicks
+    private void EnqueueContentMenuClicks
     (
         IEnumerable<FreeCompanyMemberInfo> datas,
         string                             text,
@@ -410,25 +396,25 @@ public unsafe class FCMemberManagePanel : ModuleBase
         Func<bool>?                        extraAction = null
     )
     {
-        ContextTaskHelper.Abort();
+        TaskHelper.Abort();
 
         foreach (var data in datas)
         {
-            ContextTaskHelper.Enqueue(() => OpenContextMenuAndClick(data.Index, text));
+            TaskHelper.Enqueue(() => OpenContextMenuAndClick(data.Index, text));
             if (waitAddon != null)
-                ContextTaskHelper.Enqueue(() => AddonHelper.TryGetByName<AtkUnitBase>(waitAddon, out var addon) && addon->IsAddonAndNodesReady());
+                TaskHelper.Enqueue(() => AddonHelper.TryGetByName<AtkUnitBase>(waitAddon, out var addon) && addon->IsAddonAndNodesReady());
 
             if (extraAction != null)
-                ContextTaskHelper.Enqueue(extraAction);
+                TaskHelper.Enqueue(extraAction);
 
-            ContextTaskHelper.DelayNext(500);
+            TaskHelper.DelayNext(500);
         }
     }
 
-    private static void OpenContextMenuAndClick(int dataIndex, string menuText)
+    private void OpenContextMenuAndClick(int dataIndex, string menuText)
     {
         OpenContextMenuByIndex(dataIndex);
-        ContextTaskHelper.Enqueue
+        TaskHelper.Enqueue
         (
             () =>
             {
@@ -449,10 +435,10 @@ public unsafe class FCMemberManagePanel : ModuleBase
         );
     }
 
-    private static void OpenContextMenuByIndex(int dataIndex)
-        => OpenFCMemberContextMenu(AgentFreeCompany.Instance(), (ushort)dataIndex);
+    private static void OpenContextMenuByIndex(int dataIndex) => 
+        OpenFCMemberContextMenu(AgentFreeCompany.Instance(), (ushort)dataIndex);
 
-    private static void SwitchFreeCompanyMemberListPage(int page)
+    private void SwitchFreeCompanyMemberListPage(int page)
     {
         var memoryBlock = Marshal.AllocHGlobal(32);
         var agent       = AgentFreeCompany.Instance();
@@ -474,29 +460,45 @@ public unsafe class FCMemberManagePanel : ModuleBase
             Marshal.FreeHGlobal(memoryBlock);
         }
 
-        CharacterDataDict.Clear();
-        SelectedMembers.Clear();
-        Throttler.Clear();
+        characterDataDict.Clear();
+        selectedMembers.Clear();
     }
 
-    private static void ResetAllExistedData()
+    private void ResetAllExistedData()
     {
         var agent = AgentFreeCompany.Instance();
         if (agent == null) return;
+        
         var info = agent->InfoProxyFreeCompanyMember;
         if (info == null) return;
+        
         info->ClearData();
 
-        CharacterDataDict.Clear();
-        SelectedMembers.Clear();
-        Throttler.Clear();
+        characterDataDict.Clear();
+        selectedMembers.Clear();
+    }
+    
+    private List<FreeCompanyMemberInfo> FilterAndSortCharacterData()
+    {
+        var filteredList = string.IsNullOrWhiteSpace(filterMemberName)
+                               ? characterDataDict.Values.ToList()
+                               : characterDataDict.Values
+                                                  .Where(member => member.Name.Contains(filterMemberName, StringComparison.OrdinalIgnoreCase))
+                                                  .ToList();
+
+        filteredList.Sort
+        ((a, b) =>
+            {
+                var comparison = a.Index.CompareTo(b.Index);
+                return isReverse ? -comparison : comparison;
+            }
+        );
+
+        return filteredList;
     }
 
-    private delegate nint AgentFCReceiveEventInternalDelegate(AgentFreeCompany* agent, nint a2);
 
-    private delegate void OpenFCMemberContextMenuDelegate(AgentFreeCompany* agent, ushort index);
-
-    public class FreeCompanyMemberInfo : IEquatable<FreeCompanyMemberInfo>, IComparable<FreeCompanyMemberInfo>
+    private class FreeCompanyMemberInfo : IEquatable<FreeCompanyMemberInfo>, IComparable<FreeCompanyMemberInfo>
     {
         [Flags]
         public enum ChangeFlags

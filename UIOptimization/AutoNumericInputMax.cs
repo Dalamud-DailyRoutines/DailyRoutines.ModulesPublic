@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -14,29 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNumericInputMax : ModuleBase
 {
-    private static readonly CompSig UldUpdateSig =
-        new("40 53 48 83 EC ?? 48 8B D9 48 83 C1 ?? E8 ?? ?? ?? ?? 80 BB ?? ?? ?? ?? ?? 74 ?? 48 8B CB");
-
-    private static Hook<UldUpdateDelegate>? UldUpdateHook;
-
-    private static readonly CompSig NumericSetValueSig = new
-        ("E8 ?? ?? ?? ?? C7 83 ?? ?? ?? ?? ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 8B 91");
-
-    private static NumericSetValueDelegate? NumericSetValue;
-
-    private static readonly HashSet<string> BlacklistAddons =
-    [
-        "RetainerSell", "ItemSearch", "LookingForGroupSearch", "LookingForGroupCondition", "CountDownSettingDialog",
-        "ConfigSystem", "ConfigCharacter"
-    ];
-
-    private static readonly Throttler<nint> Throttler = new();
-    private static          long            LastInterruptTime;
-
-    private static bool IsBlocked;
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNumericInputMaxTitle"),
@@ -45,10 +23,26 @@ public unsafe class AutoNumericInputMax : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private static readonly CompSig UldUpdateSig =
+        new("40 53 48 83 EC ?? 48 8B D9 48 83 C1 ?? E8 ?? ?? ?? ?? 80 BB ?? ?? ?? ?? ?? 74 ?? 48 8B CB");
+    private delegate nint UldUpdateDelegate(AtkComponentNumericInput* component);
+    private Hook<UldUpdateDelegate>? UldUpdateHook;
 
+    private static readonly CompSig NumericSetValueSig = new
+        ("E8 ?? ?? ?? ?? C7 83 ?? ?? ?? ?? ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 8B 91");
+    private delegate void NumericSetValueDelegate(AtkComponentNumericInput* component, int value, bool a3, bool a4);
+    private NumericSetValueDelegate? NumericSetValue;
+    
+    private          Config          config    = null!;
+    private readonly Throttler<nint> throttler = new();
+
+    private long lastInterruptTime;
+    private bool isBlocked;
+    
     protected override void Init()
     {
-        ModuleConfig ??= Config.Load(this) ?? new();
+        config ??= Config.Load(this) ?? new();
 
         NumericSetValue ??= Marshal.GetDelegateForFunctionPointer<NumericSetValueDelegate>(NumericSetValueSig.ScanText());
 
@@ -63,32 +57,32 @@ public unsafe class AutoNumericInputMax : ModuleBase
 
         ImGui.Spacing();
 
-        if (ImGui.Checkbox(Lang.Get("AutoNumericInputMax-AdjustMax"), ref ModuleConfig.AdjustMaximumValue))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoNumericInputMax-AdjustMax"), ref config.AdjustMaximumValue))
+            config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoNumericInputMax-AdjustMaxHelp"));
 
-        if (ModuleConfig.AdjustMaximumValue)
+        if (config.AdjustMaximumValue)
         {
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            if (ImGui.InputInt(Lang.Get("AutoNumericInputMax-MaxValue"), ref ModuleConfig.MaxValue))
-                ModuleConfig.MaxValue = Math.Clamp(ModuleConfig.MaxValue, 1, 9999);
+            if (ImGui.InputInt(Lang.Get("AutoNumericInputMax-MaxValue"), ref config.MaxValue))
+                config.MaxValue = Math.Clamp(config.MaxValue, 1, 9999);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
             ImGuiOm.HelpMarker(Lang.Get("AutoNumericInputMax-MaxValueInputHelp"));
         }
     }
 
-    private static nint UldUpdateDetour(AtkComponentNumericInput* component)
+    private nint UldUpdateDetour(AtkComponentNumericInput* component)
     {
         var result = UldUpdateHook.Original(component);
 
         if (PluginConfig.Instance().ConflictKeyBinding.IsPressed())
-            LastInterruptTime = Environment.TickCount64;
+            lastInterruptTime = Environment.TickCount64;
 
-        if (Environment.TickCount64 - LastInterruptTime > 10000)
+        if (Environment.TickCount64 - lastInterruptTime > 10000)
         {
-            if (Throttler.Throttle(nint.Zero, 5000))
+            if (throttler.Throttle(nint.Zero, 5000))
             {
                 var focusedList = RaptureAtkModule.Instance()->AtkUnitManager->FocusedUnitsList.Entries;
                 if (focusedList.Length == 0) goto Out;
@@ -96,10 +90,10 @@ public unsafe class AutoNumericInputMax : ModuleBase
                                     .ToArray()
                                     .Where(x => x != null && x.Value != null && !string.IsNullOrWhiteSpace(x.Value->NameString))
                                     .Select(x => x.Value->NameString);
-                IsBlocked = focusedAddons.Any(BlacklistAddons.Contains);
+                isBlocked = focusedAddons.Any(BlacklistAddons.Contains);
             }
 
-            if (IsBlocked || !Throttler.Throttle((nint)component, 250)) goto Out;
+            if (isBlocked || !throttler.Throttle((nint)component, 250)) goto Out;
 
             var max = component->Data.Max;
             if (component->AtkResNode == null) goto Out;
@@ -110,8 +104,8 @@ public unsafe class AutoNumericInputMax : ModuleBase
             {
                 case 1:
                     goto Out;
-                case 99 when ModuleConfig.AdjustMaximumValue:
-                    max = ModuleConfig.MaxValue;
+                case 99 when config.AdjustMaximumValue:
+                    max = config.MaxValue;
                     break;
             }
 
@@ -124,14 +118,25 @@ public unsafe class AutoNumericInputMax : ModuleBase
         Out: ;
         return result;
     }
-
-    private delegate nint UldUpdateDelegate(AtkComponentNumericInput* component);
-
-    private delegate void NumericSetValueDelegate(AtkComponentNumericInput* component, int value, bool a3, bool a4);
-
+    
     private class Config : ModuleConfig
     {
         public bool AdjustMaximumValue = true;
         public int  MaxValue           = 999;
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> BlacklistAddons =
+    [
+        "RetainerSell",
+        "ItemSearch",
+        "LookingForGroupSearch",
+        "LookingForGroupCondition",
+        "CountDownSettingDialog",
+        "ConfigSystem",
+        "ConfigCharacter"
+    ];
+
+    #endregion
 }

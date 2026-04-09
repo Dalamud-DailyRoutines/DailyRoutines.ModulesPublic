@@ -17,8 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class WeeklyBingoClickToOpen : ModuleBase
 {
-    private static readonly IAddonEventHandle?[] EventHandles = new IAddonEventHandle?[16];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("WeeklyBingoClickToOpenTitle"),
@@ -26,6 +24,8 @@ public class WeeklyBingoClickToOpen : ModuleBase
         Category    = ModuleCategory.UIOptimization,
         Author      = ["Due"]
     };
+    
+    private readonly IAddonEventHandle?[] eventHandles = new IAddonEventHandle?[16];
 
     protected override unsafe void Init()
     {
@@ -42,14 +42,14 @@ public class WeeklyBingoClickToOpen : ModuleBase
         OnAddon(AddonEvent.PreFinalize, null);
     }
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs? args)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
         foreach (var index in Enumerable.Range(0, 16))
         {
-            if (EventHandles[index] is { } handle)
+            if (eventHandles[index] is { } handle)
             {
                 DService.Instance().AddonEvent.RemoveEvent(handle);
-                EventHandles[index] = null;
+                eventHandles[index] = null;
             }
         }
 
@@ -62,7 +62,7 @@ public class WeeklyBingoClickToOpen : ModuleBase
         {
             var dutySlot = addon->DutySlotList[index];
             var handle   = DService.Instance().AddonEvent.AddEvent((nint)addon, (nint)dutySlot.DutyButton->OwnerNode, AddonEventType.ButtonClick, OnDutySlotClick);
-            EventHandles[index] = handle;
+            eventHandles[index] = handle;
         }
     }
 

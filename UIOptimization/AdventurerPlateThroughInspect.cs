@@ -12,8 +12,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AdventurerPlateThroughInspect : ModuleBase
 {
-    private static IconButtonNode? OpenButton;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AdventurerPlateThroughInspectTitle"),
@@ -22,6 +20,8 @@ public unsafe class AdventurerPlateThroughInspect : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private IconButtonNode? openButton;
 
     protected override void Init()
     {
@@ -30,17 +30,23 @@ public unsafe class AdventurerPlateThroughInspect : ModuleBase
         if (CharacterInspect->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+    }
 
-    private static void OnAddon(AddonEvent type, AddonArgs? args)
+    private void OnAddon(AddonEvent type, AddonArgs? args)
     {
         switch (type)
         {
             case AddonEvent.PostDraw:
                 if (CharacterInspect == null) return;
 
-                if (OpenButton == null)
+                if (openButton == null)
                 {
-                    OpenButton = new()
+                    openButton = new()
                     {
                         Size        = new(36f),
                         IsVisible   = true,
@@ -50,20 +56,14 @@ public unsafe class AdventurerPlateThroughInspect : ModuleBase
                         TextTooltip = LuminaWrapper.GetAddonText(15083),
                         Position    = new(298, 86)
                     };
-                    OpenButton.AttachNode(CharacterInspect->RootNode);
+                    openButton.AttachNode(CharacterInspect->RootNode);
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                OpenButton?.Dispose();
-                OpenButton = null;
+                openButton?.Dispose();
+                openButton = null;
                 break;
         }
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
     }
 }

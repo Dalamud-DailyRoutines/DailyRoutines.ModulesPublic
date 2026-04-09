@@ -33,24 +33,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedFriendList : ModuleBase
 {
-    private static          ModifyInfoMenuItem          ModifyInfoItem    = null!;
-    private static readonly TeleportFriendZoneMenuItem  TeleportZoneItem  = new();
-    private static readonly TeleportFriendWorldMenuItem TeleportWorldItem = new();
-
-    private static Config ModuleConfig = null!;
-
-    private static TextInputNode?     SearchInputNode;
-    private static TextureButtonNode? SearchSettingButtonNode;
-
-    private static DRFriendlistRemarkEdit?    RemarkEditAddon;
-    private static DRFriendlistSearchSetting? SearchSettingAddon;
-
-    private static string SearchString = string.Empty;
-
-    private static readonly List<nint>        Utf8Strings = [];
-    private static readonly List<IDisposable> Tokens      = [];
-    private static readonly List<IDisposable> InfoTokens  = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("OptimizedFriendListTitle"),
@@ -60,28 +42,46 @@ public unsafe class OptimizedFriendList : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config config = null!;
+
+    private readonly ModifyInfoMenuItem          modifyInfoItem;
+    private readonly TeleportFriendZoneMenuItem  teleportZoneItem  = new();
+    private readonly TeleportFriendWorldMenuItem teleportWorldItem = new();
+    
+    private TextInputNode?     searchInputNode;
+    private TextureButtonNode? searchSettingButtonNode;
+
+    private DRFriendlistRemarkEdit?    remarkEditAddon;
+    private DRFriendlistSearchSetting? searchSettingAddon;
+
+    private string searchString = string.Empty;
+
+    private readonly List<nint>        utf8Strings = [];
+    private readonly List<IDisposable> infoTokens  = [];
+
+    public OptimizedFriendList() =>
+        modifyInfoItem = new(this, TaskHelper);
 
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
-        TaskHelper   ??= new();
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new();
 
-        RemarkEditAddon ??= new(this)
+        remarkEditAddon ??= new(this)
         {
             InternalName = "DRFriendlistRemarkEdit",
             Title        = Lang.Get("OptimizedFriendList-ContextMenu-NicknameAndRemark"),
             Size         = new(460f, 310f)
         };
 
-        SearchSettingAddon ??= new(this, TaskHelper)
+        searchSettingAddon ??= new(this, TaskHelper)
         {
             InternalName = "DRFriendlistSearchSetting",
             Title        = Lang.Get("OptimizedFriendList-Addon-SearchSetting"),
             Size         = new(230f, 350f)
         };
-
-        ModifyInfoItem = new(TaskHelper);
-
+        
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,          "FriendList", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "FriendList", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,        "FriendList", OnAddon);
@@ -98,25 +98,25 @@ public unsafe class OptimizedFriendList : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
         OnAddon(AddonEvent.PreFinalize, null);
 
-        RemarkEditAddon?.Dispose();
-        RemarkEditAddon = null;
+        remarkEditAddon?.Dispose();
+        remarkEditAddon = null;
 
-        SearchSettingAddon?.Dispose();
-        SearchSettingAddon = null;
+        searchSettingAddon?.Dispose();
+        searchSettingAddon = null;
 
         if (FriendList->IsAddonAndNodesReady())
             InfoProxyFriendList.Instance()->RequestData();
     }
 
-    private static void ReplaceAtkString(int index, Utf8String* newString)
+    private void ReplaceAtkString(int index, Utf8String* newString)
     {
         if (newString == null) return;
 
-        Utf8Strings.Add((nint)newString);
+        utf8Strings.Add((nint)newString);
         AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->StringArray[index] = newString->StringPtr;
     }
 
-    private static void ApplyDisplayModification(TaskHelper? taskHelper)
+    private void ApplyDisplayModification(TaskHelper? taskHelper)
     {
         var addon = FriendList;
         if (!addon->IsAddonAndNodesReady()) return;
@@ -137,7 +137,7 @@ public unsafe class OptimizedFriendList : ModuleBase
                 RestoreEntryData(i, data.ContentId, taskHelper);
             }
 
-            if (!ModuleConfig.PlayerInfos.TryGetValue(data.ContentId, out var configInfo)) continue;
+            if (!config.PlayerInfos.TryGetValue(data.ContentId, out var configInfo)) continue;
 
             if (!string.IsNullOrWhiteSpace(configInfo.Nickname) && existedName != configInfo.Nickname)
             {
@@ -200,24 +200,24 @@ public unsafe class OptimizedFriendList : ModuleBase
         );
     }
 
-    private static bool MatchesSearch(string filter)
+    private bool MatchesSearch(string filter)
     {
-        if (string.IsNullOrWhiteSpace(SearchString))
+        if (string.IsNullOrWhiteSpace(searchString))
             return true;
 
         if (string.IsNullOrWhiteSpace(filter))
             return false;
 
-        if (SearchString.StartsWith('^'))
-            return filter.StartsWith(SearchString[1..], StringComparison.InvariantCultureIgnoreCase);
+        if (searchString.StartsWith('^'))
+            return filter.StartsWith(searchString[1..], StringComparison.InvariantCultureIgnoreCase);
 
-        if (SearchString.EndsWith('$'))
-            return filter.EndsWith(SearchString[..^1], StringComparison.InvariantCultureIgnoreCase);
+        if (searchString.EndsWith('$'))
+            return filter.EndsWith(searchString[..^1], StringComparison.InvariantCultureIgnoreCase);
 
-        return filter.Contains(SearchString, StringComparison.InvariantCultureIgnoreCase);
+        return filter.Contains(searchString, StringComparison.InvariantCultureIgnoreCase);
     }
 
-    protected static void ApplySearchFilter(string filter, TaskHelper? taskHelper)
+    protected void ApplySearchFilter(string filter, TaskHelper? taskHelper)
     {
         var info = InfoProxyFriendList.Instance();
 
@@ -241,7 +241,7 @@ public unsafe class OptimizedFriendList : ModuleBase
             var data = info->CharDataSpan[i];
             resets.Add(entry->ContentId, entry->ExtraFlags);
 
-            if (ModuleConfig.IgnoredGroup[(int)entry->Group])
+            if (config.IgnoredGroup[(int)entry->Group])
             {
                 entry->ExtraFlags = entry->ExtraFlags & 0xFFFF | (uint)(1 & 0xFF) << 16; // 添加隐藏标记
                 continue;
@@ -250,7 +250,7 @@ public unsafe class OptimizedFriendList : ModuleBase
             var        matchResult = false;
             PlayerInfo configInfo  = null;
 
-            if (ModuleConfig.SearchName)
+            if (config.SearchName)
             {
                 var entryNameString = entry->NameString;
                 if (string.IsNullOrEmpty(entry->NameString)) // 搜索会导致非本大区角色被重新刷新为（无法获得角色情报） 需要重新配置
@@ -259,15 +259,15 @@ public unsafe class OptimizedFriendList : ModuleBase
                 matchResult |= MatchesSearch(entryNameString);
             }
 
-            if (ModuleConfig.SearchNickname)
+            if (config.SearchNickname)
             {
-                if (ModuleConfig.PlayerInfos.TryGetValue(data.ContentId, out configInfo))
+                if (config.PlayerInfos.TryGetValue(data.ContentId, out configInfo))
                     matchResult |= MatchesSearch(configInfo.Nickname);
             }
 
-            if (ModuleConfig.SearchRemark)
+            if (config.SearchRemark)
             {
-                if (ModuleConfig.PlayerInfos.TryGetValue(data.ContentId, out configInfo))
+                if (config.PlayerInfos.TryGetValue(data.ContentId, out configInfo))
                     matchResult |= MatchesSearch(configInfo.Remark);
             }
 
@@ -287,7 +287,7 @@ public unsafe class OptimizedFriendList : ModuleBase
         }
     }
 
-    private static void RestoreEntryData(int index, ulong contentID, TaskHelper? taskHelper, Action<string>? onNameResolved = null)
+    private void RestoreEntryData(int index, ulong contentID, TaskHelper? taskHelper, Action<string>? onNameResolved = null)
     {
         var region = WorldRegionResolver.Resolve(GameState.HomeWorld);
         _ = RemotePlayerInfo.GetOrRequest(contentID, region);
@@ -326,16 +326,147 @@ public unsafe class OptimizedFriendList : ModuleBase
                     RequestInfoUpdate(taskHelper);
             }
         );
-        InfoTokens.Add(observer);
+        infoTokens.Add(observer);
+    }
+    
+    #region 事件
+
+    private void OnContextMenu(IMenuOpenedArgs args)
+    {
+        if (modifyInfoItem.IsDisplay(args))
+            args.AddMenuItem(modifyInfoItem.Get());
+
+        if (teleportZoneItem.IsDisplay(args))
+            args.AddMenuItem(teleportZoneItem.Get());
+
+        if (teleportWorldItem.IsDisplay(args))
+            args.AddMenuItem(teleportWorldItem.Get());
     }
 
-    [IPCProvider("DailyRoutines.Modules.OptimizedFriendlist.GetRemarkByContentID")]
-    private string GetRemarkByContentID(ulong contentID) =>
-        ModuleConfig.PlayerInfos.TryGetValue(contentID, out var info) ? !string.IsNullOrWhiteSpace(info.Remark) ? info.Remark : string.Empty : string.Empty;
+    private void OnAddon(AddonEvent type, AddonArgs? args)
+    {
+        switch (type)
+        {
+            case AddonEvent.PostSetup:
+                if (FriendList != null)
+                {
+                    searchInputNode ??= new()
+                    {
+                        IsVisible     = true,
+                        Position      = new(10f, 425f),
+                        Size          = new(200.0f, 35f),
+                        MaxCharacters = 20,
+                        ShowLimitText = true,
+                        OnInputReceived = x =>
+                        {
+                            searchString = x.ToString();
+                            ApplySearchFilter(searchString, TaskHelper);
+                        },
+                        OnInputComplete = x =>
+                        {
+                            searchString = x.ToString();
+                            ApplySearchFilter(searchString, TaskHelper);
+                        }
+                    };
 
-    [IPCProvider("DailyRoutines.Modules.OptimizedFriendlist.GetNicknameByContentID")]
-    private string GetNicknameByContentID(ulong contentID) =>
-        ModuleConfig.PlayerInfos.TryGetValue(contentID, out var info) ? !string.IsNullOrWhiteSpace(info.Nickname) ? info.Nickname : string.Empty : string.Empty;
+                    searchInputNode.CursorNode.ScaleY        =  1.4f;
+                    searchInputNode.CurrentTextNode.FontSize =  14;
+                    searchInputNode.CurrentTextNode.Y        += 3f;
+
+                    searchInputNode.AttachNode(FriendList->GetNodeById(20));
+
+                    searchSettingButtonNode ??= new()
+                    {
+                        Position    = new(215f, 430f),
+                        Size        = new(25f, 25f),
+                        IsVisible   = true,
+                        IsChecked   = config.SearchName,
+                        IsEnabled   = true,
+                        TexturePath = "ui/uld/CircleButtons_hr1.tex",
+                        TextureSize = new(28, 28),
+                        OnClick     = () => searchSettingAddon.Toggle()
+                    };
+
+                    searchSettingButtonNode.AttachNode(FriendList->GetNodeById(20));
+
+                    searchString = string.Empty;
+                }
+
+                if (Throttler.Shared.Throttle("OptimizedFriendList-OnRequestFriendList", 10_000))
+                {
+                    var agent = AgentFriendlist.Instance();
+                    if (agent == null) return;
+
+                    var info = InfoProxyFriendList.Instance();
+                    if (info == null || info->EntryCount == 0) return;
+
+                    var validCounter = 0;
+
+                    for (var i = 0; i < info->CharDataSpan.Length; i++)
+                    {
+                        var chara = info->CharDataSpan[i];
+                        if (chara.ContentId == 0) continue;
+
+                        DService.Instance().Framework.RunOnTick
+                        (
+                            () =>
+                            {
+                                if (FriendList == null) return;
+
+                                agent->RequestFriendInfo(chara.ContentId);
+                            },
+                            TimeSpan.FromMilliseconds(10 * validCounter)
+                        );
+
+                        validCounter++;
+                    }
+
+                    if (validCounter > 0)
+                    {
+                        DService.Instance().Framework.RunOnTick
+                        (
+                            () =>
+                            {
+                                if (FriendList == null) return;
+
+                                ApplyDisplayModification(TaskHelper);
+                            },
+                            TimeSpan.FromMilliseconds(10 * (validCounter + 1))
+                        );
+                    }
+                }
+
+                ApplyDisplayModification(TaskHelper);
+                break;
+            case AddonEvent.PreRequestedUpdate:
+                ApplySearchFilter(searchString, TaskHelper);
+                ApplyDisplayModification(TaskHelper);
+                break;
+            case AddonEvent.PreFinalize:
+                searchInputNode?.Dispose();
+                searchInputNode = null;
+
+                searchSettingButtonNode?.Dispose();
+                searchSettingButtonNode = null;
+
+                infoTokens.ForEach(static x => x.Dispose());
+                infoTokens.Clear();
+
+                utf8Strings.ForEach
+                (x =>
+                    {
+                        var ptr = (Utf8String*)x;
+                        if (ptr == null) return;
+
+                        ptr->Dtor(true);
+                    }
+                );
+                utf8Strings.Clear();
+                break;
+        }
+    }
+
+    #endregion
 
     private class Config : ModuleConfig
     {
@@ -368,7 +499,7 @@ public unsafe class OptimizedFriendList : ModuleBase
         public  string   Name      { get; private set; } = string.Empty;
         public  string   WorldName { get; private set; } = string.Empty;
 
-        private ModuleBase Instance { get; init; } = instance;
+        private OptimizedFriendList Instance { get; init; } = instance;
 
         protected override void OnSetup(AtkUnitBase* addon)
         {
@@ -378,8 +509,8 @@ public unsafe class OptimizedFriendList : ModuleBase
                 return;
             }
 
-            var existedNickname = ModuleConfig.PlayerInfos.GetValueOrDefault(ContentID, new()).Nickname;
-            var existedRemark   = ModuleConfig.PlayerInfos.GetValueOrDefault(ContentID, new()).Remark;
+            var existedNickname = Instance.config.PlayerInfos.GetValueOrDefault(ContentID, new()).Nickname;
+            var existedRemark   = Instance.config.PlayerInfos.GetValueOrDefault(ContentID, new()).Remark;
 
             playerNameNode = new()
             {
@@ -458,14 +589,14 @@ public unsafe class OptimizedFriendList : ModuleBase
                 String    = Lang.Get("Confirm"),
                 OnClick = () =>
                 {
-                    ModuleConfig.PlayerInfos[ContentID] = new()
+                    Instance.config.PlayerInfos[ContentID] = new()
                     {
                         ContentID = ContentID,
                         Name      = Name,
                         Nickname  = nicknameInputNode.String.ToString(),
                         Remark    = remarkInputNode.String.ToString()
                     };
-                    ModuleConfig.Save(Instance);
+                    Instance.config.Save(Instance);
 
                     InfoProxyFriendList.Instance()->RequestData();
                     Close();
@@ -481,8 +612,8 @@ public unsafe class OptimizedFriendList : ModuleBase
                 String    = Lang.Get("Clear"),
                 OnClick = () =>
                 {
-                    ModuleConfig.PlayerInfos.TryRemove(ContentID, out _);
-                    ModuleConfig.Save(Instance);
+                    Instance.config.PlayerInfos.TryRemove(ContentID, out _);
+                    Instance.config.Save(Instance);
 
                     InfoProxyFriendList.Instance()->RequestData();
                     Close();
@@ -644,12 +775,12 @@ public unsafe class OptimizedFriendList : ModuleBase
 
     private class DRFriendlistSearchSetting
     (
-        ModuleBase instance,
-        TaskHelper taskHelper
+        OptimizedFriendList instance,
+        TaskHelper          taskHelper
     ) : NativeAddon
     {
-        private ModuleBase Instance   { get; init; } = instance;
-        private TaskHelper TaskHelper { get; init; } = taskHelper;
+        private OptimizedFriendList Instance   { get; init; } = instance;
+        private TaskHelper          TaskHelper { get; init; } = taskHelper;
 
         protected override void OnSetup(AtkUnitBase* addon)
         {
@@ -674,15 +805,15 @@ public unsafe class OptimizedFriendList : ModuleBase
             {
                 Size      = new(80f, 20f),
                 IsVisible = true,
-                IsChecked = ModuleConfig.SearchName,
+                IsChecked = Instance.config.SearchName,
                 IsEnabled = true,
                 String    = Lang.Get("Name"),
                 OnClick = newState =>
                 {
-                    ModuleConfig.SearchName = newState;
-                    ModuleConfig.Save(Instance);
+                    Instance.config.SearchName = newState;
+                    Instance.config.Save(Instance);
 
-                    ApplySearchFilter(SearchString, TaskHelper);
+                    Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
                 }
             };
             searchTypeLayoutNode.Height += searchTypeTitleNode.Height;
@@ -691,15 +822,15 @@ public unsafe class OptimizedFriendList : ModuleBase
             {
                 Size      = new(80f, 20f),
                 IsVisible = true,
-                IsChecked = ModuleConfig.SearchNickname,
+                IsChecked = Instance.config.SearchNickname,
                 IsEnabled = true,
                 String    = LuminaWrapper.GetAddonText(15207),
                 OnClick = newState =>
                 {
-                    ModuleConfig.SearchNickname = newState;
-                    ModuleConfig.Save(Instance);
+                    Instance.config.SearchNickname = newState;
+                    Instance.config.Save(Instance);
 
-                    ApplySearchFilter(SearchString, TaskHelper);
+                    Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
                 }
             };
             searchTypeLayoutNode.Height += nicknameCheckboxNode.Height;
@@ -708,15 +839,15 @@ public unsafe class OptimizedFriendList : ModuleBase
             {
                 Size      = new(80f, 20f),
                 IsVisible = true,
-                IsChecked = ModuleConfig.SearchRemark,
+                IsChecked = Instance.config.SearchRemark,
                 IsEnabled = true,
                 String    = LuminaWrapper.GetAddonText(13294).TrimEnd(':'),
                 OnClick = newState =>
                 {
-                    ModuleConfig.SearchRemark = newState;
-                    ModuleConfig.Save(Instance);
+                    Instance.config.SearchRemark = newState;
+                    Instance.config.Save(Instance);
 
-                    ApplySearchFilter(SearchString, TaskHelper);
+                    Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
                 }
             };
             searchTypeLayoutNode.Height += remarkCheckboxNode.Height;
@@ -752,15 +883,15 @@ public unsafe class OptimizedFriendList : ModuleBase
                 {
                     Size      = new(80f, 20f),
                     IsVisible = true,
-                    IsChecked = ModuleConfig.IgnoredGroup[i],
+                    IsChecked = Instance.config.IgnoredGroup[i],
                     IsEnabled = true,
                     String    = groupFormatText.Encode(),
                     OnClick = newState =>
                     {
-                        ModuleConfig.IgnoredGroup[index] = newState;
-                        ModuleConfig.Save(Instance);
+                        Instance.config.IgnoredGroup[index] = newState;
+                        Instance.config.Save(Instance);
 
-                        ApplySearchFilter(SearchString, TaskHelper);
+                        Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
                     }
                 };
 
@@ -780,7 +911,8 @@ public unsafe class OptimizedFriendList : ModuleBase
 
     private class ModifyInfoMenuItem
     (
-        TaskHelper taskHelper
+        OptimizedFriendList instance,
+        TaskHelper          taskHelper
     ) : MenuItemBase
     {
         public override string Name       { get; protected set; } = Lang.Get("OptimizedFriendList-ContextMenu-NicknameAndRemark");
@@ -795,18 +927,18 @@ public unsafe class OptimizedFriendList : ModuleBase
         {
             if (args.Target is not MenuTargetDefault target) return;
 
-            if (RemarkEditAddon.IsOpen)
+            if (instance.remarkEditAddon.IsOpen)
             {
-                RemarkEditAddon.Close();
+                instance.remarkEditAddon.Close();
 
                 taskHelper.DelayNext(100);
-                taskHelper.Enqueue(() => !RemarkEditAddon.IsOpen);
-                taskHelper.Enqueue(() => RemarkEditAddon.OpenWithData(target.TargetContentId, target.TargetName, target.TargetHomeWorld.Value.Name.ToString()));
+                taskHelper.Enqueue(() => !instance.remarkEditAddon.IsOpen);
+                taskHelper.Enqueue(() => instance.remarkEditAddon.OpenWithData(target.TargetContentId, target.TargetName, target.TargetHomeWorld.Value.Name.ToString()));
             }
             else
-                RemarkEditAddon.OpenWithData(target.TargetContentId, target.TargetName, target.TargetHomeWorld.Value.Name.ToString());
+                instance.remarkEditAddon.OpenWithData(target.TargetContentId, target.TargetName, target.TargetHomeWorld.Value.Name.ToString());
 
-            ApplySearchFilter(SearchString, taskHelper);
+            instance.ApplySearchFilter(instance.searchString, taskHelper);
         }
     }
 
@@ -870,153 +1002,23 @@ public unsafe class OptimizedFriendList : ModuleBase
             ChatManager.Instance().SendMessage($"/pdr worldtravel {LuminaWrapper.GetWorldName(friendWorldID)}");
     }
 
-    public class PlayerInfo
+    private class PlayerInfo
     {
         public ulong  ContentID { get; set; }
         public string Name      { get; set; } = string.Empty;
         public string Nickname  { get; set; } = string.Empty;
         public string Remark    { get; set; } = string.Empty;
     }
+    
+    #region 常量
 
-    #region 事件
+    [IPCProvider("DailyRoutines.Modules.OptimizedFriendlist.GetRemarkByContentID")]
+    private string GetRemarkByContentID(ulong contentID) =>
+        config.PlayerInfos.TryGetValue(contentID, out var info) ? !string.IsNullOrWhiteSpace(info.Remark) ? info.Remark : string.Empty : string.Empty;
 
-    private static void OnContextMenu(IMenuOpenedArgs args)
-    {
-        if (ModifyInfoItem.IsDisplay(args))
-            args.AddMenuItem(ModifyInfoItem.Get());
-
-        if (TeleportZoneItem.IsDisplay(args))
-            args.AddMenuItem(TeleportZoneItem.Get());
-
-        if (TeleportWorldItem.IsDisplay(args))
-            args.AddMenuItem(TeleportWorldItem.Get());
-    }
-
-    private void OnAddon(AddonEvent type, AddonArgs? args)
-    {
-        switch (type)
-        {
-            case AddonEvent.PostSetup:
-                if (FriendList != null)
-                {
-                    SearchInputNode ??= new()
-                    {
-                        IsVisible     = true,
-                        Position      = new(10f, 425f),
-                        Size          = new(200.0f, 35f),
-                        MaxCharacters = 20,
-                        ShowLimitText = true,
-                        OnInputReceived = x =>
-                        {
-                            SearchString = x.ToString();
-                            ApplySearchFilter(SearchString, TaskHelper);
-                        },
-                        OnInputComplete = x =>
-                        {
-                            SearchString = x.ToString();
-                            ApplySearchFilter(SearchString, TaskHelper);
-                        }
-                    };
-
-                    SearchInputNode.CursorNode.ScaleY        =  1.4f;
-                    SearchInputNode.CurrentTextNode.FontSize =  14;
-                    SearchInputNode.CurrentTextNode.Y        += 3f;
-
-                    SearchInputNode.AttachNode(FriendList->GetNodeById(20));
-
-                    SearchSettingButtonNode ??= new()
-                    {
-                        Position    = new(215f, 430f),
-                        Size        = new(25f, 25f),
-                        IsVisible   = true,
-                        IsChecked   = ModuleConfig.SearchName,
-                        IsEnabled   = true,
-                        TexturePath = "ui/uld/CircleButtons_hr1.tex",
-                        TextureSize = new(28, 28),
-                        OnClick     = () => SearchSettingAddon.Toggle()
-                    };
-
-                    SearchSettingButtonNode.AttachNode(FriendList->GetNodeById(20));
-
-                    SearchString = string.Empty;
-                }
-
-                if (Throttler.Shared.Throttle("OptimizedFriendList-OnRequestFriendList", 10_000))
-                {
-                    var agent = AgentFriendlist.Instance();
-                    if (agent == null) return;
-
-                    var info = InfoProxyFriendList.Instance();
-                    if (info == null || info->EntryCount == 0) return;
-
-                    var validCounter = 0;
-
-                    for (var i = 0; i < info->CharDataSpan.Length; i++)
-                    {
-                        var chara = info->CharDataSpan[i];
-                        if (chara.ContentId == 0) continue;
-
-                        DService.Instance().Framework.RunOnTick
-                        (
-                            () =>
-                            {
-                                if (FriendList == null) return;
-
-                                agent->RequestFriendInfo(chara.ContentId);
-                            },
-                            TimeSpan.FromMilliseconds(10 * validCounter)
-                        );
-
-                        validCounter++;
-                    }
-
-                    if (validCounter > 0)
-                    {
-                        DService.Instance().Framework.RunOnTick
-                        (
-                            () =>
-                            {
-                                if (FriendList == null) return;
-
-                                ApplyDisplayModification(TaskHelper);
-                            },
-                            TimeSpan.FromMilliseconds(10 * (validCounter + 1))
-                        );
-                    }
-                }
-
-                ApplyDisplayModification(TaskHelper);
-                break;
-            case AddonEvent.PreRequestedUpdate:
-                ApplySearchFilter(SearchString, TaskHelper);
-                ApplyDisplayModification(TaskHelper);
-                break;
-            case AddonEvent.PreFinalize:
-                SearchInputNode?.Dispose();
-                SearchInputNode = null;
-
-                SearchSettingButtonNode?.Dispose();
-                SearchSettingButtonNode = null;
-
-                Tokens.ForEach(static x => x.Dispose());
-                Tokens.Clear();
-
-                InfoTokens.ForEach(static x => x.Dispose());
-                InfoTokens.Clear();
-
-                Utf8Strings.ForEach
-                (x =>
-                    {
-                        var ptr = (Utf8String*)x;
-                        if (ptr == null) return;
-
-                        ptr->Dtor(true);
-                    }
-                );
-                Utf8Strings.Clear();
-                break;
-        }
-    }
+    [IPCProvider("DailyRoutines.Modules.OptimizedFriendlist.GetNicknameByContentID")]
+    private string GetNicknameByContentID(ulong contentID) =>
+        config.PlayerInfos.TryGetValue(contentID, out var info) ? !string.IsNullOrWhiteSpace(info.Nickname) ? info.Nickname : string.Empty : string.Empty;
 
     #endregion
 }

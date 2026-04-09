@@ -24,16 +24,7 @@ public class AutoMoveGearsNotInSet : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private const string COMMAND = "retrievegears";
-
-    private static readonly InventoryType[] ArmoryInventories =
-    [
-        InventoryType.ArmoryOffHand, InventoryType.ArmoryHead, InventoryType.ArmoryBody, InventoryType.ArmoryHands,
-        InventoryType.ArmoryWaist, InventoryType.ArmoryLegs, InventoryType.ArmoryFeets, InventoryType.ArmoryEar,
-        InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings, InventoryType.ArmoryMainHand
-    ];
-
-    private static TextButtonNode? Button;
+    private TextButtonNode? button;
 
     protected override void Init()
     {
@@ -68,16 +59,16 @@ public class AutoMoveGearsNotInSet : ModuleBase
             EnqueueRetrieve();
     }
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs args)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PostDraw:
                 if (ArmouryBoard == null) return;
 
-                if (Button == null)
+                if (button == null)
                 {
-                    Button = new TextButtonNode
+                    button = new TextButtonNode
                     {
                         Size        = new(48),
                         Position    = new(12, 500),
@@ -88,7 +79,7 @@ public class AutoMoveGearsNotInSet : ModuleBase
                         IsEnabled   = true
                     };
 
-                    var backgroundNode = (SimpleNineGridNode)Button.BackgroundNode;
+                    var backgroundNode = (SimpleNineGridNode)button.BackgroundNode;
 
                     backgroundNode.TexturePath        = "ui/uld/partyfinder_hr1.tex";
                     backgroundNode.TextureCoordinates = new(38);
@@ -96,13 +87,13 @@ public class AutoMoveGearsNotInSet : ModuleBase
                     backgroundNode.LeftOffset         = 0;
                     backgroundNode.RightOffset        = 0f;
 
-                    Button.AttachNode(ArmouryBoard->RootNode);
+                    button.AttachNode(ArmouryBoard->RootNode);
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                Button?.Dispose();
-                Button = null;
+                button?.Dispose();
+                button = null;
                 break;
         }
     }
@@ -128,7 +119,7 @@ public class AutoMoveGearsNotInSet : ModuleBase
 
         var counter = 0;
 
-        foreach (var type in ArmoryInventories)
+        foreach (var type in Inventories.Armory)
         {
             var container = manager->GetInventoryContainer(type);
 
@@ -152,4 +143,10 @@ public class AutoMoveGearsNotInSet : ModuleBase
         Out:
         NotifyHelper.Instance().Chat(Lang.Get("AutoMoveGearsNotInSet-Notification", counter));
     }
+
+    #region 常量
+
+    private const string COMMAND = "retrievegears";
+
+    #endregion
 }

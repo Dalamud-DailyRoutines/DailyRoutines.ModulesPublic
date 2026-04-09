@@ -18,12 +18,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class PortraitAnimationTimeEditor : ModuleBase
 {
-    private static float Duration;
-    private static int   FrameCount;
-    private static float CurrentFrame;
-
-    private static Vector2 ComponentSize = new(100);
-
     public override ModuleInfo Info => new()
     {
         Title       = Lang.Get("PortraitAnimationTimeEditorTitle"),
@@ -31,10 +25,12 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         Author      = ["Yarukon"],
         Category    = ModuleCategory.UIOptimization
     };
+    
+    private float duration;
+    private int   frameCount;
+    private float currentFrame;
 
-    private static AgentBannerEditorState* EditorState   => AgentBannerEditor.Instance()->EditorState;
-    private static CharaViewPortrait*      CharaView     => EditorState != null ? EditorState->CharaView : null;
-    private static Character*              PortraitChara => CharaView   != null ? CharaView->GetCharacter() : null;
+    private Vector2 componentSize = new(100);
 
     protected override void Init()
     {
@@ -50,6 +46,9 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         if (BannerEditor->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
@@ -74,22 +73,22 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         ImGui.SetWindowSize(nodeState.Size with { Y = 3f * ImGui.GetTextLineHeightWithSpacing() - 1 * ImGui.GetStyle().ItemSpacing.Y });
 
         var control = GetAnimationControl(PortraitChara);
-        ImGuiHelpers.CenterCursorFor(ComponentSize.X);
+        ImGuiHelpers.CenterCursorFor(componentSize.X);
 
         using (ImRaii.Group())
         {
             if (ImGuiOm.ButtonIcon("###LastTenFrame", FontAwesomeIcon.Backward, "-10"))
             {
-                CurrentFrame = Math.Max(0, CurrentFrame - 10);
-                UpdatePortraitCurrentFrame(CurrentFrame);
+                currentFrame = Math.Max(0, currentFrame - 10);
+                UpdatePortraitCurrentFrame(currentFrame);
             }
 
             ImGui.SameLine();
 
             if (ImGuiOm.ButtonIcon("###LastFrame", FontAwesomeIcon.ArrowLeft))
             {
-                CurrentFrame = Math.Max(0, CurrentFrame - 1);
-                UpdatePortraitCurrentFrame(CurrentFrame);
+                currentFrame = Math.Max(0, currentFrame - 1);
+                UpdatePortraitCurrentFrame(currentFrame);
             }
 
             ImGuiOm.TooltipHover("-1");
@@ -107,16 +106,16 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
 
             if (ImGuiOm.ButtonIcon("Ceiling", FontAwesomeIcon.GripLines))
             {
-                CurrentFrame = MathF.Ceiling(CurrentFrame);
-                UpdatePortraitCurrentFrame(CurrentFrame);
+                currentFrame = MathF.Ceiling(currentFrame);
+                UpdatePortraitCurrentFrame(currentFrame);
             }
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
 
             if (ImGuiOm.ButtonIcon("###NextFrame", FontAwesomeIcon.ArrowRight))
             {
-                CurrentFrame = Math.Min(CurrentFrame + 1, FrameCount);
-                UpdatePortraitCurrentFrame(CurrentFrame);
+                currentFrame = Math.Min(currentFrame + 1, frameCount);
+                UpdatePortraitCurrentFrame(currentFrame);
             }
 
             ImGuiOm.TooltipHover("+1");
@@ -125,31 +124,28 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
 
             if (ImGuiOm.ButtonIcon("###NextTenFrame", FontAwesomeIcon.Forward, "+10"))
             {
-                CurrentFrame = Math.Min(CurrentFrame + 10, FrameCount);
-                UpdatePortraitCurrentFrame(CurrentFrame);
+                currentFrame = Math.Min(currentFrame + 10, frameCount);
+                UpdatePortraitCurrentFrame(currentFrame);
             }
         }
 
-        ComponentSize = ImGui.GetItemRectSize();
+        componentSize = ImGui.GetItemRectSize();
 
         ImGui.SetNextItemWidth(nodeState.Size.X - 4 * ImGui.GetStyle().ItemSpacing.X);
         if (ImGui.SliderFloat
             (
                 "###TimestampSlider",
-                ref CurrentFrame,
+                ref currentFrame,
                 0f,
-                FrameCount,
-                FrameCount < 100 ? $"%.3f / {FrameCount}" : $"%.2f / {FrameCount}"
+                frameCount,
+                frameCount < 100 ? $"%.3f / {frameCount}" : $"%.2f / {frameCount}"
             ))
-            UpdatePortraitCurrentFrame(CurrentFrame);
+            UpdatePortraitCurrentFrame(currentFrame);
 
-        CurrentFrame = CharaView->GetAnimationTime();
+        currentFrame = CharaView->GetAnimationTime();
         UpdateDuration(PortraitChara);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
+    
     private void OnAddon(AddonEvent type, AddonArgs? args) =>
         Overlay.IsOpen = type switch
         {
@@ -176,7 +172,7 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
             EditorState->SetHasChanged(true);
     }
 
-    private static void UpdateDuration(Character* chara)
+    private void UpdateDuration(Character* chara)
     {
         var animation = GetAnimationControl(chara);
         if (animation == null)
@@ -186,8 +182,8 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         if (baseTimeline == null)
             return;
 
-        Duration   = animation->hkaAnimationControl.Binding.ptr->Animation.ptr->Duration - 0.5f;
-        FrameCount = (int)Math.Round(30f * Duration);
+        duration   = animation->hkaAnimationControl.Binding.ptr->Animation.ptr->Duration - 0.5f;
+        frameCount = (int)Math.Round(30f * duration);
     }
 
     public static hkaDefaultAnimationControl* GetAnimationControl(Character* charaActor)
@@ -219,4 +215,12 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         [FieldOffset(160)]
         public Skeleton* Skeleton;
     }
+
+    #region 常量
+
+    private static AgentBannerEditorState* EditorState   => AgentBannerEditor.Instance()->EditorState;
+    private static CharaViewPortrait*      CharaView     => EditorState != null ? EditorState->CharaView : null;
+    private static Character*              PortraitChara => CharaView   != null ? CharaView->GetCharacter() : null;
+
+    #endregion
 }

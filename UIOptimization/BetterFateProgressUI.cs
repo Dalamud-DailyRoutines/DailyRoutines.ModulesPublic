@@ -1,5 +1,5 @@
+using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Common.Interface.Windows;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -22,40 +22,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class BetterFateProgressUI : ModuleBase
 {
-    private static CancellationTokenSource? CancelSource;
-
-    private static readonly Dictionary<uint, uint> AchievementToZone = new()
-    {
-        { 2343, 813 },  // 雷克兰德
-        { 2345, 815 },  // 安穆·艾兰
-        { 2346, 816 },  // 伊尔美格
-        { 2344, 814 },  // 珂露西亚岛
-        { 2347, 817 },  // 拉凯提卡大森林
-        { 2348, 818 },  // 黑风海
-        { 3022, 956 },  // 迷津
-        { 3023, 957 },  // 萨维奈岛
-        { 3024, 958 },  // 加雷马
-        { 3025, 959 },  // 叹息海
-        { 3026, 961 },  // 厄尔庇斯
-        { 3027, 960 },  // 天外天垓
-        { 3559, 1187 }, // 奥阔帕恰山
-        { 3560, 1188 }, // 克扎玛乌卡湿地
-        { 3561, 1189 }, // 亚克特尔树海
-        { 3562, 1190 }, // 夏劳尼荒野
-        { 3563, 1191 }, // 遗产之地
-        { 3564, 1192 }  // 活着的记忆
-    };
-
-    private static readonly Dictionary<uint, List<ZoneFateProgressInfo>> VersionToZoneInfos = [];
-
-    private static readonly Vector2 ChildSize = ScaledVector2(450f, 150f);
-
-    private static int     BicolorGemAmount;
-    private static uint    BicolorGemCap;
-    private static Vector2 BicolorGemComponentSize;
-
-    private static bool IsWindowUnlock;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("BetterFateProgressUITitle"),
@@ -64,17 +30,19 @@ public class BetterFateProgressUI : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private readonly CancellationTokenSource cancelSource = new();
+
+    private int     bicolorGemAmount;
+    private Vector2 bicolorGemComponentSize;
+
+    private bool isWindowUnlock;
 
     protected override void Init()
     {
-        CancelSource ??= new();
-
-        BuildZoneInfos();
         ObtainAllFateProgress();
-
-        BicolorGemCap = LuminaGetter.GetRow<Item>(26807)!.Value.StackSize;
-
-        Overlay                 ??= new Overlay(this);
+        
+        Overlay                 ??= new(this);
         Overlay.Flags           &=  ~ImGuiWindowFlags.NoTitleBar;
         Overlay.Flags           |=  ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
         Overlay.SizeConstraints =   new() { MinimumSize = ChildSize };
@@ -82,12 +50,20 @@ public class BetterFateProgressUI : ModuleBase
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "FateProgress", OnAddon);
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+
+        cancelSource.Cancel();
+        cancelSource.Dispose();
+    }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("BetterFateProgressUI-UnlockWindow"), ref IsWindowUnlock))
+        if (ImGui.Checkbox(Lang.Get("BetterFateProgressUI-UnlockWindow"), ref isWindowUnlock))
         {
-            if (IsWindowUnlock)
+            if (isWindowUnlock)
             {
                 Overlay.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
                 Overlay.Flags &= ~ImGuiWindowFlags.NoResize;
@@ -102,7 +78,7 @@ public class BetterFateProgressUI : ModuleBase
         if (!Throttler.Shared.Throttle("BetterFateProgress-Refresh", 10_000)) return;
 
         ObtainAllFateProgress();
-        BicolorGemAmount = InventoryManager.Instance()->GetInventoryItemCount(26807);
+        bicolorGemAmount = InventoryManager.Instance()->GetInventoryItemCount(26807);
     }
 
     protected override void OverlayOnOpen() => ObtainAllFateProgress();
@@ -114,27 +90,21 @@ public class BetterFateProgressUI : ModuleBase
         DrawFateProgressTabs();
     }
 
-    private static void DrawBicolorGemComponent()
+    private void DrawBicolorGemComponent()
     {
         var originalPos = ImGui.GetCursorPos();
-        ImGui.SetCursorPos
-        (
-            BicolorGemComponentSize with
-            {
-                X = ImGui.GetWindowSize().X - BicolorGemComponentSize.X - ImGui.GetStyle().ItemSpacing.X * 2
-            }
-        );
+        ImGui.SetCursorPosX(ImGui.GetWindowSize().X - bicolorGemComponentSize.X - ImGui.GetStyle().ItemSpacing.X * 2);
 
         using (ImRaii.Group())
         {
-            ImGui.Image(ImageHelper.GetGameIcon(LuminaGetter.GetRow<Item>(26807)!.Value.Icon).Handle, ScaledVector2(24f));
+            ImGui.Image(ImageHelper.GetGameIcon(LuminaGetter.GetRowOrDefault<Item>(26807).Icon).Handle, new(ImGui.GetFrameHeight()));
 
             ImGui.SameLine();
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 2f * GlobalUIScale);
-            ImGui.TextUnformatted($"{BicolorGemAmount}/{BicolorGemCap}");
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextUnformatted($"{bicolorGemAmount}/{BicolorGemCap}");
         }
 
-        BicolorGemComponentSize = ImGui.GetItemRectSize();
+        bicolorGemComponentSize = ImGui.GetItemRectSize();
         ImGui.SetCursorPos(originalPos);
     }
 
@@ -167,61 +137,7 @@ public class BetterFateProgressUI : ModuleBase
             counter++;
         }
     }
-
-    private static void BuildZoneInfos()
-    {
-        VersionToZoneInfos.Clear();
-
-        var counter        = 0;
-        var currentVersion = 0U;
-
-        foreach (var (achievementID, zoneID) in AchievementToZone)
-        {
-            if (!LuminaGetter.TryGetRow<TerritoryType>(zoneID, out var zoneRow)) continue;
-
-            var version = achievementID >= 3559 ? 2U : achievementID >= 3022 ? 1U : 0U;
-
-            if (currentVersion != version)
-            {
-                counter        = 0;
-                currentVersion = version;
-            }
-
-            var aetheryteID = zoneRow.Aetheryte.RowId;
-            var zoneInfo    = new ZoneFateProgressInfo(version, (uint)counter, achievementID, zoneID, aetheryteID);
-
-            VersionToZoneInfos.TryAdd(version, []);
-            VersionToZoneInfos[version].Add(zoneInfo);
-
-            counter++;
-        }
-
-        RefreshBackgroundTextures();
-    }
-
-    private static void RefreshBackgroundTextures()
-    {
-        DService.Instance().Framework.Run
-        (
-            () =>
-            {
-                const string uldPath = "ui/uld/FateProgress.uld";
-
-                foreach (var (version, zoneInfos) in VersionToZoneInfos)
-                {
-                    var texturePath = $"ui/uld/FlyingPermission{version + 3}_hr1.tex";
-
-                    for (var i = 0; i < zoneInfos.Count; i++)
-                    {
-                        var texture = DService.Instance().PI.UiBuilder.LoadUld(uldPath).LoadTexturePart(texturePath, i);
-                        zoneInfos[i].SetBackgroundTexture(texture);
-                    }
-                }
-            },
-            CancelSource.Token
-        );
-    }
-
+    
     private static void ObtainAllFateProgress()
     {
         foreach (var achivement in AchievementToZone.Keys)
@@ -236,16 +152,7 @@ public class BetterFateProgressUI : ModuleBase
         addon->Close(true);
         Overlay.IsOpen ^= true;
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-        CancelSource?.Cancel();
-        CancelSource?.Dispose();
-        CancelSource = null;
-    }
-
+    
     private class ZoneFateProgressInfo
     (
         uint version,
@@ -367,4 +274,83 @@ public class BetterFateProgressUI : ModuleBase
 
         public override string ToString() => $"ZoneFateProgressInfo_Version{Version + 5}.0_{ZoneID}_{Counter}";
     }
+    
+    #region 常量
+
+    private static readonly FrozenDictionary<uint, uint> AchievementToZone = new Dictionary<uint, uint>
+    {
+        [2343] = 813,  // 雷克兰德
+        [2345] = 815,  // 安穆·艾兰
+        [2346] = 816,  // 伊尔美格
+        [2344] = 814,  // 珂露西亚岛
+        [2347] = 817,  // 拉凯提卡大森林
+        [2348] = 818,  // 黑风海
+        [3022] = 956,  // 迷津
+        [3023] = 957,  // 萨维奈岛
+        [3024] = 958,  // 加雷马
+        [3025] = 959,  // 叹息海
+        [3026] = 961,  // 厄尔庇斯
+        [3027] = 960,  // 天外天垓
+        [3559] = 1187, // 奥阔帕恰山
+        [3560] = 1188, // 克扎玛乌卡湿地
+        [3561] = 1189, // 亚克特尔树海
+        [3562] = 1190, // 夏劳尼荒野
+        [3563] = 1191, // 遗产之地
+        [3564] = 1192  // 活着的记忆
+    }.ToFrozenDictionary();
+
+    private static FrozenDictionary<uint, List<ZoneFateProgressInfo>> VersionToZoneInfos
+    {
+        get
+        {
+            if (field != null) return field;
+
+            const string ULD_PATH = "ui/uld/FateProgress.uld";
+            
+            var dic = new Dictionary<uint, List<ZoneFateProgressInfo>>();
+            
+            var counter        = 0;
+            var currentVersion = 0U;
+
+            foreach (var (achievementID, zoneID) in AchievementToZone)
+            {
+                if (!LuminaGetter.TryGetRow<TerritoryType>(zoneID, out var zoneRow)) continue;
+
+                var version = achievementID >= 3559 ? 2U : achievementID >= 3022 ? 1U : 0U;
+
+                if (currentVersion != version)
+                {
+                    counter        = 0;
+                    currentVersion = version;
+                }
+
+                var aetheryteID = zoneRow.Aetheryte.RowId;
+                var zoneInfo    = new ZoneFateProgressInfo(version, (uint)counter, achievementID, zoneID, aetheryteID);
+
+                dic.TryAdd(version, []);
+                dic[version].Add(zoneInfo);
+
+                counter++;
+            }
+            
+            foreach (var (version, zoneInfos) in dic)
+            {
+                var texturePath = $"ui/uld/FlyingPermission{version + 3}_hr1.tex";
+
+                for (var i = 0; i < zoneInfos.Count; i++)
+                {
+                    var texture = DService.Instance().PI.UiBuilder.LoadUld(ULD_PATH).LoadTexturePart(texturePath, i);
+                    zoneInfos[i].SetBackgroundTexture(texture);
+                }
+            }
+            
+            return field = dic.ToFrozenDictionary();
+        }
+    }
+
+    private static readonly Vector2 ChildSize = ScaledVector2(450f, 150f);
+
+    private static readonly uint BicolorGemCap = LuminaGetter.GetRow<Item>(26807)?.StackSize ?? 1500;
+
+    #endregion
 }

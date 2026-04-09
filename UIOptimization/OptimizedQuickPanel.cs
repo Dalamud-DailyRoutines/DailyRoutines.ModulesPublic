@@ -24,17 +24,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedQuickPanel : ModuleBase
 {
-    private static readonly TextCommand QuickPanelLine = LuminaGetter.GetRowOrDefault<TextCommand>(50);
-
-    private static Config                  ModuleConfig = null!;
-    private static Hook<ToggleUIDelegate>? ToggleUIHook;
-
-    private static Hook<AgentShowDelegate>? AgentQuickPanelShowHook;
-
-    private static bool IsLastQuickPanelEnabled;
-
-    private static CheckboxNode? LockCheckBoxNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("OptimizedQuickPanelTitle"),
@@ -44,9 +33,20 @@ public unsafe class OptimizedQuickPanel : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private delegate void ToggleUIDelegate(UIModule* module, UIModule.UiFlags flags, bool enable, bool unknown = true);
+    private Hook<ToggleUIDelegate>? ToggleUIHook;
+
+    private Hook<AgentShowDelegate>? AgentQuickPanelShowHook;
+
+    private Config config = null!;
+    
+    private CheckboxNode? lockCheckBoxNode;
+
+    private bool isLastQuickPanelEnabled;
+    
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         ChatManager.Instance().RegPreExecuteCommandInner(OnPreExecuteCommandInner);
 
@@ -99,50 +99,50 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                LockCheckBoxNode?.Dispose();
-                LockCheckBoxNode = null;
+                lockCheckBoxNode?.Dispose();
+                lockCheckBoxNode = null;
 
-                if (ModuleConfig != null)
-                    ModuleConfig.Save(this);
+                if (config != null)
+                    config.Save(this);
                 break;
 
             case AddonEvent.PostDraw:
                 if (QuickPanel == null) return;
 
-                if (ModuleConfig.IsLock && ModuleConfig.LastPosition != Vector2.Zero)
-                    QuickPanel->SetPosition((short)ModuleConfig.LastPosition.X, (short)ModuleConfig.LastPosition.Y);
-                ModuleConfig.LastPosition = new(QuickPanel->RootNode->GetXFloat(), QuickPanel->RootNode->GetYFloat());
+                if (config.IsLock && config.LastPosition != Vector2.Zero)
+                    QuickPanel->SetPosition((short)config.LastPosition.X, (short)config.LastPosition.Y);
+                config.LastPosition = new(QuickPanel->RootNode->GetXFloat(), QuickPanel->RootNode->GetYFloat());
 
                 // 正常比较高帧率状态下应该是没问题的
-                if (ModuleConfig.IsLock                                   &&
+                if (config.IsLock                                   &&
                     UIInputData.Instance()->IsInputIdPressed(InputId.ESC) &&
                     AtkStage.Instance()->GetFocus() == null               &&
                     SystemMenu                      == null)
                     AgentHUD.Instance()->HandleMainCommandOperation(MainCommandOperation.OpenSystemMenu, 0);
 
-                if (LockCheckBoxNode == null)
+                if (lockCheckBoxNode == null)
                 {
-                    LockCheckBoxNode = new()
+                    lockCheckBoxNode = new()
                     {
                         Position    = new(8, 34),
-                        TextTooltip = LuminaWrapper.GetAddonText(ModuleConfig.IsLock ? 3061U : 3060),
+                        TextTooltip = LuminaWrapper.GetAddonText(config.IsLock ? 3061U : 3060),
                         Size        = new(20, 24),
-                        IsChecked   = ModuleConfig.IsLock
+                        IsChecked   = config.IsLock
                     };
 
-                    LockCheckBoxNode.OnClick = x =>
+                    lockCheckBoxNode.OnClick = x =>
                     {
-                        ModuleConfig.IsLock = x;
-                        ModuleConfig.Save(this);
+                        config.IsLock = x;
+                        config.Save(this);
 
-                        LockCheckBoxNode.TextTooltip = LuminaWrapper.GetAddonText(ModuleConfig.IsLock ? 3061U : 3060);
-                        LockCheckBoxNode.ShowTooltip();
+                        lockCheckBoxNode.TextTooltip = LuminaWrapper.GetAddonText(config.IsLock ? 3061U : 3060);
+                        lockCheckBoxNode.ShowTooltip();
                         UpdateAddonFlags();
                     };
 
-                    LockCheckBoxNode.BoxBackground.IsVisible = false;
-                    LockCheckBoxNode.BoxForeground.IsVisible = false;
-                    LockCheckBoxNode.Label.IsVisible         = false;
+                    lockCheckBoxNode.BoxBackground.IsVisible = false;
+                    lockCheckBoxNode.BoxForeground.IsVisible = false;
+                    lockCheckBoxNode.Label.IsVisible         = false;
 
                     var lockImageNode = new SimpleImageNode
                     {
@@ -173,7 +173,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
                             Id                 = 3
                         }
                     );
-                    lockImageNode.AttachNode(LockCheckBoxNode);
+                    lockImageNode.AttachNode(lockCheckBoxNode);
 
                     lockImageNode.AddTimeline
                     (
@@ -241,7 +241,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
                             .Build()
                     );
 
-                    LockCheckBoxNode.AttachNode(QuickPanel);
+                    lockCheckBoxNode.AttachNode(QuickPanel);
                 }
 
                 break;
@@ -249,7 +249,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
     }
 
     // 给 Addon 上 Flag 处理锁定
-    private static void AgentQuickPanelShowDetour(AgentInterface* agent)
+    private void AgentQuickPanelShowDetour(AgentInterface* agent)
     {
         AgentQuickPanelShowHook.Original(agent);
         UpdateAddonFlags();
@@ -279,7 +279,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
     }
 
     // 随着 ActionBar 隐藏一并隐藏, 和 ActionBar 逻辑保持一致
-    private static void ToggleUIDetour(UIModule* module, UIModule.UiFlags flags, bool enable, bool unknown)
+    private void ToggleUIDetour(UIModule* module, UIModule.UiFlags flags, bool enable, bool unknown)
     {
         ToggleUIHook.Original(module, flags, enable, unknown);
 
@@ -288,44 +288,48 @@ public unsafe class OptimizedQuickPanel : ModuleBase
             // 隐藏
             if (!enable)
             {
-                IsLastQuickPanelEnabled = QuickPanel != null;
+                isLastQuickPanelEnabled = QuickPanel != null;
                 AgentQuickPanel.Instance()->Hide();
             }
             else
             {
-                if (IsLastQuickPanelEnabled && QuickPanel == null)
+                if (isLastQuickPanelEnabled && QuickPanel == null)
                     AgentQuickPanel.Instance()->OpenPanel(AgentQuickPanel.Instance()->ActivePanel);
 
-                IsLastQuickPanelEnabled = false;
+                isLastQuickPanelEnabled = false;
             }
         }
     }
 
-    private static void UpdateAddonFlags()
+    private void UpdateAddonFlags()
     {
         if (QuickPanel == null) return;
 
         // 禁止 ESC 键关闭
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A1, 0x4, ModuleConfig.IsLock);
+        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A1, 0x4, config.IsLock);
 
         // 禁止聚焦
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A0, 0x80, ModuleConfig.IsLock);
+        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A0, 0x80, config.IsLock);
 
         // 禁止自动聚焦
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A1, 0x40, ModuleConfig.IsLock);
+        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A1, 0x40, config.IsLock);
 
         // 禁止右键菜单
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A3, 0x1, ModuleConfig.IsLock);
+        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A3, 0x1, config.IsLock);
 
         // 禁止交互
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A3, 0x40, !ModuleConfig.IsLock);
+        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A3, 0x40, !config.IsLock);
     }
-
-    private delegate void ToggleUIDelegate(UIModule* module, UIModule.UiFlags flags, bool enable, bool unknown = true);
-
+    
     private class Config : ModuleConfig
     {
         public bool    IsLock = true;
         public Vector2 LastPosition;
     }
+    
+    #region 常量
+
+    private static readonly TextCommand QuickPanelLine = LuminaGetter.GetRowOrDefault<TextCommand>(50);
+
+    #endregion
 }

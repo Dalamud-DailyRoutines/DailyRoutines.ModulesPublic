@@ -14,26 +14,32 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class RealPositionInNaviMap : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static TextButtonNode? PositionButton;
-
-    private static int LastX;
-    private static int LastY;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("RealPositionInNaviMapTitle"),
         Description = Lang.Get("RealPositionInNaviMapDescription"),
         Category    = ModuleCategory.UIOptimization
     };
+    
+    private Config config = null!;
+
+    private TextButtonNode? positionButton;
+
+    private int lastX;
+    private int lastY;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_NaviMap", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,         "_NaviMap", OnAddon);
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 
     protected override void ConfigUI()
@@ -41,24 +47,18 @@ public unsafe class RealPositionInNaviMap : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RealPositionInNaviMap-CopyFormat"));
         ImGuiOm.HelpMarker(Lang.Get("RealPositionInNaviMap-CopyFormatHelp"), 20f * GlobalUIScale);
 
-        ImGui.InputText("###CopyFormat", ref ModuleConfig.CopyFormat, 256);
+        ImGui.InputText("###CopyFormat", ref config.CopyFormat, 256);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-    }
-
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                PositionButton?.Dispose();
-                PositionButton = null;
+                positionButton?.Dispose();
+                positionButton = null;
 
                 if (NaviMap != null)
                 {
@@ -67,7 +67,7 @@ public unsafe class RealPositionInNaviMap : ModuleBase
                         origTextNode->ToggleVisibility(true);
                 }
 
-                LastX = LastY = 0;
+                lastX = lastY = 0;
 
                 break;
 
@@ -78,20 +78,20 @@ public unsafe class RealPositionInNaviMap : ModuleBase
                 // 跳跃的时候始终要更新位置
                 if (!DService.Instance().Condition[ConditionFlag.Jumping])
                 {
-                    if (numberArray->IntArray[0] != LastX)
-                        LastX = numberArray->IntArray[0];
-                    else if (numberArray->IntArray[1] != LastY)
-                        LastY = numberArray->IntArray[1];
+                    if (numberArray->IntArray[0] != lastX)
+                        lastX = numberArray->IntArray[0];
+                    else if (numberArray->IntArray[1] != lastY)
+                        lastY = numberArray->IntArray[1];
                     else
                         return;
                 }
 
-                if (PositionButton == null)
+                if (positionButton == null)
                 {
                     var origTextNode = NaviMap->GetTextNodeById(6);
                     if (origTextNode == null) return;
 
-                    PositionButton = new()
+                    positionButton = new()
                     {
                         Position  = new(0),
                         Size      = new(130, 18),
@@ -106,7 +106,7 @@ public unsafe class RealPositionInNaviMap : ModuleBase
 
                             var result = string.Format
                             (
-                                ModuleConfig.CopyFormat,
+                                config.CopyFormat,
                                 player.Position.X,
                                 player.Position.Y,
                                 player.Position.Z
@@ -121,22 +121,22 @@ public unsafe class RealPositionInNaviMap : ModuleBase
                     };
 
                     if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
-                        PositionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
+                        positionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
 
-                    PositionButton.BackgroundNode.IsVisible = false;
+                    positionButton.BackgroundNode.IsVisible = false;
 
-                    PositionButton.LabelNode.TextFlags        = TextFlags.Glare;
-                    PositionButton.LabelNode.TextColor        = origTextNode->Color.ToVector4();
-                    PositionButton.LabelNode.TextOutlineColor = origTextNode->EdgeColor.ToVector4();
+                    positionButton.LabelNode.TextFlags        = TextFlags.Glare;
+                    positionButton.LabelNode.TextColor        = origTextNode->Color.ToVector4();
+                    positionButton.LabelNode.TextOutlineColor = origTextNode->EdgeColor.ToVector4();
 
-                    PositionButton.AttachNode(NaviMap->GetNodeById(5));
+                    positionButton.AttachNode(NaviMap->GetNodeById(5));
 
                     origTextNode->ToggleVisibility(false);
                 }
 
             {
                 if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
-                    PositionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
+                    positionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
             }
 
                 break;

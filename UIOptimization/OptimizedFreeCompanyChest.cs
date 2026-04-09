@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -26,38 +27,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedFreeCompanyChest : ModuleBase
 {
-    private static readonly CompSig SendInventoryRefreshSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 8B DA 48 8B F1 33 D2 0F B7 FA");
-    private static          Hook<SendInventoryRefreshDelegate>? SendInventoryRefreshHook;
-    private static readonly MoveItemDelegate MoveItem = new CompSig("40 53 55 56 57 41 57 48 83 EC ?? 45 33 FF").GetDelegate<MoveItemDelegate>();
-
-    private static readonly uint[] ItemIDs =
-        LuminaGetter.Get<Item>().Where(x => x.ItemSortCategory.Value.Param == 150).Select(x => x.RowId).ToArray();
-
-    private static readonly Dictionary<InventoryType, string> DefaultPages = new()
-    {
-        [InventoryType.FreeCompanyPage1]    = $"{LuminaWrapper.GetFCChestName(0)} \ue090",
-        [InventoryType.FreeCompanyPage2]    = $"{LuminaWrapper.GetFCChestName(0)} \ue091",
-        [InventoryType.FreeCompanyPage3]    = $"{LuminaWrapper.GetFCChestName(0)} \ue092",
-        [InventoryType.FreeCompanyPage4]    = $"{LuminaWrapper.GetFCChestName(0)} \ue093",
-        [InventoryType.FreeCompanyPage5]    = $"{LuminaWrapper.GetFCChestName(0)} \ue094",
-        [InventoryType.FreeCompanyCrystals] = $"{LuminaWrapper.GetAddonText(2990)}",
-        [InventoryType.Invalid]             = $"{LuminaWrapper.GetAddonText(7)}"
-    };
-
-    private static Config ModuleConfig = null!;
-
-    private static CheckboxNode? FastMoveNode;
-
-    private static CheckboxNode? DefaultPageNode;
-
-    private static VerticalListNode? ComponentNode;
-    private static IconImageNode?    GilIconNode;
-    private static TextNode?         GilItemsValueNode;
-    private static TextNode?         GilItemsValueCountNode;
-
-    private static bool IsNeedToClose;
-    private static long LastTotalPrice;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("OptimizedFreeCompanyChestTitle"),
@@ -66,10 +35,31 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig SendInventoryRefreshSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 8B DA 48 8B F1 33 D2 0F B7 FA");
+    private delegate        bool    SendInventoryRefreshDelegate(InventoryManager* instance, int inventoryType);
+    private                 Hook<SendInventoryRefreshDelegate>? SendInventoryRefreshHook;
+    
+    private delegate nint MoveItemDelegate(void* agent, InventoryType srcInv, uint srcSlot, InventoryType dstInv, uint dstSlot);
+    private readonly MoveItemDelegate moveItem = new CompSig("40 53 55 56 57 41 57 48 83 EC ?? 45 33 FF").GetDelegate<MoveItemDelegate>();
+
+    private Config config = null!;
+
+    private CheckboxNode? fastMoveNode;
+
+    private CheckboxNode? defaultPageNode;
+
+    private VerticalListNode? componentNode;
+    private IconImageNode?    gilIconNode;
+    private TextNode?         gilItemsValueNode;
+    private TextNode?         gilItemsValueCountNode;
+
+    private bool isNeedToClose;
+    private long lastTotalPrice;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         SendInventoryRefreshHook ??= SendInventoryRefreshSig.GetHook<SendInventoryRefreshDelegate>(SendInventoryRefreshDetour);
         SendInventoryRefreshHook.Enable();
@@ -82,6 +72,19 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
         DService.Instance().ContextMenu.OnMenuOpened += OnContextMenuOpened;
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonContextMenu);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonChest);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonInput);
+
+        ClearNodes();
+
+        isNeedToClose = false;
+    }
 
     // 打开部队储物柜时请求所有页面数据, 并生成 Node
     private void OnAddonChest(AddonEvent type, AddonArgs args)
@@ -91,15 +94,15 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
             case AddonEvent.PostSetup:
                 if (FreeCompanyChest == null) return;
 
-                if (ModuleConfig.DefaultPage != InventoryType.Invalid)
+                if (config.DefaultPage != InventoryType.Invalid)
                 {
-                    if (ModuleConfig.DefaultPage == InventoryType.FreeCompanyCrystals)
+                    if (config.DefaultPage == InventoryType.FreeCompanyCrystals)
                         DService.Instance().Framework.Run(() => ((AtkComponentRadioButton*)FreeCompanyChest->GetComponentByNodeId(15))->Click());
                     else
                     {
-                        if ((int)ModuleConfig.DefaultPage < 20000) return;
+                        if ((int)config.DefaultPage < 20000) return;
 
-                        var index = (int)ModuleConfig.DefaultPage % 20000;
+                        var index = (int)config.DefaultPage % 20000;
                         if (index > 5) return;
 
                         DService.Instance().Framework.Run(() => ((AtkComponentRadioButton*)FreeCompanyChest->GetComponentByNodeId((uint)(10 + index)))->Click());
@@ -110,37 +113,37 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
             case AddonEvent.PostDraw:
                 if (FreeCompanyChest == null) return;
 
-                if (FastMoveNode == null)
+                if (fastMoveNode == null)
                 {
-                    FastMoveNode = new()
+                    fastMoveNode = new()
                     {
                         Size      = new(160.0f, 28.0f),
                         Position  = new(5, 210),
                         IsVisible = true,
-                        IsChecked = ModuleConfig.FastMoveItem,
+                        IsChecked = config.FastMoveItem,
                         IsEnabled = true,
                         String    = Lang.Get("OptimizedFreeCompanyChest-FastMove"),
                         OnClick = newState =>
                         {
-                            ModuleConfig.FastMoveItem = newState;
-                            ModuleConfig.Save(this);
+                            config.FastMoveItem = newState;
+                            config.Save(this);
 
-                            IsNeedToClose = false;
+                            isNeedToClose = false;
                         },
                         TextTooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
                                                            .Append($" {Lang.Get("OptimizedFreeCompanyChest-FastMoveHelp")}")
                                                            .Build()
                                                            .Encode()
                     };
-                    FastMoveNode.AttachNode(FreeCompanyChest->GetNodeById(9));
+                    fastMoveNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
-                FastMoveNode.IsChecked = ModuleConfig.FastMoveItem;
-                FastMoveNode.IsVisible = FreeCompanyChest->AtkValues[1].UInt == 0;
+                fastMoveNode.IsChecked = config.FastMoveItem;
+                fastMoveNode.IsVisible = FreeCompanyChest->AtkValues[1].UInt == 0;
 
-                if (DefaultPageNode == null)
+                if (defaultPageNode == null)
                 {
-                    DefaultPageNode = new()
+                    defaultPageNode = new()
                     {
                         Size      = new(160.0f, 28.0f),
                         Position  = new(5, 156),
@@ -153,38 +156,38 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                             switch (newState)
                             {
                                 case true when TryGetCurrentFCPage(out var currentPage):
-                                    ModuleConfig.DefaultPage = currentPage;
-                                    ModuleConfig.Save(this);
+                                    config.DefaultPage = currentPage;
+                                    config.Save(this);
                                     break;
                                 case false:
-                                    ModuleConfig.DefaultPage = InventoryType.Invalid;
-                                    ModuleConfig.Save(this);
+                                    config.DefaultPage = InventoryType.Invalid;
+                                    config.Save(this);
                                     break;
                             }
 
-                            DefaultPageNode.TextTooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
+                            defaultPageNode.TextTooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
                                                                                .Append($" {Lang.Get("OptimizedFreeCompanyChest-DefaultPageHelp")}")
                                                                                .AddRange([NewLinePayload.Payload, NewLinePayload.Payload])
                                                                                .Append
                                                                                (
-                                                                                   $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(ModuleConfig.DefaultPage, LuminaWrapper.GetAddonText(7))}"
+                                                                                   $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(config.DefaultPage, LuminaWrapper.GetAddonText(7))}"
                                                                                )
                                                                                .Build()
                                                                                .Encode();
-                            DefaultPageNode.HideTooltip();
-                            DefaultPageNode.ShowTooltip();
+                            defaultPageNode.HideTooltip();
+                            defaultPageNode.ShowTooltip();
                         },
                         TextTooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
                                                            .Append($" {Lang.Get("OptimizedFreeCompanyChest-DefaultPageHelp")}")
                                                            .AddRange([NewLinePayload.Payload, NewLinePayload.Payload])
                                                            .Append
                                                            (
-                                                               $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(ModuleConfig.DefaultPage, LuminaWrapper.GetAddonText(7))}"
+                                                               $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(config.DefaultPage, LuminaWrapper.GetAddonText(7))}"
                                                            )
                                                            .Build()
                                                            .Encode()
                     };
-                    DefaultPageNode.AttachNode(FreeCompanyChest->GetNodeById(9));
+                    defaultPageNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
                 var gilRadioButton = FreeCompanyChest->GetNodeById(16);
@@ -192,18 +195,18 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                     gilRadioButton->SetPositionFloat(0, 185);
 
                 if (Throttler.Shared.Throttle("OptimizedFreeCompanyChest-OnUpdateDefaultPage", 100))
-                    DefaultPageNode.IsChecked = TryGetCurrentFCPage(out var currentPage) && ModuleConfig.DefaultPage == currentPage;
+                    defaultPageNode.IsChecked = TryGetCurrentFCPage(out var currentPage) && config.DefaultPage == currentPage;
 
-                if (ComponentNode == null)
+                if (componentNode == null)
                 {
-                    ComponentNode = new()
+                    componentNode = new()
                     {
                         IsVisible = true,
                         Position  = new(0, -70),
                         Size      = new(0, 60)
                     };
 
-                    GilIconNode = new()
+                    gilIconNode = new()
                     {
                         IsVisible  = true,
                         IconId     = 65002,
@@ -212,7 +215,7 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                         FitTexture = true
                     };
 
-                    GilItemsValueNode = new()
+                    gilItemsValueNode = new()
                     {
                         IsVisible        = true,
                         Position         = new(-55, 50),
@@ -225,7 +228,7 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                         AlignmentType    = AlignmentType.Right
                     };
 
-                    GilItemsValueCountNode = new()
+                    gilItemsValueCountNode = new()
                     {
                         Position         = new(-55, 30),
                         Size             = new(395, 28),
@@ -238,23 +241,23 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                         AlignmentType    = AlignmentType.Right
                     };
 
-                    GilIconNode.AttachNode(ComponentNode);
-                    GilItemsValueNode.AttachNode(ComponentNode);
-                    GilItemsValueCountNode.AttachNode(ComponentNode);
-                    ComponentNode.AttachNode(FreeCompanyChest->GetNodeById(9));
+                    gilIconNode.AttachNode(componentNode);
+                    gilItemsValueNode.AttachNode(componentNode);
+                    gilItemsValueCountNode.AttachNode(componentNode);
+                    componentNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
                 if (Throttler.Shared.Throttle("OptimizedFreeCompanyChest-OnUpdateGilItemsValue", 100))
                 {
-                    LastTotalPrice = TryGetTotalPrice(out var totalPrice) ? totalPrice : 0;
+                    lastTotalPrice = TryGetTotalPrice(out var totalPrice) ? totalPrice : 0;
 
-                    ComponentNode.IsVisible       = LastTotalPrice > 0;
-                    GilItemsValueCountNode.String = $"{LastTotalPrice.ToChineseString()}\ue049";
+                    componentNode.IsVisible       = lastTotalPrice > 0;
+                    gilItemsValueCountNode.String = $"{lastTotalPrice.ToChineseString()}\ue049";
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                IsNeedToClose = false;
+                isNeedToClose = false;
 
                 ClearNodes();
                 break;
@@ -263,9 +266,9 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
     }
 
     // 快捷存取
-    private static void OnContextMenuOpened(IMenuOpenedArgs args)
+    private void OnContextMenuOpened(IMenuOpenedArgs args)
     {
-        if (FreeCompanyChest == null || !ModuleConfig.FastMoveItem) return;
+        if (FreeCompanyChest == null || !config.FastMoveItem) return;
 
         var agent = AgentFreeCompanyChest.Instance();
         if (agent == null) return;
@@ -281,8 +284,8 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
             {
                 if (TryFindFirstSuitableSlot(playerInventory, contextItem, out var slot))
                 {
-                    IsNeedToClose = true;
-                    MoveItem(agent, agent->ContextInventoryType, (uint)agent->ContextInventorySlot, playerInventory, (uint)slot);
+                    isNeedToClose = true;
+                    moveItem(agent, agent->ContextInventoryType, (uint)agent->ContextInventorySlot, playerInventory, (uint)slot);
                     agent->ContextInventoryType = InventoryType.Invalid;
                     return;
                 }
@@ -299,25 +302,25 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
             if (!TryGetCurrentFCPage(out var page) || page == InventoryType.FreeCompanyCrystals) return;
             if (!TryFindFirstSuitableSlot(page, (InventoryItem*)inventoryItem.Address, out var slot)) return;
 
-            IsNeedToClose = true;
-            MoveItem(agent, sourceInventory, sourceSlot, page, (uint)slot);
+            isNeedToClose = true;
+            moveItem(agent, sourceInventory, sourceSlot, page, (uint)slot);
         }
     }
 
     // 处理存取后的右键菜单关闭
-    private static void OnAddonContextMenu(AddonEvent type, AddonArgs args)
+    private void OnAddonContextMenu(AddonEvent type, AddonArgs args)
     {
-        if (!IsNeedToClose || ContextMenuAddon == null) return;
+        if (!isNeedToClose || ContextMenuAddon == null) return;
 
         ContextMenuAddon->IsVisible = false;
         ContextMenuAddon->Close(true);
-        IsNeedToClose = false;
+        isNeedToClose = false;
     }
 
     // 自动确认数量
-    private static void OnAddonInput(AddonEvent type, AddonArgs args)
+    private void OnAddonInput(AddonEvent type, AddonArgs args)
     {
-        if (!ModuleConfig.FastMoveItem || InputNumeric == null || !FreeCompanyChest->IsAddonAndNodesReady()) return;
+        if (!config.FastMoveItem || InputNumeric == null || !FreeCompanyChest->IsAddonAndNodesReady()) return;
 
         InputNumeric->Callback((int)InputNumeric->AtkValues[3].UInt);
     }
@@ -330,50 +333,27 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         return true;
     }
 
-    private static void ClearNodes()
+    private void ClearNodes()
     {
-        FastMoveNode?.Dispose();
-        FastMoveNode = null;
+        fastMoveNode?.Dispose();
+        fastMoveNode = null;
 
-        DefaultPageNode?.Dispose();
-        DefaultPageNode = null;
+        defaultPageNode?.Dispose();
+        defaultPageNode = null;
 
-        ComponentNode?.Dispose();
-        ComponentNode = null;
+        componentNode?.Dispose();
+        componentNode = null;
 
-        GilIconNode?.Dispose();
-        GilIconNode = null;
+        gilIconNode?.Dispose();
+        gilIconNode = null;
 
-        GilItemsValueCountNode?.Dispose();
-        GilItemsValueCountNode = null;
+        gilItemsValueCountNode?.Dispose();
+        gilItemsValueCountNode = null;
 
-        GilItemsValueNode?.Dispose();
-        GilItemsValueNode = null;
+        gilItemsValueNode?.Dispose();
+        gilItemsValueNode = null;
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
-
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonContextMenu);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonChest);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonInput);
-
-        ClearNodes();
-
-        IsNeedToClose = false;
-    }
-
-    private delegate bool SendInventoryRefreshDelegate(InventoryManager* instance, int inventoryType);
-
-    private delegate nint MoveItemDelegate(void* agent, InventoryType srcInv, uint srcSlot, InventoryType dstInv, uint dstSlot);
-
-    private class Config : ModuleConfig
-    {
-        public InventoryType DefaultPage  = InventoryType.Invalid;
-        public bool          FastMoveItem = true;
-    }
-
+    
     #region 工具
 
     private static bool TryGetSelectedItemSource(out InventoryType sourceInventory, out ushort sourceSlot)
@@ -482,6 +462,33 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
         return totalPrice > 0;
     }
+
+    #endregion
+    
+    private class Config : ModuleConfig
+    {
+        public InventoryType DefaultPage  = InventoryType.Invalid;
+        public bool          FastMoveItem = true;
+    }
+
+    #region 常量
+
+    private static readonly uint[] ItemIDs =
+        LuminaGetter.Get<Item>()
+                    .Where(x => x.ItemSortCategory.Value.Param == 150)
+                    .Select(x => x.RowId)
+                    .ToArray();
+
+    private static readonly FrozenDictionary<InventoryType, string> DefaultPages = new Dictionary<InventoryType, string>
+    {
+        [InventoryType.FreeCompanyPage1]    = $"{LuminaWrapper.GetFCChestName(0)} \ue090",
+        [InventoryType.FreeCompanyPage2]    = $"{LuminaWrapper.GetFCChestName(0)} \ue091",
+        [InventoryType.FreeCompanyPage3]    = $"{LuminaWrapper.GetFCChestName(0)} \ue092",
+        [InventoryType.FreeCompanyPage4]    = $"{LuminaWrapper.GetFCChestName(0)} \ue093",
+        [InventoryType.FreeCompanyPage5]    = $"{LuminaWrapper.GetFCChestName(0)} \ue094",
+        [InventoryType.FreeCompanyCrystals] = $"{LuminaWrapper.GetAddonText(2990)}",
+        [InventoryType.Invalid]             = $"{LuminaWrapper.GetAddonText(7)}"
+    }.ToFrozenDictionary();
 
     #endregion
 }

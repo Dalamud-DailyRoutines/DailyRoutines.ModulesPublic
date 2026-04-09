@@ -21,19 +21,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedFreeShop : ModuleBase
 {
-    private static readonly CompSig ReceiveEventSig =
-        new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 50 4C 8B BC 24 ?? ?? ?? ??");
-
-    private static Hook<AgentReceiveEventDelegate>? ReceiveEventHook;
-
-    private static Config ModuleConfig = null!;
-
-    private static CheckboxNode? IsEnabledNode;
-
-    private static HorizontalFlexNode? BatchClaimContainerNode;
-
-    private static TaskHelper? ClickYesnoHelper;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("OptimizedFreeShopTitle"),
@@ -43,13 +30,24 @@ public unsafe class OptimizedFreeShop : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig ReceiveEventSig =
+        new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 50 4C 8B BC 24 ?? ?? ?? ??");
+    private Hook<AgentReceiveEventDelegate>? ReceiveEventHook;
+
+    private Config config = null!;
+
+    private CheckboxNode?       isEnabledNode;
+    private HorizontalFlexNode? batchClaimContainerNode;
+
+    private TaskHelper? clickYesnoHelper;
 
     protected override void Init()
     {
         TaskHelper       ??= new();
-        ClickYesnoHelper ??= new();
+        clickYesnoHelper ??= new();
 
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         ReceiveEventHook ??= ReceiveEventSig.GetHook<AgentReceiveEventDelegate>(ReceiveEventDetour);
         ReceiveEventHook.Enable();
@@ -57,13 +55,21 @@ public unsafe class OptimizedFreeShop : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "FreeShop", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "FreeShop", OnAddon);
     }
-
-    private static AtkValue* ReceiveEventDetour(AgentInterface* agent, AtkValue* returnValues, AtkValue* values, uint valueCount, ulong eventKind)
+    
+    protected override void Uninit()
     {
-        if (ModuleConfig.IsEnabled && eventKind == 0 && values->Int == 0)
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+
+        clickYesnoHelper = null;
+    }
+
+    private AtkValue* ReceiveEventDetour(AgentInterface* agent, AtkValue* returnValues, AtkValue* values, uint valueCount, ulong eventKind)
+    {
+        if (config.IsEnabled && eventKind == 0 && values->Int == 0)
         {
-            ClickYesnoHelper.Abort();
-            ClickYesnoHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
+            clickYesnoHelper.Abort();
+            clickYesnoHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
         }
 
         return ReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
@@ -76,7 +82,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
             case AddonEvent.PostDraw:
                 if (FreeShop == null) return;
 
-                if (IsEnabledNode == null)
+                if (isEnabledNode == null)
                 {
                     var checkboxNode = FreeShop->GetComponentByNodeId(2);
                     if (checkboxNode == null) return;
@@ -86,25 +92,25 @@ public unsafe class OptimizedFreeShop : ModuleBase
 
                     textNode->ResizeNodeForCurrentText();
 
-                    IsEnabledNode = new()
+                    isEnabledNode = new()
                     {
                         Size      = new(160.0f, 28.0f),
                         Position  = new(56 + textNode->Width, 42),
                         IsVisible = true,
-                        IsChecked = ModuleConfig.IsEnabled,
+                        IsChecked = config.IsEnabled,
                         IsEnabled = true,
                         String    = Lang.Get("OptimizedFreeShop-FastClaim"),
                         OnClick = newState =>
                         {
-                            ModuleConfig.IsEnabled = newState;
-                            ModuleConfig.Save(this);
+                            config.IsEnabled = newState;
+                            config.Save(this);
                         }
                     };
-                    IsEnabledNode.Label.TextFlags = (TextFlags)33;
-                    IsEnabledNode.AttachNode(FreeShop->RootNode);
+                    isEnabledNode.Label.TextFlags = (TextFlags)33;
+                    isEnabledNode.AttachNode(FreeShop->RootNode);
                 }
 
-                if (BatchClaimContainerNode == null)
+                if (batchClaimContainerNode == null)
                 {
                     var itemCount = FreeShop->AtkValues[3].UInt;
                     var itemIDs   = new Dictionary<uint, List<(int Index, uint ID)>>();
@@ -118,7 +124,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
                         itemIDs[itemData.ClassJobCategory.RowId].Add((i, itemID));
                     }
 
-                    BatchClaimContainerNode = new()
+                    batchClaimContainerNode = new()
                     {
                         Width          = 40f * itemIDs.Count,
                         Position       = new(160, 5),
@@ -144,23 +150,23 @@ public unsafe class OptimizedFreeShop : ModuleBase
                             TextTooltip = $"{Lang.Get("OptimizedFreeShop-BatchClaim")}: {classJobData.Name}"
                         };
 
-                        BatchClaimContainerNode.AddNode(button);
-                        BatchClaimContainerNode.AddDummy();
+                        batchClaimContainerNode.AddNode(button);
+                        batchClaimContainerNode.AddDummy();
                     }
 
-                    BatchClaimContainerNode.AttachNode(FreeShop->RootNode);
+                    batchClaimContainerNode.AttachNode(FreeShop->RootNode);
                 }
 
 
                 break;
             case AddonEvent.PreFinalize:
-                IsEnabledNode?.Dispose();
-                IsEnabledNode = null;
+                isEnabledNode?.Dispose();
+                isEnabledNode = null;
 
-                BatchClaimContainerNode?.Dispose();
-                BatchClaimContainerNode = null;
+                batchClaimContainerNode?.Dispose();
+                batchClaimContainerNode = null;
 
-                ClickYesnoHelper?.Abort();
+                clickYesnoHelper?.Abort();
                 break;
         }
 
@@ -186,15 +192,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
                 TaskHelper.Enqueue(() => BatchClaim(itemData));
         }
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-
-        ClickYesnoHelper = null;
-    }
-
+    
     private class Config : ModuleConfig
     {
         public bool IsEnabled = true;

@@ -14,12 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRefreshMarketSearchResult : ModuleBase
 {
-    private static readonly CompSig                             ProcessRequestResultSig = new("E8 ?? ?? ?? ?? 83 3B 00 74 16");
-    private static          Hook<ProcessRequestResultDelegate>? ProcessRequestResultHook;
-
-    private static readonly CompSig     WaitMessageSig   = new("BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 8B C0 BA ?? ?? ?? ?? 48 8B CE E8 ?? ?? ?? ?? 45 33 C9");
-    private static readonly MemoryPatch WaitMessagePatch = new(WaitMessageSig.Get(), [0xBA, 0xB9, 0x1A, 0x00, 0x00]);
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoRefreshMarketSearchResultTitle"),
@@ -28,21 +22,28 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig ProcessRequestResultSig = new("E8 ?? ?? ?? ?? 83 3B 00 74 16");
+    private delegate        nint    ProcessRequestResultDelegate(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4);
+    private Hook<ProcessRequestResultDelegate>? ProcessRequestResultHook;
 
-    private static bool IsMarketStuck { get; set; }
+    private static readonly CompSig     WaitMessageSig   = new("BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 8B C0 BA ?? ?? ?? ?? 48 8B CE E8 ?? ?? ?? ?? 45 33 C9");
+    private readonly        MemoryPatch waitMessagePatch = new(WaitMessageSig.Get(), [0xBA, 0xB9, 0x1A, 0x00, 0x00]);
 
-    [IPCProvider("DailyRoutines.Modules.AutoRefreshMarketSearchResult.IsMarketStuck")]
-    public static bool IsCurrentMarketStuck => IsMarketStuck;
+    private bool isMarketStuck;
 
     protected override void Init()
     {
         ProcessRequestResultHook ??= ProcessRequestResultSig.GetHook<ProcessRequestResultDelegate>(ProcessRequestResultDetour);
         ProcessRequestResultHook.Enable();
 
-        WaitMessagePatch.Set(true);
+        waitMessagePatch.Set(true);
     }
+    
+    protected override void Uninit() =>
+        waitMessagePatch.Dispose();
 
-    private static nint ProcessRequestResultDetour(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4)
+    private nint ProcessRequestResultDetour(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4)
     {
         if (entryCount                       == 0                              &&
             a3                               > 0                               &&
@@ -51,18 +52,20 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
             LuminaGetter.TryGetRow<Item>(info->SearchItemId, out var itemData) &&
             itemData.ItemSearchCategory.RowId > 0)
         {
-            IsMarketStuck = true;
+            isMarketStuck = true;
 
             info->RequestData();
             return nint.Zero;
         }
 
-        IsMarketStuck = false;
+        isMarketStuck = false;
         return ProcessRequestResultHook.Original(info, entryCount, a3, a4);
     }
+    
+    #region IPC
 
-    protected override void Uninit() =>
-        WaitMessagePatch.Dispose();
+    [IPCProvider("DailyRoutines.Modules.AutoRefreshMarketSearchResult.IsMarketStuck")]
+    private bool IsCurrentMarketStuck => isMarketStuck;
 
-    private delegate nint ProcessRequestResultDelegate(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4);
+    #endregion
 }
