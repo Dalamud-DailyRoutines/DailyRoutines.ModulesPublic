@@ -26,12 +26,12 @@ public partial class OccultCrescentHelper
     {
         private const string COMMAND_TP = "ptp";
 
-        private static TaskHelper? MoveTaskHelper;
-        public static  bool        IsTaskHelperBusy => MoveTaskHelper?.IsBusy ?? false;
+        private TaskHelper? moveTaskHelper;
+        public  bool        IsTaskHelperBusy => moveTaskHelper?.IsBusy ?? false;
 
         public override void Init()
         {
-            MoveTaskHelper ??= new() { TimeoutMS = 30_000 };
+            moveTaskHelper ??= new() { TimeoutMS = 30_000 };
 
             DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
             DService.Instance().ClientState.Logout           += OnLogout;
@@ -46,9 +46,9 @@ public partial class OccultCrescentHelper
             DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
             DService.Instance().ClientState.Logout           -= OnLogout;
 
-            MoveTaskHelper?.Abort();
-            MoveTaskHelper?.Dispose();
-            MoveTaskHelper = null;
+            moveTaskHelper?.Abort();
+            moveTaskHelper?.Dispose();
+            moveTaskHelper = null;
 
             vnavmeshIPC.StopPathfind();
         }
@@ -65,7 +65,7 @@ public partial class OccultCrescentHelper
 
                 if (ImGui.SmallButton($"{Lang.Get("Stop")}##StopAetheryte"))
                 {
-                    MoveTaskHelper.Abort();
+                    moveTaskHelper.Abort();
                     vnavmeshIPC.StopPathfind();
                 }
 
@@ -113,15 +113,15 @@ public partial class OccultCrescentHelper
                 ImGui.TextUnformatted($"/pdr {COMMAND_TP} {Lang.Get("OccultCrescentHelper-Command-PTP-Help")}");
         }
 
-        private static void OnLogout(int type, int code)
+        private void OnLogout(int type, int code)
         {
-            MoveTaskHelper?.Abort();
+            moveTaskHelper?.Abort();
             vnavmeshIPC.StopPathfind();
         }
 
-        private static void OnZoneChanged(ushort obj)
+        private void OnZoneChanged(ushort obj)
         {
-            MoveTaskHelper?.Abort();
+            moveTaskHelper?.Abort();
             vnavmeshIPC.StopPathfind();
         }
 
@@ -177,9 +177,9 @@ public partial class OccultCrescentHelper
                 // 可以直接交互, 不管怎么样直接交互
                 if (distance3D <= 4f)
                 {
-                    MoveTaskHelper.Abort();
+                    moveTaskHelper.Abort();
 
-                    MoveTaskHelper.Enqueue
+                    moveTaskHelper.Enqueue
                     (() =>
                         {
                             if (DService.Instance().Condition[ConditionFlag.Mounted]) return false;
@@ -198,9 +198,9 @@ public partial class OccultCrescentHelper
                     DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) &&
                     distance3D <= MainModule.config.DistanceToMoveToAetheryte)
                 {
-                    MoveTaskHelper.Abort();
+                    moveTaskHelper.Abort();
 
-                    MoveTaskHelper.Enqueue
+                    moveTaskHelper.Enqueue
                     (() =>
                         {
                             // 已经在坐骑上
@@ -209,7 +209,7 @@ public partial class OccultCrescentHelper
                             if (distance3D <= 30)
                             {
                                 // 用一下冲刺
-                                MoveTaskHelper.Enqueue
+                                moveTaskHelper.Enqueue
                                 (
                                     () =>
                                     {
@@ -228,7 +228,7 @@ public partial class OccultCrescentHelper
                         }
                     );
 
-                    MoveTaskHelper.Enqueue
+                    moveTaskHelper.Enqueue
                     (() =>
                         {
                             if (!Throttler.Shared.Throttle("OccultCrescentHelper-AetheryteManager-MoveTo")) return false;
@@ -239,7 +239,7 @@ public partial class OccultCrescentHelper
                         }
                     );
 
-                    MoveTaskHelper.Enqueue
+                    moveTaskHelper.Enqueue
                     (() =>
                         {
                             // 可以稍微放宽一点
@@ -254,7 +254,7 @@ public partial class OccultCrescentHelper
                         }
                     );
 
-                    MoveTaskHelper.Enqueue
+                    moveTaskHelper.Enqueue
                     (() =>
                         {
                             if (DService.Instance().Condition[ConditionFlag.Mounted]) return false;
@@ -265,7 +265,7 @@ public partial class OccultCrescentHelper
                         }
                     );
 
-                    MoveTaskHelper.Enqueue(() => LocalPlayerState.DistanceTo3D(aetheryte.Position) <= 30);
+                    moveTaskHelper.Enqueue(() => LocalPlayerState.DistanceTo3D(aetheryte.Position) <= 30);
                     return;
                 }
             }
@@ -274,14 +274,14 @@ public partial class OccultCrescentHelper
             if (MainModule.config.IsEnabledMoveToAetheryte &&
                 DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME))
             {
-                MoveTaskHelper.Enqueue(() => UseActionManager.Instance().UseActionLocation(ActionType.Action, 41343));
-                MoveTaskHelper.Enqueue(() => UIModule.IsScreenReady() && LocalPlayerState.DistanceTo3D(CrescentAetheryte.ExpeditionBaseCamp.Position) <= 100);
-                MoveTaskHelper.Enqueue(() => UseAetheryte(aetheryte));
+                moveTaskHelper.Enqueue(() => UseActionManager.Instance().UseActionLocation(ActionType.Action, 41343));
+                moveTaskHelper.Enqueue(() => UIModule.IsScreenReady() && LocalPlayerState.DistanceTo3D(CrescentAetheryte.ExpeditionBaseCamp.Position) <= 100);
+                moveTaskHelper.Enqueue(() => UseAetheryte(aetheryte));
 
                 return;
             }
 
-            TP(aetheryte.Position, MoveTaskHelper);
+            TP(aetheryte.Position, moveTaskHelper);
         }
     }
 }

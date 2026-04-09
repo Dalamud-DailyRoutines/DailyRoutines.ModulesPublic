@@ -33,16 +33,16 @@ public partial class OccultCrescentHelper
         private const string COMMAND_FATE = "pfate";
         private const string COMMAND_CE   = "pce";
 
-        private static          HashSet<IslandEventData> AllIslandEvents = [];
-        private static readonly HashSet<string>          KnownCENames    = [];
+        private          HashSet<IslandEventData> allIslandEvents = [];
+        private readonly HashSet<string>          knownCENames    = [];
 
-        private static readonly Dictionary<long, DateTime> LocalTimes = [];
+        private readonly Dictionary<long, DateTime> localTimes = [];
 
-        private static TaskHelper? CETaskHelper;
+        private TaskHelper? ceTaskHelper;
 
         public override void Init()
         {
-            CETaskHelper ??= new() { TimeoutMS = 180_000 };
+            ceTaskHelper ??= new() { TimeoutMS = 180_000 };
 
             DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
             ExecuteCommandManager.Instance().RegPost(OnPostReceivedCommand);
@@ -86,8 +86,8 @@ public partial class OccultCrescentHelper
             // 清理资源
             OnZoneChanged(0);
 
-            CETaskHelper?.Dispose();
-            CETaskHelper = null;
+            ceTaskHelper?.Dispose();
+            ceTaskHelper = null;
         }
 
         public override void DrawConfig()
@@ -102,13 +102,13 @@ public partial class OccultCrescentHelper
 
                 if (ImGui.SmallButton($"{Lang.Get("Stop")}##StopCE"))
                 {
-                    CETaskHelper.Abort();
+                    ceTaskHelper.Abort();
                     vnavmeshIPC.StopPathfind();
                 }
 
                 using (ImRaii.PushIndent())
                 {
-                    foreach (var ce in AllIslandEvents)
+                    foreach (var ce in allIslandEvents)
                     {
                         if (!DService.Instance().Texture.TryGetFromGameIcon(new(ce.Event.IconID), out var texture)) continue;
 
@@ -157,7 +157,7 @@ public partial class OccultCrescentHelper
                             if (MainModule.config.CEHistory.TryGetValue(MainModule.GetIslandID(), out var history) &&
                                 history.TryGetValue(ceID, out var time))
                             {
-                                var dateTime = LocalTimes.GetOrAdd(time, _ => time.ToUTCDateTimeFromUnixSeconds().ToLocalTime());
+                                var dateTime = localTimes.GetOrAdd(time, _ => time.ToUTCDateTimeFromUnixSeconds().ToLocalTime());
                                 ImGui.TextUnformatted($"{dateTime.TimeAgo()}\t\t\t({dateTime:MM/dd HH:mm:ss})");
                             }
                             else
@@ -245,14 +245,14 @@ public partial class OccultCrescentHelper
             }
         }
 
-        private static void OnLogout() =>
-            CETaskHelper.Abort();
+        private void OnLogout() =>
+            ceTaskHelper.Abort();
 
-        private static void OnZoneChanged(ushort obj)
+        private void OnZoneChanged(ushort obj)
         {
-            AllIslandEvents.Clear();
-            KnownCENames.Clear();
-            CETaskHelper?.Abort();
+            allIslandEvents.Clear();
+            knownCENames.Clear();
+            ceTaskHelper?.Abort();
         }
 
         public override void OnUpdate()
@@ -274,12 +274,12 @@ public partial class OccultCrescentHelper
                 newCEData.Add(safeFate);
                 currentCENames.Add(safeFate.Event.Name);
 
-                if (AllIslandEvents.TryGetValue(safeFate, out var existed))
+                if (allIslandEvents.TryGetValue(safeFate, out var existed))
                     existed.Update(fate);
                 else
-                    AllIslandEvents.Add(safeFate);
+                    allIslandEvents.Add(safeFate);
 
-                if (KnownCENames.Add(safeFate.Event.Name))
+                if (knownCENames.Add(safeFate.Event.Name))
                     NotifyNewCE(safeFate);
             }
 
@@ -296,20 +296,20 @@ public partial class OccultCrescentHelper
                 newCEData.Add(safeCE);
                 currentCENames.Add(safeCE.Event.Name);
 
-                if (AllIslandEvents.TryGetValue(safeCE, out var existed))
+                if (allIslandEvents.TryGetValue(safeCE, out var existed))
                     existed.Update(dynamicEvent);
                 else
-                    AllIslandEvents.Add(safeCE);
+                    allIslandEvents.Add(safeCE);
 
-                if (KnownCENames.Add(safeCE.Event.Name))
+                if (knownCENames.Add(safeCE.Event.Name))
                     NotifyNewCE(safeCE);
 
                 // 因为从刷新到正式开始时间为 3 分钟
                 MainModule.config.CEHistory[islandID][safeCE.Event.DataID] = safeCE.Event.CEStartTime - 180;
             }
 
-            KnownCENames.IntersectWith(currentCENames);
-            AllIslandEvents.IntersectWith(newCEData);
+            knownCENames.IntersectWith(currentCENames);
+            allIslandEvents.IntersectWith(newCEData);
 
             if (Throttler.Shared.Throttle("OccultCrescentHelper-CEManager-OnUpdate-SaveCEHistory", 10_000))
                 MainModule.config.Save(MainModule);
@@ -332,7 +332,7 @@ public partial class OccultCrescentHelper
                 !MainModule.config.IsEnabledNotifyCEStarts)
                 return;
 
-            CETaskHelper.Abort();
+            ceTaskHelper.Abort();
 
             var message = Lang.Get("OccultCrescentHelper-CEManager-Notification-CEStart");
             NotifyHelper.Instance().NotificationInfo(message);
@@ -341,7 +341,7 @@ public partial class OccultCrescentHelper
 
         private void OnClickTeleport(uint id, SeString message)
         {
-            if (AllIslandEvents.FirstOrDefault(x => x.LinkPayloadID == id) is not { } ce) return;
+            if (allIslandEvents.FirstOrDefault(x => x.LinkPayloadID == id) is not { } ce) return;
             TeleportToCE(ce);
         }
 
@@ -353,12 +353,12 @@ public partial class OccultCrescentHelper
 
             if (args == "abort")
             {
-                CETaskHelper.Abort();
+                ceTaskHelper.Abort();
                 vnavmeshIPC.StopPathfind();
                 return;
             }
 
-            var fate = AllIslandEvents.Where(x => x.Event is { Type: CrescentEventType.FATE, Progress: < 80 }).OrderBy(x => x.Event.Progress).FirstOrDefault();
+            var fate = allIslandEvents.Where(x => x.Event is { Type: CrescentEventType.FATE, Progress: < 80 }).OrderBy(x => x.Event.Progress).FirstOrDefault();
             if (fate == null) return;
 
             TeleportToCE(fate);
@@ -372,12 +372,12 @@ public partial class OccultCrescentHelper
 
             if (args == "abort")
             {
-                CETaskHelper.Abort();
+                ceTaskHelper.Abort();
                 vnavmeshIPC.StopPathfind();
                 return;
             }
 
-            var ce = AllIslandEvents.FirstOrDefault(x => x.Event is { Type: CrescentEventType.CE, CEState: DynamicEventState.Register, CELeftTimeSecond: > 15 });
+            var ce = allIslandEvents.FirstOrDefault(x => x.Event is { Type: CrescentEventType.CE, CEState: DynamicEventState.Register, CELeftTimeSecond: > 15 });
             if (ce == null) return;
 
             TeleportToCE(ce);
@@ -395,9 +395,9 @@ public partial class OccultCrescentHelper
             if (!MainModule.config.IsEnabledMoveToEvent ||
                 data.Event.Type == CrescentEventType.CE && data.Event.CELeftTimeSecond < MainModule.config.LeftTimeMoveToEvent)
             {
-                CETaskHelper.Abort();
+                ceTaskHelper.Abort();
 
-                TP(data.Event.GetRandomPointNearEdge() + new Vector3(0, 1, 0), CETaskHelper);
+                TP(data.Event.GetRandomPointNearEdge() + new Vector3(0, 1, 0), ceTaskHelper);
                 return;
             }
 
@@ -408,14 +408,14 @@ public partial class OccultCrescentHelper
                 if (data.Event.DataID == 1967)
                     aetheryte = CrescentAetheryte.CrystallizedCaverns;
 
-                CETaskHelper.Abort();
-                CETaskHelper.Enqueue(() => MainModule.aetheryteModule.UseAetheryte(aetheryte));
+                ceTaskHelper.Abort();
+                ceTaskHelper.Enqueue(() => MainModule.aetheryteModule.UseAetheryte(aetheryte));
 
-                CETaskHelper.DelayNext(1000);
-                CETaskHelper.Enqueue(() => !AetheryteManager.IsTaskHelperBusy);
+                ceTaskHelper.DelayNext(1000);
+                ceTaskHelper.Enqueue(() => !MainModule.aetheryteModule.IsTaskHelperBusy);
             }
 
-            CETaskHelper.Enqueue
+            ceTaskHelper.Enqueue
             (() =>
                 {
                     if (DService.Instance().Condition.IsOccupiedInEvent) return false;
@@ -424,7 +424,7 @@ public partial class OccultCrescentHelper
                 }
             );
 
-            CETaskHelper.Enqueue
+            ceTaskHelper.Enqueue
             (() =>
                 {
                     if (!Throttler.Shared.Throttle("OccultCrescentHelper-CEManager-MoveTo")) return false;
@@ -435,15 +435,15 @@ public partial class OccultCrescentHelper
                 }
             );
 
-            CETaskHelper.Enqueue
+            ceTaskHelper.Enqueue
             (() =>
                 {
                     if (!Throttler.Shared.Throttle("OccultCrescentHelper-CEManager-WaitMoveTo")) return false;
 
                     // CE / FATE 寄了
-                    if (AllIslandEvents.FirstOrDefault(x => x == data) is null)
+                    if (allIslandEvents.FirstOrDefault(x => x == data) is null)
                     {
-                        CETaskHelper.Abort();
+                        ceTaskHelper.Abort();
                         return true;
                     }
 
@@ -463,7 +463,7 @@ public partial class OccultCrescentHelper
 
             if (data.Event.Type is CrescentEventType.FATE or CrescentEventType.MagicPot)
             {
-                CETaskHelper.Enqueue
+                ceTaskHelper.Enqueue
                 (() =>
                     {
                         if (DService.Instance().Condition[ConditionFlag.Mounted]) return false;
@@ -472,17 +472,17 @@ public partial class OccultCrescentHelper
                         return true;
                     }
                 );
-                CETaskHelper.DelayNext(100);
-                CETaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/facetarget"));
-                CETaskHelper.DelayNext(100);
-                CETaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/automove on"));
+                ceTaskHelper.DelayNext(100);
+                ceTaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/facetarget"));
+                ceTaskHelper.DelayNext(100);
+                ceTaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/automove on"));
             }
             else if (data.Event.Type is CrescentEventType.CE)
             {
                 if (Random.Shared.NextDouble() >= 0.6)
                 {
-                    CETaskHelper.DelayNext(Random.Shared.Next(500, 3000));
-                    CETaskHelper.Enqueue
+                    ceTaskHelper.DelayNext(Random.Shared.Next(500, 3000));
+                    ceTaskHelper.Enqueue
                     (() =>
                         {
                             if (DService.Instance().Condition[ConditionFlag.Mounted]) return false;
@@ -492,8 +492,8 @@ public partial class OccultCrescentHelper
                         }
                     );
 
-                    CETaskHelper.DelayNext(Random.Shared.Next(500, 3000));
-                    CETaskHelper.Enqueue
+                    ceTaskHelper.DelayNext(Random.Shared.Next(500, 3000));
+                    ceTaskHelper.Enqueue
                     (() =>
                         {
                             if (DService.Instance().Condition[ConditionFlag.Mounted] || vnavmeshIPC.GetIsPathfindRunning()) return false;
@@ -503,8 +503,8 @@ public partial class OccultCrescentHelper
                         }
                     );
 
-                    CETaskHelper.DelayNext(200);
-                    CETaskHelper.Enqueue(vnavmeshIPC.StopPathfind);
+                    ceTaskHelper.DelayNext(200);
+                    ceTaskHelper.Enqueue(vnavmeshIPC.StopPathfind);
                 }
             }
         }

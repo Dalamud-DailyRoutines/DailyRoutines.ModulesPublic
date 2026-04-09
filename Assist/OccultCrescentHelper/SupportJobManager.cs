@@ -176,7 +176,7 @@ public partial class OccultCrescentHelper
             }
         }
 
-        private static unsafe void OnCommandSwitchJob(string command, string args)
+        private unsafe void OnCommandSwitchJob(string command, string args)
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
             {
@@ -188,7 +188,7 @@ public partial class OccultCrescentHelper
 
             if (string.IsNullOrWhiteSpace(args))
             {
-                OthersManager.SupportJobChangeAddon.Toggle();
+                MainModule.othersModule.SupportJobChangeAddon.Toggle();
                 return;
             }
 
