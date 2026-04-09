@@ -26,31 +26,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class CrossDCPartyFinder : ModuleBase
 {
-    private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/listings?";
-    private const string BASE_DETAIL_URL = "https://xivpf.littlenightmare.top/api/listing/";
-
-    private static Config ModuleConfig = null!;
-
-    private static List<string> DataCenters = [];
-
-    private static CancellationTokenSource? CancelSource;
-
-    private static List<PartyFinderList.PartyFinderListing> Listings        = [];
-    private static List<PartyFinderList.PartyFinderListing> ListingsDisplay = [];
-    private static DateTime                                 LastUpdate      = DateTime.MinValue;
-
-    private static bool IsNeedToDisable;
-
-    private static PartyFinderRequest LastRequest  = new();
-    private static string             CurrentSeach = string.Empty;
-
-    private static int CurrentPage;
-
-    private static string SelectedDataCenter = string.Empty;
-
-    private static Dictionary<string, CheckboxNode> CheckboxNodes = [];
-    private static HorizontalListNode?              LayoutNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = "跨大区队员招募",
@@ -59,13 +34,35 @@ public class CrossDCPartyFinder : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
-
+    
     private static string LocatedDataCenter =>
         GameState.CurrentDataCenterData.Name.ToString();
 
+    private Config config = null!;
+
+    private List<string> dataCenters = [];
+
+    private CancellationTokenSource? cancelSource;
+
+    private List<PartyFinderList.PartyFinderListing> listings        = [];
+    private List<PartyFinderList.PartyFinderListing> listingsDisplay = [];
+    private DateTime                                 lastUpdate      = DateTime.MinValue;
+
+    private bool isNeedToDisable;
+
+    private PartyFinderRequest lastRequest  = new();
+    private string             currentSeach = string.Empty;
+
+    private int currentPage;
+
+    private string selectedDataCenter = string.Empty;
+
+    private Dictionary<string, CheckboxNode> checkboxNodes = [];
+    private HorizontalListNode?              layoutNode;
+
     protected override unsafe void Init()
     {
-        ModuleConfig  =   Config.Load(this) ?? new();
+        config  =   Config.Load(this) ?? new();
         Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoBackground;
 
@@ -97,7 +94,7 @@ public class CrossDCPartyFinder : ModuleBase
             return;
         }
 
-        if (SelectedDataCenter == LocatedDataCenter) return;
+        if (selectedDataCenter == LocatedDataCenter) return;
 
         var nodeInfo0  = addon->GetNodeById(38)->GetNodeState();
         var nodeInfo1  = addon->GetNodeById(31)->GetNodeState();
@@ -121,17 +118,17 @@ public class CrossDCPartyFinder : ModuleBase
         {
             var isNeedToResetY = false;
 
-            using (ImRaii.Disabled(IsNeedToDisable))
+            using (ImRaii.Disabled(isNeedToDisable))
             {
-                if (ImGui.Checkbox("倒序", ref ModuleConfig.OrderByDescending))
+                if (ImGui.Checkbox("倒序", ref config.OrderByDescending))
                 {
                     isNeedToResetY = true;
 
-                    ModuleConfig.Save(this);
+                    config.Save(this);
                     SendRequestDynamic();
                 }
 
-                var totalPages = (int)Math.Ceiling(ListingsDisplay.Count / (float)ModuleConfig.PageSize);
+                var totalPages = (int)Math.Ceiling(listingsDisplay.Count / (float)config.PageSize);
 
                 using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(2, 0)))
                 {
@@ -140,7 +137,7 @@ public class CrossDCPartyFinder : ModuleBase
                     if (ImGui.Button("<<"))
                     {
                         isNeedToResetY = true;
-                        CurrentPage    = 0;
+                        currentPage    = 0;
                     }
 
                     ImGui.SameLine();
@@ -148,19 +145,19 @@ public class CrossDCPartyFinder : ModuleBase
                     if (ImGui.Button("<"))
                     {
                         isNeedToResetY = true;
-                        CurrentPage    = Math.Max(0, CurrentPage - 1);
+                        currentPage    = Math.Max(0, currentPage - 1);
                     }
 
                     ImGui.SameLine();
-                    ImGui.TextUnformatted($" {CurrentPage + 1} / {Math.Max(1, totalPages)} ");
-                    ImGuiOm.TooltipHover($"{ListingsDisplay.Count}");
+                    ImGui.TextUnformatted($" {currentPage + 1} / {Math.Max(1, totalPages)} ");
+                    ImGuiOm.TooltipHover($"{listingsDisplay.Count}");
 
                     ImGui.SameLine();
 
                     if (ImGui.Button(">"))
                     {
                         isNeedToResetY = true;
-                        CurrentPage    = Math.Min(totalPages - 1, CurrentPage + 1);
+                        currentPage    = Math.Min(totalPages - 1, currentPage + 1);
                     }
 
                     ImGui.SameLine();
@@ -168,17 +165,17 @@ public class CrossDCPartyFinder : ModuleBase
                     if (ImGui.Button(">>"))
                     {
                         isNeedToResetY = true;
-                        CurrentPage    = Math.Max(0, totalPages - 1);
+                        currentPage    = Math.Max(0, totalPages - 1);
                     }
                 }
 
                 ImGui.SameLine();
                 if (ImGui.Button("关闭"))
-                    SelectedDataCenter = LocatedDataCenter;
+                    selectedDataCenter = LocatedDataCenter;
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                ImGui.InputTextWithHint("###SearchString", Lang.Get("PleaseSearch"), ref CurrentSeach, 128);
+                ImGui.InputTextWithHint("###SearchString", Lang.Get("PleaseSearch"), ref currentSeach, 128);
 
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
@@ -195,7 +192,7 @@ public class CrossDCPartyFinder : ModuleBase
                 {
                     if (isNeedToResetY)
                         ImGui.SetScrollHereY();
-                    if (!IsNeedToDisable)
+                    if (!isNeedToDisable)
                         DrawPartyFinderList(sizeAfter);
 
                     ImGuiOm.ScaledDummy(8f);
@@ -212,11 +209,11 @@ public class CrossDCPartyFinder : ModuleBase
 
         if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
         {
-            DataCenters = LuminaGetter.Get<WorldDCGroupType>()
+            dataCenters = LuminaGetter.Get<WorldDCGroupType>()
                                       .Where(x => x.Region == localPlayer.HomeWorld.Value.DataCenter.Value.Region)
                                       .Select(x => x.Name.ToString())
                                       .ToList();
-            SelectedDataCenter = GameState.CurrentDataCenterData.Name.ToString();
+            selectedDataCenter = GameState.CurrentDataCenterData.Name.ToString();
         }
 
         switch (type)
@@ -224,26 +221,26 @@ public class CrossDCPartyFinder : ModuleBase
             case AddonEvent.PostSetup:
                 Overlay.IsOpen = true;
 
-                LayoutNode = new()
+                layoutNode = new()
                 {
                     IsVisible = true,
                     Position  = new(85, 8)
                 };
 
-                foreach (var dataCenter in DataCenters)
+                foreach (var dataCenter in dataCenters)
                 {
                     var node = new CheckboxNode
                     {
                         Size      = new(100f, 28f),
                         IsVisible = true,
-                        IsChecked = dataCenter == SelectedDataCenter,
+                        IsChecked = dataCenter == selectedDataCenter,
                         IsEnabled = true,
                         String    = dataCenter,
                         OnClick = _ =>
                         {
-                            SelectedDataCenter = dataCenter;
+                            selectedDataCenter = dataCenter;
 
-                            foreach (var x in CheckboxNodes)
+                            foreach (var x in checkboxNodes)
                                 x.Value.IsChecked = x.Key == dataCenter;
 
                             if (LocatedDataCenter == dataCenter)
@@ -253,16 +250,16 @@ public class CrossDCPartyFinder : ModuleBase
                             }
 
                             SendRequestDynamic();
-                            IsNeedToDisable = true;
+                            isNeedToDisable = true;
                         }
                     };
 
-                    CheckboxNodes[dataCenter] = node;
+                    checkboxNodes[dataCenter] = node;
 
-                    LayoutNode.AddNode(node);
+                    layoutNode.AddNode(node);
                 }
 
-                LayoutNode.AttachNode(LookingForGroup->GetComponentNodeById(51));
+                layoutNode.AttachNode(LookingForGroup->GetComponentNodeById(51));
                 break;
             case AddonEvent.PreFinalize:
                 Overlay.IsOpen = false;
@@ -271,7 +268,7 @@ public class CrossDCPartyFinder : ModuleBase
         }
     }
 
-    private static unsafe void OnAgent(AgentEvent type, AgentArgs args)
+    private unsafe void OnAgent(AgentEvent type, AgentArgs args)
     {
         var agent = args.Agent.ToStruct<AgentLookingForGroup>();
         if (agent == null) return;
@@ -279,7 +276,7 @@ public class CrossDCPartyFinder : ModuleBase
         var formatted = args as AgentReceiveEventArgs;
         var atkValues = (AtkValue*)formatted.AtkValues;
 
-        if (SelectedDataCenter != LocatedDataCenter)
+        if (selectedDataCenter != LocatedDataCenter)
         {
             // 招募类别刷新
             if (formatted is { EventKind: 1, ValueCount: 3 } && atkValues[1].Type == ValueType.UInt)
@@ -291,7 +288,7 @@ public class CrossDCPartyFinder : ModuleBase
         }
     }
 
-    private static void DrawPartyFinderList(Vector2 size)
+    private void DrawPartyFinderList(Vector2 size)
     {
         using var table = ImRaii.Table("###ListingsTable", 3, ImGuiTableFlags.BordersInnerH, size);
         if (!table) return;
@@ -300,10 +297,10 @@ public class CrossDCPartyFinder : ModuleBase
         ImGui.TableSetupColumn("招募详情", ImGuiTableColumnFlags.WidthStretch, 50);
         ImGui.TableSetupColumn("招募信息", ImGuiTableColumnFlags.WidthFixed,   ImGui.CalcTextSize("八个汉字八个汉字").X);
 
-        var startIndex = CurrentPage * ModuleConfig.PageSize;
-        var pageItems  = ListingsDisplay.Skip(startIndex).Take(ModuleConfig.PageSize).ToList();
+        var startIndex = currentPage * config.PageSize;
+        var pageItems  = listingsDisplay.Skip(startIndex).Take(config.PageSize).ToList();
 
-        pageItems.ForEach(x => Task.Run(async () => await x.RequestAsync(), CancelSource.Token).ConfigureAwait(false));
+        pageItems.ForEach(x => Task.Run(async () => await x.RequestAsync(), cancelSource.Token).ConfigureAwait(false));
 
         var iconSize = new Vector2(ImGui.GetTextLineHeightWithSpacing() * 3) +
                        new Vector2(ImGui.GetStyle().ItemSpacing.X, 2    * ImGui.GetStyle().ItemSpacing.Y);
@@ -437,10 +434,10 @@ public class CrossDCPartyFinder : ModuleBase
         }
     }
 
-    private static void SendRequest(PartyFinderRequest req)
+    private void SendRequest(PartyFinderRequest req)
     {
-        CancelSource?.Cancel();
-        CancelSource?.Dispose();
+        cancelSource?.Cancel();
+        cancelSource?.Dispose();
         PartyFinderList.PartyFinderListing.ReleaseSlim();
 
         unsafe
@@ -449,27 +446,27 @@ public class CrossDCPartyFinder : ModuleBase
             if (agent == null || !agent->IsAgentActive()) return;
         }
 
-        CancelSource = new();
+        cancelSource = new();
 
         var testReq = req.Clone();
         testReq.PageSize = 1;
 
         // 收集用
-        var listings = new ConcurrentBag<PartyFinderList.PartyFinderListing>();
+        var bag = new ConcurrentBag<PartyFinderList.PartyFinderListing>();
 
         _ = Task.Run
         (
             async () =>
             {
-                if (StandardTimeManager.Instance().Now - LastUpdate < TimeSpan.FromSeconds(30) && LastRequest.Equals(req))
+                if (StandardTimeManager.Instance().Now - lastUpdate < TimeSpan.FromSeconds(30) && lastRequest.Equals(req))
                 {
-                    ListingsDisplay = FilterAndSort(Listings);
+                    listingsDisplay = FilterAndSort(this.listings);
                     return;
                 }
 
-                IsNeedToDisable = true;
-                LastUpdate      = StandardTimeManager.Instance().Now;
-                LastRequest     = req;
+                isNeedToDisable = true;
+                lastUpdate      = StandardTimeManager.Instance().Now;
+                lastRequest     = req;
 
                 var testResult = await testReq.Request().ConfigureAwait(false);
 
@@ -481,19 +478,19 @@ public class CrossDCPartyFinder : ModuleBase
                 Enumerable.Range(1, (int)totalPage).ForEach(x => tasks.Add(Gather((uint)x)));
                 await Task.WhenAll(tasks).ConfigureAwait(false);
 
-                Listings = listings.OrderByDescending(x => x.TimeLeft)
-                                   .DistinctBy(x => x.ID)
-                                   .DistinctBy(x => $"{x.PlayerName}@{x.HomeWorldName}")
-                                   .ToList();
-                ListingsDisplay = FilterAndSort(Listings);
+                this.listings = bag.OrderByDescending(x => x.TimeLeft)
+                                        .DistinctBy(x => x.ID)
+                                        .DistinctBy(x => $"{x.PlayerName}@{x.HomeWorldName}")
+                                        .ToList();
+                listingsDisplay = FilterAndSort(this.listings);
             },
-            CancelSource.Token
+            cancelSource.Token
         ).ContinueWith
         (async _ =>
             {
-                IsNeedToDisable = false;
+                isNeedToDisable = false;
 
-                NotifyHelper.Instance().NotificationInfo($"获取了 {ListingsDisplay.Count} 条招募信息");
+                NotifyHelper.Instance().NotificationInfo($"获取了 {listingsDisplay.Count} 条招募信息");
 
                 await DService.Instance().Framework.RunOnFrameworkThread
                 (() =>
@@ -501,7 +498,7 @@ public class CrossDCPartyFinder : ModuleBase
                         unsafe
                         {
                             if (!LookingForGroup->IsAddonAndNodesReady()) return;
-                            LookingForGroup->GetTextNodeById(49)->SetText($"{SelectedDataCenter}: {ListingsDisplay.Count}");
+                            LookingForGroup->GetTextNodeById(49)->SetText($"{selectedDataCenter}: {listingsDisplay.Count}");
                         }
                     }
                 ).ConfigureAwait(false);
@@ -514,54 +511,54 @@ public class CrossDCPartyFinder : ModuleBase
             clonedRequest.Page = page;
 
             var result = await clonedRequest.Request().ConfigureAwait(false);
-            listings.AddRange(result.Listings);
+            bag.AddRange(result.Listings);
         }
 
         List<PartyFinderList.PartyFinderListing> FilterAndSort(IEnumerable<PartyFinderList.PartyFinderListing> source)
         {
             return source.Where
-                         (x => string.IsNullOrWhiteSpace(CurrentSeach) ||
-                               x.GetSearchString().Contains(CurrentSeach, StringComparison.OrdinalIgnoreCase)
+                         (x => string.IsNullOrWhiteSpace(currentSeach) ||
+                               x.GetSearchString().Contains(currentSeach, StringComparison.OrdinalIgnoreCase)
                          )
-                         .OrderByDescending(x => ModuleConfig.OrderByDescending ? x.TimeLeft : 1 / x.TimeLeft)
+                         .OrderByDescending(x => config.OrderByDescending ? x.TimeLeft : 1 / x.TimeLeft)
                          .ToList();
         }
     }
 
-    private static unsafe void SendRequestDynamic()
+    private unsafe void SendRequestDynamic()
     {
-        var req = LastRequest.Clone();
+        var req = lastRequest.Clone();
 
-        req.DataCenter = SelectedDataCenter;
+        req.DataCenter = selectedDataCenter;
         req.Category   = PartyFinderRequest.ParseCategory(AgentLookingForGroup.Instance());
 
         SendRequest(req);
-        CurrentPage = 0;
+        currentPage = 0;
     }
 
-    private static void ClearResources()
+    private void ClearResources()
     {
-        CancelSource?.Cancel();
-        CancelSource?.Dispose();
-        CancelSource = null;
+        cancelSource?.Cancel();
+        cancelSource?.Dispose();
+        cancelSource = null;
 
-        IsNeedToDisable = false;
+        isNeedToDisable = false;
 
-        Listings = ListingsDisplay = [];
+        listings = listingsDisplay = [];
 
         PartyFinderList.PartyFinderListing.ReleaseSlim();
 
-        LastUpdate  = DateTime.MinValue;
-        LastRequest = new();
+        lastUpdate  = DateTime.MinValue;
+        lastRequest = new();
     }
 
-    private static void ClearNodes()
+    private void ClearNodes()
     {
-        LayoutNode?.Dispose();
-        LayoutNode = null;
+        layoutNode?.Dispose();
+        layoutNode = null;
 
-        CheckboxNodes.Values.ForEach(x => x?.Dispose());
-        CheckboxNodes.Clear();
+        checkboxNodes.Values.ForEach(x => x?.Dispose());
+        checkboxNodes.Clear();
     }
 
     private class Config : ModuleConfig
@@ -712,7 +709,7 @@ public class CrossDCPartyFinder : ModuleBase
                 Category   = Category,
                 World      = World,
                 DataCenter = DataCenter,
-                Jobs       = new List<uint>(Jobs)
+                Jobs       = [..Jobs]
             };
 
         public override bool Equals(object? obj) =>
@@ -990,4 +987,11 @@ public class CrossDCPartyFinder : ModuleBase
             } = [];
         }
     }
+    
+    #region 常量
+
+    private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/listings?";
+    private const string BASE_DETAIL_URL = "https://xivpf.littlenightmare.top/api/listing/";
+
+    #endregion
 }

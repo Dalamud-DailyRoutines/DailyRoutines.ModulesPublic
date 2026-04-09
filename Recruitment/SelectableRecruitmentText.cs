@@ -15,29 +15,35 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class SelectableRecruitmentText : ModuleBase
 {
-    private static TextMultiLineInputNode? RecruitmentTextNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title           = Lang.Get("SelectableRecruitmentTextTitle"),
         Description     = Lang.Get("SelectableRecruitmentTextDescription"),
         Category        = ModuleCategory.Recruitment,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/SelectableRecruitmentText-UI.png"]
+        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/SelectableRecruitmentText-UI.png"] // TODO: 调整仓库
     };
+    
+    private TextMultiLineInputNode? recruitmentTextNode;
 
     protected override void Init()
     {
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroupDetail", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+    }
 
-    private static void OnAddon(AddonEvent type, AddonArgs? args)
+    private void OnAddon(AddonEvent type, AddonArgs? args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                RecruitmentTextNode?.Dispose();
-                RecruitmentTextNode = null;
+                recruitmentTextNode?.Dispose();
+                recruitmentTextNode = null;
 
                 break;
 
@@ -53,9 +59,9 @@ public unsafe class SelectableRecruitmentText : ModuleBase
                 var origButton = LookingForGroupDetail->GetComponentButtonById(18);
                 if (origButton == null) return;
 
-                if (RecruitmentTextNode != null)
+                if (recruitmentTextNode != null)
                 {
-                    RecruitmentTextNode.Position = new Vector2(origButton->OwnerNode->X, origButton->OwnerNode->Y) - new Vector2(10, 8);
+                    recruitmentTextNode.Position = new Vector2(origButton->OwnerNode->X, origButton->OwnerNode->Y) - new Vector2(10, 8);
 
                     var formatAddon = (AddonLookingForGroupDetail*)LookingForGroupDetail;
 
@@ -68,14 +74,14 @@ public unsafe class SelectableRecruitmentText : ModuleBase
                     if (leaderText.StringPtr.ExtractText() != agent->LastViewedListing.LeaderString)
                         return;
 
-                    if (RecruitmentTextNode is { IsFocused: false, String.IsEmpty: true })
+                    if (recruitmentTextNode is { IsFocused: false, String.IsEmpty: true })
                     {
                         var seString = new ReadOnlySeStringSpan(agent->LastViewedListing.Comment).PraseAutoTranslate().ToDalamudString();
-                        RecruitmentTextNode.String = seString.Encode();
+                        recruitmentTextNode.String = seString.Encode();
                     }
 
-                    if (RecruitmentTextNode is { IsVisible: false, String.IsEmpty: false })
-                        RecruitmentTextNode.IsVisible = true;
+                    if (recruitmentTextNode is { IsVisible: false, String.IsEmpty: false })
+                        recruitmentTextNode.IsVisible = true;
 
                     return;
                 }
@@ -87,7 +93,7 @@ public unsafe class SelectableRecruitmentText : ModuleBase
                 origText->ToggleVisibility(false);
                 textNodeContainer->ToggleVisibility(false);
 
-                RecruitmentTextNode = new()
+                recruitmentTextNode = new()
                 {
                     AutoUpdateHeight = false,
                     Size             = new(520, 60),
@@ -96,17 +102,11 @@ public unsafe class SelectableRecruitmentText : ModuleBase
                     IsVisible        = false,
                     MaxLines         = 2
                 };
-                RecruitmentTextNode.TextLimitsNode.DetachNode();
-                RecruitmentTextNode.CurrentTextNode.TextFlags |= TextFlags.WordWrap;
-                RecruitmentTextNode.AttachNode(LookingForGroupDetail);
+                recruitmentTextNode.TextLimitsNode.DetachNode();
+                recruitmentTextNode.CurrentTextNode.TextFlags |= TextFlags.WordWrap;
+                recruitmentTextNode.AttachNode(LookingForGroupDetail);
 
                 break;
         }
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
     }
 }

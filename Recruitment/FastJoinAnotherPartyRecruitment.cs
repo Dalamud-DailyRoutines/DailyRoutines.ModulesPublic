@@ -15,8 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
 {
-    private static TextButtonNode? Button;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FastJoinAnotherPartyRecruitmentTitle"),
@@ -25,6 +23,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private TextButtonNode? button;
 
     protected override void Init()
     {
@@ -67,15 +67,15 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
                 break;
 
             case AddonEvent.PreFinalize:
-                Button?.Dispose();
-                Button = null;
+                button?.Dispose();
+                button = null;
                 break;
         }
     }
 
-    private static void CreateButton(AtkUnitBase* addon, TaskHelper taskHelper)
+    private void CreateButton(AtkUnitBase* addon, TaskHelper taskHelper)
     {
-        if (addon == null || Button != null) return;
+        if (addon == null || button != null) return;
 
         // 团队招募
         var partyCount = addon->AtkValues[19].UInt;
@@ -88,7 +88,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         var containerNode = addon->GetNodeById(108);
         if (containerNode == null) return;
 
-        Button = new()
+        button = new()
         {
             Size      = new(140, 28),
             Position  = new(100, 0),
@@ -97,10 +97,10 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
             OnClick   = () => Enqueue(taskHelper)
         };
 
-        Button.AttachNode(containerNode);
+        button.AttachNode(containerNode);
     }
 
-    private static void UpdateOtherButtons(AtkUnitBase* addon)
+    private void UpdateOtherButtons(AtkUnitBase* addon)
     {
         if (addon == null) return;
 
@@ -139,8 +139,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
             button2->OwnerNode->SetPosition(400, 0);
         }
 
-        if (Button != null)
-            Button.IsVisible = button2->OwnerNode->IsVisible();
+        if (button != null)
+            button.IsVisible = button2->OwnerNode->IsVisible();
     }
 
     private static void Enqueue(TaskHelper taskHelper)

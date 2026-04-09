@@ -11,12 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class NoAutoClosePartyFinder : ModuleBase
 {
-    private static readonly CompSig                            LookingForGroupHideSig = new("48 89 5C 24 ?? 57 48 83 EC 20 83 A1 ?? ?? ?? ?? ??");
-    private static          Hook<LookingForGroupHideDelegate>? LookingForGroupHideHook;
-
-    private static DateTime LastPartyMemberChangeTime;
-    private static DateTime LastViewTime;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("NoAutoClosePartyFinderTitle"),
@@ -26,6 +20,13 @@ public unsafe class NoAutoClosePartyFinder : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig                            LookingForGroupHideSig = new("48 89 5C 24 ?? 57 48 83 EC 20 83 A1 ?? ?? ?? ?? ??");
+    private delegate        void                               LookingForGroupHideDelegate(AgentLookingForGroup* agent);
+    private                 Hook<LookingForGroupHideDelegate>? LookingForGroupHideHook;
+
+    private DateTime lastPartyMemberChangeTime;
+    private DateTime lastViewTime;
 
     protected override void Init()
     {
@@ -34,23 +35,26 @@ public unsafe class NoAutoClosePartyFinder : ModuleBase
 
         LogMessageManager.Instance().RegPre(OnPreReceiveMessage);
     }
+    
+    protected override void Uninit() =>
+        LogMessageManager.Instance().Unreg(OnPreReceiveMessage);
 
-    private static void OnPreReceiveMessage(ref bool isPrevented, ref uint logMessageID, ref LogMessageQueueItem values)
+    private void OnPreReceiveMessage(ref bool isPrevented, ref uint logMessageID, ref LogMessageQueueItem values)
     {
         if (logMessageID != 947) return;
 
         isPrevented = true;
 
-        LastPartyMemberChangeTime = StandardTimeManager.Instance().UTCNow.AddSeconds(1);
+        lastPartyMemberChangeTime = StandardTimeManager.Instance().UTCNow.AddSeconds(1);
         if (LookingForGroupDetail->IsAddonAndNodesReady())
-            LastViewTime = StandardTimeManager.Instance().UTCNow.AddSeconds(1);
+            lastViewTime = StandardTimeManager.Instance().UTCNow.AddSeconds(1);
     }
 
-    private static void LookingForGroupHideDetour(AgentLookingForGroup* agent)
+    private void LookingForGroupHideDetour(AgentLookingForGroup* agent)
     {
-        if (StandardTimeManager.Instance().UTCNow < LastPartyMemberChangeTime)
+        if (StandardTimeManager.Instance().UTCNow < lastPartyMemberChangeTime)
         {
-            if (StandardTimeManager.Instance().UTCNow < LastViewTime)
+            if (StandardTimeManager.Instance().UTCNow < lastViewTime)
             {
                 if (LookingForGroupDetail->IsAddonAndNodesReady())
                     LookingForGroupDetail->Close(true);
@@ -63,9 +67,4 @@ public unsafe class NoAutoClosePartyFinder : ModuleBase
 
         LookingForGroupHideHook.Original(agent);
     }
-
-    protected override void Uninit() =>
-        LogMessageManager.Instance().Unreg(OnPreReceiveMessage);
-
-    private delegate void LookingForGroupHideDelegate(AgentLookingForGroup* agent);
 }

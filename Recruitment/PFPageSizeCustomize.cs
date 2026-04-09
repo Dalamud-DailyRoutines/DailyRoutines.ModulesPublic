@@ -10,13 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class PFPageSizeCustomize : ModuleBase
 {
-    private static readonly CompSig PartyFinderDisplayAmountSig =
-        new("48 89 5C 24 ?? 55 56 57 48 ?? ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? 48 89 85 ?? ?? ?? ?? 48 ?? ?? 0F");
-
-    private static Hook<PartyFinderDisplayAmountDelegate>? PartyFinderDisplayAmountHook;
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("PFPageSizeCustomizeTitle"),
@@ -26,10 +19,17 @@ public class PFPageSizeCustomize : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig PartyFinderDisplayAmountSig =
+        new("48 89 5C 24 ?? 55 56 57 48 ?? ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? 48 89 85 ?? ?? ?? ?? 48 ?? ?? 0F");
+    private delegate byte                                    PartyFinderDisplayAmountDelegate(nint a1, int a2);
+    private          Hook<PartyFinderDisplayAmountDelegate>? PartyFinderDisplayAmountHook;
+
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         PartyFinderDisplayAmountHook ??= PartyFinderDisplayAmountSig.GetHook<PartyFinderDisplayAmountDelegate>(PartyFinderDisplayAmountDetour);
         PartyFinderDisplayAmountHook.Enable();
@@ -38,20 +38,18 @@ public class PFPageSizeCustomize : ModuleBase
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        if (ImGui.InputShort(Lang.Get("PFPageSizeCustomize-DisplayAmount"), ref ModuleConfig.PageSize, 1, 10))
-            ModuleConfig.PageSize = Math.Clamp(ModuleConfig.PageSize, (short)1, (short)100);
+        if (ImGui.InputShort(Lang.Get("PFPageSizeCustomize-DisplayAmount"), ref config.PageSize, 1, 10))
+            config.PageSize = Math.Clamp(config.PageSize, (short)1, (short)100);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
     }
 
-    private static byte PartyFinderDisplayAmountDetour(nint a1, int a2)
+    private byte PartyFinderDisplayAmountDetour(nint a1, int a2)
     {
-        Marshal.WriteInt16(a1 + 1128, ModuleConfig.PageSize);
+        Marshal.WriteInt16(a1 + 1128, config.PageSize);
         return PartyFinderDisplayAmountHook.Original(a1, a2);
     }
-
-    private delegate byte PartyFinderDisplayAmountDelegate(nint a1, int a2);
-
+    
     private class Config : ModuleConfig
     {
         public short PageSize = 100;

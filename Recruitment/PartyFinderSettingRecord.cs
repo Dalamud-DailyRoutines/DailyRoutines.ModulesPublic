@@ -14,13 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class PartyFinderSettingRecord : ModuleBase
 {
-    private static readonly CompSig                          AddonFireCallBackSig = new("E8 ?? ?? ?? ?? 0F B6 E8 8B 44 24 20");
-    private static          Hook<AddonFireCallBackDelegate>? AgentReceiveEventHook;
-
-    private static Config ModuleConfig = null!;
-
-    private static bool EditInited;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("PartyFinderSettingRecordTitle"),
@@ -28,10 +21,18 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["status102"]
     };
+    
+    private static readonly CompSig AddonFireCallBackSig = new("E8 ?? ?? ?? ?? 0F B6 E8 8B 44 24 20");
+    private delegate        void*   AddonFireCallBackDelegate(AtkUnitBase* atkunitbase, int valuecount, AtkValue* atkvalues, byte updateVisibility);
+    private          Hook<AddonFireCallBackDelegate>? AgentReceiveEventHook;
+
+    private Config config = null!;
+
+    private bool editInited;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoMove;
@@ -49,7 +50,7 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
 
     protected override void OverlayUI()
     {
-        if (!EditInited || !LookingForGroup->IsAddonAndNodesReady() || !LookingForGroupCondition->IsAddonAndNodesReady())
+        if (!editInited || !LookingForGroup->IsAddonAndNodesReady() || !LookingForGroupCondition->IsAddonAndNodesReady())
             return;
 
         var addon = LookingForGroupCondition;
@@ -59,42 +60,44 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
         {
-            var setting = ModuleConfig.Last.Copy();
+            var setting = config.Last.Copy();
             setting.Name =
                 LookingForGroupCondition->GetComponentByNodeId(11)->UldManager.SearchNodeById(2)->GetAsAtkComponentNode()->Component->GetTextNodeById(3)->
                     GetAsAtkTextNode()->NodeText.ToString();
-            ModuleConfig.Slot.Add(setting);
+            config.Slot.Add(setting);
         }
 
         ImGui.SameLine();
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("Clear")))
-            ModuleConfig.Slot.Clear();
+            config.Slot.Clear();
 
-        for (var i = 0; i < ModuleConfig.Slot.Count; i++)
+        for (var i = 0; i < config.Slot.Count; i++)
         {
-            var config = ModuleConfig.Slot[i];
+            var setting = this.config.Slot[i];
 
             using (ImRaii.Group())
             {
-                var title = config.Name;
+                var title = setting.Name;
                 if (string.IsNullOrEmpty(title))
                     title = Lang.Get("None");
 
                 ImGui.AlignTextToFramePadding();
                 ImGui.TextUnformatted($"{i + 1}: {title}");
-                ImGuiOm.TooltipHover(Lang.Get("PartyFinderSettingRecord-Message", title, config.Description));
+                ImGuiOm.TooltipHover(Lang.Get("PartyFinderSettingRecord-Message", title, setting.Description));
 
                 ImGui.SameLine();
                 if (ImGuiOm.ButtonIcon($"Apply{i}", FontAwesomeIcon.Check, Lang.Get("Apply")))
-                    ApplyPreset(config);
+                    ApplyPreset(setting);
 
                 ImGui.SameLine();
                 if (ImGuiOm.ButtonIcon($"Delete{i}", FontAwesomeIcon.Trash, Lang.Get("Delete")))
-                    ModuleConfig.Slot.RemoveAt(i);
+                    this.config.Slot.RemoveAt(i);
             }
         }
     }
-
+    
+    #region 事件
+    
     private void OnLookingForGroupConditionAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
@@ -102,11 +105,11 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
             case AddonEvent.PostSetup:
                 Overlay.IsOpen = true;
 
-                if (EditInited || !LookingForGroup->IsAddonAndNodesReady())
+                if (editInited || !LookingForGroup->IsAddonAndNodesReady())
                     return;
 
-                ApplyPreset(ModuleConfig.Last);
-                EditInited = true;
+                ApplyPreset(config.Last);
+                editInited = true;
                 break;
             case AddonEvent.PreFinalize:
                 Overlay.IsOpen = false;
@@ -114,6 +117,47 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
         }
     }
 
+    private void* AddonFireCallBackDetour
+    (
+        AtkUnitBase* atkUnitBase,
+        int          valueCount,
+        AtkValue*    atkValues,
+        byte         updateVisibility
+    )
+    {
+        if (!editInited || atkUnitBase->NameString != "LookingForGroupCondition" || valueCount < 2)
+            return AgentReceiveEventHook.Original(atkUnitBase, valueCount, atkValues, updateVisibility);
+
+        if (atkValues != null)
+        {
+            var eventCase = atkValues[0].Int;
+
+            switch (eventCase)
+            {
+                case 11 when valueCount == 3:
+                    var itemLevel  = atkValues[1].UInt;
+                    var isEnableIL = atkValues[2].Bool;
+                    config.Last.ItemLevel = new(itemLevel, isEnableIL);
+                    break;
+                case 12:
+                    config.Last.Category = atkValues[1].UInt;
+                    config.Last.Duty     = 0;
+                    break;
+                case 13:
+                    config.Last.Duty = atkValues[1].UInt;
+                    break;
+                case 15:
+                    config.Last.Description = SeString.Parse(atkValues[1].String.Value).TextValue;
+                    break;
+            }
+        }
+
+        config.Save(this);
+        return AgentReceiveEventHook.Original(atkUnitBase, valueCount, atkValues, updateVisibility);
+    }
+
+    #endregion
+    
     private void ApplyPreset(PartyFinderSetting setting)
     {
         if (!LookingForGroup->IsAddonAndNodesReady() || !LookingForGroupCondition->IsAddonAndNodesReady())
@@ -128,52 +172,7 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
         TaskHelper.Enqueue(() => LookingForGroupCondition->Close(true));
         TaskHelper.Enqueue(() => LookingForGroup->Callback(14));
     }
-
-    #region Hook
-
-    private void* AddonFireCallBackDetour
-    (
-        AtkUnitBase* atkUnitBase,
-        int          valueCount,
-        AtkValue*    atkValues,
-        byte         updateVisibility
-    )
-    {
-        if (!EditInited || atkUnitBase->NameString != "LookingForGroupCondition" || valueCount < 2)
-            return AgentReceiveEventHook.Original(atkUnitBase, valueCount, atkValues, updateVisibility);
-
-        if (atkValues != null)
-        {
-            var eventCase = atkValues[0].Int;
-
-            switch (eventCase)
-            {
-                case 11 when valueCount == 3:
-                    var itemLevel  = atkValues[1].UInt;
-                    var isEnableIL = atkValues[2].Bool;
-                    ModuleConfig.Last.ItemLevel = new(itemLevel, isEnableIL);
-                    break;
-                case 12:
-                    ModuleConfig.Last.Category = atkValues[1].UInt;
-                    ModuleConfig.Last.Duty     = 0;
-                    break;
-                case 13:
-                    ModuleConfig.Last.Duty = atkValues[1].UInt;
-                    break;
-                case 15:
-                    ModuleConfig.Last.Description = SeString.Parse(atkValues[1].String.Value).TextValue;
-                    break;
-            }
-        }
-
-        ModuleConfig.Save(this);
-        return AgentReceiveEventHook.Original(atkUnitBase, valueCount, atkValues, updateVisibility);
-    }
-
-    #endregion
-
-    private delegate void* AddonFireCallBackDelegate(AtkUnitBase* atkunitbase, int valuecount, AtkValue* atkvalues, byte updateVisibility);
-
+    
     #region Config
 
     private class PartyFinderSetting

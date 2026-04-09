@@ -9,10 +9,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class BetterPartyFinderSort : ModuleBase
 {
-    private static readonly CompSig                           PartyFinderSortCmpSig = new("40 53 48 83 EC 20 0F B6 82 ?? ?? ?? ?? 48 8B DA 38 81 ?? ?? ?? ??");
-    private static readonly byte*                             PartyFinderSortType   = new CompSig("75 53 0F B6 05 ?? ?? ?? ??").GetStatic<byte>();
-    private static          Hook<PartyFinderSortCmpDelegate>? PartyFinderSortCmpHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("BetterPartyFinderSortTitle"),
@@ -22,6 +18,12 @@ public unsafe class BetterPartyFinderSort : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+
+    private readonly byte* PartyFinderSortType = new CompSig("75 53 0F B6 05 ?? ?? ?? ??").GetStatic<byte>();
+    
+    private static readonly CompSig                           PartyFinderSortCmpSig = new("40 53 48 83 EC 20 0F B6 82 ?? ?? ?? ?? 48 8B DA 38 81 ?? ?? ?? ??");
+    private delegate        byte                              PartyFinderSortCmpDelegate(nint a1, nint a2);
+    private                 Hook<PartyFinderSortCmpDelegate>? PartyFinderSortCmpHook;
 
     protected override void Init()
     {
@@ -65,9 +67,7 @@ public unsafe class BetterPartyFinderSort : ModuleBase
             1 => new TimeLeftDescendingStrategy(),
             _ => new TimeLeftAscendingStrategy()
         };
-
-    private delegate byte PartyFinderSortCmpDelegate(nint a1, nint a2);
-
+    
     private interface ISortStrategy
     {
         byte Compare(PartyFinderListing a1, PartyFinderListing a2);

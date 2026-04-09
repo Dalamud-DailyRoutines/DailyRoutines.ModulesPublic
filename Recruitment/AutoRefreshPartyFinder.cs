@@ -17,33 +17,33 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRefreshPartyFinder : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static Timer? PFRefreshTimer;
-
-    private static int Cooldown;
-
-    private static NumericInputNode?   RefreshIntervalNode;
-    private static CheckboxNode?       OnlyInactiveNode;
-    private static TextNode?           LeftTimeNode;
-    private static HorizontalListNode? LayoutNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoRefreshPartyFinderTitle"),
         Description = Lang.Get("AutoRefreshPartyFinderDescription"),
         Category    = ModuleCategory.Recruitment
     };
+    
+    private Config config = null!;
 
+    private Timer? refreshTimer;
+
+    private int cooldown;
+
+    private NumericInputNode?   refreshIntervalNode;
+    private CheckboxNode?       onlyInactiveNode;
+    private TextNode?           leftTimeNode;
+    private HorizontalListNode? layoutNode;
+    
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
-        PFRefreshTimer           ??= new(1_000);
-        PFRefreshTimer.AutoReset =   true;
-        PFRefreshTimer.Elapsed   +=  OnRefreshTimer;
+        refreshTimer           ??= new(1_000);
+        refreshTimer.AutoReset =   true;
+        refreshTimer.Elapsed   +=  OnRefreshTimer;
 
-        Cooldown = ModuleConfig.RefreshInterval;
+        cooldown = config.RefreshInterval;
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "LookingForGroup",       OnAddonPF);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "LookingForGroup",       OnAddonPF);
@@ -54,102 +54,119 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
         if (LookingForGroup != null)
             OnAddonPF(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonPF);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonLFGD);
+
+        if (refreshTimer != null)
+        {
+            refreshTimer.Elapsed -= OnRefreshTimer;
+            refreshTimer.Stop();
+            refreshTimer.Dispose();
+        }
+
+        refreshTimer = null;
+
+        CleanNodes();
+    }
 
     // 招募
-    private static void OnAddonPF(AddonEvent type, AddonArgs? args)
+    private void OnAddonPF(AddonEvent type, AddonArgs? args)
     {
         switch (type)
         {
             case AddonEvent.PostSetup:
-                Cooldown = ModuleConfig.RefreshInterval;
+                cooldown = config.RefreshInterval;
 
                 CreateRefreshIntervalNode();
 
-                PFRefreshTimer.Restart();
+                refreshTimer.Restart();
                 break;
-            case AddonEvent.PostRefresh when ModuleConfig.OnlyInactive:
-                Cooldown = ModuleConfig.RefreshInterval;
-                UpdateNextRefreshTime(Cooldown);
-                PFRefreshTimer.Restart();
+            case AddonEvent.PostRefresh when config.OnlyInactive:
+                cooldown = config.RefreshInterval;
+                UpdateNextRefreshTime(cooldown);
+                refreshTimer.Restart();
                 break;
             case AddonEvent.PreFinalize:
-                PFRefreshTimer.Stop();
+                refreshTimer.Stop();
                 CleanNodes();
                 break;
         }
     }
 
     // 招募详情
-    private static void OnAddonLFGD(AddonEvent type, AddonArgs? args)
+    private void OnAddonLFGD(AddonEvent type, AddonArgs? args)
     {
         switch (type)
         {
             case AddonEvent.PostSetup:
-                PFRefreshTimer.Stop();
+                refreshTimer.Stop();
                 break;
             case AddonEvent.PreFinalize:
-                Cooldown = ModuleConfig.RefreshInterval;
-                PFRefreshTimer.Restart();
+                cooldown = config.RefreshInterval;
+                refreshTimer.Restart();
                 break;
         }
     }
 
-    private static void OnRefreshTimer(object? sender, ElapsedEventArgs e)
+    private void OnRefreshTimer(object? sender, ElapsedEventArgs e)
     {
         if (!LookingForGroup->IsAddonAndNodesReady() || LookingForGroupDetail->IsAddonAndNodesReady())
         {
-            PFRefreshTimer.Stop();
+            refreshTimer.Stop();
             return;
         }
 
-        if (Cooldown > 1)
+        if (cooldown > 1)
         {
-            Cooldown--;
-            UpdateNextRefreshTime(Cooldown);
+            cooldown--;
+            UpdateNextRefreshTime(cooldown);
             return;
         }
 
-        Cooldown = ModuleConfig.RefreshInterval;
-        UpdateNextRefreshTime(Cooldown);
+        cooldown = config.RefreshInterval;
+        UpdateNextRefreshTime(cooldown);
 
         DService.Instance().Framework.Run(() => AgentLookingForGroup.Instance()->RequestListingsUpdate());
     }
 
-    private static void CleanNodes()
+    private void CleanNodes()
     {
-        RefreshIntervalNode?.Dispose();
-        RefreshIntervalNode = null;
+        refreshIntervalNode?.Dispose();
+        refreshIntervalNode = null;
 
-        OnlyInactiveNode?.Dispose();
-        OnlyInactiveNode = null;
+        onlyInactiveNode?.Dispose();
+        onlyInactiveNode = null;
 
-        LayoutNode?.Dispose();
-        LayoutNode = null;
+        layoutNode?.Dispose();
+        layoutNode = null;
 
-        LeftTimeNode?.Dispose();
-        LeftTimeNode = null;
+        leftTimeNode?.Dispose();
+        leftTimeNode = null;
     }
 
-    private static void CreateRefreshIntervalNode()
+    private void CreateRefreshIntervalNode()
     {
         if (LookingForGroup == null) return;
 
-        OnlyInactiveNode ??= new()
+        onlyInactiveNode ??= new()
         {
             Size      = new(150f, 28f),
             IsVisible = true,
-            IsChecked = ModuleConfig.OnlyInactive,
+            IsChecked = config.OnlyInactive,
             IsEnabled = true,
             String    = Lang.Get("AutoRefreshPartyFinder-OnlyInactive"),
             OnClick = newState =>
             {
-                ModuleConfig.OnlyInactive = newState;
-                ModuleConfig.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
+                config.OnlyInactive = newState;
+                config.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
             },
             Position = new(0, 1)
         };
 
-        RefreshIntervalNode ??= new()
+        refreshIntervalNode ??= new()
         {
             Size      = new(150f, 30f),
             Position  = new(0, 2),
@@ -159,21 +176,21 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
             Step      = 5,
             OnValueUpdate = newValue =>
             {
-                ModuleConfig.RefreshInterval = newValue;
-                ModuleConfig.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
+                config.RefreshInterval = newValue;
+                config.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
 
-                Cooldown = ModuleConfig.RefreshInterval;
-                PFRefreshTimer.Restart();
+                cooldown = config.RefreshInterval;
+                refreshTimer.Restart();
             },
-            Value = ModuleConfig.RefreshInterval
+            Value = config.RefreshInterval
         };
 
-        RefreshIntervalNode.Value = ModuleConfig.RefreshInterval;
-        RefreshIntervalNode.ValueTextNode.SetNumber(ModuleConfig.RefreshInterval);
+        refreshIntervalNode.Value = config.RefreshInterval;
+        refreshIntervalNode.ValueTextNode.SetNumber(config.RefreshInterval);
 
-        LeftTimeNode ??= new TextNode
+        leftTimeNode ??= new TextNode
         {
-            String           = $"({ModuleConfig.RefreshInterval})  ",
+            String           = $"({config.RefreshInterval})  ",
             FontSize         = 12,
             IsVisible        = true,
             Size             = new(0, 28f),
@@ -183,42 +200,25 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
             TextOutlineColor = ColorHelper.GetColor(7)
         };
 
-        LayoutNode = new HorizontalListNode
+        layoutNode = new HorizontalListNode
         {
             Width     = 270,
             IsVisible = true,
             Position  = new(500, 630),
             Alignment = HorizontalListAnchor.Right
         };
-        LayoutNode.AddNode([OnlyInactiveNode, RefreshIntervalNode, LeftTimeNode]);
+        layoutNode.AddNode([onlyInactiveNode, refreshIntervalNode, leftTimeNode]);
 
-        LayoutNode.AttachNode(LookingForGroup->RootNode);
+        layoutNode.AttachNode(LookingForGroup->RootNode);
     }
 
-    private static void UpdateNextRefreshTime(int leftTime)
+    private void UpdateNextRefreshTime(int leftTime)
     {
-        if (LeftTimeNode == null) return;
+        if (leftTimeNode == null) return;
 
-        LeftTimeNode.String = $"({leftTime})  ";
+        leftTimeNode.String = $"({leftTime})  ";
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonPF);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonLFGD);
-
-        if (PFRefreshTimer != null)
-        {
-            PFRefreshTimer.Elapsed -= OnRefreshTimer;
-            PFRefreshTimer.Stop();
-            PFRefreshTimer.Dispose();
-        }
-
-        PFRefreshTimer = null;
-
-        CleanNodes();
-    }
-
+    
     private class Config : ModuleConfig
     {
         public bool OnlyInactive    = true;

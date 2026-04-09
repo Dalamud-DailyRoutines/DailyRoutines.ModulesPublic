@@ -16,15 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastContentsFinderRegister : ModuleBase
 {
-    private const ImGuiWindowFlags WINDOW_FLAGS = ImGuiWindowFlags.NoDecoration       |
-                                                  ImGuiWindowFlags.AlwaysAutoResize   |
-                                                  ImGuiWindowFlags.NoSavedSettings    |
-                                                  ImGuiWindowFlags.NoMove             |
-                                                  ImGuiWindowFlags.NoDocking          |
-                                                  ImGuiWindowFlags.NoFocusOnAppearing |
-                                                  ImGuiWindowFlags.NoNav              |
-                                                  ImGuiWindowFlags.NoBackground;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("FastContentsFinderRegisterTitle"),
@@ -44,6 +35,12 @@ public unsafe class FastContentsFinderRegister : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "ContentsFinder", OnAddon);
         if (ContentsFinder != null)
             OnAddon(AddonEvent.PostSetup, null);
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        ContentFinderDataManager.ClearCache();
     }
 
     protected override void OverlayUI()
@@ -172,13 +169,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
             // ignored
         }
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        ContentFinderDataManager.ClearCache();
-    }
-
+    
     private void OnAddon(AddonEvent type, AddonArgs? args)
     {
         Overlay.IsOpen = type switch
@@ -317,4 +308,18 @@ public unsafe class FastContentsFinderRegister : ModuleBase
         public static void ClearCache() =>
             cachedData = null;
     }
+    
+    #region 常量
+
+    private const ImGuiWindowFlags WINDOW_FLAGS =
+        ImGuiWindowFlags.NoDecoration       |
+        ImGuiWindowFlags.AlwaysAutoResize   |
+        ImGuiWindowFlags.NoSavedSettings    |
+        ImGuiWindowFlags.NoMove             |
+        ImGuiWindowFlags.NoDocking          |
+        ImGuiWindowFlags.NoFocusOnAppearing |
+        ImGuiWindowFlags.NoNav              |
+        ImGuiWindowFlags.NoBackground;
+
+    #endregion
 }

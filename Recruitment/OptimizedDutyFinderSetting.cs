@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -16,41 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedDutyFinderSetting : ModuleBase
 {
-    private static readonly SetContentsFinderSettingsInitDelegate SetContentsFinderSettingsInit =
-        new CompSig("E8 ?? ?? ?? ?? 49 8B 06 45 33 FF 49 8B CE 45 89 7E 20 FF 50 28 B0 01").GetDelegate<SetContentsFinderSettingsInitDelegate>();
-
-    private static HorizontalListNode? LayoutNode;
-
-    private static readonly Dictionary<DutyFinderSettingDisplay, (IconButtonNode? ButtonNode, IconImageNode? ImageNode)> Nodes = [];
-
-    private static readonly List<DutyFinderSettingDisplay> DutyFinderSettingIcons =
-    [
-        new(DutyFinderSetting.JoinPartyInProgress, 60644, 2519),
-        new(DutyFinderSetting.UnrestrictedParty, 60641, 10008),
-        new(DutyFinderSetting.LevelSync, 60649, 12696),
-        new(DutyFinderSetting.MinimumIl, 60642, 10010),
-        new(DutyFinderSetting.SilenceEcho, 60647, 12691),
-        new(DutyFinderSetting.ExplorerMode, 60648, 13038),
-        new(DutyFinderSetting.LimitedLevelingRoulette, 60640, 13030),
-        new(DutyFinderSetting.LootRule)
-        {
-            GetIcon = () => GetCurrentSettingValue(DutyFinderSetting.LootRule) switch
-            {
-                0 => 60645,
-                1 => 60645,
-                2 => 60646,
-                _ => 0
-            },
-            GetTooltip = () => GetCurrentSettingValue(DutyFinderSetting.LootRule) switch
-            {
-                0 => 10022,
-                1 => 10023,
-                2 => 10024,
-                _ => 0
-            }
-        }
-    ];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("OptimizedDutyFinderSettingTitle"),
@@ -60,6 +26,13 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private readonly SetContentsFinderSettingsInitDelegate SetContentsFinderSettingsInit =
+        new CompSig("E8 ?? ?? ?? ?? 49 8B 06 45 33 FF 49 8B CE 45 89 7E 20 FF 50 28 B0 01").GetDelegate<SetContentsFinderSettingsInitDelegate>();
+
+    private HorizontalListNode? layoutNode;
+
+    private readonly Dictionary<DutyFinderSettingDisplay, (IconButtonNode? ButtonNode, IconImageNode? ImageNode)> nodes = [];
 
     protected override void Init()
     {
@@ -74,28 +47,28 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         OnAddon(AddonEvent.PreFinalize, null);
     }
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                foreach (var (buttonNode, imageNode) in Nodes.Values)
+                foreach (var (buttonNode, imageNode) in nodes.Values)
                 {
                     buttonNode?.Dispose();
                     imageNode?.Dispose();
                 }
 
-                Nodes.Clear();
+                nodes.Clear();
 
-                LayoutNode?.Dispose();
-                LayoutNode = null;
+                layoutNode?.Dispose();
+                layoutNode = null;
                 break;
             case AddonEvent.PostRefresh:
             case AddonEvent.PostDraw:
                 var addon = args.Addon.ToStruct();
                 if (addon == null) return;
 
-                if (LayoutNode == null)
+                if (layoutNode == null)
                 {
                     var defaultContainer = addon->GetNodeById(6);
                     if (defaultContainer == null) return;
@@ -105,18 +78,18 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
                     var attchTargetNode = addon->GetNodeById(4);
                     if (attchTargetNode == null) return;
 
-                    LayoutNode = new HorizontalListNode
+                    layoutNode = new HorizontalListNode
                     {
                         IsVisible   = true,
                         Size        = new(defaultContainer->Width, defaultContainer->Height),
                         Position    = new(defaultContainer->X - 5, defaultContainer->Y),
                         ItemSpacing = 0
                     };
-                    LayoutNode.AttachNode(attchTargetNode);
+                    layoutNode.AttachNode(attchTargetNode);
 
                     foreach (var settingDetail in DutyFinderSettingIcons)
                     {
-                        if (Nodes.ContainsKey(settingDetail)) continue;
+                        if (nodes.ContainsKey(settingDetail)) continue;
 
                         var button = new IconButtonNode
                         {
@@ -161,8 +134,8 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
 
                         iconNode.AttachNode(button);
 
-                        Nodes[settingDetail] = (button, iconNode);
-                        LayoutNode.AddNode(button);
+                        nodes[settingDetail] = (button, iconNode);
+                        layoutNode.AddNode(button);
                     }
 
                     if (GetLanguageButtons() is { Count: > 0 } langButtons)
@@ -194,12 +167,12 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
                             languageButton.ImageNode.IsVisible      = false;
 
                             languageButton.AttachNode(parentNode);
-                            Nodes[langSetting] = (languageButton, null);
+                            nodes[langSetting] = (languageButton, null);
                         }
                     }
                 }
 
-                foreach (var (settingDetail, (buttonNode, imageNode)) in Nodes)
+                foreach (var (settingDetail, (buttonNode, imageNode)) in nodes)
                 {
                     var value = GetCurrentSettingValue(settingDetail.Setting);
 
@@ -250,7 +223,7 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         };
     }
 
-    private static void ToggleSetting(DutyFinderSetting setting)
+    private void ToggleSetting(DutyFinderSetting setting)
     {
         if (IsLangConfigReady() && setting is DutyFinderSetting.Ja or DutyFinderSetting.En or DutyFinderSetting.De or DutyFinderSetting.Fr)
         {
@@ -353,4 +326,32 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         public Func<uint>? GetIcon    { get; init; }
         public Func<uint>? GetTooltip { get; init; }
     }
+    
+    private static readonly FrozenSet<DutyFinderSettingDisplay> DutyFinderSettingIcons =
+    [
+        new(DutyFinderSetting.JoinPartyInProgress, 60644, 2519),
+        new(DutyFinderSetting.UnrestrictedParty, 60641, 10008),
+        new(DutyFinderSetting.LevelSync, 60649, 12696),
+        new(DutyFinderSetting.MinimumIl, 60642, 10010),
+        new(DutyFinderSetting.SilenceEcho, 60647, 12691),
+        new(DutyFinderSetting.ExplorerMode, 60648, 13038),
+        new(DutyFinderSetting.LimitedLevelingRoulette, 60640, 13030),
+        new(DutyFinderSetting.LootRule)
+        {
+            GetIcon = () => GetCurrentSettingValue(DutyFinderSetting.LootRule) switch
+            {
+                0 => 60645,
+                1 => 60645,
+                2 => 60646,
+                _ => 0
+            },
+            GetTooltip = () => GetCurrentSettingValue(DutyFinderSetting.LootRule) switch
+            {
+                0 => 10022,
+                1 => 10023,
+                2 => 10024,
+                _ => 0
+            }
+        }
+    ];
 }
