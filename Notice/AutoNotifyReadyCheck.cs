@@ -11,8 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyReadyCheck : ModuleBase
 {
-    private static readonly FrozenSet<uint> ValidLogMessages = [3790, 3791];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyReadyCheckTitle"),
@@ -35,4 +33,10 @@ public class AutoNotifyReadyCheck : ModuleBase
         NotifyHelper.Instance().NotificationInfo(LuminaWrapper.GetLogMessageText(3790));
         NotifyHelper.Speak(LuminaWrapper.GetLogMessageText(3790));
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<uint> ValidLogMessages = [3790, 3791];
+
+    #endregion
 }

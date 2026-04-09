@@ -12,8 +12,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyDutyName : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyDutyNameTitle"),
@@ -22,27 +20,32 @@ public class AutoNotifyDutyName : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChange;
     }
-
+    
+    protected override void Uninit() =>
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChange;
+    
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref ModuleConfig.SendTTS))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref config.SendTTS))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref ModuleConfig.SendChat))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
     }
 
-    private static unsafe void OnZoneChange(ushort territory)
+    private unsafe void OnZoneChange(ushort territory)
     {
         if (GameMain.Instance()->CurrentContentFinderConditionId == 0 ||
             !LuminaGetter.TryGetRow<ContentFinderCondition>(GameMain.Instance()->CurrentContentFinderConditionId, out var content))
@@ -71,17 +74,14 @@ public class AutoNotifyDutyName : ModuleBase
             content.ItemLevelSync != 0 ? content.ItemLevelSync : maxILGearIL
         );
 
-        if (ModuleConfig.SendTTS)
+        if (config.SendTTS)
             NotifyHelper.Speak(message);
-        if (ModuleConfig.SendChat)
+        if (config.SendChat)
             NotifyHelper.Instance().Chat(message);
-        if (ModuleConfig.SendNotification)
+        if (config.SendNotification)
             NotifyHelper.Instance().NotificationInfo(message);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChange;
-
+    
     private class Config : ModuleConfig
     {
         public bool SendChat         = true;

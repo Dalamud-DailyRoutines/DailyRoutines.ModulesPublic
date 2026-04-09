@@ -19,6 +19,9 @@ public class AutoNotifyDutyStart : ModuleBase
 
     protected override void Init() =>
         DService.Instance().DutyState.DutyStarted += OnDutyStart;
+    
+    protected override void Uninit() =>
+        DService.Instance().DutyState.DutyStarted -= OnDutyStart;
 
     private static void OnDutyStart(object? sender, ushort e)
     {
@@ -26,7 +29,4 @@ public class AutoNotifyDutyStart : ModuleBase
         NotifyHelper.Instance().NotificationInfo(message);
         NotifyHelper.Speak(message);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().DutyState.DutyStarted -= OnDutyStart;
 }

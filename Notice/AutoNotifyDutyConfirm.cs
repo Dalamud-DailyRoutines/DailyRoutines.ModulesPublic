@@ -23,6 +23,9 @@ public class AutoNotifyDutyConfirm : ModuleBase
 
     protected override void Init() =>
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ContentsFinderConfirm", OnAddonSetup);
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
     private static unsafe void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
@@ -36,7 +39,4 @@ public class AutoNotifyDutyConfirm : ModuleBase
         NotifyHelper.Instance().NotificationInfo(loc);
         NotifyHelper.Speak(loc);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

@@ -11,8 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyRecruitmentEnd : ModuleBase
 {
-    private static readonly FrozenSet<uint> ValidLogMessages = [983, 984, 985, 986, 7451, 7452];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyRecruitmentEndTitle"),
@@ -36,4 +34,10 @@ public class AutoNotifyRecruitmentEnd : ModuleBase
         NotifyHelper.Instance().NotificationInfo(content);
         NotifyHelper.Speak(content);
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<uint> ValidLogMessages = [983, 984, 985, 986, 7451, 7452];
+
+    #endregion
 }

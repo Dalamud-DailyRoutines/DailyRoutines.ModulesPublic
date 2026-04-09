@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -12,22 +13,20 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyDiademWeather : ModuleBase
 {
-    private static readonly List<uint> SpecialWeathers = [133, 134, 135, 136];
-
-    private static Config ModuleConfig = null!;
-
-    private static uint LastWeather;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyDiademWeatherTitle"),
         Description = Lang.Get("AutoNotifyDiademWeatherDescription"),
         Category    = ModuleCategory.Notice
     };
+    
+    private Config config = null!;
+
+    private uint lastWeather;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
@@ -38,7 +37,7 @@ public class AutoNotifyDiademWeather : ModuleBase
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-        LastWeather = 0;
+        lastWeather = 0;
     }
 
     protected override void ConfigUI()
@@ -48,7 +47,7 @@ public class AutoNotifyDiademWeather : ModuleBase
         var weathers = string.Join
         (
             ',',
-            ModuleConfig.Weathers
+            config.Weathers
                         .Select(x => LuminaGetter.GetRow<Weather>(x)?.Name.ToString() ?? string.Empty)
                         .Distinct()
         );
@@ -66,20 +65,20 @@ public class AutoNotifyDiademWeather : ModuleBase
                         icon.GetWrapOrEmpty().Handle,
                         new(ImGui.GetTextLineHeightWithSpacing()),
                         $"{data.Name.ToString()}",
-                        ModuleConfig.Weathers.Contains(weather),
+                        config.Weathers.Contains(weather),
                         ImGuiSelectableFlags.DontClosePopups
                     ))
                 {
-                    if (!ModuleConfig.Weathers.Add(weather))
-                        ModuleConfig.Weathers.Remove(weather);
+                    if (!config.Weathers.Add(weather))
+                        config.Weathers.Remove(weather);
 
-                    ModuleConfig.Save(this);
+                    config.Save(this);
                 }
             }
         }
     }
 
-    private static void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(ushort zone)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
 
@@ -88,7 +87,7 @@ public class AutoNotifyDiademWeather : ModuleBase
         FrameworkManager.Instance().Reg(OnUpdate, 10_000);
     }
 
-    private static unsafe void OnUpdate(IFramework framework)
+    private unsafe void OnUpdate(IFramework framework)
     {
         if (GameState.TerritoryType != 939)
         {
@@ -97,10 +96,10 @@ public class AutoNotifyDiademWeather : ModuleBase
         }
 
         var weatherID = WeatherManager.Instance()->GetCurrentWeather();
-        if (LastWeather == weatherID || !LuminaGetter.TryGetRow<Weather>(weatherID, out var weather)) return;
+        if (lastWeather == weatherID || !LuminaGetter.TryGetRow<Weather>(weatherID, out var weather)) return;
 
-        LastWeather = weatherID;
-        if (!ModuleConfig.Weathers.Contains(weatherID)) return;
+        lastWeather = weatherID;
+        if (!config.Weathers.Contains(weatherID)) return;
 
         var message = Lang.Get("AutoNotifyDiademWeather-Notification", weather.Name.ToString());
         NotifyHelper.Instance().Chat(message);
@@ -111,4 +110,10 @@ public class AutoNotifyDiademWeather : ModuleBase
     {
         public HashSet<uint> Weathers = [];
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<uint> SpecialWeathers = [133, 134, 135, 136];
+
+    #endregion
 }

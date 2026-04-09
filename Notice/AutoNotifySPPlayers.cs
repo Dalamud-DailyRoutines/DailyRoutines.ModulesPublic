@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using DailyRoutines.Common.Module.Abstractions;
@@ -16,36 +17,29 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifySPPlayers : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static readonly Dictionary<uint, OnlineStatus> OnlineStatuses =
-        LuminaGetter.Get<OnlineStatus>()
-                    .Where(x => x.RowId != 0 && x.RowId != 47)
-                    .ToDictionary(x => x.RowId, x => x);
-
-    private static readonly Throttler<ulong> ObjThrottler = new();
-
-    private static HashSet<uint> SelectedOnlineStatus = [];
-
-    private static readonly ZoneSelectCombo ZoneSelectCombo = new("New");
-
-    private static string OnlineStatusSearchInput = string.Empty;
-
-    private static string SelectName    = string.Empty;
-    private static string SelectCommand = string.Empty;
-
-    private static readonly Dictionary<ulong, long> NoticeTimeInfo = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifySPPlayersTitle"),
         Description = Lang.Get("AutoNotifySPPlayersDescription"),
         Category    = ModuleCategory.Notice
     };
+    
+    private Config config = null!;
+
+    private readonly Throttler<ulong> objThrottler    = new();
+    private readonly ZoneSelectCombo  zoneSelectCombo = new("New");
+
+    private          HashSet<uint>           selectedOnlineStatus = [];
+    private readonly Dictionary<ulong, long> noticeTimeInfo       = [];
+    
+    private string onlineStatusSearchInput = string.Empty;
+
+    private string selectName    = string.Empty;
+    private string selectCommand = string.Empty;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         PlayersManager.Instance().ReceivePlayersAround += OnReceivePlayers;
     }
@@ -64,7 +58,7 @@ public class AutoNotifySPPlayers : ModuleBase
 
         RenderTableAddNewPreset();
 
-        if (ModuleConfig.NotifiedPlayer.Count == 0) return;
+        if (config.NotifiedPlayer.Count == 0) return;
 
         ImGui.Spacing();
         ImGui.Separator();
@@ -94,7 +88,7 @@ public class AutoNotifySPPlayers : ModuleBase
                 (
                     "###NameInput",
                     Lang.Get("AutoNotifySPPlayers-NameInputHint"),
-                    ref SelectName,
+                    ref selectName,
                     64
                 );
 
@@ -108,8 +102,8 @@ public class AutoNotifySPPlayers : ModuleBase
                 (
                     "OnlineStatusSelectCombo",
                     OnlineStatuses,
-                    ref SelectedOnlineStatus,
-                    ref OnlineStatusSearchInput,
+                    ref selectedOnlineStatus,
+                    ref onlineStatusSearchInput,
                     [new(Lang.Get("OnlineStatus"), ImGuiTableColumnFlags.WidthStretch, 0)],
                     [
                         x => () =>
@@ -122,12 +116,12 @@ public class AutoNotifySPPlayers : ModuleBase
                                     statusIcon.GetWrapOrEmpty().Handle,
                                     new(ImGui.GetTextLineHeightWithSpacing()),
                                     x.Name.ToString(),
-                                    SelectedOnlineStatus.Contains(x.RowId),
+                                    selectedOnlineStatus.Contains(x.RowId),
                                     ImGuiSelectableFlags.DontClosePopups
                                 ))
                             {
-                                if (!SelectedOnlineStatus.Remove(x.RowId))
-                                    SelectedOnlineStatus.Add(x.RowId);
+                                if (!selectedOnlineStatus.Remove(x.RowId))
+                                    selectedOnlineStatus.Add(x.RowId);
                             }
                         }
                     ],
@@ -140,7 +134,7 @@ public class AutoNotifySPPlayers : ModuleBase
 
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(-1f);
-                ZoneSelectCombo.DrawCheckbox();
+                zoneSelectCombo.DrawCheckbox();
 
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
@@ -148,17 +142,17 @@ public class AutoNotifySPPlayers : ModuleBase
 
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(-1f);
-                ImGui.InputTextMultiline("###CommandInput", ref SelectCommand, 1024, new(-1f, 60f * GlobalUIScale));
+                ImGui.InputTextMultiline("###CommandInput", ref selectCommand, 1024, new(-1f, 60f * GlobalUIScale));
 
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     try
                     {
-                        _ = string.Format(SelectCommand, 0);
+                        _ = string.Format(selectCommand, 0);
                     }
                     catch (Exception)
                     {
-                        SelectCommand = string.Empty;
+                        selectCommand = string.Empty;
                     }
                 }
 
@@ -171,23 +165,23 @@ public class AutoNotifySPPlayers : ModuleBase
 
         if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, Lang.Get("Add"), buttonSize))
         {
-            if (string.IsNullOrWhiteSpace(SelectName)  &&
-                SelectedOnlineStatus.Count        == 0 &&
-                ZoneSelectCombo.SelectedIDs.Count == 0)
+            if (string.IsNullOrWhiteSpace(selectName)  &&
+                selectedOnlineStatus.Count        == 0 &&
+                zoneSelectCombo.SelectedIDs.Count == 0)
                 return;
 
             var preset = new NotifiedPlayers
             {
-                Name         = SelectName,
-                OnlineStatus = [..SelectedOnlineStatus], // 不这样就有引用关系了
-                Zone         = [..ZoneSelectCombo.SelectedIDs],
-                Command      = SelectCommand
+                Name         = selectName,
+                OnlineStatus = [..selectedOnlineStatus], // 不这样就有引用关系了
+                Zone         = [..zoneSelectCombo.SelectedIDs],
+                Command      = selectCommand
             };
 
-            if (!ModuleConfig.NotifiedPlayer.Any(x => x.Equals(preset) || x.ToString() == preset.ToString()))
+            if (!config.NotifiedPlayer.Any(x => x.Equals(preset) || x.ToString() == preset.ToString()))
             {
-                ModuleConfig.NotifiedPlayer.Add(preset);
-                ModuleConfig.Save(this);
+                config.NotifiedPlayer.Add(preset);
+                config.Save(this);
             }
         }
     }
@@ -220,9 +214,9 @@ public class AutoNotifySPPlayers : ModuleBase
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("AutoNotifySPPlayers-ExtraCommand"));
 
-        for (var i = 0; i < ModuleConfig.NotifiedPlayer.Count; i++)
+        for (var i = 0; i < config.NotifiedPlayer.Count; i++)
         {
-            var       preset = ModuleConfig.NotifiedPlayer[i];
+            var       preset = config.NotifiedPlayer[i];
             using var id     = ImRaii.PushId(preset.ToString());
 
             ImGui.TableNextRow();
@@ -271,8 +265,8 @@ public class AutoNotifySPPlayers : ModuleBase
 
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
-                ModuleConfig.NotifiedPlayer.Remove(preset);
-                ModuleConfig.Save(this);
+                config.NotifiedPlayer.Remove(preset);
+                config.Save(this);
                 return;
             }
 
@@ -280,13 +274,13 @@ public class AutoNotifySPPlayers : ModuleBase
 
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.PenAlt, Lang.Get("Edit")))
             {
-                SelectName                  = preset.Name;
-                SelectedOnlineStatus        = [.. preset.OnlineStatus];
-                ZoneSelectCombo.SelectedIDs = [.. preset.Zone];
-                SelectCommand               = preset.Command;
+                selectName                  = preset.Name;
+                selectedOnlineStatus        = [.. preset.OnlineStatus];
+                zoneSelectCombo.SelectedIDs = [.. preset.Zone];
+                selectCommand               = preset.Command;
 
-                ModuleConfig.NotifiedPlayer.Remove(preset);
-                ModuleConfig.Save(this);
+                config.NotifiedPlayer.Remove(preset);
+                config.Save(this);
                 return;
             }
         }
@@ -320,28 +314,28 @@ public class AutoNotifySPPlayers : ModuleBase
         }
     }
 
-    private static void OnReceivePlayers(IReadOnlyList<IPlayerCharacter> characters)
+    private void OnReceivePlayers(IReadOnlyList<IPlayerCharacter> characters)
     {
         foreach (var character in characters)
             CheckGameObject(character);
     }
 
-    private static void CheckGameObject(IPlayerCharacter? obj)
+    private void CheckGameObject(IPlayerCharacter? obj)
     {
-        if (ModuleConfig.NotifiedPlayer.Count == 0)
+        if (config.NotifiedPlayer.Count == 0)
             return;
         if (!DService.Instance().ClientState.IsLoggedIn || DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer)
             return;
         if (obj == null || obj.Address == localPlayer.Address || obj.ObjectKind != ObjectKind.Player)
             return;
-        if (!ObjThrottler.Throttle(obj.GameObjectID, 3_000))
+        if (!objThrottler.Throttle(obj.GameObjectID, 3_000))
             return;
 
         var currentTime = Environment.TickCount64;
 
-        if (!NoticeTimeInfo.TryAdd(obj.GameObjectID, currentTime))
+        if (!noticeTimeInfo.TryAdd(obj.GameObjectID, currentTime))
         {
-            if (NoticeTimeInfo.TryGetValue(obj.GameObjectID, out var lastNoticeTime))
+            if (noticeTimeInfo.TryGetValue(obj.GameObjectID, out var lastNoticeTime))
             {
                 var timeDifference = currentTime - lastNoticeTime;
 
@@ -350,7 +344,7 @@ public class AutoNotifySPPlayers : ModuleBase
                     case < 15_000:
                         break;
                     case > 300_000:
-                        NoticeTimeInfo[obj.GameObjectID] = currentTime;
+                        noticeTimeInfo[obj.GameObjectID] = currentTime;
                         break;
                     default:
                         return;
@@ -358,18 +352,18 @@ public class AutoNotifySPPlayers : ModuleBase
             }
         }
 
-        foreach (var config in ModuleConfig.NotifiedPlayer)
+        foreach (var notifiedPlayers in config.NotifiedPlayer)
         {
             bool[] checks     = [true, true, true];
             var    playerName = obj.Name.ToString();
 
-            if (!string.IsNullOrWhiteSpace(config.Name))
+            if (!string.IsNullOrWhiteSpace(notifiedPlayers.Name))
             {
                 try
                 {
-                    checks[0] = config.Name.StartsWith('/')
-                                    ? new Regex(config.Name).IsMatch(playerName)
-                                    : playerName == config.Name;
+                    checks[0] = notifiedPlayers.Name.StartsWith('/')
+                                    ? new Regex(notifiedPlayers.Name).IsMatch(playerName)
+                                    : playerName == notifiedPlayers.Name;
                 }
                 catch (ArgumentException)
                 {
@@ -377,11 +371,11 @@ public class AutoNotifySPPlayers : ModuleBase
                 }
             }
 
-            if (config.OnlineStatus.Count > 0)
-                checks[1] = config.OnlineStatus.Contains(obj.OnlineStatus.RowId);
+            if (notifiedPlayers.OnlineStatus.Count > 0)
+                checks[1] = notifiedPlayers.OnlineStatus.Contains(obj.OnlineStatus.RowId);
 
-            if (config.Zone.Count > 0)
-                checks[2] = config.Zone.Contains(GameState.TerritoryType);
+            if (notifiedPlayers.Zone.Count > 0)
+                checks[2] = notifiedPlayers.Zone.Contains(GameState.TerritoryType);
 
             if (checks.All(x => x))
             {
@@ -391,9 +385,9 @@ public class AutoNotifySPPlayers : ModuleBase
                 NotifyHelper.Instance().NotificationInfo(message);
                 NotifyHelper.Speak(message);
 
-                if (!string.IsNullOrWhiteSpace(config.Command))
+                if (!string.IsNullOrWhiteSpace(notifiedPlayers.Command))
                 {
-                    foreach (var command in config.Command.Split('\n'))
+                    foreach (var command in notifiedPlayers.Command.Split('\n'))
                         ChatManager.Instance().SendMessage(string.Format(command.Trim(), playerName));
                 }
             }
@@ -433,4 +427,13 @@ public class AutoNotifySPPlayers : ModuleBase
     {
         public List<NotifiedPlayers> NotifiedPlayer = [];
     }
+    
+    #region 常量
+
+    private static readonly FrozenDictionary<uint, OnlineStatus> OnlineStatuses =
+        LuminaGetter.Get<OnlineStatus>()
+                    .Where(x => x.RowId != 0 && x.RowId != 47)
+                    .ToFrozenDictionary(x => x.RowId, x => x);
+
+    #endregion
 }

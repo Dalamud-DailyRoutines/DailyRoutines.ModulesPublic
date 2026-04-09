@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -16,12 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
 {
-    private const byte MENTOR_ROULETTE_ID = 9;
-
-    private static readonly uint[] MentorRouletteAchievements = [1472, 1473, 1474, 1475, 1603, 1604];
-
-    private static DalamudLinkPayload? AchievementLinkPayload;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyMentorRouletteProgressTitle"),
@@ -34,6 +29,8 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private DalamudLinkPayload? achievementLinkPayload;
 
     protected override void Init()
     {
@@ -47,8 +44,8 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-        if (AchievementLinkPayload != null)
-            LinkPayloadManager.Instance().Unreg(AchievementLinkPayload.CommandId);
+        if (achievementLinkPayload != null)
+            LinkPayloadManager.Instance().Unreg(achievementLinkPayload.CommandId);
     }
 
     private void OnZoneChanged(ushort obj)
@@ -92,11 +89,11 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
 
                 if (firstIncomplete == null) return true;
 
-                if (AchievementLinkPayload != null)
-                    LinkPayloadManager.Instance().Unreg(AchievementLinkPayload.CommandId);
+                if (achievementLinkPayload != null)
+                    LinkPayloadManager.Instance().Unreg(achievementLinkPayload.CommandId);
 
 
-                AchievementLinkPayload = LinkPayloadManager.Instance().Reg((_, _) => AgentAchievement.Instance()->OpenById(firstIncomplete.ID), out _);
+                achievementLinkPayload = LinkPayloadManager.Instance().Reg((_, _) => AgentAchievement.Instance()->OpenById(firstIncomplete.ID), out _);
                 var builder = new SeStringBuilder();
                 builder.AddText(Lang.Get("AutoNotifyMentorRouletteProgres-Notification-Title"))
                        .Add(NewLinePayload.Payload)
@@ -104,7 +101,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
                        .Add(NewLinePayload.Payload)
                        .AddText($"   {Lang.Get("AutoNotifyMentorRouletteProgres-Notification-TargetAchievement")}: ")
                        .Add(RawPayload.LinkTerminator)
-                       .Add(AchievementLinkPayload)
+                       .Add(achievementLinkPayload)
                        .AddRange(SeString.TextArrowPayloads)
                        .AddText(firstIncomplete.Name)
                        .Add(RawPayload.LinkTerminator);
@@ -145,4 +142,12 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
             }
         );
     }
+    
+    #region 常量
+
+    private const byte MENTOR_ROULETTE_ID = 9;
+
+    private static readonly FrozenSet<uint> MentorRouletteAchievements = [1472, 1473, 1474, 1475, 1603, 1604];
+
+    #endregion
 }

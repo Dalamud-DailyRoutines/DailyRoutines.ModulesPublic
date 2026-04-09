@@ -9,8 +9,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyCountdown : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyCountdownTitle"),
@@ -20,10 +18,12 @@ public class AutoNotifyCountdown : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         LogMessageManager.Instance().RegPost(OnLogMessage);
     }
@@ -31,10 +31,10 @@ public class AutoNotifyCountdown : ModuleBase
     protected override void Uninit() =>
         LogMessageManager.Instance().Unreg(OnLogMessage);
 
-    private static void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
+    private void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
     {
         if (logMessageID != 5255) return;
-        if (ModuleConfig.OnlyNotifyWhenBackground && GameState.IsForeground) return;
+        if (config.OnlyNotifyWhenBackground && GameState.IsForeground) return;
 
         NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoNotifyCountdown-NotificationTitle"));
         NotifyHelper.Speak(Lang.Get("AutoNotifyCountdown-NotificationTitle"));
@@ -42,8 +42,8 @@ public class AutoNotifyCountdown : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("OnlyNotifyWhenBackground"), ref ModuleConfig.OnlyNotifyWhenBackground))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OnlyNotifyWhenBackground"), ref config.OnlyNotifyWhenBackground))
+            config.Save(this);
     }
 
     private class Config : ModuleConfig

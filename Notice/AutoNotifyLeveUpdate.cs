@@ -10,12 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNotifyLeveUpdate : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static DateTime NextLeveCheck = DateTime.MinValue;
-    private static DateTime FinishTime    = StandardTimeManager.Instance().UTCNow;
-    private static int      LastLeve;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyLeveUpdateTitle"),
@@ -23,10 +17,16 @@ public unsafe class AutoNotifyLeveUpdate : ModuleBase
         Category    = ModuleCategory.Notice,
         Author      = ["HSS"]
     };
+    
+    private Config config = null!;
+
+    private DateTime nextLeveCheck = DateTime.MinValue;
+    private DateTime finishTime    = StandardTimeManager.Instance().UTCNow;
+    private int      lastLeve;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
         FrameworkManager.Instance().Reg(OnUpdate, 60_000);
     }
 
@@ -35,50 +35,50 @@ public unsafe class AutoNotifyLeveUpdate : ModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-NumText")}{LastLeve}");
-        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{FinishTime.ToLocalTime():g}");
-        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{NextLeveCheck.ToLocalTime():g}");
+        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-NumText")}{lastLeve}");
+        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{finishTime.ToLocalTime():g}");
+        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{nextLeveCheck.ToLocalTime():g}");
 
-        if (ImGui.Checkbox(Lang.Get("AutoNotifyLeveUpdate-OnChatMessageConfig"), ref ModuleConfig.OnChatMessage))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoNotifyLeveUpdate-OnChatMessageConfig"), ref config.OnChatMessage))
+            config.Save(this);
 
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
 
         if (ImGui.SliderInt
             (
                 Lang.Get("AutoNotifyLeveUpdate-NotificationThreshold"),
-                ref ModuleConfig.NotificationThreshold,
+                ref config.NotificationThreshold,
                 1,
                 100
             ))
         {
-            LastLeve = 0;
-            ModuleConfig.Save(this);
+            lastLeve = 0;
+            config.Save(this);
         }
     }
 
-    private static void OnUpdate(IFramework _)
+    private void OnUpdate(IFramework _)
     {
         if (!GameState.IsLoggedIn)
             return;
 
         var nowUTC         = StandardTimeManager.Instance().UTCNow;
         var leveAllowances = QuestManager.Instance()->NumLeveAllowances;
-        if (LastLeve == leveAllowances) return;
+        if (lastLeve == leveAllowances) return;
 
-        var decreasing = leveAllowances > LastLeve;
-        LastLeve      = leveAllowances;
-        NextLeveCheck = MathNextTime(nowUTC);
-        FinishTime    = MathFinishTime(leveAllowances, nowUTC);
+        var decreasing = leveAllowances > lastLeve;
+        lastLeve      = leveAllowances;
+        nextLeveCheck = MathNextTime(nowUTC);
+        finishTime    = MathFinishTime(leveAllowances, nowUTC);
 
-        if (leveAllowances >= ModuleConfig.NotificationThreshold && decreasing)
+        if (leveAllowances >= config.NotificationThreshold && decreasing)
         {
             var message = $"{Lang.Get("AutoNotifyLeveUpdate-NotificationTitle")}\n"                        +
                           $"{Lang.Get("AutoNotifyLeveUpdate-NumText")}{leveAllowances}\n"                  +
-                          $"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{FinishTime.ToLocalTime():g}\n" +
-                          $"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{NextLeveCheck.ToLocalTime():g}";
+                          $"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{finishTime.ToLocalTime():g}\n" +
+                          $"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{nextLeveCheck.ToLocalTime():g}";
 
-            if (ModuleConfig.OnChatMessage)
+            if (config.OnChatMessage)
                 NotifyHelper.Instance().Chat(message);
             NotifyHelper.Instance().NotificationInfo(message);
         }

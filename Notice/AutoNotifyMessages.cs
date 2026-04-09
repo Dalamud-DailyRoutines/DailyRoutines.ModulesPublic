@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -11,39 +12,39 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyMessages : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static HashSet<XivChatType> KnownChatTypes         = [];
-    private static string               SearchChatTypesContent = string.Empty;
-    private static string               KeywordInput           = string.Empty;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoNotifyMessagesTitle"),
         Description = Lang.Get("AutoNotifyMessagesDescription"),
         Category    = ModuleCategory.Notice
     };
+    
+    private Config config = null!;
+
+    private string searchChatTypesContent = string.Empty;
+    private string keywordInput           = string.Empty;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
-
-        KnownChatTypes = [.. Enum.GetValues<XivChatType>()];
-
+        config = Config.Load(this) ?? new();
+        
         DService.Instance().Chat.ChatMessage += OnChatMessage;
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().Chat.ChatMessage -= OnChatMessage;
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("OnlyNotifyWhenBackground"), ref ModuleConfig.OnlyNotifyWhenBackground))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("OnlyNotifyWhenBackground"), ref config.OnlyNotifyWhenBackground))
+            config.Save(this);
 
         ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
         using (var combo = ImRaii.Combo
                (
                    "###SelectChatTypesCombo",
-                   Lang.Get("AutoNotifyMessages-SelectedTypesAmount", ModuleConfig.ValidChatTypes.Count),
+                   Lang.Get("AutoNotifyMessages-SelectedTypesAmount", config.ValidChatTypes.Count),
                    ImGuiComboFlags.HeightLarge
                ))
         {
@@ -54,7 +55,7 @@ public class AutoNotifyMessages : ModuleBase
                 (
                     "###ChatTypeSelectInput",
                     $"{Lang.Get("PleaseSearch")}...",
-                    ref SearchChatTypesContent,
+                    ref searchChatTypesContent,
                     50
                 );
 
@@ -63,17 +64,17 @@ public class AutoNotifyMessages : ModuleBase
 
                 foreach (var chatType in KnownChatTypes)
                 {
-                    if (!string.IsNullOrEmpty(SearchChatTypesContent) &&
-                        !chatType.ToString().Contains(SearchChatTypesContent, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!string.IsNullOrEmpty(searchChatTypesContent) &&
+                        !chatType.ToString().Contains(searchChatTypesContent, StringComparison.OrdinalIgnoreCase)) continue;
 
-                    var existed = ModuleConfig.ValidChatTypes.Contains(chatType);
+                    var existed = config.ValidChatTypes.Contains(chatType);
 
                     if (ImGui.Checkbox(chatType.ToString(), ref existed))
                     {
-                        if (!ModuleConfig.ValidChatTypes.Remove(chatType))
-                            ModuleConfig.ValidChatTypes.Add(chatType);
+                        if (!config.ValidChatTypes.Remove(chatType))
+                            config.ValidChatTypes.Add(chatType);
 
-                        ModuleConfig.Save(this);
+                        config.Save(this);
                     }
                 }
             }
@@ -87,7 +88,7 @@ public class AutoNotifyMessages : ModuleBase
                    Lang.Get
                    (
                        "AutoNotifyMessages-ExistedKeywords",
-                       ModuleConfig.ValidKeywords.Count
+                       config.ValidKeywords.Count
                    ),
                    ImGuiComboFlags.HeightLarge
                ))
@@ -101,24 +102,24 @@ public class AutoNotifyMessages : ModuleBase
 
                 if (ImGui.SmallButton(Lang.Get("Add")))
                 {
-                    if (!string.IsNullOrWhiteSpace(KeywordInput) && !ModuleConfig.ValidKeywords.Contains(KeywordInput))
+                    if (!string.IsNullOrWhiteSpace(keywordInput) && !config.ValidKeywords.Contains(keywordInput))
                     {
-                        ModuleConfig.ValidKeywords.Add(KeywordInput);
-                        ModuleConfig.Save(this);
+                        config.ValidKeywords.Add(keywordInput);
+                        config.Save(this);
 
-                        KeywordInput = string.Empty;
+                        keywordInput = string.Empty;
                     }
                 }
 
                 ImGui.SetNextItemWidth(-1f);
-                ImGui.InputText("###KeywordInput", ref KeywordInput, 128);
+                ImGui.InputText("###KeywordInput", ref keywordInput, 128);
 
-                if (ModuleConfig.ValidKeywords.Count == 0) return;
+                if (config.ValidKeywords.Count == 0) return;
 
                 ImGui.Separator();
                 ImGui.Spacing();
 
-                foreach (var keyword in ModuleConfig.ValidKeywords.ToArray())
+                foreach (var keyword in config.ValidKeywords.ToArray())
                 {
                     using var id = ImRaii.PushId(keyword);
                     ImGui.Selectable(keyword);
@@ -129,8 +130,8 @@ public class AutoNotifyMessages : ModuleBase
                         {
                             if (ImGui.MenuItem(Lang.Get("Delete")))
                             {
-                                ModuleConfig.ValidKeywords.Remove(keyword);
-                                ModuleConfig.Save(this);
+                                config.ValidKeywords.Remove(keyword);
+                                config.Save(this);
                             }
                         }
                     }
@@ -139,16 +140,16 @@ public class AutoNotifyMessages : ModuleBase
         }
     }
 
-    private static unsafe void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
+    private unsafe void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
     {
         if (!KnownChatTypes.Contains(type)) return;
-        if (ModuleConfig.OnlyNotifyWhenBackground  && !Framework.Instance()->WindowInactive) return;
-        if (ModuleConfig.ValidChatTypes.Count == 0 && ModuleConfig.ValidKeywords.Count == 0) return;
+        if (config.OnlyNotifyWhenBackground  && !Framework.Instance()->WindowInactive) return;
+        if (config.ValidChatTypes.Count == 0 && config.ValidKeywords.Count == 0) return;
 
         var messageContent = message.ToString();
-        var conditionType  = ModuleConfig.ValidChatTypes.Count > 0 && ModuleConfig.ValidChatTypes.Contains(type);
-        var conditionMessage = ModuleConfig.ValidKeywords.Count                                                                               > 0 &&
-                               ModuleConfig.ValidKeywords.FirstOrDefault(x => messageContent.Contains(x, StringComparison.OrdinalIgnoreCase)) != null;
+        var conditionType  = config.ValidChatTypes.Count > 0 && config.ValidChatTypes.Contains(type);
+        var conditionMessage = config.ValidKeywords.Count                                                                               > 0 &&
+                               config.ValidKeywords.FirstOrDefault(x => messageContent.Contains(x, StringComparison.OrdinalIgnoreCase)) != null;
         if (!conditionType && !conditionMessage) return;
 
         var title   = $"[{type}]  {sender.TextValue}";
@@ -158,13 +159,16 @@ public class AutoNotifyMessages : ModuleBase
         NotifyHelper.Speak($"{sender.TextValue}{Lang.Get("AutoNotifyMessages-SomeoneSay")}: {content}");
     }
 
-    protected override void Uninit() =>
-        DService.Instance().Chat.ChatMessage -= OnChatMessage;
-
     private class Config : ModuleConfig
     {
         public bool                 OnlyNotifyWhenBackground;
         public HashSet<XivChatType> ValidChatTypes = [];
         public List<string>         ValidKeywords  = [];
     }
+    
+    #region 常量
+
+    private static FrozenSet<XivChatType> KnownChatTypes { get; } = [.. Enum.GetValues<XivChatType>()];
+
+    #endregion
 }
