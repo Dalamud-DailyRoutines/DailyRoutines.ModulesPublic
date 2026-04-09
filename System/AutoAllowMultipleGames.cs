@@ -16,26 +16,6 @@ public unsafe class AutoAllowMultipleGames : ModuleBase
         Author      = ["Fragile"]
     };
 
-    [DllImport("ntdll.dll")]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static extern int NtQueryInformationProcess
-    (
-        ulong ProcessHandle,
-        int   ProcessInformationClass,
-        void* ProcessInformation,
-        uint  ProcessInformationLength,
-        uint* ReturnLength
-    );
-
-    [DllImport("ntdll.dll")]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static extern int NtQueryObject(ulong Handle, int ObjectInformationClass, void* ObjectInformation, uint ObjectInformationLength, uint* ReturnLength);
-
-    [DllImport("kernel32.dll")]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(ulong Handle);
-
     protected override void Init()
     {
         foreach (var handle in EnumHandles())
@@ -130,4 +110,28 @@ public unsafe class AutoAllowMultipleGames : ModuleBase
         public ushort MaximumLength;
         public byte*  Buffer;
     }
+    
+    #region 外部
+
+    [DllImport("ntdll.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int NtQueryInformationProcess
+    (
+        ulong ProcessHandle,
+        int   ProcessInformationClass,
+        void* ProcessInformation,
+        uint  ProcessInformationLength,
+        uint* ReturnLength
+    );
+
+    [DllImport("ntdll.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int NtQueryObject(ulong Handle, int ObjectInformationClass, void* ObjectInformation, uint ObjectInformationLength, uint* ReturnLength);
+
+    [DllImport("kernel32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(ulong Handle);
+
+    #endregion
 }

@@ -11,8 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoGuardChatMessage : ModuleBase
 {
-    private static DalamudLinkPayload? Payload;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoGuardChatMessageTitle"),
@@ -20,16 +18,18 @@ public class AutoGuardChatMessage : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    private DalamudLinkPayload payload = null!;
+
     protected override void Init()
     {
-        Payload ??= LinkPayloadManager.Instance().Reg((_, _) => ChatManager.Instance().SendCommand($"/pdr toggle {nameof(AutoGuardChatMessage)}"), out _);
+        payload = LinkPayloadManager.Instance().Reg((_, _) => ChatManager.Instance().SendCommand($"/pdr toggle {nameof(AutoGuardChatMessage)}"), out _);
         ChatManager.Instance().RegPreExecuteCommandInner(OnPreExecuteCommandInner);
     }
 
     protected override void Uninit() =>
         ChatManager.Instance().Unreg(OnPreExecuteCommandInner);
 
-    private static void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
+    private void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
         if (message.ExtractText().StartsWith('/')) return;
 
@@ -41,7 +41,7 @@ public class AutoGuardChatMessage : ModuleBase
             builder.AddText(Lang.Get("AutoGuardChatMessage-Notification"))
                    .AddText($"\n   {Lang.Get("Operation")}: [")
                    .Add(RawPayload.LinkTerminator)
-                   .Add(Payload)
+                   .Add(payload)
                    .AddUiForeground(32)
                    .AddText($"{Lang.Get("Disable")}/{Lang.Get("Enable")}")
                    .AddUiForegroundOff()

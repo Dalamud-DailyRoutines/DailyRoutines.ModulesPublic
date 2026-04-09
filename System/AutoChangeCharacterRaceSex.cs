@@ -23,29 +23,22 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    private const byte MIN_RACE    = 1;
-    private const byte MAX_RACE    = 8;
-    private const byte MALE_SEX    = 0;
-    private const byte FEMALE_SEX  = 1;
-    private const int  SEX_COUNT   = 2;
-    private const int  LOOKUP_SIZE = (MAX_RACE - MIN_RACE + 1) * SEX_COUNT;
-
     private static readonly CompSig                       UpdateDrawDataSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 40 45 33 F6 48 8D 59 7A");
     private delegate        byte                          UpdateDrawDataDelegate(DrawDataContainer* data);
-    private static          Hook<UpdateDrawDataDelegate>? UpdateDrawDataHook;
+    private                 Hook<UpdateDrawDataDelegate>? UpdateDrawDataHook;
 
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static RaceSexLookup ActiveLookup = RaceSexLookup.Empty;
+    private RaceSexLookup activeLookup = RaceSexLookup.Empty;
 
-    private static byte PendingSourceRace = MIN_RACE;
-    private static byte PendingSourceSex  = MALE_SEX;
-    private static byte PendingTargetRace = MIN_RACE;
-    private static byte PendingTargetSex  = FEMALE_SEX;
+    private byte pendingSourceRace = MIN_RACE;
+    private byte pendingSourceSex  = MALE_SEX;
+    private byte pendingTargetRace = MIN_RACE;
+    private byte pendingTargetSex  = FEMALE_SEX;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         RebuildLookup();
 
@@ -57,11 +50,11 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
     }
 
     protected override void Uninit() =>
-        ActiveLookup = RaceSexLookup.Empty;
+        activeLookup = RaceSexLookup.Empty;
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("AutoChangeCharacterRaceSex-SkipLocalPlayer"), ref ModuleConfig.IsSkipLocalPlayer))
+        if (ImGui.Checkbox(Lang.Get("AutoChangeCharacterRaceSex-SkipLocalPlayer"), ref config.IsSkipLocalPlayer))
             SaveConfigAndRefresh();
         ImGuiOm.HelpMarker(Lang.Get("AutoChangeCharacterRaceSex-SkipLocalPlayer-Help"));
 
@@ -80,7 +73,7 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
                 ImGui.TextUnformatted(Lang.Get("AutoChangeCharacterRaceSex-Source"));
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(320f * GlobalUIScale);
-                DrawRaceSexCombo("###AutoChangeCharacterRaceSexSource", ref PendingSourceRace, ref PendingSourceSex);
+                DrawRaceSexCombo("###AutoChangeCharacterRaceSexSource", ref pendingSourceRace, ref pendingSourceSex);
 
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
@@ -88,7 +81,7 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
                 ImGui.TextUnformatted(Lang.Get("AutoChangeCharacterRaceSex-Target"));
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(320f * GlobalUIScale);
-                DrawRaceSexCombo("###AutoChangeCharacterRaceSexTarget", ref PendingTargetRace, ref PendingTargetSex);
+                DrawRaceSexCombo("###AutoChangeCharacterRaceSexTarget", ref pendingTargetRace, ref pendingTargetSex);
             }
         }
 
@@ -106,7 +99,7 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
 
         ImGui.Spacing();
 
-        if (ModuleConfig.Mappings.Count == 0)
+        if (config.Mappings.Count == 0)
             return;
 
         using (var ruleTable = ImRaii.Table
@@ -126,9 +119,9 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
 
                 ImGui.TableHeadersRow();
 
-                for (var i = 0; i < ModuleConfig.Mappings.Count; i++)
+                for (var i = 0; i < config.Mappings.Count; i++)
                 {
-                    var mapping = ModuleConfig.Mappings[i];
+                    var mapping = config.Mappings[i];
 
                     ImGui.TableNextRow();
 
@@ -153,7 +146,7 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
                     {
                         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
                         {
-                            ModuleConfig.Mappings.RemoveAt(i);
+                            config.Mappings.RemoveAt(i);
                             SaveConfigAndRefresh();
                             break;
                         }
@@ -163,13 +156,13 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
         }
     }
 
-    private static byte UpdateDrawDataDetour(DrawDataContainer* data)
+    private byte UpdateDrawDataDetour(DrawDataContainer* data)
     {
         if (data              == null ||
             data->OwnerObject == null)
             return UpdateDrawDataHook.Original(data);
 
-        var lookup = Volatile.Read(ref ActiveLookup);
+        var lookup = Volatile.Read(ref activeLookup);
         if (!lookup.HasAnyMapping)
             return UpdateDrawDataHook.Original(data);
 
@@ -181,7 +174,7 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
             return UpdateDrawDataHook.Original(data);
 
         var localPlayer               = Control.GetLocalPlayer();
-        var restoreLocalCustomizeData = ModuleConfig.IsSkipLocalPlayer && localPlayer != null;
+        var restoreLocalCustomizeData = config.IsSkipLocalPlayer && localPlayer != null;
 
         Unsafe.SkipInit(out CustomizeData localCustomizeData);
         if (restoreLocalCustomizeData)
@@ -201,26 +194,26 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
 
     private void AddOrUpdatePendingRule()
     {
-        var existingIndex = FindRuleIndex(PendingSourceRace, PendingSourceSex);
+        var existingIndex = FindRuleIndex(pendingSourceRace, pendingSourceSex);
 
         if (existingIndex >= 0)
         {
-            var existing = ModuleConfig.Mappings[existingIndex];
-            existing.TargetRace = PendingTargetRace;
-            existing.TargetSex  = PendingTargetSex;
+            var existing = config.Mappings[existingIndex];
+            existing.TargetRace = pendingTargetRace;
+            existing.TargetSex  = pendingTargetSex;
             existing.Enabled    = true;
         }
         else
         {
-            ModuleConfig.Mappings.Add
+            config.Mappings.Add
             (
                 new()
                 {
                     Enabled    = true,
-                    SourceRace = PendingSourceRace,
-                    SourceSex  = PendingSourceSex,
-                    TargetRace = PendingTargetRace,
-                    TargetSex  = PendingTargetSex
+                    SourceRace = pendingSourceRace,
+                    SourceSex  = pendingSourceSex,
+                    TargetRace = pendingTargetRace,
+                    TargetSex  = pendingTargetSex
                 }
             );
         }
@@ -228,9 +221,9 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
         SaveConfigAndRefresh();
     }
 
-    private static int FindRuleIndex(byte sourceRace, byte sourceSex)
+    private int FindRuleIndex(byte sourceRace, byte sourceSex)
     {
-        var mappings = CollectionsMarshal.AsSpan(ModuleConfig.Mappings);
+        var mappings = CollectionsMarshal.AsSpan(config.Mappings);
 
         for (var i = 0; i < mappings.Length; i++)
         {
@@ -245,14 +238,14 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
     private void SaveConfigAndRefresh()
     {
         RebuildLookup();
-        ModuleConfig.Save(this);
+        config.Save(this);
         RerenderAllPlayers();
     }
 
-    private static void RebuildLookup()
+    private void RebuildLookup()
     {
         var nextLookup = new RaceSexLookup();
-        var mappings   = CollectionsMarshal.AsSpan(ModuleConfig.Mappings);
+        var mappings   = CollectionsMarshal.AsSpan(config.Mappings);
 
         foreach (ref readonly var mapping in mappings)
         {
@@ -268,7 +261,7 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
             nextLookup.PackedTargets[sourceIndex] =  PackRaceSex(mapping.TargetRace, mapping.TargetSex);
         }
 
-        Volatile.Write(ref ActiveLookup, nextLookup);
+        Volatile.Write(ref activeLookup, nextLookup);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -417,4 +410,15 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
     {
         private byte element0;
     }
+    
+    #region 常量
+
+    private const byte MIN_RACE    = 1;
+    private const byte MAX_RACE    = 8;
+    private const byte MALE_SEX    = 0;
+    private const byte FEMALE_SEX  = 1;
+    private const int  SEX_COUNT   = 2;
+    private const int  LOOKUP_SIZE = (MAX_RACE - MIN_RACE + 1) * SEX_COUNT;
+
+    #endregion
 }

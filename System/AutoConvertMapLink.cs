@@ -17,9 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 // From Asvel
 public partial class AutoConvertMapLink : ModuleBase
 {
-    private static readonly CompSig                     MessageParseSig = new("E8 ?? ?? ?? ?? 48 8B D0 48 8D 4D D0 E8 ?? ?? ?? ?? 49 8B 07");
-    private static          Hook<MessageParseDelegate>? MessageParseHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoConvertMapLinkTitle"),
@@ -27,6 +24,10 @@ public partial class AutoConvertMapLink : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["KirisameVanilla"]
     };
+    
+    private static readonly CompSig                     MessageParseSig = new("E8 ?? ?? ?? ?? 48 8B D0 48 8D 4D D0 E8 ?? ?? ?? ?? 49 8B 07");
+    private delegate        nint                        MessageParseDelegate(nint a, nint b);
+    private                 Hook<MessageParseDelegate>? MessageParseHook;
 
     protected override void Init()
     {
@@ -34,7 +35,7 @@ public partial class AutoConvertMapLink : ModuleBase
         MessageParseHook.Enable();
     }
 
-    private static nint ParseMessageDetour(nint a, nint b)
+    private nint ParseMessageDetour(nint a, nint b)
     {
         var ret = MessageParseHook.Original(a, b);
 
@@ -114,9 +115,7 @@ public partial class AutoConvertMapLink : ModuleBase
 
     [GeneratedRegex(@"\uE0BB(?<map>.+?)(?<instance>[\ue0b1-\ue0b9])? \( (?<x>\d{1,2}\.\d)  , (?<y>\d{1,2}\.\d) \)", RegexOptions.Compiled)]
     private static partial Regex MapLinkRegex();
-
-    private delegate nint MessageParseDelegate(nint a, nint b);
-
+    
     private class PreMapLinkPayload
     (
         uint zoneID,

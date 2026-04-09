@@ -28,6 +28,9 @@ public unsafe class MoreFlexibleMJIWorkdays : ModuleBase
         if (MJICraftSchedule->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
@@ -136,7 +139,4 @@ public unsafe class MoreFlexibleMJIWorkdays : ModuleBase
 
         return restDays;
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

@@ -12,17 +12,17 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class BlockInputWhenFishing : ModuleBase
 {
-    private static readonly CompSig IsKeyDownSig =
-        new("E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? BA ?? ?? ?? ?? 48 8B CE E8 ?? ?? ?? ?? 84 C0 0F 84");
-
-    private static Hook<IsKeyDownDelegate>? IsKeyDownHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("BlockInputWhenFishingTitle"),
         Description = Lang.Get("BlockInputWhenFishingDescription"),
         Category    = ModuleCategory.System
     };
+    
+    private static readonly CompSig IsKeyDownSig =
+        new("E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? BA ?? ?? ?? ?? 48 8B CE E8 ?? ?? ?? ?? 84 C0 0F 84");
+    private delegate bool                     IsKeyDownDelegate(UIInputData* data, int id);
+    private          Hook<IsKeyDownDelegate>? IsKeyDownHook;
 
     protected override void Init()
     {
@@ -35,7 +35,7 @@ public unsafe class BlockInputWhenFishing : ModuleBase
 
     protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
-    private static void OnConditionChanged(ConditionFlag flag, bool isSet)
+    private void OnConditionChanged(ConditionFlag flag, bool isSet)
     {
         if (flag != ConditionFlag.Gathering) return;
 
@@ -45,11 +45,9 @@ public unsafe class BlockInputWhenFishing : ModuleBase
             IsKeyDownHook.Disable();
     }
 
-    private static bool IsKeyDownDetour(UIInputData* data, int id) =>
+    private bool IsKeyDownDetour(UIInputData* data, int id) =>
         PluginConfig.Instance().ConflictKeyBinding.IsPressed() && IsKeyDownHook.Original(data, id);
 
     protected override void Uninit() =>
         DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-
-    private delegate bool IsKeyDownDelegate(UIInputData* data, int id);
 }

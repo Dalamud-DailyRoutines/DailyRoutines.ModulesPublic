@@ -7,9 +7,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class IgnoreWindowMinSizeLimit : ModuleBase
 {
-    private static int OriginalMinWidth  = 1024;
-    private static int OriginalMinHeight = 720;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("IgnoreWindowMinSizeLimitTitle"),
@@ -19,11 +16,14 @@ public unsafe class IgnoreWindowMinSizeLimit : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private int originalMinWidth  = 1024;
+    private int originalMinHeight = 720;
 
     protected override void Init()
     {
-        OriginalMinWidth  = GameWindow.Instance()->MinWidth;
-        OriginalMinHeight = GameWindow.Instance()->MinHeight;
+        originalMinWidth  = GameWindow.Instance()->MinWidth;
+        originalMinHeight = GameWindow.Instance()->MinHeight;
 
         GameWindow.Instance()->MinHeight = 1;
         GameWindow.Instance()->MinWidth  = 1;
@@ -31,9 +31,9 @@ public unsafe class IgnoreWindowMinSizeLimit : ModuleBase
 
     protected override void Uninit()
     {
-        if (!IsEnabled) return;
+        if (!IsInitialized) return;
 
-        GameWindow.Instance()->MinWidth  = OriginalMinWidth;
-        GameWindow.Instance()->MinHeight = OriginalMinHeight;
+        GameWindow.Instance()->MinWidth  = originalMinWidth;
+        GameWindow.Instance()->MinHeight = originalMinHeight;
     }
 }

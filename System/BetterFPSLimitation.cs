@@ -31,44 +31,39 @@ public class BetterFPSLimitation : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private const string COMMAND        = "fps";
-    private const int    HISTORY_LENGTH = 100;
 
-    private static Config ModuleConfig = null!;
+    private Config                      config = null!;
+    private IDtrBarEntry?               entry;
+    private AddonDRBetterFPSLimitation? addon;
 
-    private static IDtrBarEntry? Entry;
+    private readonly float[] fpsHistory = new float[HISTORY_LENGTH];
 
-    private static AddonDRBetterFPSLimitation? Addon;
+    private int   fpsHistoryIndex;
+    private int   fpsHistoryFilledCount;
+    private float currentFPS;
+    private float averageFPS;
+    private float minFPS;
+    private float maxFPS;
 
-    private static readonly float[] FPSHistory = new float[HISTORY_LENGTH];
-
-    private static int   FPSHistoryIndex;
-    private static int   FPSHistoryFilledCount;
-    private static float CurrentFPS;
-    private static float AverageFPS;
-    private static float MinFPS;
-    private static float MaxFPS;
-
-    private static ushort NewThresholdInput = 120;
+    private ushort newThresholdInput = 120;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ??
+        config = Config.Load(this) ??
                        new()
                        {
                            Thresholds = [15, 30, 45, 60, 90, 120]
                        };
         ResetHistory();
 
-        Entry ??= DService.Instance().DTRBar.Get("DailyRoutines-BetterFPSLimitation");
-        Entry.OnClick = param =>
+        entry ??= DService.Instance().DTRBar.Get("DailyRoutines-BetterFPSLimitation");
+        entry.OnClick = param =>
         {
             switch (param.ClickType)
             {
                 case MouseClickType.Left:
                     EnsureAddon();
-                    Addon.Toggle();
+                    addon.Toggle();
                     break;
                 case MouseClickType.Right:
                     EnsureOverlay();
@@ -77,9 +72,9 @@ public class BetterFPSLimitation : ModuleBase
             }
         };
 
-        Entry.Shown   = true;
-        Entry.Text    = LuminaWrapper.GetAddonText(4002);
-        Entry.Tooltip = Lang.Get("BetterFPSLimitation-DTR-Tooltip");
+        entry.Shown   = true;
+        entry.Text    = LuminaWrapper.GetAddonText(4002);
+        entry.Tooltip = Lang.Get("BetterFPSLimitation-DTR-Tooltip");
 
         FrameworkManager.Instance().Reg(OnUpdate, 1_000);
 
@@ -92,11 +87,11 @@ public class BetterFPSLimitation : ModuleBase
 
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-        Entry?.Remove();
-        Entry = null;
+        entry?.Remove();
+        entry = null;
 
-        Addon?.Dispose();
-        Addon = null;
+        addon?.Dispose();
+        addon = null;
 
         ResetHistory();
     }
@@ -113,13 +108,13 @@ public class BetterFPSLimitation : ModuleBase
 
         using (ImRaii.PushIndent())
         {
-            foreach (var threshold in ModuleConfig.Thresholds.ToList())
+            foreach (var threshold in config.Thresholds.ToList())
             {
                 using var id = ImRaii.PushId(threshold);
 
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
                 {
-                    ModuleConfig.Thresholds.Remove(threshold);
+                    config.Thresholds.Remove(threshold);
                     continue;
                 }
 
@@ -129,28 +124,28 @@ public class BetterFPSLimitation : ModuleBase
 
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
             {
-                if (NewThresholdInput > 1               &&
-                    NewThresholdInput <= short.MaxValue &&
-                    !ModuleConfig.Thresholds.Contains((short)NewThresholdInput))
+                if (newThresholdInput > 1               &&
+                    newThresholdInput <= short.MaxValue &&
+                    !config.Thresholds.Contains((short)newThresholdInput))
                 {
-                    ModuleConfig.Thresholds.Add((short)NewThresholdInput);
-                    ModuleConfig.Save(this);
+                    config.Thresholds.Add((short)newThresholdInput);
+                    config.Save(this);
                 }
             }
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            if (ImGui.InputUShort("###NewThreshold", ref NewThresholdInput, 10, 10))
-                NewThresholdInput = (ushort)Math.Clamp(NewThresholdInput, 1, short.MaxValue);
+            if (ImGui.InputUShort("###NewThreshold", ref newThresholdInput, 10, 10))
+                newThresholdInput = (ushort)Math.Clamp(newThresholdInput, 1, short.MaxValue);
         }
     }
 
     protected override unsafe void OverlayUI()
     {
-        var color = GetFPSColor(CurrentFPS);
+        var color = GetFPSColor(currentFPS);
 
         ImGui.SetWindowFontScale(1.5f);
-        ImGui.TextColored(color, $"{CurrentFPS:F0}");
+        ImGui.TextColored(color, $"{currentFPS:F0}");
         ImGui.SetWindowFontScale(1.0f);
 
         ImGui.SameLine();
@@ -166,10 +161,10 @@ public class BetterFPSLimitation : ModuleBase
         {
             if (table)
             {
-                DrawStatColumn("AVG", $"{AverageFPS:F0}",              GetFPSColor(AverageFPS));
-                DrawStatColumn("MIN", $"{MinFPS:F0}",                  GetFPSColor(MinFPS));
-                DrawStatColumn("MAX", $"{MaxFPS:F0}",                  GetFPSColor(MaxFPS));
-                DrawStatColumn("CAP", $"{ModuleConfig.Limitation:F0}", GetCapColor());
+                DrawStatColumn("AVG", $"{averageFPS:F0}",              GetFPSColor(averageFPS));
+                DrawStatColumn("MIN", $"{minFPS:F0}",                  GetFPSColor(minFPS));
+                DrawStatColumn("MAX", $"{maxFPS:F0}",                  GetFPSColor(maxFPS));
+                DrawStatColumn("CAP", $"{config.Limitation:F0}", GetCapColor());
             }
         }
 
@@ -186,46 +181,46 @@ public class BetterFPSLimitation : ModuleBase
             const ImPlotAxisFlags AXIS_FLAGS = ImPlotAxisFlags.NoLabel | ImPlotAxisFlags.NoTickLabels;
             ImPlot.SetupAxes((byte*)null, (byte*)null, AXIS_FLAGS, AXIS_FLAGS);
 
-            var yMax = MathF.Max(MathF.Max(MaxFPS, ModuleConfig.Limitation) * 1.25f, 100f);
-            ImPlot.SetupAxesLimits(0, FPSHistory.Length, 0, yMax, ImPlotCond.Always);
+            var yMax = MathF.Max(MathF.Max(maxFPS, config.Limitation) * 1.25f, 100f);
+            ImPlot.SetupAxesLimits(0, fpsHistory.Length, 0, yMax, ImPlotCond.Always);
 
-            ImPlot.SetupAxisTicks(ImAxis.X1, 0, FPSHistory.Length, 51);
+            ImPlot.SetupAxisTicks(ImAxis.X1, 0, fpsHistory.Length, 51);
             ImPlot.SetupAxisTicks(ImAxis.Y1, 0, yMax,              21);
 
             using (ImRaii.PushColor(ImPlotCol.Line, color)
                          .Push(ImPlotCol.Fill, color))
-                ImPlot.PlotLine("##FPS", ref FPSHistory[0], FPSHistory.Length, 1.0, 0.0, ImPlotLineFlags.Shaded, FPSHistoryIndex);
+                ImPlot.PlotLine("##FPS", ref fpsHistory[0], fpsHistory.Length, 1.0, 0.0, ImPlotLineFlags.Shaded, fpsHistoryIndex);
 
-            if (AverageFPS <= 0)
+            if (averageFPS <= 0)
                 return;
 
             var avgColor = KnownColor.White.ToVector4() with { W = 0.6f };
-            var xs       = new double[] { 0, FPSHistory.Length };
-            var ys       = new double[] { AverageFPS, AverageFPS };
+            var xs       = new double[] { 0, fpsHistory.Length };
+            var ys       = new double[] { averageFPS, averageFPS };
 
             using (ImRaii.PushColor(ImPlotCol.Line, avgColor))
                 ImPlot.PlotLine("##FPSAvg", ref xs[0], ref ys[0], 2);
         }
     }
 
-    private static void OnCommand(string command, string args)
+    private void OnCommand(string command, string args)
     {
         EnsureAddon();
-        Addon.Toggle();
+        addon.Toggle();
     }
 
-    private static unsafe void OnUpdate(IFramework _)
+    private unsafe void OnUpdate(IFramework _)
     {
         Update();
 
-        if (Entry == null) return;
+        if (entry == null) return;
 
-        CurrentFPS = Math.Max(Framework.Instance()->FrameRate, 0f);
-        RecordFPS(CurrentFPS);
+        currentFPS = Math.Max(Framework.Instance()->FrameRate, 0f);
+        RecordFPS(currentFPS);
 
-        var text = DService.Instance().SeStringEvaluator.EvaluateFromAddon(4002, [(int)CurrentFPS]).ToDalamudString();
+        var text = DService.Instance().SeStringEvaluator.EvaluateFromAddon(4002, [(int)currentFPS]).ToDalamudString();
 
-        if (ModuleConfig.IsEnabled)
+        if (config.IsEnabled)
         {
             text = new SeStringBuilder()
                    .AddUiGlow(37)
@@ -234,13 +229,13 @@ public class BetterFPSLimitation : ModuleBase
                    .Build();
         }
 
-        Entry.Text = text;
+        entry.Text = text;
     }
 
-    private static unsafe void Update()
+    private unsafe void Update()
     {
-        Device.Instance()->IsFrameRateLimited = ModuleConfig.IsEnabled;
-        Device.Instance()->FrameRateLimit     = (short)MathF.Min(ModuleConfig.Limitation + 2, short.MaxValue);
+        Device.Instance()->IsFrameRateLimited = config.IsEnabled;
+        Device.Instance()->FrameRateLimit     = (short)MathF.Min(config.Limitation + 2, short.MaxValue);
     }
 
     private void EnsureOverlay()
@@ -256,50 +251,50 @@ public class BetterFPSLimitation : ModuleBase
         };
     }
 
-    private static void EnsureAddon()
+    private void EnsureAddon()
     {
-        if (Addon != null)
+        if (addon != null)
             return;
 
-        var thresholdGroups = ModuleConfig.Thresholds
+        var thresholdGroups = config.Thresholds
                                           .Select((value, index) => new { value, index })
                                           .GroupBy(x => x.index / 3)
                                           .Select(g => g.Select(x => x.value).ToList())
                                           .ToList();
-
-        Addon = new()
+        
+        addon = new(this)
         {
             InternalName = "DRBetterFPSLimitation",
             Title        = LuminaWrapper.GetAddonText(4032),
             Size         = new(250f, 208f + 32f * thresholdGroups.Count)
         };
-        Addon.SetWindowPosition(ModuleConfig.AddonPosition);
+        addon.SetWindowPosition(config.AddonPosition);
     }
 
-    private static void ResetHistory()
+    private void ResetHistory()
     {
-        Array.Clear(FPSHistory);
-        FPSHistoryIndex       = 0;
-        FPSHistoryFilledCount = 0;
-        CurrentFPS            = 0f;
-        AverageFPS            = 0f;
-        MinFPS                = 0f;
-        MaxFPS                = 0f;
+        Array.Clear(fpsHistory);
+        fpsHistoryIndex       = 0;
+        fpsHistoryFilledCount = 0;
+        currentFPS            = 0f;
+        averageFPS            = 0f;
+        minFPS                = 0f;
+        maxFPS                = 0f;
     }
 
-    private static void RecordFPS(float fps)
+    private void RecordFPS(float fps)
     {
-        FPSHistory[FPSHistoryIndex] = fps;
-        FPSHistoryIndex             = (FPSHistoryIndex + 1) % FPSHistory.Length;
+        fpsHistory[fpsHistoryIndex] = fps;
+        fpsHistoryIndex             = (fpsHistoryIndex + 1) % fpsHistory.Length;
 
-        if (FPSHistoryFilledCount < FPSHistory.Length)
-            FPSHistoryFilledCount++;
+        if (fpsHistoryFilledCount < fpsHistory.Length)
+            fpsHistoryFilledCount++;
 
-        if (FPSHistoryFilledCount == 0)
+        if (fpsHistoryFilledCount == 0)
         {
-            AverageFPS = 0f;
-            MinFPS     = 0f;
-            MaxFPS     = 0f;
+            averageFPS = 0f;
+            minFPS     = 0f;
+            maxFPS     = 0f;
             return;
         }
 
@@ -307,27 +302,27 @@ public class BetterFPSLimitation : ModuleBase
         var max = 0f;
         var sum = 0f;
 
-        for (var i = 0; i < FPSHistoryFilledCount; i++)
+        for (var i = 0; i < fpsHistoryFilledCount; i++)
         {
-            var value            = FPSHistory[i];
+            var value            = fpsHistory[i];
             if (value < min) min = value;
             if (value > max) max = value;
             sum += value;
         }
 
-        AverageFPS = sum / FPSHistoryFilledCount;
-        MinFPS     = min == float.MaxValue ? 0f : min;
-        MaxFPS     = max;
+        averageFPS = sum / fpsHistoryFilledCount;
+        minFPS     = min == float.MaxValue ? 0f : min;
+        maxFPS     = max;
     }
 
-    private static Vector4 GetFPSColor(float fps)
+    private Vector4 GetFPSColor(float fps)
     {
-        if (ModuleConfig.IsEnabled)
+        if (config.IsEnabled)
         {
-            if (ModuleConfig.Limitation <= 0)
+            if (config.Limitation <= 0)
                 return KnownColor.Gray.ToVector4();
 
-            var ratio = fps / ModuleConfig.Limitation;
+            var ratio = fps / config.Limitation;
             return ratio switch
             {
                 >= 0.95f => KnownColor.SpringGreen.ToVector4(),
@@ -344,8 +339,8 @@ public class BetterFPSLimitation : ModuleBase
         };
     }
 
-    private static Vector4 GetCapColor() =>
-        ModuleConfig.IsEnabled
+    private Vector4 GetCapColor() =>
+        config.IsEnabled
             ? KnownColor.SpringGreen.ToVector4()
             : KnownColor.Gray.ToVector4();
 
@@ -369,7 +364,7 @@ public class BetterFPSLimitation : ModuleBase
         public List<short> Thresholds = [];
     }
 
-    private class AddonDRBetterFPSLimitation : NativeAddon
+    private class AddonDRBetterFPSLimitation(BetterFPSLimitation module) : NativeAddon
     {
         public static NodeBase FPSWidget;
 
@@ -399,23 +394,23 @@ public class BetterFPSLimitation : ModuleBase
             }
 
             if (IsEnabledNode != null)
-                IsEnabledNode.IsChecked = ModuleConfig.IsEnabled;
+                IsEnabledNode.IsChecked = module.config.IsEnabled;
 
             if (FPSInputNode != null)
-                FPSInputNode.Value = ModuleConfig.Limitation;
+                FPSInputNode.Value = module.config.Limitation;
 
             base.OnUpdate(addon);
         }
 
         protected override unsafe void OnFinalize(AtkUnitBase* addon)
         {
-            ModuleConfig.AddonPosition = RootNode.Position;
-            ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
+            module.config.AddonPosition = RootNode.Position;
+            module.config.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
             base.OnFinalize(addon);
         }
 
-        public static NodeBase CreateFPSWidget()
+        public NodeBase CreateFPSWidget()
         {
             var column = new VerticalListNode
             {
@@ -427,15 +422,15 @@ public class BetterFPSLimitation : ModuleBase
             {
                 Size      = new Vector2(150.0f, 20.0f),
                 IsVisible = true,
-                IsChecked = ModuleConfig.IsEnabled,
+                IsChecked = module.config.IsEnabled,
                 IsEnabled = true,
                 String    = Lang.Get("Enable"),
                 OnClick = newState =>
                 {
-                    ModuleConfig.IsEnabled = newState;
-                    ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
+                    module.config.IsEnabled = newState;
+                    module.config.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
-                    Update();
+                    module.Update();
                 }
             };
             column.AddNode(IsEnabledNode);
@@ -465,22 +460,22 @@ public class BetterFPSLimitation : ModuleBase
                 Step      = 10,
                 OnValueUpdate = newValue =>
                 {
-                    ModuleConfig.Limitation = (short)newValue;
-                    ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
+                    module.config.Limitation = (short)newValue;
+                    module.config.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
-                    Update();
+                    module.Update();
                 },
-                Value = ModuleConfig.Limitation
+                Value = module.config.Limitation
             };
 
-            FPSInputNode.Value = ModuleConfig.Limitation;
-            FPSInputNode.ValueTextNode.SetNumber(ModuleConfig.Limitation);
+            FPSInputNode.Value = module.config.Limitation;
+            FPSInputNode.ValueTextNode.SetNumber(module.config.Limitation);
             column.AddNode(FPSInputNode);
             totalHeight += FPSInputNode.Size.Y;
 
             var fpsDisplayColumn = new HorizontalFlexNode
             {
-                Width          = Addon.Size.X,
+                Width          = module.addon.Size.X,
                 IsVisible      = true,
                 AlignmentFlags = FlexFlags.FitContentHeight
             };
@@ -528,17 +523,17 @@ public class BetterFPSLimitation : ModuleBase
             column.AddNode(spacer2);
             totalHeight += spacer2.Size.Y;
 
-            var thresholdGroups = ModuleConfig.Thresholds
-                                              .Select((value, index) => new { value, index })
-                                              .GroupBy(x => x.index / 3)
-                                              .Select(g => g.Select(x => x.value).ToList())
-                                              .ToList();
+            var thresholdGroups = module.config.Thresholds
+                                        .Select((value, index) => new { value, index })
+                                        .GroupBy(x => x.index / 3)
+                                        .Select(g => g.Select(x => x.value).ToList())
+                                        .ToList();
 
             foreach (var thresholds in thresholdGroups)
             {
                 var fpsSetTable = new HorizontalFlexNode
                 {
-                    Width          = Addon.Size.X,
+                    Width          = module.addon.Size.X,
                     IsVisible      = true,
                     AlignmentFlags = FlexFlags.FitContentHeight
                 };
@@ -552,14 +547,14 @@ public class BetterFPSLimitation : ModuleBase
                         String    = threshold.ToString(),
                         OnClick = () =>
                         {
-                            ModuleConfig.Limitation = threshold;
-                            ModuleConfig.IsEnabled  = true;
-                            ModuleConfig.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
+                            module.config.Limitation = threshold;
+                            module.config.IsEnabled  = true;
+                            module.config.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
 
-                            FPSInputNode.Value = ModuleConfig.Limitation;
-                            FPSInputNode.ValueTextNode.SetNumber(ModuleConfig.Limitation);
+                            FPSInputNode.Value = module.config.Limitation;
+                            FPSInputNode.ValueTextNode.SetNumber(module.config.Limitation);
 
-                            Update();
+                            module.Update();
                         }
                     };
 
@@ -579,4 +574,11 @@ public class BetterFPSLimitation : ModuleBase
             return column;
         }
     }
+    
+    #region 常量
+
+    private const string COMMAND        = "fps";
+    private const int    HISTORY_LENGTH = 100;
+
+    #endregion
 }

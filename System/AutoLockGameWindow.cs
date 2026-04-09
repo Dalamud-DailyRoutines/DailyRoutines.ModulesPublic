@@ -10,9 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoLockGameWindow : ModuleBase
 {
-    private static          bool   IsLocked;
-    private static readonly object ObjectLock = new();
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoLockGameWindowTitle"),
@@ -20,38 +17,42 @@ public class AutoLockGameWindow : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["status102"]
     };
+    
+    private          bool isLocked;
+    private readonly Lock objectLock = new();
 
-    protected override void Init() => DService.Instance().Condition.ConditionChange += OnConditionChange;
+    protected override void Init() => 
+        DService.Instance().Condition.ConditionChange += OnConditionChange;
+    
+    protected override void Uninit()
+    {
+        DService.Instance().Condition.ConditionChange -= OnConditionChange;
+        WindowLock.Cleanup();
+    }
 
-    private static void OnConditionChange(ConditionFlag flag, bool value)
+    private void OnConditionChange(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.InCombat) return;
 
         Task.Run
         (() =>
             {
-                lock (ObjectLock)
+                lock (objectLock)
                 {
                     switch (value)
                     {
-                        case true when !IsLocked:
+                        case true when !isLocked:
                             WindowLock.LockWindowByHandle(Process.GetCurrentProcess().MainWindowHandle);
-                            IsLocked = true;
+                            isLocked = true;
                             break;
-                        case false when IsLocked:
+                        case false when isLocked:
                             WindowLock.UnlockWindow(Process.GetCurrentProcess().MainWindowHandle);
-                            IsLocked = false;
+                            isLocked = false;
                             break;
                     }
                 }
             }
         );
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().Condition.ConditionChange -= OnConditionChange;
-        WindowLock.Cleanup();
     }
 
     private static class WindowLock
@@ -60,8 +61,8 @@ public class AutoLockGameWindow : ModuleBase
         private const int  WM_WINDOWPOSCHANGING = 0x0046;
         private const uint SWP_NOMOVE           = 0x0002;
 
-        private static readonly Dictionary<nint, nint>            windowProcMap    = [];
-        private static readonly Dictionary<nint, WndProcDelegate> wndProcDelegates = [];
+        private static readonly Dictionary<nint, nint>            WindowProcMap    = [];
+        private static readonly Dictionary<nint, WndProcDelegate> WndProcDelegates = [];
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint newProc);
@@ -71,7 +72,7 @@ public class AutoLockGameWindow : ModuleBase
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+        private static extern bool GetWindowRect(nint hWnd, out Rect lpRect);
 
         public static void LockWindowByHandle(nint hWnd)
         {
@@ -81,11 +82,11 @@ public class AutoLockGameWindow : ModuleBase
 
         public static void UnlockWindow(nint hWnd)
         {
-            if (hWnd != nint.Zero && windowProcMap.TryGetValue(hWnd, out var oldProc))
+            if (hWnd != nint.Zero && WindowProcMap.TryGetValue(hWnd, out var oldProc))
             {
                 SetWindowLongPtr(hWnd, GWL_WNDPROC, oldProc);
-                windowProcMap.Remove(hWnd);
-                wndProcDelegates.Remove(hWnd);
+                WindowProcMap.Remove(hWnd);
+                WndProcDelegates.Remove(hWnd);
             }
         }
 
@@ -94,14 +95,14 @@ public class AutoLockGameWindow : ModuleBase
             var newWndProc = new WndProcDelegate(NewWindowProc);
             var newProcPtr = Marshal.GetFunctionPointerForDelegate(newWndProc);
 
-            if (!windowProcMap.ContainsKey(hWnd))
+            if (!WindowProcMap.ContainsKey(hWnd))
             {
                 var oldProc = SetWindowLongPtr(hWnd, GWL_WNDPROC, newProcPtr);
                 if (oldProc == nint.Zero && Marshal.GetLastWin32Error() != 0)
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to subclass window.");
 
-                windowProcMap[hWnd]    = oldProc;
-                wndProcDelegates[hWnd] = newWndProc;
+                WindowProcMap[hWnd]    = oldProc;
+                WndProcDelegates[hWnd] = newWndProc;
             }
         }
 
@@ -109,7 +110,7 @@ public class AutoLockGameWindow : ModuleBase
         {
             if (uMsg == WM_WINDOWPOSCHANGING)
             {
-                var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                var pos = Marshal.PtrToStructure<WindowPos>(lParam);
 
                 if ((pos.flags & SWP_NOMOVE) == 0)
                 {
@@ -121,17 +122,17 @@ public class AutoLockGameWindow : ModuleBase
                 }
             }
 
-            return CallWindowProc(windowProcMap[hWnd], hWnd, uMsg, wParam, lParam);
+            return CallWindowProc(WindowProcMap[hWnd], hWnd, uMsg, wParam, lParam);
         }
 
         public static void Cleanup()
         {
-            foreach (var hWnd in windowProcMap.Keys.ToList())
+            foreach (var hWnd in WindowProcMap.Keys.ToList())
                 UnlockWindow(hWnd);
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct RECT
+        private struct Rect
         {
             public int Left;
             public int Top;
@@ -140,7 +141,7 @@ public class AutoLockGameWindow : ModuleBase
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct WINDOWPOS
+        private struct WindowPos
         {
             public nint hwnd;
             public nint hwndInsertAfter;

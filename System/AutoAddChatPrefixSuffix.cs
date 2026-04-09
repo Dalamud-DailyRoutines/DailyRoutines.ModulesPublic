@@ -9,8 +9,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoAddChatPrefixSuffix : ModuleBase
 {
-    private static Config? ModuleConfig;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoAddChatPrefixSuffixTitle"),
@@ -18,10 +16,12 @@ public class AutoAddChatPrefixSuffix : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["那年雪落"]
     };
+    
+    private Config? config;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ??
+        config = Config.Load(this) ??
                        new()
                        {
                            Blacklist = !GameState.IsCN
@@ -62,28 +62,28 @@ public class AutoAddChatPrefixSuffix : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("Prefix"), ref ModuleConfig.IsAddPrefix))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("Prefix"), ref config.IsAddPrefix))
+            config.Save(this);
 
-        if (ModuleConfig.IsAddPrefix)
+        if (config.IsAddPrefix)
         {
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200f * GlobalUIScale);
-            ImGui.InputText("###Prefix", ref ModuleConfig.PrefixString, 48);
+            ImGui.InputText("###Prefix", ref config.PrefixString, 48);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
 
-        if (ImGui.Checkbox(Lang.Get("Suffix"), ref ModuleConfig.IsAddSuffix))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("Suffix"), ref config.IsAddSuffix))
+            config.Save(this);
 
-        if (ModuleConfig.IsAddSuffix)
+        if (config.IsAddSuffix)
         {
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200f * GlobalUIScale);
-            ImGui.InputText("###Suffix", ref ModuleConfig.SuffixString, 48);
+            ImGui.InputText("###Suffix", ref config.SuffixString, 48);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
 
         ImGui.Spacing();
@@ -95,15 +95,15 @@ public class AutoAddChatPrefixSuffix : ModuleBase
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
         {
-            ModuleConfig.Blacklist.Add(string.Empty);
-            ModuleConfig.Save(this);
+            config.Blacklist.Add(string.Empty);
+            config.Save(this);
         }
 
         ImGui.Spacing();
 
-        if (ModuleConfig.Blacklist.Count == 0) return;
+        if (config.Blacklist.Count == 0) return;
 
-        var       blackListItems = ModuleConfig.Blacklist.ToList();
+        var       blackListItems = config.Blacklist.ToList();
         var       tableSize      = (ImGui.GetContentRegionAvail() * 0.85f) with { Y = 0 };
         using var table          = ImRaii.Table(Lang.Get("Blacklist"), 5, ImGuiTableFlags.NoBordersInBody, tableSize);
         if (!table) return;
@@ -122,9 +122,9 @@ public class AutoAddChatPrefixSuffix : ModuleBase
 
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
-                ModuleConfig.Blacklist.Remove(blackListItems[i]);
-                ModuleConfig.Blacklist.Add(inputRef);
-                ModuleConfig.Save(this);
+                config.Blacklist.Remove(blackListItems[i]);
+                config.Blacklist.Add(inputRef);
+                config.Save(this);
                 blackListItems[i] = inputRef;
             }
 
@@ -132,15 +132,15 @@ public class AutoAddChatPrefixSuffix : ModuleBase
 
             if (ImGuiOm.ButtonIcon("Delete", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
-                ModuleConfig.Blacklist.Remove(blackListItems[i]);
-                ModuleConfig.Save(this);
+                config.Blacklist.Remove(blackListItems[i]);
+                config.Save(this);
                 blackListItems.RemoveAt(i);
                 i--;
             }
         }
     }
 
-    private static void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
+    private void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
         var messageText   = message.ToString();
         var isCommand     = messageText.StartsWith('/') || messageText.StartsWith('／');
@@ -156,20 +156,17 @@ public class AutoAddChatPrefixSuffix : ModuleBase
         }
     }
 
-    private static bool IsWhitelistChat(string message) =>
-        ModuleConfig?.Blacklist.Any(whiteListChat => !string.IsNullOrEmpty(whiteListChat) && message.EndsWith(whiteListChat)) ?? false;
-
-    private static bool IsBlackListChat(string message) =>
-        ModuleConfig?.Blacklist.Any(blackListChat => !string.IsNullOrEmpty(blackListChat) && message.EndsWith(blackListChat)) ?? false;
+    private bool IsBlackListChat(string message) =>
+        config?.Blacklist.Any(blackListChat => !string.IsNullOrEmpty(blackListChat) && message.EndsWith(blackListChat)) ?? false;
 
     private static bool IsGameItemChat(string message) =>
         message.Contains("<item>") || message.Contains("<flag>") || message.Contains("<pfinder>");
 
-    private static bool AddPrefixAndSuffixIfNeeded(string original, out string handledMessage, bool isTellCommand = false)
+    private bool AddPrefixAndSuffixIfNeeded(string original, out string handledMessage, bool isTellCommand = false)
     {
         handledMessage = original;
 
-        if (ModuleConfig.IsAddPrefix)
+        if (config.IsAddPrefix)
         {
             if (isTellCommand)
             {
@@ -177,18 +174,18 @@ public class AutoAddChatPrefixSuffix : ModuleBase
                 if (firstSpaceIndex == -1) return false;
                 var secondSpaceIndex = original.IndexOf(' ', firstSpaceIndex + 1);
                 if (secondSpaceIndex == -1) return false;
-                handledMessage = $"{original[..secondSpaceIndex]} {ModuleConfig.PrefixString}{original[secondSpaceIndex..].TrimStart()}";
+                handledMessage = $"{original[..secondSpaceIndex]} {config.PrefixString}{original[secondSpaceIndex..].TrimStart()}";
             }
             else
-                handledMessage = $"{ModuleConfig.PrefixString}{handledMessage}";
+                handledMessage = $"{config.PrefixString}{handledMessage}";
         }
 
-        if (ModuleConfig.IsAddSuffix)
-            handledMessage = $"{handledMessage}{ModuleConfig.SuffixString}";
+        if (config.IsAddSuffix)
+            handledMessage = $"{handledMessage}{config.SuffixString}";
         return true;
     }
 
-    public class Config : ModuleConfig
+    private class Config : ModuleConfig
     {
         public HashSet<string> Blacklist = [];
         public bool            IsAddPrefix;

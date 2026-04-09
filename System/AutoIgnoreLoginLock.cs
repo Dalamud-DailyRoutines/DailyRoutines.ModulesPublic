@@ -10,11 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoIgnoreLoginLock : ModuleBase
 {
-    private static readonly CompSig AgentLobbyUpdateSig =
-        new("40 55 56 41 55 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 48 83 B9");
-
-    private static Hook<AgentLobbyUpdateDelegate>? AgentLobbyUpdateHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoIgnoreLoginLockTitle"),
@@ -23,6 +18,11 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig AgentLobbyUpdateSig =
+        new("40 55 56 41 55 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 48 83 B9");
+    private delegate void                            AgentLobbyUpdateDelegate(AgentLobby* agent, uint deltaTime);
+    private          Hook<AgentLobbyUpdateDelegate>? AgentLobbyUpdateHook;
 
     protected override void Init()
     {
@@ -30,12 +30,10 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         AgentLobbyUpdateHook.Enable();
     }
 
-    private static void AgentLobbyUpdateDetour(AgentLobby* agent, uint deltaTime)
+    private void AgentLobbyUpdateDetour(AgentLobby* agent, uint deltaTime)
     {
         agent->TemporaryLocked = false;
         AgentLobbyUpdateHook.Original(agent, deltaTime);
         agent->TemporaryLocked = false;
     }
-
-    private delegate void AgentLobbyUpdateDelegate(AgentLobby* agent, uint deltaTime);
 }

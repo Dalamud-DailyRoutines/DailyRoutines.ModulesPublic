@@ -16,26 +16,27 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoHideGameObjects : ModuleBase
 {
-    private static readonly CompSig                          UpdateObjectArraysSig = new("40 57 48 83 EC ?? 48 89 5C 24 ?? 33 DB");
-    private static          Hook<UpdateObjectArraysDelegate> UpdateObjectArraysHook;
-
-    private static Config ModuleConfig = null!;
-
-    private static readonly HashSet<nint> ProcessedObjects = [];
-
-    private static int ZoneUpdateCount;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoHideGameObjectsTitle"),
         Description = Lang.Get("AutoHideGameObjectsDescription"),
         Category    = ModuleCategory.System
     };
+    
+    private static readonly CompSig                          UpdateObjectArraysSig = new("40 57 48 83 EC ?? 48 89 5C 24 ?? 33 DB");
+    private delegate        void*                            UpdateObjectArraysDelegate(GameObjectManager* objectManager);
+    private                 Hook<UpdateObjectArraysDelegate> UpdateObjectArraysHook;
+
+    private Config config = null!;
+
+    private readonly HashSet<nint> processedObjects = [];
+
+    private int zoneUpdateCount;
 
     protected override void Init()
     {
         TaskHelper   ??= new() { TimeoutMS = 30_000 };
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
 
         UpdateObjectArraysHook ??= UpdateObjectArraysSig.GetHook<UpdateObjectArraysDelegate>(UpdateObjectArraysDetour);
         UpdateObjectArraysHook.Enable();
@@ -61,32 +62,32 @@ public unsafe class AutoHideGameObjects : ModuleBase
         using (ImRaii.PushId("Default"))
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HidePlayer"), ref ModuleConfig.DefaultConfig.HidePlayer))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HidePlayer"), ref config.DefaultConfig.HidePlayer))
+                config.Save(this);
             ImGuiOm.TooltipHover(Lang.Get("AutoHideGameObjects-HidePlayerHelp"));
 
-            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HideUnimportantENPC"), ref ModuleConfig.DefaultConfig.HideUnimportantENPC))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HideUnimportantENPC"), ref config.DefaultConfig.HideUnimportantENPC))
+                config.Save(this);
             ImGuiOm.TooltipHover(Lang.Get("AutoHideGameObjects-HideUnimportantENPCHelp"));
 
-            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HidePet"), ref ModuleConfig.DefaultConfig.HidePet))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HidePet"), ref config.DefaultConfig.HidePet))
+                config.Save(this);
             ImGuiOm.TooltipHover(Lang.Get("AutoHideGameObjects-HidePetHelp"));
 
-            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HideChocobo"), ref ModuleConfig.DefaultConfig.HideChocobo))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HideChocobo"), ref config.DefaultConfig.HideChocobo))
+                config.Save(this);
             ImGuiOm.TooltipHover(Lang.Get("AutoHideGameObjects-HideChocoboHelp"));
         }
     }
 
-    private static void* UpdateObjectArraysDetour(GameObjectManager* objectManager)
+    private void* UpdateObjectArraysDetour(GameObjectManager* objectManager)
     {
         var orig = UpdateObjectArraysHook.Original(objectManager);
         UpdateAllObjects(objectManager);
         return orig;
     }
 
-    private static void UpdateAllObjects(GameObjectManager* manager)
+    private void UpdateAllObjects(GameObjectManager* manager)
     {
         if (manager == null) return;
         if (!GameState.IsLoggedIn) return;
@@ -132,12 +133,12 @@ public unsafe class AutoHideGameObjects : ModuleBase
             }
             else
             {
-                if (!ShouldFilter(ModuleConfig.DefaultConfig, entry.Value, (uint)index))
+                if (!ShouldFilter(config.DefaultConfig, entry.Value, (uint)index))
                     continue;
             }
 
             entry.Value->RenderFlags |= (VisibilityFlags)256;
-            ProcessedObjects.Add((nint)entry.Value);
+            processedObjects.Add((nint)entry.Value);
         }
     }
 
@@ -196,7 +197,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
         return false;
     }
 
-    private static bool ShouldFilterOccultCrescent(GameObject* gameObject, nint targetAddress, ref int playerCount, uint index)
+    private bool ShouldFilterOccultCrescent(GameObject* gameObject, nint targetAddress, ref int playerCount, uint index)
     {
         if (gameObject == null) return false;
 
@@ -216,7 +217,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
             if (player->IsDead() || (nint)gameObject == targetAddress)
             {
                 gameObject->RenderFlags &= ~(VisibilityFlags)256;
-                ProcessedObjects.Remove((nint)gameObject);
+                processedObjects.Remove((nint)gameObject);
                 return false;
             }
 
@@ -249,9 +250,9 @@ public unsafe class AutoHideGameObjects : ModuleBase
         return false;
     }
 
-    private static void ResetAllObjects()
+    private void ResetAllObjects()
     {
-        if (!DService.Instance().ClientState.IsLoggedIn || ProcessedObjects.Count == 0) return;
+        if (!DService.Instance().ClientState.IsLoggedIn || processedObjects.Count == 0) return;
 
         var manager = GameObjectManager.Instance();
         if (manager == null) return;
@@ -260,33 +261,31 @@ public unsafe class AutoHideGameObjects : ModuleBase
         {
             if (entry.Value       == null                                            ||
                 (nint)entry.Value == (LocalPlayerState.Object?.Address ?? nint.Zero) ||
-                !ProcessedObjects.Contains((nint)entry.Value))
+                !processedObjects.Contains((nint)entry.Value))
                 continue;
 
             entry.Value->RenderFlags &= ~(VisibilityFlags)256;
         }
 
-        ProcessedObjects.Clear();
-        ZoneUpdateCount = 0;
+        processedObjects.Clear();
+        zoneUpdateCount = 0;
     }
 
-    private static void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(ushort zone)
     {
-        ZoneUpdateCount = 0;
-        ProcessedObjects.Clear();
+        zoneUpdateCount = 0;
+        processedObjects.Clear();
     }
 
-    private static void OnUpdate(IFramework _)
+    private void OnUpdate(IFramework _)
     {
         // 主要是小区域更新不及时
-        if (ZoneUpdateCount > 3 || DService.Instance().Condition.IsBetweenAreas) return;
+        if (zoneUpdateCount > 3 || DService.Instance().Condition.IsBetweenAreas) return;
 
-        ZoneUpdateCount++;
+        zoneUpdateCount++;
         UpdateAllObjects(GameObjectManager.Instance());
     }
-
-    private delegate void* UpdateObjectArraysDelegate(GameObjectManager* objectManager);
-
+    
     private class Config : ModuleConfig
     {
         public FilterConfig DefaultConfig = new();

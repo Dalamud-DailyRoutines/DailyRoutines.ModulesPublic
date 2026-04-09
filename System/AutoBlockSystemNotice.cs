@@ -17,13 +17,13 @@ public class AutoBlockSystemNotice : ModuleBase
 
     protected override void Init() =>
         DService.Instance().Chat.CheckMessageHandled += OnChat;
+    
+    protected override void Uninit() =>
+        DService.Instance().Chat.CheckMessageHandled -= OnChat;
 
     private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
     {
         if (type is not XivChatType.Notice) return;
         ishandled = true;
     }
-
-    protected override void Uninit() =>
-        DService.Instance().Chat.CheckMessageHandled -= OnChat;
 }

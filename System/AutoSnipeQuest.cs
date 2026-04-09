@@ -10,9 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoSnipeQuest : ModuleBase
 {
-    private static readonly CompSig EnqueueSnipeTaskSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 50 48 8B F9 48 8D 4C 24 ??");
-    private static          Hook<EnqueueSnipeTaskDelegate> EnqueueSnipeTaskHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoSnipeQuestTitle"),
@@ -21,6 +18,10 @@ public unsafe class AutoSnipeQuest : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private static readonly CompSig EnqueueSnipeTaskSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 50 48 8B F9 48 8D 4C 24 ??");
+    private delegate        ulong   EnqueueSnipeTaskDelegate(EventSceneModuleImplBase* scene, lua_State* state);
+    private                 Hook<EnqueueSnipeTaskDelegate> EnqueueSnipeTaskHook;
 
     protected override void Init()
     {
@@ -36,6 +37,4 @@ public unsafe class AutoSnipeQuest : ModuleBase
         state->top     += 1;
         return 1;
     }
-
-    private delegate ulong EnqueueSnipeTaskDelegate(EventSceneModuleImplBase* scene, lua_State* state);
 }

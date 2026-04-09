@@ -11,16 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedBorderlessWindow : ModuleBase
 {
-    private static readonly CompSig WindowProcessSig =
-        new("40 55 53 56 57 41 54 41 56 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E0");
-
-    private static Hook<WindowProcessDelegate> WindowProcessHook = null!;
-
-    private static readonly CompSig SetMainWindowBorderlessSig =
-        new("40 53 48 83 EC 60 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24 ?? 48 8B D9 48 8B 49 18");
-
-    private static Hook<SetMainWindowBorderlessDelegate> SetMainWindowBorderlessHook = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("OptimizedBorderlessWindowTitle"),
@@ -29,6 +19,16 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig WindowProcessSig =
+        new("40 55 53 56 57 41 54 41 56 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E0");
+    private delegate nint                        WindowProcessDelegate(ulong hWnd, uint uMsg, ulong wParam, long lParam);
+    private          Hook<WindowProcessDelegate> WindowProcessHook = null!;
+
+    private static readonly CompSig SetMainWindowBorderlessSig =
+        new("40 53 48 83 EC 60 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24 ?? 48 8B D9 48 8B 49 18");
+    private delegate void                                  SetMainWindowBorderlessDelegate(GameWindow* self, bool borderless);
+    private          Hook<SetMainWindowBorderlessDelegate> SetMainWindowBorderlessHook = null!;
 
     protected override void Init()
     {
@@ -47,22 +47,22 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
         if (IsEnabled && Framework.Instance()->GameWindow->Borderless)
         {
             var windowHandle = Framework.Instance()->GameWindow->WindowHandle;
-            WinAPI.SetWindowLongPtrW(windowHandle, WinAPI.GwlpStyle, 0x80000000); // WS_POPUP
-            WinAPI.ShowWindow(windowHandle, WinAPI.SwShowMaximized);
-            WinAPI.SetWindowPos(windowHandle, 0, 0, 0, 0, 0, WinAPI.SwpNoSize | WinAPI.SwpNoMove | WinAPI.SwpNoZOrder | WinAPI.SwpFrameChanged);
+            WinAPI.SetWindowLongPtrW(windowHandle, WinAPI.GWLP_STYLE, 0x80000000); // WS_POPUP
+            WinAPI.ShowWindow(windowHandle, WinAPI.SW_SHOW_MAXIMIZED);
+            WinAPI.SetWindowPos(windowHandle, 0, 0, 0, 0, 0, WinAPI.SWP_NO_SIZE | WinAPI.SWP_NO_MOVE | WinAPI.SWP_NO_Z_ORDER | WinAPI.SWP_FRAME_CHANGED);
         }
     }
 
-    private static nint WindowProcessDetour(ulong hWnd, uint uMsg, ulong wParam, long lParam)
+    private nint WindowProcessDetour(ulong hWnd, uint uMsg, ulong wParam, long lParam)
     {
         switch (uMsg)
         {
-            case WinAPI.WmWindowPosChanging:
+            case WinAPI.WM_WINDOW_POS_CHANGING:
                 if (Framework.Instance()->GameWindow->Borderless)
                 {
                     var windowPos = (WinAPI.WindowPos*)lParam;
 
-                    if ((windowPos->Flags & WinAPI.SwpNoSize) == 0)
+                    if ((windowPos->Flags & WinAPI.SWP_NO_SIZE) == 0)
                     {
                         // 调整无边框窗口大小以覆盖整个显示器
                         WinAPI.Rect rect = new()
@@ -80,7 +80,7 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
 
                 break;
 
-            case WinAPI.WmNcCalcSize:
+            case WinAPI.WM_NC_CALC_SIZE:
                 if (wParam != 0 && Framework.Instance()->GameWindow->Borderless)
                     return 0;
                 break;
@@ -89,7 +89,7 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
         return WindowProcessHook.Original(hWnd, uMsg, wParam, lParam);
     }
 
-    private static void SetMainWindowBorderlessDetour(GameWindow* self, bool borderless)
+    private void SetMainWindowBorderlessDetour(GameWindow* self, bool borderless)
     {
         if (borderless)
         {
@@ -108,9 +108,9 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
         WinAPI.GetWindowRect(windowHandle, &rect);
         ConvertToBorderlessRect(ref rect);
 
-        WinAPI.SetWindowLongPtrW(windowHandle, WinAPI.GwlpStyle, 0x80CE0000); // WS_POPUP | WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX
-        WinAPI.ShowWindow(windowHandle, WinAPI.SwRestore);
-        WinAPI.SetWindowPos(windowHandle, 0, rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top, WinAPI.SwpNoZOrder | WinAPI.SwpFrameChanged);
+        WinAPI.SetWindowLongPtrW(windowHandle, WinAPI.GWLP_STYLE, 0x80CE0000); // WS_POPUP | WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX
+        WinAPI.ShowWindow(windowHandle, WinAPI.SW_RESTORE);
+        WinAPI.SetWindowPos(windowHandle, 0, rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top, WinAPI.SWP_NO_Z_ORDER | WinAPI.SWP_FRAME_CHANGED);
     }
 
     private static void SyncSwapchainResolution(int width, int height)
@@ -128,7 +128,7 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
     private static void ConvertToBorderlessRect(ref WinAPI.Rect rect)
     {
         var originalRect = rect;
-        var monitor      = WinAPI.MonitorFromRect(&originalRect, WinAPI.MonitorDefaultToPrimary);
+        var monitor      = WinAPI.MonitorFromRect(&originalRect, WinAPI.MONITOR_DEFAULT_TO_PRIMARY);
 
         if (monitor != 0)
         {
@@ -138,22 +138,18 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
         }
     }
 
-    private delegate nint WindowProcessDelegate(ulong hWnd, uint uMsg, ulong wParam, long lParam);
-
-    private delegate void SetMainWindowBorderlessDelegate(GameWindow* self, bool borderless);
-
     private static class WinAPI
     {
-        public const int  GwlpStyle               = -16;
-        public const int  SwShowMaximized         = 3;
-        public const int  SwRestore               = 9;
-        public const uint SwpNoSize               = 0x01;
-        public const uint SwpNoMove               = 0x02;
-        public const uint SwpNoZOrder             = 0x04;
-        public const uint SwpFrameChanged         = 0x20;
-        public const uint WmWindowPosChanging     = 0x46;
-        public const uint WmNcCalcSize            = 0x83;
-        public const uint MonitorDefaultToPrimary = 1;
+        public const int  GWLP_STYLE                 = -16;
+        public const int  SW_SHOW_MAXIMIZED          = 3;
+        public const int  SW_RESTORE                 = 9;
+        public const uint SWP_NO_SIZE                = 0x01;
+        public const uint SWP_NO_MOVE                = 0x02;
+        public const uint SWP_NO_Z_ORDER             = 0x04;
+        public const uint SWP_FRAME_CHANGED          = 0x20;
+        public const uint WM_WINDOW_POS_CHANGING     = 0x46;
+        public const uint WM_NC_CALC_SIZE            = 0x83;
+        public const uint MONITOR_DEFAULT_TO_PRIMARY = 1;
 
         [DllImport("user32.dll", EntryPoint = "GetWindowRect", ExactSpelling = true)]
         public static extern bool GetWindowRect(nint hWnd, Rect* lpRect);

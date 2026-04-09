@@ -10,24 +10,22 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoFilterLogMessage : ModuleBase
 {
-    private static Config          ModuleConfig = null!;
-    private static LogMessageCombo Combo        = null!;
-
-    private static readonly HashSet<uint> SeenLogMessages = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoFilterLogMessageTitle"),
         Description = Lang.Get("AutoFilterLogMessageDescription"),
         Category    = ModuleCategory.System
     };
+    
+    private          Config          config = null!;
+    private readonly LogMessageCombo combo  = new("LogMessage");
+
+    private readonly HashSet<uint> seenLogMessages = [];
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
-
-        Combo             ??= new("LogMessage");
-        Combo.SelectedIDs =   ModuleConfig.FilteredLogMessages;
+        config            = Config.Load(this) ?? new();
+        combo.SelectedIDs = config.FilteredLogMessages;
 
         LogMessageManager.Instance().RegPre(OnLogMessage);
     }
@@ -38,10 +36,10 @@ public class AutoFilterLogMessage : ModuleBase
 
         using (ImRaii.PushIndent())
         {
-            if (Combo.DrawCheckbox())
+            if (combo.DrawCheckbox())
             {
-                ModuleConfig.FilteredLogMessages = Combo.SelectedIDs;
-                ModuleConfig.Save(this);
+                config.FilteredLogMessages = combo.SelectedIDs;
+                config.Save(this);
             }
         }
 
@@ -53,27 +51,27 @@ public class AutoFilterLogMessage : ModuleBase
         {
             foreach (var filterMode in Enum.GetValues<FilterMode>())
             {
-                if (ImGui.RadioButton(Lang.Get($"AutoFilterLogMessage-Mode-{filterMode}"), ModuleConfig.Mode == filterMode))
+                if (ImGui.RadioButton(Lang.Get($"AutoFilterLogMessage-Mode-{filterMode}"), config.Mode == filterMode))
                 {
-                    ModuleConfig.Mode = filterMode;
-                    ModuleConfig.Save(this);
+                    config.Mode = filterMode;
+                    config.Save(this);
                 }
             }
         }
     }
 
-    private static void OnLogMessage(ref bool isPrevented, ref uint logMessageID, ref LogMessageQueueItem item)
+    private void OnLogMessage(ref bool isPrevented, ref uint logMessageID, ref LogMessageQueueItem item)
     {
-        if (!ModuleConfig.FilteredLogMessages.Contains(logMessageID)) return;
+        if (!config.FilteredLogMessages.Contains(logMessageID)) return;
 
-        switch (ModuleConfig.Mode)
+        switch (config.Mode)
         {
             case FilterMode.Always:
                 isPrevented = true;
                 break;
 
             case FilterMode.PassFirst:
-                if (SeenLogMessages.Add(logMessageID)) return;
+                if (seenLogMessages.Add(logMessageID)) return;
 
                 isPrevented = true;
                 break;

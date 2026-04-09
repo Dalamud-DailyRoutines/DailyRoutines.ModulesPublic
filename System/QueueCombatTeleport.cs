@@ -18,24 +18,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class QueueCombatTeleport : ModuleBase
 {
-    private static readonly CompSig CanUseTeleportSig =
-        new("84 C0 0F 84 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 89 5C 24");
-
-    // test al, al → mov al, 1
-    private static readonly MemoryPatch CanUseTeleportPatch = new(CanUseTeleportSig.Get(), [0xB0, 0x01]);
-
-    private static readonly CompSig CanUseTeleportMapSig =
-        new("84 C0 0F 44 CA 8B C1 48 83 C4 ?? C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC");
-
-    // test → or, cmovz → nop
-    private static readonly MemoryPatch CanUseTeleportMapPatch =
-        new(CanUseTeleportMapSig.Get(), [0x08, 0xC0, 0x90, 0x90, 0x90]);
-
-    private static (uint ID, uint SubID)? QueuedTeleport;
-
-    private static Config?     ModuleConfig;
-    private static TaskHelper? TeleportHelper;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("QueueCombatTeleportTitle"),
@@ -44,34 +26,59 @@ public unsafe class QueueCombatTeleport : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private static readonly CompSig CanUseTeleportSig =
+        new("84 C0 0F 84 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 89 5C 24");
 
+    // test al, al → mov al, 1
+    private readonly MemoryPatch canUseTeleportPatch = new(CanUseTeleportSig.Get(), [0xB0, 0x01]);
+
+    private static readonly CompSig CanUseTeleportMapSig =
+        new("84 C0 0F 44 CA 8B C1 48 83 C4 ?? C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC");
+
+    // test → or, cmovz → nop
+    private readonly MemoryPatch canUseTeleportMapPatch = new(CanUseTeleportMapSig.Get(), [0x08, 0xC0, 0x90, 0x90, 0x90]);
+
+    private Config? config;
+    
+    private (uint ID, uint SubID)? queuedTeleport;
+    
     protected override void Init()
     {
-        ModuleConfig   =   Config.Load(this) ?? new();
-        TeleportHelper ??= new() { TimeoutMS = 60_000 };
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 60_000 };
 
-        CanUseTeleportPatch.Enable();
-        CanUseTeleportMapPatch.Enable();
+        canUseTeleportPatch.Enable();
+        canUseTeleportMapPatch.Enable();
 
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
         ExecuteCommandManager.Instance().RegPre(OnPreUseCommand);
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
+        ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
+        UseActionManager.Instance().Unreg(OnPreUseAction);
+
+        queuedTeleport = null;
+    }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref ModuleConfig.SendNotification))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
 
         ImGui.SameLine();
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref ModuleConfig.SendChat))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
 
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        if (ImGui.InputInt(Lang.Get("Delay"), ref ModuleConfig.Delay))
-            ModuleConfig.Delay = Math.Max(0, ModuleConfig.Delay);
+        if (ImGui.InputInt(Lang.Get("Delay"), ref config.Delay))
+            config.Delay = Math.Max(0, config.Delay);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
+            config.Save(this);
     }
 
     // 直接导向传送界面
@@ -99,7 +106,7 @@ public unsafe class QueueCombatTeleport : ModuleBase
     }
 
     // 实际存储
-    private static void OnPreUseCommand
+    private void OnPreUseCommand
     (
         ref bool               isPrevented,
         ref ExecuteCommandFlag command,
@@ -111,52 +118,52 @@ public unsafe class QueueCombatTeleport : ModuleBase
     {
         if (command != ExecuteCommandFlag.Teleport || isPrevented || !DService.Instance().Condition[ConditionFlag.InCombat]) return;
         isPrevented    = true;
-        QueuedTeleport = new(param1, param3);
+        queuedTeleport = new(param1, param3);
         Notify(QueueTeleportNotifyType.Save);
     }
 
     // 实际执行传送
-    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    private void OnConditionChanged(ConditionFlag flag, bool value)
     {
-        if (flag != ConditionFlag.InCombat || value || QueuedTeleport == null) return;
+        if (flag != ConditionFlag.InCombat || value || queuedTeleport == null) return;
         var currentFate = FateManager.Instance()->CurrentFate;
         if (currentFate != null && currentFate->Progress < 80) return;
 
         if (currentFate != null)
-            TeleportHelper.Enqueue(() => FateManager.Instance()->CurrentFate == null);
-        TeleportHelper.Enqueue(() => !DService.Instance().Condition[ConditionFlag.InCombat]);
+            TaskHelper.Enqueue(() => FateManager.Instance()->CurrentFate == null);
+        TaskHelper.Enqueue(() => !DService.Instance().Condition[ConditionFlag.InCombat]);
 
-        if (ModuleConfig.Delay > 0)
+        if (config.Delay > 0)
         {
-            TeleportHelper.Enqueue(() => NotifyHelper.Instance().NotificationInfo(Lang.Get("QueueCombatTeleport-Notice-Waiting", ModuleConfig.Delay)));
-            TeleportHelper.DelayNext(ModuleConfig.Delay);
+            TaskHelper.Enqueue(() => NotifyHelper.Instance().NotificationInfo(Lang.Get("QueueCombatTeleport-Notice-Waiting", config.Delay)));
+            TaskHelper.DelayNext(config.Delay);
         }
 
-        TeleportHelper.Enqueue
+        TaskHelper.Enqueue
         (() =>
             {
-                Telepo.Instance()->Teleport(QueuedTeleport.Value.ID, (byte)QueuedTeleport.Value.SubID);
+                Telepo.Instance()->Teleport(queuedTeleport.Value.ID, (byte)queuedTeleport.Value.SubID);
                 Notify(QueueTeleportNotifyType.Execute);
-                QueuedTeleport = null;
+                queuedTeleport = null;
 
                 return true;
             }
         );
     }
 
-    private static void Notify(QueueTeleportNotifyType type)
+    private void Notify(QueueTeleportNotifyType type)
     {
-        if (!ModuleConfig.SendChat && !ModuleConfig.SendNotification) return;
+        if (!config.SendChat && !config.SendNotification) return;
 
         var message = string.Empty;
 
         switch (type)
         {
-            case QueueTeleportNotifyType.Save when QueuedTeleport != null:
+            case QueueTeleportNotifyType.Save when queuedTeleport != null:
                 var qualifiedAetheryteSaved =
                     DService.Instance().AetheryteList.FirstOrDefault
-                    (x => x.AetheryteID == QueuedTeleport.Value.ID &&
-                          x.SubIndex    == QueuedTeleport.Value.SubID
+                    (x => x.AetheryteID == queuedTeleport.Value.ID &&
+                          x.SubIndex    == queuedTeleport.Value.SubID
                     );
                 if (qualifiedAetheryteSaved == null) return;
                 message = Lang.Get
@@ -165,11 +172,11 @@ public unsafe class QueueCombatTeleport : ModuleBase
                     qualifiedAetheryteSaved.AetheryteData.Value.PlaceName.Value.Name.ToString()
                 );
                 break;
-            case QueueTeleportNotifyType.Execute when QueuedTeleport != null:
+            case QueueTeleportNotifyType.Execute when queuedTeleport != null:
                 var qualifiedAetheryteExecuted =
                     DService.Instance().AetheryteList.FirstOrDefault
-                    (x => x.AetheryteID == QueuedTeleport.Value.ID &&
-                          x.SubIndex    == QueuedTeleport.Value.SubID
+                    (x => x.AetheryteID == queuedTeleport.Value.ID &&
+                          x.SubIndex    == queuedTeleport.Value.SubID
                     );
                 if (qualifiedAetheryteExecuted == null) return;
                 message = Lang.Get
@@ -184,28 +191,13 @@ public unsafe class QueueCombatTeleport : ModuleBase
         }
 
         if (string.IsNullOrWhiteSpace(message)) return;
-        if (ModuleConfig.SendChat)
+        if (config.SendChat)
             NotifyHelper.Instance().Chat(message);
-        if (ModuleConfig.SendNotification)
+        if (config.SendNotification)
             NotifyHelper.Instance().NotificationInfo(message);
     }
 
-    protected override void Uninit()
-    {
-        CanUseTeleportPatch.Disable();
-        CanUseTeleportMapPatch.Disable();
-
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-        ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
-        UseActionManager.Instance().Unreg(OnPreUseAction);
-
-        TeleportHelper?.Dispose();
-        TeleportHelper = null;
-
-        QueuedTeleport = null;
-    }
-
-    public class Config : ModuleConfig
+    private class Config : ModuleConfig
     {
         public int  Delay    = 500;
         public bool SendChat = true;

@@ -26,68 +26,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoFaceCameraDirection : ModuleBase
 {
-    private const string COMMAND = "/pdrface";
-
-    private static readonly FrozenSet<int> ValidOpcodes =
-    [
-        UpstreamOpcode.PositionUpdateInstanceOpcode,
-        UpstreamOpcode.PositionUpdateOpcode
-    ];
-
-    private static readonly FrozenSet<PositionUpdatePacket.MoveType> ValidMoveTypes =
-    [
-        PositionUpdatePacket.MoveType.NormalMove0,
-        PositionUpdatePacket.MoveType.NormalMove1,
-        PositionUpdatePacket.MoveType.NormalMove2,
-        PositionUpdatePacket.MoveType.NormalMove3
-    ];
-
-    private static readonly FrozenSet<PositionUpdateInstancePacket.MoveType> ValidInstanceMoveTypes =
-    [
-        PositionUpdateInstancePacket.MoveType.NormalMove0,
-        PositionUpdateInstancePacket.MoveType.NormalMove1,
-        PositionUpdateInstancePacket.MoveType.NormalMove2,
-        PositionUpdateInstancePacket.MoveType.NormalMove3
-    ];
-
-    private static readonly CompSig                            CameraUpdateRotationSig = new("40 53 48 81 EC ?? ?? ?? ?? 8B 81 ?? ?? ?? ?? 48 8B D9 44 0F 29 54 24");
-    private static          Hook<CameraUpdateRotationDelegate> CameraUpdateRotationHook;
-
-    private static readonly CompSig                      UpdateVisualRotationSig = new("40 53 48 83 EC ?? 83 B9 ?? ?? ?? ?? ?? 48 8B D9 0F 85 ?? ?? ?? ?? F6 81");
-    private static readonly UpdateVisualRotationDelegate UpdateVisualRotation    = UpdateVisualRotationSig.GetDelegate<UpdateVisualRotationDelegate>();
-
-    private static readonly CompSig                    SetRotationSig = new("40 53 48 83 EC ?? F3 0F 10 81 ?? ?? ?? ?? 48 8B D9 0F 2E C1");
-    private static          Hook<SetRotationDelegate>? SetRotationHook;
-
-    private static Config ModuleConfig = null!;
-
-    private static float LocalPlayerRotationInput;
-
-    private static Camera* CacheCamera;
-
-    private static bool  LockOn;
-    private static float LockOnRotation;
-
-    private static float CameraCharaRotation;
-    private static float LastSendedRotation;
-
-    private static bool IsAllow;
-    private static long LastUpdateTick;
-
-    private static readonly FrozenDictionary<string, Vector2> WorldDirectionToNormalizedDirection = new Dictionary<string, Vector2>
-    {
-        ["south"]     = new(0, 1),
-        ["north"]     = new(0, -1),
-        ["west"]      = new(-1, 0),
-        ["east"]      = new(1, 0),
-        ["northeast"] = new(0.707f, -0.707f),
-        ["southeast"] = new(0.707f, 0.707f),
-        ["northwest"] = new(-0.707f, -0.707f),
-        ["southwest"] = new(-0.707f, 0.707f)
-    }.ToFrozenDictionary();
-
-    private static readonly string GroundValuesString = string.Join(" / ", WorldDirectionToNormalizedDirection.Keys);
-
     public override ModuleInfo Info { get; } = new()
     {
         Title            = Lang.Get("AutoFaceCameraDirectionTitle"),
@@ -97,10 +35,37 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private static readonly CompSig                            CameraUpdateRotationSig = new("40 53 48 81 EC ?? ?? ?? ?? 8B 81 ?? ?? ?? ?? 48 8B D9 44 0F 29 54 24");
+    private delegate        void                               CameraUpdateRotationDelegate(Camera* camera);
+    private                 Hook<CameraUpdateRotationDelegate> CameraUpdateRotationHook;
+
+    private static readonly CompSig                      UpdateVisualRotationSig = new("40 53 48 83 EC ?? 83 B9 ?? ?? ?? ?? ?? 48 8B D9 0F 85 ?? ?? ?? ?? F6 81");
+    private delegate        void*                        UpdateVisualRotationDelegate(GameObject* gameObject);
+    private readonly        UpdateVisualRotationDelegate UpdateVisualRotation    = UpdateVisualRotationSig.GetDelegate<UpdateVisualRotationDelegate>();
+
+    private static readonly CompSig                    SetRotationSig = new("40 53 48 83 EC ?? F3 0F 10 81 ?? ?? ?? ?? 48 8B D9 0F 2E C1");
+    private delegate        void                       SetRotationDelegate(GameObject* gameObject, float rotation);
+    private                 Hook<SetRotationDelegate>? SetRotationHook;
+
+    private Config config = null!;
+
+    private float localPlayerRotationInput;
+
+    private Camera* cacheCamera;
+
+    private bool  lockOn;
+    private float lockOnRotation;
+
+    private float cameraCharaRotation;
+    private float lastSendedRotation;
+
+    private bool isAllow;
+    private long lastUpdateTick;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         CameraUpdateRotationHook ??= CameraUpdateRotationSig.GetHook<CameraUpdateRotationDelegate>(CameraUpdateRotationDetour);
         CameraUpdateRotationHook.Enable();
@@ -152,11 +117,11 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("WorkMode")}");
 
         ImGui.SameLine();
-        if (ImGuiComponents.ToggleButton("WorkMode", ref ModuleConfig.WorkMode))
-            ModuleConfig.Save(this);
+        if (ImGuiComponents.ToggleButton("WorkMode", ref config.WorkMode))
+            config.Save(this);
 
         using (ImRaii.PushIndent())
-            ImGui.TextWrapped($"{Lang.Get($"AutoFaceCameraDirection-WorkMode{ModuleConfig.WorkMode}")}");
+            ImGui.TextWrapped($"{Lang.Get($"AutoFaceCameraDirection-WorkMode{config.WorkMode}")}");
 
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
@@ -181,15 +146,15 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         using (ImRaii.ItemWidth(200f * GlobalUIScale))
         using (ImRaii.PushIndent())
         {
-            ImGui.InputFloat($"{Lang.Get("Settings")}##SetCharaRotation", ref LocalPlayerRotationInput, format: "%.2f");
+            ImGui.InputFloat($"{Lang.Get("Settings")}##SetCharaRotation", ref localPlayerRotationInput, format: "%.2f");
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SetLocalRotation((GameObject*)localPlayer.Address, LocalPlayerRotationInput);
+                SetLocalRotation((GameObject*)localPlayer.Address, localPlayerRotationInput);
 
             var currentRotation = localPlayer.Rotation;
             ImGui.InputFloat($"{Lang.Get("Current")}##CurrentCharaRotation", ref currentRotation, format: "%.2f", flags: ImGuiInputTextFlags.ReadOnly);
         }
 
-        if (CacheCamera == null) return;
+        if (cacheCamera == null) return;
 
         ImGui.TextColored
         (
@@ -199,10 +164,10 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         );
 
         using (ImRaii.PushIndent())
-            ImGui.TextUnformatted($"{CacheCamera->DirH:F2} → {RotationHelper.CameraDirHToChara(CacheCamera->DirH):F2}");
+            ImGui.TextUnformatted($"{cacheCamera->DirH:F2} → {RotationHelper.CameraDirHToChara(cacheCamera->DirH):F2}");
     }
 
-    private static void OnCommand(string command, string args)
+    private void OnCommand(string command, string args)
     {
         args = args.Trim().ToLowerInvariant();
 
@@ -226,25 +191,25 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         switch (typeRaw)
         {
             case "ground" when WorldDirectionToNormalizedDirection.TryGetValue(valueRaw, out var dirGround):
-                LockOnRotation = RotationHelper.WorldDirHToChara(dirGround);
-                LockOn         = true;
-                SetLocalRotation((GameObject*)localPlayer.Address, LockOnRotation);
+                lockOnRotation = RotationHelper.WorldDirHToChara(dirGround);
+                lockOn         = true;
+                SetLocalRotation((GameObject*)localPlayer.Address, lockOnRotation);
                 break;
 
             case "chara" when float.TryParse(valueRaw, out var rotation):
-                LockOnRotation = rotation;
-                LockOn         = true;
+                lockOnRotation = rotation;
+                lockOn         = true;
                 break;
 
             case "camera" when float.TryParse(valueRaw, out var dirCamera):
-                LockOnRotation = RotationHelper.CameraDirHToChara(dirCamera);
-                LockOn         = true;
-                SetLocalRotation((GameObject*)localPlayer.Address, LockOnRotation);
+                lockOnRotation = RotationHelper.CameraDirHToChara(dirCamera);
+                lockOn         = true;
+                SetLocalRotation((GameObject*)localPlayer.Address, lockOnRotation);
                 break;
 
             case "off":
-                LockOn         = false;
-                LockOnRotation = 0;
+                lockOn         = false;
+                lockOnRotation = 0;
                 break;
 
             default:
@@ -252,23 +217,23 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
                 return;
         }
 
-        if (!LockOn) return;
+        if (!lockOn) return;
 
-        SetLocalRotation((GameObject*)localPlayer.Address, LockOnRotation);
+        SetLocalRotation((GameObject*)localPlayer.Address, lockOnRotation);
 
         var moveState = MovementManager.Instance().CurrentZoneMoveState;
 
         if (GameState.ContentFinderCondition != 0)
         {
             var moveType = (PositionUpdateInstancePacket.MoveType)(moveState << 16);
-            new PositionUpdateInstancePacket(LockOnRotation, localPlayer.Position, moveType).Send();
+            new PositionUpdateInstancePacket(lockOnRotation, localPlayer.Position, moveType).Send();
         }
         else
         {
             if (!Throttler.Shared.Throttle("AutoFaceCameraDirection-UpdateRotation", 20)) return;
 
             var moveType = (PositionUpdatePacket.MoveType)(moveState << 16);
-            new PositionUpdatePacket(LockOnRotation, localPlayer.Position, moveType).Send();
+            new PositionUpdatePacket(lockOnRotation, localPlayer.Position, moveType).Send();
         }
 
         return;
@@ -279,10 +244,10 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         }
     }
 
-    private static void OnPostUseAction(bool result, ActionType actionType, uint actionID, ulong targetID, Vector3 location, uint extraParam, byte a7) =>
+    private void OnPostUseAction(bool result, ActionType actionType, uint actionID, ulong targetID, Vector3 location, uint extraParam, byte a7) =>
         OnUpdate(DService.Instance().Framework);
 
-    private static void SetRotationDetour(GameObject* gameObject, float rotation)
+    private void SetRotationDetour(GameObject* gameObject, float rotation)
     {
         if (gameObject == null || gameObject->EntityId != LocalPlayerState.EntityID || ShouldSkipUpdate())
         {
@@ -291,15 +256,15 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         }
 
         gameObject->Rotation = rotation;
-        IsAllow              = true;
+        isAllow              = true;
     }
 
     // 主动发包
-    private static void OnUpdate(IFramework framework)
+    private void OnUpdate(IFramework framework)
     {
-        if (MathF.Abs(LastSendedRotation - CameraCharaRotation) < 0.001f) return;
+        if (MathF.Abs(lastSendedRotation - cameraCharaRotation) < 0.001f) return;
 
-        if (CacheCamera == null) return;
+        if (cacheCamera == null) return;
 
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null || localPlayer->Health <= 0) return;
@@ -310,52 +275,52 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         var isDuty      = GameState.ContentFinderCondition != 0;
         var interval    = isDuty ? 33 : 100;
 
-        SetLocalRotation((GameObject*)localPlayer, CameraCharaRotation);
+        SetLocalRotation((GameObject*)localPlayer, cameraCharaRotation);
 
-        if (currentTick - LastUpdateTick < interval) return;
-        LastUpdateTick = currentTick;
+        if (currentTick - lastUpdateTick < interval) return;
+        lastUpdateTick = currentTick;
 
         var moveState = MovementManager.Instance().CurrentZoneMoveState;
 
         if (isDuty)
         {
             var moveType = (PositionUpdateInstancePacket.MoveType)(moveState << 16);
-            new PositionUpdateInstancePacket(CameraCharaRotation, localPlayer->Position, moveType).Send();
+            new PositionUpdateInstancePacket(cameraCharaRotation, localPlayer->Position, moveType).Send();
         }
         else
         {
             var moveType = (PositionUpdatePacket.MoveType)(moveState << 16);
-            new PositionUpdatePacket(CameraCharaRotation, localPlayer->Position, moveType).Send();
+            new PositionUpdatePacket(cameraCharaRotation, localPlayer->Position, moveType).Send();
         }
     }
 
     // 获取摄像机到人物的旋转角度
-    private static void CameraUpdateRotationDetour(Camera* camera)
+    private void CameraUpdateRotationDetour(Camera* camera)
     {
         CameraUpdateRotationHook.Original(camera);
-        CacheCamera = camera;
+        cacheCamera = camera;
 
-        CameraCharaRotation = LockOn ? LockOnRotation : RotationHelper.CameraDirHToChara(camera->DirH);
+        cameraCharaRotation = lockOn ? lockOnRotation : RotationHelper.CameraDirHToChara(camera->DirH);
     }
 
-    private static void OnPreSendPacket(ref bool isPrevented, int opcode, ref nint packet, ref bool isPrioritize)
+    private void OnPreSendPacket(ref bool isPrevented, int opcode, ref nint packet, ref bool isPrioritize)
     {
-        if (CacheCamera == null || !ValidOpcodes.Contains(opcode) || ShouldSkipUpdate()) return;
+        if (cacheCamera == null || !ValidOpcodes.Contains(opcode) || ShouldSkipUpdate()) return;
 
         if (opcode == UpstreamOpcode.PositionUpdateOpcode)
         {
             var data = (PositionUpdatePacket*)packet;
             if (!ValidMoveTypes.Contains(data->Move)) return;
 
-            if (!IsAllow)
+            if (!isAllow)
             {
                 isPrevented = true;
                 return;
             }
 
-            IsAllow = false;
+            isAllow = false;
 
-            LastSendedRotation = data->Rotation;
+            lastSendedRotation = data->Rotation;
             return;
         }
 
@@ -364,19 +329,19 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
             var data = (PositionUpdateInstancePacket*)packet;
             if (!ValidInstanceMoveTypes.Contains(data->Move)) return;
 
-            if (!IsAllow)
+            if (!isAllow)
             {
                 isPrevented = true;
                 return;
             }
 
-            IsAllow = false;
+            isAllow = false;
 
-            LastSendedRotation = data->RotationNew;
+            lastSendedRotation = data->RotationNew;
         }
     }
 
-    private static void SetLocalRotation(GameObject* gameObject, float value)
+    private void SetLocalRotation(GameObject* gameObject, float value)
     {
         if (MathF.Abs(gameObject->Rotation - value) < 0.001f) return;
 
@@ -385,60 +350,59 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool ShouldSkipUpdate()
+    private bool ShouldSkipUpdate()
     {
         if (MovementManager.Instance().IsManagerBusy) return true;
 
         var isConflict = PluginConfig.Instance().ConflictKeyBinding.IsPressed();
-        return ModuleConfig.WorkMode switch
+        return config.WorkMode switch
         {
             false => isConflict, // WorkMode=false: 按下打断键时跳过 (即不工作)
             true  => !isConflict // WorkMode=true:  没按下打断键时跳过 (即不工作)
         };
     }
 
+    #region IPC
+
     [IPCProvider("DailyRoutines.Modules.AutoFaceCameraDirection.SetWorkMode")]
-    public static void SetWorkModeIPC(bool workMode) => ModuleConfig.WorkMode = workMode;
+    private void SetWorkModeIPC(bool workMode) => 
+        config.WorkMode = workMode;
 
     [IPCProvider("DailyRoutines.Modules.AutoFaceCameraDirection.CancelLockOn")]
-    public static void CancelLockOnIPC()
+    private void CancelLockOnIPC()
     {
-        LockOn         = false;
-        LockOnRotation = 0;
+        lockOn         = false;
+        lockOnRotation = 0;
     }
 
     [IPCProvider("DailyRoutines.Modules.AutoFaceCameraDirection.LockOnGround")]
-    public static bool LockOnGroundIPC(string rotation)
+    private bool LockOnGroundIPC(string rotation)
     {
         if (!WorldDirectionToNormalizedDirection.TryGetValue(rotation, out var dirGround))
             return false;
 
-        LockOnRotation = RotationHelper.WorldDirHToChara(dirGround);
-        LockOn         = true;
+        lockOnRotation = RotationHelper.WorldDirHToChara(dirGround);
+        lockOn         = true;
 
         return true;
     }
 
     [IPCProvider("DailyRoutines.Modules.AutoFaceCameraDirection.LockOnChara")]
-    public static void LockOnCharaIPC(float rotation)
+    private void LockOnCharaIPC(float rotation)
     {
-        LockOnRotation = rotation;
-        LockOn         = true;
+        lockOnRotation = rotation;
+        lockOn         = true;
     }
 
     [IPCProvider("DailyRoutines.Modules.AutoFaceCameraDirection.LockOnCamera")]
-    public static void LockOnCameraIPC(float rotation)
+    private void LockOnCameraIPC(float rotation)
     {
-        LockOnRotation = RotationHelper.CameraDirHToChara(rotation);
-        LockOn         = true;
+        lockOnRotation = RotationHelper.CameraDirHToChara(rotation);
+        lockOn         = true;
     }
 
-    private delegate void CameraUpdateRotationDelegate(Camera* camera);
-
-    private delegate void* UpdateVisualRotationDelegate(GameObject* gameObject);
-
-    private delegate void SetRotationDelegate(GameObject* gameObject, float rotation);
-
+    #endregion
+    
 
     private class Config : ModuleConfig
     {
@@ -446,4 +410,46 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         // false - 按下打断热键则不保持人物面向与摄像机一致
         public bool WorkMode;
     }
+    
+    #region 常量
+
+    private const string COMMAND = "/pdrface";
+
+    private static readonly FrozenSet<int> ValidOpcodes =
+    [
+        UpstreamOpcode.PositionUpdateInstanceOpcode,
+        UpstreamOpcode.PositionUpdateOpcode
+    ];
+
+    private static readonly FrozenSet<PositionUpdatePacket.MoveType> ValidMoveTypes =
+    [
+        PositionUpdatePacket.MoveType.NormalMove0,
+        PositionUpdatePacket.MoveType.NormalMove1,
+        PositionUpdatePacket.MoveType.NormalMove2,
+        PositionUpdatePacket.MoveType.NormalMove3
+    ];
+
+    private static readonly FrozenSet<PositionUpdateInstancePacket.MoveType> ValidInstanceMoveTypes =
+    [
+        PositionUpdateInstancePacket.MoveType.NormalMove0,
+        PositionUpdateInstancePacket.MoveType.NormalMove1,
+        PositionUpdateInstancePacket.MoveType.NormalMove2,
+        PositionUpdateInstancePacket.MoveType.NormalMove3
+    ];
+    
+    private static readonly FrozenDictionary<string, Vector2> WorldDirectionToNormalizedDirection = new Dictionary<string, Vector2>
+    {
+        ["south"]     = new(0, 1),
+        ["north"]     = new(0, -1),
+        ["west"]      = new(-1, 0),
+        ["east"]      = new(1, 0),
+        ["northeast"] = new(0.707f, -0.707f),
+        ["southeast"] = new(0.707f, 0.707f),
+        ["northwest"] = new(-0.707f, -0.707f),
+        ["southwest"] = new(-0.707f, 0.707f)
+    }.ToFrozenDictionary();
+    
+    private static readonly string GroundValuesString = string.Join(" / ", WorldDirectionToNormalizedDirection.Keys);
+
+    #endregion
 }

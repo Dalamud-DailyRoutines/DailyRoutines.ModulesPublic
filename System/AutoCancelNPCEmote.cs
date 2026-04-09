@@ -9,16 +9,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCancelNPCEmote : ModuleBase
 {
-    private static readonly CompSig WaitForBaseSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B 49 ?? E8 ?? ?? ?? ?? 48 8B 35");
-
-    private static Hook<EventSceneScriptDelegate>? WaitForActionTimelineHook;
-    private static Hook<EventSceneScriptDelegate>? WaitForActionTimelineLoadHook;
-    private static Hook<EventSceneScriptDelegate>? PlayActionTimelineHook;
-    private static Hook<EventSceneScriptDelegate>? PlayEmoteHook;
-    private static Hook<EventSceneScriptDelegate>? CancelEmoteHook;
-    private static Hook<EventSceneScriptDelegate>? WaitForEmoteHook;
-    private static Hook<EventSceneScriptDelegate>? IsEmotingHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoCancelNPCEmoteTitle"),
@@ -27,6 +17,19 @@ public unsafe class AutoCancelNPCEmote : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private static readonly CompSig WaitForBaseSig = 
+        new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B 49 ?? E8 ?? ?? ?? ?? 48 8B 35");
+
+    private delegate nint EventSceneScriptDelegate(EventSceneModuleImplBase* scene);
+    
+    private Hook<EventSceneScriptDelegate>? WaitForActionTimelineHook;
+    private Hook<EventSceneScriptDelegate>? WaitForActionTimelineLoadHook;
+    private Hook<EventSceneScriptDelegate>? PlayActionTimelineHook;
+    private Hook<EventSceneScriptDelegate>? PlayEmoteHook;
+    private Hook<EventSceneScriptDelegate>? CancelEmoteHook;
+    private Hook<EventSceneScriptDelegate>? WaitForEmoteHook;
+    private Hook<EventSceneScriptDelegate>? IsEmotingHook;
 
     protected override void Init()
     {
@@ -64,6 +67,4 @@ public unsafe class AutoCancelNPCEmote : ModuleBase
     private static nint EventSceneScriptDetour(EventSceneModuleImplBase* scene) => 1;
 
     private static nint EventSceneScriptNoDetour(EventSceneModuleImplBase* scene) => 0;
-
-    private delegate nint EventSceneScriptDelegate(EventSceneModuleImplBase* scene);
 }

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Threading.Channels;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -49,39 +50,22 @@ public class FastWorldTravel : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    internal const string COMMAND = "worldtravel";
-
-    private static readonly HashSet<uint> WorldTravelValidZones = [132, 129, 130];
-
-    private static readonly ConditionFlag[] InvalidConditions =
-    [
-        ConditionFlag.BoundByDuty,
-        ConditionFlag.BoundByDuty56,
-        ConditionFlag.BoundByDuty95,
-        ConditionFlag.InDutyQueue,
-        ConditionFlag.DutyRecorderPlayback,
-        ConditionFlag.BetweenAreas
-    ];
-
-    private static Config? ModuleConfig;
-
-    private static IDtrBarEntry? Entry;
-
-    private static AddonDRFastWorldTravel? Addon;
-
-    private static WorldMonitor? WorldStatusMonitor;
+    private Config?                 config;
+    private IDtrBarEntry?           entry;
+    private AddonDRFastWorldTravel? addon;
+    private WorldMonitor?           worldStatusMonitor;
 
     protected override unsafe void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = int.MaxValue, ShowDebug = true };
 
         if (GameState.IsCN)
-            WorldStatusMonitor = new(CheckCNDataCenterStatus);
+            worldStatusMonitor = new(CheckCNDataCenterStatus);
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("FastWorldTravel-CommandHelp") });
 
-        if (ModuleConfig.AddDtrEntry)
+        if (config.AddDtrEntry)
             HandleDtrEntry(true);
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
@@ -99,11 +83,11 @@ public class FastWorldTravel : ModuleBase
 
         HandleDtrEntry(false);
 
-        Addon?.Dispose();
-        Addon = null;
+        addon?.Dispose();
+        addon = null;
 
-        WorldStatusMonitor?.Dispose();
-        WorldStatusMonitor = null;
+        worldStatusMonitor?.Dispose();
+        worldStatusMonitor = null;
 
         FrameworkManager.Instance().Unreg(OnUpdate);
         CommandManager.Instance().RemoveSubCommand(COMMAND);
@@ -117,18 +101,18 @@ public class FastWorldTravel : ModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("FastWorldTravel-AutoLeaveParty"), ref ModuleConfig.AutoLeaveParty))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("FastWorldTravel-AutoLeaveParty"), ref config.AutoLeaveParty))
+            config.Save(this);
         ImGuiOm.TooltipHover(Lang.Get("FastWorldTravel-AutoLeavePartyHelp"));
 
-        if (ImGui.Checkbox(Lang.Get("FastWorldTravel-AddDtrEntry"), ref ModuleConfig.AddDtrEntry))
+        if (ImGui.Checkbox(Lang.Get("FastWorldTravel-AddDtrEntry"), ref config.AddDtrEntry))
         {
-            ModuleConfig.Save(this);
-            HandleDtrEntry(ModuleConfig.AddDtrEntry);
+            config.Save(this);
+            HandleDtrEntry(config.AddDtrEntry);
         }
 
-        if (ImGui.Checkbox(Lang.Get("FastWorldTravel-ReplaceOrigAddon"), ref ModuleConfig.ReplaceOrigAddon))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("FastWorldTravel-ReplaceOrigAddon"), ref config.ReplaceOrigAddon))
+            config.Save(this);
     }
 
     private void HandleDtrEntry(bool isAdd)
@@ -136,26 +120,26 @@ public class FastWorldTravel : ModuleBase
         switch (isAdd)
         {
             case true:
-                Entry ??= DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
-                Entry.OnClick = _ =>
+                entry ??= DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
+                entry.OnClick = _ =>
                 {
                     EnsureAddon();
-                    Addon.Toggle();
+                    addon.Toggle();
                 };
-                Entry.Shown   = true;
-                Entry.Tooltip = Lang.Get("FastWorldTravel-DtrEntryTooltip");
-                Entry.Text    = LuminaWrapper.GetAddonText(12510);
+                entry.Shown   = true;
+                entry.Tooltip = Lang.Get("FastWorldTravel-DtrEntryTooltip");
+                entry.Text    = LuminaWrapper.GetAddonText(12510);
                 return;
-            case false when Entry != null:
-                Entry.Remove();
-                Entry = null;
+            case false when entry != null:
+                entry.Remove();
+                entry = null;
                 break;
         }
     }
 
     private void EnsureAddon()
     {
-        Addon ??= new(TaskHelper)
+        addon ??= new(this, TaskHelper)
         {
             InternalName = "DRFastWorldTravel",
             Title        = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
@@ -167,18 +151,18 @@ public class FastWorldTravel : ModuleBase
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
-        if (Entry == null || (TaskHelper?.IsBusy ?? true)) return;
+        if (entry == null || (TaskHelper?.IsBusy ?? true)) return;
 
         if (InvalidConditions.Contains(flag))
         {
             if (value)
-                Entry.Shown = false;
+                entry.Shown = false;
             else
             {
-                Entry.Shown = !DService.Instance().Condition.Any(InvalidConditions);
+                entry.Shown = !DService.Instance().Condition.Any(InvalidConditions);
 
-                if (Entry.Shown)
-                    Entry.Text = new SeStringBuilder().AddIcon(BitmapFontIcon.CrossWorld)
+                if (entry.Shown)
+                    entry.Text = new SeStringBuilder().AddIcon(BitmapFontIcon.CrossWorld)
                                                       .Append($"{GameState.CurrentWorldData.Name.ToString()}")
                                                       .Build();
             }
@@ -189,25 +173,25 @@ public class FastWorldTravel : ModuleBase
     private unsafe void OnAddon(AddonEvent type, AddonArgs args)
     {
         if (WorldTravelSelect == null) return;
-        if (!ModuleConfig.ReplaceOrigAddon) return;
+        if (!config.ReplaceOrigAddon) return;
 
         WorldTravelSelect->Close(true);
 
         EnsureAddon();
-        Addon.Open();
+        addon.Open();
     }
 
     // 更新 DTR
     private void OnUpdate(IFramework _)
     {
-        if (Entry == null || (TaskHelper?.IsBusy ?? true)) return;
+        if (entry == null || (TaskHelper?.IsBusy ?? true)) return;
 
-        Entry.Shown = !DService.Instance().Condition.Any(InvalidConditions);
+        entry.Shown = !DService.Instance().Condition.Any(InvalidConditions);
 
         if (DService.Instance().Condition.Any(ConditionFlag.WaitingToVisitOtherWorld, ConditionFlag.ReadyingVisitOtherWorld))
             return;
 
-        Entry.Text = new SeStringBuilder().AddIcon(BitmapFontIcon.CrossWorld)
+        entry.Text = new SeStringBuilder().AddIcon(BitmapFontIcon.CrossWorld)
                                           .Append($"{GameState.CurrentWorldData.Name.ToString()}")
                                           .Build();
     }
@@ -229,7 +213,7 @@ public class FastWorldTravel : ModuleBase
         if (args.Length == 0)
         {
             EnsureAddon();
-            Addon.Toggle();
+            addon.Toggle();
             return;
         }
 
@@ -311,13 +295,13 @@ public class FastWorldTravel : ModuleBase
         (
             () =>
             {
-                if (Entry == null) return;
-                Entry.Text = $"\ue06f {targetWorld.Name.ToString()}";
+                if (entry == null) return;
+                entry.Text = $"\ue06f {targetWorld.Name.ToString()}";
             },
             "更新 DTR 目标服务器信息"
         );
 
-        if (ModuleConfig.AutoLeaveParty)
+        if (config.AutoLeaveParty)
             TaskHelper.Enqueue(LeaveNonCrossWorldParty, "离开非跨服小队");
 
         if (!WorldTravelValidZones.Contains(GameState.TerritoryType))
@@ -615,7 +599,8 @@ public class FastWorldTravel : ModuleBase
 
     private class AddonDRFastWorldTravel
     (
-        TaskHelper taskHelper
+        FastWorldTravel module,
+        TaskHelper      taskHelper
     ) : NativeAddon
     {
         private static NodeBase TeleportWidget;
@@ -871,7 +856,7 @@ public class FastWorldTravel : ModuleBase
                             {
                                 IsEnabled = false,
                                 Name = $"当前监控: " +
-                                       $"{(WorldStatusMonitor.GetActiveMonitors().ToList() is { Count: > 0 } list ?
+                                       $"{(module.worldStatusMonitor.GetActiveMonitors().ToList() is { Count: > 0 } list ?
                                                LuminaWrapper.GetDataCenterName(list.First()) :
                                                "(无)")}",
                                 OnClick = () => { }
@@ -885,14 +870,14 @@ public class FastWorldTravel : ModuleBase
                             IsEnabled = true
                         };
 
-                        if (WorldStatusMonitor.GetActiveMonitors().Contains(dcID))
+                        if (module.worldStatusMonitor.GetActiveMonitors().Contains(dcID))
                         {
                             subMenu.AddItem
                             (
                                 new()
                                 {
                                     Name    = "移除监控",
-                                    OnClick = () => WorldStatusMonitor.RemoveMonitor(dcID)
+                                    OnClick = () => module.worldStatusMonitor.RemoveMonitor(dcID)
                                 }
                             );
                         }
@@ -915,10 +900,10 @@ public class FastWorldTravel : ModuleBase
                                     Name = "自动前往",
                                     OnClick = () =>
                                     {
-                                        WorldStatusMonitor.Clear();
+                                        module.worldStatusMonitor.Clear();
 
-                                        WorldStatusMonitor.JustGo = true;
-                                        WorldStatusMonitor.AddMonitor(dcID);
+                                        module.worldStatusMonitor.JustGo = true;
+                                        module.worldStatusMonitor.AddMonitor(dcID);
                                     }
                                 }
                             );
@@ -930,10 +915,10 @@ public class FastWorldTravel : ModuleBase
                                     Name = "发送通知",
                                     OnClick = () =>
                                     {
-                                        WorldStatusMonitor.Clear();
+                                        module.worldStatusMonitor.Clear();
 
-                                        WorldStatusMonitor.JustGo = false;
-                                        WorldStatusMonitor.AddMonitor(dcID);
+                                        module.worldStatusMonitor.JustGo = false;
+                                        module.worldStatusMonitor.AddMonitor(dcID);
                                     }
                                 }
                             );
@@ -1145,4 +1130,22 @@ public class FastWorldTravel : ModuleBase
             }
         }
     }
+    
+    #region 常量
+
+    private const string COMMAND = "worldtravel";
+
+    private static readonly FrozenSet<uint> WorldTravelValidZones = [132, 129, 130];
+
+    private static readonly ConditionFlag[] InvalidConditions =
+    [
+        ConditionFlag.BoundByDuty,
+        ConditionFlag.BoundByDuty56,
+        ConditionFlag.BoundByDuty95,
+        ConditionFlag.InDutyQueue,
+        ConditionFlag.DutyRecorderPlayback,
+        ConditionFlag.BetweenAreas
+    ];
+
+    #endregion
 }

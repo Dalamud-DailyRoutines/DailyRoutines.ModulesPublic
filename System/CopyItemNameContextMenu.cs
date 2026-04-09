@@ -13,12 +13,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class CopyItemNameContextMenu : ModuleBase
 {
-    private static readonly string CopyItemNameString = LuminaWrapper.GetAddonText(159);
-    private static readonly string GlamoursString     = LuminaGetter.GetRow<CircleActivity>(18)!.Value.Name.ToString();
-
-    private static readonly CopyItemNameMenuItem MenuItem        = new(CopyItemNameString);
-    private static readonly CopyItemNameMenuItem GlamourMenuItem = new($"{CopyItemNameString} ({GlamoursString})");
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("CopyItemNameContextMenuTitle"),
@@ -29,13 +23,16 @@ public class CopyItemNameContextMenu : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private readonly CopyItemNameMenuItem menuItem        = new(CopyItemNameString);
+    private readonly CopyItemNameMenuItem glamourMenuItem = new($"{CopyItemNameString} ({GlamoursString})");
+
     protected override void Init() =>
         DService.Instance().ContextMenu.OnMenuOpened += OnContextMenuOpened;
 
     protected override void Uninit() =>
         DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 
-    private static unsafe void OnContextMenuOpened(IMenuOpenedArgs args)
+    private unsafe void OnContextMenuOpened(IMenuOpenedArgs args)
     {
         var type = args.MenuType;
 
@@ -43,15 +40,15 @@ public class CopyItemNameContextMenu : ModuleBase
         {
             if (args.Target is MenuTargetInventory { TargetItem: { ItemId: > 0 } item })
             {
-                MenuItem.SetRawItemID(item.ItemId);
+                menuItem.SetRawItemID(item.ItemId);
 
-                args.AddMenuItem(MenuItem.Get());
+                args.AddMenuItem(menuItem.Get());
 
                 if (item.GlamourId == 0)
                     return;
 
-                GlamourMenuItem.SetRawItemID(item.GlamourId);
-                args.AddMenuItem(GlamourMenuItem.Get());
+                glamourMenuItem.SetRawItemID(item.GlamourId);
+                args.AddMenuItem(glamourMenuItem.Get());
             }
 
             return;
@@ -83,14 +80,14 @@ public class CopyItemNameContextMenu : ModuleBase
         var itemID = prismBoxItem?.RowId ?? ContextMenuItemManager.Instance().CurrentItemID;
         if (itemID == 0) return;
 
-        MenuItem.SetRawItemID(itemID);
-        args.AddMenuItem(MenuItem.Get());
+        menuItem.SetRawItemID(itemID);
+        args.AddMenuItem(menuItem.Get());
 
         var glamourID = ContextMenuItemManager.Instance().CurrentGlamourID;
         if (glamourID == 0) return;
 
-        GlamourMenuItem.SetRawItemID(glamourID);
-        args.AddMenuItem(GlamourMenuItem.Get());
+        glamourMenuItem.SetRawItemID(glamourID);
+        args.AddMenuItem(glamourMenuItem.Get());
     }
 
     private sealed class CopyItemNameMenuItem
@@ -130,4 +127,11 @@ public class CopyItemNameContextMenu : ModuleBase
         public void SetRawItemID(uint id) =>
             itemID = id;
     }
+    
+    #region 常量
+
+    private static readonly string CopyItemNameString = LuminaWrapper.GetAddonText(159);
+    private static readonly string GlamoursString     = LuminaGetter.GetRowOrDefault<CircleActivity>(18).Name.ToString();
+
+    #endregion
 }

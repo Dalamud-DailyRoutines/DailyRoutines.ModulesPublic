@@ -18,13 +18,13 @@ public partial class BetterCommandInput : ModuleBase
         Category    = ModuleCategory.System
     };
     
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
     
-    private static DateTime LastChatTime = DateTime.MinValue;
+    private DateTime lastChatTime = DateTime.MinValue;
     
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         ChatManager.Instance().RegPreExecuteCommandInner(OnPreExecuteCommandInner);
     }
@@ -34,8 +34,8 @@ public partial class BetterCommandInput : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("BetterCommandInput-DeleteSpaceBeforeCommand"), ref ModuleConfig.IsAvoidingSpace))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("BetterCommandInput-DeleteSpaceBeforeCommand"), ref config.IsAvoidingSpace))
+            config.Save(this);
 
         ImGui.Spacing();
 
@@ -46,15 +46,15 @@ public partial class BetterCommandInput : ModuleBase
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
         {
-            ModuleConfig.Whitelist.Add(string.Empty);
-            ModuleConfig.Save(this);
+            config.Whitelist.Add(string.Empty);
+            config.Save(this);
         }
 
         ImGui.Spacing();
 
-        for (var i = 0; i < ModuleConfig.Whitelist.Count; i++)
+        for (var i = 0; i < config.Whitelist.Count; i++)
         {
-            var whiteListCommand = ModuleConfig.Whitelist[i];
+            var whiteListCommand = config.Whitelist[i];
             var input            = whiteListCommand;
 
             using var id = ImRaii.PushId($"{whiteListCommand}_{i}_Command");
@@ -64,26 +64,26 @@ public partial class BetterCommandInput : ModuleBase
 
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
-                ModuleConfig.Whitelist[i] = input;
-                ModuleConfig.Save(this);
+                config.Whitelist[i] = input;
+                config.Save(this);
             }
 
             ImGui.SameLine();
 
             if (ImGuiOm.ButtonIcon("Delete", FontAwesomeIcon.TrashAlt, $"{Lang.Get("Delete")}"))
             {
-                ModuleConfig.Whitelist.Remove(whiteListCommand);
-                ModuleConfig.Save(this);
+                config.Whitelist.Remove(whiteListCommand);
+                config.Save(this);
             }
         }
     }
 
-    private static void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
+    private void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
         var messageDecode          = message.ToString();
         var isMatchRegex           = CommandRegex().IsMatch(messageDecode);
         var isStartWithSlash       = messageDecode.StartsWith('/') || messageDecode.StartsWith('／');
-        var shouldMessageBeHandled = ModuleConfig.IsAvoidingSpace ? isMatchRegex : isStartWithSlash;
+        var shouldMessageBeHandled = config.IsAvoidingSpace ? isMatchRegex : isStartWithSlash;
 
         if (string.IsNullOrWhiteSpace(messageDecode) || !shouldMessageBeHandled)
             return;
@@ -92,12 +92,12 @@ public partial class BetterCommandInput : ModuleBase
             message = new(handledMessage);
     }
 
-    private static bool HandleSlashCommand(string command, out string handledMessage)
+    private bool HandleSlashCommand(string command, out string handledMessage)
     {
         handledMessage = string.Empty;
 
         if (!IsValid(command)) return false;
-        if (ModuleConfig.IsAvoidingSpace)
+        if (config.IsAvoidingSpace)
             command = command.TrimStart(' ', '　');
 
         var spaceIndex = command.IndexOf(' ');
@@ -106,7 +106,7 @@ public partial class BetterCommandInput : ModuleBase
         {
             var lower = command.ToLowerAndHalfWidth();
 
-            foreach (var whiteListCommand in ModuleConfig.Whitelist)
+            foreach (var whiteListCommand in config.Whitelist)
             {
                 if (lower.Equals(whiteListCommand, StringComparison.CurrentCultureIgnoreCase))
                     lower = whiteListCommand;
@@ -118,7 +118,7 @@ public partial class BetterCommandInput : ModuleBase
         {
             var lower = command[..spaceIndex].ToLowerAndHalfWidth();
 
-            foreach (var whiteListCommand in ModuleConfig.Whitelist)
+            foreach (var whiteListCommand in config.Whitelist)
             {
                 if (lower.Equals(whiteListCommand, StringComparison.CurrentCultureIgnoreCase))
                     lower = whiteListCommand;
@@ -127,13 +127,13 @@ public partial class BetterCommandInput : ModuleBase
             handledMessage = $"{lower}{command[spaceIndex..]}";
         }
 
-        LastChatTime = StandardTimeManager.Instance().Now;
+        lastChatTime = StandardTimeManager.Instance().Now;
         return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsValid(ReadOnlySpan<char> chars) =>
-        (StandardTimeManager.Instance().Now - LastChatTime).TotalMilliseconds >= 500f &&
+    private bool IsValid(ReadOnlySpan<char> chars) =>
+        (StandardTimeManager.Instance().Now - lastChatTime).TotalMilliseconds >= 500f &&
         (ContainsUppercase(chars) || ContainsFullWidth(chars) || ContainsSpace(chars));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

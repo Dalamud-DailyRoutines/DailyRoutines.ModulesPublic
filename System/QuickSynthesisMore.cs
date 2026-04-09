@@ -11,15 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class QuickSynthesisMore : ModuleBase
 {
-    private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
-
-    // ja → nop
-    private static readonly MemoryPatch SimpleCraftAmountJudgePatch =
-        new(SimpleCraftAmountJudgeSig.Get(), [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]);
-
-    private static readonly CompSig SimpleCraftGetAmountUpperLimitSig = new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
-    private static          Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("QuickSynthesisMoreTitle"),
@@ -28,10 +19,20 @@ public unsafe class QuickSynthesisMore : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
+    
+    private static readonly CompSig SimpleCraftGetAmountUpperLimitSig = new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
+    private delegate        int     SimpleCraftGetAmountUpperLimitDelegate(nint agent, bool eventCase);
+    private                 Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
+    
+    private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
+
+    // ja → nop
+    private readonly MemoryPatch simpleCraftAmountJudgePatch =
+        new(SimpleCraftAmountJudgeSig.Get(), [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]);
 
     protected override void Init()
     {
-        SimpleCraftAmountJudgePatch.Enable();
+        simpleCraftAmountJudgePatch.Enable();
 
         SimpleCraftGetAmountUpperLimitHook ??=
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
@@ -58,15 +59,10 @@ public unsafe class QuickSynthesisMore : ModuleBase
             var portion = itemCount / ingredient.Amount;
             if (portion == 0) return 0;
 
-            portion    = Math.Min(255,     portion);
-            maxPortion = Math.Min(portion, maxPortion);
+            portion    = (int)MathF.Min(255,     portion);
+            maxPortion = (int)MathF.Min(portion, maxPortion);
         }
 
         return maxPortion;
     }
-
-    protected override void Uninit() =>
-        SimpleCraftAmountJudgePatch.Disable();
-
-    private delegate int SimpleCraftGetAmountUpperLimitDelegate(nint agent, bool eventCase);
 }

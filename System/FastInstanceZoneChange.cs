@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -35,27 +36,18 @@ public unsafe class FastInstanceZoneChange : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private const string COMMAND = "insc";
 
-    // 其他地方也没法换线
-    private static readonly HashSet<TerritoryIntendedUse> ValidUses =
-    [
-        TerritoryIntendedUse.Overworld,
-        TerritoryIntendedUse.Town
-    ];
-
-    private static Config        ModuleConfig = null!;
-    private static IDtrBarEntry? Entry;
+    private Config        config = null!;
+    private IDtrBarEntry? entry;
 
     protected override void Init()
     {
         TaskHelper   ??= new() { TimeoutMS = 30_000, ShowDebug = true };
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("FastInstanceZoneChange-CommandHelp") });
 
-        if (ModuleConfig.AddDtrEntry)
+        if (config.AddDtrEntry)
         {
             HandleDtrEntry(true);
             OnConditionChanged(ConditionFlag.BetweenAreas, false);
@@ -80,25 +72,25 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-TeleportIfNotNearAetheryte"), ref ModuleConfig.TeleportIfNotNearAetheryte))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-TeleportIfNotNearAetheryte"), ref config.TeleportIfNotNearAetheryte))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-ConstantlyTry"), ref ModuleConfig.ConstantlyTry))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-ConstantlyTry"), ref config.ConstantlyTry))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-MountAfterChange"), ref ModuleConfig.MountAfterChange))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-MountAfterChange"), ref config.MountAfterChange))
+            config.Save(this);
 
-        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-AddDtrEntry"), ref ModuleConfig.AddDtrEntry))
+        if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-AddDtrEntry"), ref config.AddDtrEntry))
         {
-            ModuleConfig.Save(this);
-            HandleDtrEntry(ModuleConfig.AddDtrEntry);
+            config.Save(this);
+            HandleDtrEntry(config.AddDtrEntry);
         }
 
-        if (ModuleConfig.AddDtrEntry)
+        if (config.AddDtrEntry)
         {
-            if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-CloseAfterUsage"), ref ModuleConfig.CloseAfterUsage))
-                ModuleConfig.Save(this);
+            if (ImGui.Checkbox(Lang.Get("FastInstanceZoneChange-CloseAfterUsage"), ref config.CloseAfterUsage))
+                config.Save(this);
         }
     }
 
@@ -137,22 +129,22 @@ public unsafe class FastInstanceZoneChange : ModuleBase
             {
                 if (TaskHelper.IsBusy || DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition[ConditionFlag.Casting]) continue;
                 ChatManager.Instance().SendMessage($"/pdr insc {i}");
-                if (ModuleConfig.CloseAfterUsage)
+                if (config.CloseAfterUsage)
                     Overlay.IsOpen = false;
             }
         }
     }
 
-    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.BetweenAreas || value) return;
-        if (!ModuleConfig.AddDtrEntry          || Entry == null) return;
+        if (!config.AddDtrEntry          || entry == null) return;
 
-        Entry.Text = !InstancesManager.IsInstancedArea
+        entry.Text = !InstancesManager.IsInstancedArea
                          ? string.Empty
                          : Lang.Get("AutoMarksFinder-RelayInstanceDisplay", InstancesManager.CurrentInstance.ToSESquareCount());
-        Entry.Shown   = InstancesManager.IsInstancedArea;
-        Entry.Tooltip = ValidUses.Contains(GameState.TerritoryIntendedUse) ? Lang.Get("FastInstanceZoneChange-DtrEntryTooltip") : string.Empty;
+        entry.Shown   = InstancesManager.IsInstancedArea;
+        entry.Tooltip = ValidUses.Contains(GameState.TerritoryIntendedUse) ? Lang.Get("FastInstanceZoneChange-DtrEntryTooltip") : string.Empty;
     }
 
     private void OnCommand(string command, string args)
@@ -200,7 +192,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
         var isAnyAetheryteNearby = IsAnyAetheryteNearby(out _);
 
-        if (ModuleConfig.TeleportIfNotNearAetheryte && !isAnyAetheryteNearby)
+        if (config.TeleportIfNotNearAetheryte && !isAnyAetheryteNearby)
         {
             TaskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(default, GameState.TerritoryType, true), "传送到目标区域最近以太之光", weight: 2);
             TaskHelper.DelayNext(500, "等待传送开始", 2);
@@ -246,7 +238,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
             weight: 2
         );
 
-        if (ModuleConfig.ConstantlyTry)
+        if (config.ConstantlyTry)
             TaskHelper.Enqueue(() => EnqueueInstanceChange(targetInstance, 0), "开始持续尝试切换副本区", weight: 2);
         else
             TaskHelper.Enqueue(() => ChangeInstanceZone(targetInstance), "切换副本区", weight: 2);
@@ -264,7 +256,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
             "等待切换完毕, 更新副本区信息"
         );
 
-        if (ModuleConfig.MountAfterChange)
+        if (config.MountAfterChange)
         {
             TaskHelper.Enqueue
             (
@@ -293,9 +285,9 @@ public unsafe class FastInstanceZoneChange : ModuleBase
     {
         switch (isAdd)
         {
-            case true when Entry == null:
-                Entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-FastInstanceZoneChange");
-                Entry.OnClick =  _ =>
+            case true when entry == null:
+                entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-FastInstanceZoneChange");
+                entry.OnClick =  _ =>
                 {
                     Overlay ??= new(this)
                     {
@@ -304,12 +296,12 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
                     Overlay.IsOpen ^= true;
                 };
-                Entry.Shown   =   false;
-                Entry.Tooltip =   Lang.Get("FastInstanceZoneChange-DtrEntryTooltip");
+                entry.Shown   =   false;
+                entry.Tooltip =   Lang.Get("FastInstanceZoneChange-DtrEntryTooltip");
                 return;
             case false:
-                Entry?.Remove();
-                Entry = null;
+                entry?.Remove();
+                entry = null;
                 break;
         }
 
@@ -394,4 +386,17 @@ public unsafe class FastInstanceZoneChange : ModuleBase
         public bool MountAfterChange           = true;
         public bool TeleportIfNotNearAetheryte = true;
     }
+    
+    #region 常量
+
+    private const string COMMAND = "insc";
+
+    // 其他地方也没法换线
+    private static readonly FrozenSet<TerritoryIntendedUse> ValidUses =
+    [
+        TerritoryIntendedUse.Overworld,
+        TerritoryIntendedUse.Town
+    ];
+
+    #endregion
 }

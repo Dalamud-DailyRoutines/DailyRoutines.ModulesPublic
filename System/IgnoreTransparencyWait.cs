@@ -9,12 +9,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class IgnoreTransparencyWait : ModuleBase
 {
-    private static readonly CompSig WaitForBaseSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B 49 ?? E8 ?? ?? ?? ?? 48 8B 35");
-
-    private static Hook<EventSceneScriptDelegate>? WaitForTransparencyHook;
-    private static Hook<EventSceneScriptDelegate>? WaitForMoveHook;
-    private static Hook<EventSceneScriptDelegate>? WaitForPathMoveHook;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("IgnoreTransparencyWaitTitle"),
@@ -23,6 +17,12 @@ public unsafe class IgnoreTransparencyWait : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private static readonly CompSig WaitForBaseSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B 49 ?? E8 ?? ?? ?? ?? 48 8B 35");
+    private delegate        nint    EventSceneScriptDelegate(EventSceneModuleImplBase* scene);
+    private Hook<EventSceneScriptDelegate>? WaitForTransparencyHook;
+    private Hook<EventSceneScriptDelegate>? WaitForMoveHook;
+    private Hook<EventSceneScriptDelegate>? WaitForPathMoveHook;
 
     protected override void Init()
     {
@@ -42,6 +42,4 @@ public unsafe class IgnoreTransparencyWait : ModuleBase
     }
 
     private static nint EventSceneScriptDetour(EventSceneModuleImplBase* scene) => 1;
-
-    private delegate nint EventSceneScriptDelegate(EventSceneModuleImplBase* scene);
 }

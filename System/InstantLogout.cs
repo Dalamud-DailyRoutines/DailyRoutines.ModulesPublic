@@ -16,20 +16,18 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class InstantLogout : ModuleBase
 {
-    private static readonly CompSig                          SystemMenuExecuteSig = new("E8 ?? ?? ?? ?? 40 B5 01 41 B9 ?? ?? ?? ??");
-    private static          Hook<SystemMenuExecuteDelegate>? SystemMenuExecuteHook;
-
-    private static Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
-
-    private static readonly TextCommand LogoutLine   = LuminaGetter.GetRowOrDefault<TextCommand>(172);
-    private static readonly TextCommand ShutdownLine = LuminaGetter.GetRowOrDefault<TextCommand>(173);
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("InstantLogoutTitle"),
         Description = Lang.Get("InstantLogoutDescription"),
         Category    = ModuleCategory.System
     };
+    
+    private static readonly CompSig                          SystemMenuExecuteSig = new("E8 ?? ?? ?? ?? 40 B5 01 41 B9 ?? ?? ?? ??");
+    private delegate        nint                             SystemMenuExecuteDelegate(AgentHUD* agentHud, int a2, uint a3, int a4, nint a5);
+    private                 Hook<SystemMenuExecuteDelegate>? SystemMenuExecuteHook;
+
+    private Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
 
     protected override void Init()
     {
@@ -127,6 +125,11 @@ public unsafe class InstantLogout : ModuleBase
             }
         );
     }
+    
+    #region 常量
 
-    private delegate nint SystemMenuExecuteDelegate(AgentHUD* agentHud, int a2, uint a3, int a4, nint a5);
+    private static readonly TextCommand LogoutLine   = LuminaGetter.GetRowOrDefault<TextCommand>(172);
+    private static readonly TextCommand ShutdownLine = LuminaGetter.GetRowOrDefault<TextCommand>(173);
+
+    #endregion
 }

@@ -7,7 +7,17 @@ namespace DailyRoutines.ModulesPublic;
 
 public class BetterWaitCommand : ModuleBase
 {
-    private static readonly MemoryPatch WaitSyntaxDecimalPatch = new
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = Lang.Get("BetterWaitCommandTitle"),
+        Description = Lang.Get("BetterWaitCommandDescription"),
+        Category    = ModuleCategory.System,
+        Author      = ["Cindy-Master"]
+    };
+
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private readonly MemoryPatch WaitSyntaxDecimalPatch = new
     (
         "F3 0F 58 05 ?? ?? ?? ?? F3 48 0F 2C C0 69 C8",
         [
@@ -20,7 +30,7 @@ public class BetterWaitCommand : ModuleBase
         ]
     );
 
-    private static readonly MemoryPatch WaitCommandDecimalPatch = new
+    private readonly MemoryPatch WaitCommandDecimalPatch = new
     (
         "F3 0F 58 0D ?? ?? ?? ?? F3 48 0F 2C C1 69 C8",
         [
@@ -34,16 +44,6 @@ public class BetterWaitCommand : ModuleBase
             0xEB // 0x1F
         ]
     );
-
-    public override ModuleInfo Info { get; } = new()
-    {
-        Title       = Lang.Get("BetterWaitCommandTitle"),
-        Description = Lang.Get("BetterWaitCommandDescription"),
-        Category    = ModuleCategory.System,
-        Author      = ["Cindy-Master"]
-    };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init()
     {

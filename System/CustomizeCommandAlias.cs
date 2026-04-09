@@ -17,16 +17,16 @@ public class CustomizeCommandAlias : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static CompiledAliasEntry[] ActiveAliasEntries = [];
+    private CompiledAliasEntry[] activeAliasEntries = [];
 
-    private static string SourceCommandInput         = string.Empty;
-    private static string TargetCommandInput = string.Empty;
+    private string sourceCommandInput = string.Empty;
+    private string targetCommandInput = string.Empty;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
         RefreshActiveAliasEntries();
 
         ChatManager.Instance().RegPreExecuteCommandInner(OnPreExecuteCommandInner);
@@ -39,28 +39,28 @@ public class CustomizeCommandAlias : ModuleBase
     {
         using (ImRaii.Disabled
                (
-                   string.IsNullOrEmpty(SourceCommandInput) ||
-                   string.IsNullOrEmpty(TargetCommandInput) ||
-                   !SourceCommandInput.StartsWith('/')      ||
-                   !TargetCommandInput.StartsWith('/')
+                   string.IsNullOrEmpty(sourceCommandInput) ||
+                   string.IsNullOrEmpty(targetCommandInput) ||
+                   !sourceCommandInput.StartsWith('/')      ||
+                   !targetCommandInput.StartsWith('/')
                ))
         {
             if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, Lang.Get("Add")))
             {
-                if (!HasDuplicateAlias(SourceCommandInput))
+                if (!HasDuplicateAlias(sourceCommandInput))
                 {
                     var entry = new AliasEntry
                     {
                         Enabled       = true,
-                        Alias         = SourceCommandInput,
-                        TargetCommand = TargetCommandInput
+                        Alias         = sourceCommandInput,
+                        TargetCommand = targetCommandInput
                     };
 
-                    ModuleConfig.AliasEntries.Add(entry);
+                    config.AliasEntries.Add(entry);
                     SaveAndRefresh(this);
 
-                    SourceCommandInput = string.Empty;
-                    TargetCommandInput = string.Empty;
+                    sourceCommandInput = string.Empty;
+                    targetCommandInput = string.Empty;
                 }
             }
         }
@@ -69,12 +69,12 @@ public class CustomizeCommandAlias : ModuleBase
         ImGui.SameLine();
         using (ImRaii.Group())
         {
-            ImGui.InputText($"{Lang.Get("Alias")}##AliasInput", ref SourceCommandInput, 128);
+            ImGui.InputText($"{Lang.Get("Alias")}##AliasInput", ref sourceCommandInput, 128);
         
-            ImGui.InputText($"{Lang.Get("Target")}##TargetCommandInput", ref TargetCommandInput, 128);
+            ImGui.InputText($"{Lang.Get("Target")}##TargetCommandInput", ref targetCommandInput, 128);
         }
         
-        if (ModuleConfig.AliasEntries.Count == 0)
+        if (config.AliasEntries.Count == 0)
             return;
         
         ImGui.NewLine();
@@ -88,9 +88,9 @@ public class CustomizeCommandAlias : ModuleBase
         ImGui.TableSetupColumn(Lang.Get("Operation"), ImGuiTableColumnFlags.WidthStretch, 0.18f);
         ImGui.TableHeadersRow();
 
-        for (var i = 0; i < ModuleConfig.AliasEntries.Count; i++)
+        for (var i = 0; i < config.AliasEntries.Count; i++)
         {
-            var entry = ModuleConfig.AliasEntries[i];
+            var entry = config.AliasEntries[i];
 
             using var id = ImRaii.PushId($"CustomizeCommandAlias_{i}");
 
@@ -143,7 +143,7 @@ public class CustomizeCommandAlias : ModuleBase
 
             if (ImGuiOm.ButtonIcon("Delete", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
-                ModuleConfig.AliasEntries.RemoveAt(i);
+                config.AliasEntries.RemoveAt(i);
                 SaveAndRefresh(this);
 
                 i--;
@@ -151,10 +151,10 @@ public class CustomizeCommandAlias : ModuleBase
         }
     }
 
-    private static void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
+    private void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
-        var activeAliasEntries = ActiveAliasEntries.AsSpan();
-        if (activeAliasEntries.IsEmpty)
+        var span = this.activeAliasEntries.AsSpan();
+        if (span.IsEmpty)
             return;
 
         var messageText = message.ToString();
@@ -165,7 +165,7 @@ public class CustomizeCommandAlias : ModuleBase
         var firstChar   = messageSpan[0];
         if (!firstChar.Equals('/')) return;
 
-        foreach (ref readonly var entry in activeAliasEntries)
+        foreach (ref readonly var entry in span)
         {
             if (firstChar          != entry.FirstChar  ||
                 messageSpan.Length < entry.AliasLength ||
@@ -179,15 +179,15 @@ public class CustomizeCommandAlias : ModuleBase
         }
     }
 
-    private static void SaveAndRefresh(ModuleBase module)
+    private void SaveAndRefresh(ModuleBase module)
     {
-        ModuleConfig.Save(module);
+        config.Save(module);
         RefreshActiveAliasEntries();
     }
 
-    private static void RefreshActiveAliasEntries()
+    private void RefreshActiveAliasEntries()
     {
-        var aliasEntries = CollectionsMarshal.AsSpan(ModuleConfig.AliasEntries);
+        var aliasEntries = CollectionsMarshal.AsSpan(config.AliasEntries);
         var activeCount  = 0;
 
         foreach (ref readonly var entry in aliasEntries)
@@ -198,7 +198,7 @@ public class CustomizeCommandAlias : ModuleBase
 
         if (activeCount == 0)
         {
-            ActiveAliasEntries = [];
+            activeAliasEntries = [];
             return;
         }
 
@@ -213,12 +213,12 @@ public class CustomizeCommandAlias : ModuleBase
             compiledEntries[index++] = new(entry.Alias, entry.TargetCommand);
         }
 
-        ActiveAliasEntries = compiledEntries;
+        activeAliasEntries = compiledEntries;
     }
 
-    private static bool HasDuplicateAlias(ReadOnlySpan<char> alias, int excludedIndex = -1)
+    private bool HasDuplicateAlias(ReadOnlySpan<char> alias, int excludedIndex = -1)
     {
-        var aliasEntries = CollectionsMarshal.AsSpan(ModuleConfig.AliasEntries);
+        var aliasEntries = CollectionsMarshal.AsSpan(config.AliasEntries);
 
         for (var i = 0; i < aliasEntries.Length; i++)
         {

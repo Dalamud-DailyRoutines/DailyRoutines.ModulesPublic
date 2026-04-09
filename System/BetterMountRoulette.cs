@@ -15,17 +15,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class BetterMountRoulette : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static LuminaSearcher<Mount>?             MasterMountsSearcher;
-    private static MountListHandler?                  NormalMounts;
-    private static MountListHandler?                  PVPMounts;
-    private static Dictionary<uint, MountListHandler> ZoneMounts = [];
-
-    private static ZoneSelectCombo? ZoneSelector;
-
-    private static HashSet<uint>? MountsListToUse;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("BetterMountRouletteTitle"),
@@ -33,13 +22,22 @@ public class BetterMountRoulette : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["XSZYYS"]
     };
+    
+    private Config config = null!;
+
+    private readonly ZoneSelectCombo zoneSelector = new("##BetterMountRouletteZoneSelector");
+    
+    private LuminaSearcher<Mount>?             masterMountsSearcher;
+    private MountListHandler?                  pvpMounts;
+    private MountListHandler?                  normalMounts;
+    private Dictionary<uint, MountListHandler> zoneMountListHandlers = [];
+    
+    private HashSet<uint>? mountsListToUse;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
-
-        ZoneSelector = new ZoneSelectCombo("##BetterMountRouletteZoneSelector");
-
+        config = Config.Load(this) ?? new();
+        
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
 
         DService.Instance().ClientState.Login += OnLogin;
@@ -55,26 +53,25 @@ public class BetterMountRoulette : ModuleBase
         DService.Instance().ClientState.Login            -= OnLogin;
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-        MasterMountsSearcher = null;
-        NormalMounts         = null;
-        PVPMounts            = null;
-        ZoneMounts.Clear();
+        masterMountsSearcher = null;
+        normalMounts         = null;
+        pvpMounts            = null;
+        zoneMountListHandlers.Clear();
 
-        ZoneSelector    = null;
-        MountsListToUse = null;
+        mountsListToUse = null;
     }
 
     protected override void ConfigUI()
     {
-        if (NormalMounts == null || PVPMounts == null)
+        if (normalMounts == null || pvpMounts == null)
             return;
 
         using var tabBar = ImRaii.TabBar("##MountTabs", ImGuiTabBarFlags.Reorderable);
         if (!tabBar) return;
 
-        DrawTab(Lang.Get("General"), NormalMounts);
+        DrawTab(Lang.Get("General"), normalMounts);
 
-        DrawTab("PVP", PVPMounts);
+        DrawTab("PVP", pvpMounts);
 
         DrawZoneTabs();
 
@@ -93,7 +90,7 @@ public class BetterMountRoulette : ModuleBase
     {
         var zonesToRemove = new List<uint>();
 
-        foreach (var (zoneID, handler) in ZoneMounts)
+        foreach (var (zoneID, handler) in zoneMountListHandlers)
         {
             if (!LuminaGetter.TryGetRow<TerritoryType>(zoneID, out var territory)) continue;
 
@@ -113,15 +110,15 @@ public class BetterMountRoulette : ModuleBase
 
         foreach (var zoneID in zonesToRemove)
         {
-            ZoneMounts.Remove(zoneID);
-            ModuleConfig.ZoneRouletteMounts.Remove(zoneID);
-            ModuleConfig.Save(this);
+            zoneMountListHandlers.Remove(zoneID);
+            config.ZoneRouletteMounts.Remove(zoneID);
+            config.Save(this);
         }
     }
 
     private void HandleNewZoneTabAddition()
     {
-        if (ZoneSelector == null) return;
+        if (zoneSelector == null) return;
 
         if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing | ImGuiTabItemFlags.NoTooltip))
             ImGui.OpenPopup("AddNewZonePopup");
@@ -130,14 +127,14 @@ public class BetterMountRoulette : ModuleBase
         {
             if (popup)
             {
-                if (ZoneSelector.DrawRadio())
+                if (zoneSelector.DrawRadio())
                 {
                     var newMountSet = new HashSet<uint>();
 
-                    if (ModuleConfig.ZoneRouletteMounts.TryAdd(ZoneSelector.SelectedID, newMountSet))
+                    if (config.ZoneRouletteMounts.TryAdd(zoneSelector.SelectedID, newMountSet))
                     {
-                        ZoneMounts[ZoneSelector.SelectedID] = new MountListHandler(MasterMountsSearcher, newMountSet);
-                        ModuleConfig.Save(this);
+                        zoneMountListHandlers[zoneSelector.SelectedID] = new MountListHandler(masterMountsSearcher, newMountSet);
+                        config.Save(this);
                     }
                 }
             }
@@ -204,7 +201,7 @@ public class BetterMountRoulette : ModuleBase
                 {
                     if (!handler.SelectedIDs.Add(mount.RowId))
                         handler.SelectedIDs.Remove(mount.RowId);
-                    ModuleConfig.Save(this);
+                    config.Save(this);
                 }
 
                 if (ImGui.IsItemHovered())
@@ -213,10 +210,10 @@ public class BetterMountRoulette : ModuleBase
         }
     }
 
-    private static void OnZoneChanged(ushort obj) =>
+    private void OnZoneChanged(ushort obj) =>
         OnLogin();
 
-    private static unsafe void OnLogin()
+    private unsafe void OnLogin()
     {
         var unlockedMounts = LuminaGetter.Get<Mount>()
                                          .Where
@@ -226,7 +223,7 @@ public class BetterMountRoulette : ModuleBase
                                          )
                                          .ToList();
 
-        MasterMountsSearcher = new LuminaSearcher<Mount>
+        masterMountsSearcher = new LuminaSearcher<Mount>
         (
             unlockedMounts,
             [
@@ -234,15 +231,15 @@ public class BetterMountRoulette : ModuleBase
             ]
         );
 
-        NormalMounts = new(MasterMountsSearcher, ModuleConfig.NormalRouletteMounts);
-        PVPMounts    = new(MasterMountsSearcher, ModuleConfig.PVPRouletteMounts);
+        normalMounts = new(masterMountsSearcher, config.NormalRouletteMounts);
+        pvpMounts    = new(masterMountsSearcher, config.PVPRouletteMounts);
 
-        ZoneMounts.Clear();
-        foreach (var (zoneID, mountIDs) in ModuleConfig.ZoneRouletteMounts)
-            ZoneMounts[zoneID] = new MountListHandler(MasterMountsSearcher, mountIDs);
+        zoneMountListHandlers.Clear();
+        foreach (var (zoneID, mountIDs) in config.ZoneRouletteMounts)
+            zoneMountListHandlers[zoneID] = new MountListHandler(masterMountsSearcher, mountIDs);
     }
 
-    private static void OnPreUseAction
+    private void OnPreUseAction
     (
         ref bool                        isPrevented,
         ref ActionType                  actionType,
@@ -255,33 +252,33 @@ public class BetterMountRoulette : ModuleBase
     {
         if (!DService.Instance().Condition[ConditionFlag.Mounted] && actionType == ActionType.GeneralAction && MountRouletteActionIDs.Contains(actionID))
         {
-            MountsListToUse = null;
+            mountsListToUse = null;
             var currentZone = GameState.TerritoryType;
 
-            if (ModuleConfig.ZoneRouletteMounts.TryGetValue(currentZone, out var zoneMounts) && zoneMounts.Count > 0)
-                MountsListToUse = zoneMounts;
+            if (config.ZoneRouletteMounts.TryGetValue(currentZone, out var zoneMounts) && zoneMounts.Count > 0)
+                mountsListToUse = zoneMounts;
             else
             {
-                MountsListToUse = GameState.IsInPVPArea
-                                      ? ModuleConfig.PVPRouletteMounts
-                                      : ModuleConfig.NormalRouletteMounts;
+                mountsListToUse = GameState.IsInPVPArea
+                                      ? config.PVPRouletteMounts
+                                      : config.NormalRouletteMounts;
             }
         }
 
-        if (MountsListToUse != null && actionType == ActionType.Mount)
+        if (mountsListToUse != null && actionType == ActionType.Mount)
         {
             try
             {
-                if (MountsListToUse.Count > 0)
+                if (mountsListToUse.Count > 0)
                 {
-                    var mountListAsList = MountsListToUse.ToList();
+                    var mountListAsList = mountsListToUse.ToList();
                     var randomMountID   = mountListAsList[Random.Shared.Next(mountListAsList.Count)];
                     actionID = randomMountID;
                 }
             }
             finally
             {
-                MountsListToUse = null;
+                mountsListToUse = null;
             }
         }
     }
@@ -306,9 +303,7 @@ public class BetterMountRoulette : ModuleBase
     }
 
     #region 数据
-
-    private const int PageSize = 100;
-
+    
     private static readonly HashSet<uint> MountRouletteActionIDs = [9, 24];
 
     private static readonly Vector4 ButtonNormalColor   = ImGuiCol.Button.ToVector4().WithAlpha(0f);
