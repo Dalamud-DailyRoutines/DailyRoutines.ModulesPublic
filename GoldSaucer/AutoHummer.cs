@@ -24,9 +24,12 @@ public class AutoHummer : ModuleBase
 
     protected override void Init()
     {
-        TaskHelper ??= new() { TimeoutMS = 10000 };
+        TaskHelper ??= new();
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "Hummer", OnAddonSetup);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
     protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
@@ -87,7 +90,4 @@ public class AutoHummer : ModuleBase
 
         return false;
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

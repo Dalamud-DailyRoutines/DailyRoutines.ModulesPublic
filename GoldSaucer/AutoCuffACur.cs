@@ -28,6 +28,14 @@ public class AutoCuffACur : ModuleBase
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "PunchingMachine", OnAddonSetup);
     }
+    
+    protected override unsafe void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
+
+        if (PunchingMachine->IsAddonAndNodesReady())
+            new EventCompletePackt(2359300, 14).Send();
+    }
 
     protected override void ConfigUI()
     {
@@ -116,13 +124,5 @@ public class AutoCuffACur : ModuleBase
 
         text->SetText(builder.Build().EncodeWithNullTerminator());
         text->SetPositionFloat(20, 60);
-    }
-
-    protected override unsafe void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
-
-        if (PunchingMachine->IsAddonAndNodesReady())
-            new EventCompletePackt(2359300, 14).Send();
     }
 }

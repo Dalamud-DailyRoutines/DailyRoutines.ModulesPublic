@@ -27,6 +27,9 @@ public class AutoUfoCatcher : ModuleBase
         TaskHelper ??= new();
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "UfoCatcher", OnAddonSetup);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
     protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
@@ -85,7 +88,4 @@ public class AutoUfoCatcher : ModuleBase
 
         return false;
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

@@ -13,14 +13,14 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMiniCactpot : ModuleBase
 {
-    private static readonly MiniCactpotSolver Solver = new();
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoMiniCactpotTitle"),
         Description = Lang.Get("AutoMiniCactpotDescription"),
         Category    = ModuleCategory.GoldSaucer
     };
+    
+    private readonly MiniCactpotSolver solver = new();
 
     protected override void Init()
     {
@@ -53,7 +53,7 @@ public unsafe class AutoMiniCactpot : ModuleBase
         }
     }
 
-    private static void OnUpdate(IFramework framework)
+    private void OnUpdate(IFramework framework)
     {
         var addon = (AddonLotteryDaily*)LotteryDaily;
         var agent = AgentLotteryDaily.Instance();
@@ -68,7 +68,7 @@ public unsafe class AutoMiniCactpot : ModuleBase
             // 选数字
             case 1:
             {
-                var solution = Solver.Solve(state);
+                var solution = solver.Solve(state);
 
                 for (var i = 0; i < MiniCactpotSolver.TOTAL_NUMBERS; i++)
                     if (solution[i])
@@ -83,7 +83,7 @@ public unsafe class AutoMiniCactpot : ModuleBase
             // 选线
             case 2:
             {
-                var               solution = Solver.Solve(state);
+                var               solution = solver.Solve(state);
                 ReadOnlySpan<int> map      = [6, 3, 4, 5, 7, 0, 1, 2];
 
                 for (var i = 0; i < MiniCactpotSolver.TOTAL_LANES; i++)

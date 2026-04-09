@@ -18,13 +18,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoSellCards : ModuleBase
 {
-    private const string Command = "scards";
-
-    private static HorizontalListNode? LayoutNode;
-    private static TextNode?           TitleNode;
-    private static TextButtonNode?     StartButton;
-    private static TextButtonNode?     StopButton;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoSellCardsTitle"),
@@ -34,6 +27,11 @@ public unsafe class AutoSellCards : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private HorizontalListNode? layoutNode;
+    private TextNode?           titleNode;
+    private TextButtonNode?     startButton;
+    private TextButtonNode?     stopButton;
 
     protected override void Init()
     {
@@ -44,7 +42,17 @@ public unsafe class AutoSellCards : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "TripleTriadCoinExchange", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadCoinExchange", OnAddon);
 
-        CommandManager.Instance().AddSubCommand(Command, new(OnCommand) { HelpMessage = Lang.Get("AutoSellCards-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoSellCards-CommandHelp") });
+    }
+    
+    protected override void Uninit()
+    {
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonDialog);
     }
 
     protected override void ConfigUI()
@@ -52,7 +60,7 @@ public unsafe class AutoSellCards : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"/pdr {Command} → {Lang.Get("AutoSellCards-CommandHelp")}");
+        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("AutoSellCards-CommandHelp")}");
     }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
@@ -62,9 +70,9 @@ public unsafe class AutoSellCards : ModuleBase
             case AddonEvent.PostDraw:
                 if (TripleTriadCoinExchange == null) return;
 
-                if (LayoutNode == null)
+                if (layoutNode == null)
                 {
-                    TitleNode = new TextNode
+                    titleNode = new TextNode
                     {
                         LineSpacing      = 23,
                         AlignmentType    = AlignmentType.Left,
@@ -77,16 +85,16 @@ public unsafe class AutoSellCards : ModuleBase
                         Position         = new(15, 465),
                         String           = Info.Title
                     };
-                    TitleNode.AttachNode(TripleTriadCoinExchange->RootNode);
+                    titleNode.AttachNode(TripleTriadCoinExchange->RootNode);
 
-                    LayoutNode = new HorizontalListNode
+                    layoutNode = new HorizontalListNode
                     {
                         IsVisible = true,
                         Position  = new(15, 495)
                     };
-                    LayoutNode.AttachNode(TripleTriadCoinExchange->RootNode);
+                    layoutNode.AttachNode(TripleTriadCoinExchange->RootNode);
 
-                    StartButton = new()
+                    startButton = new()
                     {
                         IsVisible = true,
                         Size      = new(260, 35),
@@ -97,16 +105,16 @@ public unsafe class AutoSellCards : ModuleBase
                             StartHandOver();
                         }
                     };
-                    LayoutNode.AddNode(StartButton);
+                    layoutNode.AddNode(startButton);
 
-                    StopButton = new()
+                    stopButton = new()
                     {
                         IsVisible = true,
                         Size      = new(260, 35),
                         String    = Lang.Get("Stop"),
                         OnClick   = () => TaskHelper.Abort()
                     };
-                    LayoutNode.AddNode(StopButton);
+                    layoutNode.AddNode(stopButton);
 
                     TripleTriadCoinExchange->RootNode->SetHeight(486   + 60);
                     TripleTriadCoinExchange->WindowNode->SetHeight(486 + 60);
@@ -125,28 +133,28 @@ public unsafe class AutoSellCards : ModuleBase
 
                 if (TaskHelper.IsBusy)
                 {
-                    StartButton.IsEnabled = false;
-                    StopButton.IsEnabled  = true;
+                    startButton.IsEnabled = false;
+                    stopButton.IsEnabled  = true;
                 }
                 else
                 {
-                    StartButton.IsEnabled = true;
-                    StopButton.IsEnabled  = false;
+                    startButton.IsEnabled = true;
+                    stopButton.IsEnabled  = false;
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                LayoutNode?.Dispose();
-                LayoutNode = null;
+                layoutNode?.Dispose();
+                layoutNode = null;
 
-                StartButton?.Dispose();
-                StartButton = null;
+                startButton?.Dispose();
+                startButton = null;
 
-                StopButton?.Dispose();
-                StopButton = null;
+                stopButton?.Dispose();
+                stopButton = null;
 
-                TitleNode?.Dispose();
-                TitleNode = null;
+                titleNode?.Dispose();
+                titleNode = null;
 
                 TaskHelper?.Abort();
                 break;
@@ -231,14 +239,10 @@ public unsafe class AutoSellCards : ModuleBase
         TaskHelper.Enqueue(StartHandOver, "开始新一轮检测交换", weight: 2);
         return true;
     }
+    
+    #region 常量
 
-    protected override void Uninit()
-    {
-        CommandManager.Instance().RemoveSubCommand(Command);
+    private const string COMMAND = "scards";
 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonDialog);
-    }
+    #endregion
 }

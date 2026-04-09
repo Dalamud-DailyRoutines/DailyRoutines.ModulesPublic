@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -10,25 +11,18 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoJumboCactpot : ModuleBase
 {
-    private static readonly Dictionary<Mode, string> NumberModeLoc = new()
-    {
-        [Mode.Random] = Lang.Get("AutoJumboCactpot-Random"),
-        [Mode.Fixed]  = Lang.Get("AutoJumboCactpot-Fixed")
-    };
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoJumboCactpotTitle"),
         Description = Lang.Get("AutoJumboCactpotDescription"),
         Category    = ModuleCategory.GoldSaucer
     };
-
-
+    
+    private Config config = null!;
+    
     protected override unsafe void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         TaskHelper ??= new() { TimeoutMS = 5_000 };
 
@@ -36,37 +30,40 @@ public class AutoJumboCactpot : ModuleBase
         if (LotteryWeeklyInput->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
 
-        using (var combo = ImRaii.Combo($"{Lang.Get("AutoJumboCactpot-NumberMode")}", NumberModeLoc.GetValueOrDefault(ModuleConfig.NumberMode, string.Empty)))
+        using (var combo = ImRaii.Combo($"{Lang.Get("AutoJumboCactpot-NumberMode")}", NumberModeLoc.GetValueOrDefault(config.NumberMode, string.Empty)))
         {
             if (combo)
             {
                 foreach (var modePair in NumberModeLoc)
                 {
-                    if (ImGui.Selectable(modePair.Value, modePair.Key == ModuleConfig.NumberMode))
+                    if (ImGui.Selectable(modePair.Value, modePair.Key == config.NumberMode))
                     {
-                        ModuleConfig.NumberMode = modePair.Key;
-                        ModuleConfig.Save(this);
+                        config.NumberMode = modePair.Key;
+                        config.Save(this);
                     }
                 }
             }
         }
 
-        if (ModuleConfig.NumberMode == Mode.Fixed)
+        if (config.NumberMode == Mode.Fixed)
         {
             ImGui.SameLine();
 
             ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            ImGui.InputInt(Lang.Get("AutoJumboCactpot-FixedNumber"), ref ModuleConfig.FixedNumber);
+            ImGui.InputInt(Lang.Get("AutoJumboCactpot-FixedNumber"), ref config.FixedNumber);
 
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
-                ModuleConfig.FixedNumber = Math.Clamp(ModuleConfig.FixedNumber, 0, 9999);
-                ModuleConfig.Save(this);
+                config.FixedNumber = Math.Clamp(config.FixedNumber, 0, 9999);
+                config.Save(this);
             }
         }
     }
@@ -86,10 +83,10 @@ public class AutoJumboCactpot : ModuleBase
 
                 if (!LotteryWeeklyInput->IsAddonAndNodesReady()) return false;
 
-                var number = ModuleConfig.NumberMode switch
+                var number = config.NumberMode switch
                 {
                     Mode.Random => Random.Shared.Next(0, 9999),
-                    Mode.Fixed  => Math.Clamp(ModuleConfig.FixedNumber, 0, 9999),
+                    Mode.Fixed  => Math.Clamp(config.FixedNumber, 0, 9999),
                     _           => 0
                 };
 
@@ -107,8 +104,6 @@ public class AutoJumboCactpot : ModuleBase
         );
     }
 
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     private class Config : ModuleConfig
     {
@@ -121,4 +116,14 @@ public class AutoJumboCactpot : ModuleBase
         Random,
         Fixed
     }
+    
+    #region 常量
+
+    private static readonly FrozenDictionary<Mode, string> NumberModeLoc = new Dictionary<Mode, string>()
+    {
+        [Mode.Random] = Lang.Get("AutoJumboCactpot-Random"),
+        [Mode.Fixed]  = Lang.Get("AutoJumboCactpot-Fixed")
+    }.ToFrozenDictionary();
+
+    #endregion
 }

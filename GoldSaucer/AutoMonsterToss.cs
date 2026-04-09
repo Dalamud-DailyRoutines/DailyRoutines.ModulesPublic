@@ -28,6 +28,14 @@ public class AutoMonsterToss : ModuleBase
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "BasketBall", OnAddonSetup);
     }
+    
+    protected override unsafe void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
+
+        if (BasketBall->IsAddonAndNodesReady())
+            new EventCompletePackt(0x240001, 14).Send();
+    }
 
     protected override void ConfigUI()
     {
@@ -128,13 +136,5 @@ public class AutoMonsterToss : ModuleBase
 
         text->SetText(builder.Encode());
         text->SetPositionFloat(20, 60);
-    }
-
-    protected override unsafe void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
-
-        if (BasketBall->IsAddonAndNodesReady())
-            new EventCompletePackt(0x240001, 14).Send();
     }
 }
