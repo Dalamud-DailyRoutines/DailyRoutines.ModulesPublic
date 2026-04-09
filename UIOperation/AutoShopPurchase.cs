@@ -18,11 +18,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoShopPurchase : ModuleBase
 {
-    private static Config?                 ModuleConfig;
-    private static ShopPresetDisplayTable? PresetDisplayTable;
-
-    private static List<AddonWithListInfo> ScannedData = [];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoShopPurchaseTitle"),
@@ -32,39 +27,43 @@ public class AutoShopPurchase : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
+    private Config config = null!;
+    
+    private ShopPresetDisplayTable? presetDisplayTable;
+    private List<AddonWithListInfo> scannedData = [];
+
     protected override void Init()
     {
-        ModuleConfig       =   Config.Load(this) ?? new();
-        PresetDisplayTable ??= new();
+        config             =   Config.Load(this) ?? new();
+        presetDisplayTable ??= new(this);
+    }
+    
+    protected override void Uninit()
+    {
+        config?.Save(this);
+
+        presetDisplayTable?.Dispose();
+        presetDisplayTable = null;
+
+        ShopPresetExecutor.CancelAndDispose();
     }
 
     protected override void ConfigUI()
     {
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileImport, Lang.Get("Import")))
         {
-            var config = ImportFromClipboard<ShopPurchasePreset>();
+            var clipboard = ImportFromClipboard<ShopPurchasePreset>();
 
-            if (config != null)
+            if (clipboard != null)
             {
-                ModuleConfig.Presets.Add(config);
-                ModuleConfig.Save(this);
+                this.config.Presets.Add(clipboard);
+                this.config.Save(this);
             }
         }
 
-        PresetDisplayTable.Draw();
+        presetDisplayTable.Draw();
     }
-
-    protected override void Uninit()
-    {
-        if (ModuleConfig != null)
-            ModuleConfig.Save(this);
-
-        PresetDisplayTable?.Dispose();
-        PresetDisplayTable = null;
-
-        ShopPresetExecutor.CancelAndDispose();
-    }
-
+    
     private class Config : ModuleConfig
     {
         public List<ShopPurchasePreset> Presets = [];
@@ -247,20 +246,24 @@ public class AutoShopPurchase : ModuleBase
             $"{Name}_{AddonName}_Click:{ClickRoute.Key}-{ClickRoute.Value}_Number:{NumberRoute.Key}-{NumberRoute.Value}";
     }
 
-    public class ShopPresetDisplayTable : IDisposable
+    private class ShopPresetDisplayTable : IDisposable
     {
-        private static string NameInput       = string.Empty;
-        private static string TargetNameInput = Lang.Get("AutoShopPurchase-UI-UnknownTarget");
-        private static string AddonNameInput  = string.Empty;
-        private static uint   ListComponentNodeIDInput;
-        private static int    ClickIndexInput;
-        private static bool   IsSetNumberInput;
-        private static int    SetNumberInput;
+        private readonly AutoShopPurchase module;
+        
+        private string nameInput       = string.Empty;
+        private string targetNameInput = Lang.Get("AutoShopPurchase-UI-UnknownTarget");
+        private string addonNameInput  = string.Empty;
+        private uint   listComponentNodeIDInput;
+        private int    clickIndexInput;
+        private bool   isSetNumberInput;
+        private int    setNumberInput;
+        private bool   isAddNewPresetWindowOpen;
 
-        private bool IsAddNewPresetWindowOpen;
-
-        public ShopPresetDisplayTable() =>
+        public ShopPresetDisplayTable(AutoShopPurchase module)
+        {
+            this.module                       =  module;
             WindowManager.Instance().PostDraw += WindowRenderAddNewPreset;
+        }
 
         private static unsafe AtkUnitList FocusedList =>
             RaptureAtkUnitManager.Instance()->FocusedUnitsList;
@@ -277,11 +280,11 @@ public class AutoShopPurchase : ModuleBase
             TableSetupColumns();
             TableRenderHeaderRow();
 
-            for (var i = 0; i < ModuleConfig.Presets.Count; i++)
-                TableRenderRow(i, ModuleConfig.Presets[i]);
+            for (var i = 0; i < module.config.Presets.Count; i++)
+                TableRenderRow(i, module.config.Presets[i]);
         }
 
-        private void TableSetupColumns()
+        private static void TableSetupColumns()
         {
             ImGui.TableSetupColumn("序号", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("1234").X);
             ImGui.TableSetupColumn("名称", ImGuiTableColumnFlags.None,       25);
@@ -300,8 +303,8 @@ public class AutoShopPurchase : ModuleBase
 
             if (ImGuiOm.ButtonIconSelectable("OpenAddNewPresetWindow", FontAwesomeIcon.Plus))
             {
-                ScannedData              =  AddonWithListInfo.ScanAddons(FocusedList);
-                IsAddNewPresetWindowOpen ^= true;
+                module.scannedData              =  AddonWithListInfo.ScanAddons(FocusedList);
+                isAddNewPresetWindowOpen ^= true;
             }
 
             ImGui.TableNextColumn();
@@ -361,18 +364,18 @@ public class AutoShopPurchase : ModuleBase
             if (ImGuiOm.ButtonIcon($"DeletePreset_{preset}", FontAwesomeIcon.Trash, $"{Lang.Get("Delete")} (Ctrl)"))
             {
                 if (ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
-                    ModuleConfig.Presets.Remove(preset);
+                    module.config.Presets.Remove(preset);
             }
         }
 
         private void WindowRenderAddNewPreset()
         {
-            if (!IsAddNewPresetWindowOpen) return;
+            if (!isAddNewPresetWindowOpen) return;
             RefreshWindowInfo();
 
             using (FontManager.Instance().UIFont.Push())
             {
-                if (ImGui.Begin($"{Lang.Get("AutoShopPurchase-UI-AddNewPreset")}###AutoShopPurchase-AddNewPreset", ref IsAddNewPresetWindowOpen))
+                if (ImGui.Begin($"{Lang.Get("AutoShopPurchase-UI-AddNewPreset")}###AutoShopPurchase-AddNewPreset", ref isAddNewPresetWindowOpen))
                 {
                     using (ImRaii.Group())
                         WindowRenderPresetInfoInput();
@@ -384,7 +387,7 @@ public class AutoShopPurchase : ModuleBase
 
                     using (ImRaii.Group())
                     {
-                        foreach (var data in ScannedData.ToList())
+                        foreach (var data in module.scannedData.ToList())
                             WindowRenderAddonInfo(data);
                     }
 
@@ -399,13 +402,13 @@ public class AutoShopPurchase : ModuleBase
             AddonWithListInfo.ScanAddons(FocusedList).ForEach
             (x =>
                 {
-                    if (!ScannedData.Contains(x))
-                        ScannedData.Add(x);
+                    if (!module.scannedData.Contains(x))
+                        module.scannedData.Add(x);
                 }
             );
 
-            if (!string.IsNullOrWhiteSpace(TargetNameInput) && TargetManager.Target is { } target)
-                TargetNameInput = target.Name.TextValue;
+            if (!string.IsNullOrWhiteSpace(targetNameInput) && TargetManager.Target is { } target)
+                targetNameInput = target.Name.TextValue;
         }
 
         private void WindowRenderPresetInfoInput()
@@ -414,14 +417,14 @@ public class AutoShopPurchase : ModuleBase
             (
                 $"{Lang.Get("Name")}:",
                 200f * GlobalUIScale,
-                () => ImGui.InputText("###NameInput", ref NameInput, 256)
+                () => ImGui.InputText("###NameInput", ref nameInput, 256)
             );
 
             ImGuiOm.CompLabelLeft
             (
                 $"{Lang.Get("Target")}:",
                 200f * GlobalUIScale,
-                () => ImGui.InputText("###TargetNameInput", ref TargetNameInput, 256, ImGuiInputTextFlags.ReadOnly)
+                () => ImGui.InputText("###TargetNameInput", ref targetNameInput, 256, ImGuiInputTextFlags.ReadOnly)
             );
             ImGuiOm.TooltipHover(Lang.Get("AutoShopPurchase-Tooltip-EmptyTargetInput"), 30f);
 
@@ -429,14 +432,14 @@ public class AutoShopPurchase : ModuleBase
             (
                 $"{Lang.Get("Addon")}:",
                 200f * GlobalUIScale,
-                () => ImGui.InputText("###AddonNameInput", ref AddonNameInput, 128, ImGuiInputTextFlags.ReadOnly)
+                () => ImGui.InputText("###AddonNameInput", ref addonNameInput, 128, ImGuiInputTextFlags.ReadOnly)
             );
 
             ImGuiOm.CompLabelLeft
             (
                 $"{Lang.Get("List")}:",
                 200f * GlobalUIScale,
-                () => ImGui.InputUInt("###ListComponentNodeIDInput", ref ListComponentNodeIDInput, flags: ImGuiInputTextFlags.ReadOnly)
+                () => ImGui.InputUInt("###ListComponentNodeIDInput", ref listComponentNodeIDInput, flags: ImGuiInputTextFlags.ReadOnly)
             );
 
             ImGuiOm.CompLabelLeft
@@ -445,16 +448,16 @@ public class AutoShopPurchase : ModuleBase
                 200f * GlobalUIScale,
                 () =>
                 {
-                    var result = ImGui.InputInt("###ClickIndexInput", ref ClickIndexInput, flags: ImGuiInputTextFlags.ReadOnly);
+                    var result = ImGui.InputInt("###ClickIndexInput", ref clickIndexInput, flags: ImGuiInputTextFlags.ReadOnly);
                     if (result)
-                        ClickIndexInput = Math.Max(1, ClickIndexInput);
+                        clickIndexInput = Math.Max(1, clickIndexInput);
                     return result;
                 }
             );
 
-            ImGui.Checkbox(Lang.Get("AutoShopPurchase-UI-IsSetNumber"), ref IsSetNumberInput);
+            ImGui.Checkbox(Lang.Get("AutoShopPurchase-UI-IsSetNumber"), ref isSetNumberInput);
 
-            if (IsSetNumberInput)
+            if (isSetNumberInput)
             {
                 ImGuiOm.CompLabelLeft
                 (
@@ -462,9 +465,9 @@ public class AutoShopPurchase : ModuleBase
                     200f * GlobalUIScale,
                     () =>
                     {
-                        var result = ImGui.InputInt("###SetNumberInput", ref SetNumberInput, 0, 100);
+                        var result = ImGui.InputInt("###SetNumberInput", ref setNumberInput, 0, 100);
                         if (result)
-                            SetNumberInput = Math.Max(1, SetNumberInput);
+                            setNumberInput = Math.Max(1, setNumberInput);
                         return result;
                     }
                 );
@@ -472,20 +475,20 @@ public class AutoShopPurchase : ModuleBase
 
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
             {
-                if (!string.IsNullOrWhiteSpace(AddonNameInput) && !string.IsNullOrWhiteSpace(NameInput))
+                if (!string.IsNullOrWhiteSpace(addonNameInput) && !string.IsNullOrWhiteSpace(nameInput))
                 {
-                    var preset = new ShopPurchasePreset(AddonNameInput)
+                    var preset = new ShopPurchasePreset(addonNameInput)
                     {
-                        ClickRoute  = new(ListComponentNodeIDInput, ClickIndexInput),
-                        NumberRoute = new(IsSetNumberInput, SetNumberInput),
-                        Name        = NameInput,
-                        TargetName  = TargetNameInput
+                        ClickRoute  = new(listComponentNodeIDInput, clickIndexInput),
+                        NumberRoute = new(isSetNumberInput, setNumberInput),
+                        Name        = nameInput,
+                        TargetName  = targetNameInput
                     };
 
-                    if (!ModuleConfig.Presets.Contains(preset))
+                    if (!module.config.Presets.Contains(preset))
                     {
-                        ModuleConfig.Presets.Add(preset);
-                        NotifyHelper.Instance().NotificationSuccess(Lang.Get("AutoShopPurchase-Tooltip-AddPresetSuccess", NameInput));
+                        module.config.Presets.Add(preset);
+                        NotifyHelper.Instance().NotificationSuccess(Lang.Get("AutoShopPurchase-Tooltip-AddPresetSuccess", nameInput));
                     }
                 }
             }
@@ -497,7 +500,7 @@ public class AutoShopPurchase : ModuleBase
 
             if (!addon->IsAddonAndNodesReady())
             {
-                ScannedData.Remove(data);
+                module.scannedData.Remove(data);
                 return;
             }
 
@@ -508,7 +511,7 @@ public class AutoShopPurchase : ModuleBase
             }
         }
 
-        private static unsafe void WindowRenderListComponentNodeInfo(AddonWithListInfo data, uint nodeID)
+        private unsafe void WindowRenderListComponentNodeInfo(AddonWithListInfo data, uint nodeID)
         {
             var node = data.GetListByID(nodeID);
             if (node == null) return;
@@ -528,9 +531,9 @@ public class AutoShopPurchase : ModuleBase
 
                         if (ImGui.Button($"{i:D3}##{data.AddonName}-{nodeID}"))
                         {
-                            AddonNameInput           = data.AddonName;
-                            ListComponentNodeIDInput = nodeID;
-                            ClickIndexInput          = i;
+                            addonNameInput           = data.AddonName;
+                            listComponentNodeIDInput = nodeID;
+                            clickIndexInput          = i;
                             node->DispatchItemEvent(i, AtkEventType.ListItemClick);
                         }
 
@@ -565,7 +568,7 @@ public class AutoShopPurchase : ModuleBase
         {
             private static readonly Dictionary<ShopPurchasePreset, PresetRunTimesInputComponent> Cache = [];
 
-            private int TimesInput = 1;
+            private int timesInput = 1;
 
             public static PresetRunTimesInputComponent Using(ShopPurchasePreset preset)
             {
@@ -583,13 +586,13 @@ public class AutoShopPurchase : ModuleBase
                 using var group    = ImRaii.Group();
 
                 if (ImGuiOm.ButtonIcon($"RunPreset_{preset}", FontAwesomeIcon.Play, Lang.Get("Run")))
-                    DService.Instance().Framework.RunOnTick(async () => await ShopPresetExecutor.TryExecuteAsync(preset, TimesInput).ConfigureAwait(false));
+                    DService.Instance().Framework.RunOnTick(async () => await ShopPresetExecutor.TryExecuteAsync(preset, timesInput).ConfigureAwait(false));
 
                 ImGui.SameLine(0, 2f * GlobalUIScale);
 
                 ImGui.SetNextItemWidth(50f * GlobalUIScale);
-                if (ImGui.InputInt($"###RunPresetTimesInput{preset}", ref TimesInput))
-                    TimesInput = Math.Max(1, TimesInput);
+                if (ImGui.InputInt($"###RunPresetTimesInput{preset}", ref timesInput))
+                    timesInput = Math.Max(1, timesInput);
             }
         }
     }

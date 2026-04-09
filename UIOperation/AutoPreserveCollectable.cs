@@ -22,10 +22,10 @@ public class AutoPreserveCollectable : ModuleBase
 
     protected override void Init() =>
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     private static void OnAddon(AddonEvent type, AddonArgs args) =>
         AddonSelectYesnoEvent.ClickYes((LuminaGetter.GetRowOrDefault<Addon>(1463).Text.ToDalamudString().Payloads[0] as TextPayload).Text);
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

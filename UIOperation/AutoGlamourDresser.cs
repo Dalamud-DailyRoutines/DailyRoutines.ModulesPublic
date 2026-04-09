@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -26,26 +27,13 @@ public unsafe class AutoGlamourDresser : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static readonly HashSet<uint> ArmoireAvailableItems =
-        LuminaGetter.Get<Cabinet>()
-                    .Where(x => x.Item.RowId > 0)
-                    .Select(x => x.Item.RowId)
-                    .ToHashSet();
-
-    private static readonly List<MirageItemSet> MirageItemSets =
-        LuminaGetter.Get<MirageStoreSetItem>()
-                    .Select(MirageItemSet.Parse)
-                    .Where(x => x != null)
-                    .OfType<MirageItemSet>()
-                    .ToList();
     
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
     protected override void Init()
     {
         TaskHelper   ??= new() { TimeoutMS = 5_000 };
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
 
         LogMessageManager.Instance().RegPost(OnReceiveLogMessage);
 
@@ -72,8 +60,8 @@ public unsafe class AutoGlamourDresser : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("AutoGlamourDresser-AutoSwitchJobCategory"), ref ModuleConfig.AutoSwitchJobCategory))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoGlamourDresser-AutoSwitchJobCategory"), ref config.AutoSwitchJobCategory))
+            config.Save(this);
 
         ImGui.NewLine();
         
@@ -96,12 +84,12 @@ public unsafe class AutoGlamourDresser : ModuleBase
 
             using (ImRaii.PushIndent())
             {
-                if (ImGui.Checkbox(Lang.Get("AutoGlamourDresser-OnlyRemoveSetItemsWhenComplete"), ref ModuleConfig.OnlyRemoveSetItemsWhenComplete))
-                    ModuleConfig.Save(this);
+                if (ImGui.Checkbox(Lang.Get("AutoGlamourDresser-OnlyRemoveSetItemsWhenComplete"), ref config.OnlyRemoveSetItemsWhenComplete))
+                    config.Save(this);
 
                 ImGui.SameLine();
-                if (ImGui.Checkbox(Lang.Get("AutoGlamourDresser-SkipItemsWithStain"), ref ModuleConfig.SkipItemsWithStain))
-                    ModuleConfig.Save(this);
+                if (ImGui.Checkbox(Lang.Get("AutoGlamourDresser-SkipItemsWithStain"), ref config.SkipItemsWithStain))
+                    config.Save(this);
             }
         }
 
@@ -115,9 +103,9 @@ public unsafe class AutoGlamourDresser : ModuleBase
         }
     }
     
-    private static void OnMiragePrismPrismBox(AddonEvent type, AddonArgs? args)
+    private void OnMiragePrismPrismBox(AddonEvent type, AddonArgs? args)
     {
-        if (!ModuleConfig.AutoSwitchJobCategory) return;
+        if (!config.AutoSwitchJobCategory) return;
 
         var addon = (AddonMiragePrismPrismBox*)MiragePrismPrismBox;
         if (addon == null) return;
@@ -200,7 +188,7 @@ public unsafe class AutoGlamourDresser : ModuleBase
 
         foreach (var mirageItemSet in MirageItemSets)
         {
-            if (!mirageItemSet.TryGetRestorableIndexes(itemsByID, ModuleConfig.OnlyRemoveSetItemsWhenComplete, ModuleConfig.SkipItemsWithStain, out var itemIndexes))
+            if (!mirageItemSet.TryGetRestorableIndexes(itemsByID, config.OnlyRemoveSetItemsWhenComplete, config.SkipItemsWithStain, out var itemIndexes))
                 continue;
 
             validItemSets[mirageItemSet] = itemIndexes;
@@ -450,4 +438,21 @@ public unsafe class AutoGlamourDresser : ModuleBase
             return itemIndexes.Count > 0 && (!onlyRemoveWhenComplete || itemIndexes.Count == SetItems.Count);
         }
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<uint> ArmoireAvailableItems =
+        LuminaGetter.Get<Cabinet>()
+                    .Where(x => x.Item.RowId > 0)
+                    .Select(x => x.Item.RowId)
+                    .ToFrozenSet();
+
+    private static readonly FrozenSet<MirageItemSet> MirageItemSets =
+        LuminaGetter.Get<MirageStoreSetItem>()
+                    .Select(MirageItemSet.Parse)
+                    .Where(x => x != null)
+                    .OfType<MirageItemSet>()
+                    .ToFrozenSet();
+
+    #endregion
 }

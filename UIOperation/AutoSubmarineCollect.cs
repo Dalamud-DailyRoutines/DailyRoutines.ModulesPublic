@@ -23,6 +23,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Algorithms;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
@@ -40,30 +41,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoSubmarineCollect : ModuleBase
 {
-    private const string COMMAND = "submarine";
-
-    // 桶装青磷水和魔导机械修理材料
-    private static readonly uint[] SubmarineItems = [10155, 10373];
-
-    private static readonly CompSig CurrentSubmarineIndexSig = new("48 8D 0D ?? ?? ?? ?? 80 A3");
-
-    private static readonly CompSig SubmarineReturnTimeSig = new
-    (
-        "40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3 48 8D 48 ?? 48 83 C4 ?? 5B E9 ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3"
-    );
-
-    private static Hook<SubmarineReturnTimeDelegate>? SubmarineReturnTimeHook;
-
-    private static DalamudLinkPayload? CollectSubmarinePayload;
-
-    private static Config ModuleConfig = null!;
-
-    private static          VerticalListNode?     ItemListLayout;
-    private static readonly List<ItemDisplayNode> ItemRenderers = [];
-    private static          TextButtonNode?       AutoCollectNode;
-
-    private static bool IsJustLogin;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoSubmarineCollectTitle"),
@@ -75,22 +52,32 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private static Lazy<List<string>> VoyageListTitleText =>
-        new
-        (() => LuminaGetter.GetRowOrDefault<HouFixCompanySubmarine>(2).Text.ToDalamudString().Payloads
-                           .Where(x => x.Type == PayloadType.RawText)
-                           .Select(text => SantisizeText((text as TextPayload).Text))
-                           .Where(x => !string.IsNullOrWhiteSpace(x))
-                           .ToList()
-        );
+    private static readonly CompSig CurrentSubmarineIndexSig = new("48 8D 0D ?? ?? ?? ?? 80 A3");
+
+    private static readonly CompSig SubmarineReturnTimeSig = new
+    (
+        "40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3 48 8D 48 ?? 48 83 C4 ?? 5B E9 ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3"
+    );
+    private delegate nint                               SubmarineReturnTimeDelegate(SubmarineReturnTimePacket* packet);
+    private          Hook<SubmarineReturnTimeDelegate>? SubmarineReturnTimeHook;
+
+    private Config config = null!;
+    
+    private DalamudLinkPayload? collectSubmarinePayload;
+    
+    private          VerticalListNode?     itemListLayout;
+    private readonly List<ItemDisplayNode> itemRenderers = [];
+    private          TextButtonNode?       autoCollectNode;
+
+    private bool isJustLogin;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         TaskHelper ??= new() { TimeoutMS = 30_000 };
 
-        CollectSubmarinePayload ??= LinkPayloadManager.Instance().Reg(OnClickCollectSubmarinePayload, out _);
+        collectSubmarinePayload ??= LinkPayloadManager.Instance().Reg(OnClickCollectSubmarinePayload, out _);
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno",              OnAddonSelectYesno);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "AirShipExplorationResult", OnExplorationResult);
@@ -123,11 +110,11 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         FrameworkManager.Instance().Unreg(OnUpdate);
         GameState.Instance().Login -= OnLogin;
 
-        IsJustLogin = false;
+        isJustLogin = false;
 
-        if (CollectSubmarinePayload != null)
-            LinkPayloadManager.Instance().Unreg(CollectSubmarinePayload.CommandId);
-        CollectSubmarinePayload = null;
+        if (collectSubmarinePayload != null)
+            LinkPayloadManager.Instance().Unreg(collectSubmarinePayload.CommandId);
+        collectSubmarinePayload = null;
     }
 
     protected override void ConfigUI()
@@ -138,405 +125,27 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("AutoSubmarineCollect-NotifyWhenLogin"), ref ModuleConfig.NotifyWhenLogin))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoSubmarineCollect-NotifyWhenLogin"), ref config.NotifyWhenLogin))
+            config.Save(this);
 
         using (ImRaii.ItemWidth(100f * GlobalUIScale))
         {
-            if (ImGui.InputUInt($"{Lang.Get("AutoSubmarineCollect-NotifyCount", ModuleConfig.NotifyCount)}###NotifyCountInput", ref ModuleConfig.NotifyCount))
-                ModuleConfig.NotifyCount = Math.Clamp(ModuleConfig.NotifyCount, 0, 4);
+            if (ImGui.InputUInt($"{Lang.Get("AutoSubmarineCollect-NotifyCount", config.NotifyCount)}###NotifyCountInput", ref config.NotifyCount))
+                config.NotifyCount = Math.Clamp(config.NotifyCount, 0, 4);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
 
             if (ImGui.InputUInt
                 (
-                    $"{Lang.Get("AutoSubmarineCollect-AutoCollectCount", ModuleConfig.AutoCollectCount)}###AutoCollectCount",
-                    ref ModuleConfig.AutoCollectCount
+                    $"{Lang.Get("AutoSubmarineCollect-AutoCollectCount", config.AutoCollectCount)}###AutoCollectCount",
+                    ref config.AutoCollectCount
                 ))
-                ModuleConfig.NotifyCount = Math.Clamp(ModuleConfig.NotifyCount, 0, 4);
+                config.NotifyCount = Math.Clamp(config.NotifyCount, 0, 4);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
         }
     }
-
-    // 潜艇收取
-    private bool EnqueueSubmarineCollect()
-    {
-        TaskHelper.Enqueue(() => !DService.Instance().Condition.Any(ConditionFlag.OccupiedInCutSceneEvent, ConditionFlag.WatchingCutscene78), "等待过场动画结束");
-        TaskHelper.Enqueue(IsOnValidSubmarineList,                                                                                            "等待潜水艇列表界面出现");
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (IsLackOfSubmarineItems() || !IsAnySubmarinesAvailable(out var submarineIndex))
-                {
-                    TaskHelper.Abort();
-                    return;
-                }
-
-                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(submarineIndex), $"收取 {submarineIndex} 号潜艇", weight: 1);
-                TaskHelper.DelayNext(2_000, "延迟 2 秒, 等待远航结果确认", 1);
-                TaskHelper.Enqueue(EnqueueSubmarineStateCheck, "确认潜艇信息, 准备修理和再次出航", weight: 1);
-            },
-            "检测是否有潜艇待收取"
-        );
-
-        return true;
-    }
-
-    private void EnqueueSubmarineStateCheck()
-    {
-        TaskHelper.Enqueue(() => AirShipExplorationDetail->IsAddonAndNodesReady(), "等待出航信息确认界面出现");
-
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (!Throttler.Shared.Throttle("AutoSubmarineCollect-RepairSubmarine", 100)) return false;
-                if (!IsAnySubmarinePartWaitForRepair(out var parts)) return true;
-
-                var currentSubmarineIndex = *CurrentSubmarineIndexSig.GetStatic<int>();
-                parts.ForEach
-                    (index => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairSubmarinePart, (uint)currentSubmarineIndex, (uint)index));
-                return false;
-            },
-            "检测并修理潜水艇部件"
-        );
-
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (!AirShipExplorationDetail->IsAddonAndNodesReady()) return false;
-
-                AirShipExplorationDetail->Callback(0);
-                AirShipExplorationDetail->Close(true);
-
-                return true;
-            },
-            "再次确认出航"
-        );
-
-        TaskHelper.DelayNext(2_000, "等待出航动画结束");
-        TaskHelper.Enqueue(EnqueueSubmarineCollect, "开始新一轮");
-    }
-
-    // 是否有潜艇部件需要修理
-    private static bool IsAnySubmarinePartWaitForRepair(out List<int> parts)
-    {
-        parts = [];
-
-        var currentSubmarine = *CurrentSubmarineIndexSig.GetStatic<int>();
-        if (currentSubmarine is < 0 or > 3) return false;
-
-        var manager = InventoryManager.Instance();
-        if (manager == null) return false;
-
-        var container = manager->GetInventoryContainer(InventoryType.HousingInteriorPlacedItems2);
-        if (container == null || !container->IsLoaded) return false;
-
-        var offset = 5 * currentSubmarine;
-
-        for (var i = 0; i < 4; i++)
-        {
-            var slot = container->GetInventorySlot(i + offset);
-            if (slot            == null) continue;
-            if (slot->Condition > 0) continue;
-            parts.Add(i);
-        }
-
-        return parts.Count > 0;
-    }
-
-    // 是否缺少潜艇相关物品
-    private static bool IsLackOfSubmarineItems()
-    {
-        var manager    = InventoryManager.Instance();
-        var itemLacked = 0U;
-
-        // 魔导机械修理材料
-        if (manager->GetInventoryItemCount(10373) < 20)
-            itemLacked = 10373;
-        // 桶装青磷水
-        if (manager->GetInventoryItemCount(10155) < 15)
-            itemLacked = 10155;
-
-        if (itemLacked != 0)
-        {
-            NotifyHelper.Instance().Chat(Lang.GetSe("AutoSubmarineCollect-LackSpecificItems", SeString.CreateItemLink(itemLacked)));
-            return true;
-        }
-
-        return false;
-    }
-
-    // 是否存在待收潜艇
-    private static bool IsAnySubmarinesAvailable(out int index)
-    {
-        index = -1;
-
-        // 不在潜艇主界面
-        if (!IsOnValidSubmarineList()) return false;
-
-        var submarines = HousingManager.Instance()->WorkshopTerritory->Submersible.Data;
-
-        for (var i = 0; i < submarines.Length; i++)
-        {
-            var submarine = submarines[i];
-            // 潜艇无等级 → 不存在
-            if (submarine.RankId == 0) continue;
-
-            var returnTime      = submarine.GetReturnTime();
-            var leftTimeSeconds = (returnTime - StandardTimeManager.Instance().Now.ToUniversalTime()).TotalSeconds;
-            if (leftTimeSeconds > 0) continue;
-
-            index = i;
-            return true;
-        }
-
-        return false;
-    }
-
-    // 是否正在潜艇列表界面
-    private static bool IsOnValidSubmarineList()
-    {
-        if (HousingManager.Instance()->WorkshopTerritory == null) return false;
-        if (!SelectString->IsAddonAndNodesReady()) return false;
-
-        var title = SelectString->AtkValues[2].String.ToString();
-        if (string.IsNullOrEmpty(title) || !VoyageListTitleText.Value.All(title.Contains))
-            return false;
-
-        return true;
-    }
-
-    // 通知潜水艇完成情况
-    private static void NotifyFinishCount(SubmarineReturnTimePacket* packet)
-    {
-        if (packet->GetAvailableCount() == 0)
-        {
-            IsJustLogin = false;
-            return;
-        }
-
-        var maxCount      = packet->GetAvailableCount();
-        var finishedCount = packet->GetFinishCount();
-
-        if (ModuleConfig.NotifyWhenLogin && IsJustLogin ||
-            ModuleConfig.NotifyCount > 0 && finishedCount >= Math.Min(maxCount, ModuleConfig.NotifyCount))
-        {
-            IsJustLogin = false;
-
-            var messageBuilder = new SeStringBuilder();
-            messageBuilder.AddText(Lang.Get("AutoSubmarineCollect-Notification-SubmarineInfo", maxCount - finishedCount, finishedCount));
-
-            messageBuilder.Add(NewLinePayload.Payload)
-                          .AddText($"{Lang.Get("AutoSubmarineCollect-Notification-LatestReturnTime")}: {packet->GetLatestReturnTime()}");
-            if (finishedCount == maxCount)
-                messageBuilder.AddText($" ({packet->GetLatestReturnTime().TimeAgo()})");
-
-            if (finishedCount > 0)
-            {
-                messageBuilder.Add(NewLinePayload.Payload)
-                              .Add(RawPayload.LinkTerminator)
-                              .Add(CollectSubmarinePayload)
-                              .AddText("[")
-                              .AddUiForeground(35)
-                              .AddText($"{Lang.Get("AutoSubmarineCollect-Payload-TeleportAndCollect")}")
-                              .AddUiForegroundOff()
-                              .AddText("]")
-                              .Add(RawPayload.LinkTerminator);
-            }
-
-            NotifyHelper.Instance().Chat(messageBuilder.Build());
-        }
-
-        if (ModuleConfig.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, ModuleConfig.AutoCollectCount))
-            ChatManager.Instance().SendMessage("/pdr submarine");
-    }
-
-    // 发包获取情报
-    private static void SendRefreshSubmarineInfo()
-    {
-        if (!GameState.IsLoggedIn) return;
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RefreshSubmarineInfo, 1);
-    }
-
-    private static string SantisizeText(string text)
-    {
-        char[] charsToReplace = ['(', '.', ')', ']', ':', '/'];
-        foreach (var c in charsToReplace)
-            text = text.Replace(c, ' ');
-        return text.Trim();
-    }
-
-    private delegate nint SubmarineReturnTimeDelegate(SubmarineReturnTimePacket* packet);
-
-    private class Config : ModuleConfig
-    {
-        public uint AutoCollectCount;
-        public uint NotifyCount     = 4;
-        public bool NotifyWhenLogin = true;
-    }
-
-    private class ItemDisplayNode : HorizontalListNode
-    {
-        public ItemDisplayNode(uint itemID, float width)
-        {
-            ItemID = itemID;
-
-            IconNode = new()
-            {
-                Size       = new(32),
-                IsVisible  = true,
-                IconId     = LuminaWrapper.GetItemIconID(ItemID),
-                FitTexture = true
-            };
-
-            AddNode(IconNode);
-
-            AddDummy(5);
-
-            NameNode = new()
-            {
-                IsVisible = true,
-                Position  = new(0, 6),
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                FontSize  = 14,
-                String    = LuminaWrapper.GetItemName(ItemID)
-            };
-
-            AddNode(NameNode);
-
-            var itemCount   = LocalPlayerState.GetItemCount(ItemID);
-            var textBuilder = new SeStringBuilder();
-
-            if (itemCount <= 20)
-            {
-                textBuilder.AddIcon(BitmapFontIcon.ExclamationRectangle)
-                           .AddText(" ");
-            }
-
-            textBuilder.AddText($"{itemCount}");
-
-            CountNode = new()
-            {
-                IsVisible        = true,
-                TextFlags        = TextFlags.AutoAdjustNodeSize | TextFlags.Edge | TextFlags.Emboss,
-                FontType         = FontType.MiedingerMed,
-                AlignmentType    = AlignmentType.TopRight,
-                Position         = new(width - 20, 4),
-                TextColor        = ColorHelper.GetColor(50),
-                TextOutlineColor = ColorHelper.GetColor((uint)(itemCount > 20 ? 28 : 17)),
-                FontSize         = 16,
-                String           = textBuilder.Build().Encode()
-            };
-            CountNode.AttachNode(this);
-        }
-
-        public uint           ItemID    { get; init; }
-        public IconImageNode? IconNode  { get; private set; }
-        public TextNode?      NameNode  { get; private set; }
-        public TextNode?      CountNode { get; private set; }
-
-        public void UpdateItemCount()
-        {
-            var itemCount   = LocalPlayerState.GetItemCount(ItemID);
-            var textBuilder = new SeStringBuilder();
-
-            if (itemCount <= 20)
-            {
-                textBuilder.AddIcon(BitmapFontIcon.ExclamationRectangle)
-                           .AddText(" ");
-            }
-
-            textBuilder.AddText($"{itemCount}");
-
-            CountNode.String           = textBuilder.Build().Encode();
-            CountNode.TextOutlineColor = ColorHelper.GetColor((uint)(itemCount > 20 ? 28 : 17));
-        }
-
-        protected override void Dispose(bool disposing, bool isNativeDestructor)
-        {
-            IconNode?.Dispose();
-            IconNode = null;
-
-            NameNode?.Dispose();
-            NameNode = null;
-
-            CountNode?.Dispose();
-            CountNode = null;
-
-            base.Dispose(disposing, isNativeDestructor);
-        }
-    }
-
-    [StructLayout(LayoutKind.Explicit, Size = 144)]
-    private struct SubmarineReturnTimePacket
-    {
-        [FieldOffset(0)]
-        public int ReturnTime1;
-
-        [FieldOffset(36)]
-        public int ReturnTime2;
-
-        [FieldOffset(72)]
-        public int ReturnTime3;
-
-        [FieldOffset(108)]
-        public int ReturnTime4;
-
-        public int GetFinishCount() =>
-            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }.Count(x => x != 0 && x <= DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-
-        public int GetAvailableCount() =>
-            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }.Count(x => x != 0);
-
-        public DateTime GetLatestReturnTime() =>
-            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }
-                .Where(x => x != 0)
-                .Max()
-                .ToUTCDateTimeFromUnixSeconds()
-                .ToLocalTime();
-    }
-
-    private record FreeCompanyWorkshopInfo
-    {
-        public FreeCompanyWorkshopInfo(uint territoryType, uint wardIndex, uint plotIndex)
-        {
-            TerritoryType = territoryType;
-            WardIndex     = wardIndex;
-            PlotIndex     = plotIndex;
-
-            var result = LuminaGetter
-                         .GetSub<HousingMapMarkerInfo>()
-                         .SelectMany(x => x)
-                         .Where(x => x.Map.IsValid)
-                         .Where(x => x.Map.Value.TerritoryType.RowId == TerritoryType)
-                         .FirstOrDefault(x => x.SubrowId             == PlotIndex);
-
-            Position = new(result.X, result.Y, result.Z);
-            Map      = result.Map.RowId;
-        }
-
-        public Vector3 Position      { get; init; }
-        public uint    TerritoryType { get; init; }
-        public uint    Map           { get; init; }
-        public uint    WardIndex     { get; init; }
-        public uint    PlotIndex     { get; init; }
-
-        public static bool TryGet([NotNullWhen(true)] out FreeCompanyWorkshopInfo? workshopInfo)
-        {
-            workshopInfo = null;
-
-            var fcHouseID = HousingManager.GetOwnedHouseId(EstateType.FreeCompanyEstate);
-            if (fcHouseID.Id == 0 || fcHouseID.WorldId != GameState.CurrentWorld) return false;
-
-            workshopInfo = new(fcHouseID.TerritoryTypeId, fcHouseID.WardIndex, fcHouseID.PlotIndex);
-            return true;
-        }
-    }
-
+    
     #region Teleport
 
     // 传送
@@ -741,30 +350,30 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                ItemListLayout?.Dispose();
-                ItemListLayout = null;
+                itemListLayout?.Dispose();
+                itemListLayout = null;
 
-                AutoCollectNode?.Dispose();
-                AutoCollectNode = null;
+                autoCollectNode?.Dispose();
+                autoCollectNode = null;
 
-                ItemRenderers.ForEach(x => x?.Dispose());
-                ItemRenderers.Clear();
+                itemRenderers.ForEach(x => x?.Dispose());
+                itemRenderers.Clear();
                 break;
             case AddonEvent.PostDraw:
                 if (SelectString == null) return;
 
-                if (ItemListLayout == null && IsOnValidSubmarineList())
+                if (itemListLayout == null && IsOnValidSubmarineList())
                 {
                     var width = SelectString->RootNode->Width - 25;
 
-                    ItemListLayout = new()
+                    itemListLayout = new()
                     {
                         IsVisible = true,
                         Position  = new(22, 15)
                     };
-                    ItemListLayout.AttachNode(SelectString->RootNode);
+                    itemListLayout.AttachNode(SelectString->RootNode);
 
-                    AutoCollectNode = new()
+                    autoCollectNode = new()
                     {
                         IsVisible = true,
                         Position  = new(-10, 0),
@@ -777,9 +386,9 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                         }
                     };
 
-                    ItemListLayout.AddNode(AutoCollectNode);
+                    itemListLayout.AddNode(autoCollectNode);
 
-                    ItemListLayout.AddDummy(5);
+                    itemListLayout.AddDummy(5);
 
                     foreach (var itemID in SubmarineItems)
                     {
@@ -791,8 +400,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                         };
                         row.AddNodeFlags(NodeFlags.HasCollision);
 
-                        ItemListLayout.AddNode(row);
-                        ItemRenderers.Add(row);
+                        itemListLayout.AddNode(row);
+                        itemRenderers.Add(row);
                     }
 
                     var textNode = SelectString->GetTextNodeById(2);
@@ -818,9 +427,9 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                         listNode->OwnerNode->SetYFloat(92 + 40);
                 }
 
-                if (ItemListLayout != null && Throttler.Shared.Throttle("AutoSubmarineCollect-UpdateCount"))
+                if (itemListLayout != null && Throttler.Shared.Throttle("AutoSubmarineCollect-UpdateCount"))
                 {
-                    foreach (var item in ItemRenderers)
+                    foreach (var item in itemRenderers)
                         item.UpdateItemCount();
                 }
 
@@ -834,16 +443,16 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         AddonSelectYesnoEvent.ClickYes();
     }
 
-    private static nint SubmarineReturnTimeDetour(SubmarineReturnTimePacket* submarineReturnTimePacket)
+    private nint SubmarineReturnTimeDetour(SubmarineReturnTimePacket* submarineReturnTimePacket)
     {
         NotifyFinishCount(submarineReturnTimePacket);
         return SubmarineReturnTimeHook.Original(submarineReturnTimePacket);
     }
 
     // 登陆后就发一次包吧
-    private static void OnLogin()
+    private void OnLogin()
     {
-        IsJustLogin = true;
+        isJustLogin = true;
         SendRefreshSubmarineInfo();
     }
 
@@ -861,6 +470,400 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         if (logMessageID != 4109) return;
         isPrevented = true;
     }
+
+    #endregion
+
+    // 潜艇收取
+    private bool EnqueueSubmarineCollect()
+    {
+        TaskHelper.Enqueue(() => !DService.Instance().Condition.Any(ConditionFlag.OccupiedInCutSceneEvent, ConditionFlag.WatchingCutscene78), "等待过场动画结束");
+        TaskHelper.Enqueue(IsOnValidSubmarineList,                                                                                            "等待潜水艇列表界面出现");
+        TaskHelper.Enqueue
+        (
+            () =>
+            {
+                if (IsLackOfSubmarineItems() || !IsAnySubmarinesAvailable(out var submarineIndex))
+                {
+                    TaskHelper.Abort();
+                    return;
+                }
+
+                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(submarineIndex), $"收取 {submarineIndex} 号潜艇", weight: 1);
+                TaskHelper.DelayNext(2_000, "延迟 2 秒, 等待远航结果确认", 1);
+                TaskHelper.Enqueue(EnqueueSubmarineStateCheck, "确认潜艇信息, 准备修理和再次出航", weight: 1);
+            },
+            "检测是否有潜艇待收取"
+        );
+
+        return true;
+    }
+
+    private void EnqueueSubmarineStateCheck()
+    {
+        TaskHelper.Enqueue(() => AirShipExplorationDetail->IsAddonAndNodesReady(), "等待出航信息确认界面出现");
+
+        TaskHelper.Enqueue
+        (
+            () =>
+            {
+                if (!Throttler.Shared.Throttle("AutoSubmarineCollect-RepairSubmarine", 100)) return false;
+                if (!IsAnySubmarinePartWaitForRepair(out var parts)) return true;
+
+                var currentSubmarineIndex = *CurrentSubmarineIndexSig.GetStatic<int>();
+                parts.ForEach
+                    (index => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairSubmarinePart, (uint)currentSubmarineIndex, (uint)index));
+                return false;
+            },
+            "检测并修理潜水艇部件"
+        );
+
+        TaskHelper.Enqueue
+        (
+            () =>
+            {
+                if (!AirShipExplorationDetail->IsAddonAndNodesReady()) return false;
+
+                AirShipExplorationDetail->Callback(0);
+                AirShipExplorationDetail->Close(true);
+
+                return true;
+            },
+            "再次确认出航"
+        );
+
+        TaskHelper.DelayNext(2_000, "等待出航动画结束");
+        TaskHelper.Enqueue(EnqueueSubmarineCollect, "开始新一轮");
+    }
+
+    // 是否有潜艇部件需要修理
+    private static bool IsAnySubmarinePartWaitForRepair(out List<int> parts)
+    {
+        parts = [];
+
+        var currentSubmarine = *CurrentSubmarineIndexSig.GetStatic<int>();
+        if (currentSubmarine is < 0 or > 3) return false;
+
+        var manager = InventoryManager.Instance();
+        if (manager == null) return false;
+
+        var container = manager->GetInventoryContainer(InventoryType.HousingInteriorPlacedItems2);
+        if (container == null || !container->IsLoaded) return false;
+
+        var offset = 5 * currentSubmarine;
+
+        for (var i = 0; i < 4; i++)
+        {
+            var slot = container->GetInventorySlot(i + offset);
+            if (slot            == null) continue;
+            if (slot->Condition > 0) continue;
+            parts.Add(i);
+        }
+
+        return parts.Count > 0;
+    }
+
+    // 是否缺少潜艇相关物品
+    private static bool IsLackOfSubmarineItems()
+    {
+        var manager    = InventoryManager.Instance();
+        var itemLacked = 0U;
+
+        // 魔导机械修理材料
+        if (manager->GetInventoryItemCount(10373) < 20)
+            itemLacked = 10373;
+        // 桶装青磷水
+        if (manager->GetInventoryItemCount(10155) < 15)
+            itemLacked = 10155;
+
+        if (itemLacked != 0)
+        {
+            NotifyHelper.Instance().Chat(Lang.GetSe("AutoSubmarineCollect-LackSpecificItems", SeString.CreateItemLink(itemLacked)));
+            return true;
+        }
+
+        return false;
+    }
+
+    // 是否存在待收潜艇
+    private static bool IsAnySubmarinesAvailable(out int index)
+    {
+        index = -1;
+
+        // 不在潜艇主界面
+        if (!IsOnValidSubmarineList()) return false;
+
+        var submarines = HousingManager.Instance()->WorkshopTerritory->Submersible.Data;
+
+        for (var i = 0; i < submarines.Length; i++)
+        {
+            var submarine = submarines[i];
+            // 潜艇无等级 → 不存在
+            if (submarine.RankId == 0) continue;
+
+            var returnTime      = submarine.GetReturnTime();
+            var leftTimeSeconds = (returnTime - StandardTimeManager.Instance().Now.ToUniversalTime()).TotalSeconds;
+            if (leftTimeSeconds > 0) continue;
+
+            index = i;
+            return true;
+        }
+
+        return false;
+    }
+
+    // 是否正在潜艇列表界面
+    private static bool IsOnValidSubmarineList()
+    {
+        if (HousingManager.Instance()->WorkshopTerritory == null) return false;
+        if (!SelectString->IsAddonAndNodesReady()) return false;
+
+        var title = SelectString->AtkValues[2].String.ToString();
+        if (string.IsNullOrEmpty(title) || !VoyageListTitleText.All(title.Contains))
+            return false;
+
+        return true;
+    }
+
+    // 通知潜水艇完成情况
+    private void NotifyFinishCount(SubmarineReturnTimePacket* packet)
+    {
+        if (packet->GetAvailableCount() == 0)
+        {
+            isJustLogin = false;
+            return;
+        }
+
+        var maxCount      = packet->GetAvailableCount();
+        var finishedCount = packet->GetFinishCount();
+
+        if (config.NotifyWhenLogin && isJustLogin ||
+            config.NotifyCount > 0 && finishedCount >= Math.Min(maxCount, config.NotifyCount))
+        {
+            isJustLogin = false;
+
+            var messageBuilder = new SeStringBuilder();
+            messageBuilder.AddText(Lang.Get("AutoSubmarineCollect-Notification-SubmarineInfo", maxCount - finishedCount, finishedCount));
+
+            messageBuilder.Add(NewLinePayload.Payload)
+                          .AddText($"{Lang.Get("AutoSubmarineCollect-Notification-LatestReturnTime")}: {packet->GetLatestReturnTime()}");
+            if (finishedCount == maxCount)
+                messageBuilder.AddText($" ({packet->GetLatestReturnTime().TimeAgo()})");
+
+            if (finishedCount > 0)
+            {
+                messageBuilder.Add(NewLinePayload.Payload)
+                              .Add(RawPayload.LinkTerminator)
+                              .Add(collectSubmarinePayload)
+                              .AddText("[")
+                              .AddUiForeground(35)
+                              .AddText($"{Lang.Get("AutoSubmarineCollect-Payload-TeleportAndCollect")}")
+                              .AddUiForegroundOff()
+                              .AddText("]")
+                              .Add(RawPayload.LinkTerminator);
+            }
+
+            NotifyHelper.Instance().Chat(messageBuilder.Build());
+        }
+
+        if (config.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, config.AutoCollectCount))
+            ChatManager.Instance().SendMessage("/pdr submarine");
+    }
+
+    // 发包获取情报
+    private static void SendRefreshSubmarineInfo()
+    {
+        if (!GameState.IsLoggedIn) return;
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RefreshSubmarineInfo, 1);
+    }
+
+    private static string SantisizeText(string text)
+    {
+        char[] charsToReplace = ['(', '.', ')', ']', ':', '/'];
+        foreach (var c in charsToReplace)
+            text = text.Replace(c, ' ');
+        return text.Trim();
+    }
+    
+    private class Config : ModuleConfig
+    {
+        public uint AutoCollectCount;
+        public uint NotifyCount     = 4;
+        public bool NotifyWhenLogin = true;
+    }
+
+    private class ItemDisplayNode : HorizontalListNode
+    {
+        public ItemDisplayNode(uint itemID, float width)
+        {
+            ItemID = itemID;
+
+            IconNode = new()
+            {
+                Size       = new(32),
+                IsVisible  = true,
+                IconId     = LuminaWrapper.GetItemIconID(ItemID),
+                FitTexture = true
+            };
+
+            AddNode(IconNode);
+
+            AddDummy(5);
+
+            NameNode = new()
+            {
+                IsVisible = true,
+                Position  = new(0, 6),
+                TextFlags = TextFlags.AutoAdjustNodeSize,
+                FontSize  = 14,
+                String    = LuminaWrapper.GetItemName(ItemID)
+            };
+
+            AddNode(NameNode);
+
+            var itemCount   = LocalPlayerState.GetItemCount(ItemID);
+            var textBuilder = new SeStringBuilder();
+
+            if (itemCount <= 20)
+            {
+                textBuilder.AddIcon(BitmapFontIcon.ExclamationRectangle)
+                           .AddText(" ");
+            }
+
+            textBuilder.AddText($"{itemCount}");
+
+            CountNode = new()
+            {
+                IsVisible        = true,
+                TextFlags        = TextFlags.AutoAdjustNodeSize | TextFlags.Edge | TextFlags.Emboss,
+                FontType         = FontType.MiedingerMed,
+                AlignmentType    = AlignmentType.TopRight,
+                Position         = new(width - 20, 4),
+                TextColor        = ColorHelper.GetColor(50),
+                TextOutlineColor = ColorHelper.GetColor((uint)(itemCount > 20 ? 28 : 17)),
+                FontSize         = 16,
+                String           = textBuilder.Build().Encode()
+            };
+            CountNode.AttachNode(this);
+        }
+
+        public uint           ItemID    { get; init; }
+        public IconImageNode? IconNode  { get; private set; }
+        public TextNode?      NameNode  { get; private set; }
+        public TextNode?      CountNode { get; private set; }
+
+        public void UpdateItemCount()
+        {
+            var itemCount   = LocalPlayerState.GetItemCount(ItemID);
+            var textBuilder = new SeStringBuilder();
+
+            if (itemCount <= 20)
+            {
+                textBuilder.AddIcon(BitmapFontIcon.ExclamationRectangle)
+                           .AddText(" ");
+            }
+
+            textBuilder.AddText($"{itemCount}");
+
+            CountNode.String           = textBuilder.Build().Encode();
+            CountNode.TextOutlineColor = ColorHelper.GetColor((uint)(itemCount > 20 ? 28 : 17));
+        }
+
+        protected override void Dispose(bool disposing, bool isNativeDestructor)
+        {
+            IconNode?.Dispose();
+            IconNode = null;
+
+            NameNode?.Dispose();
+            NameNode = null;
+
+            CountNode?.Dispose();
+            CountNode = null;
+
+            base.Dispose(disposing, isNativeDestructor);
+        }
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 144)]
+    private struct SubmarineReturnTimePacket
+    {
+        [FieldOffset(0)]
+        public int ReturnTime1;
+
+        [FieldOffset(36)]
+        public int ReturnTime2;
+
+        [FieldOffset(72)]
+        public int ReturnTime3;
+
+        [FieldOffset(108)]
+        public int ReturnTime4;
+
+        public int GetFinishCount() =>
+            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }.Count(x => x != 0 && x <= DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+        public int GetAvailableCount() =>
+            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }.Count(x => x != 0);
+
+        public DateTime GetLatestReturnTime() =>
+            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }
+                .Where(x => x != 0)
+                .Max()
+                .ToUTCDateTimeFromUnixSeconds()
+                .ToLocalTime();
+    }
+
+    private record FreeCompanyWorkshopInfo
+    {
+        public FreeCompanyWorkshopInfo(uint territoryType, uint wardIndex, uint plotIndex)
+        {
+            TerritoryType = territoryType;
+            WardIndex     = wardIndex;
+            PlotIndex     = plotIndex;
+
+            var result = LuminaGetter
+                         .GetSub<HousingMapMarkerInfo>()
+                         .SelectMany(x => x)
+                         .Where(x => x.Map.IsValid)
+                         .Where(x => x.Map.Value.TerritoryType.RowId == TerritoryType)
+                         .FirstOrDefault(x => x.SubrowId             == PlotIndex);
+
+            Position = new(result.X, result.Y, result.Z);
+            Map      = result.Map.RowId;
+        }
+
+        public Vector3 Position      { get; init; }
+        public uint    TerritoryType { get; init; }
+        public uint    Map           { get; init; }
+        public uint    WardIndex     { get; init; }
+        public uint    PlotIndex     { get; init; }
+
+        public static bool TryGet([NotNullWhen(true)] out FreeCompanyWorkshopInfo? workshopInfo)
+        {
+            workshopInfo = null;
+
+            var fcHouseID = HousingManager.GetOwnedHouseId(EstateType.FreeCompanyEstate);
+            if (fcHouseID.Id == 0 || fcHouseID.WorldId != GameState.CurrentWorld) return false;
+
+            workshopInfo = new(fcHouseID.TerritoryTypeId, fcHouseID.WardIndex, fcHouseID.PlotIndex);
+            return true;
+        }
+    }
+    
+    #region 常量
+
+    private const string COMMAND = "submarine";
+
+    // 桶装青磷水和魔导机械修理材料
+    private static readonly uint[] SubmarineItems = [10155, 10373];
+
+    private static List<string> VoyageListTitleText { get; } =
+    [
+        ..LuminaGetter.GetRowOrDefault<HouFixCompanySubmarine>(2).Text.ToDalamudString().Payloads
+                      .Where(x => x.Type == PayloadType.RawText)
+                      .Select(text => SantisizeText((text as TextPayload).Text))
+                      .Where(x => !string.IsNullOrWhiteSpace(x))
+                      .ToList()
+    ];
 
     #endregion
 }

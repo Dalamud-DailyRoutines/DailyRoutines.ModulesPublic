@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -25,21 +24,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWork : ModuleBase
 {
-    private static          Config            ModuleConfig      = null!;
-    private static readonly Throttler<string> RetainerThrottler = new();
-    private static readonly HashSet<ulong>    PlayerRetainers   = [];
-
-    private static readonly RetainerWorkerBase[] Workers =
-    [
-        new CollectWorker(),
-        new EntrustDupsWorker(),
-        new GilsShareWorker(),
-        new GilsWithdrawWorker(),
-        new RefreshWorker(),
-        new TownDispatchWorker(),
-        new PriceAdjustWorker()
-    ];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoRetainerWorkTitle"),
@@ -50,16 +34,36 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
+    private          Config            config      = null!;
+    private readonly Throttler<string> retainerThrottler = new();
+    private readonly HashSet<ulong>    playerRetainers   = [];
+
+    private readonly RetainerWorkerBase[] workers;
+
+    public AutoRetainerWork()
+    {
+        workers =
+        [
+            new CollectWorker(this),
+            new EntrustDupsWorker(this),
+            new GilsShareWorker(this),
+            new GilsWithdrawWorker(this),
+            new RefreshWorker(this),
+            new TownDispatchWorker(this),
+            new PriceAdjustWorker(this)
+        ];
+    }
+
     protected override void Init()
     {
-        ModuleConfig =   Config.Load(this) ?? new();
-        Overlay      ??= new Overlay(this);
+        config =   Config.Load(this) ?? new();
+        Overlay      ??= new(this);
 
         // 雇员列表
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "RetainerList", OnRetainerList);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RetainerList", OnRetainerList);
 
-        foreach (var worker in Workers)
+        foreach (var worker in workers)
             worker.Init();
     }
 
@@ -67,7 +71,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnRetainerList);
 
-        foreach (var worker in Workers)
+        foreach (var worker in workers)
             worker.Uninit();
     }
 
@@ -86,9 +90,12 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     #endregion
 
-    public class TownDispatchWorker : RetainerWorkerBase
+    private class TownDispatchWorker
+    (
+        AutoRetainerWork module
+    ) : RetainerWorkerBase(module)
     {
-        private static TaskHelper? TaskHelper;
+        private TaskHelper? TaskHelper;
 
         public override bool DrawConfigCondition() => true;
 
@@ -136,10 +143,10 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                 TaskHelper.Abort();
         }
 
-        private static void EnqueueRetainersDispatch()
+        private void EnqueueRetainersDispatch()
         {
             if (TaskHelper.AbortByConflictKey(Module)) return;
-            if (IsAnyOtherWorkerBusy(typeof(TownDispatchWorker))) return;
+            if (Module.IsAnyOtherWorkerBusy(typeof(TownDispatchWorker))) return;
 
             var addon = (AddonSelectString*)SelectString;
             if (addon == null) return;
@@ -172,9 +179,12 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         }
     }
 
-    public class GilsWithdrawWorker : RetainerWorkerBase
+    private class GilsWithdrawWorker
+    (
+        AutoRetainerWork module
+    ) : RetainerWorkerBase(module)
     {
-        private static TaskHelper? TaskHelper;
+        private TaskHelper? TaskHelper;
 
         public override bool DrawConfigCondition() => false;
 
@@ -204,10 +214,10 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                 TaskHelper.Abort();
         }
 
-        private static void EnqueueRetainersGilWithdraw()
+        private void EnqueueRetainersGilWithdraw()
         {
             if (TaskHelper.AbortByConflictKey(Module)) return;
-            if (IsAnyOtherWorkerBusy(typeof(GilsWithdrawWorker))) return;
+            if (Module.IsAnyOtherWorkerBusy(typeof(GilsWithdrawWorker))) return;
 
             var count = GetValidRetainerCount(x => x.Gil > 0, out var validRetainers);
             if (count == 0) return;
@@ -220,7 +230,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                         () =>
                         {
                             if (TaskHelper.AbortByConflictKey(Module)) return true;
-                            return EnterRetainer(index);
+                            return Module.EnterRetainer(index);
                         },
                         $"选择进入 {index} 号雇员"
                     );
@@ -270,23 +280,26 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         }
     }
 
-    public class GilsShareWorker : RetainerWorkerBase
+    private class GilsShareWorker
+    (
+        AutoRetainerWork module
+    ) : RetainerWorkerBase(module)
     {
-        private static TaskHelper? TaskHelper;
+        private TaskHelper? taskHelper;
 
         public override bool DrawConfigCondition() => false;
 
         public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
 
-        public override bool IsWorkerBusy() => TaskHelper?.IsBusy ?? false;
+        public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
-        public override void Init() => TaskHelper ??= new() { TimeoutMS = 15_000 };
+        public override void Init() => taskHelper ??= new() { TimeoutMS = 15_000 };
 
         public override void Uninit()
         {
-            TaskHelper?.Abort();
-            TaskHelper?.Dispose();
-            TaskHelper = null;
+            taskHelper?.Abort();
+            taskHelper?.Dispose();
+            taskHelper = null;
         }
 
         public override void DrawOverlay(string activeAddonName)
@@ -294,12 +307,12 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-GilsShare-Title"));
             if (!node) return;
 
-            if (ImGui.RadioButton($"{Lang.Get("Method")} 1", ref ModuleConfig.GilsShareMethod, 0))
-                ModuleConfig.Save(Module);
+            if (ImGui.RadioButton($"{Lang.Get("Method")} 1", ref Module.config.GilsShareMethod, 0))
+                Module.config.Save(Module);
 
             ImGui.SameLine();
-            if (ImGui.RadioButton($"{Lang.Get("Method")} 2", ref ModuleConfig.GilsShareMethod, 1))
-                ModuleConfig.Save(Module);
+            if (ImGui.RadioButton($"{Lang.Get("Method")} 2", ref Module.config.GilsShareMethod, 1))
+                Module.config.Save(Module);
 
             ImGuiOm.HelpMarker(Lang.Get("AutoRetainerWork-GilsShare-MethodsHelp"));
 
@@ -308,13 +321,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Stop")))
-                TaskHelper.Abort();
+                taskHelper.Abort();
         }
 
         private void EnqueueRetainersGilShare()
         {
-            if (TaskHelper.AbortByConflictKey(Module)) return;
-            if (IsAnyOtherWorkerBusy(typeof(GilsShareWorker))) return;
+            if (taskHelper.AbortByConflictKey(Module)) return;
+            if (Module.IsAnyOtherWorkerBusy(typeof(GilsShareWorker))) return;
 
             var retainerManager = RetainerManager.Instance();
             var retainerCount   = retainerManager->GetRetainerCount();
@@ -326,7 +339,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             var avgAmount = (uint)Math.Floor(totalGilAmount / (double)retainerCount);
             if (avgAmount <= 1) return;
 
-            switch (ModuleConfig.GilsShareMethod)
+            switch (Module.config.GilsShareMethod)
             {
                 case 0:
                     for (var i = 0U; i < retainerCount; i++)
@@ -344,31 +357,31 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             }
         }
 
-        private static void EnqueueRetainersGilShareMethodFirst(uint index, uint avgAmount)
+        private void EnqueueRetainersGilShareMethodFirst(uint index, uint avgAmount)
         {
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
-                    return EnterRetainer(index);
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
+                    return Module.EnterRetainer(index);
                 },
                 $"选择进入 {index} 号雇员"
             );
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
                     return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                 },
                 "选择进入金币管理"
             );
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
                     if (!Bank->IsAddonAndNodesReady()) return false;
 
                     var retainerGils = Bank->AtkValues[6].Int;
@@ -398,42 +411,42 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                 },
                 $"使用 1 号方法均分 {index} 号雇员的金币"
             );
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
                     return LeaveRetainer();
                 },
                 "回到雇员列表"
             );
         }
 
-        private static void EnqueueRetainersGilShareMethodSecond(uint index)
+        private void EnqueueRetainersGilShareMethodSecond(uint index)
         {
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
-                    return EnterRetainer(index);
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
+                    return Module.EnterRetainer(index);
                 },
                 $"选择进入 {index} 号雇员"
             );
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
                     return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                 },
                 "选择进入金币管理"
             );
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
                     if (!Bank->IsAddonAndNodesReady()) return false;
 
                     var retainerGils = Bank->AtkValues[6].Int;
@@ -454,11 +467,11 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             );
 
             // 回到雇员列表
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (
                 () =>
                 {
-                    if (TaskHelper.AbortByConflictKey(Module)) return true;
+                    if (taskHelper.AbortByConflictKey(Module)) return true;
                     return LeaveRetainer();
                 },
                 "回到雇员列表"
@@ -466,19 +479,22 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         }
     }
 
-    public class EntrustDupsWorker : RetainerWorkerBase
+    private class EntrustDupsWorker
+    (
+        AutoRetainerWork module
+    ) : RetainerWorkerBase(module)
     {
-        private static TaskHelper? TaskHelper;
+        private TaskHelper? taskHelper;
 
         public override bool DrawConfigCondition() => false;
 
         public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
 
-        public override bool IsWorkerBusy() => TaskHelper?.IsBusy ?? false;
+        public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
         public override void Init()
         {
-            TaskHelper ??= new() { TimeoutMS = 15_000 };
+            taskHelper ??= new() { TimeoutMS = 15_000 };
 
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RetainerItemTransferList",     OnEntrustDupsAddons);
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RetainerItemTransferProgress", OnEntrustDupsAddons);
@@ -488,9 +504,9 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         {
             DService.Instance().AddonLifecycle.UnregisterListener(OnEntrustDupsAddons);
 
-            TaskHelper?.Abort();
-            TaskHelper?.Dispose();
-            TaskHelper = null;
+            taskHelper?.Abort();
+            taskHelper?.Dispose();
+            taskHelper = null;
         }
 
         public override void DrawOverlay(string activeAddonName)
@@ -503,13 +519,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Stop")))
-                TaskHelper.Abort();
+                taskHelper.Abort();
         }
 
-        private static void EnqueueRetainersEntrust()
+        private void EnqueueRetainersEntrust()
         {
-            if (TaskHelper.AbortByConflictKey(Module)) return;
-            if (IsAnyOtherWorkerBusy(typeof(EntrustDupsWorker))) return;
+            if (taskHelper.AbortByConflictKey(Module)) return;
+            if (Module.IsAnyOtherWorkerBusy(typeof(EntrustDupsWorker))) return;
 
             var count = GetValidRetainerCount(x => x.ItemCount > 0, out var validRetainers);
             if (count == 0) return;
@@ -517,30 +533,30 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             validRetainers.ForEach
             (index =>
                 {
-                    TaskHelper.Enqueue
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
-                            return EnterRetainer(index);
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
+                            return Module.EnterRetainer(index);
                         },
                         $"选择进入 {index} 号雇员"
                     );
-                    TaskHelper.Enqueue
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
                             return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し"]);
                         },
                         "选择道具管理"
                     );
-                    TaskHelper.Enqueue
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (!RetainerThrottler.Throttle("AutoRetainerEntrustDups", 100)) return false;
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
+                            if (!Module.retainerThrottler.Throttle("AutoRetainerEntrustDups", 100)) return false;
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
 
                             var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Retainer);
                             if (agent == null || !agent->IsAgentActive()) return false;
@@ -549,21 +565,21 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                         },
                         "选择同类道具合并提交"
                     );
-                    TaskHelper.DelayNext(500, "等待同类道具合并提交开始");
-                    TaskHelper.Enqueue
+                    taskHelper.DelayNext(500, "等待同类道具合并提交开始");
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
                             return ExitRetainerInventory();
                         },
                         "离开雇员背包界面"
                     );
-                    TaskHelper.Enqueue
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
                             return LeaveRetainer();
                         },
                         "回到雇员列表"
@@ -572,9 +588,9 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             );
         }
 
-        private static void OnEntrustDupsAddons(AddonEvent type, AddonArgs args)
+        private void OnEntrustDupsAddons(AddonEvent type, AddonArgs args)
         {
-            if (!TaskHelper.IsBusy) return;
+            if (!taskHelper.IsBusy) return;
 
             switch (args.AddonName)
             {
@@ -582,11 +598,11 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                     args.Addon.ToStruct()->Callback(1);
                     break;
                 case "RetainerItemTransferProgress":
-                    TaskHelper.Enqueue
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
                             var addon = AddonHelper.GetByName("RetainerItemTransferProgress");
                             if (!addon->IsAddonAndNodesReady()) return false;
 
@@ -609,23 +625,26 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         }
     }
 
-    public class RefreshWorker : RetainerWorkerBase
+    private class RefreshWorker
+    (
+        AutoRetainerWork module
+    ) : RetainerWorkerBase(module)
     {
-        private static TaskHelper? TaskHelper;
+        private TaskHelper? taskHelper;
 
         public override bool DrawConfigCondition() => false;
 
         public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
 
-        public override bool IsWorkerBusy() => TaskHelper?.IsBusy ?? false;
+        public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
-        public override void Init() => TaskHelper ??= new() { TimeoutMS = 15_000 };
+        public override void Init() => taskHelper ??= new() { TimeoutMS = 15_000 };
 
         public override void Uninit()
         {
-            TaskHelper?.Abort();
-            TaskHelper?.Dispose();
-            TaskHelper = null;
+            taskHelper?.Abort();
+            taskHelper?.Dispose();
+            taskHelper = null;
         }
 
         public override void DrawOverlay(string activeAddonName)
@@ -638,12 +657,12 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Stop")))
-                TaskHelper.Abort();
+                taskHelper.Abort();
         }
 
-        private static void EnqueueRetainersRefresh()
+        private void EnqueueRetainersRefresh()
         {
-            if (IsAnyOtherWorkerBusy(typeof(RefreshWorker))) return;
+            if (Module.IsAnyOtherWorkerBusy(typeof(RefreshWorker))) return;
 
             var count = GetValidRetainerCount(_ => true, out var validRetainers);
             if (count == 0) return;
@@ -651,20 +670,20 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             validRetainers.ForEach
             (index =>
                 {
-                    TaskHelper.Enqueue
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
-                            return EnterRetainer(index);
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
+                            return Module.EnterRetainer(index);
                         },
                         $"选择进入 {index} 号雇员"
                     );
-                    TaskHelper.Enqueue
+                    taskHelper.Enqueue
                     (
                         () =>
                         {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
+                            if (taskHelper.AbortByConflictKey(Module)) return true;
                             return LeaveRetainer();
                         },
                         "回到雇员列表"
@@ -674,9 +693,12 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         }
     }
 
-    public class CollectWorker : RetainerWorkerBase
+    private class CollectWorker
+    (
+        AutoRetainerWork module
+    ) : RetainerWorkerBase(module)
     {
-        private static TaskHelper? TaskHelper;
+        private TaskHelper? taskHelper;
 
         private static readonly string[] VentureCompleteTexts = ["结束", "Complete", "完了"];
 
@@ -684,11 +706,11 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
 
-        public override bool IsWorkerBusy() => TaskHelper?.IsBusy ?? false;
+        public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
         public override void Init()
         {
-            TaskHelper ??= new() { TimeoutMS = 15_000, ShowDebug = true };
+            taskHelper ??= new() { TimeoutMS = 15_000, ShowDebug = true };
 
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RetainerList", OnRetainerList);
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,  "RetainerList", OnRetainerList);
@@ -698,9 +720,9 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         {
             DService.Instance().AddonLifecycle.UnregisterListener(OnRetainerList);
 
-            TaskHelper?.Abort();
-            TaskHelper?.Dispose();
-            TaskHelper = null;
+            taskHelper?.Abort();
+            taskHelper?.Dispose();
+            taskHelper = null;
         }
 
         public override void DrawOverlay(string activeAddonName)
@@ -708,11 +730,11 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-Collect-Title"));
             if (!node) return;
 
-            if (ImGui.Checkbox(Lang.Get("AutoRetainerWork-Collect-AutoCollect"), ref ModuleConfig.AutoRetainerCollect))
+            if (ImGui.Checkbox(Lang.Get("AutoRetainerWork-Collect-AutoCollect"), ref Module.config.AutoRetainerCollect))
             {
-                if (ModuleConfig.AutoRetainerCollect)
+                if (Module.config.AutoRetainerCollect)
                     EnqueueRetainersCollect();
-                ModuleConfig.Save(Module);
+                Module.config.Save(Module);
             }
 
             if (ImGui.Button(Lang.Get("Start")))
@@ -720,31 +742,31 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Stop")))
-                TaskHelper.Abort();
+                taskHelper.Abort();
         }
 
-        private static void OnRetainerList(AddonEvent type, AddonArgs args)
+        private void OnRetainerList(AddonEvent type, AddonArgs args)
         {
-            if (IsAnyOtherWorkerBusy(typeof(CollectWorker))) return;
+            if (Module.IsAnyOtherWorkerBusy(typeof(CollectWorker))) return;
 
             switch (type)
             {
                 case AddonEvent.PostSetup:
-                    ObtainPlayerRetainers();
-                    if (TaskHelper.IsBusy) return;
-                    if (!ModuleConfig.AutoRetainerCollect) break;
-                    if (TaskHelper.AbortByConflictKey(Module)) break;
+                    Module.ObtainPlayerRetainers();
+                    if (taskHelper.IsBusy) return;
+                    if (!Module.config.AutoRetainerCollect) break;
+                    if (taskHelper.AbortByConflictKey(Module)) break;
                     EnqueueRetainersCollect();
                     break;
                 case AddonEvent.PostDraw:
-                    if (!ModuleConfig.AutoRetainerCollect) break;
-                    if (!RetainerThrottler.Throttle("AutoRetainerCollect-AFK", 5_000)) return;
+                    if (!Module.config.AutoRetainerCollect) break;
+                    if (!Module.retainerThrottler.Throttle("AutoRetainerCollect-AFK", 5_000)) return;
 
                     DService.Instance().Framework.RunOnTick
                     (
                         () =>
                         {
-                            if (TaskHelper.IsBusy) return;
+                            if (taskHelper.IsBusy) return;
                             EnqueueRetainersCollect();
                         },
                         TimeSpan.FromSeconds(1)
@@ -753,9 +775,9 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             }
         }
 
-        private static void EnqueueRetainersCollect()
+        private void EnqueueRetainersCollect()
         {
-            if (TaskHelper.AbortByConflictKey(Module)) return;
+            if (taskHelper.AbortByConflictKey(Module)) return;
 
             var serverTime = Framework.GetServerTime();
             var count = GetValidRetainerCount
@@ -766,35 +788,35 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
             if (count == 0)
             {
-                if (TaskHelper.IsBusy)
-                    TaskHelper.Enqueue(LeaveRetainer, "确保所有雇员均已返回");
+                if (taskHelper.IsBusy)
+                    taskHelper.Enqueue(LeaveRetainer, "确保所有雇员均已返回");
                 return;
             }
 
             foreach (var index in validRetainers)
             {
-                TaskHelper.Enqueue
+                taskHelper.Enqueue
                 (
                     () =>
                     {
-                        if (TaskHelper.AbortByConflictKey(Module)) return true;
-                        return EnterRetainer(index);
+                        if (taskHelper.AbortByConflictKey(Module)) return true;
+                        return Module.EnterRetainer(index);
                     },
                     $"选择进入 {index} 号雇员"
                 );
 
-                TaskHelper.Enqueue
+                taskHelper.Enqueue
                 (
                     () =>
                     {
-                        if (TaskHelper.AbortByConflictKey(Module)) return true;
+                        if (taskHelper.AbortByConflictKey(Module)) return true;
                         if (!SelectString->IsAddonAndNodesReady()) return false;
                         if (RetainerList != null) return false;
 
                         if (!AddonSelectStringEvent.TryScanSelectStringText(VentureCompleteTexts, out var i))
                         {
-                            TaskHelper.Abort();
-                            TaskHelper.Enqueue(LeaveRetainer, "回到雇员列表");
+                            taskHelper.Abort();
+                            taskHelper.Enqueue(LeaveRetainer, "回到雇员列表");
                             return true;
                         }
 
@@ -803,11 +825,11 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                     "确认雇员探险完成"
                 );
 
-                TaskHelper.Enqueue
+                taskHelper.Enqueue
                 (
                     () =>
                     {
-                        if (TaskHelper.AbortByConflictKey(Module)) return true;
+                        if (taskHelper.AbortByConflictKey(Module)) return true;
                         if (!RetainerTaskResult->IsAddonAndNodesReady()) return false;
 
                         RetainerTaskResult->Callback(14);
@@ -816,11 +838,11 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                     "重新派遣雇员探险"
                 );
 
-                TaskHelper.Enqueue
+                taskHelper.Enqueue
                 (
                     () =>
                     {
-                        if (TaskHelper.AbortByConflictKey(Module)) return true;
+                        if (taskHelper.AbortByConflictKey(Module)) return true;
                         if (!RetainerTaskAsk->IsAddonAndNodesReady()) return false;
 
                         RetainerTaskAsk->Callback(12);
@@ -829,24 +851,27 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                     "确认派遣雇员探险"
                 );
 
-                TaskHelper.Enqueue
+                taskHelper.Enqueue
                 (
                     () =>
                     {
-                        if (TaskHelper.AbortByConflictKey(Module)) return true;
+                        if (taskHelper.AbortByConflictKey(Module)) return true;
                         return LeaveRetainer();
                     },
                     "回到雇员列表"
                 );
             }
 
-            TaskHelper.Enqueue(EnqueueRetainersCollect, "重新检查是否有其他雇员需要收取");
+            taskHelper.Enqueue(EnqueueRetainersCollect, "重新检查是否有其他雇员需要收取");
         }
     }
 
-    public abstract class RetainerWorkerBase
+    private abstract class RetainerWorkerBase
+    (
+        AutoRetainerWork module
+    )
     {
-        protected static AutoRetainerWork Module => ModuleManager.Instance().GetModule<AutoRetainerWork>();
+        protected AutoRetainerWork Module = module;
 
         public abstract bool IsWorkerBusy();
 
@@ -883,7 +908,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     protected override void ConfigUI()
     {
-        foreach (var worker in Workers)
+        foreach (var worker in workers)
         {
             if (!worker.DrawConfigCondition()) continue;
 
@@ -902,7 +927,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         ImGuiOm.ScaledDummy(200f, 0.1f);
 
-        foreach (var worker in Workers)
+        foreach (var worker in workers)
         {
             if (!worker.DrawOverlayCondition(activeAddon->NameString)) continue;
             worker.DrawOverlay(activeAddon->NameString);
@@ -917,9 +942,9 @@ public unsafe partial class AutoRetainerWork : ModuleBase
     /// <summary>
     ///     打开指定索引对应的雇员
     /// </summary>
-    private static bool EnterRetainer(uint index)
+    private bool EnterRetainer(uint index)
     {
-        if (!RetainerThrottler.Throttle("EnterRetainer", 100)) return false;
+        if (!retainerThrottler.Throttle("EnterRetainer", 100)) return false;
 
         if (!RetainerList->IsAddonAndNodesReady()) return false;
 
@@ -1024,7 +1049,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
     /// <summary>
     ///     将雇员 ID 添加至列表
     /// </summary>
-    private static void ObtainPlayerRetainers()
+    private void ObtainPlayerRetainers()
     {
         var retainerManager = RetainerManager.Instance();
         if (retainerManager == null) return;
@@ -1034,16 +1059,16 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             var retainer = retainerManager->GetRetainerBySortedIndex(i);
             if (retainer == null) break;
 
-            PlayerRetainers.Add(retainer->RetainerId);
+            playerRetainers.Add(retainer->RetainerId);
         }
     }
 
     /// <summary>
     ///     是否有其他 Worker 正在运行
     /// </summary>
-    private static bool IsAnyOtherWorkerBusy(Type current)
+    private bool IsAnyOtherWorkerBusy(Type current)
     {
-        foreach (var worker in Workers)
+        foreach (var worker in workers)
         {
             if (!worker.IsWorkerBusy()) continue;
             if (current == worker.GetType()) continue;
@@ -1057,14 +1082,14 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     #region 预定义
 
-    public enum AdjustBehavior
+    private enum AdjustBehavior
     {
         固定值,
         百分比
     }
 
     [Flags]
-    public enum AbortCondition
+    private enum AbortCondition
     {
         无        = 1,
         低于最小值    = 2,
@@ -1075,7 +1100,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         高于最大值    = 64
     }
 
-    public enum AbortBehavior
+    private enum AbortBehavior
     {
         无,
         收回至雇员,
@@ -1086,7 +1111,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         改价至最高值
     }
 
-    public enum SortOrder
+    private enum SortOrder
     {
         上架顺序,
         物品ID,
@@ -1186,7 +1211,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         public bool SendPriceAdjustProcessMessage = true;
     }
 
-    public class ItemKey : IEquatable<ItemKey>
+    private class ItemKey : IEquatable<ItemKey>
     {
         public ItemKey() { }
 
@@ -1222,7 +1247,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         public static bool operator !=(ItemKey lhs, ItemKey rhs) => !(lhs == rhs);
     }
 
-    public class ItemConfig : IEquatable<ItemConfig>
+    private class ItemConfig : IEquatable<ItemConfig>
     {
         public ItemConfig() { }
 

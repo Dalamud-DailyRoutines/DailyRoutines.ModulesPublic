@@ -29,6 +29,9 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         if (HousingGoods != null)
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
@@ -138,7 +141,4 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         if (type == AddonEvent.PreFinalize)
             TaskHelper.Abort();
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

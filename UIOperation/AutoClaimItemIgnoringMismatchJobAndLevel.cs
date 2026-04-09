@@ -10,14 +10,14 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
 {
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoClaimItemIgnoringMismatchJobAndLevelTitle"),
         Description = Lang.Get("AutoClaimItemIgnoringMismatchJobAndLevelDescription"),
         Category    = ModuleCategory.UIOperation
     };
+    
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init()
     {
@@ -25,6 +25,9 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
         if (SelectYesno->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() => 
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     private static void OnAddon(AddonEvent type, AddonArgs? args)
     {
@@ -40,6 +43,4 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
             ]
         );
     }
-
-    protected override void Uninit() => DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

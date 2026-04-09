@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
@@ -18,6 +19,8 @@ using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud.Abstractions;
+using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
@@ -28,20 +31,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoExpertDelivery : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static DRAutoExpertDelivery? Addon;
-
-    private static readonly Dictionary<uint, (uint EventID, uint DataID)> ZoneInfo = new()
-    {
-        // 黑涡团
-        [128] = (1441793, 1002388),
-        // 双蛇党
-        [132] = (1441794, 1002394),
-        // 恒辉队
-        [130] = (1441795, 1002391)
-    };
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoExpertDeliveryTitle"),
@@ -49,14 +38,18 @@ public unsafe class AutoExpertDelivery : ModuleBase
         Category            = ModuleCategory.UIOperation,
         ModulesPrerequisite = ["FastGrandCompanyExchange"]
     };
+    
+    private Config config = null!;
+
+    private DRAutoExpertDelivery? addonExpertDelivery;
 
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         TaskHelper ??= new() { TimeoutMS = int.MaxValue };
 
-        Addon ??= new(this)
+        addonExpertDelivery ??= new(this)
         {
             InternalName          = "DRAutoExpertDelivery",
             Title                 = Info.Title,
@@ -101,7 +94,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                 GrandCompanySupplyList->AtkValues->UInt       != 2)
                 return false;
 
-            var items = ExpertDeliveryItem.Parse().Where(x => x.GetIndex() != -1 && !x.IsNeedToSkip()).ToList();
+            var items = ExpertDeliveryItem.Parse().Where(x => x.GetIndex() != -1 && !x.IsNeedToSkip(this)).ToList();
 
             if (items.Count > 0)
             {
@@ -155,9 +148,9 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         if (isAutoExchange && ModuleManager.Instance().IsModuleEnabled(typeof(FastGrandCompanyExchange)))
         {
-            TaskHelper.Enqueue(() => ModuleManager.Instance().GetModule<FastGrandCompanyExchange>().EnqueueByName("default"));
-            TaskHelper.Enqueue(() => ModuleManager.Instance().GetModule<FastGrandCompanyExchange>().IsExchanging);
-            TaskHelper.Enqueue(() => !ModuleManager.Instance().GetModule<FastGrandCompanyExchange>().IsExchanging);
+            TaskHelper.Enqueue(() => EnqueueByNameIPC.InvokeFunc("default", -1));
+            TaskHelper.Enqueue(() => IsCurrentlyBusyIPC.Value);
+            TaskHelper.Enqueue(() => !IsCurrentlyBusyIPC.Value);
             TaskHelper.Enqueue(() => GrandCompanyExchange->Close(true));
         }
 
@@ -219,12 +212,12 @@ public unsafe class AutoExpertDelivery : ModuleBase
             case AddonEvent.PostSetup:
                 if (GrandCompanySupplyList == null) return;
 
-                if (ModuleConfig.AutoSwitchWhenOpen)
-                    GrandCompanySupplyList->Callback(0, ModuleConfig.DefaultPage);
+                if (config.AutoSwitchWhenOpen)
+                    GrandCompanySupplyList->Callback(0, config.DefaultPage);
                 break;
             case AddonEvent.PostDraw:
-                if (TaskHelper.IsBusy || Addon.IsOpen || !GrandCompanySupplyList->IsAddonAndNodesReady()) return;
-                Addon.Open();
+                if (TaskHelper.IsBusy || addonExpertDelivery.IsOpen || !GrandCompanySupplyList->IsAddonAndNodesReady()) return;
+                addonExpertDelivery.Open();
                 break;
         }
     }
@@ -233,8 +226,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSupplyList);
 
-        Addon?.Dispose();
-        Addon = null;
+        addonExpertDelivery?.Dispose();
+        addonExpertDelivery = null;
     }
 
     private class Config : ModuleConfig
@@ -375,13 +368,13 @@ public unsafe class AutoExpertDelivery : ModuleBase
             {
                 IsVisible = true,
                 IsEnabled = true,
-                IsChecked = ModuleConfig.SkipWhenHQ,
+                IsChecked = instance.config.SkipWhenHQ,
                 Size      = new(100, 27),
                 String    = Lang.Get("AutoExpertDelivery-SkipHQ"),
                 OnClick = x =>
                 {
-                    ModuleConfig.SkipWhenHQ = x;
-                    ModuleConfig.Save(instance);
+                    instance.config.SkipWhenHQ = x;
+                    instance.config.Save(instance);
                 }
             };
 
@@ -395,13 +388,13 @@ public unsafe class AutoExpertDelivery : ModuleBase
             {
                 IsVisible = true,
                 IsEnabled = true,
-                IsChecked = ModuleConfig.SkipWhenMateria,
+                IsChecked = instance.config.SkipWhenMateria,
                 Size      = new(100, 27),
                 String    = Lang.Get("AutoExpertDelivery-SkipMaterias"),
                 OnClick = x =>
                 {
-                    ModuleConfig.SkipWhenMateria = x;
-                    ModuleConfig.Save(instance);
+                    instance.config.SkipWhenMateria = x;
+                    instance.config.Save(instance);
                 }
             };
 
@@ -434,7 +427,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                 {
                     IsVisible = true,
                     IsEnabled = true,
-                    IsChecked = ModuleConfig.DefaultPage == i,
+                    IsChecked = instance.config.DefaultPage == i,
                     Size      = new(100, 27),
                     String    = LuminaWrapper.GetAddonText(4572 + i)
                 };
@@ -447,13 +440,13 @@ public unsafe class AutoExpertDelivery : ModuleBase
                         return;
                     }
 
-                    ModuleConfig.DefaultPage = (int)index;
-                    ModuleConfig.Save(instance);
+                    instance.config.DefaultPage = (int)index;
+                    instance.config.Save(instance);
 
                     for (var d = 0; d < DefaultPageCheckboxes.Count; d++)
                     {
                         var node = DefaultPageCheckboxes[d];
-                        node.IsChecked = ModuleConfig.DefaultPage == d;
+                        node.IsChecked = instance.config.DefaultPage == d;
                     }
                 };
 
@@ -515,11 +508,11 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         public void HandIn() => GrandCompanySupplyList->Callback(1, GetIndex());
 
-        public bool IsNeedToSkip()
+        public bool IsNeedToSkip(AutoExpertDelivery instance)
         {
             if (GetSlot() == null) return true;
-            if (ModuleConfig.SkipWhenHQ      && IsHQ()) return true;
-            if (ModuleConfig.SkipWhenMateria && HasMateria()) return true;
+            if (instance.config.SkipWhenHQ      && IsHQ()) return true;
+            if (instance.config.SkipWhenMateria && HasMateria()) return true;
 
             return false;
         }
@@ -575,4 +568,28 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         public override string ToString() => $"ExpertDeliveryItem-{ItemID}_{Container}_{Slot}_{SealReward}";
     }
+
+    #region 常量
+
+    private static readonly FrozenDictionary<uint, (uint EventID, uint DataID)> ZoneInfo = new Dictionary<uint, (uint EventID, uint DataID)>
+    {
+        // 黑涡团
+        [128] = (1441793, 1002388),
+        // 双蛇党
+        [132] = (1441794, 1002394),
+        // 恒辉队
+        [130] = (1441795, 1002391)
+    }.ToFrozenDictionary();
+
+    #endregion
+
+    #region IPC
+
+    [IPCSubscriber("DailyRoutines.Modules.FastGrandCompanyExchange.IsBusy")]
+    private IPCSubscriber<bool> IsCurrentlyBusyIPC;
+    
+    [IPCSubscriber("DailyRoutines.Modules.FastGrandCompanyExchange.EnqueueByName")]
+    private IPCSubscriber<string, int, bool> EnqueueByNameIPC;
+
+    #endregion
 }

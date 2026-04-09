@@ -22,32 +22,31 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMaterialize : ModuleBase
 {
-    private const string Command = "materialize";
-
-    // 0 - 成功; 3 - 获取 InventoryType 或 InventorySlot 失败; 4 - 物品为空或不符合条件; 34 - 当前状态无法使用; 
-    private static readonly CompSig ExtractMateriaSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 41 0F BF F8 8B DA 48 8B F1 45 33 C0");
-    private static          Hook<ExtractMateriaDelegate>? ExtractMateriaHook;
-
-    private static readonly CompSig MaterializeControllerSig = new("48 8D 0D ?? ?? ?? ?? 8B D0 E8 ?? ?? ?? ?? 83 7F");
-
-    private static TextNode?       LableNode;
-    private static TextButtonNode? StartButtonNode;
-    private static TextButtonNode? StopButtonNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoMaterializeTitle"),
         Description = Lang.Get("AutoMaterializeDescription"),
         Category    = ModuleCategory.UIOperation
     };
+    
+    // 0 - 成功; 3 - 获取 InventoryType 或 InventorySlot 失败; 4 - 物品为空或不符合条件; 34 - 当前状态无法使用; 
+    private static readonly CompSig ExtractMateriaSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 41 0F BF F8 8B DA 48 8B F1 45 33 C0");
+    private delegate        int     ExtractMateriaDelegate(nint a1, InventoryType type, uint slot);
+    private                 Hook<ExtractMateriaDelegate>? ExtractMateriaHook;
+
+    private static readonly CompSig MaterializeControllerSig = new("48 8D 0D ?? ?? ?? ?? 8B D0 E8 ?? ?? ?? ?? 83 7F");
+
+    private TextNode?       lableNode;
+    private TextButtonNode? startButtonNode;
+    private TextButtonNode? stopButtonNode;
 
     protected override void Init()
     {
+        TaskHelper ??= new();
+        
         ExtractMateriaHook ??= ExtractMateriaSig.GetHook<ExtractMateriaDelegate>(ExtractMateriaDetour);
         ExtractMateriaHook.Enable();
-
-        TaskHelper ??= new();
-
+        
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "Materialize",       OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Materialize",       OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "MaterializeDialog", OnDialogAddon);
@@ -55,7 +54,17 @@ public unsafe class AutoMaterialize : ModuleBase
         if (MaterializeDialog != null)
             OnDialogAddon(AddonEvent.PostSetup, null);
 
-        CommandManager.Instance().AddSubCommand(Command, new((_, _) => StartARoundAll()) { HelpMessage = Lang.Get("AutoMaterializeTitle") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new((_, _) => StartARoundAll()) { HelpMessage = Lang.Get("AutoMaterializeTitle") });
+    }
+    
+    protected override void Uninit()
+    {
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnDialogAddon);
     }
 
     protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
@@ -131,7 +140,7 @@ public unsafe class AutoMaterialize : ModuleBase
         return true;
     }
 
-    private static int ExtractMateria(InventoryType type, uint slot) =>
+    private int ExtractMateria(InventoryType type, uint slot) =>
         ExtractMateriaHook.Original(MaterializeControllerSig.GetStatic(), type, slot);
 
     private int ExtractMateriaDetour(nint a1, InventoryType type, uint slot)
@@ -151,9 +160,9 @@ public unsafe class AutoMaterialize : ModuleBase
             case AddonEvent.PostDraw:
                 if (Materialize == null) return;
 
-                if (LableNode == null)
+                if (lableNode == null)
                 {
-                    LableNode = new()
+                    lableNode = new()
                     {
                         IsVisible     = true,
                         Position      = new(135, 8),
@@ -163,12 +172,12 @@ public unsafe class AutoMaterialize : ModuleBase
                         AlignmentType = AlignmentType.Right,
                         TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
                     };
-                    LableNode.AttachNode(Materialize->RootNode);
+                    lableNode.AttachNode(Materialize->RootNode);
                 }
 
-                if (StartButtonNode == null)
+                if (startButtonNode == null)
                 {
-                    StartButtonNode = new()
+                    startButtonNode = new()
                     {
                         Position  = new(295, 10),
                         Size      = new(100, 28),
@@ -176,14 +185,14 @@ public unsafe class AutoMaterialize : ModuleBase
                         String    = Lang.Get("Start"),
                         OnClick   = StartARoundAll
                     };
-                    StartButtonNode.AttachNode(Materialize->RootNode);
+                    startButtonNode.AttachNode(Materialize->RootNode);
                 }
 
-                StartButtonNode.IsEnabled = !TaskHelper.IsBusy;
+                startButtonNode.IsEnabled = !TaskHelper.IsBusy;
 
-                if (StopButtonNode == null)
+                if (stopButtonNode == null)
                 {
-                    StopButtonNode = new()
+                    stopButtonNode = new()
                     {
                         Position  = new(400, 10),
                         Size      = new(100, 28),
@@ -191,19 +200,19 @@ public unsafe class AutoMaterialize : ModuleBase
                         String    = Lang.Get("Stop"),
                         OnClick   = () => TaskHelper.Abort()
                     };
-                    StopButtonNode.AttachNode(Materialize->RootNode);
+                    stopButtonNode.AttachNode(Materialize->RootNode);
                 }
 
                 break;
             case AddonEvent.PreFinalize:
-                LableNode?.Dispose();
-                LableNode = null;
+                lableNode?.Dispose();
+                lableNode = null;
 
-                StartButtonNode?.Dispose();
-                StartButtonNode = null;
+                startButtonNode?.Dispose();
+                startButtonNode = null;
 
-                StopButtonNode?.Dispose();
-                StopButtonNode = null;
+                stopButtonNode?.Dispose();
+                stopButtonNode = null;
 
                 TaskHelper?.Abort();
                 break;
@@ -217,16 +226,10 @@ public unsafe class AutoMaterialize : ModuleBase
 
         addon->Callback(0);
     }
+    
+    #region 常量
 
-    protected override void Uninit()
-    {
-        CommandManager.Instance().RemoveSubCommand(Command);
+    private const string COMMAND = "materialize";
 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-
-        DService.Instance().AddonLifecycle.UnregisterListener(OnDialogAddon);
-    }
-
-    private delegate int ExtractMateriaDelegate(nint a1, InventoryType type, uint slot);
+    #endregion
 }

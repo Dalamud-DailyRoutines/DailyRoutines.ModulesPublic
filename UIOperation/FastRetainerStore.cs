@@ -14,9 +14,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastRetainerStore : ModuleBase
 {
-    private static readonly HashSet<string> PlayerAddonNames   = ["Inventory", "InventoryLarge", "InventoryExpansion"];
-    private static readonly HashSet<string> RetainerAddonNames = ["InventoryRetainer", "InventoryRetainerLarge"];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FastRetainerStoreTitle"),
@@ -199,4 +196,11 @@ public unsafe class FastRetainerStore : ModuleBase
         protected override void OnClicked(IMenuItemClickedArgs args) =>
             ModuleManager.Instance().GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> PlayerAddonNames   = ["Inventory", "InventoryLarge", "InventoryExpansion"];
+    private static readonly FrozenSet<string> RetainerAddonNames = ["InventoryRetainer", "InventoryRetainerLarge"];
+
+    #endregion
 }

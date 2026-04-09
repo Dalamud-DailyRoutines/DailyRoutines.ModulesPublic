@@ -21,21 +21,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoMJIWorkshopImport : ModuleBase
 {
-    private static readonly FrozenDictionary<string, MJICraftworksObject> ItemNameMap =
-        LuminaGetter.Get<MJICraftworksObject>()
-                    .Where(x => x.Item.RowId != 0 && x.Item.IsValid)
-                    .ToDictionary(x => x.RowId, x => x).Values
-                    .ToDictionary
-                    (
-                        r => RemoveMJIItemPrefix(r.Item.Value.Name.ToString() ?? string.Empty),
-                        r => r,
-                        StringComparer.OrdinalIgnoreCase
-                    ).ToFrozenDictionary();
-
-    private static Config ModuleConfig = null!;
-
-    private static Assignments Recommendations = new();
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = "自动无人岛工房生产计划",
@@ -45,9 +30,13 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true, TCOnly = true };
 
+    private Config config = null!;
+
+    private Assignments recommendations = new();
+
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         Overlay                 ??= new(this);
         Overlay.Flags           &=  ~ImGuiWindowFlags.NoTitleBar;
@@ -61,6 +50,9 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         if (MJICraftSchedule != null)
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
@@ -76,7 +68,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
 
         DrawImportSection();
 
-        if (Recommendations.Empty) return;
+        if (recommendations.Empty) return;
 
         DrawBulkApplySection();
         DrawIndividualApplySection();
@@ -106,26 +98,26 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         using var indent = ImRaii.PushIndent();
 
         if (ImGui.Button(Lang.Get("ImportFromClipboard")))
-            Recommendations = Assignments.Parse(ImGui.GetClipboardText().Trim());
+            recommendations = Assignments.Parse(ImGui.GetClipboardText().Trim());
 
         ImGui.SameLine();
         if (ImGui.Button("清除已导入数据"))
-            Recommendations = new();
+            recommendations = new();
 
         ImGui.SameLine();
         ImGui.TextDisabled("|");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150f * GlobalUIScale);
-        if (ImGui.SliderInt("工房数量", ref ModuleConfig.WorkshopAmount, 0, 4))
-            ModuleConfig.Save(this);
+        if (ImGui.SliderInt("工房数量", ref config.WorkshopAmount, 0, 4))
+            config.Save(this);
 
         ImGui.SameLine();
-        if (ImGui.Checkbox("忽略 4 号工房", ref ModuleConfig.IgnoreFourthWorkshop))
-            ModuleConfig.Save(ModuleManager.Instance().GetModule<AutoMJIWorkshopImport>());
+        if (ImGui.Checkbox("忽略 4 号工房", ref config.IgnoreFourthWorkshop))
+            config.Save(ModuleManager.Instance().GetModule<AutoMJIWorkshopImport>());
     }
 
-    private static void DrawBulkApplySection()
+    private void DrawBulkApplySection()
     {
         ImGuiOm.ScaledDummy(12);
 
@@ -141,7 +133,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
             ApplyRecommendations(true);
     }
 
-    private static void DrawIndividualApplySection()
+    private void DrawIndividualApplySection()
     {
         ImGuiOm.ScaledDummy(12);
 
@@ -151,7 +143,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
 
         using var scrollSection = ImRaii.Child("ScrollableSection");
 
-        foreach (var (cycle, rec) in Recommendations.Enumerate())
+        foreach (var (cycle, rec) in recommendations.Enumerate())
         {
             ImGui.AlignTextToFramePadding();
             ImGui.TextUnformatted($"第 {cycle} 天:");
@@ -164,7 +156,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         }
     }
 
-    private static void DrawWorkshopTable(int cycle, DayAssignment rec)
+    private void DrawWorkshopTable(int cycle, DayAssignment rec)
     {
         const ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags.RowBg | ImGuiTableFlags.NoKeepColumnsVisible;
 
@@ -190,8 +182,8 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
             ImGui.TableSetupColumn($"工房 {i + 1}");
     }
 
-    private static int CalculateWorkshopLimit(int workshopCount)
-        => workshopCount - (ModuleConfig.IgnoreFourthWorkshop && workshopCount > 1 ? 1 : 0);
+    private int CalculateWorkshopLimit(int workshopCount) => 
+        workshopCount - (config.IgnoreFourthWorkshop && workshopCount > 1 ? 1 : 0);
 
     private static void DrawWorkshopContent(WorkshopAssignment workshop)
     {
@@ -245,20 +237,20 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
             _                              => name
         };
 
-    private static void ApplyRecommendations(bool nextWeek)
+    private void ApplyRecommendations(bool nextWeek)
     {
         try
         {
             var agentData = AgentMJICraftSchedule.Instance()->Data;
-            if (Recommendations.Schedules.Count > 7)
-                throw new Exception($"单周内天数超过七天 (现: {Recommendations.Schedules.Count})");
+            if (recommendations.Schedules.Count > 7)
+                throw new Exception($"单周内天数超过七天 (现: {recommendations.Schedules.Count})");
 
             var forbiddenCycles   = nextWeek ? 0 : (1u << agentData->CycleInProgress + 1) - 1;
             var currentRestCycles = nextWeek ? agentData->RestCycles >> 7 : agentData->RestCycles & 0x7F;
 
             HandleRestCycles(currentRestCycles, forbiddenCycles, nextWeek);
 
-            foreach (var (c, r) in Recommendations.Enumerate())
+            foreach (var (c, r) in recommendations.Enumerate())
                 ApplyRecommendation(c - 1 + (nextWeek ? 7 : 0), r);
 
             ResetCurrentCycleToRefreshUI();
@@ -271,11 +263,11 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         }
     }
 
-    private static void HandleRestCycles(uint currentRestCycles, uint forbiddenCycles, bool nextWeek)
+    private void HandleRestCycles(uint currentRestCycles, uint forbiddenCycles, bool nextWeek)
     {
-        if ((currentRestCycles & Recommendations.CyclesMask) == 0) return;
+        if ((currentRestCycles & recommendations.CyclesMask) == 0) return;
 
-        var freeCycles = ~Recommendations.CyclesMask & 0x7F;
+        var freeCycles = ~recommendations.CyclesMask & 0x7F;
         var rest       = 1u << 31 - BitOperations.LeadingZeroCount(freeCycles) | 1;
 
         if (BitOperations.PopCount(rest) != 2)
@@ -291,13 +283,13 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         SetRestCycles(newRest);
     }
 
-    private static void ApplyRecommendation(int cycle, DayAssignment assignment)
+    private void ApplyRecommendation(int cycle, DayAssignment assignment)
     {
-        var maxWorkshops = ModuleConfig.WorkshopAmount;
+        var maxWorkshops = config.WorkshopAmount;
 
         for (var workshop = 0; workshop < maxWorkshops; workshop++)
         {
-            if (ModuleConfig.IgnoreFourthWorkshop && workshop == maxWorkshops - 1) continue;
+            if (config.IgnoreFourthWorkshop && workshop == maxWorkshops - 1) continue;
 
             var workshopRec = workshop < assignment.Workshops.Count
                                   ? assignment.Workshops[workshop]
@@ -308,15 +300,15 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         }
     }
 
-    private static void ApplyRecommendationToCurrentCycle(DayAssignment rec)
+    private void ApplyRecommendationToCurrentCycle(DayAssignment rec)
     {
         var cycle = AgentMJICraftSchedule.Instance()->Data->CycleDisplayed;
         ApplyRecommendation(cycle, rec);
         ResetCurrentCycleToRefreshUI();
     }
 
-    public static void ScheduleItemToWorkshop(uint objectID, int startingHour, int cycle, int workshop)
-        => MJIManager.Instance()->ScheduleCraft
+    public static void ScheduleItemToWorkshop(uint objectID, int startingHour, int cycle, int workshop) => 
+        MJIManager.Instance()->ScheduleCraft
         (
             (ushort)objectID,
             (byte)((startingHour + 17) % 24),
@@ -345,17 +337,14 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
             AddonEvent.PreFinalize => false,
             _                      => Overlay.IsOpen
         };
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
+    
     private class Config : ModuleConfig
     {
         public bool IgnoreFourthWorkshop;
         public int  WorkshopAmount = 4;
     }
 
-    public class Assignments
+    private class Assignments
     {
         private readonly List<DayAssignment>          schedules = [];
         public           uint                         CyclesMask { get; private set; }
@@ -457,7 +446,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         }
     }
 
-    public class DayAssignment
+    private class DayAssignment
     {
         private readonly List<WorkshopAssignment>          workshops = [];
         public           IReadOnlyList<WorkshopAssignment> Workshops => workshops;
@@ -519,7 +508,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         }
     }
 
-    public partial class WorkshopAssignment
+    private partial class WorkshopAssignment
     {
         public List<SlotRec> Slots  { get; } = [];
         public bool          IsRest { get; private set; }
@@ -572,9 +561,24 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         private static partial Regex ItemNameRegex();
     }
 
-    public readonly record struct SlotRec
+    private readonly record struct SlotRec
     (
         int  Slot,
         uint CraftObjectID
     );
+    
+    #region 常量
+
+    private static readonly FrozenDictionary<string, MJICraftworksObject> ItemNameMap =
+        LuminaGetter.Get<MJICraftworksObject>()
+                    .Where(x => x.Item.RowId != 0 && x.Item.IsValid)
+                    .ToDictionary(x => x.RowId, x => x).Values
+                    .ToDictionary
+                    (
+                        r => RemoveMJIItemPrefix(r.Item.Value.Name.ToString() ?? string.Empty),
+                        r => r,
+                        StringComparer.OrdinalIgnoreCase
+                    ).ToFrozenDictionary();
+
+    #endregion
 }

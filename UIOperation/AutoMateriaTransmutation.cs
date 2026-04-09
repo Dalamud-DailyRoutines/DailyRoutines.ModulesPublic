@@ -16,12 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMateriaTransmutation : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
-    private static string ItemSearchInput = string.Empty;
-
-    private static TextButtonNode? OperateButtonNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoMateriaTransmutationTitle"),
@@ -31,11 +25,17 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private Config config = null!;
+    
+    private string itemSearchInput = string.Empty;
+    
+    private TextButtonNode? operateButtonNode;
 
     protected override void Init()
     {
         TaskHelper   ??= new() { TimeoutMS = 15_000 };
-        ModuleConfig =   Config.Load(this) ?? new();
+        config =   Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "TradeMultiple", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TradeMultiple", OnAddon);
@@ -58,8 +58,8 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
             (
                 "MateriaSelectCombo",
                 Sheets.Materias,
-                ref ModuleConfig.BlacklistedItems,
-                ref ItemSearchInput,
+                ref config.BlacklistedItems,
+                ref itemSearchInput,
                 [
                     ("物品", ImGuiTableColumnFlags.WidthStretch, 0)
                 ],
@@ -74,14 +74,14 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
                                 itemIcon.Handle,
                                 new(ImGui.GetTextLineHeightWithSpacing()),
                                 $"{x.Name.ToString()}",
-                                ModuleConfig.BlacklistedItems.Contains(x.RowId),
+                                config.BlacklistedItems.Contains(x.RowId),
                                 ImGuiSelectableFlags.SpanAllColumns | ImGuiSelectableFlags.DontClosePopups
                             ))
                         {
-                            if (!ModuleConfig.BlacklistedItems.Remove(x.RowId))
+                            if (!config.BlacklistedItems.Remove(x.RowId))
                             {
-                                ModuleConfig.BlacklistedItems.Add(x.RowId);
-                                ModuleConfig.Save(this);
+                                config.BlacklistedItems.Add(x.RowId);
+                                config.Save(this);
                             }
                         }
                     }
@@ -92,7 +92,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
                 ],
                 true
             ))
-            ModuleConfig.Save(this);
+            config.Save(this);
     }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
@@ -103,7 +103,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
                 var addon = TradeMultipleAddon;
                 if (addon == null) return;
 
-                if (OperateButtonNode == null)
+                if (operateButtonNode == null)
                 {
                     addon->RootNode->SetWidth(400);
                     addon->WindowNode->SetWidth(400);
@@ -178,7 +178,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
                     if (anotherButton != null)
                         anotherButton->OwnerNode->SetPositionFloat(220, 166);
 
-                    OperateButtonNode = new()
+                    operateButtonNode = new()
                     {
                         Size      = new(150, 28),
                         Position  = new(40, 166),
@@ -193,15 +193,15 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
                         },
                         IsEnabled = true
                     };
-                    OperateButtonNode.AttachNode(addon->RootNode);
+                    operateButtonNode.AttachNode(addon->RootNode);
                 }
 
-                OperateButtonNode.String = Lang.Get(TaskHelper.IsBusy ? "Stop" : "AutoMateriaTransmutation-BatchTransmutate");
+                operateButtonNode.String = Lang.Get(TaskHelper.IsBusy ? "Stop" : "AutoMateriaTransmutation-BatchTransmutate");
 
                 break;
             case AddonEvent.PreFinalize:
-                OperateButtonNode?.Dispose();
-                OperateButtonNode = null;
+                operateButtonNode?.Dispose();
+                operateButtonNode = null;
                 break;
         }
     }
@@ -260,7 +260,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
         TaskHelper.Enqueue(Enqueue);
     }
 
-    private static bool TryFindFirstMateriaSlot(out InventoryType inventoryType, out ushort inventorySlot)
+    private bool TryFindFirstMateriaSlot(out InventoryType inventoryType, out ushort inventorySlot)
     {
         inventoryType = InventoryType.Inventory1;
         inventorySlot = 0;
@@ -279,7 +279,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
             for (var i = 0; i < container->Size; i++)
             {
                 var slot = container->GetInventorySlot(i);
-                if (slot == null || slot->ItemId == 0 || ModuleConfig.BlacklistedItems.Contains(slot->ItemId)) continue;
+                if (slot == null || slot->ItemId == 0 || config.BlacklistedItems.Contains(slot->ItemId)) continue;
 
                 var data = LuminaGetter.GetRow<Item>(slot->ItemId);
                 if (data is not { FilterGroup: 13 }) continue;

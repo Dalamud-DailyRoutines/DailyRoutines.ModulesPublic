@@ -22,6 +22,9 @@ public class AutoConstantlyInspect : ModuleBase
 
     protected override void Init() =>
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ItemInspectionResult", OnAddon);
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
@@ -42,7 +45,4 @@ public class AutoConstantlyInspect : ModuleBase
         AgentId.ItemInspection.SendEvent(3, 0);
         addon->Close(true);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

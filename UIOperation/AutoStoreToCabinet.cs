@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Interface.Windows;
 using DailyRoutines.Common.Module.Abstractions;
@@ -8,6 +9,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -16,20 +18,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoStoreToCabinet : ModuleBase
 {
-    private static readonly List<InventoryType> ValidInventoryTypes =
-    [
-        InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3,
-        InventoryType.Inventory4, InventoryType.ArmoryBody, InventoryType.ArmoryEar, InventoryType.ArmoryFeets,
-        InventoryType.ArmoryHands, InventoryType.ArmoryHead, InventoryType.ArmoryLegs, InventoryType.ArmoryRings,
-        InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings, InventoryType.ArmoryMainHand,
-        InventoryType.ArmoryOffHand
-    ];
-
-    private static Dictionary<uint, uint>? CabinetItems; // Item ID - Cabinet Index
-
-    private static CancellationTokenSource? CancelSource;
-    private static bool                     IsOnTask;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoStoreToCabinetTitle"),
@@ -37,17 +25,22 @@ public class AutoStoreToCabinet : ModuleBase
         Category    = ModuleCategory.UIOperation
     };
 
+    private readonly CancellationTokenSource cancelSource = new();
+
+    private bool isOnTask;
+
     protected override void Init()
     {
-        CabinetItems ??= LuminaGetter.Get<Cabinet>()
-                                     .Where(x => x.Item.RowId > 0)
-                                     .ToDictionary(x => x.Item.RowId, x => x.RowId);
-
-        CancelSource ??= new();
-        Overlay      ??= new Overlay(this);
+        Overlay ??= new(this);
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Cabinet", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Cabinet", OnAddon);
+    }
+    
+    protected override void Uninit()
+    {
+        cancelSource.Cancel();
+        cancelSource.Dispose();
     }
 
     protected override unsafe void OverlayPreDraw()
@@ -74,11 +67,11 @@ public class AutoStoreToCabinet : ModuleBase
             ImGui.Spacing();
 
             ImGui.SameLine();
-            ImGui.BeginDisabled(IsOnTask);
+            ImGui.BeginDisabled(isOnTask);
 
             if (ImGui.Button(Lang.Get("Start")))
             {
-                IsOnTask = true;
+                isOnTask = true;
                 DService.Instance().Framework.RunOnTick
                 (
                     async () =>
@@ -98,10 +91,10 @@ public class AutoStoreToCabinet : ModuleBase
                         }
                         finally
                         {
-                            IsOnTask = false;
+                            isOnTask = false;
                         }
                     },
-                    cancellationToken: CancelSource.Token
+                    cancellationToken: cancelSource.Token
                 );
             }
 
@@ -111,8 +104,8 @@ public class AutoStoreToCabinet : ModuleBase
 
             if (ImGui.Button(Lang.Get("Stop")))
             {
-                CancelSource.Cancel();
-                IsOnTask = false;
+                cancelSource.Cancel();
+                isOnTask = false;
             }
 
             ImGuiOm.HelpMarker(Lang.Get("AutoStoreToCabinet-StoreHelp"));
@@ -127,7 +120,7 @@ public class AutoStoreToCabinet : ModuleBase
         {
             var inventoryManager = InventoryManager.Instance();
 
-            foreach (var inventory in ValidInventoryTypes)
+            foreach (var inventory in Inventories.PlayerWithArmory)
             {
                 var container = inventoryManager->GetInventoryContainer(inventory);
                 if (container == null) continue;
@@ -159,11 +152,14 @@ public class AutoStoreToCabinet : ModuleBase
             _                      => Overlay.IsOpen
         };
     }
+    
+    #region 常量
 
-    protected override void Uninit()
-    {
-        CancelSource?.Cancel();
-        CancelSource?.Dispose();
-        CancelSource = null;
-    }
+    // Item ID - Cabinet Index
+    private static readonly FrozenDictionary<uint, uint> CabinetItems =
+        LuminaGetter.Get<Cabinet>()
+                    .Where(x => x.Item.RowId > 0)
+                    .ToFrozenDictionary(x => x.Item.RowId, x => x.RowId);
+
+    #endregion
 }

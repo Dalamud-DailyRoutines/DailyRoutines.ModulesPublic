@@ -25,31 +25,26 @@ namespace DailyRoutines.ModulesPublic;
 
 public class FastGrandCompanyExchange : ModuleBase
 {
-    private const string COMMAND = "gce";
-
-    private static Config ModuleConfig = null!;
-
-    private static DRFastGCExchange? Addon;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("FastGrandCompanyExchangeTitle"),
         Description = Lang.Get("FastGrandCompanyExchangeDescription"),
         Category    = ModuleCategory.UIOperation
     };
+    
+    private bool IsExchanging => TaskHelper?.IsBusy ?? false;
 
-    public bool IsExchanging => TaskHelper?.IsBusy ?? false;
+    private Config config = null!;
 
-    [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.IsBusy")]
-    public bool IsCurrentlyBusy => IsExchanging;
-
+    private DRFastGCExchange? addon;
+    
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         TaskHelper ??= new();
 
-        Addon ??= new(this)
+        addon ??= new(this)
         {
             InternalName          = "DRFastGCExchange",
             Title                 = Info.Title,
@@ -67,8 +62,8 @@ public class FastGrandCompanyExchange : ModuleBase
         CommandManager.Instance().RemoveSubCommand(COMMAND);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
-        Addon?.Dispose();
-        Addon = null;
+        addon?.Dispose();
+        addon = null;
     }
 
     protected override void ConfigUI()
@@ -79,10 +74,10 @@ public class FastGrandCompanyExchange : ModuleBase
         ImGui.TextWrapped($"/pdr {COMMAND} {Lang.Get("FastGrandCompanyExchange-CommandHelp")}");
     }
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs? args)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
-        if (Addon.IsOpen || !GrandCompanyExchange->IsAddonAndNodesReady()) return;
-        Addon.Open();
+        if (addon.IsOpen || !GrandCompanyExchange->IsAddonAndNodesReady()) return;
+        addon.Open();
     }
 
     private void OnCommand(string command, string args)
@@ -95,7 +90,7 @@ public class FastGrandCompanyExchange : ModuleBase
 
         if (splited[0] == "default")
         {
-            EnqueueByName(ModuleConfig.ExchangeItemName, ModuleConfig.ExchangeItemCount);
+            EnqueueByName(config.ExchangeItemName, config.ExchangeItemCount);
             return;
         }
 
@@ -103,14 +98,14 @@ public class FastGrandCompanyExchange : ModuleBase
         EnqueueByName(splited[0], itemCount);
     }
 
-    public unsafe bool EnqueueByName(string itemName, int itemCount = -1)
+    private unsafe bool EnqueueByName(string itemName, int itemCount = -1)
     {
         if (!GrandCompanyExchange->IsAddonAndNodesReady()) return false;
 
         if (itemName == "default")
         {
-            itemName  = ModuleConfig.ExchangeItemName;
-            itemCount = ModuleConfig.ExchangeItemCount;
+            itemName  = config.ExchangeItemName;
+            itemCount = config.ExchangeItemCount;
         }
 
         var grandCompany = PlayerState.Instance()->GrandCompany;
@@ -253,7 +248,7 @@ public class FastGrandCompanyExchange : ModuleBase
                 OnClick = () =>
                 {
                     if (instance.TaskHelper.IsBusy) return;
-                    instance.EnqueueByName(ModuleConfig.ExchangeItemName, ModuleConfig.ExchangeItemCount);
+                    instance.EnqueueByName(instance.config.ExchangeItemName, instance.config.ExchangeItemCount);
                 }
             };
 
@@ -275,8 +270,8 @@ public class FastGrandCompanyExchange : ModuleBase
             {
                 IsVisible       = true,
                 Size            = new(layoutNode.Size.X - 10, 35),
-                String          = ModuleConfig.ExchangeItemName,
-                OnInputReceived = x => ModuleConfig.ExchangeItemName = x.ToString()
+                String          = instance.config.ExchangeItemName,
+                OnInputReceived = x => instance.config.ExchangeItemName = x.ToString()
             };
 
             itemNameInputNode.OnInputComplete = UpdateExchangeItem;
@@ -309,12 +304,12 @@ public class FastGrandCompanyExchange : ModuleBase
                 Min       = -1,
                 OnValueUpdate = newValue =>
                 {
-                    ModuleConfig.ExchangeItemCount = newValue;
+                    instance.config.ExchangeItemCount = newValue;
 
-                    ModuleConfig.ExchangeItemCount = Math.Max(-1, ModuleConfig.ExchangeItemCount);
-                    ModuleConfig.Save(instance);
+                    instance.config.ExchangeItemCount = (int)MathF.Max(-1, instance.config.ExchangeItemCount);
+                    instance.config.Save(instance);
                 },
-                Value = ModuleConfig.ExchangeItemCount
+                Value = instance.config.ExchangeItemCount
             };
 
             layoutNode.AddNode(countInputNode);
@@ -324,7 +319,7 @@ public class FastGrandCompanyExchange : ModuleBase
 
         private void UpdateExchangeItem(ReadOnlySeString x)
         {
-            ModuleConfig.ExchangeItemName = x.ToString();
+            instance.config.ExchangeItemName = x.ToString();
 
             var grandCompany = PlayerState.Instance()->GrandCompany;
             var gcRank       = PlayerState.Instance()->GetGrandCompanyRank();
@@ -335,22 +330,22 @@ public class FastGrandCompanyExchange : ModuleBase
                                      .Where(d => gcRank                                                                        >= d.RequiredGrandCompanyRank.RowId)
                                      .Where
                                      (d => (d.Item.ValueNullable?.Name.ToString() ?? string.Empty)
-                                          .Contains(ModuleConfig.ExchangeItemName, StringComparison.OrdinalIgnoreCase)
+                                          .Contains(instance.config.ExchangeItemName, StringComparison.OrdinalIgnoreCase)
                                      )
                                      .OrderBy(d => (d.Item.ValueNullable?.Name.ToString() ?? string.Empty).Length)
                                      .FirstOrDefault();
 
-            if (string.IsNullOrWhiteSpace(ModuleConfig.ExchangeItemName) || result.RowId == 0)
-                ModuleConfig.ExchangeItemName = LuminaWrapper.GetItemName(21072);
+            if (string.IsNullOrWhiteSpace(instance.config.ExchangeItemName) || result.RowId == 0)
+                instance.config.ExchangeItemName = LuminaWrapper.GetItemName(21072);
             else if (result.RowId != 0)
-                ModuleConfig.ExchangeItemName = result.Item.Value.Name.ToString();
+                instance.config.ExchangeItemName = result.Item.Value.Name.ToString();
 
-            if (ModuleConfig.ExchangeItemName == x.ToString())
+            if (instance.config.ExchangeItemName == x.ToString())
                 return;
 
             IsNotClosed = true;
             Close();
-            ModuleConfig.Save(instance);
+            instance.config.Save(instance);
         }
 
         protected override void OnUpdate(AtkUnitBase* addon)
@@ -390,4 +385,20 @@ public class FastGrandCompanyExchange : ModuleBase
         public int    ExchangeItemCount = -1;
         public string ExchangeItemName  = string.Empty;
     }
+    
+    #region IPC
+
+    [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.IsBusy")]
+    private bool IsCurrentlyBusy => IsExchanging;
+    
+    [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.EnqueueByName")]
+    private void EnqueueByNameIPC(string itemName, int itemCount) => EnqueueByName(itemName, itemCount);
+
+    #endregion
+
+    #region 常量
+
+    private const string COMMAND = "gce";
+
+    #endregion
 }

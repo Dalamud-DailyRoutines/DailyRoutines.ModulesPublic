@@ -13,8 +13,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoClaimPVPRewards : ModuleBase
 {
-    private static AtkEventWrapper? ClaimAllEvent;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoClaimPVPRewardsTitle"),
@@ -23,6 +21,8 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private AtkEventWrapper? claimAllEvent;
 
     protected override void Init()
     {
@@ -50,11 +50,11 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
                 var closeButton = PvpReward->GetComponentButtonById(124);
                 if (closeButton == null) return;
 
-                if (ClaimAllEvent == null)
+                if (claimAllEvent == null)
                 {
                     closeButton->OwnerNode->ClearEvents();
 
-                    ClaimAllEvent = new AtkEventWrapper
+                    claimAllEvent = new AtkEventWrapper
                     ((_, _, _, _) =>
                         {
                             for (var i = 0; i < 30; i++)
@@ -83,7 +83,7 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
                             }
                         }
                     );
-                    ClaimAllEvent.Add(PvpReward, (AtkResNode*)closeButton->OwnerNode, AtkEventType.ButtonClick);
+                    claimAllEvent.Add(PvpReward, (AtkResNode*)closeButton->OwnerNode, AtkEventType.ButtonClick);
 
                     closeButton->SetText(Lang.Get("AutoClaimPVPRewards-Button"));
                 }
@@ -92,8 +92,8 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                ClaimAllEvent?.Dispose();
-                ClaimAllEvent = null;
+                claimAllEvent?.Dispose();
+                claimAllEvent = null;
                 break;
         }
     }

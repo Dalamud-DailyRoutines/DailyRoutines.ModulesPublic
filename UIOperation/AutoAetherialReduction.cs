@@ -16,10 +16,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoAetherialReduction : ModuleBase
 {
-    private static TextNode?       LableNode;
-    private static TextButtonNode? StartButtonNode;
-    private static TextButtonNode? StopButtonNode;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoAetherialReductionTitle"),
@@ -27,9 +23,10 @@ public unsafe class AutoAetherialReduction : ModuleBase
         Category    = ModuleCategory.UIOperation,
         Author      = ["YLCHEN"]
     };
-
-    [IPCProvider("DailyRoutines.Modules.AutoAetherialReduction.IsBusy")]
-    public bool IsCurrentlyBusy => TaskHelper?.IsBusy ?? false;
+    
+    private TextNode?       lableNode;
+    private TextButtonNode? startButtonNode;
+    private TextButtonNode? stopButtonNode;
 
     protected override void Init()
     {
@@ -102,9 +99,9 @@ public unsafe class AutoAetherialReduction : ModuleBase
             case AddonEvent.PostDraw:
                 if (PurifyItemSelector == null) return;
 
-                if (LableNode == null)
+                if (lableNode == null)
                 {
-                    LableNode = new()
+                    lableNode = new()
                     {
                         IsVisible     = true,
                         Position      = new(135, 8),
@@ -114,12 +111,12 @@ public unsafe class AutoAetherialReduction : ModuleBase
                         AlignmentType = AlignmentType.Right,
                         TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge
                     };
-                    LableNode.AttachNode(PurifyItemSelector->RootNode);
+                    lableNode.AttachNode(PurifyItemSelector->RootNode);
                 }
 
-                if (StartButtonNode == null)
+                if (startButtonNode == null)
                 {
-                    StartButtonNode = new()
+                    startButtonNode = new()
                     {
                         Position  = new(295, 10),
                         Size      = new(100, 28),
@@ -127,14 +124,14 @@ public unsafe class AutoAetherialReduction : ModuleBase
                         String    = Lang.Get("Start"),
                         OnClick   = () => StartReduction()
                     };
-                    StartButtonNode.AttachNode(PurifyItemSelector->RootNode);
+                    startButtonNode.AttachNode(PurifyItemSelector->RootNode);
                 }
 
-                StartButtonNode.IsEnabled = !TaskHelper.IsBusy;
+                startButtonNode.IsEnabled = !TaskHelper.IsBusy;
 
-                if (StopButtonNode == null)
+                if (stopButtonNode == null)
                 {
-                    StopButtonNode = new()
+                    stopButtonNode = new()
                     {
                         Position  = new(400, 10),
                         Size      = new(100, 28),
@@ -142,7 +139,7 @@ public unsafe class AutoAetherialReduction : ModuleBase
                         String    = Lang.Get("Stop"),
                         OnClick   = () => TaskHelper.Abort()
                     };
-                    StopButtonNode.AttachNode(PurifyItemSelector->RootNode);
+                    stopButtonNode.AttachNode(PurifyItemSelector->RootNode);
                 }
 
                 break;
@@ -165,20 +162,26 @@ public unsafe class AutoAetherialReduction : ModuleBase
 
         return false;
     }
-
-
-    private static void ClearNodes()
+    
+    private void ClearNodes()
     {
-        LableNode?.Dispose();
-        LableNode = null;
+        lableNode?.Dispose();
+        lableNode = null;
 
-        StartButtonNode?.Dispose();
-        StartButtonNode = null;
+        startButtonNode?.Dispose();
+        startButtonNode = null;
 
-        StopButtonNode?.Dispose();
-        StopButtonNode = null;
+        stopButtonNode?.Dispose();
+        stopButtonNode = null;
     }
+    
+    #region IPC
 
+    [IPCProvider("DailyRoutines.Modules.AutoAetherialReduction.IsBusy")]
+    private bool IsCurrentlyBusy => TaskHelper?.IsBusy ?? false;
+    
     [IPCProvider("DailyRoutines.Modules.AutoAetherialReduction.StartReduction")]
-    public bool StartReductionIPC() => StartReduction();
+    private bool StartReductionIPC() => StartReduction();
+
+    #endregion
 }

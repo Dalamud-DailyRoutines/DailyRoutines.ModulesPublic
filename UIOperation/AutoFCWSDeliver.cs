@@ -34,8 +34,8 @@ public unsafe class AutoFCWSDeliver : ModuleBase
 
     protected override void Init()
     {
-        TaskHelper ??= new TaskHelper { TimeoutMS = 30_000 };
-        Overlay    ??= new Overlay(this);
+        TaskHelper ??= new() { TimeoutMS = 30_000 };
+        Overlay    ??= new(this);
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "SelectYesno",                OnAddonYesno);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "SelectString",               OnAddonString);
@@ -47,6 +47,14 @@ public unsafe class AutoFCWSDeliver : ModuleBase
             OnAddonMenu(AddonEvent.PostSetup, null);
     }
 
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonRecipeNote);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonYesno);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonString);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonMenu);
+    }
+    
     protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
     protected override void OverlayUI()
@@ -197,15 +205,7 @@ public unsafe class AutoFCWSDeliver : ModuleBase
     private void OnAddonRecipeNote(AddonEvent type, AddonArgs args) => TaskHelper.Abort();
 
     public static long SetHighDword(int value) => (long)value << 32;
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonRecipeNote);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonYesno);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonString);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonMenu);
-    }
-
+    
     private record WorkshopCraftItem
     (
         uint ItemID,

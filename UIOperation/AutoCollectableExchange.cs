@@ -17,11 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCollectableExchange : ModuleBase
 {
-    private static readonly CompSig HandInCollectablesSig =
-        new("48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 48 8B 49");
-
-    private static HandInCollectablesDelegate? HandInCollectables;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoCollectableExchangeTitle"),
@@ -30,19 +25,27 @@ public unsafe class AutoCollectableExchange : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig HandInCollectablesSig =
+        new("48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 48 8B 49");
+    private delegate nint HandInCollectablesDelegate(AgentInterface* agentCollectablesShop);
+    private HandInCollectablesDelegate? handInCollectables;
 
     protected override void Init()
     {
         TaskHelper ??= new();
         Overlay    ??= new(this);
 
-        HandInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
+        handInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "CollectablesShop", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CollectablesShop", OnAddon);
         if (CollectablesShopAddon != null)
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
@@ -96,7 +99,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
             using (ImRaii.Disabled(!buttonNode->NodeFlags.HasFlag(NodeFlags.Enabled)))
             {
                 if (ImGui.Button(LuminaWrapper.GetAddonText(531)))
-                    HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
+                    handInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
             }
 
             ImGui.SameLine();
@@ -146,7 +149,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
                     return true;
                 }
 
-                HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
+                handInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
                 return true;
             },
             "ClickExchange"
@@ -178,9 +181,4 @@ public unsafe class AutoCollectableExchange : ModuleBase
             _                      => Overlay.IsOpen
         };
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-    private delegate nint HandInCollectablesDelegate(AgentInterface* agentCollectablesShop);
 }

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -16,15 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRequestItemSubmit : ModuleBase
 {
-    private static readonly HashSet<string> HQItemTexts =
-    [
-        LuminaWrapper.GetAddonText(5450),
-        LuminaWrapper.GetAddonText(11514),
-        LuminaWrapper.GetAddonText(102434)
-    ];
-
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoRequestItemSubmitTitle"),
@@ -32,9 +24,11 @@ public unsafe class AutoRequestItemSubmit : ModuleBase
         Category    = ModuleCategory.UIOperation
     };
 
+    private Config config = null!;
+
     protected override void Init()
     {
-        ModuleConfig = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Request", OnAddonRequest);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "Request", OnAddonRequest);
@@ -45,11 +39,11 @@ public unsafe class AutoRequestItemSubmit : ModuleBase
     {
         ImGuiOm.ConflictKeyText();
 
-        if (ImGui.Checkbox(Lang.Get("AutoRequestItemSubmit-SubmitHQItem"), ref ModuleConfig.IsSubmitHQItem))
-            ModuleConfig.Save(this);
+        if (ImGui.Checkbox(Lang.Get("AutoRequestItemSubmit-SubmitHQItem"), ref config.IsSubmitHQItem))
+            config.Save(this);
     }
 
-    private static void OnAddonRequest(AddonEvent type, AddonArgs args)
+    private void OnAddonRequest(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
@@ -65,9 +59,9 @@ public unsafe class AutoRequestItemSubmit : ModuleBase
         }
     }
 
-    private static void OnAddonSelectYesno(AddonEvent type, AddonArgs args)
+    private void OnAddonSelectYesno(AddonEvent type, AddonArgs args)
     {
-        if (!ModuleConfig.IsSubmitHQItem) return;
+        if (!config.IsSubmitHQItem) return;
 
         var text = ((AddonSelectYesno*)SelectYesno)->PromptText->NodeText.ToString();
         if (!HQItemTexts.Contains(text)) return;
@@ -131,4 +125,15 @@ public unsafe class AutoRequestItemSubmit : ModuleBase
     {
         public bool IsSubmitHQItem = true;
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> HQItemTexts =
+    [
+        LuminaWrapper.GetAddonText(5450),
+        LuminaWrapper.GetAddonText(11514),
+        LuminaWrapper.GetAddonText(102434)
+    ];
+
+    #endregion
 }

@@ -19,6 +19,9 @@ public class AutoQuestAccept : ModuleBase
 
     protected override void Init() =>
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "JournalAccept", OnAddonSetup);
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
     protected override void ConfigUI() =>
         ImGuiOm.ConflictKeyText();
@@ -38,7 +41,4 @@ public class AutoQuestAccept : ModuleBase
 
         addon->Callback(3, questID);
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

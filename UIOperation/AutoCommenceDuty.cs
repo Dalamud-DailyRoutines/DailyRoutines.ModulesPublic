@@ -22,6 +22,9 @@ public class AutoCommenceDuty : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ContentsFinderConfirm", OnAddonSetup);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,   "ContentsFinderConfirm", OnAddonSetup);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
     private static unsafe void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
@@ -33,7 +36,4 @@ public class AutoCommenceDuty : ModuleBase
 
         ((AddonContentsFinderConfirm*)addon)->CommenceButton->Click();
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

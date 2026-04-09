@@ -11,14 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoInventoryTransfer : ModuleBase
 {
-    private static readonly List<string> MenuTexts =
-    [
-        LuminaWrapper.GetAddonText(97),
-        LuminaWrapper.GetAddonText(98),
-        LuminaWrapper.GetAddonText(881),
-        LuminaWrapper.GetAddonText(887)
-    ];
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoInventoryTransferTitle"),
@@ -33,6 +25,9 @@ public unsafe class AutoInventoryTransfer : ModuleBase
 
         DService.Instance().ContextMenu.OnMenuOpened += OnContextMenuOpened;
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 
     protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
@@ -54,7 +49,16 @@ public unsafe class AutoInventoryTransfer : ModuleBase
                    InventoryRetainerLarge->IsAddonAndNodesReady();
         }
     }
+    
+    #region 常量
 
-    protected override void Uninit() =>
-        DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
+    private static readonly List<string> MenuTexts =
+    [
+        LuminaWrapper.GetAddonText(97),
+        LuminaWrapper.GetAddonText(98),
+        LuminaWrapper.GetAddonText(881),
+        LuminaWrapper.GetAddonText(887)
+    ];
+
+    #endregion
 }
