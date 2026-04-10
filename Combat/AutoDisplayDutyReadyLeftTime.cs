@@ -10,8 +10,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
 {
-    private static CountdownTimer? Timer;
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoDisplayDutyReadyLeftTimeTitle"),
@@ -20,10 +18,12 @@ public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
         PreviewImageURL =
         [
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayDutyReadyLeftTime/preview-1.png"
-        ]
+        ] // TODO: 修改仓库
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private CountdownTimer? timer;
 
     protected override void Init() =>
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
@@ -31,24 +31,24 @@ public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-        OnConditionChanged(ConditionFlag.WaitingForDuty, false);
+        OnConditionChanged(ConditionFlag.WaitingForDutyFinder, false);
     }
 
-    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.WaitingForDutyFinder) return;
 
-        Timer?.Stop();
-        Timer?.Dispose();
-        Timer = null;
+        timer?.Stop();
+        timer?.Dispose();
+        timer = null;
 
         if (value)
         {
             OnCountdownRunning(null, 45);
 
-            Timer = new(45);
-            Timer.Start();
-            Timer.TimeChanged += OnCountdownRunning;
+            timer = new(45);
+            timer.Start();
+            timer.TimeChanged += OnCountdownRunning;
         }
     }
 
