@@ -29,6 +29,7 @@ global using Dalamud.Bindings.ImPlot;
 global using Dalamud.Interface;
 global using Dalamud.Interface.Utility.Raii;
 global using Dalamud.Game;
+global using Dalamud.Plugin.Services;
 
 #endregion
 
