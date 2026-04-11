@@ -158,7 +158,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 break;
 
             case AddonEvent.PreFinalize:
-                DLog.Debug("调用清除");
                 ClearTextNodes();
                 break;
         }
