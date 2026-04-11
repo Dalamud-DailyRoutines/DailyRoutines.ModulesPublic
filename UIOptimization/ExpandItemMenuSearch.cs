@@ -34,10 +34,19 @@ public class ExpandItemMenuSearch : ModuleBase
             return field = typeof(ExpandItemMenuSearch)
                            .GetNestedTypes(BindingFlags.NonPublic)
                            .Where(type => !type.IsAbstract && typeof(SearchMenuItemBase).IsAssignableFrom(type))
-                           .Select(type => (SearchMenuItemBase)Activator.CreateInstance(type, true)!)
+                           .Select
+                           (type => Activator.CreateInstance
+                                    (
+                                        type,
+                                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                                        null,
+                                        [this],
+                                        null
+                                    ) as SearchMenuItemBase
+                           )
                            .OrderBy(searchMenuItem => searchMenuItem.Order)
                            .ThenBy(searchMenuItem => searchMenuItem.ConfigKey, StringComparer.Ordinal)
-                           .ToArray();
+                           .ToArray()!;
         }
     }
     
