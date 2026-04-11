@@ -25,6 +25,8 @@ using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Dalamud.Helpers;
 using OmenTools.Info.Game;
+using OmenTools.Info.Game.ItemSource;
+using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
@@ -417,18 +419,19 @@ public class OptimizedRecipeNote : ModuleBase
                                     !recipe.Ingredient[(int)index].IsValid)
                                     return;
 
-                                var item     = recipe.Ingredient[(int)index].Value;
-                                var itemInfo = ItemSourceInfo.GetItemInfo(item.RowId);
+                                var item        = recipe.Ingredient[(int)index].Value;
+                                var sourceState = ItemSourceInfo.Query(item.RowId).State;
+                                var hasNPCShop  = sourceState == ItemSourceQueryState.Ready;
 
                                 // 既能 NPC 买到又能市场布告板
-                                if (item.ItemSearchCategory.RowId > 0 && itemInfo != null)
+                                if (item.ItemSearchCategory.RowId > 0 && hasNPCShop)
                                 {
                                     if (!PluginConfig.Instance().ConflictKeyBinding.IsPressed())
                                         OpenShopListByItemIDIPC.InvokeFunc(item.RowId);
                                     else
                                         ChatManager.Instance().SendMessage($"/pdr market {item.Name}");
                                 }
-                                else if (itemInfo != null)
+                                else if (hasNPCShop)
                                     OpenShopListByItemIDIPC.InvokeFunc(item.RowId);
                                 else if (item.ItemSearchCategory.RowId > 0)
                                     ChatManager.Instance().SendMessage($"/pdr market {item.Name}");
@@ -622,8 +625,9 @@ public class OptimizedRecipeNote : ModuleBase
         {
             if (!recipe.Ingredient[d].IsValid) break;
 
-            var item     = recipe.Ingredient[d].Value;
-            var itemInfo = ItemSourceInfo.GetItemInfo(item.RowId);
+            var item        = recipe.Ingredient[d].Value;
+            var sourceState = ItemSourceInfo.Query(item.RowId).State;
+            var hasNPCShop  = sourceState == ItemSourceQueryState.Ready;
 
             var button     = getShopInfoButtons[d];
             var sourceText = string.Empty;
@@ -631,12 +635,12 @@ public class OptimizedRecipeNote : ModuleBase
             button.X = -6 + (maxIngredientAmount >= 10 ? -20 : 0);
 
             // 既能 NPC 买到又能市场布告板
-            if (item.ItemSearchCategory.RowId > 0 && itemInfo != null)
+            if (item.ItemSearchCategory.RowId > 0 && hasNPCShop)
             {
                 button.IconId = 60412;
                 sourceText    = $"{LuminaWrapper.GetAddonText(350)} / {LuminaWrapper.GetAddonText(548)} [{Lang.Get("ConflictKey")}]";
             }
-            else if (itemInfo != null)
+            else if (hasNPCShop)
             {
                 button.IconId = 60412;
                 sourceText    = $"{LuminaWrapper.GetAddonText(350)}";

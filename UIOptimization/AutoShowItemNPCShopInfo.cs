@@ -12,8 +12,11 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
+using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Game;
+using OmenTools.Info.Game.ItemSource;
+using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -68,7 +71,8 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         var itemID = AgentItemDetail.Instance()->ItemId;
 
         if (itemModifications.TryGetValue(itemID, out _)) return;
-        if (ItemSourceInfo.GetItemInfo(itemID) is not { } itemInfo) return;
+        var result = ItemSourceInfo.Query(itemID);
+        if (result is not { State: ItemSourceQueryState.Ready, Data: { } itemInfo }) return;
 
         var text = new SeStringBuilder()
                    .Add(NewLinePayload.Payload)
@@ -99,7 +103,7 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
             OpenByItemID(ContextMenuItemManager.Instance().CurrentItemID);
 
         public override bool IsDisplay(IMenuOpenedArgs args) =>
-            ItemSourceInfo.GetItemInfo(ContextMenuItemManager.Instance().CurrentItemID) is not null;
+            ItemSourceInfo.Query(ContextMenuItemManager.Instance().CurrentItemID).State == ItemSourceQueryState.Ready;
     }
 
     private class AddonShopsPreview : NativeAddon
@@ -148,6 +152,8 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
 
         protected override void OnSetup(AtkUnitBase* addon)
         {
+            var item = LuminaGetter.GetRowOrDefault<Item>(SourceInfo.ItemID);
+
             var itemInfoRow = new HorizontalListNode
             {
                 IsVisible   = true,
@@ -179,7 +185,7 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
             };
             itemInfoRow.AddNode(itemNameNode);
 
-            if (SourceInfo.GetItem().ItemSearchCategory.RowId > 0)
+            if (item.ItemSearchCategory.RowId > 0)
             {
                 itemInfoRow.AddDummy(15f);
 
@@ -190,7 +196,7 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
                     Size        = new(32),
                     Position    = new Vector2(0, 2),
                     IsVisible   = true,
-                    OnClick     = () => ChatManager.Instance().SendMessage($"/pdr market {SourceInfo.GetItem().Name}")
+                    OnClick     = () => ChatManager.Instance().SendMessage($"/pdr market {item.Name}")
                 };
                 itemInfoRow.AddNode(marketButtonNode);
             }
@@ -346,12 +352,19 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         if (AddonShopsPreview.Addon is { IsOpen: true } addon &&
             addon.SourceInfo.ItemID == itemID)
             AddonShopsPreview.CloseAndClear();
-        else if (ItemSourceInfo.GetItemInfo(itemID) is { } itemInfo)
-            AddonShopsPreview.OpenWithData(itemInfo);
         else
         {
-            NotifyHelper.Instance().ChatError(Lang.Get("AutoShowItemNPCShopInfo-Notification-ShopNotFound", itemID));
-            return false;
+            var result = ItemSourceInfo.Query(itemID);
+
+            if (result is { State: ItemSourceQueryState.Ready, Data: { } itemInfo })
+                AddonShopsPreview.OpenWithData(itemInfo);
+            else if (result.State == ItemSourceQueryState.NotFound)
+            {
+                NotifyHelper.Instance().ChatError(Lang.Get("AutoShowItemNPCShopInfo-Notification-ShopNotFound", itemID));
+                return false;
+            }
+            else
+                return false;
         }
 
         return true;
