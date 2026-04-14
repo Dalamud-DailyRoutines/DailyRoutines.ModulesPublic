@@ -392,7 +392,7 @@ public class FastGrandCompanyExchange : ModuleBase
     private bool IsCurrentlyBusy => IsExchanging;
     
     [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.EnqueueByName")]
-    private void EnqueueByNameIPC(string itemName, int itemCount) => EnqueueByName(itemName, itemCount);
+    private bool EnqueueByNameIPC(string itemName, int itemCount) => EnqueueByName(itemName, itemCount);
 
     #endregion
 
