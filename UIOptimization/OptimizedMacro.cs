@@ -1,127 +1,127 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Controllers;
 using KamiToolKit.Nodes;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedMacro : DailyModuleBase
+public unsafe class OptimizedMacro : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = GetLoc("OptimizedMacroTitle"),
-        Description     = GetLoc("OptimizedMacroDescription"),
-        Category        = ModuleCategories.UIOptimization,
+        Title           = Lang.Get("OptimizedMacroTitle"),
+        Description     = Lang.Get("OptimizedMacroDescription"),
+        Category        = ModuleCategory.UIOptimization,
         Author          = ["Rorinnn"],
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/OptimizedMacro-UI.png"]
+        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/OptimizedMacro-UI.png"] // TODO: 更改仓库
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private const int MACROS_PER_SET  = 100;
-    private const int MAX_MACRO_LINES = 15;
+    private Config config = null!;
 
-    private const string COMMAND = "macroset";
-    
-    private static string DefaultOption  = LuminaWrapper.GetAddonText(4764); // 未选择
+    private AddonController? macroController;
 
-    private static Config ModuleConfig = null!;
+    private HorizontalListNode? controlListNode;
+    private TextDropDownNode?   presetDropdownNode;
+    private TextButtonNode?     loadButtonNode;
+    private TextButtonNode?     saveButtonNode;
+    private TextButtonNode?     deleteButtonNode;
 
-    private static AddonController? MacroController;
-
-    private static HorizontalListNode? ControlListNode;
-    private static TextDropDownNode?   PresetDropdownNode;
-    private static TextButtonNode?     LoadButtonNode;
-    private static TextButtonNode?     SaveButtonNode;
-    private static TextButtonNode?     DeleteButtonNode;
-
-    private static MacroPresetsInputAddon?   InputDialog;
-    private static MacroPresetsConfirmAddon? ConfirmDialog;
+    private MacroPresetsInputAddon?   inputDialog;
+    private MacroPresetsConfirmAddon? confirmDialog;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
-        CommandManager.AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = GetLoc("OptimizedMacro-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("OptimizedMacro-CommandHelp") });
 
-        InputDialog = new MacroPresetsInputAddon
+        inputDialog = new MacroPresetsInputAddon
         {
             Size         = new(300, 120),
             InternalName = "DRMacroPresetsInputDialog",
-            Title        = GetLoc("PleaseInput"),
+            Title        = Lang.Get("PleaseInput"),
             DepthLayer   = 6
         };
 
-        ConfirmDialog = new MacroPresetsConfirmAddon
+        confirmDialog = new MacroPresetsConfirmAddon
         {
             Size         = new(300, 100),
             InternalName = "DRMacroPresetsConfirmDialog",
-            Title        = GetLoc("PleaseConfirmOperation"),
+            Title        = Lang.Get("PleaseConfirmOperation"),
             DepthLayer   = 6
         };
 
-        MacroController          =  new("Macro");
-        MacroController.OnAttach += OnAddonAttach;
-        MacroController.OnDetach += OnAddonDetach;
+        macroController = new()
+        {
+            AddonName  = "Macro",
+            OnSetup    = OnAddonSetup,
+            OnFinalize = OnAddonFinalize
+        };
 
-        MacroController.Enable();
+        macroController.Enable();
     }
 
     protected override void Uninit()
     {
-        CommandManager.RemoveSubCommand(COMMAND);
-        
-        MacroController?.Dispose();
-        MacroController = null;
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
 
-        OnAddonDetach(null);
+        macroController?.Dispose();
+        macroController = null;
 
-        InputDialog?.Dispose();
-        InputDialog = null;
+        OnAddonFinalize(null);
 
-        ConfirmDialog?.Dispose();
-        ConfirmDialog = null;
+        inputDialog?.Dispose();
+        inputDialog = null;
 
-        if (ModuleConfig != null)
-            SaveConfig(ModuleConfig);
+        confirmDialog?.Dispose();
+        confirmDialog = null;
+
+        if (config != null)
+            config.Save(this);
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Command"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Command"));
 
         using (ImRaii.PushIndent())
-            ImGui.TextUnformatted($"/pdr {COMMAND} {GetLoc("OptimizedMacro-CommandHelp")}");
-        
-        ImGui.NewLine();
-        
-        if (ImGui.Checkbox(GetLoc("OptimizedMacro-ConfirmBeforeDelete"), ref ModuleConfig.ConfirmOverwrite))
-            SaveConfig(ModuleConfig);
+            ImGui.TextUnformatted($"/pdr {COMMAND} {Lang.Get("OptimizedMacro-CommandHelp")}");
 
-        if (ImGui.Checkbox(GetLoc("OptimizedMacro-ConfirmBeforeOverwrite"), ref ModuleConfig.ConfirmDelete))
-            SaveConfig(ModuleConfig);
+        ImGui.NewLine();
+
+        if (ImGui.Checkbox(Lang.Get("OptimizedMacro-ConfirmBeforeDelete"), ref config.ConfirmOverwrite))
+            config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("OptimizedMacro-ConfirmBeforeOverwrite"), ref config.ConfirmDelete))
+            config.Save(this);
     }
 
     #region Event Handlers
 
-    private static void OnCommand(string command, string args)
+    private void OnCommand(string command, string args)
     {
         if (string.IsNullOrWhiteSpace(args)) return;
         LoadPreset(args);
     }
-    
-    private void OnAddonAttach(AtkUnitBase* addon)
+
+    private void OnAddonSetup(AtkUnitBase* addon)
     {
         if (addon == null) return;
 
         var nodeMacroIndexLabel = addon->GetNodeById(115);
+
         if (nodeMacroIndexLabel != null)
         {
             nodeMacroIndexLabel->X = 440;
@@ -129,6 +129,7 @@ public unsafe class OptimizedMacro : DailyModuleBase
         }
 
         var nodeMacroIndex = addon->GetNodeById(116);
+
         if (nodeMacroIndex != null)
         {
             nodeMacroIndex->X = 515;
@@ -136,20 +137,21 @@ public unsafe class OptimizedMacro : DailyModuleBase
         }
 
         var nodeMacroCount = addon->GetNodeById(117);
+
         if (nodeMacroCount != null)
         {
             nodeMacroCount->X = 450;
             nodeMacroCount->Y = 521;
         }
 
-        ControlListNode = new()
+        controlListNode = new()
         {
             Size     = new(400, 30),
             Position = new(10, 517)
         };
-        ControlListNode.AttachNode(addon);
+        controlListNode.AttachNode(addon);
 
-        PresetDropdownNode = new TextDropDownNode
+        presetDropdownNode = new TextDropDownNode
         {
             Size             = new(150, 30),
             Position         = new(0, -1),
@@ -157,74 +159,74 @@ public unsafe class OptimizedMacro : DailyModuleBase
             Options          = GetPresetNames(),
             OnOptionSelected = OnPresetSelected
         };
-        ControlListNode.AddNode(PresetDropdownNode);
+        controlListNode.AddNode(presetDropdownNode);
 
-        LoadButtonNode = new TextButtonNode
+        loadButtonNode = new TextButtonNode
         {
             Size      = new(100, 30),
             String    = LuminaWrapper.GetAddonText(6140), // 读取
             OnClick   = OnLoadPreset,
-            IsEnabled = false,
+            IsEnabled = false
         };
-        LoadButtonNode.LabelNode.AutoAdjustTextSize();
-        ControlListNode.AddNode(LoadButtonNode);
+        loadButtonNode.LabelNode.AutoAdjustTextSize();
+        controlListNode.AddNode(loadButtonNode);
 
-        DeleteButtonNode = new TextButtonNode
+        deleteButtonNode = new TextButtonNode
         {
             Size      = new(100, 30),
             String    = LuminaWrapper.GetAddonText(68), // 删除
             OnClick   = OnDeletePreset,
-            IsEnabled = false,
+            IsEnabled = false
         };
-        DeleteButtonNode.LabelNode.AutoAdjustTextSize();
-        ControlListNode.AddNode(DeleteButtonNode);
+        deleteButtonNode.LabelNode.AutoAdjustTextSize();
+        controlListNode.AddNode(deleteButtonNode);
 
-        SaveButtonNode = new TextButtonNode
+        saveButtonNode = new TextButtonNode
         {
             Size      = new(100, 30),
             String    = LuminaWrapper.GetAddonText(552), // 保存
             IsEnabled = true,
             OnClick = () =>
             {
-                if (PresetDropdownNode.SelectedOption != DefaultOption)
+                if (presetDropdownNode.SelectedOption != DefaultOption)
                     OnOverwritePreset();
                 else
                     OnSavePreset();
-            },
+            }
         };
-        SaveButtonNode.LabelNode.AutoAdjustTextSize();
-        ControlListNode.AddNode(SaveButtonNode);
+        saveButtonNode.LabelNode.AutoAdjustTextSize();
+        controlListNode.AddNode(saveButtonNode);
     }
 
-    private static void OnAddonDetach(AtkUnitBase* addon)
+    private void OnAddonFinalize(AtkUnitBase* addon)
     {
-        PresetDropdownNode?.Dispose();
-        PresetDropdownNode = null;
+        presetDropdownNode?.Dispose();
+        presetDropdownNode = null;
 
-        LoadButtonNode?.Dispose();
-        LoadButtonNode = null;
+        loadButtonNode?.Dispose();
+        loadButtonNode = null;
 
-        SaveButtonNode?.Dispose();
-        SaveButtonNode = null;
+        saveButtonNode?.Dispose();
+        saveButtonNode = null;
 
-        DeleteButtonNode?.Dispose();
-        DeleteButtonNode = null;
-        
-        ControlListNode?.Dispose();
-        ControlListNode = null;
+        deleteButtonNode?.Dispose();
+        deleteButtonNode = null;
+
+        controlListNode?.Dispose();
+        controlListNode = null;
     }
 
-    private static void OnPresetSelected(string selection)
+    private void OnPresetSelected(string selection)
     {
         var isDefaultOption = selection == DefaultOption;
 
-        LoadButtonNode.IsEnabled   = !isDefaultOption;
-        DeleteButtonNode.IsEnabled = !isDefaultOption;
+        loadButtonNode.IsEnabled   = !isDefaultOption;
+        deleteButtonNode.IsEnabled = !isDefaultOption;
     }
 
-    private static void OnLoadPreset()
+    private void OnLoadPreset()
     {
-        var selectedPreset = PresetDropdownNode.SelectedOption;
+        var selectedPreset = presetDropdownNode.SelectedOption;
         if (string.IsNullOrEmpty(selectedPreset) || selectedPreset == DefaultOption)
             return;
 
@@ -233,31 +235,31 @@ public unsafe class OptimizedMacro : DailyModuleBase
 
     private void OnSavePreset()
     {
-        if (InputDialog == null) return;
+        if (inputDialog == null) return;
 
-        InputDialog.PlaceholderString = $"{GetLoc("Name")} ({GetLoc("Preset")})";
-        InputDialog.DefaultString     = string.Empty;
-        InputDialog.OnInputComplete = newName =>
+        inputDialog.PlaceholderString = $"{Lang.Get("Name")} ({Lang.Get("Preset")})";
+        inputDialog.DefaultString     = string.Empty;
+        inputDialog.OnInputComplete = newName =>
         {
             SavePreset(newName);
-            PresetDropdownNode.Options = GetPresetNames();
+            presetDropdownNode.Options = GetPresetNames();
         };
 
-        InputDialog.Toggle();
+        inputDialog.Toggle();
     }
 
     private void OnOverwritePreset()
     {
-        if (PresetDropdownNode == null) return;
+        if (presetDropdownNode == null) return;
 
-        var selectedPreset = PresetDropdownNode.SelectedOption;
+        var selectedPreset = presetDropdownNode.SelectedOption;
         if (string.IsNullOrEmpty(selectedPreset) || selectedPreset == DefaultOption)
             return;
 
-        if (ModuleConfig.ConfirmOverwrite)
+        if (config.ConfirmOverwrite)
         {
-            ConfirmDialog.OnConfirm = () => SavePreset(selectedPreset, true);
-            ConfirmDialog.Toggle();
+            confirmDialog.OnConfirm = () => SavePreset(selectedPreset, true);
+            confirmDialog.Toggle();
         }
         else
             SavePreset(selectedPreset, true);
@@ -265,16 +267,16 @@ public unsafe class OptimizedMacro : DailyModuleBase
 
     private void OnDeletePreset()
     {
-        if (PresetDropdownNode == null) return;
+        if (presetDropdownNode == null) return;
 
-        var selectedPreset = PresetDropdownNode.SelectedOption;
+        var selectedPreset = presetDropdownNode.SelectedOption;
         if (string.IsNullOrEmpty(selectedPreset) || selectedPreset == DefaultOption)
             return;
-        
-        if (ModuleConfig.ConfirmDelete)
+
+        if (config.ConfirmDelete)
         {
-            ConfirmDialog.OnConfirm = () => DeletePreset(selectedPreset);
-            ConfirmDialog.Toggle();
+            confirmDialog.OnConfirm = () => DeletePreset(selectedPreset);
+            confirmDialog.Toggle();
         }
         else
             DeletePreset(selectedPreset);
@@ -296,7 +298,7 @@ public unsafe class OptimizedMacro : DailyModuleBase
 
             var createdAt = StandardTimeManager.Instance().Now;
 
-            if (isOverwrite && ModuleConfig.Presets.TryGetValue(presetName, out var preset))
+            if (isOverwrite && config.Presets.TryGetValue(presetName, out var preset))
                 createdAt = preset.CreatedAt;
 
             var presetData = new PresetData
@@ -306,30 +308,30 @@ public unsafe class OptimizedMacro : DailyModuleBase
                 SharedMacros     = ReadMacrosFromMemory(macroModule, 1)
             };
 
-            ModuleConfig.Presets[presetName] = presetData;
-            SaveConfig(ModuleConfig);
+            config.Presets[presetName] = presetData;
+            config.Save(this);
 
-            Chat(GetLoc(isOverwrite ? "OptimizedMacro-Notification-Overwritten" : "OptimizedMacro-Notification-Saved", presetName));
+            NotifyHelper.Instance().Chat(Lang.Get(isOverwrite ? "OptimizedMacro-Notification-Overwritten" : "OptimizedMacro-Notification-Saved", presetName));
         }
         catch
         {
-            Chat(GetLoc("OptimizedMacro-Notification-SaveError", presetName));
+            NotifyHelper.Instance().Chat(Lang.Get("OptimizedMacro-Notification-SaveError", presetName));
         }
     }
 
-    private static void LoadPreset(string presetName)
+    private void LoadPreset(string presetName)
     {
         try
         {
             var macroModule = RaptureMacroModule.Instance();
             if (macroModule == null) return;
-            
+
             var hotbarModule = RaptureHotbarModule.Instance();
             if (hotbarModule == null) return;
 
             if (presetName == DefaultOption) return;
-            
-            if (string.IsNullOrWhiteSpace(presetName) || !ModuleConfig.Presets.TryGetValue(presetName, out var presetData))
+
+            if (string.IsNullOrWhiteSpace(presetName) || !config.Presets.TryGetValue(presetName, out var presetData))
                 throw new Exception();
 
             WriteMacrosToMemory(macroModule, 0, presetData.IndividualMacros);
@@ -338,12 +340,12 @@ public unsafe class OptimizedMacro : DailyModuleBase
             macroModule->SetSavePendingFlag(true, 0);
             macroModule->SetSavePendingFlag(true, 1);
             hotbarModule->ReloadAllMacroSlots();
-            
-            Chat(GetLoc("OptimizedMacro-Notification-Loaded", presetName));
+
+            NotifyHelper.Instance().Chat(Lang.Get("OptimizedMacro-Notification-Loaded", presetName));
         }
         catch
         {
-            Chat(GetLoc("OptimizedMacro-Notification-LoadError", presetName));
+            NotifyHelper.Instance().Chat(Lang.Get("OptimizedMacro-Notification-LoadError", presetName));
         }
     }
 
@@ -352,22 +354,22 @@ public unsafe class OptimizedMacro : DailyModuleBase
         try
         {
             if (presetName == DefaultOption) return;
-            
-            if (string.IsNullOrWhiteSpace(presetName) || !ModuleConfig.Presets.Remove(presetName))
+
+            if (string.IsNullOrWhiteSpace(presetName) || !config.Presets.Remove(presetName))
                 throw new Exception();
 
-            SaveConfig(ModuleConfig);
-            Chat(GetLoc("OptimizedMacro-Notification-Deleted", presetName));
+            config.Save(this);
+            NotifyHelper.Instance().Chat(Lang.Get("OptimizedMacro-Notification-Deleted", presetName));
 
-            PresetDropdownNode.Options        = GetPresetNames();
-            PresetDropdownNode.SelectedOption = DefaultOption;
+            presetDropdownNode.Options        = GetPresetNames();
+            presetDropdownNode.SelectedOption = DefaultOption;
 
-            LoadButtonNode.IsEnabled   = false;
-            DeleteButtonNode.IsEnabled = false;
+            loadButtonNode.IsEnabled   = false;
+            deleteButtonNode.IsEnabled = false;
         }
         catch
         {
-            Chat(GetLoc("OptimizedMacro-Notification-DeleteError", presetName));
+            NotifyHelper.Instance().Chat(Lang.Get("OptimizedMacro-Notification-DeleteError", presetName));
         }
     }
 
@@ -384,13 +386,11 @@ public unsafe class OptimizedMacro : DailyModuleBase
             var hasContent = false;
 
             for (var lineIdx = 0; lineIdx < MAX_MACRO_LINES; lineIdx++)
-            {
                 if (macro->Lines[lineIdx].AsSpan().Length > 0)
                 {
                     hasContent = true;
                     break;
                 }
-            }
 
             // 跳过完全为空的宏
             if (nameSpan.Length == 0 && macro->IconId == 0 && !hasContent)
@@ -449,11 +449,30 @@ public unsafe class OptimizedMacro : DailyModuleBase
 
     #endregion
 
+    #region Models
+
+    private class MacroData
+    {
+        public uint                    Index  { get; set; }
+        public uint                    IconID { get; set; }
+        public byte[]?                 Name   { get; set; }
+        public Dictionary<int, byte[]> Lines  { get; set; } = [];
+    }
+
+    private class PresetData
+    {
+        public DateTime        CreatedAt        { get; set; } = StandardTimeManager.Instance().Now;
+        public List<MacroData> IndividualMacros { get; set; } = [];
+        public List<MacroData> SharedMacros     { get; set; } = [];
+    }
+
+    #endregion
+    
     #region Tools
 
-    private static List<string> GetPresetNames()
+    private List<string> GetPresetNames()
     {
-        var sortedList = ModuleConfig.Presets
+        var sortedList = config.Presets
                                      .OrderByDescending(x => x.Value.CreatedAt)
                                      .Select(x => x.Key)
                                      .ToList();
@@ -465,8 +484,8 @@ public unsafe class OptimizedMacro : DailyModuleBase
 
     private abstract class BaseMacroDialog : NativeAddon
     {
-        protected TextButtonNode? ConfirmButton;
         protected TextButtonNode? CancelButton;
+        protected TextButtonNode? ConfirmButton;
 
         protected void SetupButtons(float yOffset = 0f)
         {
@@ -542,29 +561,21 @@ public unsafe class OptimizedMacro : DailyModuleBase
         }
     }
 
-    #region Models
-
-    private class MacroData
+    private class Config : ModuleConfig
     {
-        public uint                    Index  { get; set; }
-        public uint                    IconID { get; set; }
-        public byte[]?                 Name   { get; set; }
-        public Dictionary<int, byte[]> Lines  { get; set; } = [];
-    }
-
-    private class PresetData
-    {
-        public DateTime        CreatedAt        { get; set; } = StandardTimeManager.Instance().Now;
-        public List<MacroData> IndividualMacros { get; set; } = [];
-        public List<MacroData> SharedMacros     { get; set; } = [];
-    }
-
-    #endregion
-
-    private class Config : ModuleConfiguration
-    {
-        public bool                           ConfirmOverwrite = true;
         public bool                           ConfirmDelete    = true;
+        public bool                           ConfirmOverwrite = true;
         public Dictionary<string, PresetData> Presets          = [];
     }
+    
+    #region 常量
+
+    private const int MACROS_PER_SET  = 100;
+    private const int MAX_MACRO_LINES = 15;
+
+    private const string COMMAND = "macroset";
+
+    private static string DefaultOption = LuminaWrapper.GetAddonText(4764); // 未选择
+
+    #endregion
 }

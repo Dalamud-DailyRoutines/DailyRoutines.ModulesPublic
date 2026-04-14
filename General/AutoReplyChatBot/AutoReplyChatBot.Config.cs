@@ -1,14 +1,13 @@
-using System;
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
 using Dalamud.Game.Text;
 using Newtonsoft.Json;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoReplyChatBot
 {
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public string APIKey            = string.Empty;
         public string BaseURL           = "https://api.deepseek.com/v1";
@@ -51,7 +50,7 @@ public partial class AutoReplyChatBot
     private class Prompt
     {
         public string Content = DEFAULT_SYSTEM_PROMPT;
-        public string Name    = GetLoc("Default");
+        public string Name    = Lang.Get("Default");
     }
 
     private class ChatWindow
@@ -92,7 +91,8 @@ public partial class AutoReplyChatBot
         public long   Timestamp { get; set; }
         public string Name      { get; set; } = string.Empty;
 
-        [JsonIgnore] public DateTime? LocalTime { get; set; }
+        [JsonIgnore]
+        public DateTime? LocalTime { get; set; }
 
         public override string ToString() => $"[{Name}] {Text}";
     }

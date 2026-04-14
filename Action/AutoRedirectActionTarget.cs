@@ -1,30 +1,34 @@
-﻿using System;
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRedirectActionTarget : DailyModuleBase
+public unsafe class AutoRedirectActionTarget : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoRedirectActionTargetTitle"),
-        Description = GetLoc("AutoRedirectActionTargetDescription"),
-        Category    = ModuleCategories.Action
+        Title       = Lang.Get("AutoRedirectActionTargetTitle"),
+        Description = Lang.Get("AutoRedirectActionTargetDescription"),
+        Category    = ModuleCategory.Action
     };
-
-    private static Config ModuleConfig = null!;
     
+    private Config config = null!;
+
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
         UseActionManager.Instance().RegPreUseActionLocation(OnPreUseAction);
     }
 
@@ -33,14 +37,14 @@ public unsafe class AutoRedirectActionTarget : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("AutoRedirectActionTarget-RedirectEnemyAction"), ref ModuleConfig.TargetEnemyAction))
-            SaveConfig(ModuleConfig);
-        
-        if (ImGui.Checkbox(GetLoc("AutoRedirectActionTarget-RedirectMemberAction"), ref ModuleConfig.TargetMemberAction))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("AutoRedirectActionTarget-RedirectEnemyAction"), ref config.TargetEnemyAction))
+            config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("AutoRedirectActionTarget-RedirectMemberAction"), ref config.TargetMemberAction))
+            config.Save(this);
     }
 
-    private static void OnPreUseAction
+    private void OnPreUseAction
     (
         ref bool       isPrevented,
         ref ActionType type,
@@ -53,20 +57,22 @@ public unsafe class AutoRedirectActionTarget : DailyModuleBase
     {
         if (type != ActionType.Action) return;
         if (!LuminaGetter.TryGetRow(actionID, out Action actionRow)) return;
-        
+
         if (actionRow.TargetArea) return;
-        
+
         switch (actionRow.CanTargetHostile)
         {
-            case true when !ModuleConfig.TargetEnemyAction:
-            case false when !ModuleConfig.TargetMemberAction:
+            case true when !config.TargetEnemyAction:
+            case false when !config.TargetMemberAction:
                 return;
         }
-        
+
         var gameObject = targetID == 0xE0000000 ? null : CharacterManager.Instance()->LookupBattleCharaByEntityId((uint)targetID);
+
         if (gameObject == null || !ActionManager.CanUseActionOnTarget(actionID, (GameObject*)gameObject))
         {
             var targetToSelect = GetAvailableTarget(actionID, actionRow.CanTargetHostile);
+
             if (targetToSelect != null)
             {
                 targetID = targetToSelect->EntityId;
@@ -79,7 +85,7 @@ public unsafe class AutoRedirectActionTarget : DailyModuleBase
     private static BattleChara* GetAvailableTarget(uint actionID, bool isTargetEnemy)
     {
         var localPosition = LocalPlayerState.Object.Position;
-        var actionRange = MathF.Pow(ActionManager.GetActionRange(actionID), 2);
+        var actionRange   = MathF.Pow(ActionManager.GetActionRange(actionID), 2);
 
         var previousTarget = TargetSystem.Instance()->PreviousTarget;
         if (previousTarget != null                                       &&
@@ -99,7 +105,7 @@ public unsafe class AutoRedirectActionTarget : DailyModuleBase
 
                 var obj = CharacterManager.Instance()->LookupBattleCharaByEntityId((uint)enemyData.EntityId);
                 if (obj == null) continue;
-                
+
                 if (ActionManager.CanUseActionOnTarget(actionID, (GameObject*)obj) &&
                     Vector3.DistanceSquared(localPosition, obj->Position) <= actionRange)
                     return obj;
@@ -108,6 +114,7 @@ public unsafe class AutoRedirectActionTarget : DailyModuleBase
         else
         {
             var agent = AgentHUD.Instance();
+
             if (agent->PartyMemberCount > 1)
             {
                 foreach (var partyMember in agent->PartyMembers)
@@ -118,22 +125,22 @@ public unsafe class AutoRedirectActionTarget : DailyModuleBase
                         return partyMember.Object;
                 }
             }
-            
+
             for (var i = 0; i < 200; i++)
             {
                 var obj = CharacterManager.Instance()->BattleCharas[i].Value;
                 if (obj == null) continue;
-                
+
                 if (ActionManager.CanUseActionOnTarget(actionID, (GameObject*)obj) &&
                     Vector3.DistanceSquared(localPosition, obj->Position) <= actionRange)
                     return obj;
             }
         }
-        
+
         return null;
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public bool TargetEnemyAction = true;
         public bool TargetMemberAction;

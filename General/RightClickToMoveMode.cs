@@ -1,463 +1,588 @@
-using System;
-using System.Collections.Generic;
+using System.Collections.Frozen;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using DailyRoutines.Abstracts;
-using DailyRoutines.IPC;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Internal;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
-using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.System.Input;
+using OmenTools.Dalamud;
+using OmenTools.Interop.Game;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class RightClickToMoveMode : DailyModuleBase
+public class RightClickToMoveMode : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("RightClickToMoveModeTitle"),
-        Description = GetLoc("RightClickToMoveModeDescription"),
-        Category    = ModuleCategories.General,
+        Title       = Lang.Get("RightClickToMoveModeTitle"),
+        Description = Lang.Get("RightClickToMoveModeDescription"),
+        Category    = ModuleCategory.General
     };
 
-    private static readonly Dictionary<ControlMode, (string Title, string Desc)> ControlModes = new()
-    {
-        [ControlMode.RightClick]     = (GetLoc("RightClickToMoveMode-RightClickMode-Title"), GetLoc("RightClickToMoveMode-RightClickMode-Desc")),
-        [ControlMode.LeftRightClick] = (GetLoc("RightClickToMoveMode-LeftRightClickMode-Title"), GetLoc("RightClickToMoveMode-LeftRightClickMode-Desc")),
-        [ControlMode.KeyRightClick]  = (GetLoc("RightClickToMoveMode-KeyRightClickMode-Title"), GetLoc("RightClickToMoveMode-KeyRightClickMode-Desc")),
-    };
-    
-    private static readonly CompSig                              GameObjectSetRotationSig = new("40 53 48 83 EC ?? F3 0F 10 81 ?? ?? ?? ?? 48 8B D9 0F 2E C1");
-    private delegate        void                                 GameObjectSetRotationDelegate(nint obj, float value);
-    private static          Hook<GameObjectSetRotationDelegate>? GameObjectSetRotationHook;
+    private Config moduleConfig = null!;
 
-    private static volatile bool   IsModuleActive;
-
-    private static readonly uint LineColor = KnownColor.LightSkyBlue.ToVector4().ToUInt();
-    private static readonly uint DotColor  = KnownColor.RoyalBlue.ToVector4().ToUInt();
-    private static readonly uint TextColor = KnownColor.Orange.ToVector4().ToUInt();
-    
-    private static Vector3 TargetWorldPos;
-
-    private static Config          ModuleConfig;
-    private static PathFindHelper? PathFindHelper;
-    
-    private static WindowHook? Hook;
+    private readonly MovementInputController movementController = new() { Precision = 0.15f, IsAutoMove = true };
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-
-        GameObjectSetRotationHook ??= GameObjectSetRotationSig.GetHook<GameObjectSetRotationDelegate>(GameObjectSetRotationDetour);
-        GameObjectSetRotationHook.Enable();
-
-        if (!DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName))
-        {
-            ModuleConfig.MoveMode = MoveMode.Game;
-            SaveConfig(ModuleConfig);
-        }
+        moduleConfig = Config.Load(this) ?? new();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
 
-        if (IsModuleActive) return;
-        IsModuleActive = true;
-
-        try
-        {
-            PathFindHelper ??= new PathFindHelper { Precision = 1f };
-
-            Hook ??= new(Framework.Instance()->GameWindow->WindowHandle, HandleClickResult);
-
-            WindowManager.Draw += OnPosDraw;
-        }
-        catch
-        {
-            CleanupResources();
-            throw;
-        }
+        InputIDManager.Instance().RegPostPressed(OnPostPressed);
+        WindowManager.Instance().PostDraw += OnDraw;
     }
 
-    protected override void ConfigUI()
+    protected override void Uninit()
     {
-        ConflictKeyText();
+        InputIDManager.Instance().UnregPostPressed(OnPostPressed);
         
-        ImGui.NewLine();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-MoveMode")}");
-
-        using (ImRaii.PushIndent())
-        {
-            ImGui.Spacing();
-            
-            foreach (var moveMode in Enum.GetValues<MoveMode>())
-            {
-                using var disabled = ImRaii.Disabled(ModuleConfig.MoveMode == moveMode || 
-                                                     (moveMode == MoveMode.vnavmesh && !DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName)));
-
-                ImGui.SameLine();
-                if (ImGui.RadioButton(moveMode.ToString(), moveMode == ModuleConfig.MoveMode))
-                {
-                    ModuleConfig.MoveMode = moveMode;
-                    SaveConfig(ModuleConfig);
-                }
-            }
-        }
+        SessionManager.Stop(this);
+        TargetIndicatorRenderer.Reset();
         
-        ImGui.NewLine();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("RightClickToMoveMode-ControlMode")}");
-
-        using (ImRaii.PushIndent())
-        {
-            ImGui.Spacing();
-            
-            foreach (var controlMode in Enum.GetValues<ControlMode>())
-            {
-                using var disabled = ImRaii.Disabled(controlMode == ModuleConfig.ControlMode);
-
-                ImGui.SameLine();
-                if (ImGui.RadioButton(ControlModes[controlMode].Title, controlMode == ModuleConfig.ControlMode))
-                {
-                    ModuleConfig.ControlMode = controlMode;
-                    SaveConfig(ModuleConfig);
-                }
-            }
-            
-            ImGui.TextUnformatted(ControlModes[ModuleConfig.ControlMode].Desc);
-
-            if (ModuleConfig.ControlMode == ControlMode.KeyRightClick)
-            {
-                ImGui.AlignTextToFramePadding();
-                ImGui.TextUnformatted($"{GetLoc("RightClickToMoveMode-ComboKey")}:");
-
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(200f * GlobalFontScale);
-                using var combo = ImRaii.Combo("###ComboKeyCombo", ModuleConfig.ComboKey.GetFancyName());
-                if (combo)
-                {
-                    var validKeys = DService.Instance().KeyState.GetValidVirtualKeys();
-                    foreach (var keyToSelect in validKeys)
-                    {
-                        using var disabled = ImRaii.Disabled(DRConfig.Instance().ConflictKey == keyToSelect);
-                        if (ImGui.Selectable(keyToSelect.GetFancyName()))
-                        {
-                            ModuleConfig.ComboKey = keyToSelect;
-                            SaveConfig(ModuleConfig);
-                        }
-                    }
-                }
-            }
-        }
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        WindowManager.Instance().PostDraw                -= OnDraw;
         
-        ImGui.NewLine();
-        
-        if (ImGui.Checkbox($"{GetLoc("RightClickToMoveMode-DisplayLineToTarget")}###DisplayLineToTarget", ref ModuleConfig.DisplayLineToTarget))
-            SaveConfig(ModuleConfig);
-
-        if (ImGui.Checkbox($"{GetLoc("RightClickToMoveMode-NoChangeFaceDirection")}###NoChangeFaceDirection", ref ModuleConfig.NoChangeFaceDirection))
-            SaveConfig(ModuleConfig);
-
-        if (ImGui.Checkbox($"{GetLoc("RightClickToMoveMode-WASDToInterrupt")}###WASDToInterrupt", ref ModuleConfig.WASDToInterrupt))
-            SaveConfig(ModuleConfig);
+        movementController.Dispose();
     }
 
-    protected override void Uninit() => 
-        CleanupResources();
+    #region 事件
 
-    private static void OnPosDraw()
+    private void OnPostPressed(bool result, InputId id)
     {
-        if (!IsModuleActive) return;
-
-        if (TargetWorldPos == default) return;
-        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
-
-        MovementManager.SetCurrentControlMode(MovementControlMode.Normal);
+        // 右键
+        if (id != InputId.MOUSE_CANCEL) return;
+        if (!result) return;
         
-        var distance = Vector2.DistanceSquared(TargetWorldPos.ToVector2(), localPlayer.Position.ToVector2());
-        if (IsInterruptKeysPressed() || distance <= 4f)
-            StopPathFind();
-
-        if (!ModuleConfig.DisplayLineToTarget) return;
-
-        if (!DService.Instance().GameGUI.WorldToScreen(TargetWorldPos,       out var screenPos) ||
-            !DService.Instance().GameGUI.WorldToScreen(localPlayer.Position, out var localScreenPos)) 
-            return;
-
-        var drawList = ImGui.GetForegroundDrawList();
-
-        drawList.AddLine(localScreenPos, screenPos, LineColor, 8f);
-        drawList.AddCircleFilled(localScreenPos, 12f, DotColor);
-        drawList.AddCircleFilled(screenPos,      12f, DotColor);
-
-        ImGuiOm.TextOutlined(screenPos + ScaledVector2(16f),
-                             TextColor,
-                             GetLoc("RightClickToMoveMode-TextDisplay",
-                                    $"[{TargetWorldPos.X:F1}, {TargetWorldPos.Y:F1}, {TargetWorldPos.Z:F1}]",
-                                    MathF.Sqrt(distance).ToString("F2")));
+        OnMouseClickCaptured(ImGui.GetMousePos());
     }
     
-    private static void OnZoneChanged(ushort obj) => 
-        StopPathFind();
-
-    private static void GameObjectSetRotationDetour(nint obj, float value)
+    private void OnDraw()
     {
-        if (ModuleConfig.NoChangeFaceDirection                                         &&
-            obj            == (DService.Instance().ObjectTable.LocalPlayer?.Address ?? nint.Zero) &&
-            TargetWorldPos != default)
-            return;
-        
-        GameObjectSetRotationHook.Original(obj, value);
-    }
-
-    private static bool IsInterruptKeysPressed()
-    {
-        if (IsConflictKeyPressed()) return true;
-        if (ModuleConfig.WASDToInterrupt && 
-            (DService.Instance().KeyState[VirtualKey.W] || 
-             DService.Instance().KeyState[VirtualKey.A] ||
-             DService.Instance().KeyState[VirtualKey.S] || 
-             DService.Instance().KeyState[VirtualKey.D])) 
-            return true;
-
-        return false;
-    }
-
-    private static void HandleClickResult()
-    {
-        if (!IsModuleActive) return;
-        if (DService.Instance().ObjectTable.LocalPlayer is null || PathFindHelper == null) return;
-
-        switch (ModuleConfig.ControlMode)
+        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer)
         {
-            case ControlMode.RightClick:
-                break;
-            case ControlMode.LeftRightClick:
-                var isLeftButtonPressed = (GetAsyncKeyState(0x01) & 0x8000) != 0;
-                if (!isLeftButtonPressed) return;
-                break;
-            case ControlMode.KeyRightClick:
-                var isKeyPressed = DService.Instance().KeyState[ModuleConfig.ComboKey];
-                if (!isKeyPressed) return;
-                break;
+            SessionManager.Stop(this);
+            TargetIndicatorRenderer.Draw(this, null);
+            return;
         }
 
-        if (!DService.Instance().GameGUI.ScreenToWorld(ImGui.GetMousePos(), out var worldPos)) return;
-        
-        var finalWorldPos = Vector3.Zero;
-        if (DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName) &&
-            vnavmeshIPC.QueryMeshNearestPoint(worldPos, 3, 10) is { } worldPosByNavmesh)
-            finalWorldPos = worldPosByNavmesh;
-        else if (MovementManager.TryDetectGroundDownwards(worldPos, out var hitInfo, 1024) ?? false)
-            finalWorldPos = hitInfo.Point;
-        else 
-            return;
+        if (IsInterruptKeysPressed())
+            SessionManager.Stop(this);
 
-        StopPathFind();
-        TargetWorldPos = finalWorldPos;
-
-        if (AgentMap.Instance()->IsPlayerMoving)
-            ChatManager.Instance().SendMessage("/automove off");
-        
-        switch (ModuleConfig.MoveMode)
+        if (SessionManager.Current is { } session)
         {
-            case MoveMode.Game:
-                PathFindHelper.DesiredPosition = finalWorldPos;
-                PathFindHelper.Enabled         = true;
-                break;
-            case MoveMode.vnavmesh:
-                if (!DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.InternalName))
+            switch (session.Driver)
+            {
+                case MoveDriver.Game:
+                    SessionManager.UpdateGame(this, session, localPlayer.Position);
+                    break;
+                case MoveDriver.Navmesh:
+                    SessionManager.UpdateNavmesh(this, session, localPlayer.Position);
+                    break;
+            }
+        }
+
+        TargetIndicatorRenderer.Draw(this, SessionManager.Current);
+    }
+    
+    private void OnZoneChanged(ushort _) 
+    {
+        SessionManager.Stop(this);
+        TargetIndicatorRenderer.Reset();
+    }
+    
+    private void OnMouseClickCaptured(Vector2 clientPosition)
+    {
+        if (DService.Instance().ObjectTable.LocalPlayer is null) return;
+        if (!ClickTriggerEvaluator.ShouldHandle(moduleConfig)) return;
+        if (!ClickPointResolver.TryResolve(clientPosition, out var targetPosition)) return;
+
+        SessionManager.Start(this, targetPosition);
+    }
+
+    #endregion
+    
+    #region 绘制
+    
+    protected override void ConfigUI()
+    {
+        ImGuiOm.ConflictKeyText();
+
+        ImGui.NewLine();
+        DrawMoveModeSection();
+
+        ImGui.NewLine();
+        DrawControlModeSection();
+
+        ImGui.NewLine();
+        DrawIndicatorSection();
+
+        if (ImGui.Checkbox($"{Lang.Get("RightClickToMoveMode-WASDToInterrupt")}###WASDToInterrupt", ref moduleConfig.WASDToInterrupt))
+            moduleConfig.Save(this);
+    }
+    
+    private void DrawMoveModeSection()
+    {
+        var navmeshAvailable = IsNavmeshAvailable();
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RightClickToMoveMode-MoveMode"));
+
+        using (ImRaii.PushIndent())
+        {
+            ImGui.Spacing();
+
+            foreach (var moveMode in Enum.GetValues<MoveMode>())
+            {
+                var unavailable = moveMode is MoveMode.Navmesh or MoveMode.Smart && !navmeshAvailable;
+                using var disabled = ImRaii.Disabled(unavailable || moveMode == moduleConfig.MoveMode);
+
+                ImGui.SameLine();
+
+                if (ImGui.RadioButton(MoveModeTitles[moveMode], moveMode == moduleConfig.MoveMode))
                 {
-                    ModuleConfig.MoveMode = MoveMode.Game;
-                    ModuleConfig.Save(ModuleManager.GetModule<RightClickToMoveMode>());
-                    return;
+                    moduleConfig.MoveMode = moveMode;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
                 }
-                
-                vnavmeshIPC.PathSetTolerance(2f);
-                vnavmeshIPC.PathfindAndMoveTo(TargetWorldPos, DService.Instance().Condition[ConditionFlag.InFlight] || DService.Instance().Condition[ConditionFlag.Diving]);
-                break;
+            }
+
+            ImGui.TextUnformatted(MoveModeDescriptions[moduleConfig.MoveMode]);
+
+            if (!navmeshAvailable)
+                ImGui.TextDisabled(Lang.Get("RightClickToMoveMode-NavmeshUnavailable"));
         }
     }
 
-    private static void StopPathFind()
+    private void DrawControlModeSection()
     {
-        TargetWorldPos = default;
-        
-        if (PathFindHelper != null)
-            PathFindHelper.Enabled = false;
-        
-        vnavmeshIPC.PathStop();
-    }
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RightClickToMoveMode-ControlMode"));
 
-    private static void CleanupResources()
-    {
-        if (!IsModuleActive) return;
-
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        WindowManager.Draw               -= OnPosDraw;
-
-        Hook?.Dispose();
-
-        if (PathFindHelper != null)
+        using (ImRaii.PushIndent())
         {
-            PathFindHelper.Dispose();
-            PathFindHelper = null;
+            ImGui.Spacing();
+
+            foreach (var controlMode in Enum.GetValues<ControlMode>())
+            {
+                using var disabled = ImRaii.Disabled(controlMode == moduleConfig.ControlMode);
+
+                ImGui.SameLine();
+
+                if (ImGui.RadioButton(ControlModeTitles[controlMode], controlMode == moduleConfig.ControlMode))
+                {
+                    moduleConfig.ControlMode = controlMode;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                }
+            }
+
+            ImGui.TextUnformatted(ControlModeDescriptions[moduleConfig.ControlMode]);
+
+            if (moduleConfig.ControlMode != ControlMode.KeyRightClick) return;
+
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextUnformatted($"{Lang.Get("RightClickToMoveMode-ComboKey")}:");
+
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(200f * GlobalUIScale);
+            using var combo = ImRaii.Combo("###ComboKeyCombo", moduleConfig.ComboKey.GetFancyName());
+
+            if (!combo) return;
+
+            var validKeys = DService.Instance().KeyState.GetValidVirtualKeys();
+            foreach (var keyToSelect in validKeys)
+            {
+                using var disabled = ImRaii.Disabled(PluginConfig.Instance().ConflictKeyBinding.Keyboard == keyToSelect);
+
+                if (ImGui.Selectable(keyToSelect.GetFancyName()))
+                {
+                    moduleConfig.ComboKey = keyToSelect;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                }
+            }
+        }
+    }
+
+    private void DrawIndicatorSection()
+    {
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RightClickToMoveMode-IndicatorStyle"));
+
+        using (ImRaii.PushIndent())
+        {
+            ImGui.Spacing();
+
+            foreach (var indicatorStyle in Enum.GetValues<IndicatorStyle>())
+            {
+                using var disabled = ImRaii.Disabled(indicatorStyle == moduleConfig.IndicatorStyle);
+
+                ImGui.SameLine();
+
+                if (ImGui.RadioButton(IndicatorStyleTitles[indicatorStyle], indicatorStyle == moduleConfig.IndicatorStyle))
+                {
+                    moduleConfig.IndicatorStyle = indicatorStyle;
+                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                }
+            }
+
+            ImGui.TextUnformatted(IndicatorStyleDescriptions[moduleConfig.IndicatorStyle]);
+        }
+    }
+
+    #endregion
+
+    #region 辅助方法
+
+    private static bool ShouldUseGameMove(Vector3 localPlayerPosition, Vector3 targetPosition)
+    {
+        if (!IsNavmeshAvailable()) 
+            return true;
+        
+        if (MathF.Abs(localPlayerPosition.Y - targetPosition.Y) > SMART_GAME_HEIGHT_DELTA)
+            return false;
+        
+        var isBlocked = MovementManager.TryDetectTwoPoints(localPlayerPosition, targetPosition, out _) ?? true;
+        return !isBlocked && Vector2.DistanceSquared(localPlayerPosition.ToVector2(), targetPosition.ToVector2()) <= SMART_GAME_DISTANCE_SQ;
+    }
+    
+    private MoveDriver ResolveMoveDriver(Vector3 localPlayerPosition, Vector3 targetPosition) =>
+        moduleConfig.MoveMode switch
+        {
+            MoveMode.Game    => MoveDriver.Game,
+            MoveMode.Navmesh => IsNavmeshAvailable() ? MoveDriver.Navmesh : MoveDriver.Game,
+            MoveMode.Smart   => ShouldUseGameMove(localPlayerPosition, targetPosition) ? MoveDriver.Game : MoveDriver.Navmesh,
+            _                => MoveDriver.Game
+        };
+    
+    private bool IsInterruptKeysPressed()
+    {
+        if (PluginConfig.Instance().ConflictKeyBinding.IsPressed()) return true;
+
+        return moduleConfig.WASDToInterrupt &&
+               (DService.Instance().KeyState[VirtualKey.W] ||
+                DService.Instance().KeyState[VirtualKey.A] ||
+                DService.Instance().KeyState[VirtualKey.S] ||
+                DService.Instance().KeyState[VirtualKey.D]);
+    }
+
+    private static bool IsNavmeshAvailable() =>
+        DService.Instance().PI.IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) && vnavmeshIPC.GetIsNavReady();
+
+    #endregion
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    private sealed class Config : ModuleConfig
+    {
+        public VirtualKey     ComboKey        = VirtualKey.SHIFT;
+        public ControlMode    ControlMode     = ControlMode.RightClick;
+        public IndicatorStyle IndicatorStyle  = IndicatorStyle.Pulse;
+        public MoveMode       MoveMode        = MoveMode.Smart;
+        public bool           WASDToInterrupt = true;
+    }
+
+    private static class SessionManager
+    {
+        public static MoveSession? Current { get; private set; }
+
+        public static void Start(RightClickToMoveMode module, Vector3 targetPosition)
+        {
+            if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
+
+            Stop(module);
+
+            if (LocalPlayerState.Instance().IsMoving)
+                ChatManager.Instance().SendMessage("/automove off");
+
+            var driver = module.ResolveMoveDriver(localPlayer.Position, targetPosition);
+            switch (driver)
+            {
+                case MoveDriver.Game:
+                    StartGame(module, targetPosition);
+                    break;
+                case MoveDriver.Navmesh:
+                    StartNavmesh(module, targetPosition);
+                    break;
+            }
         }
 
-        TargetWorldPos   = default;
-        IsModuleActive   = false;
+        public static void Stop(RightClickToMoveMode module)
+        {
+            var session = Current;
+            Current = null;
+            if (session == null) return;
+
+            module.movementController.Enabled         = false;
+            module.movementController.DesiredPosition = default;
+
+            vnavmeshIPC.StopPathfind();
+
+            if (session is { Driver: MoveDriver.Game })
+                MovementManager.Instance().SetCurrentControlMode(session.PreviousControlMode);
+        }
+
+        public static void UpdateGame(RightClickToMoveMode module, MoveSession session, Vector3 localPlayerPosition)
+        {
+            if (Vector2.DistanceSquared(session.Target.ToVector2(), localPlayerPosition.ToVector2()) <= GAME_ARRIVAL_DISTANCE_SQ)
+                Stop(module);
+        }
+
+        public static void UpdateNavmesh(RightClickToMoveMode module, MoveSession session, Vector3 localPlayerPosition)
+        {
+            if (Vector2.DistanceSquared(session.Target.ToVector2(), localPlayerPosition.ToVector2()) <= NAVMESH_ARRIVAL_DISTANCE_SQ)
+            {
+                Stop(module);
+                return;
+            }
+
+            var isBusy = vnavmeshIPC.GetIsPathfindRunning() || vnavmeshIPC.GetIsPathfindInProgress() || vnavmeshIPC.GetIsNavPathfindInProgress();
+            if (!isBusy && session.ElapsedSeconds >= 0.15f)
+                Stop(module);
+        }
+
+        private static void StartGame(RightClickToMoveMode module, Vector3 targetPosition)
+        {
+            var previousControlMode = MovementManager.Instance().CurrentControlMode;
+            MovementManager.Instance().SetCurrentControlMode(MovementControlMode.Normal);
+
+            module.movementController.DesiredPosition = targetPosition;
+            module.movementController.Enabled         = true;
+
+            Current = new(targetPosition, MoveDriver.Game, previousControlMode);
+            TargetIndicatorRenderer.Trigger(module, targetPosition);
+        }
+
+        private static void StartNavmesh(RightClickToMoveMode module, Vector3 targetPosition)
+        {
+            module.movementController.Enabled         = false;
+            module.movementController.DesiredPosition = default;
+            
+            var fly = DService.Instance().Condition[ConditionFlag.InFlight] || DService.Instance().Condition[ConditionFlag.Diving];
+            if (!vnavmeshIPC.PathfindAndMoveTo(targetPosition, fly)) return;
+
+            Current = new(targetPosition, MoveDriver.Navmesh, MovementManager.Instance().CurrentControlMode);
+            TargetIndicatorRenderer.Trigger(module, targetPosition);
+        }
     }
 
-    private class Config : ModuleConfiguration
+    private sealed class MoveSession(Vector3 target, MoveDriver driver, MovementControlMode previousControlMode)
     {
-        public MoveMode    MoveMode            = MoveMode.Game;
-        public ControlMode ControlMode         = ControlMode.RightClick;
-        public VirtualKey  ComboKey            = VirtualKey.SHIFT;
-        public bool        DisplayLineToTarget = true;
-        public bool        NoChangeFaceDirection;
-        public bool        WASDToInterrupt = true;
+        public Vector3             Target              { get; } = target;
+        public MoveDriver          Driver              { get; } = driver;
+        public MovementControlMode PreviousControlMode { get; } = previousControlMode;
+        public long                StartedAtTicks      { get; } = Environment.TickCount64;
+
+        public float ElapsedSeconds => (Environment.TickCount64 - StartedAtTicks) / 1000f;
     }
 
-    public enum MoveMode
+    private static class ClickTriggerEvaluator
     {
-        Game,
-        vnavmesh
+        public static bool ShouldHandle(Config config) =>
+            config.ControlMode switch
+            {
+                ControlMode.RightClick => true,
+                ControlMode.LeftRightClick => (GetAsyncKeyState(0x01) & 0x8000) != 0,
+                ControlMode.KeyRightClick => DService.Instance().KeyState[config.ComboKey],
+                _ => false
+            };
     }
 
-    public enum ControlMode
+    private static class ClickPointResolver
+    {
+        public static bool TryResolve(Vector2 clientPosition, out Vector3 targetPosition)
+        {
+            targetPosition = default;
+
+            if (!DService.Instance().GameGUI.ScreenToWorld(clientPosition, out var worldPosition))
+                return false;
+
+            if (IsNavmeshAvailable() && vnavmeshIPC.QueryNearestPointOnMesh(worldPosition, 3f, 10f) is { } meshPosition)
+            {
+                targetPosition = meshPosition;
+                return true;
+            }
+
+            if (MovementManager.TryDetectGroundDownwards(worldPosition, out var hitInfo, 1024) ?? false)
+            {
+                targetPosition = hitInfo.Point;
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    private static class TargetIndicatorRenderer
+    {
+        private static Vector3 PulseTarget;
+        private static long    PulseStartedAtTicks;
+        private static bool    IsPulseActive;
+
+        public static void Trigger(RightClickToMoveMode module, Vector3 targetPosition)
+        {
+            if (module.moduleConfig.IndicatorStyle != IndicatorStyle.Pulse)
+            {
+                ResetPulse();
+                return;
+            }
+
+            PulseTarget          = targetPosition;
+            PulseStartedAtTicks  = Environment.TickCount64;
+            IsPulseActive        = true;
+        }
+
+        public static void Draw(RightClickToMoveMode module, MoveSession? session)
+        {
+            if (module.moduleConfig.IndicatorStyle == IndicatorStyle.None) return;
+
+            switch (module.moduleConfig.IndicatorStyle)
+            {
+                case IndicatorStyle.Pulse:
+                    DrawPulse();
+                    break;
+                case IndicatorStyle.Marker when session != null:
+                    DrawMarker(session.Target);
+                    break;
+            }
+        }
+
+        public static void Reset()
+        {
+            ResetPulse();
+        }
+
+        private static void DrawPulse()
+        {
+            if (!IsPulseActive) return;
+            if (!DService.Instance().GameGUI.WorldToScreen(PulseTarget, out var screenPosition))
+            {
+                ResetPulse();
+                return;
+            }
+
+            var elapsed = (Environment.TickCount64 - PulseStartedAtTicks) / 1000f;
+            if (elapsed >= PULSE_DURATION_SECONDS)
+            {
+                ResetPulse();
+                return;
+            }
+
+            var progress  = Math.Clamp(elapsed / PULSE_DURATION_SECONDS, 0f, 1f);
+            var alpha     = 0.85f * (1f - progress);
+            var radius    = (PULSE_START_RADIUS + PULSE_EXPAND_RADIUS * progress) * GlobalUIScale;
+            var thickness = MathF.Max(1.75f * GlobalUIScale, 4f * GlobalUIScale * (1f - progress * 0.6f));
+
+            var drawList = ImGui.GetForegroundDrawList();
+            drawList.AddCircle(screenPosition, radius, IndicatorColor.WithAlpha(alpha).ToUInt(), 32, thickness);
+            drawList.AddCircleFilled(screenPosition, 4f * GlobalUIScale,
+                                     IndicatorInnerColor.WithAlpha(0.25f + alpha * 0.25f).ToUInt(), 16);
+        }
+
+        private static void DrawMarker(Vector3 targetPosition)
+        {
+            if (!DService.Instance().GameGUI.WorldToScreen(targetPosition, out var screenPosition))
+                return;
+
+            var radius    = MARKER_RADIUS * GlobalUIScale;
+            var drawList  = ImGui.GetForegroundDrawList();
+            var color     = IndicatorColor.WithAlpha(0.95f).ToUInt();
+            var inner     = IndicatorInnerColor.WithAlpha(0.45f).ToUInt();
+            var crossSize = radius * 0.65f;
+
+            drawList.AddCircle(screenPosition, radius, color, 24, 2.5f * GlobalUIScale);
+            drawList.AddCircleFilled(screenPosition, 4f * GlobalUIScale, inner, 16);
+            drawList.AddLine(screenPosition + new Vector2(-crossSize, 0), screenPosition + new Vector2(crossSize, 0), color, 2f * GlobalUIScale);
+            drawList.AddLine(screenPosition + new Vector2(0, -crossSize), screenPosition + new Vector2(0, crossSize), color, 2f * GlobalUIScale);
+        }
+
+        private static void ResetPulse()
+        {
+            PulseTarget         = default;
+            PulseStartedAtTicks = 0;
+            IsPulseActive       = false;
+        }
+    }
+    
+    private enum ControlMode
     {
         RightClick,
         LeftRightClick,
-        KeyRightClick,
+        KeyRightClick
     }
 
-    public class WindowHook
+    private enum MoveMode
     {
-        private delegate nint Win32MouseProc(int nCode, nint wParam, nint lParam);
-
-        private static nint           HookID = nint.Zero;
-        private static Win32MouseProc MouseProc;
-        private const  int            WH_MOUSE       = 7;
-        private const  int            WM_RBUTTONDOWN = 0x0204;
-        private const  int            WM_ACTIVATE    = 0x0006;
-
-        private static nint       GameWindowHandle;
-        private static bool       IsModuleActive = true;
-        private static Action     HandleClickCallback;
-        private        WindowProc WindowHookProc;
-        private        nint       OldWndProc;
-
-        public WindowHook(nint windowHandle, Action clickCallback)
-        {
-            GameWindowHandle    = windowHandle;
-            HandleClickCallback = clickCallback;
-            MouseProc           = MouseHookCallback;
-
-            WindowHookProc = WndProc;
-            OldWndProc     = GetWindowLongPtr(GameWindowHandle, -4);
-            SetWindowLongPtr(GameWindowHandle, -4, Marshal.GetFunctionPointerForDelegate(WindowHookProc));
-
-            StartHook();
-        }
-
-        private delegate nint WindowProc(nint hWnd, uint msg, nint wParam, nint lParam);
-
-        private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
-        {
-            if (msg == WM_ACTIVATE)
-            {
-                StopHook();
-                StartHook();
-            }
-
-            return CallWindowProc(OldWndProc, hWnd, msg, wParam, lParam);
-        }
-
-        private static void StartHook()
-        {
-            if (GameWindowHandle == nint.Zero) return;
-
-            var threadID = GetWindowThreadProcessID(GameWindowHandle, out _);
-            HookID = SetWindowsHookEx(WH_MOUSE, MouseProc, nint.Zero, threadID);
-
-            if (HookID == nint.Zero)
-            {
-                var error = Marshal.GetLastWin32Error();
-                throw new Exception($"Failed to set mouse hook, error code: {error}");
-            }
-        }
-
-        private static void StopHook()
-        {
-            if (HookID != nint.Zero)
-            {
-                UnhookWindowsHookEx(HookID);
-                HookID = nint.Zero;
-            }
-        }
-
-        private static nint MouseHookCallback(int nCode, nint wParam, nint lParam)
-        {
-            if (!IsModuleActive) return CallNextHookEx(nint.Zero, nCode, wParam, lParam);
-
-            if (nCode >= 0 && HookID != nint.Zero)
-            {
-                var mouseStruct = (MOUSEHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MOUSEHOOKSTRUCT));
-
-                if ((int)wParam == WM_RBUTTONDOWN && mouseStruct.hwnd == GameWindowHandle)
-                {
-                    var clientPoint = new Vector2() { X = mouseStruct.pt.X, Y = mouseStruct.pt.Y };
-                    ScreenToClient(GameWindowHandle, ref clientPoint);
-
-                    HandleClickCallback();
-                }
-            }
-
-            return CallNextHookEx(HookID, nCode, wParam, lParam);
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct MOUSEHOOKSTRUCT
-        {
-            public Vector2 pt;
-            public nint    hwnd;
-            public uint    wHitTestCode;
-            public nint    dwExtraInfo;
-        }
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "GetWindowThreadProcessId")]
-        private static extern uint GetWindowThreadProcessID(nint hWnd, out uint lpdwProcessID);
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowsHookExW")]
-        private static extern nint SetWindowsHookEx(int idHook, Win32MouseProc lpfn, nint hMod, uint dwThreadID);
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "UnhookWindowsHookEx")]
-        private static extern bool UnhookWindowsHookEx(nint hhk);
-
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "CallNextHookEx")]
-        private static extern nint CallNextHookEx(nint hhk, int nCode, nint wParam, nint lParam);
-
-        [DllImport("user32.dll", EntryPoint = "ScreenToClient")]
-        private static extern bool ScreenToClient(nint hWnd, ref Vector2 lpPoint);
-
-        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-        private static extern nint GetWindowLongPtr(nint hWnd, int nIndex);
-
-        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-        private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
-
-        [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
-        private static extern nint CallWindowProc(nint lpPrevWndFunc, nint hWnd, uint Msg, nint wParam, nint lParam);
-
-        public void Dispose()
-        {
-            StopHook();
-            if (GameWindowHandle != nint.Zero && OldWndProc != nint.Zero)
-                SetWindowLongPtr(GameWindowHandle, -4, OldWndProc);
-        }
+        Game,
+        Navmesh,
+        Smart
     }
 
-    [DllImport("user32.dll")]
-    public static extern short GetAsyncKeyState(int vKey);
+    private enum MoveDriver
+    {
+        Game,
+        Navmesh
+    }
+
+    private enum IndicatorStyle
+    {
+        None,
+        Pulse,
+        Marker
+    }
+    
+    #region 预置数据
+    
+    private const float GAME_ARRIVAL_DISTANCE_SQ    = 2.25f;
+    private const float NAVMESH_ARRIVAL_DISTANCE_SQ = 2.25f;
+    private const float SMART_GAME_DISTANCE_SQ      = 144f;
+    private const float SMART_GAME_HEIGHT_DELTA     = 1.5f;
+    private const float PULSE_DURATION_SECONDS      = 0.45f;
+    private const float MARKER_RADIUS               = 11f;
+    private const float PULSE_START_RADIUS          = 14f;
+    private const float PULSE_EXPAND_RADIUS         = 30f;
+    
+    private static readonly Vector4 IndicatorColor      = KnownColor.DeepSkyBlue.ToVector4();
+    private static readonly Vector4 IndicatorInnerColor = KnownColor.LightSkyBlue.ToVector4();
+
+    private static readonly FrozenDictionary<MoveMode, string> MoveModeTitles = new Dictionary<MoveMode, string>
+    {
+        [MoveMode.Game]    = Lang.Get("RightClickToMoveMode-MoveMode-Game"),
+        [MoveMode.Navmesh] = Lang.Get("RightClickToMoveMode-MoveMode-Navmesh"),
+        [MoveMode.Smart]   = Lang.Get("RightClickToMoveMode-MoveMode-Smart")
+    }.ToFrozenDictionary();
+    private static readonly FrozenDictionary<MoveMode, string> MoveModeDescriptions = new Dictionary<MoveMode, string>
+    {
+        [MoveMode.Game]    = Lang.Get("RightClickToMoveMode-MoveMode-Game-Desc"),
+        [MoveMode.Navmesh] = Lang.Get("RightClickToMoveMode-MoveMode-Navmesh-Desc"),
+        [MoveMode.Smart]   = Lang.Get("RightClickToMoveMode-MoveMode-Smart-Desc")
+    }.ToFrozenDictionary();
+    private static readonly FrozenDictionary<ControlMode, string> ControlModeTitles = new Dictionary<ControlMode, string>
+    {
+        [ControlMode.RightClick]     = Lang.Get("RightClickToMoveMode-RightClickMode-Title"),
+        [ControlMode.LeftRightClick] = Lang.Get("RightClickToMoveMode-LeftRightClickMode-Title"),
+        [ControlMode.KeyRightClick]  = Lang.Get("RightClickToMoveMode-KeyRightClickMode-Title")
+    }.ToFrozenDictionary();
+    private static readonly FrozenDictionary<ControlMode, string> ControlModeDescriptions = new Dictionary<ControlMode, string>
+    {
+        [ControlMode.RightClick]     = Lang.Get("RightClickToMoveMode-RightClickMode-Desc"),
+        [ControlMode.LeftRightClick] = Lang.Get("RightClickToMoveMode-LeftRightClickMode-Desc"),
+        [ControlMode.KeyRightClick]  = Lang.Get("RightClickToMoveMode-KeyRightClickMode-Desc")
+    }.ToFrozenDictionary();
+    private static readonly FrozenDictionary<IndicatorStyle, string> IndicatorStyleTitles = new Dictionary<IndicatorStyle, string>
+    {
+        [IndicatorStyle.None]   = Lang.Get("RightClickToMoveMode-IndicatorStyle-None"),
+        [IndicatorStyle.Pulse]  = Lang.Get("RightClickToMoveMode-IndicatorStyle-Pulse"),
+        [IndicatorStyle.Marker] = Lang.Get("RightClickToMoveMode-IndicatorStyle-Marker")
+    }.ToFrozenDictionary();
+    private static readonly FrozenDictionary<IndicatorStyle, string> IndicatorStyleDescriptions = new Dictionary<IndicatorStyle, string>
+    {
+        [IndicatorStyle.None]   = Lang.Get("RightClickToMoveMode-IndicatorStyle-None-Desc"),
+        [IndicatorStyle.Pulse]  = Lang.Get("RightClickToMoveMode-IndicatorStyle-Pulse-Desc"),
+        [IndicatorStyle.Marker] = Lang.Get("RightClickToMoveMode-IndicatorStyle-Marker-Desc")
+    }.ToFrozenDictionary();
+
+    #endregion
 }

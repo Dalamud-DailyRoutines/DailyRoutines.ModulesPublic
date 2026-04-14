@@ -1,38 +1,42 @@
-using System;
 using System.Collections.Frozen;
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
-using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyReadyCheck : DailyModuleBase
+public class AutoNotifyReadyCheck : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyReadyCheckTitle"),
-        Description = GetLoc("AutoNotifyReadyCheckDescription"),
-        Category    = ModuleCategories.Notice,
+        Title       = Lang.Get("AutoNotifyReadyCheckTitle"),
+        Description = Lang.Get("AutoNotifyReadyCheckDescription"),
+        Category    = ModuleCategory.Notice
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static readonly FrozenSet<uint> ValidLogMessages = [3790, 3791];
-    
     protected override void Init() =>
         LogMessageManager.Instance().RegPost(OnLogMessage);
-    
-    protected override void Uninit() => 
+
+    protected override void Uninit() =>
         LogMessageManager.Instance().Unreg(OnLogMessage);
 
     private static void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
     {
         if (!ValidLogMessages.Contains(logMessageID)) return;
-        
-        NotificationInfo(LuminaWrapper.GetLogMessageText(3790));
-        Speak(LuminaWrapper.GetLogMessageText(3790));
+
+        NotifyHelper.Instance().NotificationInfo(LuminaWrapper.GetLogMessageText(3790));
+        NotifyHelper.Speak(LuminaWrapper.GetLogMessageText(3790));
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<uint> ValidLogMessages = [3790, 3791];
+
+    #endregion
 }

@@ -1,38 +1,37 @@
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using System.Collections.Frozen;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using OmenTools.Extensions;
+using OmenTools.OmenService;
+using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoSummonPet : DailyModuleBase
+public class AutoSummonPet : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoSummonPetTitle"),
-        Description = GetLoc("AutoSummonPetDescription"),
-        Category    = ModuleCategories.Action,
+        Title       = Lang.Get("AutoSummonPetTitle"),
+        Description = Lang.Get("AutoSummonPetDescription"),
+        Category    = ModuleCategory.Action
     };
-
-    private static readonly Dictionary<uint, uint> SummonActions = new()
-    {
-        [28] = 17215, // 学者
-        [26] = 25798, // 秘术师 / 召唤师
-        [27] = 25798,
-    };
-    
-    private static readonly HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
 
     protected override void Init()
     {
         TaskHelper ??= new TaskHelper { TimeoutMS = 30_000 };
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
-        DService.Instance().DutyState.DutyRecommenced += OnDutyRecommenced;
+        DService.Instance().DutyState.DutyRecommenced    += OnDutyRecommenced;
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
     }
 
     // 重新挑战
@@ -46,8 +45,8 @@ public class AutoSummonPet : DailyModuleBase
     private void OnZoneChanged(ushort zone)
     {
         TaskHelper.Abort();
-        
-        if (!IsValidPVEDuty()) return;
+
+        if (!GameState.IsInPVEActonZone) return;
 
         TaskHelper.DelayNext(1_000);
         TaskHelper.Enqueue(CheckCurrentJob);
@@ -55,7 +54,9 @@ public class AutoSummonPet : DailyModuleBase
 
     private unsafe bool CheckCurrentJob()
     {
-        if (BetweenAreas || !UIModule.IsScreenReady() || DService.Instance().Condition[ConditionFlag.Casting] ||
+        if (DService.Instance().Condition.IsBetweenAreas         ||
+            !UIModule.IsScreenReady()                            ||
+            DService.Instance().Condition[ConditionFlag.Casting] ||
             DService.Instance().ObjectTable.LocalPlayer is not { IsTargetable: true } localPlayer) return false;
 
         if (!SummonActions.TryGetValue(LocalPlayerState.ClassJob, out var actionID))
@@ -63,8 +64,9 @@ public class AutoSummonPet : DailyModuleBase
             TaskHelper.Abort();
             return true;
         }
-        
+
         var state = CharacterManager.Instance()->LookupPetByOwnerObject(localPlayer.ToStruct()) != null;
+
         if (state)
         {
             TaskHelper.Abort();
@@ -76,15 +78,15 @@ public class AutoSummonPet : DailyModuleBase
         TaskHelper.Enqueue(CheckCurrentJob);
         return true;
     }
+    
+    #region 常量
 
-    private static bool IsValidPVEDuty() =>
-        !GameState.IsInPVPArea &&
-        (GameState.ContentFinderCondition == 0 ||
-         !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId));
-
-    protected override void Uninit()
+    private static readonly FrozenDictionary<uint, uint> SummonActions = new Dictionary<uint, uint>()
     {
-        DService.Instance().DutyState.DutyRecommenced -= OnDutyRecommenced;
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-    }
+        [28] = 17215, // 学者
+        [26] = 25798, // 秘术师 / 召唤师
+        [27] = 25798
+    }.ToFrozenDictionary();
+
+    #endregion
 }

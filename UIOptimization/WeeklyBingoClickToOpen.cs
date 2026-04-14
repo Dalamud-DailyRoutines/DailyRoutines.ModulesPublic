@@ -1,5 +1,6 @@
-using System.Linq;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Events.EventDataTypes;
 using Dalamud.Game.Addon.Lifecycle;
@@ -9,20 +10,22 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class WeeklyBingoClickToOpen : DailyModuleBase
+public class WeeklyBingoClickToOpen : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("WeeklyBingoClickToOpenTitle"),
-        Description = GetLoc("WeeklyBingoClickToOpenDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("WeeklyBingoClickToOpenTitle"),
+        Description = Lang.Get("WeeklyBingoClickToOpenDescription"),
+        Category    = ModuleCategory.UIOptimization,
         Author      = ["Due"]
     };
-
-    private static readonly IAddonEventHandle?[] EventHandles = new IAddonEventHandle?[16];
+    
+    private readonly IAddonEventHandle?[] eventHandles = new IAddonEventHandle?[16];
 
     protected override unsafe void Init()
     {
@@ -39,14 +42,14 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
         OnAddon(AddonEvent.PreFinalize, null);
     }
 
-    private static unsafe void OnAddon(AddonEvent type, AddonArgs? args)
+    private unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
         foreach (var index in Enumerable.Range(0, 16))
         {
-            if (EventHandles[index] is { } handle)
+            if (eventHandles[index] is { } handle)
             {
                 DService.Instance().AddonEvent.RemoveEvent(handle);
-                EventHandles[index] = null;
+                eventHandles[index] = null;
             }
         }
 
@@ -59,7 +62,7 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
         {
             var dutySlot = addon->DutySlotList[index];
             var handle   = DService.Instance().AddonEvent.AddEvent((nint)addon, (nint)dutySlot.DutyButton->OwnerNode, AddonEventType.ButtonClick, OnDutySlotClick);
-            EventHandles[index] = handle;
+            eventHandles[index] = handle;
         }
     }
 
@@ -72,7 +75,7 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
         if (agent == null) return;
 
         // 副本内无法打开
-        if (BoundByDuty) return;
+        if (DService.Instance().Condition.IsBoundByDuty) return;
 
         var tileIndex    = (int)dutyButtonNode->NodeId - 12;
         var selectedTask = PlayerState.Instance()->GetWeeklyBingoTaskStatus(tileIndex);
@@ -326,7 +329,7 @@ public class WeeklyBingoClickToOpen : DailyModuleBase
         };
 
         if (bingoDataRow.Type == 0 && !UIState.IsInstanceContentUnlocked(bingoDataID))
-            NotificationError(GetLoc("WeeklyBingoClickToOpen-UnlockError")); // 还没有解锁该副本
+            NotifyHelper.Instance().NotificationError(Lang.Get("WeeklyBingoClickToOpen-UnlockError")); // 还没有解锁该副本
 
         return dutyRowID != 0;
     }

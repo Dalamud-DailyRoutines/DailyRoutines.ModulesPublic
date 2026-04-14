@@ -1,20 +1,22 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class LargerColorantColoringPreviewComponent : DailyModuleBase
+public unsafe class LargerColorantColoringPreviewComponent : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("LargerColorantColoringPreviewComponentTitle"),
-        Description = GetLoc("LargerColorantColoringPreviewComponentDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("LargerColorantColoringPreviewComponentTitle"),
+        Description = Lang.Get("LargerColorantColoringPreviewComponentDescription"),
+        Category    = ModuleCategory.UIOptimization
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
+
     // 懒得恢复了, 就这样
     protected override void Init()
     {
@@ -23,15 +25,16 @@ public unsafe class LargerColorantColoringPreviewComponent : DailyModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    protected override void Uninit() => 
+    protected override void Uninit() =>
         DService.Instance().AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "ColorantColoring", OnAddon);
 
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
         var addon = ColorantColoring;
         if (addon == null) return;
-        
+
         addon->WindowNode->SetWidth(754);
+
         for (var i = 0; i < addon->WindowNode->Component->UldManager.NodeListCount; i++)
         {
             var node = addon->WindowNode->Component->UldManager.NodeList[i];
@@ -39,16 +42,16 @@ public unsafe class LargerColorantColoringPreviewComponent : DailyModuleBase
 
             if (node->Width == 654)
                 node->SetWidth(754);
-                        
+
             if (node->Width == 640)
                 node->SetWidth(740);
-            
+
             if (node->Width == 649)
                 node->SetWidth(749);
-            
+
             if (node->Width == 646)
                 node->SetWidth(746);
-            
+
             if (node->X == 621)
                 node->SetXFloat(721);
         }
@@ -58,29 +61,33 @@ public unsafe class LargerColorantColoringPreviewComponent : DailyModuleBase
             previewContainerNode->SetYFloat(56);
 
         var previewComponent = addon->GetComponentNodeById(71);
+
         if (previewComponent != null)
         {
             previewComponent->SetWidth(330);
             previewComponent->SetHeight(550);
-            
+
             previewComponent->SetXFloat(-6);
             previewComponent->SetYFloat(1);
 
             var borderNode = previewComponent->Component->UldManager.SearchNodeById(3);
+
             if (borderNode != null)
             {
                 borderNode->SetWidth(330);
                 borderNode->SetHeight(550);
             }
-            
+
             var collisionNode = previewComponent->Component->UldManager.SearchNodeById(5);
+
             if (collisionNode != null)
             {
                 collisionNode->SetWidth(330);
                 collisionNode->SetHeight(550);
             }
-            
+
             var imageNode = previewComponent->Component->UldManager.SearchNodeById(4);
+
             if (imageNode != null)
             {
                 imageNode->SetWidth(322);
@@ -96,8 +103,8 @@ public unsafe class LargerColorantColoringPreviewComponent : DailyModuleBase
         {
             var checkBoxNode = addon->GetComponentNodeById(i);
             if (checkBoxNode == null) continue;
-            
-            checkBoxNode->SetXFloat(24 + (28 * (i - 72)));
+
+            checkBoxNode->SetXFloat(24 + 28 * (i - 72));
             checkBoxNode->SetYFloat(556);
         }
     }

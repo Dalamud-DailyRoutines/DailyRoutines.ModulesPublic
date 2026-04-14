@@ -1,64 +1,64 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
 using GameObjectStruct = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class CustomizeGameObject : DailyModuleBase
+public unsafe class CustomizeGameObject : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("CustomizeGameObjectTitle"),
-        Description = GetLoc("CustomizeGameObjectDescription"),
-        Category    = ModuleCategories.System,
+        Title       = Lang.Get("CustomizeGameObjectTitle"),
+        Description = Lang.Get("CustomizeGameObjectDescription"),
+        Category    = ModuleCategory.System,
         Author      = ["HSS"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private const int THROTTLE_INTERVAL_MS = 2_000;
-
     private static readonly CompSig CharacterUpdateSig = new("4C 8B DC 53 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 80 89");
-    private delegate        void* CharacterUpdateDelegate(Character* character);
-    private static          Hook<CharacterUpdateDelegate>? CharacterUpdateHook;
+    private delegate        void*   CharacterUpdateDelegate(Character* character);
+    private                 Hook<CharacterUpdateDelegate>? CharacterUpdateHook;
 
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static readonly Dictionary<uint, CustomizePreset>                LookupDataID          = [];
-    private static readonly Dictionary<ulong, CustomizePreset>               LookupObjectID        = [];
-    private static readonly Dictionary<int, CustomizePreset>                 LookupModelCharaID    = [];
-    private static readonly Dictionary<int, CustomizePreset>                 LookupModelSkeletonID = [];
-    private static readonly List<(byte[] NameBytes, CustomizePreset Preset)> LookupName            = [];
+    private readonly Dictionary<uint, CustomizePreset>                lookupDataID          = [];
+    private readonly Dictionary<ulong, CustomizePreset>               lookupObjectID        = [];
+    private readonly Dictionary<int, CustomizePreset>                 lookupModelCharaID    = [];
+    private readonly Dictionary<int, CustomizePreset>                 lookupModelSkeletonID = [];
+    private readonly List<(byte[] NameBytes, CustomizePreset Preset)> lookupName            = [];
 
-    private static readonly Dictionary<nint, CustomizeHistoryEntry> CustomizeHistory = [];
+    private readonly Dictionary<nint, CustomizeHistoryEntry> customizeHistory = [];
 
-    private static readonly Dictionary<nint, (ulong GameObjectID, int LastCheckTick)> FailureCache = [];
+    private readonly Dictionary<nint, (ulong GameObjectID, int LastCheckTick)> failureCache = [];
 
-    private static CustomizeType TypeInput  = CustomizeType.Name;
-    private static string        NoteInput  = string.Empty;
-    private static float         ScaleInput = 1f;
-    private static string        ValueInput = string.Empty;
-    private static bool          ScaleVFXInput;
+    private CustomizeType typeInput  = CustomizeType.Name;
+    private string        noteInput  = string.Empty;
+    private float         scaleInput = 1f;
+    private string        valueInput = string.Empty;
+    private bool          scaleVFXInput;
 
-    private static CustomizeType TypeEditInput  = CustomizeType.Name;
-    private static string        NoteEditInput  = string.Empty;
-    private static float         ScaleEditInput = 1f;
-    private static string        ValueEditInput = string.Empty;
-    private static bool          ScaleVFXEditInput;
+    private CustomizeType typeEditInput  = CustomizeType.Name;
+    private string        noteEditInput  = string.Empty;
+    private float         scaleEditInput = 1f;
+    private string        valueEditInput = string.Empty;
+    private bool          scaleVFXEditInput;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
         RebuildLookupCache();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
@@ -75,16 +75,16 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         if (DService.Instance().ObjectTable.LocalPlayer != null)
             ResetAllCustomizeFromHistory();
 
-        CustomizeHistory.Clear();
-        FailureCache.Clear();
+        customizeHistory.Clear();
+        failureCache.Clear();
         ClearLookupCache();
     }
-
+    
     #region 事件
 
-    private static void* UpdateCharacterDetour(Character* character)
+    private void* UpdateCharacterDetour(Character* character)
     {
-        if (ModuleConfig.CustomizePresets.Count == 0)
+        if (config.CustomizePresets.Count == 0)
             return CharacterUpdateHook.Original(character);
 
         var ret = CharacterUpdateHook.Original(character);
@@ -93,10 +93,10 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         return ret;
     }
 
-    private static void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(ushort zone)
     {
-        CustomizeHistory.Clear();
-        FailureCache.Clear();
+        customizeHistory.Clear();
+        failureCache.Clear();
     }
 
     #endregion
@@ -104,23 +104,23 @@ public unsafe class CustomizeGameObject : DailyModuleBase
     #region 工具
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ProcessCharacter(Character* character)
+    private void ProcessCharacter(Character* character)
     {
         if (character == null) return;
 
         var addr = (nint)character;
 
-        ref var historyEntry = ref CollectionsMarshal.GetValueRefOrNullRef(CustomizeHistory, addr);
+        ref var historyEntry = ref CollectionsMarshal.GetValueRefOrNullRef(customizeHistory, addr);
 
         if (!Unsafe.IsNullRef(ref historyEntry))
         {
             if (MathF.Abs(character->GameObject.Scale - historyEntry.CurrentScale) > 0.1f)
-                CustomizeHistory.Remove(addr);
+                customizeHistory.Remove(addr);
 
             return;
         }
 
-        ref var failureEntry = ref CollectionsMarshal.GetValueRefOrNullRef(FailureCache, addr);
+        ref var failureEntry = ref CollectionsMarshal.GetValueRefOrNullRef(failureCache, addr);
 
         if (!Unsafe.IsNullRef(ref failureEntry))
         {
@@ -135,35 +135,35 @@ public unsafe class CustomizeGameObject : DailyModuleBase
 
         CustomizePreset? match = null;
 
-        if (LookupObjectID.Count > 0)
+        if (lookupObjectID.Count > 0)
         {
             var objectID = character->GameObject.GetGameObjectId();
-            if (LookupObjectID.TryGetValue(objectID, out match)) goto Apply;
+            if (lookupObjectID.TryGetValue(objectID, out match)) goto Apply;
         }
 
         // DataID (Base ID / NPC ID)
-        if (LookupDataID.Count > 0)
+        if (lookupDataID.Count > 0)
         {
-            if (LookupDataID.TryGetValue(character->BaseId, out match))
+            if (lookupDataID.TryGetValue(character->BaseId, out match))
                 goto Apply;
         }
 
         // ModelCharaID
-        if (LookupModelCharaID.Count > 0)
+        if (lookupModelCharaID.Count > 0)
         {
-            if (LookupModelCharaID.TryGetValue(character->ModelContainer.ModelCharaId, out match))
+            if (lookupModelCharaID.TryGetValue(character->ModelContainer.ModelCharaId, out match))
                 goto Apply;
         }
 
         // ModelSkeletonID
-        if (LookupModelSkeletonID.Count > 0)
+        if (lookupModelSkeletonID.Count > 0)
         {
-            if (LookupModelSkeletonID.TryGetValue(character->ModelContainer.ModelSkeletonId, out match))
+            if (lookupModelSkeletonID.TryGetValue(character->ModelContainer.ModelSkeletonId, out match))
                 goto Apply;
         }
 
         // Name
-        if (LookupName.Count > 0)
+        if (lookupName.Count > 0)
         {
             if (character->GameObject.ObjectKind == ObjectKind.Pc)
             {
@@ -174,7 +174,7 @@ public unsafe class CustomizeGameObject : DailyModuleBase
 
             var charNamePtr = character->GameObject.Name;
 
-            foreach (var (nameBytes, preset) in LookupName)
+            foreach (var (nameBytes, preset) in lookupName)
             {
                 if (IsNameEqual(charNamePtr, nameBytes))
                 {
@@ -187,7 +187,7 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         NoMatch:
 
         if (Unsafe.IsNullRef(ref failureEntry))
-            FailureCache[addr] = (character->GameObject.GetGameObjectId(), Environment.TickCount);
+            failureCache[addr] = (character->GameObject.GetGameObjectId(), Environment.TickCount);
         else
         {
             failureEntry.GameObjectID  = character->GameObject.GetGameObjectId();
@@ -198,7 +198,7 @@ public unsafe class CustomizeGameObject : DailyModuleBase
 
         Apply:
         if (!Unsafe.IsNullRef(ref failureEntry))
-            FailureCache.Remove(addr);
+            failureCache.Remove(addr);
         ApplyPreset(character, addr, match);
     }
 
@@ -209,14 +209,14 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         return gameObjectName.SequenceEqual(presetNameBytes);
     }
 
-    private static void ApplyPreset(Character* chara, nint addr, CustomizePreset preset)
+    private void ApplyPreset(Character* chara, nint addr, CustomizePreset preset)
     {
         var currentScale  = chara->GameObject.Scale;
         var modifiedScale = currentScale * preset.Scale;
 
         var entry = new CustomizeHistoryEntry(preset, currentScale, modifiedScale);
 
-        if (CustomizeHistory.TryAdd(addr, entry))
+        if (customizeHistory.TryAdd(addr, entry))
         {
             chara->GameObject.Scale = modifiedScale;
 
@@ -234,10 +234,10 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         }
     }
 
-    private static void ResetCustomizeFromHistory(nint address)
+    private void ResetCustomizeFromHistory(nint address)
     {
-        if (CustomizeHistory.Count == 0) return;
-        if (!CustomizeHistory.TryGetValue(address, out var data)) return;
+        if (customizeHistory.Count == 0) return;
+        if (!customizeHistory.TryGetValue(address, out var data)) return;
 
         var gameObj = (GameObjectStruct*)address;
         if (gameObj == null) return;
@@ -252,11 +252,11 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         }
     }
 
-    private static void ResetAllCustomizeFromHistory()
+    private void ResetAllCustomizeFromHistory()
     {
-        if (CustomizeHistory.Count == 0) return;
+        if (customizeHistory.Count == 0) return;
 
-        foreach (var (objectPtr, data) in CustomizeHistory)
+        foreach (var (objectPtr, data) in customizeHistory)
         {
             var gameObj = (GameObjectStruct*)objectPtr;
             if (gameObj == null) continue;
@@ -272,9 +272,9 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         }
     }
 
-    private static void RemovePresetHistory(CustomizePreset? preset)
+    private void RemovePresetHistory(CustomizePreset? preset)
     {
-        var keysToRemove = CustomizeHistory
+        var keysToRemove = customizeHistory
                            .Where(x => x.Value.Preset == preset)
                            .Select(x => x.Key)
                            .ToList();
@@ -282,17 +282,17 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         foreach (var key in keysToRemove)
         {
             ResetCustomizeFromHistory(key);
-            CustomizeHistory.Remove(key);
+            customizeHistory.Remove(key);
         }
     }
 
-    private static void RebuildLookupCache()
+    private void RebuildLookupCache()
     {
         ClearLookupCache();
         // 重建缓存时，清除所有运行时状态，以确保新规则能立即生效
-        FailureCache.Clear();
+        failureCache.Clear();
 
-        foreach (var preset in ModuleConfig.CustomizePresets)
+        foreach (var preset in config.CustomizePresets)
         {
             if (!preset.Enabled) continue;
 
@@ -302,26 +302,26 @@ public unsafe class CustomizeGameObject : DailyModuleBase
                 {
                     case CustomizeType.Name:
                         if (!string.IsNullOrEmpty(preset.Value))
-                            LookupName.Add((Encoding.UTF8.GetBytes(preset.Value), preset));
+                            lookupName.Add((Encoding.UTF8.GetBytes(preset.Value), preset));
                         break;
                     case CustomizeType.DataID:
                         if (uint.TryParse(preset.Value, out var dataId))
-                            LookupDataID.TryAdd(dataId, preset);
+                            lookupDataID.TryAdd(dataId, preset);
                         break;
                     case CustomizeType.ObjectID:
                         var valStr = preset.Value.Trim();
                         var val = valStr.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
                                       ? ulong.Parse(valStr.AsSpan(2), NumberStyles.HexNumber)
                                       : ulong.Parse(valStr);
-                        LookupObjectID.TryAdd(val, preset);
+                        lookupObjectID.TryAdd(val, preset);
                         break;
                     case CustomizeType.ModelCharaID:
                         if (int.TryParse(preset.Value, out var charaId))
-                            LookupModelCharaID.TryAdd(charaId, preset);
+                            lookupModelCharaID.TryAdd(charaId, preset);
                         break;
                     case CustomizeType.ModelSkeletonID:
                         if (int.TryParse(preset.Value, out var skelId))
-                            LookupModelSkeletonID.TryAdd(skelId, preset);
+                            lookupModelSkeletonID.TryAdd(skelId, preset);
                         break;
                 }
             }
@@ -332,13 +332,13 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         }
     }
 
-    private static void ClearLookupCache()
+    private void ClearLookupCache()
     {
-        LookupDataID.Clear();
-        LookupObjectID.Clear();
-        LookupModelCharaID.Clear();
-        LookupModelSkeletonID.Clear();
-        LookupName.Clear();
+        lookupDataID.Clear();
+        lookupObjectID.Clear();
+        lookupModelCharaID.Clear();
+        lookupModelSkeletonID.Clear();
+        lookupName.Clear();
     }
 
     #endregion
@@ -365,20 +365,20 @@ public unsafe class CustomizeGameObject : DailyModuleBase
 
         DrawAddPresetSection();
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("Note"));
+        ImGuiOm.Text(Lang.Get("Note"));
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("CustomizeGameObject-CustomizeType"));
+        ImGuiOm.Text(Lang.Get("CustomizeGameObject-CustomizeType"));
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("Value"));
+        ImGuiOm.Text(Lang.Get("Value"));
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("CustomizeGameObject-Scale"));
+        ImGuiOm.Text(Lang.Get("CustomizeGameObject-Scale"));
         ImGui.TableNextColumn();
         ImGui.Dummy(new(32f));
-        ImGuiOm.TooltipHover(GetLoc("CustomizeGameObject-ScaleVFX"));
+        ImGuiOm.TooltipHover(Lang.Get("CustomizeGameObject-ScaleVFX"));
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("Operation"));
+        ImGuiOm.Text(Lang.Get("Operation"));
 
-        var array = ModuleConfig.CustomizePresets.ToArray();
+        var array = config.CustomizePresets.ToArray();
 
         for (var i = 0; i < array.Length; i++)
         {
@@ -399,26 +399,26 @@ public unsafe class CustomizeGameObject : DailyModuleBase
 
         if (popup)
         {
-            CustomizePresetEditorUI(ref TypeInput, ref ValueInput, ref ScaleInput, ref ScaleVFXInput, ref NoteInput);
+            CustomizePresetEditorUI(ref typeInput, ref valueInput, ref scaleInput, ref scaleVFXInput, ref noteInput);
             ImGui.Spacing();
 
-            var buttonSize = new Vector2(ImGui.GetContentRegionAvail().X, 24f * GlobalFontScale);
+            var buttonSize = new Vector2(ImGui.GetContentRegionAvail().X, 24f * GlobalUIScale);
 
-            if (ImGui.Button(GetLoc("Add"), buttonSize))
+            if (ImGui.Button(Lang.Get("Add"), buttonSize))
             {
-                if (ScaleInput > 0 && !string.IsNullOrWhiteSpace(ValueInput))
+                if (scaleInput > 0 && !string.IsNullOrWhiteSpace(valueInput))
                 {
                     var newPreset = new CustomizePreset
                     {
                         Enabled  = true,
-                        Scale    = ScaleInput,
-                        Type     = TypeInput,
-                        Value    = ValueInput,
-                        ScaleVFX = ScaleVFXInput,
-                        Note     = NoteInput
+                        Scale    = scaleInput,
+                        Type     = typeInput,
+                        Value    = valueInput,
+                        ScaleVFX = scaleVFXInput,
+                        Note     = noteInput
                     };
 
-                    ModuleConfig.CustomizePresets.Add(newPreset);
+                    config.CustomizePresets.Add(newPreset);
                     SaveAndRebuild();
                     ImGui.CloseCurrentPopup();
                 }
@@ -481,20 +481,20 @@ public unsafe class CustomizeGameObject : DailyModuleBase
             {
                 if (ImGui.IsWindowAppearing())
                 {
-                    TypeEditInput     = preset.Type;
-                    NoteEditInput     = preset.Note;
-                    ScaleEditInput    = preset.Scale;
-                    ValueEditInput    = preset.Value;
-                    ScaleVFXEditInput = preset.ScaleVFX;
+                    typeEditInput     = preset.Type;
+                    noteEditInput     = preset.Note;
+                    scaleEditInput    = preset.Scale;
+                    valueEditInput    = preset.Value;
+                    scaleVFXEditInput = preset.ScaleVFX;
                 }
 
-                if (CustomizePresetEditorUI(ref TypeEditInput, ref ValueEditInput, ref ScaleEditInput, ref ScaleVFXEditInput, ref NoteEditInput))
+                if (CustomizePresetEditorUI(ref typeEditInput, ref valueEditInput, ref scaleEditInput, ref scaleVFXEditInput, ref noteEditInput))
                 {
-                    preset.Type     = TypeEditInput;
-                    preset.Value    = ValueEditInput;
-                    preset.Scale    = ScaleEditInput;
-                    preset.ScaleVFX = ScaleVFXEditInput;
-                    preset.Note     = NoteEditInput;
+                    preset.Type     = typeEditInput;
+                    preset.Value    = valueEditInput;
+                    preset.Scale    = scaleEditInput;
+                    preset.ScaleVFX = scaleVFXEditInput;
+                    preset.Note     = noteEditInput;
 
                     RemovePresetHistory(preset);
                     SaveAndRebuild();
@@ -505,29 +505,29 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         ImGui.SameLine();
 
         // Delete
-        if (ImGuiOm.ButtonIcon($"DeletePreset_{i}", FontAwesomeIcon.TrashAlt, GetLoc("HoldCtrlToDelete")) &&
+        if (ImGuiOm.ButtonIcon($"DeletePreset_{i}", FontAwesomeIcon.TrashAlt, Lang.Get("HoldCtrlToDelete")) &&
             ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
         {
             RemovePresetHistory(preset);
-            ModuleConfig.CustomizePresets.Remove(preset);
+            config.CustomizePresets.Remove(preset);
             SaveAndRebuild();
         }
 
         ImGui.SameLine();
         // Export
-        if (ImGuiOm.ButtonIcon($"ExportPreset_{i}", FontAwesomeIcon.FileExport, GetLoc("ExportToClipboard")))
+        if (ImGuiOm.ButtonIcon($"ExportPreset_{i}", FontAwesomeIcon.FileExport, Lang.Get("ExportToClipboard")))
             ExportToClipboard(preset);
 
         ImGui.SameLine();
 
         // Import
-        if (ImGuiOm.ButtonIcon($"ImportPreset_{i}", FontAwesomeIcon.FileImport, GetLoc("ImportFromClipboard")))
+        if (ImGuiOm.ButtonIcon($"ImportPreset_{i}", FontAwesomeIcon.FileImport, Lang.Get("ImportFromClipboard")))
         {
             var presetImport = ImportFromClipboard<CustomizePreset>();
 
-            if (presetImport != null && !ModuleConfig.CustomizePresets.Contains(presetImport))
+            if (presetImport != null && !config.CustomizePresets.Contains(presetImport))
             {
-                ModuleConfig.CustomizePresets.Add(presetImport);
+                config.CustomizePresets.Add(presetImport);
                 SaveAndRebuild();
             }
         }
@@ -535,7 +535,7 @@ public unsafe class CustomizeGameObject : DailyModuleBase
 
     private void SaveAndRebuild()
     {
-        SaveConfig(ModuleConfig);
+        config.Save(this);
         RebuildLookupCache();
     }
 
@@ -547,12 +547,12 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         if (!table) return false;
 
         ImGui.TableSetupColumn("Label", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("真得五个字").X);
-        ImGui.TableSetupColumn("Input", ImGuiTableColumnFlags.WidthFixed, 300f * GlobalFontScale);
+        ImGui.TableSetupColumn("Input", ImGuiTableColumnFlags.WidthFixed, 300f * GlobalUIScale);
 
         // Type
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted($"{GetLoc("CustomizeGameObject-CustomizeType")}:");
+        ImGui.TextUnformatted($"{Lang.Get("CustomizeGameObject-CustomizeType")}:");
         ImGui.TableNextColumn();
 
         using (var combo = ImRaii.Combo("###CustomizeTypeSelectCombo", typeInput.ToString()))
@@ -573,7 +573,7 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         // Value
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted($"{GetLoc("Value")}:");
+        ImGui.TextUnformatted($"{Lang.Get("Value")}:");
         ImGui.TableNextColumn();
         ImGui.InputText("###CustomizeValueInput", ref valueInput, 128);
         if (ImGui.IsItemDeactivatedAfterEdit()) state = true;
@@ -582,17 +582,17 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         // Scale
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted($"{GetLoc("CustomizeGameObject-Scale")}:");
+        ImGui.TextUnformatted($"{Lang.Get("CustomizeGameObject-Scale")}:");
         ImGui.TableNextColumn();
         ImGui.SliderFloat("###CustomizeScaleSilder", ref scaleInput, 0.1f, 10f, "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit()) state = true;
         ImGui.SameLine();
-        if (ImGui.Checkbox(GetLoc("CustomizeGameObject-ScaleVFX"), ref scaleVFXInput)) state = true;
+        if (ImGui.Checkbox(Lang.Get("CustomizeGameObject-ScaleVFX"), ref scaleVFXInput)) state = true;
 
         // Note
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted($"{GetLoc("Note")}:");
+        ImGui.TextUnformatted($"{Lang.Get("Note")}:");
         ImGui.TableNextColumn();
         ImGui.InputText("###CustomizeNoteInput", ref noteInput, 128);
         if (ImGui.IsItemDeactivatedAfterEdit()) state = true;
@@ -605,11 +605,11 @@ public unsafe class CustomizeGameObject : DailyModuleBase
     {
         if (gameObject is not ICharacter chara)
         {
-            ImGui.TextUnformatted(GetLoc("CustomizeGameObject-NoTaretNotice"));
+            ImGui.TextUnformatted(Lang.Get("CustomizeGameObject-NoTaretNotice"));
             return;
         }
 
-        var       tableSize = new Vector2(350f * GlobalFontScale, 0f);
+        var       tableSize = new Vector2(350f * GlobalUIScale, 0f);
         using var table     = ImRaii.Table("TargetInfoPreviewTable", 2, ImGuiTableFlags.BordersInner, tableSize);
         if (!table) return;
 
@@ -627,7 +627,7 @@ public unsafe class CustomizeGameObject : DailyModuleBase
             ImGui.InputText($"###{label}Preview", ref value, 128, ImGuiInputTextFlags.ReadOnly);
         }
 
-        DrawRow(GetLoc("Name"),      chara.Name.ToString());
+        DrawRow(Lang.Get("Name"),    chara.Name.ToString());
         DrawRow("Data ID",           chara.DataID.ToString());
         DrawRow("Object ID",         chara.GameObjectID.ToString()); // Use hex for clarity? or keep decimal
         DrawRow("Model Chara ID",    chara.ModelCharaID.ToString());
@@ -644,8 +644,7 @@ public unsafe class CustomizeGameObject : DailyModuleBase
     }
 
     #endregion
-
-
+    
     private class CustomizePreset : IEquatable<CustomizePreset>
     {
         public string        Note     { get; set; } = string.Empty;
@@ -686,8 +685,14 @@ public unsafe class CustomizeGameObject : DailyModuleBase
         ObjectID
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public List<CustomizePreset> CustomizePresets = [];
     }
+    
+    #region 常量
+
+    private const int THROTTLE_INTERVAL_MS = 2_000;
+
+    #endregion
 }

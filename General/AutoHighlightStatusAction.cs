@@ -1,73 +1,76 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Frozen;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Interface.Textures;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using OmenTools.ImGuiOm.Widgets.Combos;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
 using LuminaAction = Lumina.Excel.Sheets.Action;
 using Status = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHighlightStatusAction : DailyModuleBase
+public unsafe class AutoHighlightStatusAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoHighlightStatusActionTitle"),
-        Description = GetLoc("AutoHighlightStatusActionDescription"),
-        Category    = ModuleCategories.General,
+        Title       = Lang.Get("AutoHighlightStatusActionTitle"),
+        Description = Lang.Get("AutoHighlightStatusActionDescription"),
+        Category    = ModuleCategory.General,
         Author      = ["HaKu"]
     };
-
-    private static readonly CompSig IsActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 47 41 80 BB C9 00 00 00 01");
+    
+    private static readonly CompSig                            IsActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 47 41 80 BB C9 00 00 00 01");
     [return: MarshalAs(UnmanagedType.U1)]
     private delegate bool IsActionHighlightedDelegate(ActionManager* actionManager, ActionType actionType, uint actionID);
-    private static Hook<IsActionHighlightedDelegate>? IsActionHighlightedHook;
+    private          Hook<IsActionHighlightedDelegate>? IsActionHighlightedHook;
 
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static StatusSelectCombo? StatusCombo;
-    private static ActionSelectCombo? ActionCombo;
+    private readonly StatusSelectCombo statusCombo = new("Status");
+    private readonly ActionSelectCombo actionCombo = new("Action");
 
-    public static bool KeepHighlightAfterExpire = true;
+    private bool keepHighlightAfterExpire = true;
 
-    public static readonly HashSet<uint> ActionsToHighlight = [];
+    private readonly HashSet<uint> actionsToHighlight = [];
 
-    private static uint LastActionID;
+    private uint lastActionID;
 
-    private static Dictionary<uint, uint[]> ComboChainsCache = [];
+    private Dictionary<uint, uint[]> comboChainsCache = [];
 
-    private static readonly Dictionary<uint, (float RemainingTime, float Countdown, float Score)> ActionCalculationCache = new(32);
+    private readonly Dictionary<uint, (float RemainingTime, float Countdown, float Score)> actionCalculationCache = new(32);
 
-    private static readonly Dictionary<StatusKey, StatusState> TrackedStatuses    = new(64);
-    private static readonly Dictionary<StatusKey, int>         TrackedStatusIndex = new(64);
-    private static readonly List<StatusKey>                    TrackedStatusKeys  = new(64);
+    private readonly Dictionary<StatusKey, StatusState> trackedStatuses    = new(64);
+    private readonly Dictionary<StatusKey, int>         trackedStatusIndex = new(64);
+    private readonly List<StatusKey>                    trackedStatusKeys  = new(64);
 
-    private static          long            LastUpdateTicks;
-    private static readonly List<StatusKey> ResyncKeys = new(16);
-    private static readonly List<StatusKey> RemoveKeys = new(16);
+    private          long            lastUpdateTicks;
+    private readonly List<StatusKey> resyncKeys = new(16);
+    private readonly List<StatusKey> removeKeys = new(16);
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
-        if (ModuleConfig.MonitoredStatus.Count == 0)
+        if (config.MonitoredStatus.Count == 0)
         {
-            ModuleConfig.MonitoredStatus = StatusConfigs.ToDictionary(x => x.Key, x => x.Value);
-            SaveConfig(ModuleConfig);
+            config.MonitoredStatus = StatusConfigs.ToDictionary(x => x.Key, x => x.Value);
+            config.Save(this);
         }
 
         RebuildComboChains();
-
-        StatusCombo ??= new("StatusCombo", PresetSheet.Statuses.Values);
-        ActionCombo ??= new("ActionCombo", PresetSheet.PlayerActions.Values);
 
         IsActionHighlightedHook = IsActionHighlightedSig.GetHook<IsActionHighlightedDelegate>(IsActionHighlightedDetour);
         IsActionHighlightedHook.Enable();
@@ -85,70 +88,70 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         CharacterStatusManager.Instance().Unreg(OnGainStatus);
         CharacterStatusManager.Instance().Unreg(OnLoseStatus);
 
-        ActionsToHighlight.Clear();
-        ActionCalculationCache.Clear();
-        TrackedStatuses.Clear();
-        TrackedStatusIndex.Clear();
-        TrackedStatusKeys.Clear();
-        ResyncKeys.Clear();
-        RemoveKeys.Clear();
-        LastUpdateTicks = 0;
+        actionsToHighlight.Clear();
+        actionCalculationCache.Clear();
+        trackedStatuses.Clear();
+        trackedStatusIndex.Clear();
+        trackedStatusKeys.Clear();
+        resyncKeys.Clear();
+        removeKeys.Clear();
+        lastUpdateTicks = 0;
     }
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.SliderFloat($"{GetLoc("AutoHighlightStatusAction-Countdown")}##ReminderThreshold", ref ModuleConfig.Countdown, 2.0f, 10.0f, "%.1f"))
-            SaveConfig(ModuleConfig);
-        ImGuiOm.HelpMarker(GetLoc("AutoHighlightStatusAction-Countdown-Help"));
+        ImGui.SetNextItemWidth(100f * GlobalUIScale);
+        if (ImGui.SliderFloat($"{Lang.Get("AutoHighlightStatusAction-Countdown")}##ReminderThreshold", ref config.Countdown, 2.0f, 10.0f, "%.1f"))
+            config.Save(this);
+        ImGuiOm.HelpMarker(Lang.Get("AutoHighlightStatusAction-Countdown-Help"));
 
-        ImGui.SameLine(0, 5f * GlobalFontScale);
-        if (ImGui.Checkbox($"{GetLoc("AutoHighlightStatusAction-KeepHighlightAfterExpire")}##KeepHighlightAfterExpire", ref KeepHighlightAfterExpire))
-            SaveConfig(ModuleConfig);
-        ImGuiOm.HelpMarker(GetLoc("AutoHighlightStatusAction-KeepHighlightAfterExpire-Help"));
+        ImGui.SameLine(0, 5f * GlobalUIScale);
+        if (ImGui.Checkbox($"{Lang.Get("AutoHighlightStatusAction-KeepHighlightAfterExpire")}##KeepHighlightAfterExpire", ref keepHighlightAfterExpire))
+            config.Save(this);
+        ImGuiOm.HelpMarker(Lang.Get("AutoHighlightStatusAction-KeepHighlightAfterExpire-Help"));
 
         ImGui.Spacing();
 
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
+        ImGui.SetNextItemWidth(300f * GlobalUIScale);
         using (ImRaii.PushId("Status"))
-            StatusCombo.DrawRadio();
+            statusCombo.DrawRadio();
         ImGui.TextDisabled("↓");
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
+        ImGui.SetNextItemWidth(300f * GlobalUIScale);
         using (ImRaii.PushId("Action"))
-            ActionCombo.DrawCheckbox();
+            actionCombo.DrawCheckbox();
 
         ImGui.Spacing();
 
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
         {
-            if (StatusCombo.SelectedID != 0 && ActionCombo.SelectedIDs.Count > 0)
+            if (statusCombo.SelectedID != 0 && actionCombo.SelectedIDs.Count > 0)
             {
-                ModuleConfig.MonitoredStatus[StatusCombo.SelectedID] = new StatusConfig
+                config.MonitoredStatus[statusCombo.SelectedID] = new StatusConfig
                 {
-                    BindActions   = ActionCombo.SelectedIDs.ToArray(),
-                    Countdown     = ModuleConfig.Countdown,
-                    KeepHighlight = KeepHighlightAfterExpire
+                    BindActions   = actionCombo.SelectedIDs.ToArray(),
+                    Countdown     = config.Countdown,
+                    KeepHighlight = keepHighlightAfterExpire
                 };
-                ModuleConfig.Save(this);
+                config.Save(this);
                 RebuildComboChains();
             }
         }
 
         ImGui.NewLine();
 
-        using var table = ImRaii.Table("PlayersInList", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.ScrollY, new(0, 200f * GlobalFontScale));
+        using var table = ImRaii.Table("PlayersInList", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.ScrollY, new(0, 200f * GlobalUIScale));
         if (!table)
             return;
 
-        ImGui.TableSetupColumn("##Delete",                                                   ImGuiTableColumnFlags.WidthFixed);
-        ImGui.TableSetupColumn(GetLoc("Status"),                                             ImGuiTableColumnFlags.WidthStretch, 15);
-        ImGui.TableSetupColumn(GetLoc("Action"),                                             ImGuiTableColumnFlags.WidthStretch, 40);
-        ImGui.TableSetupColumn(GetLoc("AutoHighlightStatusAction-Countdown"),                ImGuiTableColumnFlags.WidthStretch, 20);
-        ImGui.TableSetupColumn(GetLoc("AutoHighlightStatusAction-KeepHighlightAfterExpire"), ImGuiTableColumnFlags.WidthStretch, 20);
+        ImGui.TableSetupColumn("##Delete",                                                     ImGuiTableColumnFlags.WidthFixed);
+        ImGui.TableSetupColumn(Lang.Get("Status"),                                             ImGuiTableColumnFlags.WidthStretch, 15);
+        ImGui.TableSetupColumn(Lang.Get("Action"),                                             ImGuiTableColumnFlags.WidthStretch, 40);
+        ImGui.TableSetupColumn(Lang.Get("AutoHighlightStatusAction-Countdown"),                ImGuiTableColumnFlags.WidthStretch, 20);
+        ImGui.TableSetupColumn(Lang.Get("AutoHighlightStatusAction-KeepHighlightAfterExpire"), ImGuiTableColumnFlags.WidthStretch, 20);
 
         ImGui.TableHeadersRow();
 
-        foreach (var (status, statusConfig) in ModuleConfig.MonitoredStatus)
+        foreach (var (status, statusConfig) in config.MonitoredStatus)
         {
             using var id = ImRaii.PushId($"{status}");
 
@@ -156,10 +159,10 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
             ImGui.TableNextColumn();
 
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, GetLoc("Delete")))
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
-                ModuleConfig.MonitoredStatus.Remove(status);
-                ModuleConfig.Save(this);
+                config.MonitoredStatus.Remove(status);
+                config.Save(this);
                 RebuildComboChains();
                 break;
             }
@@ -174,7 +177,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                StatusCombo.SelectedID = status;
+                statusCombo.SelectedID = status;
 
             ImGui.TableNextColumn();
 
@@ -194,35 +197,35 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                ActionCombo.SelectedIDs = statusConfig.BindActions.ToHashSet();
+                actionCombo.SelectedIDs = statusConfig.BindActions.ToHashSet();
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{statusConfig.Countdown:0.0}");
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                ModuleConfig.Countdown = statusConfig.Countdown;
+                config.Countdown = statusConfig.Countdown;
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(statusConfig.KeepHighlight ? GetLoc("Yes") : GetLoc("No"));
+            ImGui.TextUnformatted(statusConfig.KeepHighlight ? Lang.Get("Yes") : Lang.Get("No"));
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                KeepHighlightAfterExpire = statusConfig.KeepHighlight;
+                keepHighlightAfterExpire = statusConfig.KeepHighlight;
         }
     }
 
-    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.InCombat) return;
 
-        ActionsToHighlight.Clear();
-        ActionCalculationCache.Clear();
-        TrackedStatuses.Clear();
-        TrackedStatusIndex.Clear();
-        TrackedStatusKeys.Clear();
-        ResyncKeys.Clear();
-        RemoveKeys.Clear();
+        actionsToHighlight.Clear();
+        actionCalculationCache.Clear();
+        trackedStatuses.Clear();
+        trackedStatusIndex.Clear();
+        trackedStatusKeys.Clear();
+        resyncKeys.Clear();
+        removeKeys.Clear();
 
         FrameworkManager.Instance().Unreg(OnUpdate);
         UseActionManager.Instance().Unreg(OnPostUseActionLocation);
@@ -231,9 +234,9 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
         if (!value || GameState.IsInPVPArea) return;
 
-        LastUpdateTicks = Environment.TickCount64;
+        lastUpdateTicks = Environment.TickCount64;
         SeedTrackedStatuses();
-        
+
         FrameworkManager.Instance().Reg(OnUpdate, 1000);
         UseActionManager.Instance().RegPostUseActionLocation(OnPostUseActionLocation);
         CharacterStatusManager.Instance().RegGain(OnGainStatus);
@@ -241,7 +244,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
     }
 
     [SkipLocalsInit]
-    private static void OnUpdate(IFramework _)
+    private void OnUpdate(IFramework _)
     {
         if (GameState.IsInPVPArea || !DService.Instance().Condition[ConditionFlag.InCombat])
         {
@@ -250,27 +253,27 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         }
 
         var nowTicks = Environment.TickCount64;
-        var dt       = (nowTicks - LastUpdateTicks) / 1000f;
-        LastUpdateTicks = nowTicks;
-        if (dt <= 0f) 
+        var dt       = (nowTicks - lastUpdateTicks) / 1000f;
+        lastUpdateTicks = nowTicks;
+        if (dt <= 0f)
             dt = 1f;
-        if (dt > 5f) 
-            dt  = 5f;
+        if (dt > 5f)
+            dt = 5f;
 
         if (TargetManager.Target is not IBattleNPC { IsDead: false } battleNpcTarget)
         {
-            ActionsToHighlight.Clear();
+            actionsToHighlight.Clear();
             return;
         }
-        
-        var currentTargetEntityID = battleNpcTarget.EntityID;
-        ResyncKeys.Clear();
-        RemoveKeys.Clear();
 
-        foreach (var key in TrackedStatusKeys)
+        var currentTargetEntityID = battleNpcTarget.EntityID;
+        resyncKeys.Clear();
+        removeKeys.Clear();
+
+        foreach (var key in trackedStatusKeys)
         {
             if (key.EntityID != currentTargetEntityID) continue;
-            ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(TrackedStatuses, key);
+            ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(trackedStatuses, key);
             if (Unsafe.IsNullRef(ref state))
                 continue;
 
@@ -281,28 +284,28 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
             if (remaining <= 0f)
             {
-                ResyncKeys.Add(key);
+                resyncKeys.Add(key);
                 continue;
             }
 
             if (TryGetStatusResyncCutoff(key.StatusID, out var cutoff) && remaining <= cutoff)
-                ResyncKeys.Add(key);
+                resyncKeys.Add(key);
         }
 
-        foreach (var key in ResyncKeys)
+        foreach (var key in resyncKeys)
         {
             if (key.EntityID != currentTargetEntityID) continue;
-            ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(ModuleConfig.MonitoredStatus, key.StatusID);
+            ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, key.StatusID);
 
             if (Unsafe.IsNullRef(ref statusConfig))
             {
-                RemoveKeys.Add(key);
+                removeKeys.Add(key);
                 continue;
             }
 
             if (TryResyncStatus(key.EntityID, key.StatusID, out var remaining))
             {
-                ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(TrackedStatuses, key);
+                ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(trackedStatuses, key);
 
                 if (!Unsafe.IsNullRef(ref state))
                 {
@@ -314,7 +317,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             {
                 if (statusConfig.KeepHighlight)
                 {
-                    ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(TrackedStatuses, key);
+                    ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(trackedStatuses, key);
 
                     if (!Unsafe.IsNullRef(ref state))
                     {
@@ -323,29 +326,29 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
                     }
                 }
                 else
-                    RemoveKeys.Add(key);
+                    removeKeys.Add(key);
             }
         }
 
-        foreach (var key in RemoveKeys)
+        foreach (var key in removeKeys)
             RemoveTrackedStatus(key);
 
-        RemoveKeys.Clear();
+        removeKeys.Clear();
 
-        ActionCalculationCache.Clear();
+        actionCalculationCache.Clear();
 
-        foreach (var key in TrackedStatusKeys)
+        foreach (var key in trackedStatusKeys)
         {
             if (key.EntityID != currentTargetEntityID) continue;
-            ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(TrackedStatuses, key);
+            ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(trackedStatuses, key);
             if (Unsafe.IsNullRef(ref state))
                 continue;
 
-            ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(ModuleConfig.MonitoredStatus, key.StatusID);
+            ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, key.StatusID);
 
             if (Unsafe.IsNullRef(ref statusConfig))
             {
-                RemoveKeys.Add(key);
+                removeKeys.Add(key);
                 continue;
             }
 
@@ -356,26 +359,26 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
             foreach (var actionID in actions)
             {
-                ref var actionChain = ref CollectionsMarshal.GetValueRefOrNullRef(ComboChainsCache, actionID);
+                ref var actionChain = ref CollectionsMarshal.GetValueRefOrNullRef(comboChainsCache, actionID);
                 if (Unsafe.IsNullRef(ref actionChain))
                     continue;
 
                 var score = effectiveRemaining - countdown * actionChain.Length;
 
-                ref var current = ref CollectionsMarshal.GetValueRefOrAddDefault(ActionCalculationCache, actionID, out var exists);
+                ref var current = ref CollectionsMarshal.GetValueRefOrAddDefault(actionCalculationCache, actionID, out var exists);
                 if (!exists || score < current.Score)
                     current = (effectiveRemaining, countdown, score);
             }
         }
 
-        foreach (var key in RemoveKeys)
+        foreach (var key in removeKeys)
             RemoveTrackedStatus(key);
 
-        ActionsToHighlight.Clear();
+        actionsToHighlight.Clear();
 
-        foreach (var (actionID, time) in ActionCalculationCache)
+        foreach (var (actionID, time) in actionCalculationCache)
         {
-            ref var actionChain = ref CollectionsMarshal.GetValueRefOrNullRef(ComboChainsCache, actionID);
+            ref var actionChain = ref CollectionsMarshal.GetValueRefOrNullRef(comboChainsCache, actionID);
             if (Unsafe.IsNullRef(ref actionChain)) continue;
 
             if (time.Score > 0f) continue;
@@ -397,18 +400,18 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             var checkLen      = actionChain.Length - 1;
 
             for (var i = 0; i < checkLen; i++)
-                if (actionChain[i] == LastActionID)
+                if (actionChain[i] == lastActionID)
                 {
                     notLastAction = false;
                     break;
                 }
 
             if (notLastAction)
-                ActionsToHighlight.Add(actionChain[0]);
+                actionsToHighlight.Add(actionChain[0]);
         }
     }
 
-    private static void OnPostUseActionLocation
+    private void OnPostUseActionLocation
     (
         bool       result,
         ActionType actionType,
@@ -425,32 +428,32 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             return;
         }
 
-        ActionsToHighlight.Remove(actionID);
-        LastActionID = actionID;
+        actionsToHighlight.Remove(actionID);
+        lastActionID = actionID;
     }
 
     [return: MarshalAs(UnmanagedType.U1)]
-    private static bool IsActionHighlightedDetour(ActionManager* actionManager, ActionType actionType, uint actionID) =>
-        ActionsToHighlight.Contains(actionID) || IsActionHighlightedHook.Original(actionManager, actionType, actionID);
+    private bool IsActionHighlightedDetour(ActionManager* actionManager, ActionType actionType, uint actionID) =>
+        actionsToHighlight.Contains(actionID) || IsActionHighlightedHook.Original(actionManager, actionType, actionID);
 
-    private static void OnGainStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, TimeSpan remainingTime, ulong sourceID)
+    private void OnGainStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, TimeSpan remainingTime, ulong sourceID)
     {
         if (sourceID                   != LocalPlayerState.EntityID ||
             remainingTime.TotalSeconds <= 0)
             return;
 
-        ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(ModuleConfig.MonitoredStatus, statusID);
+        ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, statusID);
         if (Unsafe.IsNullRef(ref statusConfig)) return;
 
         var key = new StatusKey(player.EntityID, statusID);
         AddOrUpdateTrackedStatus(key, new StatusState(true, (float)remainingTime.TotalSeconds));
     }
 
-    private static void OnLoseStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, ulong sourceID)
+    private void OnLoseStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, ulong sourceID)
     {
         if (sourceID != LocalPlayerState.EntityID) return;
 
-        ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(ModuleConfig.MonitoredStatus, statusID);
+        ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, statusID);
 
         if (Unsafe.IsNullRef(ref statusConfig))
         {
@@ -465,15 +468,16 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
             RemoveTrackedStatus(key);
     }
 
-    private static void SeedTrackedStatuses()
+    private void SeedTrackedStatuses()
     {
         var counter = -1;
+
         foreach (var obj in DService.Instance().ObjectTable)
         {
             counter++;
             if (counter >= 200)
                 break;
-            
+
             if (obj is not IBattleChara { IsDead: false } battleChara)
                 continue;
 
@@ -489,7 +493,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
                 if (status.StatusId              == 0) continue;
                 if (status.SourceObject.ObjectId != LocalPlayerState.EntityID) continue;
 
-                ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(ModuleConfig.MonitoredStatus, status.StatusId);
+                ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, status.StatusId);
                 if (Unsafe.IsNullRef(ref statusConfig)) continue;
 
                 var key = new StatusKey(battleChara.EntityID, status.StatusId);
@@ -499,9 +503,9 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TryGetStatusResyncCutoff(ushort statusID, out float cutoff)
+    private bool TryGetStatusResyncCutoff(ushort statusID, out float cutoff)
     {
-        ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(ModuleConfig.MonitoredStatus, statusID);
+        ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, statusID);
 
         if (Unsafe.IsNullRef(ref statusConfig))
         {
@@ -514,7 +518,7 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
 
         foreach (var actionID in actions)
         {
-            ref var actionChain = ref CollectionsMarshal.GetValueRefOrNullRef(ComboChainsCache, actionID);
+            ref var actionChain = ref CollectionsMarshal.GetValueRefOrNullRef(comboChainsCache, actionID);
             if (Unsafe.IsNullRef(ref actionChain)) continue;
             if (actionChain.Length > maxChainLen)
                 maxChainLen = actionChain.Length;
@@ -558,54 +562,54 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void AddOrUpdateTrackedStatus(StatusKey key, StatusState state)
+    private void AddOrUpdateTrackedStatus(StatusKey key, StatusState state)
     {
-        if (TrackedStatuses.TryGetValue(key, out _))
+        if (trackedStatuses.TryGetValue(key, out _))
         {
-            TrackedStatuses[key] = state;
+            trackedStatuses[key] = state;
             return;
         }
 
-        TrackedStatuses.Add(key, state);
-        TrackedStatusIndex.Add(key, TrackedStatusKeys.Count);
-        TrackedStatusKeys.Add(key);
+        trackedStatuses.Add(key, state);
+        trackedStatusIndex.Add(key, trackedStatusKeys.Count);
+        trackedStatusKeys.Add(key);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void RemoveTrackedStatus(StatusKey key)
+    private void RemoveTrackedStatus(StatusKey key)
     {
-        if (!TrackedStatuses.Remove(key))
+        if (!trackedStatuses.Remove(key))
             return;
 
-        if (!TrackedStatusIndex.Remove(key, out var index))
+        if (!trackedStatusIndex.Remove(key, out var index))
             return;
 
-        var lastIndex = TrackedStatusKeys.Count - 1;
+        var lastIndex = trackedStatusKeys.Count - 1;
 
         if ((uint)index < (uint)lastIndex)
         {
-            var lastKey = TrackedStatusKeys[lastIndex];
-            TrackedStatusKeys[index]    = lastKey;
-            TrackedStatusIndex[lastKey] = index;
+            var lastKey = trackedStatusKeys[lastIndex];
+            trackedStatusKeys[index]    = lastKey;
+            trackedStatusIndex[lastKey] = index;
         }
 
-        TrackedStatusKeys.RemoveAt(lastIndex);
+        trackedStatusKeys.RemoveAt(lastIndex);
     }
 
-    private static void RebuildComboChains()
+    private void RebuildComboChains()
     {
-        var newCache = new Dictionary<uint, uint[]>(ModuleConfig.MonitoredStatus.Count * 2);
+        var newCache = new Dictionary<uint, uint[]>(config.MonitoredStatus.Count * 2);
 
-        foreach (var config in ModuleConfig.MonitoredStatus.Values)
+        foreach (var statusConfig in config.MonitoredStatus.Values)
         {
-            foreach (var actionID in config.BindActions)
+            foreach (var actionID in statusConfig.BindActions)
             {
                 if (newCache.ContainsKey(actionID)) continue;
                 newCache[actionID] = FetchComboChain(actionID);
             }
         }
 
-        ComboChainsCache = newCache;
+        comboChainsCache = newCache;
         return;
 
         static uint[] FetchComboChain(uint actionID)
@@ -628,44 +632,11 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         }
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
+        public float                          Countdown       = 4;
         public Dictionary<uint, StatusConfig> MonitoredStatus = [];
-
-        public float Countdown = 4;
     }
-
-
-    private static readonly Dictionary<uint, StatusConfig> StatusConfigs = new()
-    {
-
-        [838]  = new StatusConfig { BindActions = [3599], Countdown  = 4.0f, KeepHighlight  = true },
-        [843]  = new StatusConfig { BindActions = [3608], Countdown  = 4.0f, KeepHighlight  = true },
-        [1881] = new StatusConfig { BindActions = [16554], Countdown = 4.0f, KeepHighlight  = true },
-        [1248] = new StatusConfig { BindActions = [8324], Countdown  = 10.0f, KeepHighlight = false },
-
-        [143]  = new StatusConfig { BindActions = [121], Countdown   = 4.0f, KeepHighlight = true },
-        [144]  = new StatusConfig { BindActions = [132], Countdown   = 4.0f, KeepHighlight = true },
-        [1871] = new StatusConfig { BindActions = [16532], Countdown = 4.0f, KeepHighlight = true },
-
-        [2614] = new StatusConfig { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
-        [2615] = new StatusConfig { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
-        [2616] = new StatusConfig { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
-
-        [179]  = new StatusConfig { BindActions = [17864], Countdown = 4.0f, KeepHighlight = true },
-        [189]  = new StatusConfig { BindActions = [17865], Countdown = 4.0f, KeepHighlight = true },
-        [1895] = new StatusConfig { BindActions = [16540], Countdown = 4.0f, KeepHighlight = true },
-
-        [124]  = new StatusConfig { BindActions = [100], Countdown        = 4.0f, KeepHighlight = true },
-        [1200] = new StatusConfig { BindActions = [7406, 3560], Countdown = 4.0f, KeepHighlight = true },
-        [129]  = new StatusConfig { BindActions = [113], Countdown        = 4.0f, KeepHighlight = true },
-        [1201] = new StatusConfig { BindActions = [7407, 3560], Countdown = 4.0f, KeepHighlight = true },
-
-        [1299] = new StatusConfig { BindActions = [7485], Countdown  = 4.0f, KeepHighlight = true },
-        [2719] = new StatusConfig { BindActions = [25772], Countdown = 4.0f, KeepHighlight = true },
-
-        [2677] = new StatusConfig { BindActions = [45], Countdown = 4.0f, KeepHighlight = true }
-    };
 
     private class StatusConfig
     {
@@ -685,4 +656,39 @@ public unsafe class AutoHighlightStatusAction : DailyModuleBase
         bool  Active,
         float RemainingTime
     );
+
+    #region 常量
+
+    private static readonly FrozenDictionary<uint, StatusConfig> StatusConfigs = new Dictionary<uint, StatusConfig>
+    {
+
+        [838]  = new() { BindActions = [3599], Countdown  = 4.0f, KeepHighlight  = true },
+        [843]  = new() { BindActions = [3608], Countdown  = 4.0f, KeepHighlight  = true },
+        [1881] = new() { BindActions = [16554], Countdown = 4.0f, KeepHighlight  = true },
+        [1248] = new() { BindActions = [8324], Countdown  = 10.0f, KeepHighlight = false },
+
+        [143]  = new() { BindActions = [121], Countdown   = 4.0f, KeepHighlight = true },
+        [144]  = new() { BindActions = [132], Countdown   = 4.0f, KeepHighlight = true },
+        [1871] = new() { BindActions = [16532], Countdown = 4.0f, KeepHighlight = true },
+
+        [2614] = new() { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
+        [2615] = new() { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
+        [2616] = new() { BindActions = [24290], Countdown = 6.0f, KeepHighlight = true },
+
+        [179]  = new() { BindActions = [17864], Countdown = 4.0f, KeepHighlight = true },
+        [189]  = new() { BindActions = [17865], Countdown = 4.0f, KeepHighlight = true },
+        [1895] = new() { BindActions = [16540], Countdown = 4.0f, KeepHighlight = true },
+
+        [124]  = new() { BindActions = [100], Countdown        = 4.0f, KeepHighlight = true },
+        [1200] = new() { BindActions = [7406, 3560], Countdown = 4.0f, KeepHighlight = true },
+        [129]  = new() { BindActions = [113], Countdown        = 4.0f, KeepHighlight = true },
+        [1201] = new() { BindActions = [7407, 3560], Countdown = 4.0f, KeepHighlight = true },
+
+        [1299] = new() { BindActions = [7485], Countdown  = 4.0f, KeepHighlight = true },
+        [2719] = new() { BindActions = [25772], Countdown = 4.0f, KeepHighlight = true },
+
+        [2677] = new() { BindActions = [45], Countdown = 4.0f, KeepHighlight = true }
+    }.ToFrozenDictionary();
+
+    #endregion
 }

@@ -1,98 +1,103 @@
-using System;
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using KamiToolKit.Overlay;
+using KamiToolKit.Overlay.UiOverlay;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayPlayerHitbox : DailyModuleBase
+public unsafe class AutoDisplayPlayerHitbox : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDisplayPlayerHitboxTitle"),
-        Description = GetLoc("AutoDisplayPlayerHitboxDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("AutoDisplayPlayerHitboxTitle"),
+        Description = Lang.Get("AutoDisplayPlayerHitboxDescription"),
+        Category    = ModuleCategory.Combat,
         Author      = ["Due"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static bool IsWeaponUnsheathed() => 
-        UIState.Instance()->WeaponState.IsUnsheathed;
-
-    private static Config ModuleConfig = null!;
-
-    private static OverlayController? Controller;
+    
+    private Config             config = null!;
+    private OverlayController? controller;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
-        Controller ??= new();
-        Controller.CreateNode(() => new PlayerDotImageNode());
+        controller ??= new();
+        controller.CreateNode(() => new PlayerDotImageNode(config));
     }
 
     protected override void Uninit()
     {
-        Controller?.Dispose();
-        Controller = null;
+        controller?.Dispose();
+        controller = null;
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("OnlyInCombat"), ref ModuleConfig.OnlyInCombat))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("OnlyInCombat"), ref config.OnlyInCombat))
+            config.Save(this);
 
-        if (ImGui.Checkbox(GetLoc("OnlyInDuty"), ref ModuleConfig.OnlyInDuty))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref config.OnlyInDuty))
+            config.Save(this);
 
-        if (ImGui.Checkbox(GetLoc("OnlyUnsheathed"), ref ModuleConfig.OnlyUnsheathed))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("OnlyUnsheathed"), ref config.OnlyUnsheathed))
+            config.Save(this);
 
         ImGui.NewLine();
-        
-        ImGui.SetNextItemWidth(200f * GlobalFontScale);
-        ImGui.ColorPicker4(GetLoc("Color"), ref ModuleConfig.Color);
+
+        ImGui.SetNextItemWidth(200f * GlobalUIScale);
+        ImGui.ColorPicker4(Lang.Get("Color"), ref config.Color);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            ModuleConfig.Save(this);
-        
-        ImGui.NewLine();
-        
-        using (ImRaii.ItemWidth(300f * GlobalFontScale))
-        {
-            if (ImGui.InputFloat(GetLoc("Size"), ref ModuleConfig.Size))
-                ModuleConfig.Size = MathF.Max(1, ModuleConfig.Size);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+            config.Save(this);
 
-            ImGui.InputUInt(GetLoc("Icon"), ref ModuleConfig.IconID);
+        ImGui.NewLine();
+
+        using (ImRaii.ItemWidth(300f * GlobalUIScale))
+        {
+            if (ImGui.InputFloat(Lang.Get("Size"), ref config.Size))
+                config.Size = MathF.Max(1, config.Size);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                ModuleConfig.Save(this);
+                config.Save(this);
+
+            ImGui.InputUInt(Lang.Get("Icon"), ref config.IconID);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
 
             ImGui.SameLine();
             if (ImGui.Button($"{FontAwesomeIcon.Icons.ToIconString()}"))
                 ChatManager.Instance().SendCommand("/xldata icon");
-            ImGuiOm.TooltipHover($"{GetLoc("IconBrowser")}\n({GetLoc("IconBrowser-Suggestion")})");
-            
-            if (ImGui.InputFloat3(GetLoc("Offset"), ref ModuleConfig.Offset, 0.1f, 1f, "%.1f"))
-                SaveConfig(ModuleConfig);
+            ImGuiOm.TooltipHover($"{Lang.Get("IconBrowser")}\n({Lang.Get("IconBrowser-Suggestion")})");
+
+            if (ImGui.InputFloat3(Lang.Get("Offset"), ref config.Offset, 0.1f, 1f, "%.1f"))
+                config.Save(this);
         }
     }
+    
+    private static bool IsWeaponUnsheathed() =>
+        UIState.Instance()->WeaponState.IsUnsheathed;
 
     private class PlayerDotImageNode : OverlayNode
     {
         public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
         public override bool         HideWithNativeUi => false;
-
+        
+        private readonly Config moduleConfig;
+            
         private readonly IconImageNode imageNode;
 
-        public PlayerDotImageNode()
+        public PlayerDotImageNode(Config config)
         {
+            moduleConfig = config;
+            
             imageNode = new IconImageNode
             {
                 IconId     = 60952,
@@ -100,21 +105,21 @@ public unsafe class AutoDisplayPlayerHitbox : DailyModuleBase
             };
             imageNode.AttachNode(this);
         }
-
+        
         protected override void OnSizeChanged()
         {
             base.OnSizeChanged();
 
             imageNode.Size   = Size;
-            imageNode.Origin = new Vector2(ModuleConfig.Size / 2.0f);
+            imageNode.Origin = new Vector2(moduleConfig.Size / 2.0f);
         }
 
         protected override void OnUpdate()
         {
-            Size = new Vector2(ModuleConfig.Size);
+            Size = new(moduleConfig.Size);
 
-            imageNode.Color  = ModuleConfig.Color;
-            imageNode.IconId = ModuleConfig.IconID;
+            imageNode.Color  = moduleConfig.Color;
+            imageNode.IconId = moduleConfig.IconID;
 
             Timeline?.PlayAnimation(1);
 
@@ -125,33 +130,32 @@ public unsafe class AutoDisplayPlayerHitbox : DailyModuleBase
             }
 
             IsVisible = !DService.Instance().Condition[ConditionFlag.Occupied38]                                   &&
-                        (!ModuleConfig.OnlyInCombat   || DService.Instance().Condition[ConditionFlag.InCombat])    &&
-                        (!ModuleConfig.OnlyInDuty     || DService.Instance().Condition[ConditionFlag.BoundByDuty]) &&
-                        (!ModuleConfig.OnlyUnsheathed || IsWeaponUnsheathed());
+                        (!moduleConfig.OnlyInCombat   || DService.Instance().Condition[ConditionFlag.InCombat])    &&
+                        (!moduleConfig.OnlyInDuty     || DService.Instance().Condition[ConditionFlag.BoundByDuty]) &&
+                        (!moduleConfig.OnlyUnsheathed || IsWeaponUnsheathed());
 
             if (!IsVisible)
                 return;
 
-            var   offset = ModuleConfig.Offset;
+            var   offset = moduleConfig.Offset;
             var   angle  = -localPlayer.Rotation;
             float cos    = MathF.Cos(angle), sin = MathF.Sin(angle);
 
-            var rotatedOffset = new Vector3((cos * offset.X) - (sin * offset.Z), offset.Y, (sin * offset.X) + (cos * offset.Z));
+            var rotatedOffset = new Vector3(cos * offset.X - sin * offset.Z, offset.Y, sin * offset.X + cos * offset.Z);
             DService.Instance().GameGUI.WorldToScreen(localPlayer.Position + rotatedOffset, out var screenPos);
 
-            Position = screenPos - (imageNode.Size / 2f);
+            Position = screenPos - imageNode.Size / 2f;
         }
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
-        public bool OnlyInCombat = true;
-        public bool OnlyInDuty   = true;
-        public bool OnlyUnsheathed;
-
-        public Vector4 Color  = new(1f, 1f, 1f, 1f);
-        public float   Size   = 96f;
-        public uint    IconID = 60422;
-        public Vector3 Offset = Vector3.Zero;
+        public Vector4 Color        = new(1f, 1f, 1f, 1f);
+        public uint    IconID       = 60422;
+        public Vector3 Offset       = Vector3.Zero;
+        public bool    OnlyInCombat = true;
+        public bool    OnlyInDuty   = true;
+        public bool    OnlyUnsheathed;
+        public float   Size = 96f;
     }
 }

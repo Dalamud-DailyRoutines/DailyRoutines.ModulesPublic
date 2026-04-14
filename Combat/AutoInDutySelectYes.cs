@@ -1,44 +1,55 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using OmenTools.Info.Algorithms;
+using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoInDutySelectYes : DailyModuleBase
+public class AutoInDutySelectYes : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoInDutySelectYesTitle"),
-        Description = GetLoc("AutoInDutySelectYesDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("AutoInDutySelectYesTitle"),
+        Description = Lang.Get("AutoInDutySelectYesDescription"),
+        Category    = ModuleCategory.Combat
     };
 
-    private static readonly AhoCorasick Blacklist = new(
-    [
-        "小队", "传送邀请", "救助", "复活", "无法战斗", "即将返回", "开始地点", "回归点", "准备确认", "倒计时", "封锁空间",
-        "小隊", "傳送邀請", "無法戰鬥", "即將返回", "開始地點", "回归點", "準備確認", "倒計時",
-        "Party", "Teleport Offer", "Raise", "Arise", "Incapacitated ", "Return", "Starting Point", "Ready Check", "Timer", "Countdown", "Sealed Area",
-        "パーティ", "テレポ勧誘", "テレポの勧誘", "蘇生", "アレイズ", "ホームポイント", "戦闘不能", "開始地点", "復帰地点", "レディチェック", "カウント", "封鎖空間"
-    ]);
-
-    protected override void Init() => 
+    protected override void Init() =>
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonSelectYesno);
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSelectYesno);
 
     private static unsafe void OnAddonSelectYesno(AddonEvent type, AddonArgs args)
     {
         if (GameState.ContentFinderCondition == 0) return;
-        
+
         var addon = (AddonSelectYesno*)args.Addon.Address;
         if (addon == null) return;
-        
+
         var text = addon->PromptText->NodeText.ToString();
         if (string.IsNullOrWhiteSpace(text) || Blacklist.ContainsAny(text))
             return;
-        
-        ClickSelectYesnoYes();
+
+        AddonSelectYesnoEvent.ClickYes();
     }
 
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSelectYesno);
+    #region 常量
+
+    private static AhoCorasick Blacklist { get; } = new
+    (
+        [
+            "小队", "传送邀请", "救助", "复活", "无法战斗", "即将返回", "开始地点", "回归点", "准备确认", "倒计时", "封锁空间",
+            "小隊", "傳送邀請", "無法戰鬥", "即將返回", "開始地點", "回归點", "準備確認", "倒計時",
+            "Party", "Teleport Offer", "Raise", "Arise", "Incapacitated ", "Return", "Starting Point", "Ready Check", "Timer", "Countdown", "Sealed Area",
+            "パーティ", "テレポ勧誘", "テレポの勧誘", "蘇生", "アレイズ", "ホームポイント", "戦闘不能", "開始地点", "復帰地点", "レディチェック", "カウント", "封鎖空間"
+        ]
+    );
+
+    #endregion
 }

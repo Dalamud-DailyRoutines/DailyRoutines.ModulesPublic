@@ -1,115 +1,120 @@
-using System;
-using System.Collections.Generic;
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastMinimizeWindow : DailyModuleBase
+public unsafe class FastMinimizeWindow : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("FastMinimizeWindowTitle"),
-        Description = GetLoc("FastMinimizeWindowDescription", CommandMini, CommandTray),
-        Category    = ModuleCategories.General,
+        Title       = Lang.Get("FastMinimizeWindowTitle"),
+        Description = Lang.Get("FastMinimizeWindowDescription", COMMAND_MINI, COMMAND_TRAY),
+        Category    = ModuleCategory.General,
         Author      = ["Rorinnn"]
     };
-
-    private static Config ModuleConfig = null!;
     
-    private static NotifyIcon? TrayIcon;
+    private Config      config = null!;
+    private NotifyIcon? trayIcon;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
-        CommandManager.AddSubCommand(CommandMini, new(OnMinimizeCommand) { HelpMessage = GetLoc("FastMinimizeWindow-MinimizeToTaskbar") });
-        CommandManager.AddSubCommand(CommandTray, new(OnTrayCommand) { HelpMessage = GetLoc("FastMinimizeWindow-MinimizeToTray") });
+        CommandManager.Instance().AddSubCommand(COMMAND_MINI, new(OnMinimizeCommand) { HelpMessage = Lang.Get("FastMinimizeWindow-MinimizeToTaskbar") });
+        CommandManager.Instance().AddSubCommand(COMMAND_TRAY, new(OnTrayCommand) { HelpMessage     = Lang.Get("FastMinimizeWindow-MinimizeToTray") });
 
-        WindowManager.Draw += DrawMinimizeButton;
+        WindowManager.Instance().PostDraw += DrawMinimizeButton;
 
-        if (ModuleConfig.AlwaysAddTrayIcon)
+        if (config.AlwaysAddTrayIcon)
             CreateTrayIcon();
     }
-    
+
     protected override void Uninit()
     {
-        WindowManager.Draw -= DrawMinimizeButton;
-        CommandManager.RemoveSubCommand(CommandMini);
-        CommandManager.RemoveSubCommand(CommandTray);
-        
-        if (Initialized)
+        WindowManager.Instance().PostDraw -= DrawMinimizeButton;
+        CommandManager.Instance().RemoveSubCommand(COMMAND_MINI);
+        CommandManager.Instance().RemoveSubCommand(COMMAND_TRAY);
+
+        if (IsEnabled)
         {
             var hwnd = Framework.Instance()->GameWindow->WindowHandle;
+
             if (hwnd != nint.Zero && !IsWindowVisible(hwnd))
             {
-                ShowWindow(hwnd, SwShow);
+                ShowWindow(hwnd, SW_SHOW);
                 SetForegroundWindow(hwnd);
             }
         }
-        
+
         DisposeTrayIcon();
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Command"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Command"));
+
         using (ImRaii.PushIndent())
         {
-            ImGui.TextUnformatted($"/pdr {CommandMini} → {GetLoc("FastMinimizeWindow-MinimizeToTaskbar")}");
-            ImGui.TextUnformatted($"/pdr {CommandTray} → {GetLoc("FastMinimizeWindow-MinimizeToTray")}");
+            ImGui.TextUnformatted($"/pdr {COMMAND_MINI} → {Lang.Get("FastMinimizeWindow-MinimizeToTaskbar")}");
+            ImGui.TextUnformatted($"/pdr {COMMAND_TRAY} → {Lang.Get("FastMinimizeWindow-MinimizeToTray")}");
         }
-        
+
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(GetLoc("FastMinimizeWindow-AlwaysAddTrayIcon"), ref ModuleConfig.AlwaysAddTrayIcon))
+        if (ImGui.Checkbox(Lang.Get("FastMinimizeWindow-AlwaysAddTrayIcon"), ref config.AlwaysAddTrayIcon))
         {
-            if (ModuleConfig.AlwaysAddTrayIcon)
+            if (config.AlwaysAddTrayIcon)
                 CreateTrayIcon();
             else
                 DisposeTrayIcon();
 
-            SaveConfig(ModuleConfig);
+            config.Save(this);
         }
-        ImGuiOm.HelpMarker(GetLoc("FastMinimizeWindow-AlwaysAddTrayIcon-Help"));
-        
+
+        ImGuiOm.HelpMarker(Lang.Get("FastMinimizeWindow-AlwaysAddTrayIcon-Help"));
+
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(GetLoc("FastMinimizeWindow-DrawButton"), ref ModuleConfig.DrawButton))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("FastMinimizeWindow-DrawButton"), ref config.DrawButton))
+            config.Save(this);
 
-        if (ModuleConfig.DrawButton)
+        if (config.DrawButton)
         {
-            using (ImRaii.ItemWidth(250f * GlobalFontScale))
+            using (ImRaii.ItemWidth(250f * GlobalUIScale))
             using (ImRaii.PushIndent())
             {
-                if (ImGui.Checkbox(GetLoc("FastMinimizeWindow-IsTransparentWhenNotHovered"), ref ModuleConfig.IsTransparentWhenNotHovered))
-                    SaveConfig(ModuleConfig);
+                if (ImGui.Checkbox(Lang.Get("FastMinimizeWindow-IsTransparentWhenNotHovered"), ref config.IsTransparentWhenNotHovered))
+                    config.Save(this);
 
-                if (ImGui.SliderFloat(GetLoc("Scale"), ref ModuleConfig.Scale, 0.1f, 2f))
-                    ModuleConfig.Scale = Math.Clamp(ModuleConfig.Scale, 0.1f, 2f);
+                if (ImGui.SliderFloat(Lang.Get("Scale"), ref config.Scale, 0.1f, 2f))
+                    config.Scale = Math.Clamp(config.Scale, 0.1f, 2f);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    SaveConfig(ModuleConfig);
+                    config.Save(this);
 
-                DrawBehaviorCombo(GetLoc("FastMinimizeWindow-LeftClickBehavior"), ref ModuleConfig.LeftClickBehavior);
-                DrawBehaviorCombo(GetLoc("FastMinimizeWindow-RightClickBehavior"), ref ModuleConfig.RightClickBehavior);
+                DrawBehaviorCombo(Lang.Get("FastMinimizeWindow-LeftClickBehavior"),  ref config.LeftClickBehavior);
+                DrawBehaviorCombo(Lang.Get("FastMinimizeWindow-RightClickBehavior"), ref config.RightClickBehavior);
 
-                using (var combo = ImRaii.Combo(GetLoc("Position"), GetLoc($"{ModuleConfig.Position}")))
+                using (var combo = ImRaii.Combo(Lang.Get("Position"), Lang.Get($"{config.Position}")))
                 {
                     if (combo)
                     {
                         foreach (var buttonPosition in Enum.GetValues<ButtonPosition>())
                         {
-                            if (ImGui.Selectable(GetLoc($"{buttonPosition}", buttonPosition == ModuleConfig.Position)))
+                            if (ImGui.Selectable(Lang.Get($"{buttonPosition}", buttonPosition == config.Position)))
                             {
-                                ModuleConfig.Position = buttonPosition;
-                                ModuleConfig.Save(this);
+                                config.Position = buttonPosition;
+                                config.Save(this);
                             }
                         }
                     }
@@ -128,17 +133,17 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
             if (ImGui.Selectable(name, behavior == behaviour))
             {
                 behavior = behaviour;
-                SaveConfig(ModuleConfig);
+                config.Save(this);
             }
         }
     }
 
     private void DrawMinimizeButton()
     {
-        if (!ModuleConfig.DrawButton) return;
+        if (!config.DrawButton) return;
 
-        var buttonSize = 20f * ModuleConfig.Scale;
-        var windowPos = ModuleConfig.Position switch
+        var buttonSize = 20f * config.Scale;
+        var windowPos = config.Position switch
         {
             ButtonPosition.TopLeft     => new Vector2(0f,                                            0f),
             ButtonPosition.TopRight    => new Vector2(ImGuiHelpers.MainViewport.Size.X - buttonSize, 0f),
@@ -146,21 +151,21 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
             ButtonPosition.BottomRight => ImGuiHelpers.MainViewport.Size - new Vector2(buttonSize),
             _                          => Vector2.Zero
         };
-            
+
         using var style1 = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         using var style2 = ImRaii.PushStyle(ImGuiStyleVar.WindowMinSize, Vector2.Zero);
 
         ImGuiHelpers.ForceNextWindowMainViewport();
         ImGuiHelpers.SetNextWindowPosRelativeMainViewport(windowPos);
 
-        if (ImGui.Begin("##DRMinimizeButton", ButtonWindowFlags))
+        if (ImGui.Begin("##DRMinimizeButton", BUTTON_WINDOW_FLAGS))
         {
-            using var color = ModuleConfig.IsTransparentWhenNotHovered ? ImRaii.PushColor(ImGuiCol.Button, 0u) : null;
+            using var color = config.IsTransparentWhenNotHovered ? ImRaii.PushColor(ImGuiCol.Button, 0u) : null;
             if (ImGui.Button("##MinimizeBtn", new Vector2(buttonSize, buttonSize)))
-                HandleClick(ModuleConfig.LeftClickBehavior);
+                HandleClick(config.LeftClickBehavior);
 
             if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Right))
-                HandleClick(ModuleConfig.RightClickBehavior);
+                HandleClick(config.RightClickBehavior);
 
             ImGui.End();
         }
@@ -187,7 +192,7 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
     {
         var hwnd = Framework.Instance()->GameWindow->WindowHandle;
         if (hwnd != nint.Zero)
-            ShowWindow(hwnd, SwMinimize);
+            ShowWindow(hwnd, SW_MINIMIZE);
     }
 
     private void TryMinimizeToTray()
@@ -195,75 +200,86 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
         var hwnd = Framework.Instance()->GameWindow->WindowHandle;
         if (hwnd == nint.Zero) return;
 
-        if (TrayIcon?.Visible is not true && !CreateTrayIcon())
+        if (trayIcon?.Visible is not true && !CreateTrayIcon())
             return;
 
-        ShowWindow(hwnd, SwHide);
+        ShowWindow(hwnd, SW_HIDE);
     }
 
     private static Icon? TryExtractGameIcon()
     {
         var mainModule = Process.GetCurrentProcess().MainModule;
         return mainModule?.FileName is { } fileName
-            ? Icon.ExtractAssociatedIcon(fileName)
-            : null;
+                   ? Icon.ExtractAssociatedIcon(fileName)
+                   : null;
     }
 
     private bool CreateTrayIcon()
     {
-        if (TrayIcon?.Visible is true) return true;
+        if (trayIcon?.Visible is true) return true;
 
         DisposeTrayIcon();
 
         try
         {
-            TrayIcon = new NotifyIcon
+            trayIcon = new NotifyIcon
             {
-                Icon = TryExtractGameIcon() ?? SystemIcons.Application,
-                Text = Info.Title,
+                Icon    = TryExtractGameIcon() ?? SystemIcons.Application,
+                Text    = Info.Title,
                 Visible = true
             };
 
-            TrayIcon.Click += OnTrayIconClick;
+            trayIcon.Click += OnTrayIconClick;
             return true;
         }
         catch
         {
-            TrayIcon = null;
+            trayIcon = null;
             return false;
         }
     }
 
-    private static void OnTrayIconClick(object? sender, EventArgs e)
+    private void OnTrayIconClick(object? sender, EventArgs e)
     {
         var hwnd = Framework.Instance()->GameWindow->WindowHandle;
         if (hwnd == nint.Zero) return;
 
         if (!IsWindowVisible(hwnd))
         {
-            ShowWindow(hwnd, SwShow);
+            ShowWindow(hwnd, SW_SHOW);
             SetForegroundWindow(hwnd);
 
-            if (!ModuleConfig.AlwaysAddTrayIcon)
+            if (!config.AlwaysAddTrayIcon)
                 DisposeTrayIcon();
         }
         else
         {
-            ShowWindow(hwnd, SwRestore);
+            ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
         }
     }
 
-    private static void DisposeTrayIcon()
+    private void DisposeTrayIcon()
     {
-        if (TrayIcon is null) return;
+        if (trayIcon is null) return;
 
-        TrayIcon.Click -= OnTrayIconClick;
-        TrayIcon.Visible = false;
-        TrayIcon.Dispose();
-        TrayIcon = null;
+        trayIcon.Click   -= OnTrayIconClick;
+        trayIcon.Visible =  false;
+        trayIcon.Dispose();
+        trayIcon = null;
     }
-    
+
+    private class Config : ModuleConfig
+    {
+        public bool           AlwaysAddTrayIcon;
+        public bool           DrawButton = true;
+        public bool           IsTransparentWhenNotHovered;
+        public ClickBehavior  LeftClickBehavior  = ClickBehavior.MinimizeToTaskbar;
+        public ButtonPosition Position           = ButtonPosition.TopRight;
+        public ClickBehavior  RightClickBehavior = ClickBehavior.MinimizeToTray;
+        public float          Scale              = 0.5f;
+    }
+
     #region 预定义
 
     private enum ClickBehavior
@@ -285,15 +301,15 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
 
     #region 数据
 
-    private const string CommandMini = "mini";
-    private const string CommandTray = "tray";
+    private const string COMMAND_MINI = "mini";
+    private const string COMMAND_TRAY = "tray";
 
-    private const int SwMinimize = 6;
-    private const int SwHide     = 0;
-    private const int SwShow     = 5;
-    private const int SwRestore  = 9;
+    private const int SW_MINIMIZE = 6;
+    private const int SW_HIDE     = 0;
+    private const int SW_SHOW     = 5;
+    private const int SW_RESTORE  = 9;
 
-    private const ImGuiWindowFlags ButtonWindowFlags =
+    private const ImGuiWindowFlags BUTTON_WINDOW_FLAGS =
         ImGuiWindowFlags.AlwaysAutoResize      |
         ImGuiWindowFlags.NoNavFocus            |
         ImGuiWindowFlags.NoFocusOnAppearing    |
@@ -304,12 +320,12 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
         ImGuiWindowFlags.NoScrollbar           |
         ImGuiWindowFlags.NoScrollWithMouse;
 
-    private static readonly Dictionary<ClickBehavior, string> BehaviorNames = new()
+    private static readonly FrozenDictionary<ClickBehavior, string> BehaviorNames = new Dictionary<ClickBehavior, string>
     {
         [ClickBehavior.None]              = LuminaWrapper.GetAddonText(7),
-        [ClickBehavior.MinimizeToTaskbar] = GetLoc("FastMinimizeWindow-MinimizeToTaskbar"),
-        [ClickBehavior.MinimizeToTray]    = GetLoc("FastMinimizeWindow-MinimizeToTray")
-    };
+        [ClickBehavior.MinimizeToTaskbar] = Lang.Get("FastMinimizeWindow-MinimizeToTaskbar"),
+        [ClickBehavior.MinimizeToTray]    = Lang.Get("FastMinimizeWindow-MinimizeToTray")
+    }.ToFrozenDictionary();
 
     #endregion
 
@@ -328,16 +344,4 @@ public unsafe class FastMinimizeWindow : DailyModuleBase
     private static extern bool SetForegroundWindow(nint hWnd);
 
     #endregion
-
-    private class Config : ModuleConfiguration
-    {
-        public bool           DrawButton = true;
-        public float          Scale      = 0.5f;
-        public ButtonPosition Position   = ButtonPosition.TopRight;
-        public bool           IsTransparentWhenNotHovered;
-        public ClickBehavior  LeftClickBehavior  = ClickBehavior.MinimizeToTaskbar;
-        public ClickBehavior  RightClickBehavior = ClickBehavior.MinimizeToTray;
-
-        public bool AlwaysAddTrayIcon;
-    }
 }

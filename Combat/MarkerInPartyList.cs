@@ -1,59 +1,58 @@
-using DailyRoutines.Abstracts;
+using System.Numerics;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Classes;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using KamiToolKit.Enums;
-using OmenTools.Extensions;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class MarkerInPartyList : DailyModuleBase
+public unsafe class MarkerInPartyList : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("MarkerInPartyListTitle"),
-        Description = GetLoc("MarkerInPartyListDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("MarkerInPartyListTitle"),
+        Description = Lang.Get("MarkerInPartyListDescription"),
+        Category    = ModuleCategory.Combat,
         Author      = ["status102"]
     };
 
-    private const int DEFAULT_ICON_ID = 61201;
-
-    private static readonly (short X, short Y) BasePosition = (41, 35);
-
     private static readonly CompSig                     LocalMarkingSig = new("E8 ?? ?? ?? ?? 4C 8B C5 8B D7 48 8B CB E8");
-    public delegate         void                        LocalMarkingDelegate(void* manager, uint markingType, GameObjectId objectID, uint entityID);
-    public static           Hook<LocalMarkingDelegate>? LocalMarkingHook;
+    private delegate        void                        LocalMarkingDelegate(void* manager, uint markingType, GameObjectId objectID, uint entityID);
+    private                 Hook<LocalMarkingDelegate>? LocalMarkingHook;
 
-    private static Config? ModuleConfig;
-    
-    private static readonly Dictionary<int, int> MarkedObject = new(8); // markID, memberIndex
-    private static readonly List<IconImageNode>  NodeList = new(8);
+    private Config? config;
 
-    private static bool NeedClear;
-    
+    private readonly (short X, short Y)   basePosition = (41, 35);
+    private readonly Dictionary<int, int> markedObject = new(8); // markID, memberIndex
+    private readonly List<IconImageNode>  nodeList     = new(8);
+
+    private bool isNeedClear;
+
     protected override void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new();
 
         LocalMarkingHook = LocalMarkingSig.GetHook<LocalMarkingDelegate>(LocalMarkingDetour);
         LocalMarkingHook.Enable();
 
         DService.Instance().ClientState.TerritoryChanged += ResetMarkedObject;
-        
+
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "_PartyList", OnAddonPartyList);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_PartyList", OnAddonPartyList);
     }
@@ -61,7 +60,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonPartyList);
-        
+
         DService.Instance().ClientState.TerritoryChanged -= ResetMarkedObject;
 
         ResetPartyMemberList();
@@ -70,30 +69,33 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(200f * GlobalFontScale);
-        var iconOffset = ModuleConfig.IconOffset;
+        ImGui.SetNextItemWidth(200f * GlobalUIScale);
+        var iconOffset = config.IconOffset;
         ImGui.InputFloat2(Lang.Get("MarkerInPartyList-IconOffset"), ref iconOffset, format: "%.1f");
+
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
-            ModuleConfig.IconOffset = iconOffset;
-            SaveConfig(ModuleConfig);
+            config.IconOffset = iconOffset;
+            config.Save(this);
             RefreshNodeStatus();
         }
 
-        ImGui.SetNextItemWidth(200f * GlobalFontScale);
-        ImGui.InputInt(Lang.Get("MarkerInPartyList-IconScale"), ref ModuleConfig.Size);
+        ImGui.SetNextItemWidth(200f * GlobalUIScale);
+        ImGui.InputInt(Lang.Get("MarkerInPartyList-IconScale"), ref config.Size);
+
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
-            SaveConfig(ModuleConfig);
+            config.Save(this);
             RefreshNodeStatus();
         }
 
-        if (ImGui.Checkbox(Lang.Get("MarkerInPartyList-HidePartyListIndexNumber"), ref ModuleConfig.HidePartyListIndexNumber))
+        if (ImGui.Checkbox(Lang.Get("MarkerInPartyList-HidePartyListIndexNumber"), ref config.HidePartyListIndexNumber))
         {
-            SaveConfig(ModuleConfig);
+            config.Save(this);
 
-            var hide = ModuleConfig.HidePartyListIndexNumber;
-            foreach (var (node, i) in NodeList.Zip(Enumerable.Range(10, 8)))
+            var hide = config.HidePartyListIndexNumber;
+
+            foreach (var (node, i) in nodeList.Zip(Enumerable.Range(10, 8)))
             {
                 var component = PartyList->GetNodeById((uint)i);
                 if (component is null || !component->IsVisible())
@@ -105,23 +107,23 @@ public unsafe class MarkerInPartyList : DailyModuleBase
         }
     }
 
-    private static void ResetMarkedObject(ushort obj)
+    private void ResetMarkedObject(ushort obj)
     {
         foreach (var i in Enumerable.Range(0, 8))
             HideImageNode(i);
-        MarkedObject.Clear();
+        markedObject.Clear();
         ResetPartyMemberList();
     }
 
-    private static void ResetPartyMemberList()
+    private void ResetPartyMemberList()
     {
         if (!PartyList->IsAddonAndNodesReady()) return;
         ModifyPartyMemberNumber(true);
     }
 
-    private static void ModifyPartyMemberNumber(bool visible)
+    private void ModifyPartyMemberNumber(bool visible)
     {
-        if (!PartyList->IsAddonAndNodesReady() || (!ModuleConfig.HidePartyListIndexNumber && !visible))
+        if (!PartyList->IsAddonAndNodesReady() || !config.HidePartyListIndexNumber && !visible)
             return;
 
         foreach (var id in Enumerable.Range(10, 8).ToList())
@@ -138,19 +140,20 @@ public unsafe class MarkerInPartyList : DailyModuleBase
                 textNode->ToggleVisibility(visible);
         }
     }
-    
-    private static void ProcessMarkIconSetted(uint markIndex, uint entityID)
+
+    private void ProcessMarkIconSetted(uint markIndex, uint entityID)
     {
         if (AgentHUD.Instance() is null || InfoProxyCrossRealm.Instance() is null)
             return;
 
         int index;
         var mark = (int)(markIndex + 1);
+
         if (mark <= 0 || mark > LuminaGetter.Get<Marker>().Count || !LuminaGetter.TryGetRow((uint)mark, out Marker markerRow))
         {
             if (FindMember(entityID, out index))
                 RemoveMemberMark(index);
-            
+
             return;
         }
 
@@ -162,7 +165,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
         if (!FindMember(entityID, out index))
             RemoveMark(markerRow.Icon);
-        else if (MarkedObject.TryGetValue(markerRow.Icon, out var outValue) && outValue == index)
+        else if (markedObject.TryGetValue(markerRow.Icon, out var outValue) && outValue == index)
         {
             // 对同一个成员重复标记
         }
@@ -172,62 +175,62 @@ public unsafe class MarkerInPartyList : DailyModuleBase
             AddMemberMark(index, markerRow.Icon);
         }
     }
-
+    
     #region ImageNode
 
-    private static void ReleaseImageNodes()
+    private void ReleaseImageNodes()
     {
         if (!PartyList->IsAddonAndNodesReady()) return;
 
-        foreach (var item in NodeList)
+        foreach (var item in nodeList)
             item?.Dispose();
 
-        NodeList.Clear();
+        nodeList.Clear();
     }
 
-    private static void ShowImageNode(int i, int iconID)
+    private void ShowImageNode(int i, int iconID)
     {
-        if (i is < 0 or > 7 || PartyList is null || NodeList.Count <= i)
+        if (i is < 0 or > 7 || PartyList is null || nodeList.Count <= i)
             return;
 
-        var node = NodeList[i];
+        var node = nodeList[i];
         if (node is null) return;
 
         node.LoadIcon((uint)iconID);
         var component = PartyList->GetNodeById((uint)(10 + i));
-        node.Position    = new(component->X + BasePosition.X + ModuleConfig.IconOffset.X, component->Y + BasePosition.Y + ModuleConfig.IconOffset.Y);
+        node.Position    = new(component->X + basePosition.X + config.IconOffset.X, component->Y + basePosition.Y + config.IconOffset.Y);
         node.TextureSize = node.ActualTextureSize;
-        node.Size        = new(ModuleConfig.Size);
+        node.Size        = new(config.Size);
         node.IsVisible   = true;
 
         ModifyPartyMemberNumber(false);
     }
 
-    private static void HideImageNode(int i)
+    private void HideImageNode(int i)
     {
-        if (i is < 0 or > 7 || NodeList.Count <= i) return;
-        
-        var node = NodeList[i];
+        if (i is < 0 or > 7 || nodeList.Count <= i) return;
+
+        var node = nodeList[i];
         if (node == null) return;
-        
+
         node.IsVisible = false;
     }
 
-    private static void RefreshNodeStatus()
+    private void RefreshNodeStatus()
     {
         var addon = PartyList;
         if (!addon->IsAddonAndNodesReady())
             return;
 
-        foreach (var (node, i) in NodeList.Zip(Enumerable.Range(10, 8)))
+        foreach (var (node, i) in nodeList.Zip(Enumerable.Range(10, 8)))
         {
             var component = PartyList->GetNodeById((uint)i);
             if (component is null || !component->IsVisible())
                 continue;
-            
-            node.Position    = new(component->X + BasePosition.X + ModuleConfig.IconOffset.X, component->Y + BasePosition.Y + ModuleConfig.IconOffset.Y);
+
+            node.Position    = new(component->X + basePosition.X + config.IconOffset.X, component->Y + basePosition.Y + config.IconOffset.Y);
             node.TextureSize = node.ActualTextureSize;
-            node.Size        = new(ModuleConfig.Size);
+            node.Size        = new(config.Size);
             node.IsVisible   = true;
         }
     }
@@ -236,39 +239,41 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
     #region 工具
 
-    private static void AddMemberMark(int memberIndex, int markID)
+    private void AddMemberMark(int memberIndex, int markID)
     {
-        MarkedObject[markID] = memberIndex;
+        markedObject[markID] = memberIndex;
         ShowImageNode(memberIndex, markID);
-        NeedClear = false;
+        isNeedClear = false;
     }
 
-    private static void RemoveMemberMark(int memberIndex)
+    private void RemoveMemberMark(int memberIndex)
     {
-        if (MarkedObject.ContainsValue(memberIndex))
+        if (markedObject.ContainsValue(memberIndex))
         {
-            MarkedObject.Remove(MarkedObject.First(x => x.Value == memberIndex).Key);
+            markedObject.Remove(markedObject.First(x => x.Value == memberIndex).Key);
             HideImageNode(memberIndex);
         }
 
-        if (MarkedObject.Count == 0)
-            NeedClear = true;
+        if (markedObject.Count == 0)
+            isNeedClear = true;
     }
 
-    private static void RemoveMark(int markID)
+    private void RemoveMark(int markID)
     {
-        if (MarkedObject.Remove(markID, out var outValue))
+        if (markedObject.Remove(markID, out var outValue))
             HideImageNode(outValue);
-        if (MarkedObject.Count == 0)
-            NeedClear = true;
+        if (markedObject.Count == 0)
+            isNeedClear = true;
     }
 
     private static bool FindMember(uint entityID, out int index)
     {
         var pAgentHUD = AgentHUD.Instance();
+
         for (var i = 0; i < pAgentHUD->PartyMemberCount; ++i)
         {
             var charData = pAgentHUD->PartyMembers[i];
+
             if (entityID == charData.EntityId)
             {
                 index = i;
@@ -278,8 +283,9 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
         if (InfoProxyCrossRealm.Instance()->IsCrossRealm)
         {
-            var myGroup = InfoProxyCrossRealm.GetMemberByEntityId(LocalPlayerState.EntityID);
+            var myGroup      = InfoProxyCrossRealm.GetMemberByEntityId(LocalPlayerState.EntityID);
             var pGroupMember = InfoProxyCrossRealm.GetMemberByEntityId(entityID);
+
             if (myGroup is not null && pGroupMember is not null && pGroupMember->GroupIndex == myGroup->GroupIndex)
             {
                 index = pGroupMember->MemberIndex;
@@ -318,16 +324,16 @@ public unsafe class MarkerInPartyList : DailyModuleBase
             case AddonEvent.PostDraw:
                 if (!PartyList->IsAddonAndNodesReady()) return;
 
-                if (NeedClear && MarkedObject.Count is 0 && UIModule.IsScreenReady())
+                if (isNeedClear && markedObject.Count is 0 && UIModule.IsScreenReady())
                 {
                     ResetPartyMemberList();
-                    NeedClear = false;
+                    isNeedClear = false;
 
                     return;
                 }
 
                 // 加入
-                if (NodeList.Count == 0)
+                if (nodeList.Count == 0)
                 {
                     foreach (var _ in Enumerable.Range(10, 8))
                     {
@@ -336,11 +342,11 @@ public unsafe class MarkerInPartyList : DailyModuleBase
                             IconId    = DEFAULT_ICON_ID,
                             NodeFlags = NodeFlags.Fill,
                             DrawFlags = DrawFlags.None,
-                            WrapMode  = WrapMode.Stretch,
+                            WrapMode  = WrapMode.Stretch
                         };
                         imageNode.Priority = 5;
 
-                        NodeList.Add(imageNode);
+                        nodeList.Add(imageNode);
                         imageNode.AttachNode(PartyList);
                     }
 
@@ -348,6 +354,7 @@ public unsafe class MarkerInPartyList : DailyModuleBase
                         return;
 
                     var markers = MarkingController.Instance()->Markers;
+
                     for (var i = 0; i < markers.Length; i++)
                     {
                         var gameObjectID = markers[i].ObjectId;
@@ -365,10 +372,16 @@ public unsafe class MarkerInPartyList : DailyModuleBase
 
     #endregion
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
+        public bool    HidePartyListIndexNumber = true;
         public Vector2 IconOffset               = new(0, 0);
         public int     Size                     = 27;
-        public bool    HidePartyListIndexNumber = true;
     }
+
+    #region 常量
+
+    private const int DEFAULT_ICON_ID = 61201;
+
+    #endregion
 }

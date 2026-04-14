@@ -1,48 +1,53 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Internal;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using OmenTools.Interop.Game.Models;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BlockInputWhenFishing : DailyModuleBase
+public unsafe class BlockInputWhenFishing : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("BlockInputWhenFishingTitle"),
-        Description = GetLoc("BlockInputWhenFishingDescription"),
-        Category    = ModuleCategories.System,
+        Title       = Lang.Get("BlockInputWhenFishingTitle"),
+        Description = Lang.Get("BlockInputWhenFishingDescription"),
+        Category    = ModuleCategory.System
     };
-
+    
     private static readonly CompSig IsKeyDownSig =
         new("E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? BA ?? ?? ?? ?? 48 8B CE E8 ?? ?? ?? ?? 84 C0 0F 84");
-    private delegate bool IsKeyDownDelegate(UIInputData* data, int id);
-    private static Hook<IsKeyDownDelegate>? IsKeyDownHook;
+    private delegate bool                     IsKeyDownDelegate(UIInputData* data, int id);
+    private          Hook<IsKeyDownDelegate>? IsKeyDownHook;
 
     protected override void Init()
     {
-        IsKeyDownHook ??= DService.Instance().Hook.HookFromSignature<IsKeyDownDelegate>(IsKeyDownSig.Get(), IsKeyDownDetour);
-        DService.Instance().Condition.ConditionChange += OnConditionChanged;
+        IsKeyDownHook                                 ??= DService.Instance().Hook.HookFromSignature<IsKeyDownDelegate>(IsKeyDownSig.Get(), IsKeyDownDetour);
+        DService.Instance().Condition.ConditionChange +=  OnConditionChanged;
 
-        if (DService.Instance().Condition[ConditionFlag.Gathering]) 
+        if (DService.Instance().Condition[ConditionFlag.Gathering])
             IsKeyDownHook.Enable();
     }
 
-    protected override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
-    private static void OnConditionChanged(ConditionFlag flag, bool isSet)
+    private void OnConditionChanged(ConditionFlag flag, bool isSet)
     {
         if (flag != ConditionFlag.Gathering) return;
 
-        if (isSet) 
+        if (isSet)
             IsKeyDownHook.Enable();
-        else 
+        else
             IsKeyDownHook.Disable();
     }
 
-    private static bool IsKeyDownDetour(UIInputData* data, int id) =>
-        IsConflictKeyPressed() && IsKeyDownHook.Original(data, id);
+    private bool IsKeyDownDetour(UIInputData* data, int id) =>
+        PluginConfig.Instance().ConflictKeyBinding.IsPressed() && IsKeyDownHook.Original(data, id);
 
-    protected override void Uninit() => 
+    protected override void Uninit() =>
         DService.Instance().Condition.ConditionChange -= OnConditionChanged;
 }

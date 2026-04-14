@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -8,11 +6,11 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoReplyChatBot
 {
-    private static void AppendHistory(string key, string role, string text, string name = null)
+    private void AppendHistory(string key, string role, string text, string name = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
 
-        var list = ModuleConfig.Histories.GetOrAdd(key, _ => []);
+        var list = config.Histories.GetOrAdd(key, _ => []);
 
         var displayName = name;
 
@@ -21,7 +19,7 @@ public partial class AutoReplyChatBot
             if (role.Equals("user", StringComparison.OrdinalIgnoreCase))
                 displayName = key;
             else if (role.Equals("assistant", StringComparison.OrdinalIgnoreCase))
-                displayName = ModuleConfig.Model;
+                displayName = config.Model;
             else
                 displayName = role;
         }
@@ -31,8 +29,8 @@ public partial class AutoReplyChatBot
         RequestSaveConfig();
     }
 
-    private static bool IsCooldownReady(string key) =>
-        GetSession(key).IsCooldownReady(ModuleConfig.CooldownSeconds);
+    private bool IsCooldownReady(string key) =>
+        GetSession(key).IsCooldownReady(config.CooldownSeconds);
 
     private static void SetCooldown(string key) =>
         GetSession(key).SetCooldown();

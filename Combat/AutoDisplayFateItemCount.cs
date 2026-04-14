@@ -1,39 +1,43 @@
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using KamiToolKit.Overlay;
+using KamiToolKit.Overlay.UiOverlay;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayFateItemCount : DailyModuleBase
+public unsafe class AutoDisplayFateItemCount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = GetLoc("AutoDisplayFateItemCountTitle"),
-        Description     = GetLoc("AutoDisplayFateItemCountDescription"),
-        Category        = ModuleCategories.Combat,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayFateItemCount-UI.png"]
+        Title           = Lang.Get("AutoDisplayFateItemCountTitle"),
+        Description     = Lang.Get("AutoDisplayFateItemCountDescription"),
+        Category        = ModuleCategory.Combat,
+        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayFateItemCount-UI.png"] // TODO: 仓库迁移
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private static OverlayController? Controller;
-    
+    private OverlayController? controller;
+
     protected override void Init()
     {
-        Controller ??= new();
-        Controller.CreateNode(() => new FateInfoNode());
+        controller ??= new();
+        controller.AddNode(new FateInfoNode());
     }
 
     protected override void Uninit()
     {
-        Controller?.Dispose();
-        Controller = null;
+        controller?.Dispose();
+        controller = null;
     }
 
     private class FateInfoNode : OverlayNode
@@ -41,22 +45,22 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
         public override OverlayLayer OverlayLayer     => OverlayLayer.Foreground;
         public override bool         HideWithNativeUi => false;
 
-        private GridNode TableNode { get; }
+        private GridNode TableNode { get; set; }
+
+        private HorizontalListNode HeaderNode { get; set; }
+        private IconImageNode      IconNode   { get; set; }
+        private TextNode           NameNode   { get; set; }
+
+        private TextNode HoldLabelNode   { get; set; }
+        private TextNode HoldCountNode   { get; set; }
+        private TextNode HandInLabelNode { get; set; }
+        private TextNode HandInCountNode { get; set; }
         
-        private HorizontalListNode HeaderNode { get; }
-        private IconImageNode      IconNode   { get; }
-        private TextNode           NameNode   { get; }
-
-        private TextNode      HoldLabelNode   { get; }
-        private TextNode      HoldCountNode   { get; }
-        private TextNode      HandInLabelNode { get; }
-        private TextNode      HandInCountNode { get; }
-
         public FateInfoNode()
         {
             Scale = new(1.5f);
             Size  = new(200, 76);
-            
+
             HeaderNode = new HorizontalListNode
             {
                 Size      = new(200, 36),
@@ -68,7 +72,7 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
                 Size       = new(32),
                 IconId     = 60498,
                 FitTexture = true,
-                IsVisible  = true,
+                IsVisible  = true
             };
             HeaderNode.AddNode(IconNode);
 
@@ -83,29 +87,29 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
                 TextFlags        = TextFlags.Edge,
                 AlignmentType    = AlignmentType.TopLeft,
                 TextColor        = ColorHelper.GetColor(50),
-                TextOutlineColor = ColorHelper.GetColor(30),
+                TextOutlineColor = ColorHelper.GetColor(30)
             };
             HeaderNode.AddNode(NameNode);
-            
+
             HeaderNode.AttachNode(this);
-            
+
             TableNode = new()
             {
                 Position = new(0, 40),
                 Size     = new Vector2(100, 28) * 2,
-                GridSize = new(2, 2),
+                GridSize = new(2, 2)
             };
 
             HoldLabelNode = new()
             {
-                String           = GetLoc("AutoDisplayFateItemCount-HoldCount"),
+                String           = Lang.Get("AutoDisplayFateItemCount-HoldCount"),
                 FontSize         = 14,
                 TextFlags        = TextFlags.Edge,
                 TextOutlineColor = ColorHelper.GetColor(37),
-                TextColor        = ColorHelper.GetColor(50),
+                TextColor        = ColorHelper.GetColor(50)
             };
             HoldLabelNode.AttachNode(TableNode[0, 0]);
-            
+
             HoldCountNode = new()
             {
                 String           = "0",
@@ -113,20 +117,20 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
                 TextFlags        = TextFlags.Edge,
                 FontType         = FontType.Miedinger,
                 TextOutlineColor = ColorHelper.GetColor(30),
-                TextColor        = ColorHelper.GetColor(50),
+                TextColor        = ColorHelper.GetColor(50)
             };
             HoldCountNode.AttachNode(TableNode[0, 1]);
-            
+
             HandInLabelNode = new()
             {
-                String           = GetLoc("AutoDisplayFateItemCount-HandInCount"),
+                String           = Lang.Get("AutoDisplayFateItemCount-HandInCount"),
                 FontSize         = 14,
                 TextFlags        = TextFlags.Edge,
                 TextOutlineColor = ColorHelper.GetColor(37),
-                TextColor        = ColorHelper.GetColor(50),
+                TextColor        = ColorHelper.GetColor(50)
             };
             HandInLabelNode.AttachNode(TableNode[1, 0]);
-            
+
             HandInCountNode = new()
             {
                 String           = "0",
@@ -134,16 +138,17 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
                 TextFlags        = TextFlags.Edge,
                 FontType         = FontType.Miedinger,
                 TextOutlineColor = ColorHelper.GetColor(30),
-                TextColor        = ColorHelper.GetColor(50),
+                TextColor        = ColorHelper.GetColor(50)
             };
             HandInCountNode.AttachNode(TableNode[1, 1]);
-            
+
             TableNode.AttachNode(this);
         }
         
         protected override void OnUpdate()
         {
             var currentFate = FateManager.Instance()->CurrentFate;
+
             if (currentFate == null                                                  ||
                 !LuminaGetter.TryGetRow<Fate>(currentFate->FateId, out var fateData) ||
                 fateData.EventItem.RowId      == 0                                   ||
@@ -159,6 +164,7 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
             AtkResNode*       nodeItemCount   = null;
             AtkComponentNode* nodeDescription = null;
             AtkComponentNode* nodeProgressBar = null;
+
             for (var i = 0; i < ToDoList->UldManager.NodeListCount; i++)
             {
                 var node = ToDoList->UldManager.NodeList[i];
@@ -171,7 +177,7 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
                 if (node->NodeId == 113001)
                     nodeProgressBar = (AtkComponentNode*)node;
             }
-            
+
             if (nodeItemCount == null || nodeDescription == null || nodeProgressBar == null) return;
 
             var progressBarState = nodeProgressBar->Component->UldManager.SearchNodeById(4)->GetNodeState();
@@ -180,10 +186,14 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
             var nodeStateDescription = nodeDescription->GetNodeState();
             var nodeStateItemCount   = nodeItemCount->GetNodeState();
             Position = progressBarState.TopLeft +
-                       new Vector2(0, nodeStateProgressBar.Height +
-                                      nodeStateDescription.Height +
-                                      nodeStateItemCount.Height +
-                                      12f);
+                       new Vector2
+                       (
+                           0,
+                           nodeStateProgressBar.Height +
+                           nodeStateDescription.Height +
+                           nodeStateItemCount.Height   +
+                           12f
+                       );
 
             UpdateFateItemHeader(fateData.EventItem.Value);
             HoldCountNode.SetNumber((int)LocalPlayerState.GetItemCount(fateData.EventItem.RowId));
@@ -192,8 +202,8 @@ public unsafe class AutoDisplayFateItemCount : DailyModuleBase
 
         private void UpdateFateItemHeader(EventItem item)
         {
-            HeaderNode.IsVisible  = true;
-            
+            HeaderNode.IsVisible = true;
+
             IconNode.IconId = item.Icon;
             NameNode.String = $"{item.Singular}";
             while (NameNode.FontSize > 1 && NameNode.GetTextDrawSize(NameNode.String).X > NameNode.Size.X)

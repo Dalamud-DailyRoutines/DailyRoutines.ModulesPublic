@@ -1,9 +1,8 @@
 using System.Collections.Frozen;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
@@ -13,42 +12,22 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud.Attributes;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoUseEventItem : DailyModuleBase
+public unsafe class AutoUseEventItem : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoUseEventItemTitle"),
-        Description = GetLoc("AutoUseEventItemDescription"),
-        Category    = ModuleCategories.General
+        Title       = Lang.Get("AutoUseEventItemTitle"),
+        Description = Lang.Get("AutoUseEventItemDescription"),
+        Category    = ModuleCategory.General
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-
-    private static readonly string[] InventoryEventAddons =
-    [
-        "InventoryEventGrid",
-        "InventoryEventGrid0",
-        "InventoryEventGrid0E"
-    ];
-
-    private static readonly Dictionary<uint, HashSet<uint>> QuestRowIDToEventItems =
-        LuminaGetter.Get<EventItem>()
-                    .Where(x => x.Quest.ValueNullable != null && x.Action.ValueNullable != null)
-                    .GroupBy(item => item.Quest.RowId)
-                    .ToDictionary
-                    (
-                        group => group.Key,
-                        group => group.Select(item => item.RowId).ToHashSet()
-                    );
-
-    private static readonly FrozenSet<uint> InvalidLogMessageID =
-    [
-        7732, // 当前状态下无法进行该操作。
-        563   // 无法指定目标。
-    ];
 
     protected override void Init()
     {
@@ -79,18 +58,18 @@ public unsafe class AutoUseEventItem : DailyModuleBase
     private static void OnAddonInventoryEvent()
     {
         if (!UIModule.Instance()->IsInventoryOpen()               ||
-            IsCasting                                             ||
+            DService.Instance().Condition.IsCasting               ||
             DService.Instance().Condition[ConditionFlag.InCombat] ||
             Request != null                                       ||
             !IsAnyQuestNearby(out var questRowID))
             return;
-        
+
         IGameObject gameObj;
         if (TargetManager.Target != null)
             gameObj = TargetManager.Target;
         else
             IsAnyMTQNearby(out gameObj);
-        
+
         if (!QuestRowIDToEventItems.TryGetValue(questRowID, out var eventItemList)) return;
 
         if (DService.Instance().Condition[ConditionFlag.OccupiedInQuestEvent])
@@ -98,12 +77,12 @@ public unsafe class AutoUseEventItem : DailyModuleBase
             DService.Instance().Framework.RunOnTick(OnAddonInventoryEvent);
             return;
         }
-        
+
         var filterItems = FilterEItemsByInventory(eventItemList);
 
         foreach (var eItem in filterItems)
         {
-            if (IsCasting) return;
+            if (DService.Instance().Condition.IsCasting) return;
             UseActionManager.Instance().UseActionLocation(ActionType.EventItem, eItem, gameObj.GameObjectID, gameObj.Position);
         }
     }
@@ -180,6 +159,37 @@ public unsafe class AutoUseEventItem : DailyModuleBase
         return result;
     }
 
+    #region IPC
+
     [IPCProvider("DailyRoutines.Modules.AutoUseEventItem.UseEventItem")]
-    private static void UseEventItem() => OnAddonInventoryEvent();
+    private void UseEventItem() => OnAddonInventoryEvent();
+
+    #endregion
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> InventoryEventAddons =
+    [
+        "InventoryEventGrid",
+        "InventoryEventGrid0",
+        "InventoryEventGrid0E"
+    ];
+
+    private static readonly FrozenDictionary<uint, HashSet<uint>> QuestRowIDToEventItems =
+        LuminaGetter.Get<EventItem>()
+                    .Where(x => x.Quest.ValueNullable != null && x.Action.ValueNullable != null)
+                    .GroupBy(item => item.Quest.RowId)
+                    .ToFrozenDictionary
+                    (
+                        group => group.Key,
+                        group => group.Select(item => item.RowId).ToHashSet()
+                    );
+
+    private static readonly FrozenSet<uint> InvalidLogMessageID =
+    [
+        7732, // 当前状态下无法进行该操作。
+        563   // 无法指定目标。
+    ];
+
+    #endregion
 }

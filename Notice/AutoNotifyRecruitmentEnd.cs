@@ -1,34 +1,43 @@
 using System.Collections.Frozen;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyRecruitmentEnd : DailyModuleBase
+public class AutoNotifyRecruitmentEnd : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyRecruitmentEndTitle"),
-        Description = GetLoc("AutoNotifyRecruitmentEndDescription"),
-        Category    = ModuleCategories.Notice,
+        Title       = Lang.Get("AutoNotifyRecruitmentEndTitle"),
+        Description = Lang.Get("AutoNotifyRecruitmentEndDescription"),
+        Category    = ModuleCategory.Notice
     };
-    
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static readonly FrozenSet<uint> ValidLogMessages = [983, 984, 985, 986, 7451, 7452];
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() =>
         LogMessageManager.Instance().RegPost(OnLogMessage);
-    
-    protected override void Uninit() => 
+
+    protected override void Uninit() =>
         LogMessageManager.Instance().Unreg(OnLogMessage);
 
     private static void OnLogMessage(uint logMessageID, LogMessageQueueItem item)
     {
         if (!ValidLogMessages.Contains(logMessageID)) return;
-        
+
         var content = LuminaWrapper.GetLogMessageText(logMessageID);
-        NotificationInfo(content);
-        Speak(content);
+        NotifyHelper.Instance().NotificationInfo(content);
+        NotifyHelper.Speak(content);
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<uint> ValidLogMessages = [983, 984, 985, 986, 7451, 7452];
+
+    #endregion
 }

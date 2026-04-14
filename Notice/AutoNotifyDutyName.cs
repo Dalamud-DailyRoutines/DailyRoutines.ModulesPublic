@@ -1,43 +1,51 @@
-using System.Linq;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyDutyName : DailyModuleBase
+public class AutoNotifyDutyName : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyDutyNameTitle"),
-        Description = GetLoc("AutoNotifyDutyNameDescription"),
-        Category    = ModuleCategories.Notice,
+        Title       = Lang.Get("AutoNotifyDutyNameTitle"),
+        Description = Lang.Get("AutoNotifyDutyNameDescription"),
+        Category    = ModuleCategory.Notice
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-        
+        config = Config.Load(this) ?? new();
+
         DService.Instance().ClientState.TerritoryChanged += OnZoneChange;
     }
-
+    
+    protected override void Uninit() =>
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChange;
+    
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
-            SaveConfig(ModuleConfig);
-        
-        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-            SaveConfig(ModuleConfig);
-        
-        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref config.SendTTS))
+            config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
     }
 
-    private static unsafe void OnZoneChange(ushort territory)
+    private unsafe void OnZoneChange(ushort territory)
     {
         if (GameMain.Instance()->CurrentContentFinderConditionId == 0 ||
             !LuminaGetter.TryGetRow<ContentFinderCondition>(GameMain.Instance()->CurrentContentFinderConditionId, out var content))
@@ -49,31 +57,35 @@ public class AutoNotifyDutyName : DailyModuleBase
                             : $"{content.ClassJobLevelRequired}-{content.ClassJobLevelSync}";
 
         var maxILGearIL = content.ClassJobLevelSync == 0
-                            ? 0
-                            : PresetSheet.Gears.Values
-                                         .Where(x => x.LevelEquip != 1 && x.LevelEquip <= content.ClassJobLevelSync)
-                                         .OrderByDescending(x => x.LevelItem.RowId)
-                                         .FirstOrDefault().LevelItem.RowId;
-        
-        var message = GetLoc("AutoNotifyDutyName-NoticeMessage", levelText, content.Name.ToString(),
-                             GetLoc("ILMinimum"), content.ItemLevelRequired,          
-                             GetLoc("ILMaximum"), content.ItemLevelSync != 0 ? content.ItemLevelSync : maxILGearIL);
-        
-        if (ModuleConfig.SendTTS) 
-            Speak(message);
-        if (ModuleConfig.SendChat) 
-            Chat(message);
-        if (ModuleConfig.SendNotification) 
-            NotificationInfo(message);
+                              ? 0
+                              : Sheets.Gears.Values
+                                      .Where(x => x.LevelEquip != 1 && x.LevelEquip <= content.ClassJobLevelSync)
+                                      .OrderByDescending(x => x.LevelItem.RowId)
+                                      .FirstOrDefault().LevelItem.RowId;
+
+        var message = Lang.Get
+        (
+            "AutoNotifyDutyName-NoticeMessage",
+            levelText,
+            content.Name.ToString(),
+            Lang.Get("ILMinimum"),
+            content.ItemLevelRequired,
+            Lang.Get("ILMaximum"),
+            content.ItemLevelSync != 0 ? content.ItemLevelSync : maxILGearIL
+        );
+
+        if (config.SendTTS)
+            NotifyHelper.Speak(message);
+        if (config.SendChat)
+            NotifyHelper.Instance().Chat(message);
+        if (config.SendNotification)
+            NotifyHelper.Instance().NotificationInfo(message);
     }
-
-    protected override void Uninit() => 
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChange;
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
-        public bool SendTTS          = true;
-        public bool SendNotification = true;
         public bool SendChat         = true;
+        public bool SendNotification = true;
+        public bool SendTTS          = true;
     }
 }

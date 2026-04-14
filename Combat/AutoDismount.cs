@@ -1,25 +1,27 @@
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using System.Collections.Frozen;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDismount : DailyModuleBase
+public unsafe class AutoDismount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDismountTitle"),
-        Description = GetLoc("AutoDismountDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("AutoDismountTitle"),
+        Description = Lang.Get("AutoDismountDescription"),
+        Category    = ModuleCategory.Combat
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private static readonly HashSet<ActionType> MustDismountActionTypes = [ActionType.Item, ActionType.Ornament];
 
     protected override void Init()
     {
@@ -27,35 +29,54 @@ public unsafe class AutoDismount : DailyModuleBase
 
         UseActionManager.Instance().RegPostUseAction(OnUseAction);
     }
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnUseAction);
 
-    private void OnUseAction(bool result, ActionType actionType, uint actionID, ulong targetID, uint extraParam,
-                             ActionManager.UseActionMode queueState, uint comboRouteID)
+    private void OnUseAction
+    (
+        bool                        result,
+        ActionType                  actionType,
+        uint                        actionID,
+        ulong                       targetID,
+        uint                        extraParam,
+        ActionManager.UseActionMode queueState,
+        uint                        comboRouteID
+    )
     {
-        if (!IsOnMount) return;
+        if (!DService.Instance().Condition.IsOnMount) return;
 
         var adjustedActionID = ActionManager.Instance()->GetAdjustedActionId(actionID);
         if (!IsNeedToDismount(actionType, adjustedActionID, targetID)) return;
-        
+
         TaskHelper.Abort();
-        
-        MovementManager.Dismount();
-        TaskHelper.Enqueue(
-            () =>
+
+        MovementManager.Instance().Dismount();
+        TaskHelper.Enqueue
+        (() =>
             {
-                if (MovementManager.IsManagerBusy || DService.Instance().Condition[ConditionFlag.Mounted]) return false;
-                return UseActionManager.Instance().UseAction(actionType, actionID, targetID, extraParam, 
-                                                  queueState, comboRouteID);
-            });
+                if (MovementManager.Instance().IsManagerBusy || DService.Instance().Condition[ConditionFlag.Mounted]) return false;
+                return UseActionManager.Instance().UseAction
+                (
+                    actionType,
+                    actionID,
+                    targetID,
+                    extraParam,
+                    queueState,
+                    comboRouteID
+                );
+            }
+        );
     }
 
     private static bool IsNeedToDismount(ActionType actionType, uint actionID, ulong actionTargetID)
     {
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
         if (!LuminaGetter.TryGetRow<Action>(actionID, out var actionRow)) return false;
-        
+
         var actionManager = ActionManager.Instance();
         if (actionManager == null) return false;
-        
+
         // 坐骑
         if (actionType == ActionType.Mount) return false;
         // 该技能无须下坐骑
@@ -70,6 +91,7 @@ public unsafe class AutoDismount : DailyModuleBase
         if (actionRow is { CanTargetSelf: true } or { TargetArea: true }) return true;
 
         var actionObject = DService.Instance().ObjectTable.SearchByID(actionTargetID);
+
         // 技能必须要有目标
         if (actionRow.Range != 0)
         {
@@ -88,7 +110,10 @@ public unsafe class AutoDismount : DailyModuleBase
 
         return true;
     }
+    
+    #region 常量
 
-    protected override void Uninit() => 
-        UseActionManager.Instance().Unreg(OnUseAction);
+    private static readonly FrozenSet<ActionType> MustDismountActionTypes = [ActionType.Item, ActionType.Ornament];
+
+    #endregion
 }

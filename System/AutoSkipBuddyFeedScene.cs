@@ -1,28 +1,31 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.Interop.Game.Models;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSkipBuddyFeedScene : DailyModuleBase
+public unsafe class AutoSkipBuddyFeedScene : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoSkipBuddyFeedSceneTitle"),
-        Description = GetLoc("AutoSkipBuddyFeedSceneDescription"),
-        Category    = ModuleCategories.System
+        Title       = Lang.Get("AutoSkipBuddyFeedSceneTitle"),
+        Description = Lang.Get("AutoSkipBuddyFeedSceneDescription"),
+        Category    = ModuleCategory.System
     };
-
+    
     private static readonly CompSig PlayFeedBuddySceneSig =
         new("E8 ?? ?? ?? ?? 48 8B 5C 24 ?? 48 8D 4C 24 ?? E8 ?? ?? ?? ?? 33 C0 48 83 C4 ?? C3 CC CC CC CC CC CC CC CC CC CC CC 48 83 EC");
     private delegate void PlayFeedBuddySceneDelegate(HousingManager* manager);
-    private static Hook<PlayFeedBuddySceneDelegate>? PlayFeedBuddySceneHook;
+    private Hook<PlayFeedBuddySceneDelegate>? PlayFeedBuddySceneHook;
 
     protected override void Init()
     {
         PlayFeedBuddySceneHook ??= PlayFeedBuddySceneSig.GetHook<PlayFeedBuddySceneDelegate>(PlayFeedBuddySceneDetour);
         PlayFeedBuddySceneHook.Enable();
     }
-    
+
     private static void PlayFeedBuddySceneDetour(HousingManager* manager) { }
 }

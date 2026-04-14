@@ -1,8 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using Dalamud.Game.Text;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -14,8 +12,8 @@ public partial class AutoReplyChatBot
 
         using (var combo = ImRaii.Combo
                (
-                   $"{GetLoc("AutoReplyChatBot-ValidChatTypes")}",
-                   string.Join(',', ModuleConfig.ValidChatTypes.Select(x => ValidChatTypes.GetValueOrDefault(x, string.Empty))),
+                   $"{Lang.Get("AutoReplyChatBot-ValidChatTypes")}",
+                   string.Join(',', config.ValidChatTypes.Select(x => ValidChatTypes.GetValueOrDefault(x, string.Empty))),
                    ImGuiComboFlags.HeightLarge
                ))
         {
@@ -23,119 +21,119 @@ public partial class AutoReplyChatBot
             {
                 foreach (var (chatType, loc) in ValidChatTypes)
                 {
-                    if (ImGui.Selectable($"{loc}##{chatType}", ModuleConfig.ValidChatTypes.Contains(chatType), ImGuiSelectableFlags.DontClosePopups))
+                    if (ImGui.Selectable($"{loc}##{chatType}", config.ValidChatTypes.Contains(chatType), ImGuiSelectableFlags.DontClosePopups))
                     {
-                        if (!ModuleConfig.ValidChatTypes.Remove(chatType))
-                            ModuleConfig.ValidChatTypes.Add(chatType);
+                        if (!config.ValidChatTypes.Remove(chatType))
+                            config.ValidChatTypes.Add(chatType);
                         RequestSaveConfig();
                     }
                 }
             }
         }
 
-        if (ModuleConfig.ValidChatTypes.Contains(XivChatType.TellIncoming) &&
-            ImGui.Checkbox(GetLoc("AutoReplyChatBot-OnlyReplyNonFriendTell"), ref ModuleConfig.OnlyReplyNonFriendTell))
+        if (config.ValidChatTypes.Contains(XivChatType.TellIncoming) &&
+            ImGui.Checkbox(Lang.Get("AutoReplyChatBot-OnlyReplyNonFriendTell"), ref config.OnlyReplyNonFriendTell))
             RequestSaveConfig();
 
         ImGui.NewLine();
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-CooldownSeconds"), ref ModuleConfig.CooldownSeconds, 0, 120))
+        if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-CooldownSeconds"), ref config.CooldownSeconds, 0, 120))
             RequestSaveConfig();
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(GetLoc("AutoReplyChatBot-EnableContextLimit"), ref ModuleConfig.EnableContextLimit))
+        if (ImGui.Checkbox(Lang.Get("AutoReplyChatBot-EnableContextLimit"), ref config.EnableContextLimit))
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-EnableContextLimit-Help"));
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-EnableContextLimit-Help"));
 
-        using (ImRaii.Disabled(!ModuleConfig.EnableContextLimit))
+        using (ImRaii.Disabled(!config.EnableContextLimit))
         {
             ImGui.SetNextItemWidth(fieldW);
-            if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-MaxContextMessages"), ref ModuleConfig.MaxContextMessages, 1, 50))
+            if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxContextMessages"), ref config.MaxContextMessages, 1, 50))
                 RequestSaveConfig();
         }
 
         ImGui.NewLine();
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-MaxHistory"), ref ModuleConfig.MaxHistory, 1, 50))
+        if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxHistory"), ref config.MaxHistory, 1, 50))
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-MaxHistory-Help"));
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-MaxHistory-Help"));
 
         ImGui.NewLine();
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.SliderInt(GetLoc("AutoReplyChatBot-MaxTokens"), ref ModuleConfig.MaxTokens, 256, 8192))
+        if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxTokens"), ref config.MaxTokens, 256, 8192))
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-MaxTokens-Help"));
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-MaxTokens-Help"));
 
         ImGui.NewLine();
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.SliderFloat(GetLoc("AutoReplyChatBot-Temperature"), ref ModuleConfig.Temperature, 0.0f, 2.0f))
+        if (ImGui.SliderFloat(Lang.Get("AutoReplyChatBot-Temperature"), ref config.Temperature, 0.0f, 2.0f))
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-Temperature-Help"));
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-Temperature-Help"));
     }
 
     private void DrawAPITab(float fieldW)
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Type"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Type"));
 
         using (ImRaii.PushIndent())
         {
-            var currentProvider = ModuleConfig.Provider;
+            var currentProvider = config.Provider;
             if (ImGui.RadioButton("OpenAI", currentProvider == APIProvider.OpenAI))
-                ModuleConfig.Provider = APIProvider.OpenAI;
+                config.Provider = APIProvider.OpenAI;
 
             ImGui.SameLine();
             if (ImGui.RadioButton("Ollama", currentProvider == APIProvider.Ollama))
-                ModuleConfig.Provider = APIProvider.Ollama;
+                config.Provider = APIProvider.Ollama;
             RequestSaveConfig();
         }
 
         ImGui.NewLine();
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText("API Key", ref ModuleConfig.APIKey, 256))
+        if (ImGui.InputText("API Key", ref config.APIKey, 256))
             RequestSaveConfig();
-        ImGuiOm.TooltipHover(ModuleConfig.APIKey);
+        ImGuiOm.TooltipHover(config.APIKey);
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText("Base URL", ref ModuleConfig.BaseURL, 256))
+        if (ImGui.InputText("Base URL", ref config.BaseURL, 256))
             RequestSaveConfig();
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputText(GetLoc("AutoReplyChatBot-Model"), ref ModuleConfig.Model, 128))
+        if (ImGui.InputText(Lang.Get("AutoReplyChatBot-Model"), ref config.Model, 128))
             RequestSaveConfig();
     }
 
     private void DrawFilterTab(float fieldW, float promptW, float promptH)
     {
-        if (ImGui.Checkbox(GetLoc("AutoReplyChatBot-EnableFilterModel"), ref ModuleConfig.EnableFilter))
+        if (ImGui.Checkbox(Lang.Get("AutoReplyChatBot-EnableFilterModel"), ref config.EnableFilter))
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-EnableFilterModel-Help"));
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-EnableFilterModel-Help"));
 
-        using (ImRaii.Disabled(!ModuleConfig.EnableFilter))
+        using (ImRaii.Disabled(!config.EnableFilter))
         {
             ImGui.SetNextItemWidth(fieldW);
-            if (ImGui.InputText($"{GetLoc("AutoReplyChatBot-Model")}##FilterModelInput", ref ModuleConfig.FilterModel, 128))
+            if (ImGui.InputText($"{Lang.Get("AutoReplyChatBot-Model")}##FilterModelInput", ref config.FilterModel, 128))
                 RequestSaveConfig();
-            ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-FiterModelChoice-Help"));
+            ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-FiterModelChoice-Help"));
 
             ImGui.NewLine();
 
-            ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-FilterSystemPrompt"));
+            ImGui.TextUnformatted(Lang.Get("AutoReplyChatBot-FilterSystemPrompt"));
 
             ImGui.SameLine();
 
-            if (ImGui.SmallButton($"{GetLoc("Reset")}##ResetFilterPrompt"))
+            if (ImGui.SmallButton($"{Lang.Get("Reset")}##ResetFilterPrompt"))
             {
-                ModuleConfig.FilterPrompt = FILTER_SYSTEM_PROMPT;
+                config.FilterPrompt = FILTER_SYSTEM_PROMPT;
                 RequestSaveConfig();
             }
 
-            ImGui.InputTextMultiline("##FilterSystemPrompt", ref ModuleConfig.FilterPrompt, 4096, new(promptW, promptH));
+            ImGui.InputTextMultiline("##FilterSystemPrompt", ref config.FilterPrompt, 4096, new(promptW, promptH));
             if (ImGui.IsItemDeactivatedAfterEdit())
                 RequestSaveConfig();
         }
@@ -143,14 +141,14 @@ public partial class AutoReplyChatBot
 
     private void DrawSystemPromptTab(float fieldW, float promptW, float promptH)
     {
-        if (ModuleConfig.SelectedPromptIndex < 0 ||
-            ModuleConfig.SelectedPromptIndex >= ModuleConfig.SystemPrompts.Count)
+        if (config.SelectedPromptIndex < 0 ||
+            config.SelectedPromptIndex >= config.SystemPrompts.Count)
         {
-            ModuleConfig.SelectedPromptIndex = 0;
+            config.SelectedPromptIndex = 0;
             RequestSaveConfig();
         }
 
-        var selectedPrompt = ModuleConfig.SystemPrompts[ModuleConfig.SelectedPromptIndex];
+        var selectedPrompt = config.SystemPrompts[config.SelectedPromptIndex];
 
         ImGui.SetNextItemWidth(fieldW);
 
@@ -158,10 +156,10 @@ public partial class AutoReplyChatBot
         {
             if (combo)
             {
-                for (var i = 0; i < ModuleConfig.SystemPrompts.Count; i++)
-                    if (ImGui.Selectable(ModuleConfig.SystemPrompts[i].Name, i == ModuleConfig.SelectedPromptIndex))
+                for (var i = 0; i < config.SystemPrompts.Count; i++)
+                    if (ImGui.Selectable(config.SystemPrompts[i].Name, i == config.SelectedPromptIndex))
                     {
-                        ModuleConfig.SelectedPromptIndex = i;
+                        config.SelectedPromptIndex = i;
                         RequestSaveConfig();
                     }
             }
@@ -169,10 +167,10 @@ public partial class AutoReplyChatBot
 
         ImGui.SameLine();
 
-        if (ImGui.Button(GetLoc("Add")))
+        if (ImGui.Button(Lang.Get("Add")))
         {
-            var newPromptName = $"Prompt {ModuleConfig.SystemPrompts.Count + 1}";
-            ModuleConfig.SystemPrompts.Add
+            var newPromptName = $"Prompt {config.SystemPrompts.Count + 1}";
+            config.SystemPrompts.Add
             (
                 new()
                 {
@@ -180,31 +178,31 @@ public partial class AutoReplyChatBot
                     Content = string.Empty
                 }
             );
-            ModuleConfig.SelectedPromptIndex = ModuleConfig.SystemPrompts.Count - 1;
+            config.SelectedPromptIndex = config.SystemPrompts.Count - 1;
             RequestSaveConfig();
         }
 
         ImGui.SameLine();
 
-        using (ImRaii.Disabled(ModuleConfig.SelectedPromptIndex == 0))
+        using (ImRaii.Disabled(config.SelectedPromptIndex == 0))
         {
-            if (ImGui.Button(GetLoc("Delete")))
+            if (ImGui.Button(Lang.Get("Delete")))
             {
-                ModuleConfig.SystemPrompts.RemoveAt(ModuleConfig.SelectedPromptIndex);
-                if (ModuleConfig.SelectedPromptIndex >= ModuleConfig.SystemPrompts.Count)
-                    ModuleConfig.SelectedPromptIndex = ModuleConfig.SystemPrompts.Count - 1;
+                config.SystemPrompts.RemoveAt(config.SelectedPromptIndex);
+                if (config.SelectedPromptIndex >= config.SystemPrompts.Count)
+                    config.SelectedPromptIndex = config.SystemPrompts.Count - 1;
 
                 RequestSaveConfig();
             }
         }
 
-        if (ModuleConfig.SelectedPromptIndex == 0)
+        if (config.SelectedPromptIndex == 0)
         {
             ImGui.SameLine();
 
-            if (ImGui.Button(GetLoc("Reset")))
+            if (ImGui.Button(Lang.Get("Reset")))
             {
-                ModuleConfig.SystemPrompts[0].Content = DEFAULT_SYSTEM_PROMPT;
+                config.SystemPrompts[0].Content = DEFAULT_SYSTEM_PROMPT;
                 RequestSaveConfig();
             }
         }
@@ -213,16 +211,16 @@ public partial class AutoReplyChatBot
 
         ImGui.SetNextItemWidth(fieldW);
 
-        using (ImRaii.Disabled(ModuleConfig.SelectedPromptIndex == 0))
+        using (ImRaii.Disabled(config.SelectedPromptIndex == 0))
         {
-            if (ImGui.InputText(GetLoc("Name"), ref selectedPrompt.Name, 128))
+            if (ImGui.InputText(Lang.Get("Name"), ref selectedPrompt.Name, 128))
                 RequestSaveConfig();
         }
 
-        if (ModuleConfig.SelectedPromptIndex == 0)
+        if (config.SelectedPromptIndex == 0)
         {
-            ImGui.SameLine(0, 8f * GlobalFontScale);
-            ImGui.TextDisabled($"({GetLoc("Default")})");
+            ImGui.SameLine(0, 8f * GlobalUIScale);
+            ImGui.TextDisabled($"({Lang.Get("Default")})");
         }
 
         ImGui.InputTextMultiline("##SystemPrompt", ref selectedPrompt.Content, 4096, new(promptW, promptH));
@@ -232,34 +230,34 @@ public partial class AutoReplyChatBot
 
     private void DrawWorldBookTab(float fieldW, float promptW)
     {
-        if (ImGui.Checkbox(GetLoc("AutoReplyChatBot-EnableWorldBook"), ref ModuleConfig.EnableWorldBook))
+        if (ImGui.Checkbox(Lang.Get("AutoReplyChatBot-EnableWorldBook"), ref config.EnableWorldBook))
             RequestSaveConfig();
 
-        if (!ModuleConfig.EnableWorldBook)
+        if (!config.EnableWorldBook)
             return;
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.InputInt(GetLoc("AutoReplyChatBot-MaxWorldBookContext"), ref ModuleConfig.MaxWorldBookContext, 256, 2048))
-            ModuleConfig.MaxWorldBookContext = Math.Max(256, ModuleConfig.MaxWorldBookContext);
+        if (ImGui.InputInt(Lang.Get("AutoReplyChatBot-MaxWorldBookContext"), ref config.MaxWorldBookContext, 256, 2048))
+            config.MaxWorldBookContext = Math.Max(256, config.MaxWorldBookContext);
         if (ImGui.IsItemDeactivatedAfterEdit())
             RequestSaveConfig();
 
         ImGui.NewLine();
 
-        if (ImGui.Button($"{GetLoc("Add")}##AddWorldBook"))
+        if (ImGui.Button($"{Lang.Get("Add")}##AddWorldBook"))
         {
-            var newKey = $"Entry {ModuleConfig.WorldBookEntry.Count + 1}";
-            ModuleConfig.WorldBookEntry[newKey] = GetLoc("AutoReplyChatBot-WorldBookEntryContent");
+            var newKey = $"Entry {config.WorldBookEntry.Count + 1}";
+            config.WorldBookEntry[newKey] = Lang.Get("AutoReplyChatBot-WorldBookEntryContent");
             RequestSaveConfig();
         }
 
-        if (ModuleConfig.WorldBookEntry.Count > 0)
+        if (config.WorldBookEntry.Count > 0)
         {
             ImGui.SameLine();
 
-            if (ImGui.Button($"{GetLoc("Clear")}##ClearWorldBook"))
+            if (ImGui.Button($"{Lang.Get("Clear")}##ClearWorldBook"))
             {
-                ModuleConfig.WorldBookEntry.Clear();
+                config.WorldBookEntry.Clear();
                 RequestSaveConfig();
             }
         }
@@ -267,7 +265,7 @@ public partial class AutoReplyChatBot
         var counter         = -1;
         var entriesToRemove = new List<string>();
 
-        foreach (var entry in ModuleConfig.WorldBookEntry)
+        foreach (var entry in config.WorldBookEntry)
         {
             if (entry.Key == "GameContext") continue;
 
@@ -282,7 +280,7 @@ public partial class AutoReplyChatBot
             {
                 using (ImRaii.PushIndent())
                 {
-                    ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-WorldBookEntryName"));
+                    ImGui.TextUnformatted(Lang.Get("AutoReplyChatBot-WorldBookEntryName"));
 
                     ImGui.SetNextItemWidth(fieldW);
                     ImGui.InputText($"##Key_{key}", ref key, 128);
@@ -291,28 +289,28 @@ public partial class AutoReplyChatBot
                     {
                         if (!string.IsNullOrWhiteSpace(key) && key != entry.Key)
                         {
-                            ModuleConfig.WorldBookEntry.Remove(entry.Key);
-                            ModuleConfig.WorldBookEntry[key] = value;
+                            config.WorldBookEntry.Remove(entry.Key);
+                            config.WorldBookEntry[key] = value;
                             RequestSaveConfig();
 
                             continue;
                         }
                     }
 
-                    ImGui.TextUnformatted(GetLoc("AutoReplyChatBot-WorldBookEntryContent"));
+                    ImGui.TextUnformatted(Lang.Get("AutoReplyChatBot-WorldBookEntryContent"));
 
                     ImGui.SetNextItemWidth(promptW);
-                    ImGui.InputTextMultiline($"##Value_{key}", ref value, 2048, new(promptW, 100 * GlobalFontScale));
+                    ImGui.InputTextMultiline($"##Value_{key}", ref value, 2048, new(promptW, 100 * GlobalUIScale));
 
                     if (ImGui.IsItemDeactivatedAfterEdit())
                     {
-                        ModuleConfig.WorldBookEntry[entry.Key] = value;
+                        config.WorldBookEntry[entry.Key] = value;
                         RequestSaveConfig();
 
                         continue;
                     }
 
-                    if (ImGui.Button(GetLoc("Delete")))
+                    if (ImGui.Button(Lang.Get("Delete")))
                         entriesToRemove.Add(entry.Key);
                 }
             }
@@ -320,23 +318,23 @@ public partial class AutoReplyChatBot
 
         foreach (var key in entriesToRemove)
         {
-            ModuleConfig.WorldBookEntry.Remove(key);
+            config.WorldBookEntry.Remove(key);
             RequestSaveConfig();
         }
     }
 
     private void DrawHistoryTab(float fieldW, float promptW, float promptH)
     {
-        var keys = ModuleConfig.Histories.Keys.ToArray();
+        var keys = config.Histories.Keys.ToArray();
 
-        var noneLabel   = GetLoc("None");
+        var noneLabel   = Lang.Get("None");
         var displayKeys = new List<string>(keys.Length + 1) { string.Empty };
         displayKeys.AddRange(keys);
 
-        if (ModuleConfig.HistoryKeyIndex < 0 || ModuleConfig.HistoryKeyIndex >= displayKeys.Count)
-            ModuleConfig.HistoryKeyIndex = 0;
+        if (config.HistoryKeyIndex < 0 || config.HistoryKeyIndex >= displayKeys.Count)
+            config.HistoryKeyIndex = 0;
 
-        var currentLabel = ModuleConfig.HistoryKeyIndex == 0 ? noneLabel : displayKeys[ModuleConfig.HistoryKeyIndex];
+        var currentLabel = config.HistoryKeyIndex == 0 ? noneLabel : displayKeys[config.HistoryKeyIndex];
 
         ImGui.SetNextItemWidth(fieldW);
 
@@ -347,11 +345,11 @@ public partial class AutoReplyChatBot
                 for (var i = 0; i < displayKeys.Count; i++)
                 {
                     var label    = i == 0 ? noneLabel : displayKeys[i];
-                    var selected = i == ModuleConfig.HistoryKeyIndex;
+                    var selected = i == config.HistoryKeyIndex;
 
                     if (ImGui.Selectable(label, selected))
                     {
-                        ModuleConfig.HistoryKeyIndex = i;
+                        config.HistoryKeyIndex = i;
                         RequestSaveConfig();
                     }
                 }
@@ -360,21 +358,21 @@ public partial class AutoReplyChatBot
 
         ImGui.SameLine();
 
-        if (ImGui.Button($"{GetLoc("Clear")}##ClearHistory"))
+        if (ImGui.Button($"{Lang.Get("Clear")}##ClearHistory"))
         {
-            if (ModuleConfig.HistoryKeyIndex > 0)
+            if (config.HistoryKeyIndex > 0)
             {
-                var currentKey = displayKeys[ModuleConfig.HistoryKeyIndex];
-                ModuleConfig.Histories.Remove(currentKey);
+                var currentKey = displayKeys[config.HistoryKeyIndex];
+                config.Histories.Remove(currentKey);
                 RequestSaveConfig();
             }
         }
 
-        if (ModuleConfig.HistoryKeyIndex <= 0)
+        if (config.HistoryKeyIndex <= 0)
             return;
 
-        var currentKey2 = displayKeys[ModuleConfig.HistoryKeyIndex];
-        var entries     = ModuleConfig.Histories.TryGetValue(currentKey2, out var list) ? list.ToList() : [];
+        var currentKey2 = displayKeys[config.HistoryKeyIndex];
+        var entries     = config.Histories.TryGetValue(currentKey2, out var list) ? list.ToList() : [];
 
         using (ImRaii.Child("##HistoryViewer", new(promptW, promptH), true))
         {
@@ -393,18 +391,18 @@ public partial class AutoReplyChatBot
                     if (ImGui.Selectable($"[{timestamp}] [{message.Name}] {message.Text}"))
                     {
                         ImGui.SetClipboardText(message.Text);
-                        NotificationSuccess($"{GetLoc("CopiedToClipboard")}: {message.Text}");
+                        NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}: {message.Text}");
                     }
 
                     using (var context = ImRaii.ContextPopupItem($"{i}"))
                     {
                         if (context)
                         {
-                            if (ImGui.MenuItem($"{GetLoc("Delete")}"))
+                            if (ImGui.MenuItem($"{Lang.Get("Delete")}"))
                             {
                                 try
                                 {
-                                    ModuleConfig.Histories[currentKey2].RemoveAt(i);
+                                    config.Histories[currentKey2].RemoveAt(i);
                                     break;
                                 }
                                 catch
@@ -426,23 +424,23 @@ public partial class AutoReplyChatBot
 
     private void DrawGameContextTab()
     {
-        if (ImGui.Checkbox(GetLoc("AutoReplyChatBot-EnableGameContext"), ref ModuleConfig.EnableGameContext))
+        if (ImGui.Checkbox(Lang.Get("AutoReplyChatBot-EnableGameContext"), ref config.EnableGameContext))
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(GetLoc("AutoReplyChatBot-EnableGameContext-Help"));
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-EnableGameContext-Help"));
 
-        using (ImRaii.Disabled(!ModuleConfig.EnableGameContext))
+        using (ImRaii.Disabled(!config.EnableGameContext))
         using (ImRaii.PushIndent())
         {
             foreach (var contextType in Enum.GetValues<GameContextType>())
             {
                 using var id = ImRaii.PushId($"AutoReplyChatBot-GameContext-{contextType}");
 
-                var enabled = ModuleConfig.GameContextSettings.GetValueOrDefault(contextType, true);
+                var enabled = config.GameContextSettings.GetValueOrDefault(contextType, true);
                 var label   = GameContextLocMap.GetValueOrDefault(contextType, contextType.ToString());
 
                 if (ImGui.Checkbox($"{label}##{contextType}", ref enabled))
                 {
-                    ModuleConfig.GameContextSettings[contextType] = enabled;
+                    config.GameContextSettings[contextType] = enabled;
                     RequestSaveConfig();
                     UpdateGameContextInWorldBook();
                 }

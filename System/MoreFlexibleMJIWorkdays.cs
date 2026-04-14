@@ -1,36 +1,42 @@
-using System;
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
+public unsafe class MoreFlexibleMJIWorkdays : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("MoreFlexibleMJIWorkdaysTitle"),
-        Description = GetLoc("MoreFlexibleMJIWorkdaysDescription"),
-        Category    = ModuleCategories.System
+        Title       = Lang.Get("MoreFlexibleMJIWorkdaysTitle"),
+        Description = Lang.Get("MoreFlexibleMJIWorkdaysDescription"),
+        Category    = ModuleCategory.System
     };
 
     protected override void Init()
     {
         Overlay ??= new(this);
-        
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "MJICraftSchedule", OnAddon);
+
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "MJICraftSchedule", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "MJICraftSchedule", OnAddon);
         if (MJICraftSchedule->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
         var agent = AgentMJICraftSchedule.Instance();
         var addon = MJICraftSchedule;
+
         if (addon == null || agent == null || agent->Data == null)
         {
             Overlay.IsOpen = false;
@@ -45,8 +51,9 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
 
         if (agent->Data->NewRestCycles == 0)
             agent->Data->NewRestCycles = agent->Data->RestCycles;
-        
+
         var restDays = DecodeRestDays(agent->Data->NewRestCycles);
+
         using (ImRaii.Group())
         {
             for (var i = 0; i < restDays.Count; i++)
@@ -56,12 +63,13 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
                 if (ImGui.Checkbox($"##Day{i}", ref day))
                 {
                     restDays[i] = day;
-                    
+
                     var newDays = EncodeRestDays(restDays);
                     agent->Data->RestCycles    = newDays;
                     agent->Data->NewRestCycles = newDays;
-                    
+
                     var list = new List<int>();
+
                     for (var j = 0; j < restDays.Count; j++)
                     {
                         if (!restDays[j]) continue;
@@ -70,23 +78,23 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
 
                     while (list.Count < 4)
                         list.Add(0);
-                    
-                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.MJISetRestCycles,   (uint)list[0], (uint)list[1], (uint)list[2], (uint)list[3]);
+
+                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.MJISetRestCycles, (uint)list[0], (uint)list[1], (uint)list[2], (uint)list[3]);
                     ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.MJIWorkshopRequest, agent->Data->CycleDisplayed);
                 }
-                
+
                 switch (i)
                 {
                     case 6:
-                        ImGui.SameLine(0, 4f * GlobalFontScale);
+                        ImGui.SameLine(0, 4f * GlobalUIScale);
                         ImGui.TextUnformatted(LuminaWrapper.GetAddonText(15107));
                         break;
                     case 13:
-                        ImGui.SameLine(0, 4f * GlobalFontScale);
+                        ImGui.SameLine(0, 4f * GlobalUIScale);
                         ImGui.TextUnformatted(LuminaWrapper.GetAddonText(15108));
                         break;
                 }
-                
+
                 if (i != 6)
                     ImGui.SameLine();
             }
@@ -109,16 +117,12 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
         uint result = 0;
 
         for (var i = 0; i < 7; i++)
-        {
             if (restDays[i])
                 result |= (uint)(1 << i);
-        }
 
         for (var i = 7; i < 14; i++)
-        {
             if (restDays[i])
                 result |= (uint)(1 << i);
-        }
 
         return result;
     }
@@ -127,15 +131,12 @@ public unsafe class MoreFlexibleMJIWorkdays : DailyModuleBase
     {
         var restDays = new List<bool>(14);
 
-        for (var i = 0; i < 14; i++) 
+        for (var i = 0; i < 14; i++)
             restDays.Add(false);
 
-        for (var i = 0; i < 14; i++) 
-            restDays[i] = (value & (1u << i)) != 0;
+        for (var i = 0; i < 14; i++)
+            restDays[i] = (value & 1u << i) != 0;
 
         return restDays;
     }
-
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

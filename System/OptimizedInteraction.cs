@@ -1,9 +1,7 @@
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
+using System.Collections.Frozen;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Memory;
@@ -13,87 +11,97 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.Interop.Game.Models.Packets.Upstream;
 using Camera = FFXIVClientStructs.FFXIV.Client.Game.Camera;
+using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedInteraction : DailyModuleBase
+public unsafe class OptimizedInteraction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("OptimizedInteractionTitle"),
-        Description = GetLoc("OptimizedInteractionDescription"),
-        Category = ModuleCategories.System,
+        Title       = Lang.Get("OptimizedInteractionTitle"),
+        Description = Lang.Get("OptimizedInteractionDescription"),
+        Category    = ModuleCategory.System
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-
+    
     // 当前位置无法进行该操作
-    private static readonly CompSig CameraObjectBlockedSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? EB ?? 40 B7");
-    private delegate bool CameraObjectBlockedDelegate(nint a1, nint a2, nint a3);
-    private static Hook<CameraObjectBlockedDelegate>? CameraObjectBlockedHook;
+    private static readonly CompSig                            CameraObjectBlockedSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? EB ?? 40 B7");
+    private delegate        bool                               CameraObjectBlockedDelegate(nint a1, nint a2, nint a3);
+    private                 Hook<CameraObjectBlockedDelegate>? CameraObjectBlockedHook;
 
     // 目标处于视野之外
-    private static readonly CompSig IsObjectInViewRangeSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B C8 48 8B 10 FF 52 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? E9");
-    private  delegate bool IsObjectInViewRangeDelegate(TargetSystem* system, GameObject* gameObject);
-    private static Hook<IsObjectInViewRangeDelegate>? IsObjectInViewRangeHook;
+    private static readonly CompSig IsObjectInViewRangeSig = new
+        ("E8 ?? ?? ?? ?? 84 C0 75 ?? 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B C8 48 8B 10 FF 52 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? E9");
+    private delegate bool                               IsObjectInViewRangeDelegate(TargetSystem* system, GameObject* gameObject);
+    private          Hook<IsObjectInViewRangeDelegate>? IsObjectInViewRangeHook;
 
     // 跳跃中无法进行该操作 / 飞行中无法进行该操作
     private static readonly CompSig InteractCheck0Sig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 49 8B 00 49 8B C8 49 8B F8 48 8B F2");
-    private delegate        bool InteractCheck0Delegate(nint a1, nint a2, nint a3, nint a4, bool a5);
-    private static          Hook<InteractCheck0Delegate>? InteractCheck0Hook;
-
-    // 跳跃中无法进行该操作
-    private delegate bool IsPlayerOnJumpingDelegate(nint a1);
+    private delegate        bool    InteractCheck0Delegate(nint a1, nint a2, nint a3, nint a4, bool a5);
+    private                 Hook<InteractCheck0Delegate>? InteractCheck0Hook;
 
     private static readonly CompSig IsPlayerOnJumping0Sig =
-        new("83 B9 ?? ?? ?? ?? ?? 0F 95 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 83 B9 ?? ?? ?? ?? ?? 0F 94 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 83 B9");
-    private static Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping0Hook;
-    private static readonly CompSig IsPlayerOnJumping1Sig = new("E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 83 BF ?? ?? ?? ?? ?? 75 ?? 38 1D");
-    private static Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping1Hook;
+        new
+        (
+            "83 B9 ?? ?? ?? ?? ?? 0F 95 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 83 B9 ?? ?? ?? ?? ?? 0F 94 C0 C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 83 B9"
+        );
+    // 跳跃中无法进行该操作
+    private delegate bool                             IsPlayerOnJumpingDelegate(nint a1);
+    private          Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping0Hook;
+    
+    private static readonly CompSig                          IsPlayerOnJumping1Sig = new("E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 83 BF ?? ?? ?? ?? ?? 75 ?? 38 1D");
+    private                 Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping1Hook;
+
     private static readonly CompSig IsPlayerOnJumping2Sig =
         new("40 53 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 84 C0 75");
-    private static Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping2Hook;
+    private Hook<IsPlayerOnJumpingDelegate>? IsPlayerOnJumping2Hook;
 
     // 检查目标高低
     private static readonly CompSig CheckTargetPositionSig = new("40 53 57 41 56 48 83 EC ?? 48 8B 02");
-    private delegate bool CheckTargetPositionDelegate(
-        EventFramework* framework, GameObject* source, GameObject* target, ushort interactType, bool sendError, byte a6);
-    private static Hook<CheckTargetPositionDelegate>? CheckTargetPositionHook;
+    private delegate bool CheckTargetPositionDelegate
+    (
+        EventFramework* framework,
+        GameObject*     source,
+        GameObject*     target,
+        ushort          interactType,
+        bool            sendError,
+        byte            a6
+    );
+    private Hook<CheckTargetPositionDelegate>? CheckTargetPositionHook;
 
     // 检查目标距离
-    private static readonly CompSig CheckTargetDistanceSig = 
-        new ("E8 ?? ?? ?? ?? 0F 2F 05 ?? ?? ?? ?? 76 ?? 48 8B 03 48 8B CB FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? EB");
-    private delegate float CheckTargetDistanceDelegate(GameObject* localPlayer, GameObject* target);
-    private static Hook<CheckTargetDistanceDelegate>? CheckTargetDistanceHook;
+    private static readonly CompSig CheckTargetDistanceSig =
+        new("E8 ?? ?? ?? ?? 0F 2F 05 ?? ?? ?? ?? 76 ?? 48 8B 03 48 8B CB FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? EB");
+    private delegate float                              CheckTargetDistanceDelegate(GameObject* localPlayer, GameObject* target);
+    private          Hook<CheckTargetDistanceDelegate>? CheckTargetDistanceHook;
 
     // 交互
     private static readonly CompSig InteractWithObjectSig =
         new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 48 83 EC ?? 48 8B E9 41 0F B6 F0");
-    private delegate ulong InteractWithObjectDelegate(
-        TargetSystem* system, GameObject* obj, bool checkLOS = true);
-    private static Hook<InteractWithObjectDelegate>? InteractWithObjectHook;
-    
+    private delegate ulong InteractWithObjectDelegate
+    (
+        TargetSystem* system,
+        GameObject*   obj,
+        bool          checkLOS = true
+    );
+    private Hook<InteractWithObjectDelegate>? InteractWithObjectHook;
+
     // 当前位置无法进行该操作
     private static readonly CompSig CheckCameraPositionSig =
         new("E8 ?? ?? ?? ?? 84 C0 75 ?? B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? EB");
-    private delegate bool CheckCameraPositionDelegate(TargetSystem* system, Camera* activeCamera, GameObject* obj);
-    private static Hook<CheckCameraPositionDelegate>? CheckCameraPositionHook;
-
-    private static readonly HashSet<string> WhitelistObjectNames = 
-    [
-        // 市场布告板
-        LuminaGetter.GetRow<EObjName>(2000073)!.Value.Singular.ToString(),
-        // 简易以太之光
-        LuminaGetter.GetRow<EObjName>(2003395)!.Value.Singular.ToString(),
-    ];
-
-    private static readonly List<uint> FirstQuest = [65621, 65644, 65645, 65659, 65660, 66104, 66105, 66106];
+    private delegate bool                               CheckCameraPositionDelegate(TargetSystem* system, Camera* activeCamera, GameObject* obj);
+    private          Hook<CheckCameraPositionDelegate>? CheckCameraPositionHook;
 
     protected override void Init()
     {
         TaskHelper ??= new();
-        
+
         InitHooks();
         SwitchHooks(true);
     }
@@ -102,7 +110,7 @@ public unsafe class OptimizedInteraction : DailyModuleBase
     {
         CameraObjectBlockedHook ??= CameraObjectBlockedSig.GetHook<CameraObjectBlockedDelegate>(CameraObjectBlockedDetour);
 
-        IsObjectInViewRangeHook ??= 
+        IsObjectInViewRangeHook ??=
             IsObjectInViewRangeSig.GetHook<IsObjectInViewRangeDelegate>(IsObjectInViewRangeHookDetour);
 
         InteractCheck0Hook ??= InteractCheck0Sig.GetHook<InteractCheck0Delegate>(InteractCheck0Detour);
@@ -114,7 +122,7 @@ public unsafe class OptimizedInteraction : DailyModuleBase
         CheckTargetPositionHook ??=
             CheckTargetPositionSig.GetHook<CheckTargetPositionDelegate>(CheckTargetPositionDetour);
 
-        CheckTargetDistanceHook ??= 
+        CheckTargetDistanceHook ??=
             CheckTargetDistanceSig.GetHook<CheckTargetDistanceDelegate>(CheckTargetDistanceDetour);
 
         InteractWithObjectHook ??=
@@ -124,7 +132,7 @@ public unsafe class OptimizedInteraction : DailyModuleBase
             CheckCameraPositionSig.GetHook<CheckCameraPositionDelegate>(CheckCameraPositionDetour);
     }
 
-    private static void SwitchHooks(bool isEnable)
+    private void SwitchHooks(bool isEnable)
     {
         CameraObjectBlockedHook.Toggle(isEnable);
         IsObjectInViewRangeHook.Toggle(isEnable);
@@ -146,33 +154,38 @@ public unsafe class OptimizedInteraction : DailyModuleBase
 
     private static bool IsPlayerOnJumpingDetour(nint a1) => false;
 
-    private static bool CheckTargetPositionDetour(
+    private static bool CheckTargetPositionDetour
+    (
         EventFramework* framework,
         GameObject*     source,
         GameObject*     target,
         ushort          interactType,
         bool            sendError,
-        byte            a6)
+        byte            a6
+    )
         => true;
 
     private static float CheckTargetDistanceDetour(GameObject* localPlayer, GameObject* target) => 0f;
-    
+
     private ulong InteractWithObjectDetour(TargetSystem* system, GameObject* obj, bool checkLOS)
     {
         if (obj == null || DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return 0;
-        
+
         // 咏唱状态
         MemoryHelper.Write(DService.Instance().Condition.Address + 27, false);
-        
+
         // 动画锁
         ActionManager.Instance()->AnimationLock = 0;
-        
+
         // 以太之光
         if (obj->ObjectKind is ObjectKind.Aetheryte &&
-            EventFramework.Instance()->TryGetNearestEventID(x => x.EventId.ContentId is EventHandlerContent.Aetheryte,
-                                                            x => x.NameString == obj->NameString,
-                                                            localPlayer.Position, 
-                                                            out var eventIDAetheryte) &&
+            EventFramework.Instance()->TryGetNearestEventID
+            (
+                x => x.EventId.ContentId is EventHandlerContent.Aetheryte,
+                x => x.NameString == obj->NameString,
+                localPlayer.Position,
+                out var eventIDAetheryte
+            ) &&
             FirstQuest.Any(x => UIState.Instance()->IsUnlockLinkUnlockedOrQuestCompleted(x)))
         {
             DismountAndSend(eventIDAetheryte);
@@ -180,7 +193,7 @@ public unsafe class OptimizedInteraction : DailyModuleBase
         }
 
         // 一些通用的
-        if (WhitelistObjectNames.Contains(obj->NameString))
+        if (WhitelistObjectNames.ContainsAny(obj->NameString))
         {
             if (obj->EventHandler != null)
             {
@@ -188,10 +201,14 @@ public unsafe class OptimizedInteraction : DailyModuleBase
                 DismountAndSend(info.EventId.Id);
                 return 1;
             }
-            else if (EventFramework.Instance()->TryGetNearestEventID(_ => true, 
-                                                                     x => x.NameString == obj->NameString,
-                                                                     localPlayer.Position, 
-                                                                     out var eventIDWhitelist))
+
+            if (EventFramework.Instance()->TryGetNearestEventID
+                (
+                    _ => true,
+                    x => x.NameString == obj->NameString,
+                    localPlayer.Position,
+                    out var eventIDWhitelist
+                ))
             {
                 DismountAndSend(eventIDWhitelist);
                 return 1;
@@ -202,17 +219,33 @@ public unsafe class OptimizedInteraction : DailyModuleBase
 
         void DismountAndSend(uint eventID)
         {
-            MovementManager.Dismount();
-            TaskHelper.Enqueue(() =>
-            {
-                if (MovementManager.IsManagerBusy || DService.Instance().Condition[ConditionFlag.Mounted] ||
-                    DService.Instance().Condition[ConditionFlag.Jumping]) return false;
-                new EventStartPackt(localPlayer.GameObjectID, eventID).Send();
-                return true;
-            });
+            MovementManager.Instance().Dismount();
+            TaskHelper.Enqueue
+            (() =>
+                {
+                    if (MovementManager.Instance().IsManagerBusy                        ||
+                        DService.Instance().Condition[ConditionFlag.Mounted] ||
+                        DService.Instance().Condition[ConditionFlag.Jumping]) return false;
+                    new EventStartPackt(localPlayer.GameObjectID, eventID).Send();
+                    return true;
+                }
+            );
         }
     }
 
-    private static bool CheckCameraPositionDetour(TargetSystem* system, Camera* activeCamera, GameObject* obj)
-        => true;
+    private static bool CheckCameraPositionDetour(TargetSystem* system, Camera* activeCamera, GameObject* obj) => true;
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> WhitelistObjectNames =
+    [
+        // 市场布告板
+        LuminaGetter.GetRowOrDefault<EObjName>(2000073).Singular.ToString(),
+        // 简易以太之光
+        LuminaGetter.GetRowOrDefault<EObjName>(2003395).Singular.ToString()
+    ];
+
+    private static readonly FrozenSet<uint> FirstQuest = [65621, 65644, 65645, 65659, 65660, 66104, 66105, 66106];
+
+    #endregion
 }

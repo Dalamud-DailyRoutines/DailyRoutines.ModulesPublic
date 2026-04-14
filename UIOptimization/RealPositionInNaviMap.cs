@@ -1,60 +1,64 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class RealPositionInNaviMap : DailyModuleBase
+public unsafe class RealPositionInNaviMap : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("RealPositionInNaviMapTitle"),
-        Description = GetLoc("RealPositionInNaviMapDescription"),
-        Category    = ModuleCategories.UIOptimization
+        Title       = Lang.Get("RealPositionInNaviMapTitle"),
+        Description = Lang.Get("RealPositionInNaviMapDescription"),
+        Category    = ModuleCategory.UIOptimization
     };
-
-    private static Config ModuleConfig = null!;
     
-    private static TextButtonNode? PositionButton;
+    private Config config = null!;
 
-    private static int LastX;
-    private static int LastY;
-    
+    private TextButtonNode? positionButton;
+
+    private int lastX;
+    private int lastY;
+
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-        
+        config = Config.Load(this) ?? new();
+
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_NaviMap", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,         "_NaviMap", OnAddon);
     }
-
-    protected override void ConfigUI()
-    {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("RealPositionInNaviMap-CopyFormat"));
-        ImGuiOm.HelpMarker(GetLoc("RealPositionInNaviMap-CopyFormatHelp"), 20f * GlobalFontScale);
-
-        ImGui.InputText("###CopyFormat", ref ModuleConfig.CopyFormat, 256);
-        if (ImGui.IsItemDeactivatedAfterEdit())
-            SaveConfig(ModuleConfig);
-    }
-
+    
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
         OnAddon(AddonEvent.PreFinalize, null);
     }
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    protected override void ConfigUI()
+    {
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RealPositionInNaviMap-CopyFormat"));
+        ImGuiOm.HelpMarker(Lang.Get("RealPositionInNaviMap-CopyFormatHelp"), 20f * GlobalUIScale);
+
+        ImGui.InputText("###CopyFormat", ref config.CopyFormat, 256);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            config.Save(this);
+    }
+    
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                PositionButton?.Dispose();
-                PositionButton = null;
+                positionButton?.Dispose();
+                positionButton = null;
 
                 if (NaviMap != null)
                 {
@@ -63,8 +67,8 @@ public unsafe class RealPositionInNaviMap : DailyModuleBase
                         origTextNode->ToggleVisibility(true);
                 }
 
-                LastX = LastY = 0;
-                
+                lastX = lastY = 0;
+
                 break;
 
             case AddonEvent.PostRequestedUpdate:
@@ -74,20 +78,20 @@ public unsafe class RealPositionInNaviMap : DailyModuleBase
                 // 跳跃的时候始终要更新位置
                 if (!DService.Instance().Condition[ConditionFlag.Jumping])
                 {
-                    if (numberArray->IntArray[0] != LastX)
-                        LastX = numberArray->IntArray[0];
-                    else if (numberArray->IntArray[1] != LastY)
-                        LastY = numberArray->IntArray[1];
+                    if (numberArray->IntArray[0] != lastX)
+                        lastX = numberArray->IntArray[0];
+                    else if (numberArray->IntArray[1] != lastY)
+                        lastY = numberArray->IntArray[1];
                     else
                         return;
                 }
-                
-                if (PositionButton == null)
+
+                if (positionButton == null)
                 {
                     var origTextNode = NaviMap->GetTextNodeById(6);
                     if (origTextNode == null) return;
 
-                    PositionButton = new()
+                    positionButton = new()
                     {
                         Position  = new(0),
                         Size      = new(130, 18),
@@ -102,7 +106,7 @@ public unsafe class RealPositionInNaviMap : DailyModuleBase
 
                             var result = string.Format
                             (
-                                ModuleConfig.CopyFormat,
+                                config.CopyFormat,
                                 player.Position.X,
                                 player.Position.Y,
                                 player.Position.Z
@@ -111,35 +115,35 @@ public unsafe class RealPositionInNaviMap : DailyModuleBase
                             if (!string.IsNullOrWhiteSpace(result))
                             {
                                 ImGui.SetClipboardText(result);
-                                NotificationSuccess($"{GetLoc("CopiedToClipboard")}: {result}");
+                                NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}: {result}");
                             }
                         }
                     };
 
                     if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
-                        PositionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
+                        positionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
 
-                    PositionButton.BackgroundNode.IsVisible = false;
+                    positionButton.BackgroundNode.IsVisible = false;
 
-                    PositionButton.LabelNode.TextFlags        = TextFlags.Glare;
-                    PositionButton.LabelNode.TextColor        = origTextNode->Color.ToVector4();
-                    PositionButton.LabelNode.TextOutlineColor = origTextNode->EdgeColor.ToVector4();
+                    positionButton.LabelNode.TextFlags        = TextFlags.Glare;
+                    positionButton.LabelNode.TextColor        = origTextNode->Color.ToVector4();
+                    positionButton.LabelNode.TextOutlineColor = origTextNode->EdgeColor.ToVector4();
 
-                    PositionButton.AttachNode(NaviMap->GetNodeById(5));
+                    positionButton.AttachNode(NaviMap->GetNodeById(5));
 
                     origTextNode->ToggleVisibility(false);
                 }
 
             {
                 if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
-                    PositionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
+                    positionButton.String = $"X:{localPlayer.Position.X:F1} Y:{localPlayer.Position.Y:F1} Z:{localPlayer.Position.Z:F1}";
             }
 
                 break;
         }
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public string CopyFormat = @"X:{0:F1} Y:{1:F1} Z:{2:F1}";
     }

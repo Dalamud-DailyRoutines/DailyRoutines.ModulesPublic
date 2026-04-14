@@ -1,82 +1,96 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using OmenTools.ImGuiOm.Widgets.Combos;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.AgentEvent;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoLogin : DailyModuleBase
+public unsafe class AutoLogin : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = GetLoc("AutoLoginTitle"),
-        Description         = GetLoc("AutoLoginDescription"),
-        Category            = ModuleCategories.General,
+        Title               = Lang.Get("AutoLoginTitle"),
+        Description         = Lang.Get("AutoLoginDescription"),
+        Category            = ModuleCategory.General,
         ModulesRecommend    = ["AutoSkipLogo"],
         ModulesPrerequisite = ["InstantLogout"]
     };
 
-    private static readonly Dictionary<BehaviourMode, string> BehaviourModeLoc = new()
-    {
-        [BehaviourMode.Once]   = GetLoc("AutoLogin-Once"),
-        [BehaviourMode.Repeat] = GetLoc("AutoLogin-Repeat")
-    };
+    private Config config = null!;
 
-    private const string COMMAND = "/pdrlogin";
+    private readonly WorldSelectCombo worldSelectCombo = new("World");
 
-    private static Config ModuleConfig = null!;
+    private int selectedCharaIndex;
+    private int dropIndex = -1;
 
-    private static readonly WorldSelectCombo WorldSelectCombo = new("World");
-    
-    private static int SelectedCharaIndex;
-    private static int DropIndex = -1;
-
-    private static bool   HasLoginOnce;
-    private static int    DefaultLoginIndex = -1;
-    private static ushort ManualWorldID;
-    private static int    ManualCharaIndex = -1;
+    private bool   hasLoginOnce;
+    private int    defaultLoginIndex = -1;
+    private ushort manualWorldID;
+    private int    manualCharaIndex = -1;
 
     protected override void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
+        config =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = 180_000, ShowDebug = true };
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "_TitleMenu", OnTitleMenu);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,  "Dialogue",   OnDialogue);
         OnTitleMenu(AddonEvent.PostSetup, null);
 
-        CommandManager.AddCommand(COMMAND, new(OnCommand) { HelpMessage = GetLoc("AutoLogin-CommandHelp") });
+        CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoLogin-CommandHelp") });
         DService.Instance().ClientState.Login += OnLogin;
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.Login -= OnLogin;
+        CommandManager.Instance().RemoveCommand(COMMAND);
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnTitleMenu);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnDialogue);
+
+        ResetStates();
+        hasLoginOnce = false;
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}");
 
         using (ImRaii.PushIndent())
-            ImGui.TextUnformatted(GetLoc("AutoLogin-AddCommandHelp", COMMAND, COMMAND));
-        
+            ImGui.TextUnformatted(Lang.Get("AutoLogin-AddCommandHelp", COMMAND, COMMAND));
+
         ImGui.NewLine();
-        
-        ConflictKeyText();
+
+        ImGuiOm.ConflictKeyText();
 
         ImGui.NewLine();
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoLogin-LoginInfos")}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoLogin-LoginInfos")}");
 
         using (ImRaii.PushIndent())
         {
-            ImGui.SetNextItemWidth(300f * GlobalFontScale);
-            using (var combo = ImRaii.Combo("###LoginInfosCombo",
-                                            GetLoc("AutoLogin-SavedLoginInfosAmount", ModuleConfig.LoginInfos.Count),
-                                            ImGuiComboFlags.HeightLarge))
+            ImGui.SetNextItemWidth(300f * GlobalUIScale);
+
+            using (var combo = ImRaii.Combo
+                   (
+                       "###LoginInfosCombo",
+                       Lang.Get("AutoLogin-SavedLoginInfosAmount", config.LoginInfos.Count),
+                       ImGuiComboFlags.HeightLarge
+                   ))
             {
                 if (combo)
                 {
@@ -87,70 +101,84 @@ public unsafe class AutoLogin : DailyModuleBase
                         ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(15834)}:");
 
                         ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200f * GlobalFontScale);
-                        WorldSelectCombo.DrawRadio();
+                        ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                        worldSelectCombo.DrawRadio();
 
                         // 选择当前服务器
                         ImGui.SameLine();
-                        if (ImGui.SmallButton(GetLoc("AutoLogin-CurrentWorld")))
+
+                        if (ImGui.SmallButton(Lang.Get("AutoLogin-CurrentWorld")))
                         {
-                            if (PresetSheet.Worlds.TryGetValue(GameState.CurrentWorld, out var world))
-                                WorldSelectCombo.SelectedID = world.RowId;
+                            if (Sheets.Worlds.TryGetValue(GameState.CurrentWorld, out var world))
+                                worldSelectCombo.SelectedID = world.RowId;
                         }
 
                         // 角色登录索引选择
                         ImGui.AlignTextToFramePadding();
-                        ImGui.TextUnformatted($"{GetLoc("AutoLogin-CharacterIndex")}:");
+                        ImGui.TextUnformatted($"{Lang.Get("AutoLogin-CharacterIndex")}:");
 
                         ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200f * GlobalFontScale);
-                        if (ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref SelectedCharaIndex, flags: ImGuiInputTextFlags.EnterReturnsTrue))
-                            SelectedCharaIndex = Math.Clamp(SelectedCharaIndex, 0, 8);
-                        ImGuiOm.TooltipHover(GetLoc("AutoLogin-CharaIndexInputTooltip"));
+                        ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                        if (ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref selectedCharaIndex, flags: ImGuiInputTextFlags.EnterReturnsTrue))
+                            selectedCharaIndex = Math.Clamp(selectedCharaIndex, 0, 8);
+                        ImGuiOm.TooltipHover(Lang.Get("AutoLogin-CharaIndexInputTooltip"));
                     }
 
                     ImGui.SameLine();
                     ImGui.Dummy(new(12));
 
                     ImGui.SameLine();
-                    if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, GetLoc("Add")))
+
+                    if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, Lang.Get("Add")))
                     {
-                        if (SelectedCharaIndex is < 0 or > 7 || WorldSelectCombo.SelectedID == 0) return;
-                        var info = new LoginInfo(WorldSelectCombo.SelectedID, SelectedCharaIndex);
-                        if (!ModuleConfig.LoginInfos.Contains(info))
+                        if (selectedCharaIndex is < 0 or > 7 || worldSelectCombo.SelectedID == 0) return;
+                        var info = new LoginInfo(worldSelectCombo.SelectedID, selectedCharaIndex);
+
+                        if (!config.LoginInfos.Contains(info))
                         {
-                            ModuleConfig.LoginInfos.Add(info);
-                            SaveConfig(ModuleConfig);
+                            config.LoginInfos.Add(info);
+                            config.Save(this);
                         }
                     }
 
-                    ImGuiOm.TooltipHover(GetLoc("AutoLogin-LoginInfoOrderHelp"));
+                    ImGuiOm.TooltipHover(Lang.Get("AutoLogin-LoginInfoOrderHelp"));
 
                     ImGui.Separator();
                     ImGui.Separator();
 
-                    for (var i = 0; i < ModuleConfig.LoginInfos.Count; i++)
+                    for (var i = 0; i < config.LoginInfos.Count; i++)
                     {
-                        var info          = ModuleConfig.LoginInfos[i];
+                        var info          = config.LoginInfos[i];
                         var worldNullable = LuminaGetter.GetRow<World>(info.WorldID);
                         if (worldNullable == null) continue;
                         var world = worldNullable.Value;
+
                         using (ImRaii.PushColor(ImGuiCol.Text, i % 2 == 0 ? ImGuiColors.TankBlue : ImGuiColors.DalamudWhite))
-                            ImGui.Selectable(
-                                $"{i + 1}. {GetLoc("AutoLogin-LoginInfoDisplayText", world.Name.ToString(), world.DataCenter.Value.Name.ToString(), info.CharaIndex)}");
+                        {
+                            ImGui.Selectable
+                            (
+                                $"{i + 1}. {Lang.Get("AutoLogin-LoginInfoDisplayText", world.Name.ToString(), world.DataCenter.Value.Name.ToString(), info.CharaIndex)}"
+                            );
+                        }
 
                         using (var source = ImRaii.DragDropSource())
                         {
                             if (source)
                             {
                                 if (ImGui.SetDragDropPayload("LoginInfoReorder", []))
-                                    DropIndex = i;
+                                    dropIndex = i;
 
-                                ImGui.TextColored(ImGuiColors.DalamudYellow,
-                                                  GetLoc("AutoLogin-LoginInfoDisplayText",
-                                                         world.Name.ToString(),
-                                                         world.DataCenter.Value.Name.ToString(),
-                                                         info.CharaIndex));
+                                ImGui.TextColored
+                                (
+                                    ImGuiColors.DalamudYellow,
+                                    Lang.Get
+                                    (
+                                        "AutoLogin-LoginInfoDisplayText",
+                                        world.Name.ToString(),
+                                        world.DataCenter.Value.Name.ToString(),
+                                        info.CharaIndex
+                                    )
+                                );
                             }
                         }
 
@@ -160,8 +188,8 @@ public unsafe class AutoLogin : DailyModuleBase
                             {
                                 if (ImGui.AcceptDragDropPayload("LoginInfoReorder").Handle != null)
                                 {
-                                    Swap(DropIndex, i);
-                                    DropIndex = -1;
+                                    Swap(dropIndex, i);
+                                    dropIndex = -1;
                                 }
                             }
                         }
@@ -170,89 +198,94 @@ public unsafe class AutoLogin : DailyModuleBase
                         {
                             if (context)
                             {
-                                if (ImGui.Selectable(GetLoc("Delete")))
+                                if (ImGui.Selectable(Lang.Get("Delete")))
                                 {
-                                    ModuleConfig.LoginInfos.Remove(info);
-                                    SaveConfig(ModuleConfig);
+                                    config.LoginInfos.Remove(info);
+                                    config.Save(this);
                                 }
                             }
                         }
 
-                        if (i != ModuleConfig.LoginInfos.Count - 1)
+                        if (i != config.LoginInfos.Count - 1)
                             ImGui.Separator();
                     }
                 }
             }
         }
 
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoLogin-BehaviourMode")}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoLogin-BehaviourMode")}");
 
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
+        ImGui.SetNextItemWidth(300f * GlobalUIScale);
+
         using (ImRaii.PushIndent())
         {
-            using (var combo = ImRaii.Combo("###BehaviourModeCombo", BehaviourModeLoc[ModuleConfig.Mode]))
+            using (var combo = ImRaii.Combo("###BehaviourModeCombo", BehaviourModeLoc[config.Mode]))
             {
                 if (combo)
                 {
                     foreach (var mode in BehaviourModeLoc)
                     {
-                        if (ImGui.Selectable(mode.Value, mode.Key == ModuleConfig.Mode))
+                        if (ImGui.Selectable(mode.Value, mode.Key == config.Mode))
                         {
-                            ModuleConfig.Mode = mode.Key;
-                            SaveConfig(ModuleConfig);
+                            config.Mode = mode.Key;
+                            config.Save(this);
                         }
                     }
                 }
             }
 
-            if (ModuleConfig.Mode == BehaviourMode.Once)
+            if (config.Mode == BehaviourMode.Once)
             {
                 ImGui.Spacing();
-                
-                ImGui.TextUnformatted($"{GetLoc("State")}:");
+
+                ImGui.TextUnformatted($"{Lang.Get("State")}:");
 
                 ImGui.SameLine();
-                ImGui.TextColored(HasLoginOnce ? KnownColor.LawnGreen.ToVector4() : KnownColor.OrangeRed.ToVector4(),
-                                  HasLoginOnce
-                                      ? GetLoc("AutoLogin-LoginOnce")
-                                      : GetLoc("AutoLogin-HaveNotLogin"));
+                ImGui.TextColored
+                (
+                    hasLoginOnce ? KnownColor.LawnGreen.ToVector4() : KnownColor.OrangeRed.ToVector4(),
+                    hasLoginOnce
+                        ? Lang.Get("AutoLogin-LoginOnce")
+                        : Lang.Get("AutoLogin-HaveNotLogin")
+                );
 
-                ImGui.SameLine(0, 8f * GlobalFontScale);
-                if (ImGui.SmallButton(GetLoc("Clear")))
-                    HasLoginOnce = false;
+                ImGui.SameLine(0, 8f * GlobalUIScale);
+                if (ImGui.SmallButton(Lang.Get("Clear")))
+                    hasLoginOnce = false;
             }
         }
     }
-    
-    private void OnLogin() => 
+
+    private void OnLogin() =>
         TaskHelper.Abort();
 
     private void OnCommand(string command, string args)
     {
         args = args.Trim();
-        if (string.IsNullOrWhiteSpace(args) || !DService.Instance().ClientState.IsLoggedIn || BoundByDuty)
+        if (string.IsNullOrWhiteSpace(args) || !DService.Instance().ClientState.IsLoggedIn || DService.Instance().Condition.IsBoundByDuty)
             return;
 
         var parts = args.Split(' ');
+
         switch (parts.Length)
         {
             case 1:
                 if (!int.TryParse(args, out var charaIndex0) || charaIndex0 < 0 || charaIndex0 > 8) return;
 
-                ManualWorldID    = (ushort)GameState.HomeWorld;
-                ManualCharaIndex = charaIndex0;
+                manualWorldID    = (ushort)GameState.HomeWorld;
+                manualCharaIndex = charaIndex0;
                 break;
             case 2:
-                var world1 = PresetSheet.Worlds.Where(x => x.Value.Name.ToString().Contains(parts[0]))
-                                        .OrderBy(x => x.Value.Name.ToString())
-                                        .FirstOrDefault()
-                                        .Key;
+                var world1 = Sheets.Worlds.Where(x => x.Value.Name.ToString().Contains(parts[0]))
+                                   .OrderBy(x => x.Value.Name.ToString())
+                                   .FirstOrDefault()
+                                   .Key;
                 if (world1 == 0) return;
 
                 if (!int.TryParse(parts[1], out var charaIndex1) || charaIndex1 < 0 || charaIndex1 > 8) return;
 
-                ManualWorldID    = (ushort)world1;
-                ManualCharaIndex = charaIndex1;
+                manualWorldID    = (ushort)world1;
+                manualCharaIndex = charaIndex1;
                 break;
             default:
                 return;
@@ -264,25 +297,27 @@ public unsafe class AutoLogin : DailyModuleBase
 
     private void OnTitleMenu(AddonEvent eventType, AddonArgs? args)
     {
-        if (ModuleConfig.LoginInfos.Count <= 0                        ||
-            (ModuleConfig.Mode == BehaviourMode.Once && HasLoginOnce) ||
-            InterruptByConflictKey(TaskHelper, this)                  ||
-            LobbyDKT->IsAddonAndNodesReady()                            ||
+        if (config.LoginInfos.Count <= 0                      ||
+            config.Mode == BehaviourMode.Once && hasLoginOnce ||
+            TaskHelper.AbortByConflictKey(this)                     ||
+            LobbyDKT->IsAddonAndNodesReady()                        ||
             DService.Instance().ClientState.IsLoggedIn)
             return;
-        
-        TaskHelper.Abort();
-        TaskHelper.Enqueue(() =>
-        {
-            if (CharaSelectListMenu->IsAddonAndNodesReady()) return true;
-            if (!TitleMenu->IsAddonAndNodesReady()) return false;
 
-            AgentId.Lobby.SendEvent(0, 4);
-            return true;
-        });
-        
-        if (ManualWorldID != 0 && ManualCharaIndex != -1)
-            TaskHelper.Enqueue(() => SelectCharacter(ManualWorldID, ManualCharaIndex), "SelectCharaManual");
+        TaskHelper.Abort();
+        TaskHelper.Enqueue
+        (() =>
+            {
+                if (CharaSelectListMenu->IsAddonAndNodesReady()) return true;
+                if (!TitleMenu->IsAddonAndNodesReady()) return false;
+
+                AgentId.Lobby.SendEvent(0, 4);
+                return true;
+            }
+        );
+
+        if (manualWorldID != 0 && manualCharaIndex != -1)
+            TaskHelper.Enqueue(() => SelectCharacter(manualWorldID, manualCharaIndex), "SelectCharaManual");
         else
             TaskHelper.Enqueue(SelectCharacterDefault, "SelectCharaDefault0");
     }
@@ -300,18 +335,21 @@ public unsafe class AutoLogin : DailyModuleBase
 
     private void SelectCharacterDefault()
     {
-        if (ModuleConfig.LoginInfos.Count == 0) return;
+        if (config.LoginInfos.Count == 0) return;
 
-        var loginInfo = ModuleConfig.LoginInfos[0];
-        DefaultLoginIndex = 0;
-        TaskHelper.Enqueue(() => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
-                           $"选择默认角色_{loginInfo.WorldID}_{loginInfo.CharaIndex}");
+        var loginInfo = config.LoginInfos[0];
+        defaultLoginIndex = 0;
+        TaskHelper.Enqueue
+        (
+            () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
+            $"选择默认角色_{loginInfo.WorldID}_{loginInfo.CharaIndex}"
+        );
     }
 
     private bool SelectCharacter(ushort worldID, int charaIndex)
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
-        if (!Throttler.Throttle("AutoLogin-SelectCharacter", 100)) return false;
+        if (TaskHelper.AbortByConflictKey(this)) return true;
+        if (!Throttler.Shared.Throttle("AutoLogin-SelectCharacter", 100)) return false;
 
         var agent = AgentLobby.Instance();
         if (agent == null) return false;
@@ -333,8 +371,8 @@ public unsafe class AutoLogin : DailyModuleBase
 
     private bool SelectWorld(ushort worldID)
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
-        if (!Throttler.Throttle("AutoLogin-SelectWorld", 100)) return false;
+        if (TaskHelper.AbortByConflictKey(this)) return true;
+        if (!Throttler.Shared.Throttle("AutoLogin-SelectWorld", 100)) return false;
 
         var agent = AgentLobby.Instance();
         if (agent == null) return false;
@@ -345,58 +383,56 @@ public unsafe class AutoLogin : DailyModuleBase
         {
             // 没找到
             TaskHelper.Abort();
-            if (DefaultLoginIndex != -1 && DefaultLoginIndex < ModuleConfig.LoginInfos.Count)
+
+            if (defaultLoginIndex != -1 && defaultLoginIndex < config.LoginInfos.Count)
             {
-                var loginInfo = ModuleConfig.LoginInfos[DefaultLoginIndex];
-                DefaultLoginIndex++;
-                TaskHelper.Enqueue(() => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
-                                   $"SelectCharaDefault_{loginInfo.WorldID}_{loginInfo.CharaIndex}");
+                var loginInfo = config.LoginInfos[defaultLoginIndex];
+                defaultLoginIndex++;
+                TaskHelper.Enqueue
+                (
+                    () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
+                    $"SelectCharaDefault_{loginInfo.WorldID}_{loginInfo.CharaIndex}"
+                );
             }
         }
 
         return true;
     }
 
-    private static void ResetStates()
+    private void ResetStates()
     {
-        HasLoginOnce      = true;
-        DefaultLoginIndex = -1;
-        ManualWorldID     = 0;
-        ManualCharaIndex  = -1;
+        hasLoginOnce      = true;
+        defaultLoginIndex = -1;
+        manualWorldID     = 0;
+        manualCharaIndex  = -1;
     }
 
     private void Swap(int index1, int index2)
     {
-        if (index1 < 0 || index1 > ModuleConfig.LoginInfos.Count ||
-            index2 < 0 || index2 > ModuleConfig.LoginInfos.Count) return;
+        if (index1 < 0                             ||
+            index1 > config.LoginInfos.Count ||
+            index2 < 0                             ||
+            index2 > config.LoginInfos.Count) return;
 
-        (ModuleConfig.LoginInfos[index1], ModuleConfig.LoginInfos[index2]) =
-            (ModuleConfig.LoginInfos[index2], ModuleConfig.LoginInfos[index1]);
+        (config.LoginInfos[index1], config.LoginInfos[index2]) =
+            (config.LoginInfos[index2], config.LoginInfos[index1]);
 
         TaskHelper.Abort();
         TaskHelper.DelayNext(500);
-        TaskHelper.Enqueue(() => SaveConfig(ModuleConfig));
+        TaskHelper.Enqueue(() => config.Save(this));
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.Login -= OnLogin;
-        CommandManager.RemoveCommand(COMMAND);
-        
-        DService.Instance().AddonLifecycle.UnregisterListener(OnTitleMenu);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnDialogue);
-        
-        ResetStates();
-        HasLoginOnce = false;
-    }
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public List<LoginInfo> LoginInfos = [];
         public BehaviourMode   Mode       = BehaviourMode.Once;
     }
 
-    private class LoginInfo(uint worldID, int index) : IEquatable<LoginInfo>
+    private class LoginInfo
+    (
+        uint worldID,
+        int  index
+    ) : IEquatable<LoginInfo>
     {
         public uint WorldID    { get; set; } = worldID;
         public int  CharaIndex { get; set; } = index;
@@ -430,4 +466,16 @@ public unsafe class AutoLogin : DailyModuleBase
         Once,
         Repeat
     }
+    
+    #region 常量
+
+    private const string COMMAND = "/pdrlogin";
+
+    private static readonly Dictionary<BehaviourMode, string> BehaviourModeLoc = new()
+    {
+        [BehaviourMode.Once]   = Lang.Get("AutoLogin-Once"),
+        [BehaviourMode.Repeat] = Lang.Get("AutoLogin-Repeat")
+    };
+
+    #endregion
 }

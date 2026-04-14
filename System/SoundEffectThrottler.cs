@@ -1,27 +1,31 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Hooking;
-using System;
+using OmenTools.Interop.Game.Models;
+using OmenTools.Threading;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public class SoundEffectThrottler : DailyModuleBase
+public class SoundEffectThrottler : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("SoundEffectThrottlerTitle"),
-        Description = GetLoc("SoundEffectThrottlerDescription"),
-        Category    = ModuleCategories.System,
+        Title       = Lang.Get("SoundEffectThrottlerTitle"),
+        Description = Lang.Get("SoundEffectThrottlerDescription"),
+        Category    = ModuleCategory.System
     };
-
+    
     private static readonly CompSig                        PlaySoundEffectSig = new("E9 ?? ?? ?? ?? C6 41 28 01");
     private delegate        void                           PlaySoundEffectDelegate(uint sound, nint a2, nint a3, byte a4);
-    private static          Hook<PlaySoundEffectDelegate>? PlaySoundEffectHook;
+    private                 Hook<PlaySoundEffectDelegate>? PlaySoundEffectHook;
 
-    private static Config? ModuleConfig;
+    private Config? config;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         PlaySoundEffectHook ??= PlaySoundEffectSig.GetHook<PlaySoundEffectDelegate>(PlaySoundEffectDetour);
         PlaySoundEffectHook.Enable();
@@ -29,29 +33,31 @@ public class SoundEffectThrottler : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        ImGui.InputUInt(GetLoc("SoundEffectThrottler-Throttle"), ref ModuleConfig.Throttle);
+        ImGui.SetNextItemWidth(100f * GlobalUIScale);
+        ImGui.InputUInt(Lang.Get("SoundEffectThrottler-Throttle"), ref config.Throttle);
+
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
-            ModuleConfig.Throttle = Math.Max(100, ModuleConfig.Throttle);
-            SaveConfig(ModuleConfig);
+            config.Throttle = Math.Max(100, config.Throttle);
+            config.Save(this);
         }
 
-        ImGuiOm.HelpMarker(GetLoc("SoundEffectThrottler-ThrottleHelp", ModuleConfig.Throttle));
+        ImGuiOm.HelpMarker(Lang.Get("SoundEffectThrottler-ThrottleHelp", config.Throttle));
 
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        ImGui.SliderInt(GetLoc("SoundEffectThrottler-Volume"), ref ModuleConfig.Volume, 1, 3);
+        ImGui.SetNextItemWidth(100f * GlobalUIScale);
+        ImGui.SliderInt(Lang.Get("SoundEffectThrottler-Volume"), ref config.Volume, 1, 3);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            SaveConfig(ModuleConfig);
+            config.Save(this);
     }
 
-    private static void PlaySoundEffectDetour(uint sound, nint a2, nint a3, byte a4)
+    private void PlaySoundEffectDetour(uint sound, nint a2, nint a3, byte a4)
     {
         var se = sound - 36;
+
         switch (se)
         {
-            case <= 16 when Throttler.Throttle($"SoundEffectThrottler-{se}", ModuleConfig.Throttle):
-                for (var i = 0; i < ModuleConfig.Volume; i++)
+            case <= 16 when Throttler.Shared.Throttle($"SoundEffectThrottler-{se}", config.Throttle):
+                for (var i = 0; i < config.Volume; i++)
                     PlaySoundEffectHook.Original(sound, a2, a3, a4);
 
                 break;
@@ -60,8 +66,8 @@ public class SoundEffectThrottler : DailyModuleBase
                 break;
         }
     }
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public uint Throttle = 1000;
         public int  Volume   = 3;

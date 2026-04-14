@@ -1,76 +1,84 @@
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Interface.Textures.TextureWraps;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using OmenTools.Threading;
+using Action = Lumina.Excel.Sheets.Action;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using Status = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
+public unsafe class AutoPreventDuplicateStatus : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoPreventDuplicateStatusTitle"),
-        Description = GetLoc("AutoPreventDuplicateStatusDescription"),
-        Category    = ModuleCategories.Action,
+        Title       = Lang.Get("AutoPreventDuplicateStatusTitle"),
+        Description = Lang.Get("AutoPreventDuplicateStatusDescription"),
+        Category    = ModuleCategory.Action
     };
     
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         DuplicateActions.Keys
-                        .Except(ModuleConfig.EnabledActions.Keys)
+                        .Except(config.EnabledActions.Keys)
                         .ToList()
-                        .ForEach(key => ModuleConfig.EnabledActions[key] = true);
+                        .ForEach(key => config.EnabledActions[key] = true);
 
-        ModuleConfig.EnabledActions.Keys
+        config.EnabledActions.Keys
                     .Except(DuplicateActions.Keys)
                     .ToList()
-                    .ForEach(key => ModuleConfig.EnabledActions.Remove(key));
+                    .ForEach(key => config.EnabledActions.Remove(key));
 
-        SaveConfig(ModuleConfig);
+        config.Save(this);
 
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
     }
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnPreUseAction);
 
     protected override void ConfigUI()
     {
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoPreventDuplicateStatus-OverlapThreshold")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoPreventDuplicateStatus-OverlapThreshold")}:");
 
         ImGui.SameLine();
-        ImGui.SetNextItemWidth(150f * GlobalFontScale);
-        ImGui.InputFloat("###OverlapThreshold", ref ModuleConfig.OverlapThreshold, 0, 0, "%.1f");
+        ImGui.SetNextItemWidth(150f * GlobalUIScale);
+        ImGui.InputFloat("###OverlapThreshold", ref config.OverlapThreshold, 0, 0, "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
-            SaveConfig(ModuleConfig);
-        
-        ImGuiOm.HelpMarker(GetLoc("AutoPreventDuplicateStatus-OverlapThresholdHelp"));
+            config.Save(this);
+
+        ImGuiOm.HelpMarker(Lang.Get("AutoPreventDuplicateStatus-OverlapThresholdHelp"));
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("SendNotification")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("SendNotification")}:");
 
         ImGui.SameLine();
-        if (ImGui.Checkbox("###SendNotification", ref ModuleConfig.SendNotification))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox("###SendNotification", ref config.SendNotification))
+            config.Save(this);
 
         ImGui.Spacing();
 
-        using (var node = ImRaii.TreeNode($"{GetLoc("Action")}: {ModuleConfig.EnabledActions.Count(x => x.Value)} / {ModuleConfig.EnabledActions.Count}"))
+        using (var node = ImRaii.TreeNode($"{Lang.Get("Action")}: {config.EnabledActions.Count(x => x.Value)} / {config.EnabledActions.Count}"))
         {
             if (node)
             {
-                var tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
-                using var table = ImRaii.Table("###ActionTable", 3, ImGuiTableFlags.Borders, tableSize);
+                var       tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
+                using var table     = ImRaii.Table("###ActionTable", 3, ImGuiTableFlags.Borders, tableSize);
                 if (!table) return;
 
                 ImGui.TableSetupColumn("名称",   ImGuiTableColumnFlags.WidthStretch, 30);
@@ -80,39 +88,45 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
                 ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(GetLoc("Action"));
+                ImGui.TextUnformatted(Lang.Get("Action"));
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(GetLoc("AutoPreventDuplicateStatus-RelatedStatus"));
+                ImGui.TextUnformatted(Lang.Get("AutoPreventDuplicateStatus-RelatedStatus"));
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{GetLoc("AutoPreventDuplicateStatus-RelatedStatus")} 2");
+                ImGui.TextUnformatted($"{Lang.Get("AutoPreventDuplicateStatus-RelatedStatus")} 2");
 
                 foreach (var actionInfo in DuplicateActions)
                 {
                     if (!LuminaGetter.TryGetRow<Action>(actionInfo.Key, out var result)) continue;
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
-                    var isActionEnabled = ModuleConfig.EnabledActions[actionInfo.Key];
+                    var isActionEnabled = config.EnabledActions[actionInfo.Key];
+
                     if (ImGui.Checkbox($"###Is{actionInfo.Key}Enabled", ref isActionEnabled))
                     {
-                        ModuleConfig.EnabledActions[actionInfo.Key] ^= true;
-                        SaveConfig(ModuleConfig);
+                        config.EnabledActions[actionInfo.Key] ^= true;
+                        config.Save(this);
                     }
 
                     ImGui.SameLine();
                     ImGui.Spacing();
 
                     ImGui.SameLine();
-                    ImGuiOm.TextImage(result.Name.ToString(), ImageHelper.GetGameIcon(result.Icon).Handle,
-                                      ScaledVector2(20f));
-                    
+                    ImGuiOm.TextImage
+                    (
+                        result.Name.ToString(),
+                        ImageHelper.GetGameIcon(result.Icon).Handle,
+                        ScaledVector2(20f)
+                    );
+
                     ImGui.TableNextColumn();
                     ImGui.Spacing();
                     foreach (var status in actionInfo.Value.Statuses)
                         DrawDuplicateStatus(status);
 
                     ImGui.TableNextColumn();
+
                     if (actionInfo.Value.SecondStatuses != null)
                     {
                         ImGui.Spacing();
@@ -132,24 +146,30 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         ImGui.SameLine();
         ImGui.Image(statusIcon.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
 
-        ImGuiOm.TooltipHover($"{status.GetName()}\n" +
-                             $"{GetLoc("AutoPreventDuplicateStatus-DetectType")}: {DetectTypeLoc[status.DetectType]}");
+        ImGuiOm.TooltipHover
+        (
+            $"{status.GetName()}\n" +
+            $"{Lang.Get("AutoPreventDuplicateStatus-DetectType")}: {DetectTypeLoc[status.DetectType]}"
+        );
     }
 
-    private static void OnPreUseAction(
+    private void OnPreUseAction
+    (
         ref bool                        isPrevented,
         ref ActionType                  actionType,
         ref uint                        actionID,
         ref ulong                       targetID,
         ref uint                        extraParam,
         ref ActionManager.UseActionMode queueState,
-        ref uint                        comboRouteID)
+        ref uint                        comboRouteID
+    )
     {
         if (actionType != ActionType.Action) return;
 
         var adjustedActionID = ActionManager.Instance()->GetAdjustedActionId(actionID);
         if (!DuplicateActions.TryGetValue(adjustedActionID, out var info)                   ||
-            !ModuleConfig.EnabledActions.TryGetValue(adjustedActionID, out var enableState) || !enableState)
+            !config.EnabledActions.TryGetValue(adjustedActionID, out var enableState) ||
+            !enableState)
             return;
 
         if (ActionManager.Instance()->GetActionStatus(actionType, adjustedActionID) != 0) return;
@@ -168,36 +188,37 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         if (canTargetSelf && (gameObj == null || !ActionManager.CanUseActionOnTarget(adjustedActionID, gameObj.ToStruct())))
             targetIDDetection = LocalPlayerState.EntityID;
 
-        if (info.ShouldPrevent(targetIDDetection))
+        if (info.ShouldPrevent(this, targetIDDetection))
         {
-            if (ModuleConfig.SendNotification && 
-                Throttler.Throttle($"AutoPreventDuplicateStatus-Notification-{adjustedActionID}", 1_000))
-                NotificationInfo(GetLoc("AutoPreventDuplicateStatus-PreventedNotification", actionData.Value.Name.ToString(), adjustedActionID));
+            if (config.SendNotification &&
+                Throttler.Shared.Throttle($"AutoPreventDuplicateStatus-Notification-{adjustedActionID}", 1_000))
+                NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoPreventDuplicateStatus-PreventedNotification", actionData.Value.Name.ToString(), adjustedActionID));
 
             isPrevented = true;
         }
     }
-
-    protected override void Uninit() => 
-        UseActionManager.Instance().Unreg(OnPreUseAction);
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public Dictionary<uint, bool> EnabledActions   = [];
         public float                  OverlapThreshold = 3.5f;
         public bool                   SendNotification = true;
     }
-    
+
     private enum DetectType
     {
-        Self = 0,
+        Self   = 0,
         Member = 1,
-        Target = 2,
+        Target = 2
     }
 
-    private sealed record DuplicatePreventInfo(DuplicateStatusInfo[] Statuses, DuplicateStatusInfo[]? SecondStatuses = null)
+    private sealed record DuplicatePreventInfo
+    (
+        DuplicateStatusInfo[]  Statuses,
+        DuplicateStatusInfo[]? SecondStatuses = null
+    )
     {
-        public bool ShouldPrevent(ulong gameObjectID)
+        public bool ShouldPrevent(AutoPreventDuplicateStatus module, ulong gameObjectID)
         {
             if (SecondStatuses != null)
             {
@@ -205,12 +226,12 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
                 {
                     if (!secondInfo.IsReverse)
                     {
-                        if (secondInfo.HasStatus())
+                        if (secondInfo.HasStatus(module))
                             return false;
                     }
                     else
                     {
-                        if (!secondInfo.HasStatus())
+                        if (!secondInfo.HasStatus(module))
                             return false;
                     }
                 }
@@ -220,57 +241,62 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
             {
                 if (!firstInfo.IsReverse)
                 {
-                    if (firstInfo.HasStatus(gameObjectID))
+                    if (firstInfo.HasStatus(module, gameObjectID))
                         return true;
                 }
                 else
                 {
-                    if (!firstInfo.HasStatus(gameObjectID))
+                    if (!firstInfo.HasStatus(module, gameObjectID))
                         return true;
                 }
             }
 
             return false;
         }
-        
     }
 
-    private sealed record DuplicateStatusInfo(uint StatusID, DetectType DetectType, bool IsReverse = false)
+    private sealed record DuplicateStatusInfo
+    (
+        uint       StatusID,
+        DetectType DetectType,
+        bool       IsReverse = false
+    )
     {
-        private bool IsPermanent => 
+        private bool IsPermanent =>
             LuminaGetter.TryGetRow(StatusID, out Status row) && row.IsPermanent;
 
         public IDalamudTextureWrap? GetIcon() =>
             !LuminaGetter.TryGetRow(StatusID, out Status row) ? null : DService.Instance().Texture.GetFromGameIcon(new(row.Icon)).GetWrapOrDefault();
 
-        public string? GetName() => !PresetSheet.Statuses.TryGetValue(StatusID, out var rowData) ? null : rowData.Name.ToString();
+        public string? GetName() => !Sheets.Statuses.TryGetValue(StatusID, out var rowData) ? null : rowData.Name.ToString();
 
-        public bool HasStatus()
+        public bool HasStatus(AutoPreventDuplicateStatus module)
         {
             switch (DetectType)
             {
                 case DetectType.Self:
-                    return HasStatus(&Control.GetLocalPlayer()->StatusManager);
+                    return HasStatus(module, &Control.GetLocalPlayer()->StatusManager);
                 case DetectType.Target:
                     if (TargetManager.Target is not IBattleChara chara) return false;
-                    return HasStatus(&chara.ToStruct()->StatusManager);
+                    return HasStatus(module, &chara.ToStruct()->StatusManager);
                 case DetectType.Member:
                     if (DService.Instance().PartyList.Length <= 0) return false;
-                    
+
                     foreach (var partyMember in DService.Instance().PartyList)
                     {
                         if (IBattleChara.Create(partyMember.Address) is not { } member) continue;
-                        
-                        var state = HasStatus(member.ToStruct()->GetStatusManager());
+
+                        var state = HasStatus(module, member.ToStruct()->GetStatusManager());
                         if (state) return true;
                     }
+
                     return false;
                 default:
                     return false;
             }
         }
 
-        public bool HasStatus(ulong gameObjectID)
+        public bool HasStatus(AutoPreventDuplicateStatus module, ulong gameObjectID)
         {
             if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
 
@@ -278,31 +304,31 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
                                   ? localPlayer.ToBCStruct()
                                   : (BattleChara*)GameObjectManager.Instance()->Objects.GetObjectByGameObjectId(gameObjectID);
             if (battleChara == null) return false;
-            
-            return HasStatus(battleChara->GetStatusManager());
+
+            return HasStatus(module, battleChara->GetStatusManager());
         }
 
-        public bool HasStatus(StatusManager* statusManager)
+        public bool HasStatus(AutoPreventDuplicateStatus module, StatusManager* statusManager)
         {
             if (statusManager == null) return false;
 
             var statusIndex = statusManager->GetStatusIndex(StatusID);
             if (statusIndex == -1) return false;
 
-            return IsPermanent || statusManager->Status[statusIndex].RemainingTime > ModuleConfig.OverlapThreshold;
+            return IsPermanent || statusManager->Status[statusIndex].RemainingTime > module.config.OverlapThreshold;
         }
     }
 
     #region 数据
 
-    private static readonly Dictionary<DetectType, string> DetectTypeLoc = new()
+    private static readonly FrozenDictionary<DetectType, string> DetectTypeLoc = new Dictionary<DetectType, string>()
     {
-        [DetectType.Self]   = GetLoc("AutoPreventDuplicateStatus-Self"),
-        [DetectType.Member] = GetLoc("AutoPreventDuplicateStatus-Member"),
-        [DetectType.Target] = GetLoc("Target")
-    };
+        [DetectType.Self]   = Lang.Get("AutoPreventDuplicateStatus-Self"),
+        [DetectType.Member] = Lang.Get("AutoPreventDuplicateStatus-Member"),
+        [DetectType.Target] = Lang.Get("Target")
+    }.ToFrozenDictionary();
 
-    private static readonly Dictionary<uint, DuplicatePreventInfo> DuplicateActions = new()
+    private static readonly FrozenDictionary<uint, DuplicatePreventInfo> DuplicateActions = new Dictionary<uint, DuplicatePreventInfo>()
     {
         // 牵制
         [7549] = new([new(1195, DetectType.Target)]),
@@ -347,9 +373,9 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         // 野战治疗阵
         [188] = new([new(1944, DetectType.Self)]),
         // 扫腿，下踢，盾牌猛击
-        [7863]  = new([new(2, DetectType.Target)]),
-        [7540]  = new([new(2, DetectType.Target)]),
-        [16]    = new([new(2, DetectType.Target)]),
+        [7863] = new([new(2, DetectType.Target)]),
+        [7540] = new([new(2, DetectType.Target)]),
+        [16]   = new([new(2, DetectType.Target)]),
         // 真北
         [7546] = new([new(1250, DetectType.Self)]),
         // 亲疏自行 (战士)
@@ -420,7 +446,7 @@ public unsafe class AutoPreventDuplicateStatus : DailyModuleBase
         [29414] = new([new(3158, DetectType.Self)]),
         // 魔封魔
         [41624] = new([new(4259, DetectType.Target)])
-    };
+    }.ToFrozenDictionary();
 
     #endregion
 }

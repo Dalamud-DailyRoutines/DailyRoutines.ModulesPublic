@@ -1,45 +1,51 @@
-using System;
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
+using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Interface;
 using Dalamud.Memory;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
+using MenuItem = Dalamud.Game.Gui.ContextMenu.MenuItem;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class MoreMessageFilterPresets : DailyModuleBase
+public class MoreMessageFilterPresets : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("MoreMessageFilterPresetsTitle"),
-        Description = GetLoc("MoreMessageFilterPresetsDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("MoreMessageFilterPresetsTitle"),
+        Description = Lang.Get("MoreMessageFilterPresetsDescription"),
+        Category    = ModuleCategory.UIOptimization,
         Author      = ["Ponta"]
     };
     
     private static readonly CompSig ApplyMessageFilterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 4C 24 ?? 56 57 41 54 41 56 41 57 48 83 EC ?? 45 33 E4");
-    private delegate        int ApplyMessageFilterDelegate(nint filters);
-    private static readonly ApplyMessageFilterDelegate ApplyMessageFilter = ApplyMessageFilterSig.GetDelegate<ApplyMessageFilterDelegate>();
+    private delegate        int     ApplyMessageFilterDelegate(nint filters);
+    private readonly        ApplyMessageFilterDelegate ApplyMessageFilter = ApplyMessageFilterSig.GetDelegate<ApplyMessageFilterDelegate>();
 
     private static readonly        CompSig MessageFilterSizeSig = new("FF C5 81 FD ?? ?? ?? ?? 0F 82 ?? ?? ?? ?? 48 8B 0D");
     private static readonly unsafe int     MessageFilterSize    = ReadCMPImmediateValue((nint)((byte*)MessageFilterSizeSig.ScanText() + 2));
+
+    private          Config                 config = null!;
+    private readonly ApplyLogFilterMenuItem menuItem;
+
+    private int    selectedFilter;
+    private string inputPresetName = string.Empty;
     
-    private static Config ModuleConfig = null!;
-
-    private static int    SelectedFilter;
-    private static string InputPresetName = string.Empty;
-
-    private static readonly ApplyLogFilterMenuItem MenuItem = new();
-
+    public MoreMessageFilterPresets() =>
+        menuItem = new(this);
+    
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config                                 =  Config.Load(this) ?? new();
         DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpened;
     }
 
@@ -56,7 +62,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
         using var table     = ImRaii.Table("MessageFilterPreset", 4, ImGuiTableFlags.Borders, tableSize);
         if (!table) return;
 
-        ImGui.TableSetupColumn("添加", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeightWithSpacing() + (style.FramePadding.X * 2f));
+        ImGui.TableSetupColumn("添加", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeightWithSpacing() + style.FramePadding.X * 2f);
         ImGui.TableSetupColumn("名称", ImGuiTableColumnFlags.None,       30);
         ImGui.TableSetupColumn("目标", ImGuiTableColumnFlags.None,       30);
         ImGui.TableSetupColumn("操作", ImGuiTableColumnFlags.None,       15);
@@ -70,53 +76,52 @@ public class MoreMessageFilterPresets : DailyModuleBase
         {
             if (popup)
             {
-                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("MoreMessageFilterPresets-SourceTab"));
-                
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("MoreMessageFilterPresets-SourceTab"));
+
                 using (ImRaii.PushIndent())
-                using (var combo = ImRaii.Combo("###AddFilterPresetCombo", logTabName[SelectedFilter], ImGuiComboFlags.HeightLarge))
+                using (var combo = ImRaii.Combo("###AddFilterPresetCombo", logTabName[selectedFilter], ImGuiComboFlags.HeightLarge))
                 {
                     if (combo)
                     {
                         for (var i = 0; i < logTabName.Length; ++i)
-                        {
-                            if (ImGui.Selectable(logTabName[i], SelectedFilter == i))
-                                SelectedFilter = i;
-                        }
+                            if (ImGui.Selectable(logTabName[i], selectedFilter == i))
+                                selectedFilter = i;
                     }
                 }
 
-                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Name"));
-                
-                var defaultName = $"{GetLoc("Preset")} {ModuleConfig.Presets.Count + 1}";
-                var name        = InputPresetName.IsNullOrEmpty() ? defaultName : InputPresetName;
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Name"));
+
+                var defaultName = $"{Lang.Get("Preset")} {config.Presets.Count + 1}";
+                var name        = inputPresetName.IsNullOrEmpty() ? defaultName : inputPresetName;
+
                 using (ImRaii.PushIndent())
                 {
                     if (ImGui.InputText("###PresetNameInput", ref name, 256))
-                        InputPresetName = name;
+                        inputPresetName = name;
                 }
 
-                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileArchive, GetLoc("Save")))
+                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileArchive, Lang.Get("Save")))
                 {
-                    AddFilterPreset(SelectedFilter, name);
-                    SaveConfig(ModuleConfig);
-                    
-                    InputPresetName = string.Empty;
+                    AddFilterPreset(selectedFilter, name);
+                    config.Save(this);
+
+                    inputPresetName = string.Empty;
                     ImGui.CloseCurrentPopup();
                 }
             }
         }
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("Name"));
+        ImGui.TextUnformatted(Lang.Get("Name"));
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("MoreMessageFilterPresets-TargetTab"));
+        ImGui.TextUnformatted(Lang.Get("MoreMessageFilterPresets-TargetTab"));
 
-        for (var i = 0; i < ModuleConfig.Presets.Count; i++)
+        for (var i = 0; i < config.Presets.Count; i++)
         {
             using var id = ImRaii.PushId($"FilterIndex_{i}");
 
-            var preset = ModuleConfig.Presets[i];
+            var preset = config.Presets[i];
 
             ImGui.TableNextRow();
 
@@ -131,13 +136,14 @@ public class MoreMessageFilterPresets : DailyModuleBase
                 if (context)
                 {
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Name"));
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Name"));
 
                     ImGui.SameLine();
                     ImGui.InputText("###RenamePresetInput", ref preset.Name, 128);
+
                     if (ImGui.IsItemDeactivatedAfterEdit())
                     {
-                        SaveConfig(ModuleConfig);
+                        config.Save(this);
                         ImGui.CloseCurrentPopup();
                     }
                 }
@@ -145,39 +151,41 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
             ImGui.TableNextColumn();
             ImGui.SetNextItemWidth(-1f);
+
             using (var combo = ImRaii.Combo("###ApplyFilterPresetCombo", logTabName[preset.SelectedFilter], ImGuiComboFlags.HeightLarge))
             {
                 if (combo)
                 {
                     for (var j = 0; j < logTabName.Length; ++j)
-                    {
                         if (ImGui.Selectable(logTabName[j], preset.SelectedFilter == j))
                             preset.SelectedFilter = j;
-                    }
                 }
             }
 
             ImGui.TableNextColumn();
-            if (ImGui.Button(GetLoc("Apply")))
+
+            if (ImGui.Button(Lang.Get("Apply")))
             {
                 ApplyFilterPresetAndNotify(preset);
-                SaveConfig(ModuleConfig);
+                config.Save(this);
             }
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Delete")))
+
+            if (ImGui.Button(Lang.Get("Delete")))
             {
-                ModuleConfig.Presets.RemoveAt(i);
-                SaveConfig(ModuleConfig);
-                
+                config.Presets.RemoveAt(i);
+                config.Save(this);
+
                 break;
             }
         }
     }
-    private static void OnMenuOpened(IMenuOpenedArgs args)
+
+    private void OnMenuOpened(IMenuOpenedArgs args)
     {
-        if (!MenuItem.IsDisplay(args)) return;
-        args.AddMenuItem(MenuItem.Get());
+        if (!menuItem.IsDisplay(args)) return;
+        args.AddMenuItem(menuItem.Get());
     }
 
     private static unsafe string[] GetLogTabName()
@@ -185,7 +193,7 @@ public class MoreMessageFilterPresets : DailyModuleBase
         var names = new string[4];
 
         var addonText = LuminaGetter.GetRow<Addon>(656).GetValueOrDefault().Text.ToDalamudString();
-        
+
         for (var i = 0; i < names.Length; i++)
         {
             var name = RaptureLogModule.Instance()->GetTabName(i)->ToString();
@@ -199,46 +207,42 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private static nint GetMessageFilter(nint filters, int index)
     {
-        nint offset = (MessageFilterSize * index) + 72;
+        nint offset = MessageFilterSize * index + 72;
         return filters + offset;
     }
 
-    private static unsafe void AddFilterPreset(int index, string name)
+    private unsafe void AddFilterPreset(int index, string name)
     {
         var          filters = LogFilterConfig.Instance();
         var          filter  = GetMessageFilter((nint)filters, index);
         FilterPreset preset  = new() { Name = name };
-        
-        fixed (byte* dst = preset.PresetValue)
-        {
-            Buffer.MemoryCopy((void*)filter, dst, MessageFilterSize, MessageFilterSize);
-        }
 
-        ModuleConfig.Presets.Add(preset);
+        fixed (byte* dst = preset.PresetValue)
+            Buffer.MemoryCopy((void*)filter, dst, MessageFilterSize, MessageFilterSize);
+
+        config.Presets.Add(preset);
     }
 
-    private static unsafe void ApplyFilterPreset(FilterPreset preset, int index)
+    private unsafe void ApplyFilterPreset(FilterPreset preset, int index)
     {
         var filters = LogFilterConfig.Instance();
         var filter  = GetMessageFilter((nint)filters, index);
-        
+
         fixed (byte* src = preset.PresetValue)
-        {
             Buffer.MemoryCopy(src, (void*)filter, MessageFilterSize, MessageFilterSize);
-        }
 
         filters->SaveFile(true);
         ApplyMessageFilter((nint)filters);
     }
 
-    private static void ApplyFilterPresetAndNotify(FilterPreset preset, int index)
+    private void ApplyFilterPresetAndNotify(FilterPreset preset, int index)
     {
         ApplyFilterPreset(preset, index);
-        NotificationSuccess(GetLoc("MoreMessageFilterPresets-Notification-Applied", preset.Name, index + 1));
+        NotifyHelper.Instance().NotificationSuccess(Lang.Get("MoreMessageFilterPresets-Notification-Applied", preset.Name, index + 1));
     }
 
-    private static void ApplyFilterPresetAndNotify(FilterPreset preset)
-        => ApplyFilterPresetAndNotify(preset, preset.SelectedFilter);
+    private void ApplyFilterPresetAndNotify(FilterPreset preset) => 
+        ApplyFilterPresetAndNotify(preset, preset.SelectedFilter);
 
     private static int ReadCMPImmediateValue(nint instructionAddress)
     {
@@ -262,12 +266,12 @@ public class MoreMessageFilterPresets : DailyModuleBase
                 throw new InvalidOperationException("未知的汇编指令");
         }
     }
-
-    private class ApplyLogFilterMenuItem : MenuItemBase
+    
+    private class ApplyLogFilterMenuItem(MoreMessageFilterPresets module) : MenuItemBase
     {
-        public override string Name       { get; protected set; } = GetLoc("MoreMessageFilterPresetsTitle");
+        public override string Name       { get; protected set; } = Lang.Get("MoreMessageFilterPresetsTitle");
         public override string Identifier { get; protected set; } = nameof(MoreMessageFilterPresets);
-        
+
         protected override bool IsSubmenu    { get; set; } = true;
         protected override bool WithDRPrefix { get; set; } = true;
 
@@ -275,17 +279,17 @@ public class MoreMessageFilterPresets : DailyModuleBase
         {
             if (GetSelectedTabIndex() > 3) return;
 
-            args.OpenSubmenu(Name, ProcessMenuItems());
+            args.OpenSubmenu(Name, ProcessMenuItems(module));
         }
 
         public override unsafe bool IsDisplay(IMenuOpenedArgs args)
         {
-            if (ModuleConfig.Presets.Count == 0) return false;
-            if (args.MenuType != ContextMenuType.Default) return false;
-            if (args.AddonName != "ChatLog") return false;
+            if (module.config.Presets.Count == 0) return false;
+            if (args.MenuType              != ContextMenuType.Default) return false;
+            if (args.AddonName             != "ChatLog") return false;
 
-            var agent = (AgentContext*)args.AgentPtr;
-            var contextMenu = agent->CurrentContextMenu;
+            var agent             = (AgentContext*)args.AgentPtr;
+            var contextMenu       = agent->CurrentContextMenu;
             var contextMenuCounts = contextMenu->EventParams[0].Int;
             if (contextMenuCounts == 0) return false;
 
@@ -298,24 +302,29 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
         private static unsafe int GetSelectedTabIndex()
         {
-            var agentChatLog = AgentModule.Instance()->GetAgentChatLog();
+            var agentChatLog     = AgentModule.Instance()->GetAgentChatLog();
             var selectedTabIndex = MemoryHelper.Read<int>((nint)agentChatLog + 0x130);
 
             return selectedTabIndex;
         }
 
-        private static List<MenuItem> ProcessMenuItems()
+        private static List<MenuItem> ProcessMenuItems(MoreMessageFilterPresets module)
         {
             var list = new List<MenuItem>();
 
             var selectedTabIndex = GetSelectedTabIndex();
 
-            foreach (var preset in ModuleConfig.Presets)
-                list.Add(new()
-                {
-                    Name = preset.Name,
-                    OnClicked = _ => ApplyFilterPresetAndNotify(preset, selectedTabIndex)
-                });
+            foreach (var preset in module.config.Presets)
+            {
+                list.Add
+                (
+                    new()
+                    {
+                        Name      = preset.Name,
+                        OnClicked = _ => module.ApplyFilterPresetAndNotify(preset, selectedTabIndex)
+                    }
+                );
+            }
 
             return list;
         }
@@ -323,12 +332,12 @@ public class MoreMessageFilterPresets : DailyModuleBase
 
     private class FilterPreset
     {
-        public string Name = string.Empty;
-        public int    SelectedFilter;
+        public string Name        = string.Empty;
         public byte[] PresetValue = new byte[MessageFilterSize];
+        public int    SelectedFilter;
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public List<FilterPreset> Presets = [];
     }

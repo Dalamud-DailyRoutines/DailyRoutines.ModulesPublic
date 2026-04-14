@@ -1,38 +1,44 @@
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
+using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
-using Dalamud.Game.ClientState.Conditions;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoUseItemStacks : DailyModuleBase
+public unsafe class AutoUseItemStacks : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoUseItemStacksTitle"),
-        Description = GetLoc("AutoUseItemStacksDescription"),
-        Category    = ModuleCategories.General,
-        Author      = ["Cindy-Master"],
+        Title       = Lang.Get("AutoUseItemStacksTitle"),
+        Description = Lang.Get("AutoUseItemStacksDescription"),
+        Category    = ModuleCategory.General,
+        Author      = ["Cindy-Master"]
     };
 
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 5_000 };
-        DService.Instance().ContextMenu.OnMenuOpened += OnContextMenuOpened;
+        
+        DService.Instance().ContextMenu.OnMenuOpened +=  OnContextMenuOpened;
     }
-
-    protected override void ConfigUI() => 
-        ConflictKeyText();
-
-    protected override void Uninit() => 
+    
+    protected override void Uninit() =>
         DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
+
+    protected override void ConfigUI() =>
+        ImGuiOm.ConflictKeyText();
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)
     {
         if (args.Target is not MenuTargetInventory targetInventory) return;
-        if (OccupiedInEvent) return;
+        if (DService.Instance().Condition.IsOccupiedInEvent) return;
 
         var itemID = targetInventory.TargetItem?.ItemId ?? 0;
         if (itemID == 0) return;
@@ -43,8 +49,8 @@ public unsafe class AutoUseItemStacks : DailyModuleBase
 
     public void EnqueueOpenAllCoffers(uint itemID)
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return;
-        if (!PlayerInventories.TryGetFirstItem(x => x.ItemId == itemID, out _)) return;
+        if (TaskHelper.AbortByConflictKey(this)) return;
+        if (!Inventories.Player.TryGetFirstItem(x => x.ItemId == itemID, out _)) return;
 
         TaskHelper.Enqueue(() => AgentInventoryContext.Instance()->UseItem(itemID));
         TaskHelper.DelayNext(500);
@@ -53,17 +59,21 @@ public unsafe class AutoUseItemStacks : DailyModuleBase
         TaskHelper.Enqueue(() => EnqueueOpenAllCoffers(itemID));
     }
 
-    private static bool IsCofferItem(uint itemID) => 
+    private static bool IsCofferItem(uint itemID) =>
         LuminaGetter.GetRow<Item>(itemID) is { StackSize: > 1, ItemAction.RowId: 367 or 388 or 2462 };
 
-    private class OpenAllCoffersMenuItem(AutoUseItemStacks Module, uint ItemID) : MenuItemBase
+    private class OpenAllCoffersMenuItem
+    (
+        AutoUseItemStacks Module,
+        uint              ItemID
+    ) : MenuItemBase
     {
-        public override string Name       { get; protected set; } = GetLoc("AutoUseItemStacks-MenuItem");
+        public override string Name       { get; protected set; } = Lang.Get("AutoUseItemStacks-MenuItem");
         public override string Identifier { get; protected set; } = nameof(AutoUseItemStacks);
 
         protected override bool WithDRPrefix { get; set; } = true;
 
-        protected override void OnClicked(IMenuItemClickedArgs args) => 
+        protected override void OnClicked(IMenuItemClickedArgs args) =>
             Module.EnqueueOpenAllCoffers(ItemID);
     }
 }

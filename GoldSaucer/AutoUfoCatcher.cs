@@ -1,21 +1,25 @@
-using System;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoUfoCatcher : DailyModuleBase
+public class AutoUfoCatcher : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoTMPTitle"),
-        Description = GetLoc("AutoTMPDescription"),
-        Category    = ModuleCategories.GoldSaucer,
+        Title       = Lang.Get("AutoTMPTitle"),
+        Description = Lang.Get("AutoTMPDescription"),
+        Category    = ModuleCategory.GoldSaucer
     };
 
     protected override void Init()
@@ -23,25 +27,28 @@ public class AutoUfoCatcher : DailyModuleBase
         TaskHelper ??= new();
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "UfoCatcher", OnAddonSetup);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
-    protected override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
     private void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return;
+        if (TaskHelper.AbortByConflictKey(this)) return;
         TaskHelper.Enqueue(WaitSelectStringAddon);
         TaskHelper.Enqueue(ClickGameButton);
     }
 
     private unsafe bool WaitSelectStringAddon()
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
-        return SelectString->IsAddonAndNodesReady() && ClickSelectString(0);
+        if (TaskHelper.AbortByConflictKey(this)) return true;
+        return SelectString->IsAddonAndNodesReady() && AddonSelectStringEvent.Select(0);
     }
 
     private unsafe bool ClickGameButton()
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
+        if (TaskHelper.AbortByConflictKey(this)) return true;
 
         if (!UFOCatcher->IsAddonAndNodesReady())
             return false;
@@ -61,12 +68,15 @@ public class AutoUfoCatcher : DailyModuleBase
 
     private unsafe bool StartAnotherRound()
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
-        if (OccupiedInEvent) return false;
-        
+        if (TaskHelper.AbortByConflictKey(this)) return true;
+        if (DService.Instance().Condition.IsOccupiedInEvent) return false;
+
         var machineTarget = TargetManager.PreviousTarget;
-        var machine = machineTarget.Name.TextValue.Contains(LuminaGetter.GetRow<EObjName>(2005036)!.Value.Singular.ToString(),
-                                                            StringComparison.OrdinalIgnoreCase)
+        var machine = machineTarget.Name.TextValue.Contains
+                      (
+                          LuminaGetter.GetRow<EObjName>(2005036)!.Value.Singular.ToString(),
+                          StringComparison.OrdinalIgnoreCase
+                      )
                           ? (GameObject*)machineTarget.Address
                           : null;
 
@@ -78,7 +88,4 @@ public class AutoUfoCatcher : DailyModuleBase
 
         return false;
     }
-
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

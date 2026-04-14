@@ -1,18 +1,20 @@
-using System.Linq;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class Alphascape3Helper : DailyModuleBase
+public class Alphascape3Helper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("Alphascape3HelperTitle"),
-        Description = GetLoc("Alphascape3HelperDescription"),
-        Category    = ModuleCategories.Assist
+        Title       = Lang.Get("Alphascape3HelperTitle"),
+        Description = Lang.Get("Alphascape3HelperDescription"),
+        Category    = ModuleCategory.Assist
     };
 
     protected override void Init()
@@ -20,7 +22,7 @@ public class Alphascape3Helper : DailyModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
@@ -31,8 +33,8 @@ public class Alphascape3Helper : DailyModuleBase
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         if (GameState.TerritoryType != 800) return;
-        
-        FrameworkManager.Instance().Reg(OnUpdate, throttleMS: 100);
+
+        FrameworkManager.Instance().Reg(OnUpdate, 100);
     }
 
     private static void OnUpdate(IFramework framework)
@@ -44,7 +46,7 @@ public class Alphascape3Helper : DailyModuleBase
         }
 
         if (DService.Instance().ObjectTable.LocalPlayer is null) return;
-        
+
         var obj = DService.Instance().ObjectTable.FirstOrDefault(x => x is { ObjectKind: ObjectKind.BattleNpc, DataID: 9638 });
         if (obj is not { IsTargetable: true }) return;
 

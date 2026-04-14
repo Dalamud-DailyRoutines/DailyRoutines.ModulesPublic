@@ -1,18 +1,22 @@
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.Info.Game.Enums;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRestoreFurniture : DailyModuleBase
+public unsafe class AutoRestoreFurniture : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoRestoreFurnitureTitle"),
-        Description = GetLoc("AutoRestoreFurnitureDescription"),
-        Category    = ModuleCategories.UIOperation
+        Title       = Lang.Get("AutoRestoreFurnitureTitle"),
+        Description = Lang.Get("AutoRestoreFurnitureDescription"),
+        Category    = ModuleCategory.UIOperation
     };
 
     protected override void Init()
@@ -25,6 +29,9 @@ public unsafe class AutoRestoreFurniture : DailyModuleBase
         if (HousingGoods != null)
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
@@ -42,27 +49,27 @@ public unsafe class AutoRestoreFurniture : DailyModuleBase
             var isOutdoor = HousingGoods->AtkValues[9].UInt != 6U;
 
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("AutoRestoreFurnitureTitle"));
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoRestoreFurnitureTitle"));
 
             ImGui.SameLine();
-            ImGui.TextUnformatted($"({GetLoc(isOutdoor ? "Outdoors" : "Indoors")})");
+            ImGui.TextUnformatted($"({Lang.Get(isOutdoor ? "Outdoors" : "Indoors")})");
 
             ImGui.SameLine();
             ImGui.Spacing();
 
             ImGui.SameLine();
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, $" {GetLoc("Stop")}"))
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, $" {Lang.Get("Stop")}"))
                 TaskHelper.Abort();
 
             using (ImRaii.Disabled(TaskHelper.IsBusy))
             {
-                if (ImGui.Selectable($"    {GetLoc("AutoRestoreFurniture-PlacedToStoreRoom")}"))
+                if (ImGui.Selectable($"    {Lang.Get("AutoRestoreFurniture-PlacedToStoreRoom")}"))
                     EnqueueRestore(isOutdoor ? 25001U : 25003U, isOutdoor ? 25001U : 25010U, !isOutdoor, 65536);
 
-                if (ImGui.Selectable($"    {GetLoc("AutoRestoreFurniture-PlacedToInventory")}"))
+                if (ImGui.Selectable($"    {Lang.Get("AutoRestoreFurniture-PlacedToInventory")}"))
                     EnqueueRestore(isOutdoor ? 25001U : 25003U, isOutdoor ? 25001U : 25010U, !isOutdoor);
 
-                if (ImGui.Selectable($"    {GetLoc("AutoRestoreFurniture-StoredToInventory")}"))
+                if (ImGui.Selectable($"    {Lang.Get("AutoRestoreFurniture-StoredToInventory")}"))
                     EnqueueRestore(isOutdoor ? 27000U : 27001U, isOutdoor ? 27000U : 27008U, !isOutdoor);
             }
         }
@@ -101,12 +108,16 @@ public unsafe class AutoRestoreFurniture : DailyModuleBase
                 var inventoryTypeFinal = (int)i;
                 var slotFinal          = d;
 
-                TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommand(
-                                       ExecuteCommandFlag.RestoreFurniture,
-                                       (uint)param1,
-                                       (uint)param2,
-                                       (uint)inventoryTypeFinal,
-                                       (uint)(slotFinal + extraSlotParam)));
+                TaskHelper.Enqueue
+                (() => ExecuteCommandManager.Instance().ExecuteCommand
+                 (
+                     ExecuteCommandFlag.RestoreFurniture,
+                     (uint)param1,
+                     (uint)param2,
+                     (uint)inventoryTypeFinal,
+                     (uint)(slotFinal + extraSlotParam)
+                 )
+                );
                 TaskHelper.Enqueue(() => EnqueueRestore(startInventory, endInventory, isIndoor, extraSlotParam));
                 return true;
             }
@@ -130,7 +141,4 @@ public unsafe class AutoRestoreFurniture : DailyModuleBase
         if (type == AddonEvent.PreFinalize)
             TaskHelper.Abort();
     }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

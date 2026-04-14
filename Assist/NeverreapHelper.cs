@@ -1,65 +1,74 @@
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using OmenTools.Extensions;
+using OmenTools.Interop.Game.Models.Packets.Upstream;
+using OmenTools.OmenService;
+using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class NeverreapHelper : DailyModuleBase
+public class NeverreapHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("NeverreapHelperTitle"),
-        Description = GetLoc("NeverreapHelperDescription"),
-        Category    = ModuleCategories.Assist
+        Title       = Lang.Get("NeverreapHelperTitle"),
+        Description = Lang.Get("NeverreapHelperDescription"),
+        Category    = ModuleCategory.Assist
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
-
-    private static Config ModuleConfig = null!;
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
-        TaskHelper   ??= new() { TimeoutMS = 30_000 };
-        
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 30_000 };
+
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("OnlyValidWhenSolo"), ref ModuleConfig.ValidWhenSolo))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("OnlyValidWhenSolo"), ref config.ValidWhenSolo))
+            config.Save(this);
     }
 
     private unsafe void OnZoneChanged(ushort zone)
     {
         TaskHelper.Abort();
-        
+
         if (GameState.TerritoryType != 420) return;
-        
-        TaskHelper.Enqueue(() =>
-        {
-            if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
-            if (BetweenAreas || !UIModule.IsScreenReady()) return false;
-            if (ModuleConfig.ValidWhenSolo && (DService.Instance().PartyList.Length > 1 || PlayersManager.PlayersAroundCount > 0))
+
+        TaskHelper.Enqueue
+        (() =>
             {
-                TaskHelper.Abort();
+                if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
+                if (DService.Instance().Condition.IsBetweenAreas || !UIModule.IsScreenReady()) return false;
+
+                if (config.ValidWhenSolo && (DService.Instance().PartyList.Length > 1 || PlayersManager.Instance().PlayersAroundCount > 0))
+                {
+                    TaskHelper.Abort();
+                    return true;
+                }
+
+                if (!EventFramework.Instance()->IsEventIDNearby(1638407)) return false;
+
+                new EventStartPackt(localPlayer.EntityID, 1638407).Send();
                 return true;
             }
-            if (!EventFramework.Instance()->IsEventIDNearby(1638407)) return false;
-
-            new EventStartPackt(localPlayer.EntityID, 1638407).Send();
-            return true;
-        });
+        );
     }
-
-    protected override void Uninit() => 
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public bool ValidWhenSolo = true;
     }

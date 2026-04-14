@@ -1,48 +1,51 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Lumina.Excel.Sheets;
+using OmenTools.ImGuiOm.Widgets.Combos;
+using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoMovePetPosition : DailyModuleBase
+public class AutoMovePetPosition : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoMovePetPositionTitle"),
-        Description = GetLoc("AutoMovePetPositionDescription"),
-        Category    = ModuleCategories.Combat,
-        Author      = ["Wotou"],
+        Title       = Lang.Get("AutoMovePetPositionTitle"),
+        Description = Lang.Get("AutoMovePetPositionDescription"),
+        Category    = ModuleCategory.Combat,
+        Author      = ["Wotou"]
     };
+    
+    private Config config = null!;
+    
+    private readonly ContentSelectCombo contentSelectCombo = new("Content");
 
-    private static Config ModuleConfig = null!;
-    
-    private static readonly HashSet<uint> ValidJobs = [26, 27, 28];
-    
-    private static readonly ContentSelectCombo ContentSelectCombo = new("Content");
+    private DateTime battleStartTime = DateTime.MinValue;
 
-    private static DateTime BattleStartTime = DateTime.MinValue;
-    
-    private static bool                            IsPicking;
-    private static (uint territoryKey, int index)? CurrentPickingRow;
+    private bool                            isPicking;
+    private (uint territoryKey, int index)? currentPickingRow;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-        TaskHelper ??= new() { TimeoutMS = 30_000 };
-        
+        config =   Config.Load(this) ?? new();
+        TaskHelper   ??= new() { TimeoutMS = 30_000 };
+
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().DutyState.DutyRecommenced    += OnDutyRecommenced;
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
 
         TaskHelper.Enqueue(SchedulePetMovements);
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
@@ -53,95 +56,101 @@ public class AutoMovePetPosition : DailyModuleBase
     protected override void ConfigUI()
     {
         var tableWidth = (ImGui.GetContentRegionAvail() * 0.9f) with { Y = 0 };
-        
+
         using var table = ImRaii.Table("PositionSchedulesTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg, tableWidth);
         if (!table) return;
 
         ImGui.TableSetupColumn("新增", ImGuiTableColumnFlags.WidthFixed,   ImGui.GetTextLineHeightWithSpacing());
         ImGui.TableSetupColumn("区域", ImGuiTableColumnFlags.WidthStretch, 20);
         ImGui.TableSetupColumn("备注", ImGuiTableColumnFlags.WidthStretch, 25);
-        ImGui.TableSetupColumn("延迟", ImGuiTableColumnFlags.WidthFixed,   50f * GlobalFontScale);
+        ImGui.TableSetupColumn("延迟", ImGuiTableColumnFlags.WidthFixed,   50f * GlobalUIScale);
         ImGui.TableSetupColumn("坐标", ImGuiTableColumnFlags.WidthStretch, 20);
         ImGui.TableSetupColumn("操作", ImGuiTableColumnFlags.WidthStretch, 15);
 
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-        
+
         ImGui.TableNextColumn();
+
         if (ImGuiOm.ButtonIconSelectable("AddNewPreset", FontAwesomeIcon.Plus))
         {
-            if (!ModuleConfig.PositionSchedules.ContainsKey(1))
-                ModuleConfig.PositionSchedules[1] = [];
+            if (!config.PositionSchedules.ContainsKey(1))
+                config.PositionSchedules[1] = [];
 
-            ModuleConfig.PositionSchedules[1].Add(new(Guid.NewGuid().ToString())
-            {
-                Enabled  = true,
-                ZoneID   = 1,
-                DelayS   = 0,
-                Position = default
-            });
-            SaveConfig(ModuleConfig);
+            config.PositionSchedules[1].Add
+            (
+                new(Guid.NewGuid().ToString())
+                {
+                    Enabled  = true,
+                    ZoneID   = 1,
+                    DelayS   = 0,
+                    Position = default
+                }
+            );
+            config.Save(this);
 
             TaskHelper.Abort();
             TaskHelper.Enqueue(SchedulePetMovements);
         }
-        
+
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("Zone"));
-        
+        ImGui.TextUnformatted(Lang.Get("Zone"));
+
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("Note"));
-        
+        ImGui.TextUnformatted(Lang.Get("Note"));
+
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(FontAwesomeIcon.Clock.ToIconString());
-        ImGuiOm.TooltipHover($"{GetLoc("AutoMovePetPosition-Delay")} (s)");
-        
-        ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("Position"));
-        
-        ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("Operation"));
+        ImGuiOm.TooltipHover($"{Lang.Get("AutoMovePetPosition-Delay")} (s)");
 
-        foreach (var (zoneID, scheduleList) in ModuleConfig.PositionSchedules.ToArray())
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(Lang.Get("Position"));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(Lang.Get("Operation"));
+
+        foreach (var (zoneID, scheduleList) in config.PositionSchedules.ToArray())
         {
             if (scheduleList.Count == 0) continue;
 
             for (var i = 0; i < scheduleList.Count; i++)
             {
                 var schedule = scheduleList[i];
-                
+
                 using var id = ImRaii.PushId(schedule.GUID);
-                
+
                 ImGui.TableNextRow();
-                
+
                 var enabled = schedule.Enabled;
                 ImGui.TableNextColumn();
+
                 if (ImGui.Checkbox("##启用", ref enabled))
                 {
                     schedule.Enabled = enabled;
-                    SaveConfig(ModuleConfig);
+                    config.Save(this);
 
                     TaskHelper.Abort();
                     TaskHelper.Enqueue(SchedulePetMovements);
                 }
-                
-                var editingZoneID  = schedule.ZoneID;
+
+                var editingZoneID = schedule.ZoneID;
                 if (!LuminaGetter.TryGetRow<TerritoryType>(editingZoneID, out var zone)) continue;
 
-                ContentSelectCombo.SelectedID = zone.ContentFinderCondition.RowId;
+                contentSelectCombo.SelectedID = zone.ContentFinderCondition.RowId;
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ContentSelectCombo.DrawRadio())
+
+                if (contentSelectCombo.DrawRadio())
                 {
-                    editingZoneID = ContentSelectCombo.SelectedItem.TerritoryType.RowId;
+                    editingZoneID = contentSelectCombo.SelectedItem.TerritoryType.RowId;
 
                     var scheduleCopy = schedule.Copy();
                     scheduleCopy.ZoneID = editingZoneID;
 
                     scheduleList.Remove(schedule);
 
-                    ModuleConfig.PositionSchedules.TryAdd(editingZoneID, []);
-                    ModuleConfig.PositionSchedules[editingZoneID].Add(scheduleCopy);
-                    SaveConfig(ModuleConfig);
+                    config.PositionSchedules.TryAdd(editingZoneID, []);
+                    config.PositionSchedules[editingZoneID].Add(scheduleCopy);
+                    config.Save(this);
 
                     TaskHelper.Abort();
                     TaskHelper.Enqueue(SchedulePetMovements);
@@ -152,109 +161,120 @@ public class AutoMovePetPosition : DailyModuleBase
                 var remark = schedule.Note;
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 ImGui.InputText("##备注", ref remark, 256);
+
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     if (remark != schedule.Note)
                     {
                         schedule.Note = remark;
-                        SaveConfig(ModuleConfig);
+                        config.Save(this);
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
                     }
                 }
-                
+
                 ImGui.TableNextColumn();
                 var timeInSeconds = schedule.DelayS;
-                ImGui.SetNextItemWidth(50f * GlobalFontScale);
+                ImGui.SetNextItemWidth(50f * GlobalUIScale);
                 ImGui.InputInt("##延迟", ref timeInSeconds);
+
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     timeInSeconds = Math.Max(0, timeInSeconds);
+
                     if (timeInSeconds != schedule.DelayS)
                     {
                         schedule.DelayS = timeInSeconds;
-                        SaveConfig(ModuleConfig);
+                        config.Save(this);
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
                     }
                 }
-                
+
                 var pos = schedule.Position;
                 ImGui.TableNextColumn();
-                ImGui.SetNextItemWidth(125f * GlobalFontScale);
+                ImGui.SetNextItemWidth(125f * GlobalUIScale);
                 ImGui.InputFloat2("##坐标", ref pos, format: "%.1f");
+
                 if (ImGui.IsItemDeactivatedAfterEdit())
                 {
                     schedule.Position = pos;
-                    SaveConfig(ModuleConfig);
+                    config.Save(this);
 
                     TaskHelper.Abort();
                     TaskHelper.Enqueue(SchedulePetMovements);
                 }
 
                 ImGui.SameLine();
-                if (ImGuiOm.ButtonIcon("当前坐标", FontAwesomeIcon.Crosshairs,
-                                       GetLoc("AutoMovePetPosition-GetCurrent")))
+
+                if (ImGuiOm.ButtonIcon
+                    (
+                        "当前坐标",
+                        FontAwesomeIcon.Crosshairs,
+                        Lang.Get("AutoMovePetPosition-GetCurrent")
+                    ))
                 {
                     if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
                     {
                         schedule.Position = localPlayer.Position.ToVector2();
-                        SaveConfig(ModuleConfig);
+                        config.Save(this);
 
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
                     }
                 }
-                
+
                 ImGui.SameLine();
-                if (!IsPicking)
+
+                if (!isPicking)
                 {
-                    if (ImGuiOm.ButtonIcon("鼠标位置", FontAwesomeIcon.MousePointer, GetLoc("AutoMovePetPosition-GetMouseHelp")))
+                    if (ImGuiOm.ButtonIcon("鼠标位置", FontAwesomeIcon.MousePointer, Lang.Get("AutoMovePetPosition-GetMouseHelp")))
                     {
-                        IsPicking         = true;
-                        CurrentPickingRow = (zoneID, i);
+                        isPicking         = true;
+                        currentPickingRow = (zoneID, i);
                     }
                 }
                 else
                 {
-                    if (ImGuiOm.ButtonIcon("取消鼠标位置读取", FontAwesomeIcon.Times, GetLoc("Cancel")))
+                    if (ImGuiOm.ButtonIcon("取消鼠标位置读取", FontAwesomeIcon.Times, Lang.Get("Cancel")))
                     {
-                        IsPicking         = false;
-                        CurrentPickingRow = null;
+                        isPicking         = false;
+                        currentPickingRow = null;
                     }
                 }
 
-                if (IsPicking)
+                if (isPicking)
                 {
                     if ((ImGui.IsKeyDown(ImGuiKey.LeftAlt)  || ImGui.IsKeyDown(ImGuiKey.RightAlt)) &&
                         (ImGui.IsKeyDown(ImGuiKey.LeftCtrl) || ImGui.IsKeyDown(ImGuiKey.RightCtrl)))
                     {
                         if (DService.Instance().GameGUI.ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
                         {
-                            var currentPickingZone  = CurrentPickingRow?.territoryKey ?? 0;
-                            var currentPickingIndex = CurrentPickingRow?.index        ?? -1;
+                            var currentPickingZone  = currentPickingRow?.territoryKey ?? 0;
+                            var currentPickingIndex = currentPickingRow?.index        ?? -1;
                             if (currentPickingZone == 0 || currentPickingIndex == -1) continue;
 
-                            ModuleConfig.PositionSchedules
+                            config.PositionSchedules
                                 [currentPickingZone][currentPickingIndex].Position = worldPos.ToVector2();
-                            SaveConfig(ModuleConfig);
+                            config.Save(this);
 
                             TaskHelper.Abort();
                             TaskHelper.Enqueue(SchedulePetMovements);
 
-                            IsPicking         = false;
-                            CurrentPickingRow = null;
+                            isPicking         = false;
+                            currentPickingRow = null;
                         }
                     }
                 }
-                
+
                 ImGui.TableNextColumn();
-                if (ImGuiOm.ButtonIcon("删除", FontAwesomeIcon.TrashAlt, $"{GetLoc("Delete")} (Ctrl)"))
+
+                if (ImGuiOm.ButtonIcon("删除", FontAwesomeIcon.TrashAlt, $"{Lang.Get("Delete")} (Ctrl)"))
                 {
                     if (ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
                     {
                         scheduleList.RemoveAt(i);
-                        SaveConfig(ModuleConfig);
+                        config.Save(this);
 
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
@@ -264,22 +284,23 @@ public class AutoMovePetPosition : DailyModuleBase
                 }
 
                 ImGui.SameLine();
-                if (ImGuiOm.ButtonIcon("导出", FontAwesomeIcon.FileExport, GetLoc("Export")))
+                if (ImGuiOm.ButtonIcon("导出", FontAwesomeIcon.FileExport, Lang.Get("Export")))
                     ExportToClipboard(schedule);
 
                 ImGui.SameLine();
-                if (ImGuiOm.ButtonIcon("导入", FontAwesomeIcon.FileImport, GetLoc("Import")))
+
+                if (ImGuiOm.ButtonIcon("导入", FontAwesomeIcon.FileImport, Lang.Get("Import")))
                 {
                     var importedSchedule = ImportFromClipboard<PositionSchedule>();
                     if (importedSchedule == null) return;
-                    
-                    var importZoneID = importedSchedule.ZoneID;
-                    ModuleConfig.PositionSchedules.TryAdd(importZoneID, []);
 
-                    if (!ModuleConfig.PositionSchedules[importZoneID].Contains(importedSchedule))
+                    var importZoneID = importedSchedule.ZoneID;
+                    config.PositionSchedules.TryAdd(importZoneID, []);
+
+                    if (!config.PositionSchedules[importZoneID].Contains(importedSchedule))
                     {
                         scheduleList.Add(importedSchedule);
-                        SaveConfig(ModuleConfig);
+                        config.Save(this);
 
                         TaskHelper.Abort();
                         TaskHelper.Enqueue(SchedulePetMovements);
@@ -292,7 +313,7 @@ public class AutoMovePetPosition : DailyModuleBase
     private void OnZoneChanged(ushort zone)
     {
         ResetBattleTimer();
-        
+
         TaskHelper.Abort();
         TaskHelper.Enqueue(SchedulePetMovements);
     }
@@ -300,7 +321,7 @@ public class AutoMovePetPosition : DailyModuleBase
     private void OnDutyRecommenced(object? sender, ushort e)
     {
         ResetBattleTimer();
-        
+
         TaskHelper.Abort();
         TaskHelper.Enqueue(SchedulePetMovements);
     }
@@ -311,31 +332,31 @@ public class AutoMovePetPosition : DailyModuleBase
         {
             ResetBattleTimer();
             StartBattleTimer();
-            
+
             TaskHelper.Abort();
             TaskHelper.Enqueue(SchedulePetMovements);
         }
     }
 
-    private static void StartBattleTimer() => 
-        BattleStartTime = StandardTimeManager.Instance().Now;
+    private void StartBattleTimer() =>
+        battleStartTime = StandardTimeManager.Instance().Now;
 
-    private static void ResetBattleTimer() => 
-        BattleStartTime = DateTime.MinValue;
+    private void ResetBattleTimer() =>
+        battleStartTime = DateTime.MinValue;
 
     private void SchedulePetMovements()
     {
         if (!CheckIsEightPlayerDuty()) return;
-        
+
         var zoneID = GameState.TerritoryType;
-        if (!ModuleConfig.PositionSchedules.TryGetValue(zoneID, out var schedulesForThisDuty)) return;
+        if (!config.PositionSchedules.TryGetValue(zoneID, out var schedulesForThisDuty)) return;
 
         if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
         {
             if (!ValidJobs.Contains(localPlayer.ClassJob.RowId)) return;
-            
+
             var enabledSchedules     = schedulesForThisDuty.Where(x => x.Enabled).ToList();
-            var elapsedTimeInSeconds = (StandardTimeManager.Instance().Now - BattleStartTime).TotalSeconds;
+            var elapsedTimeInSeconds = (StandardTimeManager.Instance().Now - battleStartTime).TotalSeconds;
 
             if (DService.Instance().Condition[ConditionFlag.InCombat])
             {
@@ -343,8 +364,8 @@ public class AutoMovePetPosition : DailyModuleBase
                                    .Where(x => x.DelayS <= elapsedTimeInSeconds)
                                    .OrderByDescending(x => x.DelayS)
                                    .FirstOrDefault();
-                
-                if (bestSchedule != null) 
+
+                if (bestSchedule != null)
                     TaskHelper.Enqueue(() => MovePetToLocation(bestSchedule.Position));
             }
             else
@@ -367,7 +388,7 @@ public class AutoMovePetPosition : DailyModuleBase
         if (!CheckIsEightPlayerDuty()) return;
         if (DService.Instance().ObjectTable.LocalPlayer is not { } player) return;
         if (!ValidJobs.Contains(player.ClassJob.RowId)) return;
-        
+
         var pet = CharacterManager.Instance()->LookupPetByOwnerObject(player.ToStruct());
         if (pet == null) return;
 
@@ -383,9 +404,9 @@ public class AutoMovePetPosition : DailyModuleBase
     {
         var zoneID = GameState.TerritoryType;
         if (zoneID == 0) return false;
-        
+
         var zoneData = LuminaGetter.GetRow<TerritoryType>(zoneID);
-        if (zoneData == null) return false;
+        if (zoneData             == null) return false;
         if (zoneData.Value.RowId == 0) return false;
 
         var contentData = zoneData.Value.ContentFinderCondition.Value;
@@ -393,13 +414,16 @@ public class AutoMovePetPosition : DailyModuleBase
 
         return contentData.ContentMemberType.RowId == 3;
     }
-    
-    private class Config : ModuleConfiguration
+
+    private class Config : ModuleConfig
     {
         public Dictionary<uint, List<PositionSchedule>> PositionSchedules = new();
     }
 
-    public class PositionSchedule(string guid) : IEquatable<PositionSchedule>
+    private class PositionSchedule
+    (
+        string guid
+    ) : IEquatable<PositionSchedule>
     {
         public bool    Enabled  { get; set; } = true;
         public uint    ZoneID   { get; set; }
@@ -408,6 +432,13 @@ public class AutoMovePetPosition : DailyModuleBase
         public Vector2 Position { get; set; }
         public string  GUID     { get; set; } = guid;
 
+        public bool Equals(PositionSchedule? other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return GUID == other.GUID;
+        }
+
         public PositionSchedule Copy() =>
             new(GUID)
             {
@@ -415,17 +446,10 @@ public class AutoMovePetPosition : DailyModuleBase
                 ZoneID   = ZoneID,
                 Note     = Note,
                 DelayS   = DelayS,
-                Position = Position,
+                Position = Position
             };
 
-        public bool Equals(PositionSchedule? other)
-        {
-            if(other is null) return false;
-            if(ReferenceEquals(this, other)) return true;
-            return GUID == other.GUID;
-        }
-
-        public override string ToString() => 
+        public override string ToString() =>
             GUID;
 
         public override bool Equals(object? obj)
@@ -434,13 +458,19 @@ public class AutoMovePetPosition : DailyModuleBase
             return Equals(other);
         }
 
-        public override int GetHashCode() => 
+        public override int GetHashCode() =>
             GUID.GetHashCode();
 
-        public static bool operator ==(PositionSchedule? left, PositionSchedule? right) => 
+        public static bool operator ==(PositionSchedule? left, PositionSchedule? right) =>
             Equals(left, right);
 
-        public static bool operator !=(PositionSchedule? left, PositionSchedule? right) => 
+        public static bool operator !=(PositionSchedule? left, PositionSchedule? right) =>
             !Equals(left, right);
     }
+    
+    #region 常量
+    
+    private static readonly FrozenSet<uint> ValidJobs = [26, 27, 28];
+    
+    #endregion
 }

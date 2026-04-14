@@ -1,141 +1,173 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
-using Dalamud.Interface;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
-using OmenTools.Extensions;
+using OmenTools.ImGuiOm.Widgets.Combos;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
+using OmenTools.Threading;
+using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoCheckFoodUsage : DailyModuleBase
+public class AutoCheckFoodUsage : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoCheckFoodUsageTitle"),
-        Description = GetLoc("AutoCheckFoodUsageDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("AutoCheckFoodUsageTitle"),
+        Description = Lang.Get("AutoCheckFoodUsageDescription"),
+        Category    = ModuleCategory.Combat
     };
-
-    private const int FOOD_USAGE_COOLDOWN_SECONDS = 10;
-
+    
     private static readonly CompSig                      CountdownInitSig = new("48 89 5C 24 10 57 48 83 EC 40 48 8B DA 48 8B F9 48 8B 49 08");
     public delegate         nint                         CountdownInitDelegate(nint a1, nint a2);
-    private static          Hook<CountdownInitDelegate>? CountdownInitHook;
+    private                 Hook<CountdownInitDelegate>? CountdownInitHook;
 
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static readonly JobSelectCombo JobSelectCombo = new("Job");
+    private readonly JobSelectCombo jobSelectCombo = new("Job");
+
+    private uint   selectedItem;
+    private string selectItemSearch     = string.Empty;
+    private bool   selectItemIsHQ       = true;
+    private string zoneSearchInput      = string.Empty;
+    private string conditionSearchInput = string.Empty;
     
-    private static uint   SelectedItem;
-    private static string SelectItemSearch = string.Empty;
-    private static bool   SelectItemIsHQ   = true;
-    private static string ZoneSearch       = string.Empty;
-    private static string ConditionSearch  = string.Empty;
-
-    private static Vector2 CheckboxSize = ScaledVector2(20f);
-    
-    private static readonly DateTime LastFoodUsageTime        = DateTime.MinValue;
+    private readonly DateTime lastFoodUsageTime = DateTime.MinValue;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
         foreach (var checkPoint in Enum.GetValues<FoodCheckpoint>())
-            ModuleConfig.EnabledCheckpoints.TryAdd(checkPoint, false);
+            config.EnabledCheckpoints.TryAdd(checkPoint, false);
 
         TaskHelper ??= new TaskHelper { TimeoutMS = 60_000 };
 
         CountdownInitHook ??= CountdownInitSig.GetHook<CountdownInitDelegate>(CountdownInitDetour);
         CountdownInitHook.Enable();
-        
+
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoCheckFoodUsage-Checkpoint")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoCheckFoodUsage-Checkpoint")}:");
 
         using (ImRaii.PushIndent())
         {
-            ScaledDummy(2f);
+            ImGuiOm.ScaledDummy(2f);
 
             foreach (var checkPoint in Enum.GetValues<FoodCheckpoint>())
             {
                 ImGui.SameLine();
-                var state = ModuleConfig.EnabledCheckpoints[checkPoint];
+                var state = config.EnabledCheckpoints[checkPoint];
+
                 if (ImGui.Checkbox(checkPoint.ToString(), ref state))
                 {
-                    ModuleConfig.EnabledCheckpoints[checkPoint] = state;
-                    SaveConfig(ModuleConfig);
+                    config.EnabledCheckpoints[checkPoint] = state;
+                    config.Save(this);
                 }
             }
 
-            if (ModuleConfig.EnabledCheckpoints[FoodCheckpoint.条件变更时])
+            if (config.EnabledCheckpoints[FoodCheckpoint.条件变更时])
             {
                 using (ImRaii.PushIndent())
                 {
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(),
-                                      $"{GetLoc("AutoCheckFoodUsage-WhenConditionBegin")}:");
+                    ImGui.TextColored
+                    (
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        $"{Lang.Get("AutoCheckFoodUsage-WhenConditionBegin")}:"
+                    );
 
                     ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200f * GlobalFontScale);
-                    using (var combo = ImRaii.Combo("###ConditionBeginCombo", GetLoc("AutoCheckFoodUsage-SelectedAmount", ModuleConfig.ConditionStart.Count),
-                                                    ImGuiComboFlags.HeightLarge))
+                    ImGui.SetNextItemWidth(200f * GlobalUIScale);
+
+                    using (var combo = ImRaii.Combo
+                           (
+                               "###ConditionBeginCombo",
+                               Lang.Get("AutoCheckFoodUsage-SelectedAmount", config.ConditionStart.Count),
+                               ImGuiComboFlags.HeightLarge
+                           ))
                     {
                         if (combo)
                         {
                             if (ImGui.IsWindowAppearing())
-                                ConditionSearch = string.Empty;
+                                conditionSearchInput = string.Empty;
 
                             ImGui.SetNextItemWidth(-1f);
-                            ImGui.InputTextWithHint("###ConditionBeginSearch", GetLoc("PleaseSearch"),
-                                                    ref ConditionSearch, 128);
+                            ImGui.InputTextWithHint
+                            (
+                                "###ConditionBeginSearch",
+                                Lang.Get("PleaseSearch"),
+                                ref conditionSearchInput,
+                                128
+                            );
                             ImGui.Separator();
 
                             foreach (var conditionFlag in Enum.GetValues<ConditionFlag>())
                             {
                                 if (conditionFlag is ConditionFlag.None or ConditionFlag.NormalConditions) continue;
                                 var conditionName = conditionFlag.ToString();
-                                if (!string.IsNullOrWhiteSpace(ConditionSearch) &&
-                                    !conditionName.Contains(ConditionSearch, StringComparison.OrdinalIgnoreCase))
+                                if (!string.IsNullOrWhiteSpace(conditionSearchInput) &&
+                                    !conditionName.Contains(conditionSearchInput, StringComparison.OrdinalIgnoreCase))
                                     continue;
-                                if (ImGui.Selectable($"{conditionName}###{conditionFlag}_Begin",
-                                                     ModuleConfig.ConditionStart.Contains(conditionFlag)))
+
+                                if (ImGui.Selectable
+                                    (
+                                        $"{conditionName}###{conditionFlag}_Begin",
+                                        config.ConditionStart.Contains(conditionFlag)
+                                    ))
                                 {
-                                    if (!ModuleConfig.ConditionStart.Remove(conditionFlag))
-                                        ModuleConfig.ConditionStart.Add(conditionFlag);
-                                    SaveConfig(ModuleConfig);
+                                    if (!config.ConditionStart.Remove(conditionFlag))
+                                        config.ConditionStart.Add(conditionFlag);
+                                    config.Save(this);
                                 }
                             }
                         }
                     }
 
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(),
-                                      $"{GetLoc("AutoCheckFoodUsage-WhenConditionEnd")}:");
+                    ImGui.TextColored
+                    (
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        $"{Lang.Get("AutoCheckFoodUsage-WhenConditionEnd")}:"
+                    );
 
                     ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200f * GlobalFontScale);
-                    using (var combo = ImRaii.Combo("###ConditionEndCombo", GetLoc("AutoCheckFoodUsage-SelectedAmount", ModuleConfig.ConditionEnd.Count), 
-                                                    ImGuiComboFlags.HeightLarge))
+                    ImGui.SetNextItemWidth(200f * GlobalUIScale);
+
+                    using (var combo = ImRaii.Combo
+                           (
+                               "###ConditionEndCombo",
+                               Lang.Get("AutoCheckFoodUsage-SelectedAmount", config.ConditionEnd.Count),
+                               ImGuiComboFlags.HeightLarge
+                           ))
                     {
                         if (combo)
                         {
                             if (ImGui.IsWindowAppearing())
-                                ConditionSearch = string.Empty;
+                                conditionSearchInput = string.Empty;
 
                             ImGui.SetNextItemWidth(-1f);
-                            ImGui.InputTextWithHint("###ConditionEndSearch", GetLoc("PleaseSearch"), ref ConditionSearch, 128);
-                            
+                            ImGui.InputTextWithHint("###ConditionEndSearch", Lang.Get("PleaseSearch"), ref conditionSearchInput, 128);
+
                             ImGui.Separator();
 
                             foreach (var conditionFlag in Enum.GetValues<ConditionFlag>())
@@ -143,15 +175,15 @@ public class AutoCheckFoodUsage : DailyModuleBase
                                 if (conditionFlag is ConditionFlag.None or ConditionFlag.NormalConditions) continue;
 
                                 var conditionName = conditionFlag.ToString();
-                                if (!string.IsNullOrWhiteSpace(ConditionSearch) &&
-                                    !conditionName.Contains(ConditionSearch, StringComparison.OrdinalIgnoreCase))
+                                if (!string.IsNullOrWhiteSpace(conditionSearchInput) &&
+                                    !conditionName.Contains(conditionSearchInput, StringComparison.OrdinalIgnoreCase))
                                     continue;
 
-                                if (ImGui.Selectable($"{conditionName}###{conditionFlag}_End", ModuleConfig.ConditionEnd.Contains(conditionFlag)))
+                                if (ImGui.Selectable($"{conditionName}###{conditionFlag}_End", config.ConditionEnd.Contains(conditionFlag)))
                                 {
-                                    if (!ModuleConfig.ConditionEnd.Remove(conditionFlag))
-                                        ModuleConfig.ConditionEnd.Add(conditionFlag);
-                                    SaveConfig(ModuleConfig);
+                                    if (!config.ConditionEnd.Remove(conditionFlag))
+                                        config.ConditionEnd.Add(conditionFlag);
+                                    config.Save(this);
                                 }
                             }
                         }
@@ -159,31 +191,31 @@ public class AutoCheckFoodUsage : DailyModuleBase
                 }
             }
 
-            ScaledDummy(2f);
+            ImGuiOm.ScaledDummy(2f);
         }
 
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Settings")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Settings")}:");
 
         using (ImRaii.PushIndent())
         {
             ImGui.Dummy(Vector2.One);
 
-            ImGui.SetNextItemWidth(50f * GlobalFontScale);
-            ImGui.InputInt(GetLoc("AutoCheckFoodUsage-RefreshThreshold"), ref ModuleConfig.RefreshThreshold);
+            ImGui.SetNextItemWidth(50f * GlobalUIScale);
+            ImGui.InputInt(Lang.Get("AutoCheckFoodUsage-RefreshThreshold"), ref config.RefreshThreshold);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
 
             ImGui.SameLine();
-            if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-                SaveConfig(ModuleConfig);
+            if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+                config.Save(this);
 
-            ImGuiOm.HelpMarker(GetLoc("AutoCheckFoodUsage-RefreshThresholdHelp"));
+            ImGuiOm.HelpMarker(Lang.Get("AutoCheckFoodUsage-RefreshThresholdHelp"));
         }
 
         var       tableSize = (ImGui.GetContentRegionAvail() - ScaledVector2(100f)) with { Y = 0 };
         using var table     = ImRaii.Table("FoodPreset", 4, ImGuiTableFlags.Borders, tableSize);
         if (!table) return;
-        ImGui.TableSetupColumn("添加", ImGuiTableColumnFlags.WidthFixed, CheckboxSize.X);
+        ImGui.TableSetupColumn("添加", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeightWithSpacing());
         ImGui.TableSetupColumn("名称", ImGuiTableColumnFlags.None,       30);
         ImGui.TableSetupColumn("地区", ImGuiTableColumnFlags.None,       30);
         ImGui.TableSetupColumn("职业", ImGuiTableColumnFlags.None,       30);
@@ -197,47 +229,56 @@ public class AutoCheckFoodUsage : DailyModuleBase
         {
             if (popup)
             {
-                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("AutoCheckFoodUsage-AddNewPreset")}:");
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoCheckFoodUsage-AddNewPreset")}:");
 
                 using (ImRaii.PushIndent())
                 {
                     ImGui.AlignTextToFramePadding();
-                    ImGui.TextUnformatted($"{GetLoc("Food")}:");
+                    ImGui.TextUnformatted($"{Lang.Get("Food")}:");
 
                     ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200f * GlobalFontScale);
-                    SingleSelectCombo("FoodSelectCombo",
-                                      PresetSheet.Food,
-                                      ref SelectedItem,
-                                      ref SelectItemSearch,
-                                      x => $"{x.Name.ToString()} ({x.RowId})",
-                                      [new("物品", ImGuiTableColumnFlags.WidthStretch, 0)],
-                                      [
-                                          x => () =>
-                                          {
-                                              var icon = ImageHelper.GetGameIcon(x.Icon, SelectItemIsHQ);
+                    ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                    ImGuiOm.SingleSelectCombo
+                    (
+                        "FoodSelectCombo",
+                        Sheets.Food,
+                        ref selectedItem,
+                        ref selectItemSearch,
+                        x => $"{x.Name.ToString()} ({x.RowId})",
+                        [new("物品", ImGuiTableColumnFlags.WidthStretch, 0)],
+                        [
+                            x => () =>
+                            {
+                                var icon = ImageHelper.GetGameIcon(x.Icon, selectItemIsHQ);
 
-                                              if (ImGuiOm.SelectableImageWithText(icon.Handle, ScaledVector2(20f),
-                                                                                  x.Name.ToString(), x.RowId == SelectedItem,
-                                                                                  ImGuiSelectableFlags.DontClosePopups))
-                                                  SelectedItem = SelectedItem == x.RowId ? 0 : x.RowId;
-                                          }
-                                      ],
-                                      [x => x.Name.ToString(), x => x.RowId.ToString()],
-                                      true);
+                                if (ImGuiOm.SelectableImageWithText
+                                    (
+                                        icon.Handle,
+                                        ScaledVector2(20f),
+                                        x.Name.ToString(),
+                                        x.RowId == selectedItem,
+                                        ImGuiSelectableFlags.DontClosePopups
+                                    ))
+                                    selectedItem = selectedItem == x.RowId ? 0 : x.RowId;
+                            }
+                        ],
+                        [x => x.Name.ToString(), x => x.RowId.ToString()],
+                        true
+                    );
 
                     ImGui.SameLine();
-                    ImGui.Checkbox("HQ", ref SelectItemIsHQ);
+                    ImGui.Checkbox("HQ", ref selectItemIsHQ);
 
                     ImGui.SameLine();
-                    using (ImRaii.Disabled(SelectedItem == 0))
+
+                    using (ImRaii.Disabled(selectedItem == 0))
                     {
-                        if (ImGui.Button(GetLoc("Add")))
+                        if (ImGui.Button(Lang.Get("Add")))
                         {
-                            var preset = new FoodUsagePreset(SelectedItem, SelectItemIsHQ);
+                            var preset = new FoodUsagePreset(selectedItem, selectItemIsHQ);
 
-                            ModuleConfig.Presets.Add(preset);
-                            SaveConfig(ModuleConfig);
+                            config.Presets.Add(preset);
+                            config.Save(this);
                         }
                     }
                 }
@@ -245,34 +286,35 @@ public class AutoCheckFoodUsage : DailyModuleBase
         }
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("Food"));
+        ImGui.TextUnformatted(Lang.Get("Food"));
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("AutoCheckFoodUsage-ZoneRestrictions"));
+        ImGui.TextUnformatted(Lang.Get("AutoCheckFoodUsage-ZoneRestrictions"));
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(GetLoc("AutoCheckFoodUsage-JobRestrictions"));
+        ImGui.TextUnformatted(Lang.Get("AutoCheckFoodUsage-JobRestrictions"));
 
-        for (var i = 0; i < ModuleConfig.Presets.Count; i++)
+        for (var i = 0; i < config.Presets.Count; i++)
         {
-            var       preset = ModuleConfig.Presets[i];
+            var       preset = config.Presets[i];
             using var id     = ImRaii.PushId($"{preset.ItemID}_{preset.IsHQ}_{i}");
 
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
             var isEnabled = preset.Enabled;
+
             if (ImGui.Checkbox("", ref isEnabled))
             {
                 preset.Enabled = isEnabled;
-                SaveConfig(ModuleConfig);
+                config.Save(this);
             }
-
-            CheckboxSize = ImGui.GetItemRectSize();
-
+            
             ImGui.TableNextColumn();
-            ImGui.Selectable(
-                $"{LuminaGetter.GetRow<Item>(preset.ItemID)!.Value.Name.ToString()} {(preset.IsHQ ? "(HQ)" : "")}");
+            ImGui.Selectable
+            (
+                $"{LuminaGetter.GetRow<Item>(preset.ItemID)!.Value.Name.ToString()} {(preset.IsHQ ? "(HQ)" : "")}"
+            );
 
             using (var context = ImRaii.ContextPopupItem("PresetContextMenu"))
             {
@@ -280,28 +322,28 @@ public class AutoCheckFoodUsage : DailyModuleBase
                 {
                     if (i != 0 && ImGui.MenuItem(FontAwesomeIcon.AngleDoubleUp.ToIconString()))
                     {
-                        (ModuleConfig.Presets[i], ModuleConfig.Presets[i - 1]) = (ModuleConfig.Presets[i - 1], ModuleConfig.Presets[i]);
-                        SaveConfig(ModuleConfig);
+                        (config.Presets[i], config.Presets[i - 1]) = (config.Presets[i - 1], config.Presets[i]);
+                        config.Save(this);
                     }
-                    
-                    if (i != ModuleConfig.Presets.Count - 1 && ImGui.MenuItem(FontAwesomeIcon.AngleDoubleDown.ToIconString()))
+
+                    if (i != config.Presets.Count - 1 && ImGui.MenuItem(FontAwesomeIcon.AngleDoubleDown.ToIconString()))
                     {
-                        (ModuleConfig.Presets[i], ModuleConfig.Presets[i + 1]) = (ModuleConfig.Presets[i + 1], ModuleConfig.Presets[i]);
-                        SaveConfig(ModuleConfig);
+                        (config.Presets[i], config.Presets[i + 1]) = (config.Presets[i + 1], config.Presets[i]);
+                        config.Save(this);
                     }
 
                     ImGui.Separator();
 
-                    if (ImGui.MenuItem($"{GetLoc("AutoCheckFoodUsage-ChangeTo")} {(preset.IsHQ ? "NQ" : "HQ")}"))
+                    if (ImGui.MenuItem($"{Lang.Get("AutoCheckFoodUsage-ChangeTo")} {(preset.IsHQ ? "NQ" : "HQ")}"))
                     {
                         preset.IsHQ ^= true;
-                        SaveConfig(ModuleConfig);
+                        config.Save(this);
                     }
 
-                    if (ImGui.MenuItem(GetLoc("Delete")))
+                    if (ImGui.MenuItem(Lang.Get("Delete")))
                     {
-                        ModuleConfig.Presets.Remove(preset);
-                        SaveConfig(ModuleConfig);
+                        config.Presets.Remove(preset);
+                        config.Save(this);
                         break; // 删除后跳出循环，防止修改集合时出错
                     }
                 }
@@ -310,54 +352,65 @@ public class AutoCheckFoodUsage : DailyModuleBase
             ImGui.TableNextColumn();
             var zones = preset.Zones;
             ImGui.SetNextItemWidth(-1f);
+
             using (ImRaii.PushId("ZonesSelectCombo"))
             {
-                if (MultiSelectCombo("ZoneSelectCombo",
-                                     PresetSheet.Zones, ref zones, ref ZoneSearch,
-                                     [
-                                         new("区域", ImGuiTableColumnFlags.WidthStretch, 0),
-                                         new("副本", ImGuiTableColumnFlags.WidthStretch, 0)
-                                     ],
-                                     [
-                                         x => () =>
-                                         {
-                                             if (ImGui.Selectable($"{x.ExtractPlaceName()}##{x.RowId}",
-                                                                  zones.Contains(x.RowId),
-                                                                  ImGuiSelectableFlags.SpanAllColumns |
-                                                                  ImGuiSelectableFlags.DontClosePopups))
-                                             {
-                                                 if (!zones.Remove(x.RowId))
-                                                 {
-                                                     zones.Add(x.RowId);
-                                                     SaveConfig(ModuleConfig);
-                                                 }
-                                             }
-                                         },
-                                         x => () =>
-                                         {
-                                             var contentName = x.ContentFinderCondition.Value.Name.ToString() ?? "";
-                                             ImGui.TextUnformatted(contentName);
-                                         }
-                                     ],
-                                     [
-                                         x => x.ExtractPlaceName(),
-                                         x => x.ContentFinderCondition.Value.Name.ToString() ?? ""
-                                     ], true))
+                if (ImGuiOm.MultiSelectCombo
+                    (
+                        "ZoneSelectCombo",
+                        Sheets.Zones,
+                        ref zones,
+                        ref zoneSearchInput,
+                        [
+                            new("区域", ImGuiTableColumnFlags.WidthStretch, 0),
+                            new("副本", ImGuiTableColumnFlags.WidthStretch, 0)
+                        ],
+                        [
+                            x => () =>
+                            {
+                                if (ImGui.Selectable
+                                    (
+                                        $"{x.ExtractPlaceName()}##{x.RowId}",
+                                        zones.Contains(x.RowId),
+                                        ImGuiSelectableFlags.SpanAllColumns |
+                                        ImGuiSelectableFlags.DontClosePopups
+                                    ))
+                                {
+                                    if (!zones.Remove(x.RowId))
+                                    {
+                                        zones.Add(x.RowId);
+                                        config.Save(this);
+                                    }
+                                }
+                            },
+                            x => () =>
+                            {
+                                var contentName = x.ContentFinderCondition.Value.Name.ToString() ?? "";
+                                ImGui.TextUnformatted(contentName);
+                            }
+                        ],
+                        [
+                            x => x.ExtractPlaceName(),
+                            x => x.ContentFinderCondition.Value.Name.ToString() ?? ""
+                        ],
+                        true
+                    ))
                 {
                     preset.Zones = zones;
-                    SaveConfig(ModuleConfig);
+                    config.Save(this);
                 }
 
-                ImGuiOm.TooltipHover(GetLoc("AutoCheckFoodUsage-NoZoneSelectHelp"));
+                ImGuiOm.TooltipHover(Lang.Get("AutoCheckFoodUsage-NoZoneSelectHelp"));
             }
 
             ImGui.TableNextColumn();
             ImGui.SetNextItemWidth(-1f);
-            JobSelectCombo.SelectedIDs = preset.ClassJobs.ToHashSet();
-            if (JobSelectCombo.DrawCheckbox())
+            jobSelectCombo.SelectedIDs = preset.ClassJobs.ToHashSet();
+
+            if (jobSelectCombo.DrawCheckbox())
             {
-                preset.ClassJobs = JobSelectCombo.SelectedIDs.ToHashSet();
-                SaveConfig(ModuleConfig);
+                preset.ClassJobs = jobSelectCombo.SelectedIDs.ToHashSet();
+                config.Save(this);
             }
         }
     }
@@ -365,6 +418,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
     private bool EnqueueFoodRefresh()
     {
         if (!IsValidState()) return false;
+
         if (!IsCooldownElapsed())
         {
             TaskHelper.Abort();
@@ -372,6 +426,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
         }
 
         var validPresets = GetValidPresets();
+
         if (validPresets.Count == 0)
         {
             TaskHelper.Abort();
@@ -381,6 +436,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
         if (TryGetWellFedParam(out var itemFood, out var remainingTime))
         {
             var existedStatus = validPresets.FirstOrDefault(x => ToFoodRowID(x.ItemID) == itemFood);
+
             if (existedStatus != null && !ShouldRefreshFood(remainingTime))
             {
                 TaskHelper.Abort();
@@ -397,7 +453,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
 
     private bool TakeFood(uint itemID, bool isHQ)
     {
-        if (!Throttler.Throttle("AutoCheckFoodUsage-TakeFood", 1000)) return false;
+        if (!Throttler.Shared.Throttle("AutoCheckFoodUsage-TakeFood", 1000)) return false;
         if (!IsValidState()) return false;
 
         TaskHelper.Enqueue(() => TakeFoodInternal(itemID, isHQ));
@@ -412,13 +468,13 @@ public class AutoCheckFoodUsage : DailyModuleBase
             remainingTime.TotalMinutes >= 25)
             return true;
 
-        UseActionManager.Instance().UseActionLocation(ActionType.Item, isHQ ? itemID  + 100_0000 : itemID, 0xE0000000, default, 0xFFFF);
-        
+        UseActionManager.Instance().UseActionLocation(ActionType.Item, isHQ ? itemID + 100_0000 : itemID, 0xE0000000, default, 0xFFFF);
+
         TaskHelper.DelayNext(3_000);
         TaskHelper.Enqueue(() => CheckFoodState(itemID, isHQ));
         return true;
     }
-    
+
     private bool CheckFoodState(uint itemID, bool isHQ)
     {
         TaskHelper.Abort();
@@ -427,7 +483,7 @@ public class AutoCheckFoodUsage : DailyModuleBase
             itemFoodId                 == ToFoodRowID(itemID)             &&
             remainingTime.TotalMinutes >= 25)
         {
-            Chat(GetSLoc("AutoCheckFoodUsage-NoticeMessage", new SeStringBuilder().AddItemLink(itemID, isHQ)));
+            NotifyHelper.Instance().Chat(Lang.GetSe("AutoCheckFoodUsage-NoticeMessage", new SeStringBuilder().AddItemLink(itemID, isHQ)));
             return true;
         }
 
@@ -456,19 +512,19 @@ public class AutoCheckFoodUsage : DailyModuleBase
     private nint CountdownInitDetour(nint a1, nint a2)
     {
         var original = CountdownInitHook.Original(a1, a2);
-        
-        if (ModuleConfig.EnabledCheckpoints[FoodCheckpoint.倒计时开始时] && !GameMain.IsInPvPArea())
+
+        if (config.EnabledCheckpoints[FoodCheckpoint.倒计时开始时] && !GameMain.IsInPvPArea())
         {
             TaskHelper.Abort();
             TaskHelper.Enqueue(EnqueueFoodRefresh);
         }
-        
+
         return original;
     }
 
     private void OnZoneChanged(ushort zone)
     {
-        if (!ModuleConfig.EnabledCheckpoints[FoodCheckpoint.区域切换时] || GameMain.IsInPvPArea()) return;
+        if (!config.EnabledCheckpoints[FoodCheckpoint.区域切换时] || GameMain.IsInPvPArea()) return;
 
         TaskHelper.Abort();
         TaskHelper.Enqueue(EnqueueFoodRefresh);
@@ -476,89 +532,88 @@ public class AutoCheckFoodUsage : DailyModuleBase
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
-        if (!ModuleConfig.EnabledCheckpoints[FoodCheckpoint.条件变更时] || GameMain.IsInPvPArea() ||
-            ((!value || !ModuleConfig.ConditionStart.Contains(flag)) &&
-             (value  || !ModuleConfig.ConditionEnd.Contains(flag))))
+        if (!config.EnabledCheckpoints[FoodCheckpoint.条件变更时] ||
+            GameMain.IsInPvPArea()                                 ||
+            (!value || !config.ConditionStart.Contains(flag)) &&
+            (value  || !config.ConditionEnd.Contains(flag)))
             return;
-        
+
         TaskHelper.Abort();
         TaskHelper.Enqueue(EnqueueFoodRefresh);
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-    }
     
     private static unsafe bool IsValidState() =>
-        !BetweenAreas                            &&
-        !OccupiedInEvent                         &&
-        !IsCasting                               &&
+        !DService.Instance().Condition.IsBetweenAreas       &&
+        !DService.Instance().Condition.IsOccupiedInEvent    &&
+        !DService.Instance().Condition.IsCasting            &&
         DService.Instance().ObjectTable.LocalPlayer != null &&
-        UIModule.IsScreenReady()                          &&
+        UIModule.IsScreenReady()                            &&
         ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) == 0;
-    
-    private static bool IsCooldownElapsed() => 
-        (StandardTimeManager.Instance().Now - LastFoodUsageTime).TotalSeconds >= FOOD_USAGE_COOLDOWN_SECONDS;
-    
-    private static uint ToFoodRowID(uint id) => 
+
+    private bool IsCooldownElapsed() =>
+        (StandardTimeManager.Instance().Now - lastFoodUsageTime).TotalSeconds >= FOOD_USAGE_COOLDOWN_SECONDS;
+
+    private static uint ToFoodRowID(uint id) =>
         LuminaGetter.GetRow<ItemFood>(LuminaGetter.GetRowOrDefault<Item>(id).ItemAction.Value.Data[1])?.RowId ?? 0;
 
-    private static unsafe List<FoodUsagePreset> GetValidPresets()
+    private unsafe List<FoodUsagePreset> GetValidPresets()
     {
         var instance = InventoryManager.Instance();
         var zone     = GameState.TerritoryType;
         if (instance == null || zone == 0) return [];
-        
-        return ModuleConfig.Presets
-                           .Where(x => x.Enabled                                            && 
-                                       (x.Zones.Count == 0 || x.Zones.Contains(zone)) &&
-                                       (x.ClassJobs.Count == 0 || 
-                                        x.ClassJobs.Contains(DService.Instance().ObjectTable.LocalPlayer.ClassJob.RowId)) &&
-                                       instance->GetInventoryItemCount(x.ItemID, x.IsHQ) > 0)
+
+        return config.Presets
+                           .Where
+                           (x => x.Enabled                                      &&
+                                 (x.Zones.Count == 0 || x.Zones.Contains(zone)) &&
+                                 (x.ClassJobs.Count == 0 ||
+                                  x.ClassJobs.Contains(DService.Instance().ObjectTable.LocalPlayer.ClassJob.RowId)) &&
+                                 instance->GetInventoryItemCount(x.ItemID, x.IsHQ) > 0
+                           )
                            .OrderByDescending(x => x.Zones.Contains(zone))
                            .ToList();
     }
 
-    private static bool ShouldRefreshFood(TimeSpan remainingTime) =>
-        remainingTime <= TimeSpan.FromSeconds(ModuleConfig.RefreshThreshold) &&
+    private bool ShouldRefreshFood(TimeSpan remainingTime) =>
+        remainingTime <= TimeSpan.FromSeconds(config.RefreshThreshold) &&
         remainingTime <= TimeSpan.FromMinutes(55);
 
-    public class FoodUsagePreset : IEquatable<FoodUsagePreset>
+    private class FoodUsagePreset : IEquatable<FoodUsagePreset>
     {
+        public FoodUsagePreset() { }
+
+        public FoodUsagePreset(uint itemID) => ItemID = itemID;
+
+        public FoodUsagePreset(uint itemID, bool isHQ) : this(itemID) => IsHQ = isHQ;
+
         public uint          ItemID    { get; set; }
         public bool          IsHQ      { get; set; } = true;
         public HashSet<uint> Zones     { get; set; } = [];
         public HashSet<uint> ClassJobs { get; set; } = [];
         public bool          Enabled   { get; set; } = true;
 
-        public FoodUsagePreset() { }
-        public FoodUsagePreset(uint itemID) => ItemID = itemID;
-        public FoodUsagePreset(uint itemID, bool isHQ) : this(itemID) => IsHQ = isHQ;
-
-        public override bool Equals(object? obj) 
-            => Equals(obj as FoodUsagePreset);
-        
-        public bool Equals(FoodUsagePreset? other) 
+        public bool Equals(FoodUsagePreset? other)
             => other != null && ItemID == other.ItemID && IsHQ == other.IsHQ;
-        
-        public override int GetHashCode() 
+
+        public override bool Equals(object? obj)
+            => Equals(obj as FoodUsagePreset);
+
+        public override int GetHashCode()
             => HashCode.Combine(ItemID, IsHQ);
 
         public static bool operator ==(FoodUsagePreset? left, FoodUsagePreset? right) =>
             EqualityComparer<FoodUsagePreset>.Default.Equals(left, right);
 
-        public static bool operator !=(FoodUsagePreset? left, FoodUsagePreset? right) 
+        public static bool operator !=(FoodUsagePreset? left, FoodUsagePreset? right)
             => !(left == right);
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
-        public List<FoodUsagePreset>            Presets            = [];
-        public Dictionary<FoodCheckpoint, bool> EnabledCheckpoints = [];
-        public HashSet<ConditionFlag>           ConditionStart     = [];
         public HashSet<ConditionFlag>           ConditionEnd       = [];
+        public HashSet<ConditionFlag>           ConditionStart     = [];
+        public Dictionary<FoodCheckpoint, bool> EnabledCheckpoints = [];
+        public List<FoodUsagePreset>            Presets            = [];
         public int                              RefreshThreshold   = 600; // 秒
         public bool                             SendChat           = true;
     }
@@ -567,6 +622,12 @@ public class AutoCheckFoodUsage : DailyModuleBase
     {
         区域切换时,
         倒计时开始时,
-        条件变更时,
+        条件变更时
     }
+
+    #region 常量
+
+    private const int FOOD_USAGE_COOLDOWN_SECONDS = 10;
+
+    #endregion
 }

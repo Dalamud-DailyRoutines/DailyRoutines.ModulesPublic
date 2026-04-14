@@ -1,48 +1,53 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisableBattleBGM : DailyModuleBase
+public unsafe class AutoDisableBattleBGM : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDisableBattleBGMTitle"),
-        Description = GetLoc("AutoDisableBattleBGMDescription"),
-        Category    = ModuleCategories.Combat
+        Title       = Lang.Get("AutoDisableBattleBGMTitle"),
+        Description = Lang.Get("AutoDisableBattleBGMDescription"),
+        Category    = ModuleCategory.Combat
     };
     
     private static readonly CompSig                   IsInBattleStateSig = new("E8 ?? ?? ?? ?? 38 87 ?? ?? ?? ?? 75 09");
     private delegate        byte                      IsInBattleDelegate(BGMSystem* system, BGMSystem.Scene* scene);
-    private static          Hook<IsInBattleDelegate>? IsInBattleStateHook;
+    private                 Hook<IsInBattleDelegate>? IsInBattleStateHook;
 
-    private static Config ModuleConfig = null!;
-    
+    private Config config = null!;
+
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-        
+        config = Config.Load(this) ?? new();
+
         IsInBattleStateHook ??= IsInBattleStateSig.GetHook<IsInBattleDelegate>(IsInBattleStateDetour);
         IsInBattleStateHook.Enable();
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("AutoDisableBattleBGM-EnableInDuty"), ref ModuleConfig.EnableInDuty))
-            SaveConfig(ModuleConfig);
-        ImGuiOm.HelpMarker(GetLoc("AutoDisableBattleBGM-EnableInDutyHelp"), 20f * GlobalFontScale);
+        if (ImGui.Checkbox(Lang.Get("AutoDisableBattleBGM-EnableInDuty"), ref config.EnableInDuty))
+            config.Save(this);
+        ImGuiOm.HelpMarker(Lang.Get("AutoDisableBattleBGM-EnableInDutyHelp"), 20f * GlobalUIScale);
     }
 
-    private static byte IsInBattleStateDetour(BGMSystem* system, BGMSystem.Scene* scene)
+    private byte IsInBattleStateDetour(BGMSystem* system, BGMSystem.Scene* scene)
     {
-        if (!ModuleConfig.EnableInDuty && GameState.ContentFinderCondition > 0)
+        if (!config.EnableInDuty && GameState.ContentFinderCondition > 0)
             return IsInBattleStateHook.Original(system, scene);
 
         return 0;
     }
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public bool EnableInDuty;
     }

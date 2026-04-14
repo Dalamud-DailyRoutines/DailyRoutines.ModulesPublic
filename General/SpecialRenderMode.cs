@@ -1,165 +1,181 @@
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Interface.Components;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class SpecialRenderMode : DailyModuleBase
+public unsafe class SpecialRenderMode : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("SpecialRenderModeTitle"),
-        Description = GetLoc("SpecialRenderModeDescription"),
-        Category    = ModuleCategories.General
+        Title       = Lang.Get("SpecialRenderModeTitle"),
+        Description = Lang.Get("SpecialRenderModeDescription"),
+        Category    = ModuleCategory.General
     };
     
-    private delegate        void               ToggleFadeDelegate(EnvironmentManager* manager, int a2, float fadeDuration, Vector4* fadeColor);
-    private static readonly ToggleFadeDelegate ToggleFade = 
+    private delegate void ToggleFadeDelegate(EnvironmentManager* manager, int a2, float fadeDuration, Vector4* fadeColor);
+    private readonly ToggleFadeDelegate ToggleFade =
         new CompSig("E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 8F ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4C 24").GetDelegate<ToggleFadeDelegate>();
 
-    private static Config ModuleConfig = null!;
-    
-    protected override void Init() => ModuleConfig = LoadConfig<Config>() ?? new();
+    private Config config = null!;
 
-    protected override void Uninit()
-    {
-        if (ModuleConfig != null)
-            SaveConfig(ModuleConfig);
-    }
+    protected override void Init() => 
+        config = Config.Load(this) ?? new();
+
+    protected override void Uninit() =>
+        config?.Save(this);
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-DisableWorldRenderButAddons"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-DisableWorldRenderButAddons"));
 
         using (ImRaii.PushId("DisableWorldRenderButAddons"))
         using (ImRaii.PushIndent())
         {
-            var color = ModuleConfig.BackgroundColor;
+            var color = config.BackgroundColor;
 
-            if (ImGui.Button(GetLoc("Enable")))
+            if (ImGui.Button(Lang.Get("Enable")))
                 ToggleFade(Framework.Instance()->EnvironmentManager, 1, 0.1f, &color);
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Disable")))
+            if (ImGui.Button(Lang.Get("Disable")))
                 ToggleFade(Framework.Instance()->EnvironmentManager, 0, 0.1f, &color);
 
-            ImGui.SameLine(0, 8f * GlobalFontScale);
-            ImGui.TextUnformatted($"{GetLoc("Color")}:");
-            
+            ImGui.SameLine(0, 8f * GlobalUIScale);
+            ImGui.TextUnformatted($"{Lang.Get("Color")}:");
+
             ImGui.SameLine();
-            ModuleConfig.BackgroundColor = ImGuiComponents.ColorPickerWithPalette(1, string.Empty, ModuleConfig.BackgroundColor);
+            config.BackgroundColor = ImGuiComponents.ColorPickerWithPalette(1, string.Empty, config.BackgroundColor);
         }
-        
+
         ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideAddonsButNameplate"));
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideAddonsButNameplate"));
 
         using (ImRaii.PushId("HideAddonsButNameplate"))
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Button(GetLoc("Enable")))
+            if (ImGui.Button(Lang.Get("Enable")))
             {
-                UIModule.Instance()->ToggleUi(
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Chat | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts, false);
+                UIModule.Instance()->ToggleUi
+                (
+                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Chat | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    false
+                );
                 DTR->IsVisible = false;
             }
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Disable")))
+
+            if (ImGui.Button(Lang.Get("Disable")))
             {
-                UIModule.Instance()->ToggleUi(
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Chat | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts, true);
+                UIModule.Instance()->ToggleUi
+                (
+                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Chat | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    true
+                );
                 DTR->IsVisible = true;
             }
         }
-        
+
         ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideAddonsButChatLog"));
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideAddonsButChatLog"));
 
         using (ImRaii.PushId("HideAddonsButChatLog"))
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Button(GetLoc("Enable")))
+            if (ImGui.Button(Lang.Get("Enable")))
             {
-                UIModule.Instance()->ToggleUi(
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Nameplates | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts, false);
+                UIModule.Instance()->ToggleUi
+                (
+                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Nameplates | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    false
+                );
                 DTR->IsVisible = false;
             }
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Disable")))
+
+            if (ImGui.Button(Lang.Get("Disable")))
             {
-                UIModule.Instance()->ToggleUi(
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Nameplates | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts, true);
+                UIModule.Instance()->ToggleUi
+                (
+                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Nameplates | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    true
+                );
                 DTR->IsVisible = true;
             }
         }
-        
+
         ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideChatLog"));
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideChatLog"));
 
         using (ImRaii.PushId("HideChatLog"))
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Button(GetLoc("Enable")))
+            if (ImGui.Button(Lang.Get("Enable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.Chat, false);
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Disable")))
+            if (ImGui.Button(Lang.Get("Disable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.Chat, true);
         }
-        
+
         ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideActionBars"));
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideActionBars"));
 
         using (ImRaii.PushId("HideActionBars"))
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Button(GetLoc("Enable")))
+            if (ImGui.Button(Lang.Get("Enable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.ActionBars, false);
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Disable")))
+            if (ImGui.Button(Lang.Get("Disable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.ActionBars, true);
         }
-        
+
         ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideTargetInfo"));
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideTargetInfo"));
 
         using (ImRaii.PushId("HideTargetInfo"))
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Button(GetLoc("Enable")))
+            if (ImGui.Button(Lang.Get("Enable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.TargetInfo, false);
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Disable")))
+            if (ImGui.Button(Lang.Get("Disable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.TargetInfo, true);
         }
-        
+
         ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("SpecialRenderMode-Mode-HideNameplate"));
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideNameplate"));
 
         using (ImRaii.PushId("HideNameplate"))
         using (ImRaii.PushIndent())
         {
-            if (ImGui.Button(GetLoc("Enable")))
+            if (ImGui.Button(Lang.Get("Enable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.Nameplates, false);
 
             ImGui.SameLine();
-            if (ImGui.Button(GetLoc("Disable")))
+            if (ImGui.Button(Lang.Get("Disable")))
                 UIModule.Instance()->ToggleUi(UIModule.UiFlags.Nameplates, true);
         }
     }
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public Vector4 BackgroundColor = KnownColor.LightSkyBlue.ToVector4();
     }

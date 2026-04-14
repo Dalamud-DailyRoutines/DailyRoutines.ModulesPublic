@@ -1,17 +1,21 @@
-﻿using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Objects.Enums;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using OmenTools.OmenService;
+using OmenTools.Threading;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoOpenNeedGreed : DailyModuleBase
+public class AutoOpenNeedGreed : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = GetLoc("AutoOpenNeedGreedTitle"),
-        Description     = GetLoc("AutoOpenNeedGreedDescription"),
-        Category        = ModuleCategories.UIOperation,
+        Title       = Lang.Get("AutoOpenNeedGreedTitle"),
+        Description = Lang.Get("AutoOpenNeedGreedDescription"),
+        Category    = ModuleCategory.UIOperation
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
@@ -28,16 +32,16 @@ public class AutoOpenNeedGreed : DailyModuleBase
         LogMessageManager.Instance().Unreg(OnPost);
         TargetManager.Instance().Unreg(OnPostInteractWithObject);
     }
-    
+
     private static void OnPostInteractWithObject(ulong result, IGameObject? target, bool checkLoS)
     {
         if (result == 0 || target is not { ObjectKind: ObjectKind.Treasure }) return;
-        Throttler.Throttle("AutoOpenNeedGreed-SelfOpen", 1_000, true);
+        Throttler.Shared.Throttle("AutoOpenNeedGreed-SelfOpen", 1_000, true);
     }
 
     private static unsafe void OnPost(uint logMessageID, LogMessageQueueItem item)
     {
-        if (logMessageID != 5194 || !Throttler.Check("AutoOpenNeedGreed-SelfOpen")) return;
+        if (logMessageID != 5194 || !Throttler.Shared.Check("AutoOpenNeedGreed-SelfOpen")) return;
         AgentId.Hud.SendEvent(0, 0, 2, " ");
     }
 }

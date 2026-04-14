@@ -1,124 +1,129 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Interface;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using Lumina.Excel.Sheets;
+using OmenTools.ImGuiOm.Widgets.Combos;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using Status = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoTrackStatusOff : DailyModuleBase
+public class AutoTrackStatusOff : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = GetLoc("AutoTrackStatusOffTitle"),
-        Description     = GetLoc("AutoTrackStatusOffDescription"),
-        Category        = ModuleCategories.Combat,
-        Author          = ["Fragile"]
+        Title       = Lang.Get("AutoTrackStatusOffTitle"),
+        Description = Lang.Get("AutoTrackStatusOffDescription"),
+        Category    = ModuleCategory.Combat,
+        Author      = ["Fragile"]
     };
 
-    private const float TimeThreshold = 0.2f;
+    private Config config = null!;
     
-    private static Config             ModuleConfig = null!;
-    private static StatusSelectCombo? StatusSelectCombo;
+    private readonly StatusSelectCombo? statusSelectCombo = new
+        ("Status", LuminaGetter.Get<Status>().Where(x => x.CanStatusOff && !string.IsNullOrEmpty(x.Name.ToString())));
+
+    private readonly Dictionary<uint, (float Duration, ulong SourceID, DateTime GainTime, uint TargetID)> records = [];
     
-    private static readonly Dictionary<uint, (float Duration, ulong SourceID, DateTime GainTime, uint TargetID)> Records = [];
-
-
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
-        
-        StatusSelectCombo ??= new("Status", LuminaGetter.Get<Status>().Where(x => x.CanStatusOff && !string.IsNullOrEmpty(x.Name.ToString())));
-
-        if (ModuleConfig.StatusToMonitor.Count > 0)
-            StatusSelectCombo.SelectedIDs = ModuleConfig.StatusToMonitor.ToHashSet();
+        config = Config.Load(this) ?? new();
+        if (config.StatusToMonitor.Count > 0)
+            statusSelectCombo.SelectedIDs = config.StatusToMonitor.ToHashSet();
 
         CharacterStatusManager.Instance().RegGain(OnGainStatus);
         CharacterStatusManager.Instance().RegLose(OnLoseStatus);
     }
+    
+    protected override void Uninit()
+    {
+        CharacterStatusManager.Instance().Unreg(OnGainStatus);
+        CharacterStatusManager.Instance().Unreg(OnLoseStatus);
+
+        records.Clear();
+    }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-            SaveConfig(ModuleConfig);
-        
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
+
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(GetLoc("AutoTrackStatusOff-OnlyTrackSpecific"), ref ModuleConfig.OnlyTrackSpecific))
+        if (ImGui.Checkbox(Lang.Get("AutoTrackStatusOff-OnlyTrackSpecific"), ref config.OnlyTrackSpecific))
         {
-            SaveConfig(ModuleConfig);
-            Records.Clear();
+            config.Save(this);
+            records.Clear();
         }
 
-        if (ModuleConfig.OnlyTrackSpecific)
+        if (config.OnlyTrackSpecific)
         {
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileImport, GetLoc("Import")))
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileImport, Lang.Get("Import")))
             {
-                var config = ImportFromClipboard<HashSet<uint>>();
-                if (config != null)
+                var imported = ImportFromClipboard<HashSet<uint>>();
+
+                if (imported != null)
                 {
-                    ModuleConfig.StatusToMonitor.AddRange(config);
-                    ModuleConfig.Save(this);
+                    this.config.StatusToMonitor.AddRange(imported);
+                    this.config.Save(this);
                 }
             }
-            
+
             ImGui.SameLine();
-            using (ImRaii.Disabled(ModuleConfig.StatusToMonitor.Count > 0))
+
+            using (ImRaii.Disabled(config.StatusToMonitor.Count > 0))
             {
-                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileExport, GetLoc("Export")))
+                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileExport, Lang.Get("Export")))
                 {
-                    ExportToClipboard(ModuleConfig.StatusToMonitor);
-                    NotificationSuccess($"{GetLoc("CopiedToClipboard")}");
+                    ExportToClipboard(config.StatusToMonitor);
+                    NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}");
                 }
             }
-            
+
             ImGui.Spacing();
 
-            if (StatusSelectCombo.DrawCheckbox())
+            if (statusSelectCombo.DrawCheckbox())
             {
-                ModuleConfig.StatusToMonitor = StatusSelectCombo.SelectedItems.Select(x => x.RowId).ToHashSet();
-                ModuleConfig.Save(this);
+                config.StatusToMonitor = statusSelectCombo.SelectedItems.Select(x => x.RowId).ToHashSet();
+                config.Save(this);
             }
         }
     }
-    
-    private static void OnGainStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, TimeSpan remainingTime, ulong sourceID)
+
+    private void OnGainStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, TimeSpan remainingTime, ulong sourceID)
     {
         if (remainingTime.TotalSeconds <= 0) return;
-        if (ModuleConfig.OnlyTrackSpecific && !ModuleConfig.StatusToMonitor.Contains(statusID)) return;
+        if (config.OnlyTrackSpecific && !config.StatusToMonitor.Contains(statusID)) return;
         if (!LuminaGetter.TryGetRow<Status>(statusID, out var status) || !status.CanStatusOff) return;
-        
+
         // 不是自己给的 Status 不记录
         if (sourceID != LocalPlayerState.EntityID) return;
-        Records[statusID] = ((float)remainingTime.TotalSeconds, sourceID, StandardTimeManager.Instance().Now, player.EntityID);
+        records[statusID] = ((float)remainingTime.TotalSeconds, sourceID, StandardTimeManager.Instance().Now, player.EntityID);
     }
 
-    private static void OnLoseStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, ulong sourceID)
+    private void OnLoseStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, ulong sourceID)
     {
-        if (ModuleConfig.OnlyTrackSpecific && !ModuleConfig.StatusToMonitor.Contains(statusID)) return;
+        if (config.OnlyTrackSpecific && !config.StatusToMonitor.Contains(statusID)) return;
         if (!LuminaGetter.TryGetRow<Status>(statusID, out var status) || !status.CanStatusOff) return;
-        
+
         // 不是自己给的 Status 不判断
         if (sourceID != LocalPlayerState.EntityID) return;
-        
-        if (Records.TryGetValue(statusID, out var buffInfo))
+
+        if (records.TryGetValue(statusID, out var buffInfo))
         {
             var expectedDuration = buffInfo.Duration;
             var actualDuration   = (StandardTimeManager.Instance().Now - buffInfo.GainTime).TotalSeconds;
 
             // 死了当然全没了啊
-            if (actualDuration < expectedDuration * TimeThreshold && !player.IsDead)
+            if (actualDuration < expectedDuration * TIME_THRESHOLD && !player.IsDead)
             {
-                if (ModuleConfig.SendChat)
-                    Chat
+                if (config.SendChat)
+                {
+                    NotifyHelper.Instance().Chat
                     (
-                        GetSLoc
+                        Lang.GetSe
                         (
                             "AutoTrackStatusOff-Notification",
                             LuminaWrapper.GetStatusName(statusID),
@@ -130,26 +135,24 @@ public class AutoTrackStatusOff : DailyModuleBase
                             player.ClassJob.Value.Name.ToString()
                         )
                     );
+                }
             }
 
-            Records.Remove(statusID);
+            records.Remove(statusID);
         }
     }
 
-    protected override void Uninit()
+    private class Config : ModuleConfig
     {
-        CharacterStatusManager.Instance().Unreg(OnGainStatus);
-        CharacterStatusManager.Instance().Unreg(OnLoseStatus);
-
-        Records.Clear();
-    }
-
-    private class Config : ModuleConfiguration
-    {
-        public bool SendChat = true;
-        
         public bool OnlyTrackSpecific;
+        public bool SendChat = true;
 
         public HashSet<uint> StatusToMonitor = [];
     }
+    
+    #region 常量
+    
+    private const float TIME_THRESHOLD = 0.2f;
+
+    #endregion
 }

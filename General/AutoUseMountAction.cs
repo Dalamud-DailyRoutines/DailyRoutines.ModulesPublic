@@ -1,49 +1,40 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.Frozen;
-using System.Linq;
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 using Mount = Lumina.Excel.Sheets.Mount;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoUseMountAction : DailyModuleBase
+public unsafe class AutoUseMountAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoUseMountActionTitle"),
-        Description = GetLoc("AutoUseMountActionDescription"),
-        Category    = ModuleCategories.General,
+        Title       = Lang.Get("AutoUseMountActionTitle"),
+        Description = Lang.Get("AutoUseMountActionDescription"),
+        Category    = ModuleCategory.General,
         Author      = ["逆光", "Bill"]
     };
 
-    private static Config                 ModuleConfig = null!;
-    private static LuminaSearcher<Mount>? MountSearcher;
-    
-    private static string MountSearchInput = string.Empty;
-    
-    private static uint SelectedActionID;
-    private static uint SelectedMountID;
+    private Config config = null!;
 
-    private static readonly FrozenSet<ConditionFlag> InvalidConditions = [ConditionFlag.InFlight, ConditionFlag.Diving];
+    private string mountSearchInput = string.Empty;
+
+    private uint selectedActionID;
+    private uint selectedMountID;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new Config();
-        TaskHelper ??= new();
+        config =   Config.Load(this) ?? new();
+        TaskHelper   ??= new();
 
-        MountSearcher ??= new(LuminaGetter.Get<Mount>()
-                                          .Where(x => x.MountAction.RowId > 0)
-                                          .Where(x => x.Icon              > 0)
-                                          .Where(x => !string.IsNullOrEmpty(x.Singular.ToString()))
-                                          .GroupBy(x => x.Singular.ToString())
-                                          .Select(x => x.First()),
-                              [x => x.Singular.ToString()]);
-        
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
         UseActionManager.Instance().RegPostUseActionLocation(OnPostUseAction);
 
@@ -55,7 +46,7 @@ public unsafe class AutoUseMountAction : DailyModuleBase
     {
         DService.Instance().Condition.ConditionChange -= OnConditionChanged;
         UseActionManager.Instance().Unreg(OnPostUseAction);
-        
+
         TaskHelper?.Abort();
     }
 
@@ -70,7 +61,7 @@ public unsafe class AutoUseMountAction : DailyModuleBase
         ImGui.TableSetupColumn("操作", ImGuiTableColumnFlags.None, 80);
 
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-        
+
         ImGui.TableNextColumn();
         if (ImGuiOm.SelectableIconCentered("AddNewAction", FontAwesomeIcon.Plus))
             ImGui.OpenPopup("AddNewActionPopup");
@@ -79,18 +70,22 @@ public unsafe class AutoUseMountAction : DailyModuleBase
         {
             if (popup)
             {
-                ImGui.SetNextItemWidth(250f * GlobalFontScale);
-                using (var combo = ImRaii.Combo($"{LuminaWrapper.GetAddonText(4964)}##MountSelectCombo",
-                                                SelectedMountID > 0 && LuminaGetter.TryGetRow(SelectedMountID, out Mount selectedMount)
-                                                    ? $"{selectedMount.Singular.ToString()}"
-                                                    : string.Empty,
-                                                ImGuiComboFlags.HeightLarge))
+                ImGui.SetNextItemWidth(250f * GlobalUIScale);
+
+                using (var combo = ImRaii.Combo
+                       (
+                           $"{LuminaWrapper.GetAddonText(4964)}##MountSelectCombo",
+                           selectedMountID > 0 && LuminaGetter.TryGetRow(selectedMountID, out Mount selectedMount)
+                               ? $"{selectedMount.Singular.ToString()}"
+                               : string.Empty,
+                           ImGuiComboFlags.HeightLarge
+                       ))
                 {
                     if (combo)
                     {
                         ImGui.SetNextItemWidth(-1f);
-                        if (ImGui.InputTextWithHint("###MountSearchInput", GetLoc("PleaseSearch"), ref MountSearchInput, 128))
-                            MountSearcher?.Search(MountSearchInput);
+                        if (ImGui.InputTextWithHint("###MountSearchInput", Lang.Get("PleaseSearch"), ref mountSearchInput, 128))
+                            MountSearcher?.Search(mountSearchInput);
 
                         if (MountSearcher != null)
                         {
@@ -98,24 +93,31 @@ public unsafe class AutoUseMountAction : DailyModuleBase
                             {
                                 if (!ImageHelper.TryGetGameIcon(mount.Icon, out var textureWrap)) continue;
 
-                                if (ImGuiOm.SelectableImageWithText(textureWrap.Handle,
-                                                                    new(ImGui.GetTextLineHeightWithSpacing()),
-                                                                    $"{mount.Singular.ToString()}",
-                                                                    mount.RowId == SelectedMountID))
-                                    SelectedMountID = mount.RowId;
+                                if (ImGuiOm.SelectableImageWithText
+                                    (
+                                        textureWrap.Handle,
+                                        new(ImGui.GetTextLineHeightWithSpacing()),
+                                        $"{mount.Singular.ToString()}",
+                                        mount.RowId == selectedMountID
+                                    ))
+                                    selectedMountID = mount.RowId;
                             }
                         }
                     }
                 }
 
-                if (SelectedMountID > 0                                              &&
-                    LuminaGetter.TryGetRow(SelectedMountID, out Mount mountSelected) &&
+                if (selectedMountID > 0                                              &&
+                    LuminaGetter.TryGetRow(selectedMountID, out Mount mountSelected) &&
                     mountSelected.MountAction.ValueNullable is { Action: { Count: > 0 } actions })
                 {
-                    ImGui.SetNextItemWidth(250f * GlobalFontScale);
-                    using var combo = ImRaii.Combo($"{GetLoc("Action")}###ActionSelectCombo",
-                                                   LuminaWrapper.GetActionName(SelectedActionID),
-                                                   ImGuiComboFlags.None);
+                    ImGui.SetNextItemWidth(250f * GlobalUIScale);
+                    using var combo = ImRaii.Combo
+                    (
+                        $"{Lang.Get("Action")}###ActionSelectCombo",
+                        LuminaWrapper.GetActionName(selectedActionID),
+                        ImGuiComboFlags.None
+                    );
+
                     if (combo)
                     {
                         foreach (var action in actions)
@@ -123,21 +125,27 @@ public unsafe class AutoUseMountAction : DailyModuleBase
                             if (action.RowId == 0) continue;
                             if (!ImageHelper.TryGetGameIcon(action.Value.Icon, out var textureWrap)) continue;
 
-                            if (ImGuiOm.SelectableImageWithText(textureWrap.Handle, new(ImGui.GetTextLineHeightWithSpacing()), $"{action.Value.Name}",
-                                                                action.RowId == SelectedActionID))
-                                SelectedActionID = action.RowId;
+                            if (ImGuiOm.SelectableImageWithText
+                                (
+                                    textureWrap.Handle,
+                                    new(ImGui.GetTextLineHeightWithSpacing()),
+                                    $"{action.Value.Name}",
+                                    action.RowId == selectedActionID
+                                ))
+                                selectedActionID = action.RowId;
                         }
                     }
                 }
 
                 ImGui.Spacing();
-                using (ImRaii.Disabled(SelectedMountID == 0 || SelectedActionID == 0))
+
+                using (ImRaii.Disabled(selectedMountID == 0 || selectedActionID == 0))
                 {
-                    if (ImGui.Button(GetLoc("Add")))
+                    if (ImGui.Button(Lang.Get("Add")))
                     {
-                        var newAction = new MountAction(SelectedMountID, SelectedActionID);
-                        if (ModuleConfig.MountActions.TryAdd(newAction.MountID, newAction))
-                            ModuleConfig.Save(this);
+                        var newAction = new MountAction(selectedMountID, selectedActionID);
+                        if (config.MountActions.TryAdd(newAction.MountID, newAction))
+                            config.Save(this);
 
                         ImGui.CloseCurrentPopup();
                     }
@@ -146,7 +154,7 @@ public unsafe class AutoUseMountAction : DailyModuleBase
         }
 
         // 显示已配置的动作列表
-        foreach (var kv in ModuleConfig.MountActions)
+        foreach (var kv in config.MountActions)
         {
             var action = kv.Value;
             ImGui.TableNextRow();
@@ -163,14 +171,15 @@ public unsafe class AutoUseMountAction : DailyModuleBase
 
             // 删除按钮
             ImGui.TableNextColumn();
+
             if (ImGuiOm.ButtonIcon($"{action.MountID}_Delete", FontAwesomeIcon.TrashAlt))
             {
-                ModuleConfig.MountActions.Remove(action.MountID);
-                ModuleConfig.Save(this);
+                config.MountActions.Remove(action.MountID);
+                config.Save(this);
             }
         }
     }
-    
+
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (InvalidConditions.Contains(flag))
@@ -179,8 +188,8 @@ public unsafe class AutoUseMountAction : DailyModuleBase
                 TaskHelper.Abort();
             else
             {
-                if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer || 
-                    !ModuleConfig.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
+                if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer ||
+                    !config.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
                 TaskHelper.Enqueue(UseAction);
             }
         }
@@ -189,8 +198,8 @@ public unsafe class AutoUseMountAction : DailyModuleBase
         {
             if (value)
             {
-                if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer || 
-                    !ModuleConfig.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
+                if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer ||
+                    !config.MountActions.ContainsKey(localPlayer.CurrentMount?.RowId ?? 0)) return;
                 TaskHelper.Enqueue(UseAction);
             }
             else
@@ -204,17 +213,17 @@ public unsafe class AutoUseMountAction : DailyModuleBase
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
         var mountID = localPlayer.CurrentMount?.RowId ?? 0;
-        if (!ModuleConfig.MountActions.TryGetValue(mountID, out var action) || action.ActionID != actionID) return;
-        
+        if (!config.MountActions.TryGetValue(mountID, out var action) || action.ActionID != actionID) return;
+
         TaskHelper.Enqueue(UseAction);
     }
-    
-    private static bool UseAction()
+
+    private bool UseAction()
     {
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return true;
 
         var mountID = localPlayer.CurrentMount?.RowId ?? 0;
-        if (!ModuleConfig.MountActions.TryGetValue(mountID, out var action)) return true;
+        if (!config.MountActions.TryGetValue(mountID, out var action)) return true;
 
         if (ActionManager.Instance()->GetActionStatus(ActionType.Action, action.ActionID) != 0) return false;
 
@@ -222,16 +231,13 @@ public unsafe class AutoUseMountAction : DailyModuleBase
         return true;
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public Dictionary<uint, MountAction> MountActions { get; set; } = new();
     }
 
     private class MountAction : IEquatable<MountAction>
     {
-        public uint MountID  { get; set; }
-        public uint ActionID { get; set; }
-
         public MountAction() { }
 
         public MountAction(uint mountID, uint actionID)
@@ -239,6 +245,9 @@ public unsafe class AutoUseMountAction : DailyModuleBase
             MountID  = mountID;
             ActionID = actionID;
         }
+
+        public uint MountID  { get; set; }
+        public uint ActionID { get; set; }
 
         public bool Equals(MountAction? other)
         {
@@ -253,4 +262,25 @@ public unsafe class AutoUseMountAction : DailyModuleBase
         public override int GetHashCode() =>
             (int)MountID;
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<ConditionFlag> InvalidConditions =
+    [
+        ConditionFlag.InFlight,
+        ConditionFlag.Diving
+    ];
+
+    private static readonly LuminaSearcher<Mount> MountSearcher = new
+    (
+        LuminaGetter.Get<Mount>()
+                    .Where(x => x.MountAction.RowId > 0)
+                    .Where(x => x.Icon              > 0)
+                    .Where(x => !string.IsNullOrEmpty(x.Singular.ToString()))
+                    .GroupBy(x => x.Singular.ToString())
+                    .Select(x => x.First()),
+        [x => x.Singular.ToString()]
+    );
+
+    #endregion
 }

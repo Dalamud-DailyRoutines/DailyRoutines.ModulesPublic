@@ -1,47 +1,50 @@
-using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.Text;
+using OmenTools.Interop.Game;
+using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedChatBubble : DailyModuleBase
+public unsafe class OptimizedChatBubble : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("OptimizedChatBubbleTitle"),
-        Description = GetLoc("OptimizedChatBubbleDescription"),
-        Category    = ModuleCategories.UIOptimization,
-        Author      = ["Middo","Xww"]
+        Title       = Lang.Get("OptimizedChatBubbleTitle"),
+        Description = Lang.Get("OptimizedChatBubbleDescription"),
+        Category    = ModuleCategory.UIOptimization,
+        Author      = ["Middo", "Xww"]
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static readonly CompSig ChatBubbleSig = new("E8 ?? ?? ?? ?? 0F B6 E8 48 8D 5F 18 40 0A 6C 24 ?? BE");
+    private delegate        ulong   ChatBubbleDelegate(ChatBubbleStruct* chatBubbleStruct);
+    private          Hook<ChatBubbleDelegate> ChatBubbleHook;
 
-    private static readonly CompSig                  ChatBubbleSig = new("E8 ?? ?? ?? ?? 0F B6 E8 48 8D 5F 18 40 0A 6C 24 ?? BE");
-    private delegate        ulong                    ChatBubbleDelegate(ChatBubbleStruct* chatBubbleStruct);
-    private static          Hook<ChatBubbleDelegate> ChatBubbleHook;
-
-    private static readonly CompSig                       SetupChatBubbleSig = new("E8 ?? ?? ?? ?? 49 FF 46 60");
-    private delegate        byte                          SetupChatBubbleDelegate(nint unk, nint newBubble, nint a3);
-    private static          Hook<SetupChatBubbleDelegate> SetupChatBubbleHook;
+    private static readonly CompSig SetupChatBubbleSig = new("E8 ?? ?? ?? ?? 49 FF 46 60");
+    private delegate        byte    SetupChatBubbleDelegate(nint       unk,         nint        newBubble, nint a3);
+    private delegate        uint    GetStringSizeDelegate(TextChecker* textChecker, Utf8String* str);
+    private          Hook<SetupChatBubbleDelegate> SetupChatBubbleHook;
 
     private static readonly CompSig               GetStringSizeSig = new("E8 ?? ?? ?? ?? 49 8D 56 40");
-    private delegate        uint                  GetStringSizeDelegate(TextChecker* textChecker, Utf8String* str);
-    private static readonly GetStringSizeDelegate GetStringSize = GetStringSizeSig.GetDelegate<GetStringSizeDelegate>();
+    private readonly GetStringSizeDelegate getStringSize    = GetStringSizeSig.GetDelegate<GetStringSizeDelegate>();
 
-    private static readonly MemoryPatch ShowMiniTalkPlayerPatch = new("0F 84 ?? ?? ?? ?? ?? ?? ?? 48 8B CF 49 89 46", [0x90, 0xE9]);
+    private readonly MemoryPatch showMiniTalkPlayerPatch = new("0F 84 ?? ?? ?? ?? ?? ?? ?? 48 8B CF 49 89 46", [0x90, 0xE9]);
 
-    private static Config ModuleConfig = null!;
+    private Config moduleConfig = null!;
 
-    private static readonly HashSet<nint> NewBubbles = [];
+    private readonly HashSet<nint> newBubbles = [];
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        moduleConfig = Config.Load(this) ?? new();
 
         ChatBubbleHook = ChatBubbleSig.GetHook<ChatBubbleDelegate>(ChatBubbleDetour);
         ChatBubbleHook.Enable();
@@ -49,37 +52,37 @@ public unsafe class OptimizedChatBubble : DailyModuleBase
         SetupChatBubbleHook = SetupChatBubbleSig.GetHook<SetupChatBubbleDelegate>(SetupChatBubbleDetour);
         SetupChatBubbleHook.Enable();
 
-        ShowMiniTalkPlayerPatch.Set(ModuleConfig.IsShowInCombat);
+        showMiniTalkPlayerPatch.Set(moduleConfig.IsShowInCombat);
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("OptimizedChatBubble-ShowInCombat"), ref ModuleConfig.IsShowInCombat))
+        if (ImGui.Checkbox(Lang.Get("OptimizedChatBubble-ShowInCombat"), ref moduleConfig.IsShowInCombat))
         {
-            SaveConfig(ModuleConfig);
-            ShowMiniTalkPlayerPatch.Set(ModuleConfig.IsShowInCombat);
+            moduleConfig.Save(this);
+            showMiniTalkPlayerPatch.Set(moduleConfig.IsShowInCombat);
         }
 
-        using (ImRaii.ItemWidth(150f * GlobalFontScale))
+        using (ImRaii.ItemWidth(150f * GlobalUIScale))
         {
-            if (ImGui.InputInt(GetLoc("OptimizedChatBubble-MaxLine"), ref ModuleConfig.MaxLines, 1))
-                ModuleConfig.MaxLines = Math.Clamp(ModuleConfig.MaxLines, 1, 7);
+            if (ImGui.InputInt(Lang.Get("OptimizedChatBubble-MaxLine"), ref moduleConfig.MaxLines, 1))
+                moduleConfig.MaxLines = Math.Clamp(moduleConfig.MaxLines, 1, 7);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                moduleConfig.Save(this);
 
-            if (ImGui.InputUInt($"{GetLoc("OptimizedChatBubble-BaseDuration")} (ms)", ref ModuleConfig.Duration, 500, 1000))
-                ModuleConfig.Duration = Math.Clamp(ModuleConfig.Duration, 1000, 60_000);
+            if (ImGui.InputUInt($"{Lang.Get("OptimizedChatBubble-BaseDuration")} (ms)", ref moduleConfig.Duration, 500, 1000))
+                moduleConfig.Duration = Math.Clamp(moduleConfig.Duration, 1000, 60_000);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                moduleConfig.Save(this);
 
-            if (ImGui.InputUInt($"{GetLoc("OptimizedChatBubble-AdditionalDuration")} (ms)", ref ModuleConfig.AdditionalDuration, 1, 10))
-                ModuleConfig.AdditionalDuration = Math.Clamp(ModuleConfig.AdditionalDuration, 0, 10_000);
+            if (ImGui.InputUInt($"{Lang.Get("OptimizedChatBubble-AdditionalDuration")} (ms)", ref moduleConfig.AdditionalDuration, 1, 10))
+                moduleConfig.AdditionalDuration = Math.Clamp(moduleConfig.AdditionalDuration, 0, 10_000);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                moduleConfig.Save(this);
         }
     }
 
-    private static ulong ChatBubbleDetour(ChatBubbleStruct* chatBubbleStruct)
+    private ulong ChatBubbleDetour(ChatBubbleStruct* chatBubbleStruct)
     {
         try
         {
@@ -87,37 +90,42 @@ public unsafe class OptimizedChatBubble : DailyModuleBase
         }
         finally
         {
-            chatBubbleStruct->LineCount = (byte)Math.Clamp(ModuleConfig.MaxLines, 1, 7);
+            chatBubbleStruct->LineCount = (byte)Math.Clamp(moduleConfig.MaxLines, 1, 7);
 
-            NewBubbles.RemoveWhere(b =>
-            {
-                var bubble = (ChatBubbleEntry*)b;
-                if (bubble->Timestamp < 200)
+            newBubbles.RemoveWhere
+            (b =>
                 {
-                    if (bubble->Timestamp >= 0)
-                        bubble->Timestamp++;
-                    return false;
-                }
+                    var bubble = (ChatBubbleEntry*)b;
 
-                bubble->Timestamp += ModuleConfig.Duration - 4000;
-                if (ModuleConfig.AdditionalDuration > 0)
-                {
-                    var characterCounts = GetStringSize(&RaptureTextModule.Instance()->TextChecker, &bubble->String);
-                    var additionalDuration = ModuleConfig.AdditionalDuration * Math.Clamp(characterCounts, 0, 194 * ModuleConfig.MaxLines);
-                    bubble->Timestamp += additionalDuration;
+                    if (bubble->Timestamp < 200)
+                    {
+                        if (bubble->Timestamp >= 0)
+                            bubble->Timestamp++;
+                        return false;
+                    }
+
+                    bubble->Timestamp += moduleConfig.Duration - 4000;
+
+                    if (moduleConfig.AdditionalDuration > 0)
+                    {
+                        var characterCounts    = getStringSize(&RaptureTextModule.Instance()->TextChecker, &bubble->String);
+                        var additionalDuration = moduleConfig.AdditionalDuration * Math.Clamp(characterCounts, 0, 194 * moduleConfig.MaxLines);
+                        bubble->Timestamp += additionalDuration;
+                    }
+
+                    return true;
                 }
-                return true;
-            });
+            );
         }
     }
-    
-    private static byte SetupChatBubbleDetour(nint unk, nint newBubble, nint a3)
+
+    private byte SetupChatBubbleDetour(nint unk, nint newBubble, nint a3)
     {
         try
         {
-            if (ModuleConfig.Duration != 4000 || ModuleConfig.AdditionalDuration > 0)
-                NewBubbles.Add(newBubble);
-            
+            if (moduleConfig.Duration != 4000 || moduleConfig.AdditionalDuration > 0)
+                newBubbles.Add(newBubble);
+
             return SetupChatBubbleHook.Original(unk, newBubble, a3);
         }
         catch
@@ -125,27 +133,29 @@ public unsafe class OptimizedChatBubble : DailyModuleBase
             return 0;
         }
     }
-
-    protected override void Uninit() => ShowMiniTalkPlayerPatch.Dispose();
-
+    
     [StructLayout(LayoutKind.Explicit)]
     private struct ChatBubbleStruct
     {
-        [FieldOffset(0x8C)] public byte LineCount;
+        [FieldOffset(0x8C)]
+        public byte LineCount;
     }
 
     [StructLayout(LayoutKind.Explicit)]
     private struct ChatBubbleEntry
     {
-        [FieldOffset(0x000)] public Utf8String String;
-        [FieldOffset(0x1B8)] public long Timestamp;
+        [FieldOffset(0x000)]
+        public Utf8String String;
+
+        [FieldOffset(0x1B8)]
+        public long Timestamp;
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
-        public int  MaxLines       = 2;
+        public uint AdditionalDuration;
         public uint Duration       = 4000;
         public bool IsShowInCombat = true;
-        public uint AdditionalDuration;
+        public int  MaxLines       = 2;
     }
 }

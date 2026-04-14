@@ -1,57 +1,65 @@
-using System.Windows.Forms;
-using DailyRoutines.Abstracts;
+using System.Collections.Frozen;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.Interop.Windows.Helpers;
+using OmenTools.OmenService;
+using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoQTE : DailyModuleBase
+public class AutoQTE : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoQTETitle"),
-        Description = GetLoc("AutoQTEDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("AutoQTETitle"),
+        Description = Lang.Get("AutoQTEDescription"),
+        Category    = ModuleCategory.Combat
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static readonly CompSig                         IsInputIDPressedSig = new("E9 ?? ?? ?? ?? 83 7F 44 02");
-    private unsafe delegate byte                            IsInputIDPressedDelegate(void* data, InputId id);
-    private static          Hook<IsInputIDPressedDelegate>? IsInputIDPressedHook;
     
-    private static readonly string[] QTETypes = ["_QTEKeep", "_QTEMash", "_QTEKeepTime", "_QTEButton"];
-
-    protected override unsafe void Init()
+    protected override void Init()
     {
-        IsInputIDPressedHook ??= IsInputIDPressedSig.GetHook<IsInputIDPressedDelegate>(IsInputIDPressedDetour);
-        IsInputIDPressedHook.Enable();
-        
+        InputIDManager.Instance().RegPrePressed(OnPreIsInputIDPressed);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, QTETypes, OnQTEAddon);
     }
-
-    private static unsafe byte IsInputIDPressedDetour(void* data, InputId id)
+    
+    protected override void Uninit()
     {
-        var orig = IsInputIDPressedHook.Original(data, id);
+        InputIDManager.Instance().UnregPrePressed(OnPreIsInputIDPressed);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnQTEAddon);
+    }
+
+    private static void OnPreIsInputIDPressed(ref bool? overrideResult, ref InputId id)
+    {
         if (GameState.ContentFinderCondition == 0)
-            return orig;
-        
-        if (!Throttler.Check("AutoQTE-QTE"))
-            return 0;
-        
-        return orig;
+            return;
+
+        if (!Throttler.Shared.Check("AutoQTE-QTE"))
+            overrideResult = false;
     }
 
     private static unsafe void OnQTEAddon(AddonEvent type, AddonArgs args)
     {
-        Throttler.Throttle("AutoQTE-QTE", 1_000, true);
-        SendKeypress(Keys.Space);
+        Throttler.Shared.Throttle("AutoQTE-QTE", 1_000, true);
+        KeyEmulationHelper.SendKeypress(Keys.Space);
         AtkStage.Instance()->ClearFocus();
     }
+    
+    #region 常量
 
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnQTEAddon);
+    private static readonly FrozenSet<string> QTETypes =
+    [
+        "_QTEKeep",
+        "_QTEMash",
+        "_QTEKeepTime",
+        "_QTEButton"
+    ];
+
+    #endregion
 }

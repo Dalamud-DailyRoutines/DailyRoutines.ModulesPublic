@@ -1,30 +1,31 @@
-using System;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Manager;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using TinyPinyin;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class JobSwitchCommand : DailyModuleBase
+public class JobSwitchCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("JobSwitchCommandTitle"),
-        Description = GetLoc("JobSwitchCommandDescription", Command),
-        Category    = ModuleCategories.Assist
+        Title       = Lang.Get("JobSwitchCommandTitle"),
+        Description = Lang.Get("JobSwitchCommandDescription", COMMAND),
+        Category    = ModuleCategory.Assist
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private const string Command = "job";
+    protected override void Init() =>
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("JobSwitchCommand-CommandHelp") });
 
-    protected override void Init() => 
-        CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("JobSwitchCommand-CommandHelp") });
-    
-    protected override void Uninit() => 
-        CommandManager.RemoveSubCommand(Command);
-    
+    protected override void Uninit() =>
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
+
     private static void OnCommand(string command, string args)
     {
         args = args.ToLowerInvariant().Trim();
@@ -53,4 +54,10 @@ public class JobSwitchCommand : DailyModuleBase
             }
         }
     }
+
+    #region 常量
+
+    private const string COMMAND = "job";
+
+    #endregion
 }

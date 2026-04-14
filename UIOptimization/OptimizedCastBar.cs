@@ -1,44 +1,53 @@
-using System;
-using System.Collections.Generic;
+using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Nodes;
+using KamiToolKit.Premade.Node.Simple;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedCastBar : DailyModuleBase
+public unsafe class OptimizedCastBar : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("OptimizedCastBarTitle"),
-        Description = GetLoc("OptimizedCastBarDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("OptimizedCastBarTitle"),
+        Description = Lang.Get("OptimizedCastBarDescription"),
+        Category    = ModuleCategory.UIOptimization,
         Author      = ["Middo"]
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static readonly HashSet<ConditionFlag> ValidFlags = [ConditionFlag.BetweenAreas, ConditionFlag.Mounted];
-    
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
-    private static SimpleNineGridNode? SlideMarkerZoneNode;
-    private static SimpleNineGridNode? SlideMarkerLineNode;
-    
+    private SimpleNineGridNode? slideMarkerZoneNode;
+    private SimpleNineGridNode? slideMarkerLineNode;
+
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "_CastBar", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_CastBar", OnAddon);
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 
     protected override void ConfigUI()
@@ -46,250 +55,245 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(1050));
 
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(1050)))
-        using (ImRaii.ItemWidth(250f * GlobalFontScale))
+        using (ImRaii.ItemWidth(250f * GlobalUIScale))
         using (ImRaii.PushIndent())
         {
-            ImGui.ColorEdit4(GetLoc("TextColor"), ref ModuleConfig.CastingTextColor);
+            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.CastingTextColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("EdgeColor"), ref ModuleConfig.CastingTextEdgeColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("BackgroundColor"), ref ModuleConfig.CastingTextBackgroundColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
 
-            ImGui.InputFloat2(GetLoc("Position"), ref ModuleConfig.CastingTextPosition);
+            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.CastingTextEdgeColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.CastingTextSize);
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("BackgroundColor"), ref config.CastingTextBackgroundColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
+
+            ImGui.InputFloat2(Lang.Get("Position"), ref config.CastingTextPosition);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+
+            ImGui.InputByte(Lang.Get("FontSize"), ref config.CastingTextSize);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
         }
-        
+
         ImGui.NewLine();
-        
+
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(14051));
-        
+
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(14051)))
-        using (ImRaii.ItemWidth(250f * GlobalFontScale))
+        using (ImRaii.ItemWidth(250f * GlobalUIScale))
         using (ImRaii.PushIndent())
         {
-            ImGui.InputByte(GetLoc("Alpha"), ref ModuleConfig.IconAlpha);
+            ImGui.InputByte(Lang.Get("Alpha"), ref config.IconAlpha);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputFloat2(GetLoc("Position"), ref ModuleConfig.IconPosition);
+                config.Save(this);
+
+            ImGui.InputFloat2(Lang.Get("Position"), ref config.IconPosition);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputFloat2(GetLoc("Scale"), ref ModuleConfig.IconScale);
+                config.Save(this);
+
+            ImGui.InputFloat2(Lang.Get("Scale"), ref config.IconScale);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
         }
-        
+
         ImGui.NewLine();
-        
+
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(1051));
-        
+
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(1051)))
-        using (ImRaii.ItemWidth(250f * GlobalFontScale))
+        using (ImRaii.ItemWidth(250f * GlobalUIScale))
         using (ImRaii.PushIndent())
         {
-            ImGui.ColorEdit4(GetLoc("TextColor"), ref ModuleConfig.InterruptedTextColor);
+            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.InterruptedTextColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("EdgeColor"), ref ModuleConfig.InterruptedTextEdgeColor);
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.InterruptedTextEdgeColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("BackgroundColor"), ref ModuleConfig.InterruptedTextBackgroundColor);
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("BackgroundColor"), ref config.InterruptedTextBackgroundColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputFloat2(GetLoc("Position"), ref ModuleConfig.InterruptedTextPosition);
+                config.Save(this);
+
+            ImGui.InputFloat2(Lang.Get("Position"), ref config.InterruptedTextPosition);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.InterruptedTextSize);
+                config.Save(this);
+
+            ImGui.InputByte(Lang.Get("FontSize"), ref config.InterruptedTextSize);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
         }
-        
+
         ImGui.NewLine();
-        
+
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(3626));
-        
+
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(3626)))
-        using (ImRaii.ItemWidth(250f * GlobalFontScale))
+        using (ImRaii.ItemWidth(250f * GlobalUIScale))
         using (ImRaii.PushIndent())
         {
-            ImGui.ColorEdit4(GetLoc("TextColor"), ref ModuleConfig.NameTextColor);
+            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.NameTextColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("EdgeColor"), ref ModuleConfig.NameTextEdgeColor);
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.NameTextEdgeColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("BackgroundColor"), ref ModuleConfig.NameTextBackgroundColor);
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("BackgroundColor"), ref config.NameTextBackgroundColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputFloat2(GetLoc("Position"), ref ModuleConfig.NameTextPosition);
+                config.Save(this);
+
+            ImGui.InputFloat2(Lang.Get("Position"), ref config.NameTextPosition);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.NameTextSize);
+                config.Save(this);
+
+            ImGui.InputByte(Lang.Get("FontSize"), ref config.NameTextSize);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
         }
-        
+
         ImGui.NewLine();
-        
+
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(701));
-        
+
         using (ImRaii.PushId(LuminaWrapper.GetAddonText(701)))
-        using (ImRaii.ItemWidth(250f * GlobalFontScale))
+        using (ImRaii.ItemWidth(250f * GlobalUIScale))
         using (ImRaii.PushIndent())
         {
-            ImGui.ColorEdit4(GetLoc("TextColor"), ref ModuleConfig.CastTimeTextColor);
+            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.CastTimeTextColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("EdgeColor"), ref ModuleConfig.CastTimeTextEdgeColor);
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.CastTimeTextEdgeColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.ColorEdit4(GetLoc("BackgroundColor"), ref ModuleConfig.CastTimeTextBackgroundColor);
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("BackgroundColor"), ref config.CastTimeTextBackgroundColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputFloat2(GetLoc("Position"), ref ModuleConfig.CastTimeTextPosition);
+                config.Save(this);
+
+            ImGui.InputFloat2(Lang.Get("Position"), ref config.CastTimeTextPosition);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
-            
-            ImGui.InputByte(GetLoc("FontSize"), ref ModuleConfig.CastTimeTextSize);
+                config.Save(this);
+
+            ImGui.InputByte(Lang.Get("FontSize"), ref config.CastTimeTextSize);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
         }
-        
+
         ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("OptimizedCastBar-SlideCastMarker"));
-        ImGuiOm.HelpMarker(GetLoc("OptimizedCastBar-SlideCastMarker-Help"));
-        
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("OptimizedCastBar-SlideCastMarker"));
+        ImGuiOm.HelpMarker(Lang.Get("OptimizedCastBar-SlideCastMarker-Help"));
+
         using (ImRaii.PushId("OptimizedCastBar-SlideCastMarker"))
-        using (ImRaii.ItemWidth(250f * GlobalFontScale))
+        using (ImRaii.ItemWidth(250f * GlobalUIScale))
         using (ImRaii.PushIndent())
         {
-            using (var combo = ImRaii.Combo(GetLoc("Type"),
-                                            GetLoc($"OptimizedCastBar-SlideCastHighlightType-{ModuleConfig.SlideCastHighlightType}")))
+            using (var combo = ImRaii.Combo
+                   (
+                       Lang.Get("Type"),
+                       Lang.Get($"OptimizedCastBar-SlideCastHighlightType-{config.SlideCastHighlightType}")
+                   ))
             {
                 if (combo)
                 {
                     foreach (var type in Enum.GetValues<SlideCastHighlightType>())
                     {
-                        if (ImGui.Selectable(GetLoc($"OptimizedCastBar-SlideCastHighlightType-{type}"), ModuleConfig.SlideCastHighlightType == type))
+                        if (ImGui.Selectable(Lang.Get($"OptimizedCastBar-SlideCastHighlightType-{type}"), config.SlideCastHighlightType == type))
                         {
-                            ModuleConfig.SlideCastHighlightType = type;
-                            SaveConfig(ModuleConfig);
+                            config.SlideCastHighlightType = type;
+                            config.Save(this);
                         }
                     }
                 }
             }
-            
-            if (ModuleConfig.SlideCastHighlightType == SlideCastHighlightType.None) return;
-            
-            if (ModuleConfig.SlideCastHighlightType == SlideCastHighlightType.Line)
+
+            if (config.SlideCastHighlightType == SlideCastHighlightType.None) return;
+
+            if (config.SlideCastHighlightType == SlideCastHighlightType.Line)
             {
                 ImGui.Spacing();
-                
-                ImGui.SliderInt(GetLoc("Width"), ref ModuleConfig.SlideCastLineWidth, 1, 10);
-                if (ImGui.IsItemDeactivatedAfterEdit())
-                    SaveConfig(ModuleConfig);
 
-                ImGui.SliderInt(GetLoc("Height"), ref ModuleConfig.SlideCastLineHeight, 0, 20);
+                ImGui.SliderInt(Lang.Get("Width"), ref config.SlideCastLineWidth, 1, 10);
                 if (ImGui.IsItemDeactivatedAfterEdit())
-                    SaveConfig(ModuleConfig);
-                
+                    config.Save(this);
+
+                ImGui.SliderInt(Lang.Get("Height"), ref config.SlideCastLineHeight, 0, 20);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
+
                 ImGui.Spacing();
             }
 
-            ImGui.SliderInt(GetLoc("OptimizedCastBar-SlideCastOffsetTime"), ref ModuleConfig.SlideCastZoneAdjust, 0, 1000);
+            ImGui.SliderInt(Lang.Get("OptimizedCastBar-SlideCastOffsetTime"), ref config.SlideCastZoneAdjust, 0, 1000);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
 
-            ImGui.ColorEdit4(GetLoc("OptimizedCastBar-SlideCastMarkerNotReadyColor"), ref ModuleConfig.SlideCastNotReadyColor);
+            ImGui.ColorEdit4(Lang.Get("OptimizedCastBar-SlideCastMarkerNotReadyColor"), ref config.SlideCastNotReadyColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
 
-            ImGui.ColorEdit4(GetLoc("OptimizedCastBar-SlideCastMarkerReadyColor"), ref ModuleConfig.SlideCastReadyColor);
+            ImGui.ColorEdit4(Lang.Get("OptimizedCastBar-SlideCastMarkerReadyColor"), ref config.SlideCastReadyColor);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
         }
     }
-
-    protected override void Uninit()
-    {
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-        
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-    }
-
-    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    
+    private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (!ValidFlags.Contains(flag)) return;
-        
+
         OnAddon(AddonEvent.PreFinalize, null);
     }
-    
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                SlideMarkerZoneNode?.Dispose();
-                SlideMarkerZoneNode = null;
+                slideMarkerZoneNode?.Dispose();
+                slideMarkerZoneNode = null;
 
-                SlideMarkerLineNode?.Dispose();
-                SlideMarkerLineNode = null;
+                slideMarkerLineNode?.Dispose();
+                slideMarkerLineNode = null;
 
                 UpdateOriginalAddonNodes();
                 return;
             case AddonEvent.PostDraw:
                 if (CastBar == null) return;
-                
+
                 var addon = (AddonCastBar*)CastBar;
 
                 var progressBarNode = (AtkNineGridNode*)CastBar->GetNodeById(11);
                 if (progressBarNode == null) return;
 
-                if (Throttler.Throttle("OptimizedCastBar-PostDraw-UpdateOriginal"))
+                if (Throttler.Shared.Throttle("OptimizedCastBar-PostDraw-UpdateOriginal"))
                     UpdateOriginalAddonNodes();
-                
-                if (!Throttler.Throttle("OptimizedCastBar-PostDraw-UpdateSlideCast", 10)) return;
-                
-                var slidePerercentage = ((float)(addon->CastTime * 10) - ModuleConfig.SlideCastZoneAdjust) / (addon->CastTime * 10);
+
+                if (!Throttler.Shared.Throttle("OptimizedCastBar-PostDraw-UpdateSlideCast", 10)) return;
+
+                var slidePerercentage = ((float)(addon->CastTime * 10) - config.SlideCastZoneAdjust) / (addon->CastTime * 10);
                 var slidePosition     = 160                                                                * slidePerercentage;
                 var slideColor = DService.Instance().Condition[ConditionFlag.Casting] || DService.Instance().Condition[ConditionFlag.OccupiedInEvent]
-                                     ? ModuleConfig.SlideCastNotReadyColor
-                                     : ModuleConfig.SlideCastReadyColor;
+                                     ? config.SlideCastNotReadyColor
+                                     : config.SlideCastReadyColor;
 
-                switch (ModuleConfig.SlideCastHighlightType)
+                switch (config.SlideCastHighlightType)
                 {
                     case SlideCastHighlightType.Zone:
-                        if (SlideMarkerLineNode != null)
-                            SlideMarkerLineNode.IsVisible = false;
+                        if (slideMarkerLineNode != null)
+                            slideMarkerLineNode.IsVisible = false;
 
-                        if (SlideMarkerZoneNode == null)
+                        if (slideMarkerZoneNode == null)
                         {
-                            SlideMarkerZoneNode = new()
+                            slideMarkerZoneNode = new()
                             {
                                 PartId             = 0,
                                 TexturePath        = "ui/uld/parameter_gauge_hr1.tex",
@@ -300,38 +304,38 @@ public unsafe class OptimizedCastBar : DailyModuleBase
                                 Offsets            = new(12)
                             };
 
-                            SlideMarkerZoneNode.AttachNode(progressBarNode->ParentNode);
+                            slideMarkerZoneNode.AttachNode(progressBarNode->ParentNode);
                         }
 
-                        SlideMarkerZoneNode.IsVisible = true;
-                        SlideMarkerZoneNode.Size      = new(168           - (int)slidePosition, 22);
-                        SlideMarkerZoneNode.Position  = new(slidePosition - 9, -1f);
-                            
-                        SlideMarkerZoneNode.AddColor      = slideColor.AsVector3();
-                        SlideMarkerZoneNode.MultiplyColor = slideColor.AsVector3();
+                        slideMarkerZoneNode.IsVisible = true;
+                        slideMarkerZoneNode.Size      = new(168           - (int)slidePosition, 22);
+                        slideMarkerZoneNode.Position  = new(slidePosition - 9, -1f);
+
+                        slideMarkerZoneNode.AddColor      = slideColor.AsVector3();
+                        slideMarkerZoneNode.MultiplyColor = slideColor.AsVector3();
 
                         break;
                     case SlideCastHighlightType.Line:
-                        if (SlideMarkerZoneNode != null)
-                            SlideMarkerZoneNode.IsVisible = false;
+                        if (slideMarkerZoneNode != null)
+                            slideMarkerZoneNode.IsVisible = false;
 
-                        if (SlideMarkerLineNode == null)
+                        if (slideMarkerLineNode == null)
                         {
-                            SlideMarkerLineNode = new()
+                            slideMarkerLineNode = new()
                             {
                                 TexturePath        = "ui/uld/emjfacemask.tex",
                                 TextureCoordinates = new(28, 28),
                                 TextureSize        = new(8, 8),
-                                NodeFlags          = NodeFlags.AnchorTop | NodeFlags.AnchorLeft,
+                                NodeFlags          = NodeFlags.AnchorTop | NodeFlags.AnchorLeft
                             };
 
-                            SlideMarkerLineNode.AttachNode(progressBarNode->ParentNode);
+                            slideMarkerLineNode.AttachNode(progressBarNode->ParentNode);
                         }
 
-                        SlideMarkerLineNode.IsVisible = true;
-                        SlideMarkerLineNode.Size      = new(ModuleConfig.SlideCastLineWidth, 12 + (ModuleConfig.SlideCastLineHeight * 2));
-                        SlideMarkerLineNode.Position  = new(slidePosition, 4                    - ModuleConfig.SlideCastLineHeight);
-                        SlideMarkerLineNode.Color     = slideColor;
+                        slideMarkerLineNode.IsVisible = true;
+                        slideMarkerLineNode.Size      = new(config.SlideCastLineWidth, 12 + config.SlideCastLineHeight * 2);
+                        slideMarkerLineNode.Position  = new(slidePosition, 4                    - config.SlideCastLineHeight);
+                        slideMarkerLineNode.Color     = slideColor;
                         break;
                 }
 
@@ -339,109 +343,125 @@ public unsafe class OptimizedCastBar : DailyModuleBase
         }
     }
 
-    private static void UpdateOriginalAddonNodes()
+    private void UpdateOriginalAddonNodes()
     {
-        if (CastBar == null || ModuleConfig == null) return;
-        
+        if (CastBar == null || config == null) return;
+
         var interruptedTextNode = CastBar->GetTextNodeById(2);
+
         if (interruptedTextNode != null)
         {
-            interruptedTextNode->TextColor       = ModuleConfig.InterruptedTextColor.ToByteColor();
-            interruptedTextNode->EdgeColor       = ModuleConfig.InterruptedTextEdgeColor.ToByteColor();
-            interruptedTextNode->BackgroundColor = ModuleConfig.InterruptedTextBackgroundColor.ToByteColor();
-            interruptedTextNode->FontSize        = ModuleConfig.InterruptedTextSize;
-            interruptedTextNode->SetPositionFloat(ModuleConfig.InterruptedTextPosition.X, ModuleConfig.InterruptedTextPosition.Y);
+            interruptedTextNode->TextColor       = config.InterruptedTextColor.ToByteColor();
+            interruptedTextNode->EdgeColor       = config.InterruptedTextEdgeColor.ToByteColor();
+            interruptedTextNode->BackgroundColor = config.InterruptedTextBackgroundColor.ToByteColor();
+            interruptedTextNode->FontSize        = config.InterruptedTextSize;
+            interruptedTextNode->SetPositionFloat(config.InterruptedTextPosition.X, config.InterruptedTextPosition.Y);
         }
-        
+
         var actionNameTextNode = CastBar->GetTextNodeById(4);
+
         if (actionNameTextNode != null)
         {
-            actionNameTextNode->TextColor       = ModuleConfig.NameTextColor.ToByteColor();
-            actionNameTextNode->EdgeColor       = ModuleConfig.NameTextEdgeColor.ToByteColor();
-            actionNameTextNode->BackgroundColor = ModuleConfig.NameTextBackgroundColor.ToByteColor();
-            actionNameTextNode->FontSize        = ModuleConfig.NameTextSize;
-            actionNameTextNode->SetPositionFloat(ModuleConfig.NameTextPosition.X, ModuleConfig.NameTextPosition.Y);
+            actionNameTextNode->TextColor       = config.NameTextColor.ToByteColor();
+            actionNameTextNode->EdgeColor       = config.NameTextEdgeColor.ToByteColor();
+            actionNameTextNode->BackgroundColor = config.NameTextBackgroundColor.ToByteColor();
+            actionNameTextNode->FontSize        = config.NameTextSize;
+            actionNameTextNode->SetPositionFloat(config.NameTextPosition.X, config.NameTextPosition.Y);
         }
 
         var iconNode = (AtkComponentNode*)CastBar->GetNodeById(8);
+
         if (iconNode != null)
         {
-            iconNode->SetAlpha(ModuleConfig.IconAlpha);
-            iconNode->SetPositionFloat(ModuleConfig.IconPosition.X, ModuleConfig.IconPosition.Y);
-            iconNode->SetScale(ModuleConfig.IconScale.X, ModuleConfig.IconScale.Y);
+            iconNode->SetAlpha(config.IconAlpha);
+            iconNode->SetPositionFloat(config.IconPosition.X, config.IconPosition.Y);
+            iconNode->SetScale(config.IconScale.X, config.IconScale.Y);
         }
 
         var castingTextNode = CastBar->GetTextNodeById(6);
+
         if (castingTextNode != null)
         {
-            castingTextNode->TextColor       = ModuleConfig.CastingTextColor.ToByteColor();
-            castingTextNode->EdgeColor       = ModuleConfig.CastingTextEdgeColor.ToByteColor();
-            castingTextNode->BackgroundColor = ModuleConfig.CastingTextBackgroundColor.ToByteColor();
-            castingTextNode->FontSize        = ModuleConfig.CastingTextSize;
-            castingTextNode->SetPositionFloat(ModuleConfig.CastingTextPosition.X, ModuleConfig.CastingTextPosition.Y);
+            castingTextNode->TextColor       = config.CastingTextColor.ToByteColor();
+            castingTextNode->EdgeColor       = config.CastingTextEdgeColor.ToByteColor();
+            castingTextNode->BackgroundColor = config.CastingTextBackgroundColor.ToByteColor();
+            castingTextNode->FontSize        = config.CastingTextSize;
+            castingTextNode->SetPositionFloat(config.CastingTextPosition.X, config.CastingTextPosition.Y);
         }
 
         var castTimeTextNode = CastBar->GetTextNodeById(7);
+
         if (castTimeTextNode != null)
         {
-            castTimeTextNode->TextColor       = ModuleConfig.CastTimeTextColor.ToByteColor();
-            castTimeTextNode->EdgeColor       = ModuleConfig.CastTimeTextEdgeColor.ToByteColor();
-            castTimeTextNode->BackgroundColor = ModuleConfig.CastTimeTextBackgroundColor.ToByteColor();
-            castTimeTextNode->FontSize        = ModuleConfig.CastTimeTextSize;
-            castTimeTextNode->SetPositionFloat(ModuleConfig.CastTimeTextPosition.X, ModuleConfig.CastTimeTextPosition.Y);
+            castTimeTextNode->TextColor       = config.CastTimeTextColor.ToByteColor();
+            castTimeTextNode->EdgeColor       = config.CastTimeTextEdgeColor.ToByteColor();
+            castTimeTextNode->BackgroundColor = config.CastTimeTextBackgroundColor.ToByteColor();
+            castTimeTextNode->FontSize        = config.CastTimeTextSize;
+            castTimeTextNode->SetPositionFloat(config.CastTimeTextPosition.X, config.CastTimeTextPosition.Y);
         }
     }
 
-    protected class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
-        // 发动中
-        public Vector4 CastingTextColor           = new(1);
-        public Vector4 CastingTextEdgeColor       = new(0.56f, 0.42f, 0.05f, 1);
         public Vector4 CastingTextBackgroundColor = new(0);
-        public Vector2 CastingTextPosition        = new(0, 0);
-        public byte    CastingTextSize            = 12;
-        
-        // 图标
-        public byte    IconAlpha    = 255;
-        public Vector2 IconPosition = new(0, 3);
-        public Vector2 IconScale    = new(1);
-        
-        // 中断
-        public Vector4 InterruptedTextColor           = new(1);
-        public Vector4 InterruptedTextEdgeColor       = new(0.56f, 0.42f, 0.05f, 1);
-        public Vector4 InterruptedTextBackgroundColor = new(0);
-        public Vector2 InterruptedTextPosition        = new(0, 11);
-        public byte    InterruptedTextSize            = 18;
-        
-        // 技能名
-        public Vector4 NameTextColor           = new(1);
-        public Vector4 NameTextEdgeColor       = new(0.56f, 0.42f, 0.05f, 1);
-        public Vector4 NameTextBackgroundColor = new(0);
-        public Vector2 NameTextPosition        = new(48, 0);
-        public byte    NameTextSize            = 12;
-        
-        // 咏唱时间
-        public Vector4 CastTimeTextColor           = new(1);
-        public Vector4 CastTimeTextEdgeColor       = new(0.56f, 0.42f, 0.05f, 1);
-        public Vector4 CastTimeTextBackgroundColor = new(0);
-        public Vector2 CastTimeTextPosition        = new(130, 30);
-        public byte    CastTimeTextSize            = 20;
-        
-        public SlideCastHighlightType SlideCastHighlightType = SlideCastHighlightType.Zone;
 
-        public int SlideCastZoneAdjust = 500;
-        
+        // 发动中
+        public Vector4 CastingTextColor            = new(1);
+        public Vector4 CastingTextEdgeColor        = new(0.56f, 0.42f, 0.05f, 1);
+        public Vector2 CastingTextPosition         = new(0, 0);
+        public byte    CastingTextSize             = 12;
+        public Vector4 CastTimeTextBackgroundColor = new(0);
+
+        // 咏唱时间
+        public Vector4 CastTimeTextColor     = new(1);
+        public Vector4 CastTimeTextEdgeColor = new(0.56f, 0.42f, 0.05f, 1);
+        public Vector2 CastTimeTextPosition  = new(130, 30);
+        public byte    CastTimeTextSize      = 20;
+
+        // 图标
+        public byte    IconAlpha                      = 255;
+        public Vector2 IconPosition                   = new(0, 3);
+        public Vector2 IconScale                      = new(1);
+        public Vector4 InterruptedTextBackgroundColor = new(0);
+
+        // 中断
+        public Vector4 InterruptedTextColor     = new(1);
+        public Vector4 InterruptedTextEdgeColor = new(0.56f, 0.42f, 0.05f, 1);
+        public Vector2 InterruptedTextPosition  = new(0, 11);
+        public byte    InterruptedTextSize      = 18;
+        public Vector4 NameTextBackgroundColor  = new(0);
+
+        // 技能名
+        public Vector4 NameTextColor     = new(1);
+        public Vector4 NameTextEdgeColor = new(0.56f, 0.42f, 0.05f, 1);
+        public Vector2 NameTextPosition  = new(48, 0);
+        public byte    NameTextSize      = 12;
+
+        public SlideCastHighlightType SlideCastHighlightType = SlideCastHighlightType.Zone;
+        public int                    SlideCastLineHeight;
+
+        public int SlideCastLineWidth = 3;
+
         public Vector4 SlideCastNotReadyColor = new(0.8f, 0.3f, 0.3f, 1);
         public Vector4 SlideCastReadyColor    = new(0.3f, 0.8f, 0.3f, 1);
-        
-        public int SlideCastLineWidth = 3;
-        public int SlideCastLineHeight;
+
+        public int SlideCastZoneAdjust = 500;
     }
 
-    protected enum SlideCastHighlightType
+    private enum SlideCastHighlightType
     {
         None,
         Zone,
         Line
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<ConditionFlag> ValidFlags =
+    [
+        ConditionFlag.BetweenAreas,
+        ConditionFlag.Mounted
+    ];
+
+    #endregion
 }

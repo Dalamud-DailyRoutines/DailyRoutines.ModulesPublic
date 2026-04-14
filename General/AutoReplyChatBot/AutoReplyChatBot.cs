@@ -1,44 +1,42 @@
-using System;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Security.Authentication;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot : DailyModuleBase
+public partial class AutoReplyChatBot : ModuleBase
 {
-    private static Config ModuleConfig = null!;
-
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoReplyChatBotTitle"),
-        Description = GetLoc("AutoReplyChatBotDescription"),
-        Category    = ModuleCategories.General,
+        Title       = Lang.Get("AutoReplyChatBotTitle"),
+        Description = Lang.Get("AutoReplyChatBotDescription"),
+        Category    = ModuleCategory.General,
         Author      = ["Wotou"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
-        if (ModuleConfig.SystemPrompts is not { Count: > 0 })
+        if (config.SystemPrompts is not { Count: > 0 })
         {
-            ModuleConfig.SystemPrompts       = [new()];
-            ModuleConfig.SelectedPromptIndex = 0;
+            config.SystemPrompts       = [new()];
+            config.SelectedPromptIndex = 0;
         }
 
         foreach (var contextType in Enum.GetValues<GameContextType>())
-            ModuleConfig.GameContextSettings.TryAdd(contextType, true);
+            config.GameContextSettings.TryAdd(contextType, true);
 
-        ModuleConfig.SystemPrompts = ModuleConfig.SystemPrompts.DistinctBy(x => x.Name).ToList();
-        SaveConfig(ModuleConfig);
+        config.SystemPrompts = config.SystemPrompts.DistinctBy(x => x.Name).ToList();
+        config.Save(this);
 
         DService.Instance().Chat.ChatMessage += OnChat;
     }
@@ -51,14 +49,14 @@ public partial class AutoReplyChatBot : DailyModuleBase
         DisposeAllSessions();
     }
 
-    private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+    private void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
-        if (!ModuleConfig.ValidChatTypes.Contains(type)) return;
+        if (!config.ValidChatTypes.Contains(type)) return;
 
         var (playerName, worldID, worldName) = ExtractNameWorld(sender);
         if (string.IsNullOrEmpty(playerName) || string.IsNullOrEmpty(worldName)) return;
         if (playerName == LocalPlayerState.Name    && worldID == GameState.HomeWorld) return;
-        if (type       == XivChatType.TellIncoming && ModuleConfig.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
+        if (type       == XivChatType.TellIncoming && config.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
 
         var userText = message.TextValue;
         if (string.IsNullOrWhiteSpace(userText)) return;

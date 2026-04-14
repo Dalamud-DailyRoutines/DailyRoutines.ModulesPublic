@@ -1,59 +1,54 @@
-using System;
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Interop;
+using OmenTools.Interop.Game.Helpers;
+using OmenTools.OmenService;
 using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ScrollableTabs : DailyModuleBase
+public unsafe class ScrollableTabs : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("ScrollableTabsTitle"),
-        Description = GetLoc("ScrollableTabsDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("ScrollableTabsTitle"),
+        Description = Lang.Get("ScrollableTabsDescription"),
+        Category    = ModuleCategory.UIOptimization,
         Author      = ["Cyf5119"]
     };
+    
+    private bool IsNext =>
+        wheelState == (!config.Invert ? 1 : -1);
 
-    private const int NUM_ARMOURY_BOARD_TABS            = 12;
-    private const int NUM_INVENTORY_TABS                = 5;
-    private const int NUM_INVENTORY_LARGE_TABS          = 4;
-    private const int NUM_INVENTORY_EXPANSION_TABS      = 2;
-    private const int NUM_INVENTORY_RETAINER_TABS       = 6;
-    private const int NUM_INVENTORY_RETAINER_LARGE_TABS = 3;
-    private const int NUM_BUDDY_TABS                    = 3;
-
-    private static Config ModuleConfig = null!;
-    private static int    WheelState;
-
+    private bool IsPrev =>
+        wheelState == (!config.Invert ? -1 : 1);
+    
     private static AtkCollisionNode* IntersectingCollisionNode =>
         RaptureAtkModule.Instance()->AtkCollisionManager.IntersectingCollisionNode;
-
-    private static bool IsNext =>
-        WheelState == (!ModuleConfig.Invert ? 1 : -1);
-
-    private static bool IsPrev =>
-        WheelState == (!ModuleConfig.Invert ? -1 : 1);
-
+    
     private delegate void AddonUpdateHandler(AtkUnitBase* unitBase);
 
-    private static readonly Dictionary<string, AddonUpdateHandler> UIHandlerMapping = [];
-    private static readonly Dictionary<string, string>             UINameMapping    = [];
+    private Config config = null!;
+    private int    wheelState;
+    
+    private readonly Dictionary<string, AddonUpdateHandler> uiHandlerMapping = [];
+    private readonly Dictionary<string, string>             uiNameMapping    = [];
 
-    static ScrollableTabs()
+    public ScrollableTabs()
     {
         InitUINameMapping();
         InitUIHandlerMapping();
 
         return;
-
-        static void InitUINameMapping()
+        
+        void InitUINameMapping()
         {
             var directUseNames = new[]
             {
@@ -67,22 +62,22 @@ public unsafe class ScrollableTabs : DailyModuleBase
             };
 
             foreach (var name in directUseNames)
-                UINameMapping[name] = name;
+                uiNameMapping[name] = name;
 
             // Inventory
             foreach (var name in new[] { "InventoryGrid", "InventoryGridCrystal" })
-                UINameMapping[name] = "Inventory";
+                uiNameMapping[name] = "Inventory";
 
             // InventoryEvent
             foreach (var name in new[] { "InventoryEventGrid" })
-                UINameMapping[name] = "InventoryEvent";
+                uiNameMapping[name] = "InventoryEvent";
 
             // InventoryLarge / InventoryExpansion
-            UINameMapping["InventoryCrystalGrid"] = "InventoryLarge";
+            uiNameMapping["InventoryCrystalGrid"] = "InventoryLarge";
 
             // InventoryLarge 相关映射
             foreach (var name in new[] { "InventoryEventGrid0", "InventoryEventGrid1", "InventoryEventGrid2", "InventoryGrid0", "InventoryGrid1" })
-                UINameMapping[name] = "InventoryLarge";
+                uiNameMapping[name] = "InventoryLarge";
 
             // InventoryExpansion
             foreach (var name in new[]
@@ -90,105 +85,105 @@ public unsafe class ScrollableTabs : DailyModuleBase
                          "InventoryEventGrid0E", "InventoryEventGrid1E", "InventoryEventGrid2E", "InventoryGrid0E", "InventoryGrid1E", "InventoryGrid2E",
                          "InventoryGrid3E"
                      })
-                UINameMapping[name] = "InventoryExpansion";
+                uiNameMapping[name] = "InventoryExpansion";
 
             // InventoryRetainer
             foreach (var name in new[] { "RetainerGridCrystal", "RetainerGrid" })
-                UINameMapping[name] = "InventoryRetainer";
+                uiNameMapping[name] = "InventoryRetainer";
 
             // InventoryRetainerLarge
             foreach (var name in new[] { "RetainerCrystalGrid", "RetainerGrid0", "RetainerGrid1", "RetainerGrid2", "RetainerGrid3", "RetainerGrid4" })
-                UINameMapping[name] = "InventoryRetainerLarge";
+                uiNameMapping[name] = "InventoryRetainerLarge";
 
             // Character
             foreach (var name in new[] { "CharacterStatus", "CharacterProfile" })
-                UINameMapping[name] = "Character";
+                uiNameMapping[name] = "Character";
 
             // Buddy
             foreach (var name in new[] { "BuddyAction", "BuddySkill", "BuddyAppearance" })
-                UINameMapping[name] = "Buddy";
+                uiNameMapping[name] = "Buddy";
         }
 
-        static void InitUIHandlerMapping()
+        void InitUIHandlerMapping()
         {
-            UIHandlerMapping["ArmouryBoard"] = unitBase => UpdateArmouryBoard((AddonArmouryBoard*)unitBase);
+            uiHandlerMapping["ArmouryBoard"] = addon => UpdateArmouryBoard((AddonArmouryBoard*)addon);
 
             // Inventory
-            UIHandlerMapping["Inventory"]          = unitBase => UpdateInventory((AddonInventory*)unitBase);
-            UIHandlerMapping["InventoryEvent"]     = unitBase => UpdateInventoryEvent((AddonInventoryEvent*)unitBase);
-            UIHandlerMapping["InventoryLarge"]     = unitBase => UpdateInventoryLarge((AddonInventoryLarge*)unitBase);
-            UIHandlerMapping["InventoryExpansion"] = unitBase => UpdateInventoryExpansion((AddonInventoryExpansion*)unitBase);
+            uiHandlerMapping["Inventory"]          = addon => UpdateInventory((AddonInventory*)addon);
+            uiHandlerMapping["InventoryEvent"]     = addon => UpdateInventoryEvent((AddonInventoryEvent*)addon);
+            uiHandlerMapping["InventoryLarge"]     = addon => UpdateInventoryLarge((AddonInventoryLarge*)addon);
+            uiHandlerMapping["InventoryExpansion"] = addon => UpdateInventoryExpansion((AddonInventoryExpansion*)addon);
 
             // Retainer
-            UIHandlerMapping["InventoryRetainer"]      = unitBase => UpdateInventoryRetainer((AddonInventoryRetainer*)unitBase);
-            UIHandlerMapping["InventoryRetainerLarge"] = unitBase => UpdateInventoryRetainerLarge((AddonInventoryRetainerLarge*)unitBase);
+            uiHandlerMapping["InventoryRetainer"]      = addon => UpdateInventoryRetainer((AddonInventoryRetainer*)addon);
+            uiHandlerMapping["InventoryRetainerLarge"] = addon => UpdateInventoryRetainerLarge((AddonInventoryRetainerLarge*)addon);
 
             // NoteBook
-            UIHandlerMapping["MinionNoteBook"] = unitBase => UpdateMountMinion((AddonMinionMountBase*)unitBase);
-            UIHandlerMapping["MountNoteBook"]  = unitBase => UpdateMountMinion((AddonMinionMountBase*)unitBase);
+            uiHandlerMapping["MinionNoteBook"] = addon => UpdateMountMinion((AddonMinionMountBase*)addon);
+            uiHandlerMapping["MountNoteBook"]  = addon => UpdateMountMinion((AddonMinionMountBase*)addon);
 
             // TabController
-            UIHandlerMapping["FishGuide2"]        = unitBase => UpdateTabController(unitBase, &((AddonFishGuide2*)unitBase)->TabController);
-            UIHandlerMapping["AdventureNoteBook"] = unitBase => UpdateTabController(unitBase, &((AddonAdventureNoteBook*)unitBase)->TabController);
-            UIHandlerMapping["OrnamentNoteBook"]  = unitBase => UpdateTabController(unitBase, &((AddonOrnamentNoteBook*)unitBase)->TabController);
-            UIHandlerMapping["GSInfoCardList"]    = unitBase => UpdateTabController(unitBase, &((AddonGSInfoCardList*)unitBase)->TabController);
-            UIHandlerMapping["GSInfoEditDeck"]    = unitBase => UpdateTabController(unitBase, &((AddonGSInfoEditDeck*)unitBase)->TabController);
-            UIHandlerMapping["LovmPaletteEdit"]   = unitBase => UpdateTabController(unitBase, &((AddonLovmPaletteEdit*)unitBase)->TabController);
+            uiHandlerMapping["FishGuide2"]        = addon => UpdateTabController(addon, &((AddonFishGuide2*)addon)->TabController);
+            uiHandlerMapping["AdventureNoteBook"] = addon => UpdateTabController(addon, &((AddonAdventureNoteBook*)addon)->TabController);
+            uiHandlerMapping["OrnamentNoteBook"]  = addon => UpdateTabController(addon, &((AddonOrnamentNoteBook*)addon)->TabController);
+            uiHandlerMapping["GSInfoCardList"]    = addon => UpdateTabController(addon, &((AddonGSInfoCardList*)addon)->TabController);
+            uiHandlerMapping["GSInfoEditDeck"]    = addon => UpdateTabController(addon, &((AddonGSInfoEditDeck*)addon)->TabController);
+            uiHandlerMapping["LovmPaletteEdit"]   = addon => UpdateTabController(addon, &((AddonLovmPaletteEdit*)addon)->TabController);
 
             // 其他
-            UIHandlerMapping["AOZNotebook"]          = unitBase => UpdateAOZNotebook((AddonAOZNotebook*)unitBase);
-            UIHandlerMapping["AetherCurrent"]        = unitBase => UpdateAetherCurrent((AddonAetherCurrent*)unitBase);
-            UIHandlerMapping["FateProgress"]         = unitBase => UpdateFateProgress((AddonFateProgress*)unitBase);
-            UIHandlerMapping["MYCWarResultNotebook"] = unitBase => UpdateFieldNotes((AddonMYCWarResultNotebook*)unitBase);
-            UIHandlerMapping["MJIMinionNoteBook"]    = unitBase => UpdateMJIMinionNoteBook((AddonMJIMinionNoteBook*)unitBase);
-            UIHandlerMapping["InventoryBuddy"]       = unitBase => UpdateInventoryBuddy((AddonInventoryBuddy*)unitBase);
-            UIHandlerMapping["InventoryBuddy2"]      = unitBase => UpdateInventoryBuddy((AddonInventoryBuddy*)unitBase);
-            UIHandlerMapping["Buddy"]                = unitBase => UpdateBuddy((AddonBuddy*)unitBase);
-            UIHandlerMapping["MiragePrismPrismBox"]  = unitBase => UpdateMiragePrismPrismBox((AddonMiragePrismPrismBox*)unitBase);
+            uiHandlerMapping["AOZNotebook"]          = addon => UpdateAOZNotebook((AddonAOZNotebook*)addon);
+            uiHandlerMapping["AetherCurrent"]        = addon => UpdateAetherCurrent((AddonAetherCurrent*)addon);
+            uiHandlerMapping["FateProgress"]         = addon => UpdateFateProgress((AddonFateProgress*)addon);
+            uiHandlerMapping["MYCWarResultNotebook"] = addon => UpdateFieldNotes((AddonMYCWarResultNotebook*)addon);
+            uiHandlerMapping["MJIMinionNoteBook"]    = addon => UpdateMJIMinionNoteBook((AddonMJIMinionNoteBook*)addon);
+            uiHandlerMapping["InventoryBuddy"]       = addon => UpdateInventoryBuddy((AddonInventoryBuddy*)addon);
+            uiHandlerMapping["InventoryBuddy2"]      = addon => UpdateInventoryBuddy((AddonInventoryBuddy*)addon);
+            uiHandlerMapping["Buddy"]                = addon => UpdateBuddy((AddonBuddy*)addon);
+            uiHandlerMapping["MiragePrismPrismBox"]  = addon => UpdateMiragePrismPrismBox((AddonMiragePrismPrismBox*)addon);
 
             // Currency
-            UIHandlerMapping["Currency"] = unitBase => UpdateCurrency((AddonCurrency*)unitBase);
+            uiHandlerMapping["Currency"] = addon => UpdateCurrency((AddonCurrency*)addon);
 
             // Character
-            UIHandlerMapping["Character"]       = unitBase => UpdateCharacter((AddonCharacter*)unitBase);
-            UIHandlerMapping["CharacterClass"]  = HandleCharacterUI;
-            UIHandlerMapping["CharacterRepute"] = HandleCharacterUI;
+            uiHandlerMapping["Character"]       = addon => UpdateCharacter((AddonCharacter*)addon);
+            uiHandlerMapping["CharacterClass"]  = HandleCharacterUI;
+            uiHandlerMapping["CharacterRepute"] = HandleCharacterUI;
         }
     }
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new Config();
+        config = Config.Load(this) ?? new();
 
         FrameworkManager.Instance().Reg(OnUpdate);
     }
-
-    protected override void ConfigUI()
-    {
-        if (ImGui.Checkbox(GetLoc("ScrollableTabs-Invert"), ref ModuleConfig.Invert))
-            SaveConfig(ModuleConfig);
-    }
-
+    
     protected override void Uninit() =>
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-    private static void OnUpdate(IFramework _)
+    protected override void ConfigUI()
+    {
+        if (ImGui.Checkbox(Lang.Get("ScrollableTabs-Invert"), ref config.Invert))
+            config.Save(this);
+    }
+    
+    private void OnUpdate(IFramework _)
     {
         if (!DService.Instance().ClientState.IsLoggedIn)
             return;
 
-        WheelState = Math.Clamp(UIInputData.Instance()->CursorInputs.MouseWheel, -1, 1);
-        if (WheelState == 0)
+        wheelState = Math.Clamp(UIInputData.Instance()->CursorInputs.MouseWheel, -1, 1);
+        if (wheelState == 0)
             return;
 
-        if (ModuleConfig.Invert)
-            WheelState *= -1;
+        if (config.Invert)
+            wheelState *= -1;
 
         var hoveredUnitBase = RaptureAtkModule.Instance()->AtkCollisionManager.IntersectingAddon;
 
         if (hoveredUnitBase == null)
         {
-            WheelState = 0;
+            wheelState = 0;
             return;
         }
 
@@ -196,13 +191,13 @@ public unsafe class ScrollableTabs : DailyModuleBase
 
         if (string.IsNullOrEmpty(originalName))
         {
-            WheelState = 0;
+            wheelState = 0;
             return;
         }
 
-        if (!UINameMapping.TryGetValue(originalName, out var mappedName))
+        if (!uiNameMapping.TryGetValue(originalName, out var mappedName))
         {
-            WheelState = 0;
+            wheelState = 0;
             return;
         }
 
@@ -212,28 +207,28 @@ public unsafe class ScrollableTabs : DailyModuleBase
             itemInventryWindowSizeType == 2)
             mappedName = "InventoryExpansion";
 
-        if (!TryGetAddonByName(mappedName, out var unitBase))
+        if (!AddonHelper.TryGetByName(mappedName, out var unitBase))
         {
-            WheelState = 0;
+            wheelState = 0;
             return;
         }
 
-        if (UIHandlerMapping.TryGetValue(mappedName, out var handler))
+        if (uiHandlerMapping.TryGetValue(mappedName, out var handler))
             handler(unitBase);
 
-        WheelState = 0;
+        wheelState = 0;
     }
 
-    private static void HandleCharacterUI(AtkUnitBase* unitBase)
+    private void HandleCharacterUI(AtkUnitBase* unitBase)
     {
         var name           = unitBase->NameString;
-        var addonCharacter = name == "Character" ? (AddonCharacter*)unitBase : GetAddonByName<AddonCharacter>("Character");
+        var addonCharacter = name == "Character" ? (AddonCharacter*)unitBase : AddonHelper.GetByName<AddonCharacter>("Character");
 
         if (addonCharacter == null                             ||
             !addonCharacter->AddonControl.IsChildSetupComplete ||
             IntersectingCollisionNode == addonCharacter->PreviewController.CollisionNode)
         {
-            WheelState = 0;
+            wheelState = 0;
             return;
         }
 
@@ -251,9 +246,10 @@ public unsafe class ScrollableTabs : DailyModuleBase
         }
     }
 
-    private static int GetTabIndex(int currentTabIndex, int numTabs) => Math.Clamp(currentTabIndex + WheelState, 0, numTabs - 1);
+    private int GetTabIndex(int currentTabIndex, int numTabs) => 
+        Math.Clamp(currentTabIndex + wheelState, 0, numTabs - 1);
 
-    private static void UpdateArmouryBoard(AddonArmouryBoard* addon)
+    private void UpdateArmouryBoard(AddonArmouryBoard* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, NUM_ARMOURY_BOARD_TABS);
 
@@ -263,9 +259,9 @@ public unsafe class ScrollableTabs : DailyModuleBase
             addon->PreviousTab(0);
     }
 
-    private static void UpdateInventory(AddonInventory* addon)
+    private void UpdateInventory(AddonInventory* addon)
     {
-        if (addon->TabIndex == NUM_INVENTORY_TABS - 1 && WheelState > 0)
+        if (addon->TabIndex == NUM_INVENTORY_TABS - 1 && wheelState > 0)
         {
             var values = stackalloc AtkValue[3];
 
@@ -294,9 +290,9 @@ public unsafe class ScrollableTabs : DailyModuleBase
         }
     }
 
-    private static void UpdateInventoryEvent(AddonInventoryEvent* addon)
+    private void UpdateInventoryEvent(AddonInventoryEvent* addon)
     {
-        if (addon->TabIndex == 0 && WheelState < 0)
+        if (addon->TabIndex == 0 && wheelState < 0)
         {
             // inside Vf68, fn call before return with a2 being 2
             var values = stackalloc AtkValue[3];
@@ -334,7 +330,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         }
     }
 
-    private static void UpdateInventoryLarge(AddonInventoryLarge* addon)
+    private void UpdateInventoryLarge(AddonInventoryLarge* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, NUM_INVENTORY_LARGE_TABS);
 
@@ -344,7 +340,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab(tabIndex);
     }
 
-    private static void UpdateInventoryExpansion(AddonInventoryExpansion* addon)
+    private void UpdateInventoryExpansion(AddonInventoryExpansion* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, NUM_INVENTORY_EXPANSION_TABS);
 
@@ -354,7 +350,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab(tabIndex, false);
     }
 
-    private static void UpdateInventoryRetainer(AddonInventoryRetainer* addon)
+    private void UpdateInventoryRetainer(AddonInventoryRetainer* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, NUM_INVENTORY_RETAINER_TABS);
 
@@ -364,7 +360,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab(tabIndex);
     }
 
-    private static void UpdateInventoryRetainerLarge(AddonInventoryRetainerLarge* addon)
+    private void UpdateInventoryRetainerLarge(AddonInventoryRetainerLarge* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, NUM_INVENTORY_RETAINER_LARGE_TABS);
 
@@ -374,7 +370,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab(tabIndex);
     }
 
-    private static void UpdateTabController(AtkUnitBase* addon, TabController* tabController)
+    private void UpdateTabController(AtkUnitBase* addon, TabController* tabController)
     {
         var tabIndex = GetTabIndex(tabController->TabIndex, tabController->TabCount);
 
@@ -385,7 +381,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         tabController->CallbackFunction(tabIndex, addon);
     }
 
-    private static void UpdateAOZNotebook(AddonAOZNotebook* addon)
+    private void UpdateAOZNotebook(AddonAOZNotebook* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, addon->TabCount);
 
@@ -395,7 +391,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab(tabIndex, true);
     }
 
-    private static void UpdateAetherCurrent(AddonAetherCurrent* addon)
+    private void UpdateAetherCurrent(AddonAetherCurrent* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, addon->TabCount);
         if (addon->TabIndex == tabIndex) return;
@@ -406,7 +402,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
             addon->Tabs[i].Value->IsSelected = i == tabIndex;
     }
 
-    private static void UpdateFateProgress(AddonFateProgress* addon)
+    private void UpdateFateProgress(AddonFateProgress* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, addon->TabCount);
         if (!addon->IsLoaded || addon->TabIndex == tabIndex)
@@ -416,13 +412,13 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab(tabIndex, &atkEvent);
     }
 
-    private static void UpdateFieldNotes(AddonMYCWarResultNotebook* addon)
+    private void UpdateFieldNotes(AddonMYCWarResultNotebook* addon)
     {
         if (IntersectingCollisionNode == addon->DescriptionCollisionNode)
             return;
 
         var atkEvent   = new AtkEvent();
-        var eventParam = Math.Clamp(addon->CurrentNoteIndex % 10 + WheelState, -1, addon->MaxNoteIndex - 1);
+        var eventParam = Math.Clamp(addon->CurrentNoteIndex % 10 + wheelState, -1, addon->MaxNoteIndex - 1);
 
         if (eventParam == -1)
         {
@@ -445,29 +441,29 @@ public unsafe class ScrollableTabs : DailyModuleBase
             addon->AtkUnitBase.ReceiveEvent(AtkEventType.ButtonClick, eventParam, &atkEvent);
     }
 
-    private static void UpdateMountMinion(AddonMinionMountBase* addon)
+    private void UpdateMountMinion(AddonMinionMountBase* addon)
     {
         switch (addon->CurrentView)
         {
-            case AddonMinionMountBase.ViewType.Normal when addon->TabController.TabIndex == 0 && WheelState < 0:
+            case AddonMinionMountBase.ViewType.Normal when addon->TabController.TabIndex == 0 && wheelState < 0:
                 addon->SwitchToFavorites();
                 break;
             case AddonMinionMountBase.ViewType.Normal:
                 UpdateTabController((AtkUnitBase*)addon, &addon->TabController);
                 break;
-            case AddonMinionMountBase.ViewType.Favorites when WheelState > 0:
+            case AddonMinionMountBase.ViewType.Favorites when wheelState > 0:
                 addon->TabController.CallbackFunction(0, (AtkUnitBase*)addon);
                 break;
         }
     }
 
-    private static void UpdateMJIMinionNoteBook(AddonMJIMinionNoteBook* addon)
+    private void UpdateMJIMinionNoteBook(AddonMJIMinionNoteBook* addon)
     {
         var agent = AgentMJIMinionNoteBook.Instance();
 
         if (agent->CurrentView == AgentMJIMinionNoteBook.ViewType.Normal)
         {
-            if (addon->TabController.TabIndex == 0 && WheelState < 0)
+            if (addon->TabController.TabIndex == 0 && wheelState < 0)
             {
                 agent->CurrentView                      = AgentMJIMinionNoteBook.ViewType.Favorites;
                 agent->SelectedFavoriteMinion.TabIndex  = 0;
@@ -482,7 +478,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
                 agent->HandleCommand(0x40B);
             }
         }
-        else if (agent->CurrentView == AgentMJIMinionNoteBook.ViewType.Favorites && WheelState > 0)
+        else if (agent->CurrentView == AgentMJIMinionNoteBook.ViewType.Favorites && wheelState > 0)
         {
             agent->CurrentView                    = AgentMJIMinionNoteBook.ViewType.Normal;
             agent->SelectedNormalMinion.TabIndex  = 0;
@@ -497,7 +493,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         }
     }
 
-    private static void UpdateInventoryBuddy(AddonInventoryBuddy* addon)
+    private void UpdateInventoryBuddy(AddonInventoryBuddy* addon)
     {
         if (!PlayerState.Instance()->HasPremiumSaddlebag)
             return;
@@ -510,7 +506,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab((byte)tabIndex);
     }
 
-    private static void UpdateCurrency(AddonCurrency* addon)
+    private void UpdateCurrency(AddonCurrency* addon)
     {
         var atkStage    = AtkStage.Instance();
         var numberArray = atkStage->GetNumberArrayData(NumberArrayType.Currency);
@@ -522,7 +518,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
             enableStates[i] = addon->Tabs[i].Value != null && addon->Tabs[i].Value->IsEnabled;
 
 
-        if (WheelState > 0 && currentTab < enableStates.Length)
+        if (wheelState > 0 && currentTab < enableStates.Length)
         {
             for (var i = currentTab + 1; i < enableStates.Length; i++)
                 if (enableStates[i])
@@ -548,7 +544,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->AtkUnitBase.OnRequestedUpdate(atkStage->GetNumberArrayData(), atkStage->GetStringArrayData());
     }
 
-    private static void UpdateBuddy(AddonBuddy* addon)
+    private void UpdateBuddy(AddonBuddy* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, NUM_BUDDY_TABS);
 
@@ -565,7 +561,7 @@ public unsafe class ScrollableTabs : DailyModuleBase
         }
     }
 
-    private static void UpdateMiragePrismPrismBox(AddonMiragePrismPrismBox* addon)
+    private void UpdateMiragePrismPrismBox(AddonMiragePrismPrismBox* addon)
     {
         if (addon->JobDropdown                                   == null ||
             addon->JobDropdown->List                             == null ||
@@ -579,8 +575,8 @@ public unsafe class ScrollableTabs : DailyModuleBase
             addon->OrderDropdown->List->AtkComponentBase.OwnerNode->AtkResNode.IsVisible())
             return;
 
-        var prevButton = !ModuleConfig.Invert ? addon->PrevButton : addon->NextButton;
-        var nextButton = !ModuleConfig.Invert ? addon->NextButton : addon->PrevButton;
+        var prevButton = !config.Invert ? addon->PrevButton : addon->NextButton;
+        var nextButton = !config.Invert ? addon->NextButton : addon->PrevButton;
 
         if (prevButton == null || IsPrev && !prevButton->IsEnabled)
             return;
@@ -595,11 +591,11 @@ public unsafe class ScrollableTabs : DailyModuleBase
             return;
 
         var agent = AgentMiragePrismPrismBox.Instance();
-        agent->PageIndex += (byte)WheelState;
+        agent->PageIndex += (byte)wheelState;
         agent->UpdateItems(false, false);
     }
 
-    private static void UpdateCharacter(AddonCharacter* addon)
+    private void UpdateCharacter(AddonCharacter* addon)
     {
         var tabIndex = GetTabIndex(addon->TabIndex, addon->TabCount);
 
@@ -616,10 +612,10 @@ public unsafe class ScrollableTabs : DailyModuleBase
         }
     }
 
-    private static void UpdateCharacterClass(AddonCharacter* addonCharacter, AddonCharacterClass* addon)
+    private void UpdateCharacterClass(AddonCharacter* addonCharacter, AddonCharacterClass* addon)
     {
         // prev or next embedded addon
-        if (addon->TabIndex + WheelState < 0 || addon->TabIndex + WheelState > 1)
+        if (addon->TabIndex + wheelState < 0 || addon->TabIndex + wheelState > 1)
         {
             UpdateCharacter(addonCharacter);
             return;
@@ -633,10 +629,10 @@ public unsafe class ScrollableTabs : DailyModuleBase
         addon->SetTab(tabIndex);
     }
 
-    private static void UpdateCharacterRepute(AddonCharacter* addonCharacter, AddonCharacterRepute* addon)
+    private void UpdateCharacterRepute(AddonCharacter* addonCharacter, AddonCharacterRepute* addon)
     {
         // prev embedded addon
-        if (addon->SelectedExpansion + WheelState < 0)
+        if (addon->SelectedExpansion + wheelState < 0)
         {
             UpdateCharacter(addonCharacter);
             return;
@@ -652,9 +648,21 @@ public unsafe class ScrollableTabs : DailyModuleBase
         data.ListItemData.SelectedIndex = tabIndex; // technically the index of an id array, but it's literally the same value
         addon->AtkUnitBase.ReceiveEvent((AtkEventType)37, 0, &atkEvent, &data);
     }
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public bool Invert = true;
     }
+    
+    #region 常量
+
+    private const int NUM_ARMOURY_BOARD_TABS            = 12;
+    private const int NUM_INVENTORY_TABS                = 5;
+    private const int NUM_INVENTORY_LARGE_TABS          = 4;
+    private const int NUM_INVENTORY_EXPANSION_TABS      = 2;
+    private const int NUM_INVENTORY_RETAINER_TABS       = 6;
+    private const int NUM_INVENTORY_RETAINER_LARGE_TABS = 3;
+    private const int NUM_BUDDY_TABS                    = 3;
+
+    #endregion
 }

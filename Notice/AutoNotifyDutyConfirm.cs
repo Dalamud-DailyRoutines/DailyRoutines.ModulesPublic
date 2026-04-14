@@ -1,24 +1,31 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyDutyConfirm : DailyModuleBase
+public class AutoNotifyDutyConfirm : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyDutyConfirmTitle"),
-        Description = GetLoc("AutoNotifyDutyConfirmDescription"),
-        Category    = ModuleCategories.Notice,
+        Title       = Lang.Get("AutoNotifyDutyConfirmTitle"),
+        Description = Lang.Get("AutoNotifyDutyConfirmDescription"),
+        Category    = ModuleCategory.Notice
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    protected override void Init() => 
+
+    protected override void Init() =>
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ContentsFinderConfirm", OnAddonSetup);
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
     private static unsafe void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
@@ -28,11 +35,8 @@ public class AutoNotifyDutyConfirm : DailyModuleBase
         var dutyName = MemoryHelper.ReadStringNullTerminated((nint)addon->AtkValues[1].String.Value);
         if (string.IsNullOrWhiteSpace(dutyName)) return;
 
-        var loc = GetLoc("AutoNotifyDutyConfirm-NoticeMessage", dutyName);
-        NotificationInfo(loc);
-        Speak(loc);
+        var loc = Lang.Get("AutoNotifyDutyConfirm-NoticeMessage", dutyName);
+        NotifyHelper.Instance().NotificationInfo(loc);
+        NotifyHelper.Speak(loc);
     }
-
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

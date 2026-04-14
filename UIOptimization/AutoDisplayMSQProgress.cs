@@ -1,21 +1,24 @@
-using System.Linq;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayMSQProgress : DailyModuleBase
+public unsafe class AutoDisplayMSQProgress : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDisplayMSQProgressTitle"),
-        Description = GetLoc("AutoDisplayMSQProgressDescription"),
-        Category    = ModuleCategories.UIOptimization
+        Title       = Lang.Get("AutoDisplayMSQProgressTitle"),
+        Description = Lang.Get("AutoDisplayMSQProgressDescription"),
+        Category    = ModuleCategory.UIOptimization
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
@@ -32,7 +35,7 @@ public unsafe class AutoDisplayMSQProgress : DailyModuleBase
 
     private static void OnAddon(AddonEvent type, AddonArgs args)
     {
-        if (!Throttler.Throttle("ScenarioTree", 1_000)) return;
+        if (!Throttler.Shared.Throttle("ScenarioTree", 1_000)) return;
 
         var addon = ScenarioTreeAddon;
         if (!addon->IsAddonAndNodesReady()) return;

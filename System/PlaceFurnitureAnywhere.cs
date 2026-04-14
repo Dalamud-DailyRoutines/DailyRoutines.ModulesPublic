@@ -1,76 +1,84 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Common.Component.BGCollision;
+using OmenTools.Interop.Game;
+using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class PlaceFurnitureAnywhere : DailyModuleBase
+public unsafe class PlaceFurnitureAnywhere : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("PlaceFurnitureAnywhereTitle"),
-        Description = GetLoc("PlaceFurnitureAnywhereDescription"),
-        Category    = ModuleCategories.System
+        Title       = Lang.Get("PlaceFurnitureAnywhereTitle"),
+        Description = Lang.Get("PlaceFurnitureAnywhereDescription"),
+        Category    = ModuleCategory.System
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static MemoryPatch? Patch0;
-    private static MemoryPatch? Patch1;
-    private static MemoryPatch? Patch2;
-
-    private static readonly CompSig RaycastFilterSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 41");
+    
+    private static readonly CompSig                      RaycastFilterSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 41");
     [return: MarshalAs(UnmanagedType.U1)]
-    private delegate bool RaycastFilterDelegate(
+    private delegate bool RaycastFilterDelegate
+    (
         BGCollisionModule* module,
         RaycastHit*        hitInfo,
         Vector3*           origin,
         Vector3*           direction,
         float              maxDistance,
         int                layerMask,
-        int*               flags);
-    private static Hook<RaycastFilterDelegate>? RaycastFilterHook;
+        int*               flags
+    );
+    private                 Hook<RaycastFilterDelegate>? RaycastFilterHook;
+    
+    private MemoryPatch? patch0;
+    private MemoryPatch? patch1;
+    private MemoryPatch? patch2;
 
     protected override void Init()
     {
         var baseAddress0 = DService.Instance().SigScanner.ScanText("C6 ?? ?? ?? 00 00 00 8B FE 48 89") + 6;
-        Patch0 = new(baseAddress0, [0x1]);
-        Patch0.Enable();
-        
+        patch0 = new(baseAddress0, [0x1]);
+        patch0.Enable();
+
         var baseAddress1 = DService.Instance().SigScanner.ScanText("48 85 C0 74 ?? C6 87 ?? ?? 00 00 00") + 11;
-        Patch1 = new(baseAddress1, [0x1]);
-        Patch1.Enable();
-        
+        patch1 = new(baseAddress1, [0x1]);
+        patch1.Enable();
+
         var baseAddress2 = DService.Instance().SigScanner.ScanText("C6 87 83 01 00 00 00 48 83 C4 ??") + 6;
-        Patch2 = new(baseAddress2, [0x1]);
-        Patch2.Enable();
+        patch2 = new(baseAddress2, [0x1]);
+        patch2.Enable();
 
         RaycastFilterHook ??= RaycastFilterSig.GetHook<RaycastFilterDelegate>(RaycastFilterDetour);
         RaycastFilterHook.Enable();
     }
+    
+    protected override void Uninit()
+    {
+        patch0?.Disable();
+        patch1?.Disable();
+        patch2?.Disable();
+    }
 
-    private static bool RaycastFilterDetour(
+    private bool RaycastFilterDetour
+    (
         BGCollisionModule* module,
         RaycastHit*        hitInfo,
         Vector3*           origin,
         Vector3*           direction,
         float              maxDistance,
         int                layerMask,
-        int*               flags)
+        int*               flags
+    )
     {
         if (!DService.Instance().Condition[ConditionFlag.UsingHousingFunctions])
             return RaycastFilterHook.Original(module, hitInfo, origin, direction, maxDistance, layerMask, flags);
 
         return false;
-    }
-
-    protected override void Uninit()
-    {
-        Patch0?.Disable();
-        Patch1?.Disable();
-        Patch2?.Disable();
     }
 }

@@ -1,33 +1,41 @@
-using System;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoHummer : DailyModuleBase
+public class AutoHummer : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoCTSTitle"),
-        Description = GetLoc("AutoCTSDescription"),
-        Category    = ModuleCategories.GoldSaucer,
+        Title       = Lang.Get("AutoCTSTitle"),
+        Description = Lang.Get("AutoCTSDescription"),
+        Category    = ModuleCategory.GoldSaucer
     };
 
     protected override void Init()
     {
-        TaskHelper ??= new() { TimeoutMS = 10000 };
+        TaskHelper ??= new();
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "Hummer", OnAddonSetup);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
-    protected override void ConfigUI() => ConflictKeyText();
+    protected override void ConfigUI() => ImGuiOm.ConflictKeyText();
 
     private void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return;
+        if (TaskHelper.AbortByConflictKey(this)) return;
 
         TaskHelper.Enqueue(WaitSelectStringAddon);
         TaskHelper.Enqueue(ClickGameButton);
@@ -35,13 +43,13 @@ public class AutoHummer : DailyModuleBase
 
     private bool WaitSelectStringAddon()
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
-        return ClickSelectString(0);
+        if (TaskHelper.AbortByConflictKey(this)) return true;
+        return AddonSelectStringEvent.Select(0);
     }
 
     private unsafe bool ClickGameButton()
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
+        if (TaskHelper.AbortByConflictKey(this)) return true;
 
         if (!Hummer->IsAddonAndNodesReady())
             return false;
@@ -61,13 +69,16 @@ public class AutoHummer : DailyModuleBase
 
     private unsafe bool StartAnotherRound()
     {
-        if (InterruptByConflictKey(TaskHelper, this)) return true;
-        if (OccupiedInEvent) return false;
-        
+        if (TaskHelper.AbortByConflictKey(this)) return true;
+        if (DService.Instance().Condition.IsOccupiedInEvent) return false;
+
         var machineTarget = TargetManager.PreviousTarget;
         var machine =
-            machineTarget.Name.TextValue.Contains(LuminaGetter.GetRow<EObjName>(2005035)!.Value.Singular.ToString(),
-                                                      StringComparison.OrdinalIgnoreCase)
+            machineTarget.Name.TextValue.Contains
+            (
+                LuminaGetter.GetRow<EObjName>(2005035)!.Value.Singular.ToString(),
+                StringComparison.OrdinalIgnoreCase
+            )
                 ? (GameObject*)machineTarget.Address
                 : null;
 
@@ -79,7 +90,4 @@ public class AutoHummer : DailyModuleBase
 
         return false;
     }
-
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 }

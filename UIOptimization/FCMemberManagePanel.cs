@@ -1,74 +1,76 @@
-using DailyRoutines.Abstracts;
+using System.Runtime.InteropServices;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Textures;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
+using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.Interop.Game.Helpers;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
+using OmenTools.Threading;
+using OmenTools.Threading.TaskHelper;
 using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FCMemberManagePanel : DailyModuleBase
+public unsafe class FCMemberManagePanel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("FCMemberManagePanelTitle"),
-        Description = GetLoc("FCMemberManagePanelDescription"),
-        Category = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("FCMemberManagePanelTitle"),
+        Description = Lang.Get("FCMemberManagePanelDescription"),
+        Category    = ModuleCategory.UIOptimization
     };
-
-    private static TaskHelper? ContextTaskHelper;
-    
-    private static readonly Throttler<string> Throttler = new();
-
-    private static readonly Dictionary<ulong, FreeCompanyMemberInfo> CharacterDataDict = [];
-    private static          List<FreeCompanyMemberInfo>              CharacterDataDisplay => FilterAndSortCharacterData();
-    private static readonly HashSet<FreeCompanyMemberInfo>           SelectedMembers      = [];
 
     private static readonly CompSig AgentFCReceiveEventInternalSig =
         new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 41 56 48 83 EC ?? 48 8B F1 48 8B DA");
     private delegate nint AgentFCReceiveEventInternalDelegate(AgentFreeCompany* agent, nint a2);
-    private static AgentFCReceiveEventInternalDelegate? AgentFCReceiveEventInternal;
+    private static   AgentFCReceiveEventInternalDelegate? AgentFCReceiveEventInternal;
 
+    // TODO: 等待 FFCS 更新 AgentFreeCompany.OpenContextMenuForMember
     private static readonly CompSig OpenFCMemberContextMenuSig = new("E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 48 8D 4F 10 E8 ?? ?? ?? ?? 44 8B 43 20");
-    private delegate void OpenFCMemberContextMenuDelegate(AgentFreeCompany* agent, ushort index);
-    private static OpenFCMemberContextMenuDelegate? OpenFCMemberContextMenu;
+    private delegate        void    OpenFCMemberContextMenuDelegate(AgentFreeCompany* agent, ushort index);
+    private static          OpenFCMemberContextMenuDelegate? OpenFCMemberContextMenu;
     
-    private static uint FCTotalMembersCount;
-    private static int  CurrentFCMemberPage;
-    
-    private static bool   IsReverse;
-    private static string FilterMemberName = string.Empty;
+    private readonly Dictionary<ulong, FreeCompanyMemberInfo> characterDataDict = [];
+    private readonly HashSet<FreeCompanyMemberInfo>           selectedMembers   = [];
+
+    private uint fcTotalMembersCount;
+    private int  currentFCMemberPage;
+
+    private bool   isReverse;
+    private string filterMemberName = string.Empty;
+
+    private List<FreeCompanyMemberInfo> characterDataDisplay = [];
 
     protected override void Init()
     {
-        ContextTaskHelper ??= new() { TimeoutMS = 3000 };
+        TaskHelper ??= new() { TimeoutMS = 3000 };
 
         OpenFCMemberContextMenu ??=
             Marshal.GetDelegateForFunctionPointer<OpenFCMemberContextMenuDelegate>(OpenFCMemberContextMenuSig.ScanText());
 
-        AgentFCReceiveEventInternal ??= 
+        AgentFCReceiveEventInternal ??=
             Marshal.GetDelegateForFunctionPointer<AgentFCReceiveEventInternalDelegate>(AgentFCReceiveEventInternalSig.ScanText());
-        
-        Overlay       ??= new(this);
-        Overlay.Flags &=  ~ImGuiWindowFlags.NoTitleBar;
-        Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
-        Overlay.Flags &=  ~ImGuiWindowFlags.NoResize;
-        Overlay.WindowName = Lang.Get("FCMemberManagePanelTitle");
-        
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "FreeCompanyMember", OnAddonMember);
+
+        Overlay            ??= new(this);
+        Overlay.Flags      &=  ~ImGuiWindowFlags.NoTitleBar;
+        Overlay.Flags      &=  ~ImGuiWindowFlags.AlwaysAutoResize;
+        Overlay.Flags      &=  ~ImGuiWindowFlags.NoResize;
+        Overlay.WindowName =   Lang.Get("FCMemberManagePanelTitle");
+
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "FreeCompanyMember", OnAddonMember);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "FreeCompanyMember", OnAddonMember);
-        if (FreeCompanyMember != null && FreeCompanyMember->IsAddonAndNodesReady()) 
+        if (FreeCompanyMember != null && FreeCompanyMember->IsAddonAndNodesReady())
             OnAddonMember(AddonEvent.PostSetup, null);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonYesno);
     }
@@ -78,41 +80,40 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonMember);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonYesno);
 
-        ContextTaskHelper?.Abort();
-        ContextTaskHelper = null;
-        
         ResetAllExistedData();
     }
 
     protected override void OverlayPreDraw()
     {
         if (!DService.Instance().ClientState.IsLoggedIn) return;
-        
-        if (FCTotalMembersCount == 0 && Throttler.Throttle("GetFCTotalMembersCount", 1_000))
+
+        if (fcTotalMembersCount == 0 && Throttler.Shared.Throttle("FCMemberManagePanel-GetFCTotalMembersCount", 1_000))
         {
             var instance = InfoProxyFreeCompany.Instance();
             instance->RequestData();
-            FCTotalMembersCount = instance->TotalMembers;
+            fcTotalMembersCount = instance->TotalMembers;
         }
 
-        if (FCTotalMembersCount != 0 && Throttler.Throttle("SubstituteFCMembersData", 1_000))
+        if (fcTotalMembersCount != 0 && Throttler.Shared.Throttle("FCMemberManagePanel-SubstituteFCMembersData", 1_000))
         {
             var agent          = AgentFreeCompany.Instance();
             var memberInstance = agent->InfoProxyFreeCompanyMember;
 
-            CurrentFCMemberPage = agent->CurrentMemberPageIndex;
-            
-            if (Throttler.Throttle("Re-RequestMembersInfo", 3_000))
+            currentFCMemberPage = agent->CurrentMemberPageIndex;
+
+            if (Throttler.Shared.Throttle("FCMemberManagePanel-RerequestMembersInfo", 3_000))
             {
                 var source = memberInstance->CharDataSpan;
+
                 for (var i = 0; i < source.Length; i++)
                 {
                     var newData = FreeCompanyMemberInfo.Parse(source[i], i);
                     if (string.IsNullOrWhiteSpace(newData.Name)) continue;
-                    
-                    if (CharacterDataDict.TryGetValue(newData.ContentID, out var existingData))
+
+                    if (characterDataDict.TryGetValue(newData.ContentID, out var existingData))
                     {
                         var changes = existingData.UpdateFrom(newData);
+
                         if (changes != FreeCompanyMemberInfo.ChangeFlags.None)
                         {
                             existingData.Index        = newData.Index;
@@ -124,8 +125,10 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
                         }
                     }
                     else
-                        CharacterDataDict[newData.ContentID] = newData;
+                        characterDataDict[newData.ContentID] = newData;
                 }
+
+                characterDataDisplay = FilterAndSortCharacterData();
             }
         }
     }
@@ -134,114 +137,136 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
     {
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("FCMemberManagePanel-CurrentPage")}:");
-        
-        var pageAmount = ((int)FCTotalMembersCount + 199) / 200;
+
+        var pageAmount = ((int)fcTotalMembersCount + 199) / 200;
+
         for (var i = 0; i < pageAmount; i++)
         {
             ImGui.SameLine();
-            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.TankBlue, i == CurrentFCMemberPage))
+
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.TankBlue, i == currentFCMemberPage))
             {
-                using (ImRaii.Disabled(i == CurrentFCMemberPage))
+                using (ImRaii.Disabled(i == currentFCMemberPage))
                 {
                     if (ImGui.Button(Lang.Get("FCMemberManagePanel-PageDisplay", i + 1)))
                         SwitchFreeCompanyMemberListPage(i);
                 }
             }
         }
-        
+
         var       tableSize = ImGui.GetContentRegionAvail() with { Y = 0 };
         using var table     = ImRaii.Table("FCMembersTable", 5, ImGuiTableFlags.Borders, tableSize);
         if (!table) return;
-        
-        ImGui.TableSetupColumn("序号", ImGuiTableColumnFlags.WidthFixed,   ImGui.GetTextLineHeightWithSpacing());
-        ImGui.TableSetupColumn("名称", ImGuiTableColumnFlags.WidthStretch, 30);
-        ImGui.TableSetupColumn("职业", ImGuiTableColumnFlags.WidthFixed,   ImGui.CalcTextSize("测试测试测").X);
-        ImGui.TableSetupColumn("位置", ImGuiTableColumnFlags.WidthStretch, 25);
-        ImGui.TableSetupColumn("勾选框", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeight());
+
+        ImGui.TableSetupColumn("序号",  ImGuiTableColumnFlags.WidthFixed,   ImGui.GetTextLineHeightWithSpacing());
+        ImGui.TableSetupColumn("名称",  ImGuiTableColumnFlags.WidthStretch, 30);
+        ImGui.TableSetupColumn("职业",  ImGuiTableColumnFlags.WidthFixed,   ImGui.CalcTextSize("测试测试测").X);
+        ImGui.TableSetupColumn("位置",  ImGuiTableColumnFlags.WidthStretch, 25);
+        ImGui.TableSetupColumn("勾选框", ImGuiTableColumnFlags.WidthFixed,   ImGui.GetTextLineHeight());
 
         if (GameState.IsCN || GameState.IsTC)
             ImGui.TableSetColumnEnabled(5, false);
-        
+
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         DrawHeaderRow();
-        
-        foreach (var data in CharacterDataDisplay)
+
+        foreach (var data in characterDataDisplay)
         {
             using var id       = ImRaii.PushId(data.ContentID.ToString());
-            var       selected = SelectedMembers.Contains(data);
-            
+            var       selected = selectedMembers.Contains(data);
+
             ImGui.TableNextRow();
-            
+
             ImGui.TableNextColumn();
+
             if (ImGui.Selectable($"{data.Index}", selected, ImGuiSelectableFlags.SpanAllColumns))
             {
-                if (!SelectedMembers.Remove(data)) 
-                    SelectedMembers.Add(data);
+                if (!selectedMembers.Remove(data))
+                    selectedMembers.Add(data);
             }
-            
+
             DrawSingleContextMenu(data);
-            
+
             ImGui.TableNextColumn();
             LuminaGetter.TryGetRow<OnlineStatus>(data.OnlineStatus, out var onlineStatusRow);
+
             if (data.OnlineStatus != 0)
             {
-                var onlineStatusIcon  = DService.Instance().Texture.GetFromGameIcon(new(onlineStatusRow.Icon)).GetWrapOrDefault();
+                var onlineStatusIcon = DService.Instance().Texture.GetFromGameIcon(new(onlineStatusRow.Icon)).GetWrapOrDefault();
+
                 if (onlineStatusIcon != null)
                 {
                     var origPosY = ImGui.GetCursorPosY();
-                    ImGui.SetCursorPosY(origPosY + (2f * GlobalFontScale));
+                    ImGui.SetCursorPosY(origPosY + 2f * GlobalUIScale);
                     ImGui.Image(onlineStatusIcon.Handle, new(ImGui.GetTextLineHeight()));
                     ImGui.SetCursorPosY(origPosY);
                     ImGui.SameLine();
                 }
             }
+
             ImGui.TextUnformatted($"{data.Name}");
-            
+
             ImGui.TableNextColumn();
+
             if (data.JobIcon != null)
             {
                 var origPosY = ImGui.GetCursorPosY();
-                ImGui.SetCursorPosY(origPosY + (2f * GlobalFontScale));
+                ImGui.SetCursorPosY(origPosY + 2f * GlobalUIScale);
                 ImGui.Image(data.JobIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
                 ImGui.SetCursorPosY(origPosY);
                 ImGui.SameLine();
             }
+
             ImGui.TextUnformatted(data.Job);
-            
+
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(data.Location);
-            
+
             ImGui.TableNextColumn();
             using (ImRaii.Disabled())
                 ImGui.Checkbox($"{data.ContentID}_Checkbox", ref selected);
         }
     }
 
-    private static void DrawHeaderRow()
+    private void DrawHeaderRow()
     {
         ImGui.TableNextColumn();
-        var arrowButton = IsReverse
+        var arrowButton = isReverse
                               ? ImGui.Button(FontAwesomeIcon.ArrowUp.ToIconString())
                               : ImGui.Button(FontAwesomeIcon.ArrowDown.ToIconString());
         if (arrowButton)
-            IsReverse ^= true;
-        
+        {
+            isReverse            ^= true;
+            characterDataDisplay =  FilterAndSortCharacterData();
+        }
+
         ImGui.TableNextColumn();
         ImGui.Selectable(Lang.Get("Name"));
-        if (ImGui.BeginPopupContextItem("NameSearch_Popup"))
+
+        using (var context = ImRaii.ContextPopupItem("NameSearch_Popup"))
         {
-            ImGui.SetNextItemWidth(200f * GlobalFontScale);
-            ImGui.InputTextWithHint("###NameSearchInput", Lang.Get("PleaseSearch"), 
-                                    ref FilterMemberName, 128);
-            ImGui.EndPopup();
+            if (context)
+            {
+                ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                ImGui.InputTextWithHint
+                (
+                    "###NameSearchInput",
+                    Lang.Get("PleaseSearch"),
+                    ref filterMemberName,
+                    128
+                );
+
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    characterDataDisplay = FilterAndSortCharacterData();
+            }
         }
-        
+
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("Job"));
-        
+
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-PositionLastTime"));
-        
+
         ImGui.TableNextColumn();
         if (ImGuiOm.ButtonIcon("OpenMultiPopup", FontAwesomeIcon.EllipsisH, string.Empty, true))
             ImGui.OpenPopup("Multi_Popup");
@@ -249,110 +274,98 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
         DrawMultiContextMenu();
     }
     
-    private static List<FreeCompanyMemberInfo> FilterAndSortCharacterData()
-    {
-        var filteredList = string.IsNullOrWhiteSpace(FilterMemberName)
-                               ? CharacterDataDict.Values.ToList()
-                               : CharacterDataDict.Values
-                                                  .Where(member => member.Name.Contains(FilterMemberName, StringComparison.OrdinalIgnoreCase))
-                                                  .ToList();
-
-        filteredList.Sort((a, b) =>
-        {
-            var comparison = a.Index.CompareTo(b.Index);
-            return IsReverse ? -comparison : comparison;
-        });
-
-        return filteredList;
-    }
-    
     // 不能用 ImRaii - 会导致延迟执行产生的数据错误
-    private static void DrawSingleContextMenu(FreeCompanyMemberInfo data)
+    private void DrawSingleContextMenu(FreeCompanyMemberInfo data)
     {
         if (ImGui.BeginPopupContextItem($"{data.ContentID}_Popup"))
         {
             ImGui.TextUnformatted($"{data.Name}");
-        
+
             ImGui.Separator();
             ImGui.Spacing();
-        
+
             // 冒险者铭牌
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString());
-        
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(15083));
+
             // 个人信息
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString());
-        
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(51));
+
             // 部队信息
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString());
-            
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2807));
+
             // 任命
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString());
-            
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2656)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2656));
+
             // 除名
-            if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString()))
-                OpenContextMenuAndClick(data.Index, LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString());
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
+                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2801));
 
             ImGui.EndPopup();
         }
     }
-    
-    private static void DrawMultiContextMenu()
+
+    private void DrawMultiContextMenu()
     {
         if (ImGui.BeginPopupContextItem("Multi_Popup"))
         {
-            ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-SelectedMembers", SelectedMembers.Count));
-        
+            ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-SelectedMembers", selectedMembers.Count));
+
             ImGui.Separator();
             ImGui.Spacing();
-            
-            using (ImRaii.Disabled(SelectedMembers.Count == 0))
+
+            using (ImRaii.Disabled(selectedMembers.Count == 0))
             {
                 // 清除已选
                 if (ImGui.MenuItem(Lang.Get("Clear")))
-                    SelectedMembers.Clear();
-                
+                    selectedMembers.Clear();
+
                 // 冒险者铭牌
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(15083)!.Value.Text.ToString());
-        
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(15083));
+
                 // 个人信息
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(51)!.Value.Text.ToString(), "SocialDetailB");
-        
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(51), "SocialDetailB");
+
                 // 部队信息
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(2807)!.Value.Text.ToString());
-            
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(2807));
+
                 // 任命
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString()))
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(2656)!.Value.Text.ToString());
-            
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2656)))
+                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(2656));
+
                 // 除名
-                if (ImGui.MenuItem(LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString()))
+                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
                 {
-                    EnqueueContentMenuClicks(SelectedMembers, LuminaGetter.GetRow<Addon>(2801)!.Value.Text.ToString(), "SelectYesno",
-                                             () =>
-                                             {
-                                                 ContextTaskHelper.Enqueue(() => ClickSelectYesnoYes(), weight: 1);
-                                                 return true;
-                                             });
+                    EnqueueContentMenuClicks
+                    (
+                        selectedMembers,
+                        LuminaWrapper.GetAddonText(2801),
+                        "SelectYesno",
+                        () =>
+                        {
+                            TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes(), weight: 1);
+                            return true;
+                        }
+                    );
                 }
             }
 
             ImGui.EndPopup();
         }
     }
-    
+
     private void OnAddonMember(AddonEvent type, AddonArgs? args)
     {
         Overlay.IsOpen = type switch
         {
-            AddonEvent.PostSetup   => true,
-            _                      => Overlay.IsOpen
+            AddonEvent.PostSetup => true,
+            _                    => Overlay.IsOpen
         };
 
         switch (type)
@@ -367,52 +380,65 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
         }
     }
 
-    private static void OnAddonYesno(AddonEvent type, AddonArgs args)
+    private void OnAddonYesno(AddonEvent type, AddonArgs args)
     {
-        if (!ContextTaskHelper.IsBusy || args.Addon == nint.Zero) return;
+        if (!TaskHelper.IsBusy || args.Addon == nint.Zero) return;
 
         var addon = args.Addon.ToStruct();
         addon->Callback(0);
     }
 
-    private static void EnqueueContentMenuClicks(
-        IEnumerable<FreeCompanyMemberInfo> datas, string text, string? waitAddon = null, Func<bool>? extraAction = null)
+    private void EnqueueContentMenuClicks
+    (
+        IEnumerable<FreeCompanyMemberInfo> datas,
+        string                             text,
+        string?                            waitAddon   = null,
+        Func<bool>?                        extraAction = null
+    )
     {
-        ContextTaskHelper.Abort();
+        TaskHelper.Abort();
+
         foreach (var data in datas)
         {
-            ContextTaskHelper.Enqueue(() => OpenContextMenuAndClick(data.Index, text));
+            TaskHelper.Enqueue(() => OpenContextMenuAndClick(data.Index, text));
             if (waitAddon != null)
-                ContextTaskHelper.Enqueue(() => TryGetAddonByName<AtkUnitBase>(waitAddon, out var addon) && addon->IsAddonAndNodesReady());
-            
+                TaskHelper.Enqueue(() => AddonHelper.TryGetByName<AtkUnitBase>(waitAddon, out var addon) && addon->IsAddonAndNodesReady());
+
             if (extraAction != null)
-                ContextTaskHelper.Enqueue(extraAction);
-            
-            ContextTaskHelper.DelayNext(500);
+                TaskHelper.Enqueue(extraAction);
+
+            TaskHelper.DelayNext(500);
         }
     }
 
-    private static void OpenContextMenuAndClick(int dataIndex, string menuText)
+    private void OpenContextMenuAndClick(int dataIndex, string menuText)
     {
         OpenContextMenuByIndex(dataIndex);
-        ContextTaskHelper.Enqueue(() =>
-        {
-            if (ContextMenuAddon == null || !ContextMenuAddon->IsAddonAndNodesReady()) return false;
-            
-            if (!ClickContextMenu(menuText))
+        TaskHelper.Enqueue
+        (
+            () =>
             {
-                ContextMenuAddon->Close(true);
-                NotificationError(
-                    $"{Lang.Get("FCMemberManagePanel-ContextMenuItemNoFound")}: {menuText}");
-            }
-            return true;
-        }, weight: 2);
-    }
-    
-    private static void OpenContextMenuByIndex(int dataIndex) 
-        => OpenFCMemberContextMenu(AgentFreeCompany.Instance(), (ushort)dataIndex);
+                if (ContextMenuAddon == null || !ContextMenuAddon->IsAddonAndNodesReady()) return false;
 
-    private static void SwitchFreeCompanyMemberListPage(int page)
+                if (!AddonContextMenuEvent.Select(menuText))
+                {
+                    ContextMenuAddon->Close(true);
+                    NotifyHelper.Instance().NotificationError
+                    (
+                        $"{Lang.Get("FCMemberManagePanel-ContextMenuItemNoFound")}: {menuText}"
+                    );
+                }
+
+                return true;
+            },
+            weight: 2
+        );
+    }
+
+    private static void OpenContextMenuByIndex(int dataIndex) => 
+        OpenFCMemberContextMenu(AgentFreeCompany.Instance(), (ushort)dataIndex);
+
+    private void SwitchFreeCompanyMemberListPage(int page)
     {
         var memoryBlock = Marshal.AllocHGlobal(32);
         var agent       = AgentFreeCompany.Instance();
@@ -422,11 +448,11 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
             var value1 = (AtkValue*)memoryBlock;
             value1->Type = ValueType.Int;
             value1->SetInt(1);
-            
+
             var value2 = (AtkValue*)(memoryBlock + 16);
-            value2->Type  = ValueType.UInt;
+            value2->Type = ValueType.UInt;
             value2->SetUInt((uint)page);
-            
+
             AgentFCReceiveEventInternal(agent, memoryBlock);
         }
         finally
@@ -434,34 +460,46 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
             Marshal.FreeHGlobal(memoryBlock);
         }
 
-        CharacterDataDict.Clear();
-        SelectedMembers.Clear();
-        Throttler.Clear();
+        characterDataDict.Clear();
+        selectedMembers.Clear();
     }
 
-    private static void ResetAllExistedData()
+    private void ResetAllExistedData()
     {
         var agent = AgentFreeCompany.Instance();
         if (agent == null) return;
+        
         var info = agent->InfoProxyFreeCompanyMember;
         if (info == null) return;
-        info->ClearData();
         
-        CharacterDataDict.Clear();
-        SelectedMembers.Clear();
-        Throttler.Clear();
+        info->ClearData();
+
+        characterDataDict.Clear();
+        selectedMembers.Clear();
+    }
+    
+    private List<FreeCompanyMemberInfo> FilterAndSortCharacterData()
+    {
+        var filteredList = string.IsNullOrWhiteSpace(filterMemberName)
+                               ? characterDataDict.Values.ToList()
+                               : characterDataDict.Values
+                                                  .Where(member => member.Name.Contains(filterMemberName, StringComparison.OrdinalIgnoreCase))
+                                                  .ToList();
+
+        filteredList.Sort
+        ((a, b) =>
+            {
+                var comparison = a.Index.CompareTo(b.Index);
+                return isReverse ? -comparison : comparison;
+            }
+        );
+
+        return filteredList;
     }
 
-    public class FreeCompanyMemberInfo : IEquatable<FreeCompanyMemberInfo>, IComparable<FreeCompanyMemberInfo>
+
+    private class FreeCompanyMemberInfo : IEquatable<FreeCompanyMemberInfo>, IComparable<FreeCompanyMemberInfo>
     {
-        public ulong                    ContentID    { get; set; }
-        public int                      Index        { get; set; }
-        public uint                     OnlineStatus { get; set; }
-        public string                   Name         { get; set; }
-        public ISharedImmediateTexture? JobIcon      { get; set; }
-        public string                   Job          { get; set; }
-        public string                   Location     { get; set; }
-        
         [Flags]
         public enum ChangeFlags
         {
@@ -474,6 +512,20 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
             Location     = 1 << 5
         }
 
+        public ulong                    ContentID    { get; set; }
+        public int                      Index        { get; set; }
+        public uint                     OnlineStatus { get; set; }
+        public string                   Name         { get; set; }
+        public ISharedImmediateTexture? JobIcon      { get; set; }
+        public string                   Job          { get; set; }
+        public string                   Location     { get; set; }
+
+        public int CompareTo(FreeCompanyMemberInfo? other)
+            => other is null ? 1 : Index.CompareTo(other.Index);
+
+        public bool Equals(FreeCompanyMemberInfo? other)
+            => other is not null && ContentID == other.ContentID;
+
         public ChangeFlags UpdateFrom(FreeCompanyMemberInfo other)
         {
             var changes = ChangeFlags.None;
@@ -483,26 +535,31 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
                 Index   =  other.Index;
                 changes |= ChangeFlags.Index;
             }
+
             if (OnlineStatus != other.OnlineStatus)
             {
                 OnlineStatus =  other.OnlineStatus;
                 changes      |= ChangeFlags.OnlineStatus;
             }
+
             if (Name != other.Name)
             {
                 Name    =  other.Name;
                 changes |= ChangeFlags.Name;
             }
+
             if (JobIcon != other.JobIcon)
             {
                 JobIcon =  other.JobIcon;
                 changes |= ChangeFlags.JobIcon;
             }
+
             if (Job != other.Job)
             {
                 Job     =  other.Job;
                 changes |= ChangeFlags.Job;
             }
+
             if (Location != other.Location)
             {
                 Location =  other.Location;
@@ -511,14 +568,15 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
 
             return changes;
         }
-        
+
         public static FreeCompanyMemberInfo Parse(InfoProxyCommonList.CharacterData data, int index)
         {
             var stringArray    = AtkStage.Instance()->GetStringArrayData()[36]->StringArray;
             var lastOnlineTime = string.Empty;
+
             try
             {
-                lastOnlineTime = SeString.Parse(stringArray[1 + (index * 5)].Value).TextValue;
+                lastOnlineTime = SeString.Parse(stringArray[1 + index * 5].Value).TextValue;
             }
             catch (Exception)
             {
@@ -527,66 +585,61 @@ public unsafe class FCMemberManagePanel : DailyModuleBase
 
             return new FreeCompanyMemberInfo
             {
-                ContentID = data.ContentId,
-                Index     = index,
+                ContentID    = data.ContentId,
+                Index        = index,
                 OnlineStatus = (uint)GetOrigOnlineStatusID(data.State),
-                Name    = string.IsNullOrWhiteSpace(data.NameString) ? LuminaGetter.GetRow<Addon>(964)!.Value.Text.ToString() : data.NameString,
-                JobIcon = data.Job == 0 ? null : DService.Instance().Texture.GetFromGameIcon(new(62100U + data.Job)),
-                Job     = data.Job == 0 ? string.Empty : LuminaGetter.GetRow<ClassJob>(data.Job)?.Abbreviation.ToString(),
+                Name         = string.IsNullOrWhiteSpace(data.NameString) ? LuminaWrapper.GetAddonText(964) : data.NameString,
+                JobIcon      = data.Job == 0 ? null : DService.Instance().Texture.GetFromGameIcon(new(62100U + data.Job)),
+                Job          = data.Job == 0 ? string.Empty : LuminaGetter.GetRow<ClassJob>(data.Job)?.Abbreviation.ToString(),
                 Location = data.Location != 0
                                ? LuminaGetter.TryGetRow<TerritoryType>(data.Location, out var zone) ? zone.PlaceName.Value.Name.ToString() : lastOnlineTime
-                               : lastOnlineTime,
+                               : lastOnlineTime
             };
         }
-        
+
         public static int GetOrigOnlineStatusID(InfoProxyCommonList.CharacterData.OnlineStatus status)
         {
             // 默认的 0 无法获取图标
             if (status == InfoProxyCommonList.CharacterData.OnlineStatus.Offline)
                 return 10;
-    
+
             var value = (ulong)status;
-    
-            var lowestBit = value & (~value + 1);
-    
+
+            var lowestBit = value & ~value + 1;
+
             var position = 0;
+
             while (lowestBit > 1UL)
             {
                 lowestBit >>= 1;
                 position++;
             }
-    
+
             return position;
         }
 
-        public bool Equals(FreeCompanyMemberInfo? other) 
-            => other is not null && this.ContentID == other.ContentID;
-
-        public override bool Equals(object? obj) 
+        public override bool Equals(object? obj)
             => Equals(obj as FreeCompanyMemberInfo);
 
-        public override int GetHashCode() 
+        public override int GetHashCode()
             => ContentID.GetHashCode();
 
-        public int CompareTo(FreeCompanyMemberInfo? other) 
-            => other is null ? 1 : this.Index.CompareTo(other.Index);
-
-        public static bool operator ==(FreeCompanyMemberInfo? left, FreeCompanyMemberInfo? right) 
+        public static bool operator ==(FreeCompanyMemberInfo? left, FreeCompanyMemberInfo? right)
             => left?.Equals(right) ?? ReferenceEquals(right, null);
 
-        public static bool operator !=(FreeCompanyMemberInfo left, FreeCompanyMemberInfo right) 
+        public static bool operator !=(FreeCompanyMemberInfo left, FreeCompanyMemberInfo right)
             => !(left == right);
 
-        public static bool operator <(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right) 
+        public static bool operator <(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right)
             => ReferenceEquals(left, null) ? !ReferenceEquals(right, null) : left.CompareTo(right) < 0;
 
-        public static bool operator <=(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right) 
+        public static bool operator <=(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right)
             => ReferenceEquals(left, null) || left.CompareTo(right) <= 0;
 
-        public static bool operator >(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right) 
+        public static bool operator >(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right)
             => !ReferenceEquals(left, null) && left.CompareTo(right) > 0;
 
-        public static bool operator >=(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right) 
+        public static bool operator >=(FreeCompanyMemberInfo left, FreeCompanyMemberInfo? right)
             => ReferenceEquals(left, null) ? ReferenceEquals(right, null) : left.CompareTo(right) >= 0;
     }
 }

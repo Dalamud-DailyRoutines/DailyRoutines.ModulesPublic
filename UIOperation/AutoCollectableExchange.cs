@@ -1,129 +1,159 @@
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.Interop.Game.Models.Packets.Upstream;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCollectableExchange : DailyModuleBase
+public unsafe class AutoCollectableExchange : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoCollectableExchangeTitle"),
-        Description = GetLoc("AutoCollectableExchangeDescription"),
-        Category    = ModuleCategories.UIOperation,
+        Title       = Lang.Get("AutoCollectableExchangeTitle"),
+        Description = Lang.Get("AutoCollectableExchangeDescription"),
+        Category    = ModuleCategory.UIOperation
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
     private static readonly CompSig HandInCollectablesSig =
         new("48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 48 8B 49");
     private delegate nint HandInCollectablesDelegate(AgentInterface* agentCollectablesShop);
-    private static HandInCollectablesDelegate? HandInCollectables;
+    private HandInCollectablesDelegate? handInCollectables;
 
     protected override void Init()
     {
         TaskHelper ??= new();
-        Overlay ??= new(this);
-        
-        HandInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
+        Overlay    ??= new(this);
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CollectablesShop", OnAddon);
+        handInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
+
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "CollectablesShop", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CollectablesShop", OnAddon);
-        if (CollectablesShopAddon != null) 
+        if (CollectablesShopAddon != null)
             OnAddon(AddonEvent.PostSetup, null);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void OverlayUI()
     {
         var addon = CollectablesShopAddon;
+
         if (addon == null)
         {
             Overlay.IsOpen = false;
             return;
         }
-        
+
         var buttonNode = CollectablesShopAddon->GetNodeById(51);
         if (buttonNode == null) return;
-        
+
         if (buttonNode->IsVisible())
             buttonNode->ToggleVisibility(false);
 
         using var font = FontManager.Instance().UIFont80.Push();
 
-        ImGui.SetWindowPos(new Vector2(addon->X + addon->GetScaledWidth(true), addon->Y + addon->GetScaledHeight(true)) - ImGui.GetWindowSize() -
-                           ScaledVector2(12f));
+        ImGui.SetWindowPos
+        (
+            new Vector2(addon->X + addon->GetScaledWidth(true), addon->Y + addon->GetScaledHeight(true)) -
+            ImGui.GetWindowSize()                                                                        -
+            ScaledVector2(12f)
+        );
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(ImGuiColors.DalamudYellow, GetLoc("AutoCollectableExchangeTitle"));
+        ImGui.TextColored(ImGuiColors.DalamudYellow, Lang.Get("AutoCollectableExchangeTitle"));
 
         using (ImRaii.Disabled(!buttonNode->NodeFlags.HasFlag(NodeFlags.Enabled) || TaskHelper.IsBusy))
         {
-            if (ImGui.Button(GetLoc("Start")))
+            if (ImGui.Button(Lang.Get("Start")))
                 EnqueueExchange();
         }
 
         ImGui.SameLine();
+
         using (ImRaii.Disabled(!TaskHelper.IsBusy))
         {
-            if (ImGui.Button(GetLoc("Stop"))) 
+            if (ImGui.Button(Lang.Get("Stop")))
                 TaskHelper.Abort();
         }
-        
+
         ImGui.SameLine();
         ImGui.TextDisabled("|");
-        
+
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
             ImGui.SameLine();
+
             using (ImRaii.Disabled(!buttonNode->NodeFlags.HasFlag(NodeFlags.Enabled)))
             {
-                if (ImGui.Button(LuminaGetter.GetRow<Addon>(531)!.Value.Text.ToString()))
-                    HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
+                if (ImGui.Button(LuminaWrapper.GetAddonText(531)))
+                    handInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
             }
-            
+
             ImGui.SameLine();
+
             if (ImGui.Button(LuminaGetter.GetRow<InclusionShop>(3801094)!.Value.Unknown0.ToString()))
             {
-                TaskHelper.Enqueue(() =>
-                {
-                    if (CollectablesShopAddon->IsAddonAndNodesReady())
-                        CollectablesShopAddon->Close(true);
-                });
-                TaskHelper.Enqueue(() => !OccupiedInEvent);
-                TaskHelper.Enqueue(() => GamePacketManager.Instance().SendPackt(
-                                       new EventStartPackt(DService.Instance().ObjectTable.LocalPlayer.GameObjectID,
-                                                           GetScriptEventID(GameState.TerritoryType))));
+                TaskHelper.Enqueue
+                (() =>
+                    {
+                        if (CollectablesShopAddon->IsAddonAndNodesReady())
+                            CollectablesShopAddon->Close(true);
+                    }
+                );
+                TaskHelper.Enqueue(() => !DService.Instance().Condition.IsOccupiedInEvent);
+                TaskHelper.Enqueue
+                (() => GamePacketManager.Instance().SendPackt
+                 (
+                     new EventStartPackt
+                     (
+                         DService.Instance().ObjectTable.LocalPlayer.GameObjectID,
+                         GetScriptEventID(GameState.TerritoryType)
+                     )
+                 )
+                );
             }
         }
     }
 
     private void EnqueueExchange()
     {
-        TaskHelper.Enqueue(() =>
-        {
-            if (CollectablesShopAddon == null || SelectYesno->IsAddonAndNodesReady())
+        TaskHelper.Enqueue
+        (
+            () =>
             {
-                TaskHelper.Abort();
+                if (CollectablesShopAddon == null || SelectYesno->IsAddonAndNodesReady())
+                {
+                    TaskHelper.Abort();
+                    return true;
+                }
+
+                var list = CollectablesShopAddon->GetComponentNodeById(31)->GetAsAtkComponentList();
+                if (list == null) return false;
+
+                if (list->ListLength <= 0)
+                {
+                    TaskHelper.Abort();
+                    return true;
+                }
+
+                handInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
                 return true;
-            }
-
-            var list = CollectablesShopAddon->GetComponentNodeById(31)->GetAsAtkComponentList();
-            if (list == null) return false;
-
-            if (list->ListLength <= 0)
-            {
-                TaskHelper.Abort();
-                return true;
-            }
-
-            HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
-            return true;
-        }, "ClickExchange");
+            },
+            "ClickExchange"
+        );
 
         TaskHelper.Enqueue(EnqueueExchange, "EnqueueNewRound");
     }
@@ -143,15 +173,12 @@ public unsafe class AutoCollectableExchange : DailyModuleBase
     {
         var addon = args.Addon.ToStruct();
         if (addon == null) return;
-        
+
         Overlay.IsOpen = type switch
         {
-            AddonEvent.PostSetup => true,
+            AddonEvent.PostSetup   => true,
             AddonEvent.PreFinalize => false,
-            _ => Overlay.IsOpen,
+            _                      => Overlay.IsOpen
         };
     }
-
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 }

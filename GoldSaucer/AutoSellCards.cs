@@ -1,7 +1,7 @@
-using System;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
@@ -9,47 +9,58 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
-using OmenTools.Extensions;
+using OmenTools.Interop.Game.Models.Packets.Upstream;
+using OmenTools.OmenService;
+using OmenTools.Threading;
+using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSellCards : DailyModuleBase
+public unsafe class AutoSellCards : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = GetLoc("AutoSellCardsTitle"),
-        Description         = GetLoc("AutoSellCardsDescription"),
-        Category            = ModuleCategories.GoldSaucer,
+        Title               = Lang.Get("AutoSellCardsTitle"),
+        Description         = Lang.Get("AutoSellCardsDescription"),
+        Category            = ModuleCategory.GoldSaucer,
         ModulesPrerequisite = ["InstantLeaveDuty", "ContentFinderCommand"]
     };
-    
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static HorizontalListNode? LayoutNode;
-    private static TextNode?           TitleNode;
-    private static TextButtonNode?     StartButton;
-    private static TextButtonNode?     StopButton;
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private const string Command = "scards";
+    private HorizontalListNode? layoutNode;
+    private TextNode?           titleNode;
+    private TextButtonNode?     startButton;
+    private TextButtonNode?     stopButton;
 
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ShopCardDialog", OnAddonDialog);
-        
+
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "TripleTriadCoinExchange", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadCoinExchange", OnAddon);
 
-        CommandManager.AddSubCommand(Command, new(OnCommand) { HelpMessage = GetLoc("AutoSellCards-CommandHelp") });
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoSellCards-CommandHelp") });
+    }
+    
+    protected override void Uninit()
+    {
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonDialog);
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
-        
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
+
         ImGui.SameLine();
-        ImGui.TextUnformatted($"/pdr {Command} → {GetLoc("AutoSellCards-CommandHelp")}");
+        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("AutoSellCards-CommandHelp")}");
     }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
@@ -59,9 +70,9 @@ public unsafe class AutoSellCards : DailyModuleBase
             case AddonEvent.PostDraw:
                 if (TripleTriadCoinExchange == null) return;
 
-                if (LayoutNode == null)
+                if (layoutNode == null)
                 {
-                    TitleNode = new TextNode
+                    titleNode = new TextNode
                     {
                         LineSpacing      = 23,
                         AlignmentType    = AlignmentType.Left,
@@ -74,40 +85,40 @@ public unsafe class AutoSellCards : DailyModuleBase
                         Position         = new(15, 465),
                         String           = Info.Title
                     };
-                    TitleNode.AttachNode(TripleTriadCoinExchange->RootNode);
-                    
-                    LayoutNode = new HorizontalListNode
+                    titleNode.AttachNode(TripleTriadCoinExchange->RootNode);
+
+                    layoutNode = new HorizontalListNode
                     {
                         IsVisible = true,
                         Position  = new(15, 495)
                     };
-                    LayoutNode.AttachNode(TripleTriadCoinExchange->RootNode);
+                    layoutNode.AttachNode(TripleTriadCoinExchange->RootNode);
 
-                    StartButton = new()
+                    startButton = new()
                     {
                         IsVisible = true,
                         Size      = new(260, 35),
-                        String    = GetLoc("Start"),
+                        String    = Lang.Get("Start"),
                         OnClick = () =>
                         {
                             TaskHelper.Abort();
                             StartHandOver();
                         }
                     };
-                    LayoutNode.AddNode(StartButton);
-            
-                    StopButton = new()
+                    layoutNode.AddNode(startButton);
+
+                    stopButton = new()
                     {
                         IsVisible = true,
                         Size      = new(260, 35),
-                        String    = GetLoc("Stop"),
+                        String    = Lang.Get("Stop"),
                         OnClick   = () => TaskHelper.Abort()
                     };
-                    LayoutNode.AddNode(StopButton);
+                    layoutNode.AddNode(stopButton);
 
                     TripleTriadCoinExchange->RootNode->SetHeight(486   + 60);
                     TripleTriadCoinExchange->WindowNode->SetHeight(486 + 60);
-                    
+
                     for (var i = 0; i < TripleTriadCoinExchange->WindowNode->Component->UldManager.NodeListCount; i++)
                     {
                         var node = TripleTriadCoinExchange->WindowNode->Component->UldManager.NodeList[i];
@@ -122,38 +133,38 @@ public unsafe class AutoSellCards : DailyModuleBase
 
                 if (TaskHelper.IsBusy)
                 {
-                    StartButton.IsEnabled = false;
-                    StopButton.IsEnabled  = true;
+                    startButton.IsEnabled = false;
+                    stopButton.IsEnabled  = true;
                 }
                 else
                 {
-                    StartButton.IsEnabled = true;
-                    StopButton.IsEnabled  = false;
+                    startButton.IsEnabled = true;
+                    stopButton.IsEnabled  = false;
                 }
-                
+
                 break;
             case AddonEvent.PreFinalize:
-                LayoutNode?.Dispose();
-                LayoutNode = null;
-                
-                StartButton?.Dispose();
-                StartButton = null;
-                
-                StopButton?.Dispose();
-                StopButton = null;
-                
-                TitleNode?.Dispose();
-                TitleNode = null;
-                
+                layoutNode?.Dispose();
+                layoutNode = null;
+
+                startButton?.Dispose();
+                startButton = null;
+
+                stopButton?.Dispose();
+                stopButton = null;
+
+                titleNode?.Dispose();
+                titleNode = null;
+
                 TaskHelper?.Abort();
                 break;
         }
     }
-    
+
     private static void OnAddonDialog(AddonEvent type, AddonArgs args)
     {
         if (ShopCardDialog == null) return;
-        
+
         ShopCardDialog->Callback(0, ShopCardDialog->AtkValues[6].UInt);
         ShopCardDialog->FireCloseCallback();
         ShopCardDialog->Close(true);
@@ -167,27 +178,31 @@ public unsafe class AutoSellCards : DailyModuleBase
             StartHandOver();
             return;
         }
-        
+
         // 附近没有可用的幻卡兑换地点
         if (!EventFramework.Instance()->IsEventIDNearby(721135))
         {
-            TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/pdrduty n 195"),                  "发送九宫幻卡对局室参加申请");
+            TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/pdrduty n 195"),       "发送九宫幻卡对局室参加申请");
             TaskHelper.Enqueue(() => GameState.TerritoryType == 579 && UIModule.IsScreenReady(), "等待进入九宫幻卡对局室");
         }
 
         TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 721135).Send(), "发包打开幻卡交换页面");
         TaskHelper.Enqueue(StartHandOver,                                                       "开始交换");
-        TaskHelper.Enqueue(() =>
-        {
-            if (!TripleTriadCoinExchange->IsAddonAndNodesReady()) return;
-            TripleTriadCoinExchange->Callback(-1);
-        }, "交换完毕, 关闭界面");
+        TaskHelper.Enqueue
+        (
+            () =>
+            {
+                if (!TripleTriadCoinExchange->IsAddonAndNodesReady()) return;
+                TripleTriadCoinExchange->Callback(-1);
+            },
+            "交换完毕, 关闭界面"
+        );
         TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/pdr leaveduty"), "离开幻卡对局室");
     }
 
     private bool StartHandOver()
     {
-        if (!Throttler.Throttle("AutoSellCards-HandOver")) 
+        if (!Throttler.Shared.Throttle("AutoSellCards-HandOver"))
             return false;
 
         if (ShopCardDialog->IsAddonAndNodesReady())
@@ -196,10 +211,11 @@ public unsafe class AutoSellCards : DailyModuleBase
             return true;
         }
 
-        if (!TripleTriadCoinExchange->IsAddonAndNodesReady()) 
+        if (!TripleTriadCoinExchange->IsAddonAndNodesReady())
             return false;
 
         var cardsAmount = TripleTriadCoinExchange->AtkValues[1].Int;
+
         if (cardsAmount == 0)
         {
             TaskHelper.RemoveQueueTasks(2);
@@ -207,29 +223,26 @@ public unsafe class AutoSellCards : DailyModuleBase
         }
 
         var isCardInDeck = Convert.ToBoolean(TripleTriadCoinExchange->AtkValues[204].Byte);
+
         if (!isCardInDeck)
         {
-            var message = GetLoc("AutoSellCards-CurrentCardNotInDeckMessage");
-            ChatError(message);
-            NotificationWarning(message);
-            
+            var message = Lang.Get("AutoSellCards-CurrentCardNotInDeckMessage");
+            NotifyHelper.Instance().ChatError(message);
+            NotifyHelper.Instance().NotificationWarning(message);
+
             TaskHelper.RemoveQueueTasks(2);
             return true;
         }
 
         TaskHelper.Enqueue(() => TripleTriadCoinExchange->Callback(0, 0, 0), "点击交换幻卡", weight: 2);
-        TaskHelper.DelayNext(100, "等待 100 毫秒", weight: 2);
+        TaskHelper.DelayNext(100, "等待 100 毫秒", 2);
         TaskHelper.Enqueue(StartHandOver, "开始新一轮检测交换", weight: 2);
         return true;
     }
+    
+    #region 常量
 
-    protected override void Uninit()
-    {
-        CommandManager.RemoveSubCommand(Command);
-        
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-        
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonDialog);
-    }
+    private const string COMMAND = "scards";
+
+    #endregion
 }

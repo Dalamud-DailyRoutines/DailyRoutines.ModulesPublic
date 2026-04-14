@@ -1,25 +1,28 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using OmenTools.Interop.Game.Models;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public unsafe class NoHideHotbars : DailyModuleBase
+public unsafe class NoHideHotbars : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("NoHideHotbarsTitle"),
-        Description = GetLoc("NoHideHotbarsDescription"),
-        Category = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("NoHideHotbarsTitle"),
+        Description = Lang.Get("NoHideHotbarsDescription"),
+        Category    = ModuleCategory.UIOptimization
     };
-
+    
     private static readonly CompSig                 ToggleUISig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 48 8B 01 41 0F B6 D9");
     private delegate        void                    ToggleUIDelegate(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true);
-    private static          Hook<ToggleUIDelegate>? ToggleUIHook;
+    private                 Hook<ToggleUIDelegate>? ToggleUIHook;
 
     private static readonly CompSig                  ToggleUI2Sig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 41 0F B6 E9 41 0F B6 F0");
     private delegate        bool                     ToggleUI2Delegate(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true);
-    private static          Hook<ToggleUI2Delegate>? ToggleUI2Hook;
+    private                 Hook<ToggleUI2Delegate>? ToggleUI2Hook;
 
     protected override void Init()
     {
@@ -30,13 +33,13 @@ public unsafe class NoHideHotbars : DailyModuleBase
         ToggleUI2Hook.Enable();
     }
 
-    private static void ToggleUIDetour(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true)
+    private void ToggleUIDetour(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true)
     {
         if (!isEnable) return;
         ToggleUIHook.Original(module, flags, isEnable, unknown);
     }
 
-    private static bool ToggleUI2Detour(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true)
+    private bool ToggleUI2Detour(UIModule* module, UIModule.UiFlags flags, bool isEnable, bool unknown = true)
     {
         if (!isEnable) return true;
         return ToggleUI2Hook.Original(module, flags, isEnable, unknown);

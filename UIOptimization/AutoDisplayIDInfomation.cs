@@ -1,6 +1,7 @@
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Objects.Enums;
@@ -12,33 +13,36 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using OmenTools.Threading;
 using RowStatus = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayIDInfomation : DailyModuleBase
+public unsafe class AutoDisplayIDInfomation : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDisplayIDInfomationTitle"),
-        Description = GetLoc("AutoDisplayIDInfomationDescription"),
-        Category    = ModuleCategories.UIOptimization,
+        Title       = Lang.Get("AutoDisplayIDInfomationTitle"),
+        Description = Lang.Get("AutoDisplayIDInfomationDescription"),
+        Category    = ModuleCategory.UIOptimization,
         Author      = ["Middo"]
     };
+    
+    private Config config = null!;
+    private IDtrBarEntry? zoneInfoEntry;
 
-    private static Config ModuleConfig = null!;
-
-    private static IDtrBarEntry? ZoneInfoEntry;
-
-    private static TooltipModification? ItemModification;
-    private static TooltipModification? ActionModification;
-    private static TooltipModification? StatusModification;
-    private static TooltipModification? WeatherModification;
+    private TooltipModification? itemModification;
+    private TooltipModification? actionModification;
+    private TooltipModification? statusModification;
+    private TooltipModification? weatherModification;
 
     protected override void Init()
     {
-        ModuleConfig  =   LoadConfig<Config>() ?? new();
-        ZoneInfoEntry ??= DService.Instance().DTRBar.Get("AutoDisplayIDInfomation-ZoneInfo");
+        config = Config.Load(this) ?? new();
+        
+        zoneInfoEntry ??= DService.Instance().DTRBar.Get("AutoDisplayIDInfomation-ZoneInfo");
 
         GameTooltipManager.Instance().RegGenerateItemTooltipModifier(ModifyItemTooltip);
         GameTooltipManager.Instance().RegGenerateActionTooltipModifier(ModifyActionTooltip);
@@ -52,6 +56,7 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
 
         DService.Instance().ClientState.MapIdChanged     += OnMapChanged;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
+        
         UpdateDTRInfo();
     }
 
@@ -59,19 +64,19 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
     {
         DService.Instance().ClientState.MapIdChanged     -= OnMapChanged;
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        
-        ZoneInfoEntry?.Remove();
-        ZoneInfoEntry = null;
+
+        zoneInfoEntry?.Remove();
+        zoneInfoEntry = null;
 
         GameTooltipManager.Instance().Unreg(generateItemModifiers: ModifyItemTooltip);
         GameTooltipManager.Instance().Unreg(generateActionModifiers: ModifyActionTooltip);
         GameTooltipManager.Instance().Unreg(ModifyStatusTooltip);
         GameTooltipManager.Instance().Unreg(ModifyWeatherTooltip);
 
-        GameTooltipManager.Instance().RemoveItemDetail(ItemModification);
-        GameTooltipManager.Instance().RemoveItemDetail(ActionModification);
-        GameTooltipManager.Instance().RemoveItemDetail(StatusModification);
-        GameTooltipManager.Instance().RemoveWeather(WeatherModification);
+        GameTooltipManager.Instance().RemoveItemDetail(itemModification);
+        GameTooltipManager.Instance().RemoveItemDetail(actionModification);
+        GameTooltipManager.Instance().RemoveItemDetail(statusModification);
+        GameTooltipManager.Instance().RemoveWeather(weatherModification);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
@@ -79,74 +84,74 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(520)} ID", ref ModuleConfig.ShowItemID))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(520)} ID", ref config.ShowItemID))
+            config.Save(this);
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(1340)} ID", ref ModuleConfig.ShowActionID))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(1340)} ID", ref config.ShowActionID))
+            config.Save(this);
 
-        if (ModuleConfig.ShowActionID)
+        if (config.ShowActionID)
         {
             using (ImRaii.PushIndent())
             {
-                if (ImGui.Checkbox(GetLoc("Resolved"), ref ModuleConfig.ShowActionIDResolved))
-                    SaveConfig(ModuleConfig);
+                if (ImGui.Checkbox(Lang.Get("Resolved"), ref config.ShowActionIDResolved))
+                    config.Save(this);
 
-                if (ImGui.Checkbox(GetLoc("Original"), ref ModuleConfig.ShowActionIDOriginal))
-                    SaveConfig(ModuleConfig);
+                if (ImGui.Checkbox(Lang.Get("Original"), ref config.ShowActionIDOriginal))
+                    config.Save(this);
             }
         }
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(1030)} ID", ref ModuleConfig.ShowTargetID))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(1030)} ID", ref config.ShowTargetID))
+            config.Save(this);
 
-        if (ModuleConfig.ShowTargetID)
+        if (config.ShowTargetID)
         {
             using (ImRaii.PushIndent())
             {
-                if (ImGui.Checkbox("BattleNPC", ref ModuleConfig.ShowTargetIDBattleNPC))
-                    SaveConfig(ModuleConfig);
+                if (ImGui.Checkbox("BattleNPC", ref config.ShowTargetIDBattleNPC))
+                    config.Save(this);
 
-                if (ImGui.Checkbox("EventNPC", ref ModuleConfig.ShowTargetIDEventNPC))
-                    SaveConfig(ModuleConfig);
+                if (ImGui.Checkbox("EventNPC", ref config.ShowTargetIDEventNPC))
+                    config.Save(this);
 
-                if (ImGui.Checkbox("Companion", ref ModuleConfig.ShowTargetIDCompanion))
-                    SaveConfig(ModuleConfig);
+                if (ImGui.Checkbox("Companion", ref config.ShowTargetIDCompanion))
+                    config.Save(this);
 
-                if (ImGui.Checkbox(LuminaWrapper.GetAddonText(832), ref ModuleConfig.ShowTargetIDOthers))
-                    SaveConfig(ModuleConfig);
+                if (ImGui.Checkbox(LuminaWrapper.GetAddonText(832), ref config.ShowTargetIDOthers))
+                    config.Save(this);
             }
         }
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{GetLoc("Status")} ID", ref ModuleConfig.ShowStatusID))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox($"{Lang.Get("Status")} ID", ref config.ShowStatusID))
+            config.Save(this);
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(8555)} ID", ref ModuleConfig.ShowWeatherID))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(8555)} ID", ref config.ShowWeatherID))
+            config.Save(this);
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(870)}", ref ModuleConfig.ShowZoneInfo))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(870)}", ref config.ShowZoneInfo))
+            config.Save(this);
     }
 
-    private static void OnMapChanged(uint obj) =>
+    private void OnMapChanged(uint obj) =>
         UpdateDTRInfo();
 
-    private static void OnZoneChanged(ushort obj) =>
+    private void OnZoneChanged(ushort obj) =>
         UpdateDTRInfo();
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
-        if (!Throttler.Throttle("AutoDisplayIDInfomation-OnAddon", 50)) return;
+        if (!Throttler.Shared.Throttle("AutoDisplayIDInfomation-OnAddon", 50)) return;
 
         switch (args.AddonName)
         {
@@ -178,13 +183,13 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
                 var name = AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->StringArray->ExtractText();
                 var show = target.ObjectKind switch
                 {
-                    ObjectKind.BattleNpc => ModuleConfig.ShowTargetIDBattleNPC,
-                    ObjectKind.EventNpc  => ModuleConfig.ShowTargetIDEventNPC,
-                    ObjectKind.Companion => ModuleConfig.ShowTargetIDCompanion,
-                    _                    => ModuleConfig.ShowTargetIDOthers
+                    ObjectKind.BattleNpc => config.ShowTargetIDBattleNPC,
+                    ObjectKind.EventNpc  => config.ShowTargetIDEventNPC,
+                    ObjectKind.Companion => config.ShowTargetIDCompanion,
+                    _                    => config.ShowTargetIDOthers
                 };
 
-                if (!show || !ModuleConfig.ShowTargetID)
+                if (!show || !config.ShowTargetID)
                 {
                     AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->SetValueAndUpdate(0, name.Replace($"  [{id}]", string.Empty));
                     return;
@@ -196,15 +201,15 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         }
     }
 
-    private static void ModifyItemTooltip(AtkUnitBase* addonItemDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
+    private void ModifyItemTooltip(AtkUnitBase* addonItemDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
     {
-        if (ItemModification != null)
+        if (itemModification != null)
         {
-            GameTooltipManager.Instance().RemoveItemDetail(ItemModification);
-            ItemModification = null;
+            GameTooltipManager.Instance().RemoveItemDetail(itemModification);
+            itemModification = null;
         }
 
-        if (!ModuleConfig.ShowItemID) return;
+        if (!config.ShowItemID) return;
 
         var itemID = AgentItemDetail.Instance()->ItemId;
         if (itemID < 2000000)
@@ -219,7 +224,7 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
             new UIForegroundPayload(0)
         };
 
-        ItemModification = GameTooltipManager.Instance().AddItemDetail
+        itemModification = GameTooltipManager.Instance().AddItemDetail
         (
             itemID,
             TooltipItemType.ItemUICategory,
@@ -228,36 +233,36 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         );
     }
 
-    private static void ModifyActionTooltip(AtkUnitBase* addonActionDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
+    private void ModifyActionTooltip(AtkUnitBase* addonActionDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
     {
-        if (ActionModification != null)
+        if (actionModification != null)
         {
-            GameTooltipManager.Instance().RemoveItemDetail(ActionModification);
-            ActionModification = null;
+            GameTooltipManager.Instance().RemoveItemDetail(actionModification);
+            actionModification = null;
         }
 
-        if (!ModuleConfig.ShowActionID) return;
+        if (!config.ShowActionID) return;
 
         var hoveredID = AgentActionDetail.Instance()->ActionId;
-        var id = ModuleConfig is { ShowActionIDResolved: true, ShowActionIDOriginal: false }
+        var id = config is { ShowActionIDResolved: true, ShowActionIDOriginal: false }
                      ? hoveredID
                      : AgentActionDetail.Instance()->OriginalId;
 
         var payloads    = new List<Payload>();
-        var needNewLine = ModuleConfig is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != hoveredID;
+        var needNewLine = config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != hoveredID;
 
         payloads.Add(needNewLine ? new NewLinePayload() : new TextPayload("   "));
         payloads.Add(new UIForegroundPayload(3));
         payloads.Add(new TextPayload("["));
         payloads.Add(new TextPayload($"{id}"));
 
-        if (ModuleConfig is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != hoveredID)
+        if (config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != hoveredID)
             payloads.Add(new TextPayload($" → {hoveredID}"));
 
         payloads.Add(new TextPayload("]"));
         payloads.Add(new UIForegroundPayload(0));
 
-        ActionModification = GameTooltipManager.Instance().AddActionDetail
+        actionModification = GameTooltipManager.Instance().AddActionDetail
         (
             hoveredID,
             TooltipActionType.ActionKind,
@@ -266,7 +271,7 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         );
     }
 
-    private static void ModifyStatusTooltip
+    private void ModifyStatusTooltip
     (
         AtkTooltipManager*                manager,
         AtkTooltipManager.AtkTooltipType  type,
@@ -275,13 +280,13 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         AtkTooltipManager.AtkTooltipArgs* args
     )
     {
-        if (StatusModification != null)
+        if (statusModification != null)
         {
-            GameTooltipManager.Instance().RemoveItemDetail(StatusModification);
-            StatusModification = null;
+            GameTooltipManager.Instance().RemoveItemDetail(statusModification);
+            statusModification = null;
         }
 
-        if (!ModuleConfig.ShowStatusID) return;
+        if (!config.ShowStatusID) return;
 
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer || targetNode == null) return;
 
@@ -309,15 +314,17 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
 
         if (!map.TryGetValue(iconID, out var statuID) || statuID == 0) return;
 
-        StatusModification = GameTooltipManager.Instance().AddStatus(statuID, $"  [{statuID}]", TooltipModifyMode.Regex, @"^(.*?)(?=\(|（|\n|$)");
+        statusModification = GameTooltipManager.Instance().AddStatus(statuID, $"  [{statuID}]", TooltipModifyMode.Regex, @"^(.*?)(?=\(|（|\n|$)");
 
         return;
 
-        void AddStatuses(StatusManager sm) =>
+        void AddStatuses(StatusManager sm)
+        {
             AddStatusToMap(sm, ref map);
+        }
     }
 
-    private static void ModifyWeatherTooltip
+    private void ModifyWeatherTooltip
     (
         AtkTooltipManager*                manager,
         AtkTooltipManager.AtkTooltipType  type,
@@ -326,18 +333,18 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         AtkTooltipManager.AtkTooltipArgs* args
     )
     {
-        if (WeatherModification != null)
+        if (weatherModification != null)
         {
-            GameTooltipManager.Instance().RemoveWeather(WeatherModification);
-            WeatherModification = null;
+            GameTooltipManager.Instance().RemoveWeather(weatherModification);
+            weatherModification = null;
         }
 
-        if (!ModuleConfig.ShowWeatherID) return;
+        if (!config.ShowWeatherID) return;
 
         var weatherID = WeatherManager.Instance()->WeatherId;
         if (!LuminaGetter.TryGetRow<Weather>(weatherID, out var weather)) return;
 
-        WeatherModification = GameTooltipManager.Instance().AddWeatherTooltipModify($"{weather.Name} [{weatherID}]");
+        weatherModification = GameTooltipManager.Instance().AddWeatherTooltipModify($"{weather.Name} [{weatherID}]");
     }
 
     private static void AddStatusToMap(StatusManager statusManager, ref Dictionary<uint, uint> map)
@@ -354,43 +361,42 @@ public unsafe class AutoDisplayIDInfomation : DailyModuleBase
         }
     }
 
-    private static void UpdateDTRInfo()
+    private void UpdateDTRInfo()
     {
-        if (ModuleConfig.ShowZoneInfo)
+        if (config.ShowZoneInfo)
         {
             var mapID  = GameState.Map;
             var zoneID = GameState.TerritoryType;
 
             if (mapID == 0 || zoneID == 0)
             {
-                ZoneInfoEntry.Shown = false;
+                zoneInfoEntry.Shown = false;
                 return;
             }
 
-            ZoneInfoEntry.Shown = true;
+            zoneInfoEntry.Shown = true;
 
-            ZoneInfoEntry.Text = $"{LuminaWrapper.GetAddonText(870)}: {zoneID} / {LuminaWrapper.GetAddonText(670)}: {mapID}";
+            zoneInfoEntry.Text = $"{LuminaWrapper.GetAddonText(870)}: {zoneID} / {LuminaWrapper.GetAddonText(670)}: {mapID}";
         }
         else
-            ZoneInfoEntry.Shown = false;
+            zoneInfoEntry.Shown = false;
     }
 
-    public class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
-        public bool ShowItemID = true;
-
         public bool ShowActionID         = true;
-        public bool ShowActionIDResolved = true;
         public bool ShowActionIDOriginal = true;
+        public bool ShowActionIDResolved = true;
+        public bool ShowItemID           = true;
 
-        public bool ShowStatusID  = true;
-        public bool ShowWeatherID = true;
-        public bool ShowZoneInfo  = true;
+        public bool ShowStatusID = true;
 
         public bool ShowTargetID          = true;
         public bool ShowTargetIDBattleNPC = true;
         public bool ShowTargetIDCompanion = true;
         public bool ShowTargetIDEventNPC  = true;
         public bool ShowTargetIDOthers    = true;
+        public bool ShowWeatherID         = true;
+        public bool ShowZoneInfo          = true;
     }
 }

@@ -1,41 +1,45 @@
-using System;
 using System.Diagnostics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.Group;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using OmenTools.OmenService;
+using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
+public unsafe class AutoNotifyCutsceneEnd : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyCutsceneEndTitle"),
-        Description = GetLoc("AutoNotifyCutsceneEndDescription"),
-        Category    = ModuleCategories.Notice
+        Title       = Lang.Get("AutoNotifyCutsceneEndTitle"),
+        Description = Lang.Get("AutoNotifyCutsceneEndDescription"),
+        Category    = ModuleCategory.Notice
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private Config config = null!;
 
-    private static Config ModuleConfig = null!;
-
-    private static bool       IsDutyEnd;
-    private static Stopwatch? Stopwatch;
+    private bool       isDutyEnd;
+    private Stopwatch? stopwatch;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
-        Stopwatch  ??= new();
+        stopwatch  ??= new();
         TaskHelper ??= new() { TimeoutMS = 30_000 };
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().DutyState.DutyCompleted      += OnDutyComplete;
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
-        
+
         OnZoneChanged(0);
     }
 
@@ -46,19 +50,19 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
         DService.Instance().DutyState.DutyCompleted      -= OnDutyComplete;
 
         ClearResources();
-        Stopwatch = null;
+        stopwatch = null;
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
 
-        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
 
-        if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref config.SendTTS))
+            config.Save(this);
     }
 
     private void OnZoneChanged(ushort zone)
@@ -72,7 +76,7 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
         (
             () =>
             {
-                if (BetweenAreas || LocalPlayerState.Object == null) return false;
+                if (DService.Instance().Condition.IsBetweenAreas || LocalPlayerState.Object == null) return false;
 
                 if (GroupManager.Instance()->MainGroup.MemberCount < 2)
                 {
@@ -86,7 +90,7 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
             "检查是否需要开始监控"
         );
     }
-    
+
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag                             != ConditionFlag.InCombat ||
@@ -97,7 +101,7 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
 
         if (!value)
         {
-            if (IsDutyEnd) return;
+            if (isDutyEnd) return;
 
             DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_PartyList", OnAddon);
         }
@@ -112,7 +116,7 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
         // 不在副本内 / PVP / 副本已经结束 / 少于两个真人玩家 → 结束检查
         if (GameState.ContentFinderCondition == 0 ||
             GameState.IsInPVPArea                 ||
-            IsDutyEnd                             ||
+            isDutyEnd                             ||
             GroupManager.Instance()->MainGroup.MemberCount < 2)
         {
             ClearResources();
@@ -125,7 +129,7 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
         if (DService.Instance().Condition[ConditionFlag.InCombat])
         {
             // 进战时还在检查
-            if (Stopwatch.IsRunning)
+            if (stopwatch.IsRunning)
                 CheckStopwatchAndRelay();
 
             DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
@@ -133,7 +137,7 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
         }
 
         // 计时器运行中
-        if (Stopwatch.IsRunning)
+        if (stopwatch.IsRunning)
         {
             // 检查是否任一玩家仍在剧情状态
             if (IsAnyPartyMemberWatchingCutscene(agent))
@@ -147,36 +151,36 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
             if (!IsAnyPartyMemberWatchingCutscene(agent))
                 return;
 
-            Stopwatch.Restart();
+            stopwatch.Restart();
         }
     }
 
-    private static void OnDutyComplete(object? sender, ushort zone) =>
-        IsDutyEnd = true;
+    private void OnDutyComplete(object? sender, ushort zone) =>
+        isDutyEnd = true;
 
-    private static void CheckStopwatchAndRelay()
+    private void CheckStopwatchAndRelay()
     {
-        if (!Stopwatch.IsRunning || !Throttler.Throttle("AutoNotifyCutsceneEnd-Relay", 1_000)) return;
+        if (!stopwatch.IsRunning || !Throttler.Shared.Throttle("AutoNotifyCutsceneEnd-Relay", 1_000)) return;
 
-        var elapsedTime = Stopwatch.Elapsed;
-        Stopwatch.Reset();
+        var elapsedTime = stopwatch.Elapsed;
+        stopwatch.Reset();
 
         // 小于四秒 → 不播报
         if (elapsedTime < TimeSpan.FromSeconds(4)) return;
 
-        var message = $"{GetLoc("AutoNotifyCutsceneEnd-NotificationMessage")}";
-        if (ModuleConfig.SendChat)
-            Chat($"{message} {GetLoc("AutoNotifyCutsceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
-        if (ModuleConfig.SendNotification)
-            NotificationInfo($"{message} {GetLoc("AutoNotifyCutsceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
-        if (ModuleConfig.SendTTS)
-            Speak(message);
+        var message = $"{Lang.Get("AutoNotifyCutsceneEnd-NotificationMessage")}";
+        if (config.SendChat)
+            NotifyHelper.Instance().Chat($"{message} {Lang.Get("AutoNotifyCutsceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
+        if (config.SendNotification)
+            NotifyHelper.Instance().NotificationInfo($"{message} {Lang.Get("AutoNotifyCutsceneEnd-NotificationMessage-WaitSeconds", $"{elapsedTime.TotalSeconds:F0}")}");
+        if (config.SendTTS)
+            NotifyHelper.Speak(message);
     }
 
     private static bool IsAnyPartyMemberWatchingCutscene(AgentHUD* agent)
     {
         if (agent == null) return false;
-        
+
         var group = GroupManager.Instance()->MainGroup;
         if (group.MemberCount < 2) return false;
 
@@ -202,11 +206,11 @@ public unsafe class AutoNotifyCutsceneEnd : DailyModuleBase
     {
         TaskHelper?.Abort();
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        Stopwatch?.Reset();
-        IsDutyEnd = false;
+        stopwatch?.Reset();
+        isDutyEnd = false;
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public bool SendChat         = true;
         public bool SendNotification = true;

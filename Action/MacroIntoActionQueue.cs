@@ -1,32 +1,38 @@
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using OmenTools.Extensions;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class MacroIntoActionQueue : DailyModuleBase
+public unsafe class MacroIntoActionQueue : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("MacroIntoActionQueueTitle"),
-        Description = GetLoc("MacroIntoActionQueueDescription"),
-        Category    = ModuleCategories.Action,
+        Title       = Lang.Get("MacroIntoActionQueueTitle"),
+        Description = Lang.Get("MacroIntoActionQueueDescription"),
+        Category    = ModuleCategory.Action
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    protected override void Init() => 
+    protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
+    
+    protected override void Uninit() =>
+        UseActionManager.Instance().Unreg(OnPreUseAction);
 
-    private static void OnPreUseAction(
+    private static void OnPreUseAction
+    (
         ref bool                        isPrevented,
         ref ActionType                  actionType,
         ref uint                        actionID,
         ref ulong                       targetID,
         ref uint                        extraParam,
         ref ActionManager.UseActionMode queueState,
-        ref uint                        comboRouteID)
+        ref uint                        comboRouteID
+    )
     {
         queueState                          = ActionManager.UseActionMode.Queue;
         ActionManager.Instance()->QueueType = ActionManager.UseActionMode.Queue;
@@ -39,7 +45,4 @@ public unsafe class MacroIntoActionQueue : DailyModuleBase
             targetID   = 0xE0000000;
         }
     }
-
-    protected override void Uninit() => 
-        UseActionManager.Instance().Unreg(OnPreUseAction);
 }

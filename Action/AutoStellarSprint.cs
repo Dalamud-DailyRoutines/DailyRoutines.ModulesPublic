@@ -1,23 +1,24 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoStellarSprint : DailyModuleBase
+public class AutoStellarSprint : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoStellarSprintTitle"),
-        Description = GetLoc("AutoStellarSprintDescription"),
-        Category    = ModuleCategories.Action,
+        Title       = Lang.Get("AutoStellarSprintTitle"),
+        Description = Lang.Get("AutoStellarSprintDescription"),
+        Category    = ModuleCategory.Action,
         Author      = ["Due"]
     };
-
-    private const uint STELLAR_SPRINT = 43357;
-    private const uint SPRINT_STATUS  = 4398;
 
     protected override void Init()
     {
@@ -61,7 +62,7 @@ public class AutoStellarSprint : DailyModuleBase
 
     private static void OnUpdate(IFramework _)
     {
-        if (BetweenAreas || OccupiedInEvent) return;
+        if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition.IsOccupiedInEvent) return;
 
         if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.CosmicExploration)
         {
@@ -83,4 +84,11 @@ public class AutoStellarSprint : DailyModuleBase
 
         UseActionManager.Instance().UseAction(ActionType.Action, STELLAR_SPRINT);
     }
+    
+    #region 常量
+
+    private const uint STELLAR_SPRINT = 43357;
+    private const uint SPRINT_STATUS  = 4398;
+
+    #endregion
 }

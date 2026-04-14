@@ -1,30 +1,30 @@
-using System;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
+using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class CopyItemNameContextMenu : DailyModuleBase
+public class CopyItemNameContextMenu : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("CopyItemNameContextMenuTitle"),
-        Description = GetLoc("CopyItemNameContextMenuDescription"),
-        Category    = ModuleCategories.System,
+        Title       = Lang.Get("CopyItemNameContextMenuTitle"),
+        Description = Lang.Get("CopyItemNameContextMenuDescription"),
+        Category    = ModuleCategory.System,
         Author      = ["Nukoooo"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static readonly string CopyItemNameString = LuminaWrapper.GetAddonText(159);
-    private static readonly string GlamoursString     = LuminaGetter.GetRow<CircleActivity>(18)!.Value.Name.ToString();
-
-    private static readonly CopyItemNameMenuItem MenuItem        = new(CopyItemNameString);
-    private static readonly CopyItemNameMenuItem GlamourMenuItem = new($"{CopyItemNameString} ({GlamoursString})");
+    private readonly CopyItemNameMenuItem menuItem        = new(CopyItemNameString);
+    private readonly CopyItemNameMenuItem glamourMenuItem = new($"{CopyItemNameString} ({GlamoursString})");
 
     protected override void Init() =>
         DService.Instance().ContextMenu.OnMenuOpened += OnContextMenuOpened;
@@ -32,7 +32,7 @@ public class CopyItemNameContextMenu : DailyModuleBase
     protected override void Uninit() =>
         DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 
-    private static unsafe void OnContextMenuOpened(IMenuOpenedArgs args)
+    private unsafe void OnContextMenuOpened(IMenuOpenedArgs args)
     {
         var type = args.MenuType;
 
@@ -40,15 +40,15 @@ public class CopyItemNameContextMenu : DailyModuleBase
         {
             if (args.Target is MenuTargetInventory { TargetItem: { ItemId: > 0 } item })
             {
-                MenuItem.SetRawItemID(item.ItemId);
+                menuItem.SetRawItemID(item.ItemId);
 
-                args.AddMenuItem(MenuItem.Get());
+                args.AddMenuItem(menuItem.Get());
 
                 if (item.GlamourId == 0)
                     return;
 
-                GlamourMenuItem.SetRawItemID(item.GlamourId);
-                args.AddMenuItem(GlamourMenuItem.Get());
+                glamourMenuItem.SetRawItemID(item.GlamourId);
+                args.AddMenuItem(glamourMenuItem.Get());
             }
 
             return;
@@ -80,14 +80,14 @@ public class CopyItemNameContextMenu : DailyModuleBase
         var itemID = prismBoxItem?.RowId ?? ContextMenuItemManager.Instance().CurrentItemID;
         if (itemID == 0) return;
 
-        MenuItem.SetRawItemID(itemID);
-        args.AddMenuItem(MenuItem.Get());
+        menuItem.SetRawItemID(itemID);
+        args.AddMenuItem(menuItem.Get());
 
         var glamourID = ContextMenuItemManager.Instance().CurrentGlamourID;
         if (glamourID == 0) return;
 
-        GlamourMenuItem.SetRawItemID(glamourID);
-        args.AddMenuItem(GlamourMenuItem.Get());
+        glamourMenuItem.SetRawItemID(glamourID);
+        args.AddMenuItem(glamourMenuItem.Get());
     }
 
     private sealed class CopyItemNameMenuItem
@@ -95,12 +95,11 @@ public class CopyItemNameContextMenu : DailyModuleBase
         string name
     ) : MenuItemBase
     {
+        private         uint   itemID;
         public override string Name       { get; protected set; } = name;
         public override string Identifier { get; protected set; } = nameof(CopyItemNameContextMenu);
 
         protected override bool WithDRPrefix { get; set; } = true;
-
-        private uint itemID;
 
         protected override unsafe void OnClicked(IMenuItemClickedArgs args)
         {
@@ -128,4 +127,11 @@ public class CopyItemNameContextMenu : DailyModuleBase
         public void SetRawItemID(uint id) =>
             itemID = id;
     }
+    
+    #region 常量
+
+    private static readonly string CopyItemNameString = LuminaWrapper.GetAddonText(159);
+    private static readonly string GlamoursString     = LuminaGetter.GetRowOrDefault<CircleActivity>(18).Name.ToString();
+
+    #endregion
 }

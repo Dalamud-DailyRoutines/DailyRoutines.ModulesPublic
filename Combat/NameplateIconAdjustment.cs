@@ -1,40 +1,46 @@
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class NameplateIconAdjustment : DailyModuleBase
+public unsafe class NameplateIconAdjustment : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("NameplateIconAdjustmentTitle"),
-        Description = GetLoc("NameplateIconAdjustmentDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("NameplateIconAdjustmentTitle"),
+        Description = Lang.Get("NameplateIconAdjustmentDescription"),
+        Category    = ModuleCategory.Combat,
         Author      = ["Marsh"]
     };
-
-    private static Config ModuleConfig = null!;
+    
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "NamePlate", OnAddon);
     }
+    
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void ConfigUI()
     {
-        if (ImGui.SliderFloat(GetLoc("Scale"), ref ModuleConfig.Scale, 0f, 2f, "%.2f"))
-            ModuleConfig.Save(this);
+        if (ImGui.SliderFloat(Lang.Get("Scale"), ref config.Scale, 0f, 2f, "%.2f"))
+            config.Save(this);
 
-        if (ImGui.SliderFloat2($"{GetLoc("IconOffset")}", ref ModuleConfig.Offset, -100f, 100f, "%.1f"))
-            ModuleConfig.Save(this);
+        if (ImGui.SliderFloat2($"{Lang.Get("IconOffset")}", ref config.Offset, -100f, 100f, "%.1f"))
+            config.Save(this);
     }
-    
-    private static void OnAddon(AddonEvent type, AddonArgs? args)
+
+    private void OnAddon(AddonEvent type, AddonArgs? args)
     {
         var addon = NamePlate;
         if (!NamePlate->IsAddonAndNodesReady()) return;
@@ -46,10 +52,10 @@ public unsafe class NameplateIconAdjustment : DailyModuleBase
             var imageNode = (AtkImageNode*)componentNode->Component->UldManager.SearchNodeById(9);
             if (imageNode == null) return;
 
-            imageNode->SetScale(ModuleConfig.Scale, ModuleConfig.Scale);
-            
-            var posX = ((1.5f - (ModuleConfig.Scale * 0.5f)) * 96f) + (ModuleConfig.Offset.X * ModuleConfig.Scale);
-            var posY = 4                                            + (ModuleConfig.Offset.Y * ModuleConfig.Scale);
+            imageNode->SetScale(config.Scale, config.Scale);
+
+            var posX = (1.5f - config.Scale * 0.5f) * 96f + config.Offset.X * config.Scale;
+            var posY = 4                                        + config.Offset.Y * config.Scale;
             imageNode->SetPositionFloat(posX, posY);
         }
 
@@ -62,20 +68,17 @@ public unsafe class NameplateIconAdjustment : DailyModuleBase
             var imageNode = (AtkImageNode*)componentNode->Component->UldManager.SearchNodeById(9);
             if (imageNode == null) return;
 
-            imageNode->SetScale(ModuleConfig.Scale, ModuleConfig.Scale);
-            
-            var posX = ((1.5f - (ModuleConfig.Scale * 0.5f)) * 96f) + (ModuleConfig.Offset.X * ModuleConfig.Scale);
-            var posY = 4                                            + (ModuleConfig.Offset.Y * ModuleConfig.Scale);
+            imageNode->SetScale(config.Scale, config.Scale);
+
+            var posX = (1.5f - config.Scale * 0.5f) * 96f + config.Offset.X * config.Scale;
+            var posY = 4                                        + config.Offset.Y * config.Scale;
             imageNode->SetPositionFloat(posX, posY);
         }
     }
 
-    protected override void Uninit() => 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-    public class Config : ModuleConfiguration
+    public class Config : ModuleConfig
     {
-        public float   Scale  = 1f;
         public Vector2 Offset;
+        public float   Scale = 1f;
     }
 }

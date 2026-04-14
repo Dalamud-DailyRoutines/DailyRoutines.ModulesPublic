@@ -1,42 +1,30 @@
 using System.Collections.Frozen;
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.Info.Game.Data;
+using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using OmenTools.Threading;
 using LuminaAction = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCancelCast : DailyModuleBase
+public unsafe class AutoCancelCast : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoCancelCastTitle"),
-        Description = GetLoc("AutoCancelCastDescription"),
-        Category    = ModuleCategories.Action
+        Title       = Lang.Get("AutoCancelCastTitle"),
+        Description = Lang.Get("AutoCancelCastDescription"),
+        Category    = ModuleCategory.Action
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static readonly FrozenSet<ObjectKind> ValidObjectKinds =
-    [
-        ObjectKind.Player,
-        ObjectKind.BattleNpc
-    ];
-
-    private static readonly FrozenSet<ConditionFlag> ValidConditions =
-    [
-        ConditionFlag.Casting
-    ];
-
-    private static FrozenSet<uint> TargetAreaActions { get; } =
-        LuminaGetter.Get<LuminaAction>()
-                    .Where(x => x.TargetArea)
-                    .Select(x => x.RowId)
-                    .ToFrozenSet();
 
     protected override void Init() =>
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
@@ -59,7 +47,7 @@ public unsafe class AutoCancelCast : DailyModuleBase
 
     private static void OnUpdate(IFramework _)
     {
-        if (!IsCasting)
+        if (!DService.Instance().Condition.IsCasting)
         {
             FrameworkManager.Instance().Unreg(OnUpdate);
             return;
@@ -67,8 +55,8 @@ public unsafe class AutoCancelCast : DailyModuleBase
 
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
-        if (localPlayer.CastActionType != ActionType.Action      ||
-            TargetAreaActions.Contains(localPlayer.CastActionID) ||
+        if (localPlayer.CastActionType != ActionType.Action                ||
+            Sheets.TargetAreaActions.ContainsKey(localPlayer.CastActionID) ||
             !LuminaGetter.TryGetRow(localPlayer.CastActionID, out LuminaAction actionRow))
         {
             FrameworkManager.Instance().Unreg(OnUpdate);
@@ -104,8 +92,23 @@ public unsafe class AutoCancelCast : DailyModuleBase
 
         void ExecuteCancast()
         {
-            if (Throttler.Throttle("AutoCancelCast-CancelCast", 100))
+            if (Throttler.Shared.Throttle("AutoCancelCast-CancelCast", 100))
                 ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.CancelCast);
         }
     }
+    
+    #region 常量
+    
+    private static readonly FrozenSet<ObjectKind> ValidObjectKinds =
+    [
+        ObjectKind.Player,
+        ObjectKind.BattleNpc
+    ];
+
+    private static readonly FrozenSet<ConditionFlag> ValidConditions =
+    [
+        ConditionFlag.Casting
+    ];
+    
+    #endregion
 }

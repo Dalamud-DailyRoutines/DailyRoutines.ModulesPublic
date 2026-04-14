@@ -1,81 +1,84 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud.Attributes;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDiscard : DailyModuleBase
+public unsafe class AutoDiscard : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDiscardTitle"),
-        Description = GetLoc("AutoDiscardDescription"),
-        Category    = ModuleCategories.General
+        Title       = Lang.Get("AutoDiscardTitle"),
+        Description = Lang.Get("AutoDiscardDescription"),
+        Category    = ModuleCategory.General
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private const string COMMAND = "/pdrdiscard";
+    private Config                moduleConfig = null!;
+    private LuminaSearcher<Item>? itemSearcher;
 
-    private static readonly Dictionary<DiscardBehaviour, string> DiscardBehaviourLoc = new()
-    {
-        [DiscardBehaviour.Discard] = LuminaWrapper.GetAddonText(91),
-        [DiscardBehaviour.Sell]    = LuminaWrapper.GetAddonText(93)
-    };
-
-    private static readonly InventoryType[] InventoryTypes =
-    [
-        InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3,
-        InventoryType.Inventory4
-    ];
-
-    private static LuminaSearcher<Item>? ItemSearcher;
-    private static Config                ModuleConfig = null!;
-
-    private static string NewGroupNameInput  = string.Empty;
-    private static string EditGroupNameInput = string.Empty;
-
-    private static string ItemSearchInput         = string.Empty;
-    private static string SelectedItemSearchInput = string.Empty;
-
-    private static string     AddItemsByNameInput  = string.Empty;
-    private static List<Item> LastAddedItemsByName = [];
-
-    private static uint       AddItemsByCategoryInput  = 61;
-    private static List<Item> LastAddedItemsByCategory = [];
+    private string     newGroupNameInput        = string.Empty;
+    private string     editGroupNameInput       = string.Empty;
+    private string     itemSearchInput          = string.Empty;
+    private string     selectedItemSearchInput  = string.Empty;
+    private string     addItemsByNameInput      = string.Empty;
+    private List<Item> lastAddedItemsByName     = [];
+    private uint       addItemsByCategoryInput  = 61;
+    private List<Item> lastAddedItemsByCategory = [];
 
     protected override void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
+        moduleConfig =   Config.Load(this) ?? new();
         TaskHelper   ??= new() { TimeoutMS = 2_000 };
 
         var itemNames = LuminaGetter.Get<Item>()
-                                    .Where(x => !string.IsNullOrEmpty(x.Name.ToString()) &&
-                                                x.ItemSortCategory.RowId != 3            && x.ItemSortCategory.RowId != 4)
+                                    .Where
+                                    (x => !string.IsNullOrEmpty(x.Name.ToString()) &&
+                                          x.ItemSortCategory.RowId != 3            &&
+                                          x.ItemSortCategory.RowId != 4
+                                    )
                                     .GroupBy(x => x.Name.ToString())
                                     .Select(x => x.First())
                                     .ToList();
-        ItemSearcher ??= new(itemNames, [x => x.Name.ToString(), x => x.RowId.ToString()]);
+        itemSearcher ??= new(itemNames, [x => x.Name.ToString(), x => x.RowId.ToString()]);
 
-        CommandManager.AddCommand(COMMAND, new(OnCommand) { HelpMessage = GetLoc("AutoDiscard-CommandHelp") });
+        CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoDiscard-CommandHelp") });
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreSetup, "SelectYesno", OnAddon);
+    }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+
+        CommandManager.Instance().RemoveCommand(COMMAND);
+        itemSearcher = null;
+
+        lastAddedItemsByName.Clear();
+        lastAddedItemsByCategory.Clear();
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"{COMMAND} → {GetLoc("AutoDiscard-CommandHelp")}");
+        ImGui.TextUnformatted($"{COMMAND} → {Lang.Get("AutoDiscard-CommandHelp")}");
 
         ImGui.Spacing();
 
@@ -83,22 +86,22 @@ public unsafe class AutoDiscard : DailyModuleBase
 
         ImGui.SameLine();
 
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileImport, GetLoc("Import")))
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileImport, Lang.Get("Import")))
         {
             var config = ImportFromClipboard<DiscardItemsGroup>();
 
             if (config != null)
             {
-                ModuleConfig.DiscardGroups.Add(config);
-                ModuleConfig.Save(this);
+                moduleConfig.DiscardGroups.Add(config);
+                moduleConfig.Save(this);
             }
         }
 
-        var       tableSize = new Vector2(ImGui.GetContentRegionAvail().X - 8f * GlobalFontScale, 0);
+        var       tableSize = new Vector2(ImGui.GetContentRegionAvail().X - 8f * GlobalUIScale, 0);
         using var table     = ImRaii.Table("DiscardGroupTable", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg, tableSize);
         if (!table) return;
 
-        var orderColumnWidth = ImGui.CalcTextSize((ModuleConfig.DiscardGroups.Count + 1).ToString()).X + 24;
+        var orderColumnWidth = ImGui.CalcTextSize((moduleConfig.DiscardGroups.Count + 1).ToString()).X + 24;
         ImGui.TableSetupColumn("Order",      ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize, orderColumnWidth);
         ImGui.TableSetupColumn("UniqueName", ImGuiTableColumnFlags.None,                                        20f);
         ImGui.TableSetupColumn("Items",      ImGuiTableColumnFlags.None,                                        80f);
@@ -110,18 +113,18 @@ public unsafe class AutoDiscard : DailyModuleBase
         ImGui.TableNextColumn();
 
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("Name"));
+        ImGuiOm.Text(Lang.Get("Name"));
 
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("AutoDiscard-ItemsOverview"));
+        ImGuiOm.Text(Lang.Get("AutoDiscard-ItemsOverview"));
 
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("Mode"));
+        ImGuiOm.Text(Lang.Get("Mode"));
 
         ImGui.TableNextColumn();
-        ImGuiOm.Text(GetLoc("Operation"));
+        ImGuiOm.Text(Lang.Get("Operation"));
 
-        for (var i = 0; i < ModuleConfig.DiscardGroups.Count; i++)
+        for (var i = 0; i < moduleConfig.DiscardGroups.Count; i++)
         {
             using var id = ImRaii.PushId(i);
 
@@ -143,86 +146,90 @@ public unsafe class AutoDiscard : DailyModuleBase
             OperationColumn(i);
         }
     }
-
+    
     #region Table
 
     private void DrawAddNewGroupButton()
     {
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, GetLoc("Add")))
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("Add")))
             ImGui.OpenPopup("AddNewGroupPopup");
 
         using var popup = ImRaii.Popup("AddNewGroupPopup", ImGuiWindowFlags.AlwaysAutoResize);
         if (!popup) return;
 
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
-        ImGui.InputTextWithHint("###NewGroupNameInput",
-                                GetLoc("AutoDiscard-AddNewGroupInputNameHelp"), ref NewGroupNameInput,
-                                100);
+        ImGui.SetNextItemWidth(300f * GlobalUIScale);
+        ImGui.InputTextWithHint
+        (
+            "###NewGroupNameInput",
+            Lang.Get("AutoDiscard-AddNewGroupInputNameHelp"),
+            ref newGroupNameInput,
+            100
+        );
 
-        if (ImGui.Button(GetLoc("Confirm")))
+        if (ImGui.Button(Lang.Get("Confirm")))
         {
-            var info = new DiscardItemsGroup(NewGroupNameInput);
+            var info = new DiscardItemsGroup(newGroupNameInput);
 
-            if (!string.IsNullOrWhiteSpace(NewGroupNameInput) && !ModuleConfig.DiscardGroups.Contains(info))
+            if (!string.IsNullOrWhiteSpace(newGroupNameInput) && !moduleConfig.DiscardGroups.Contains(info))
             {
-                ModuleConfig.DiscardGroups.Add(info);
-                SaveConfig(ModuleConfig);
+                moduleConfig.DiscardGroups.Add(info);
+                moduleConfig.Save(this);
 
-                NewGroupNameInput = string.Empty;
+                newGroupNameInput = string.Empty;
                 ImGui.CloseCurrentPopup();
             }
         }
 
         ImGui.SameLine();
-        if (ImGui.Button(GetLoc("Cancel")))
+        if (ImGui.Button(Lang.Get("Cancel")))
             ImGui.CloseCurrentPopup();
     }
 
     private void UniqueNameColumn(int index)
     {
-        if (index < 0 || index > ModuleConfig.DiscardGroups.Count) return;
+        if (index < 0 || index > moduleConfig.DiscardGroups.Count) return;
 
-        var       group = ModuleConfig.DiscardGroups[index];
+        var       group = moduleConfig.DiscardGroups[index];
         using var id    = ImRaii.PushId(index);
 
         if (ImGuiOm.SelectableFillCell($"{group.UniqueName}"))
         {
-            EditGroupNameInput = group.UniqueName;
+            editGroupNameInput = group.UniqueName;
             ImGui.OpenPopup("EditGroupPopup");
         }
 
         using var popup = ImRaii.Popup("EditGroupPopup", ImGuiWindowFlags.AlwaysAutoResize);
         if (!popup) return;
 
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
-        ImGui.InputTextWithHint("###EditGroupNameInput", GetLoc("AutoDiscard-AddNewGroupInputNameHelp"), ref EditGroupNameInput, 100);
+        ImGui.SetNextItemWidth(300f * GlobalUIScale);
+        ImGui.InputTextWithHint("###EditGroupNameInput", Lang.Get("AutoDiscard-AddNewGroupInputNameHelp"), ref editGroupNameInput, 100);
 
-        if (ImGui.Button(GetLoc("Confirm")))
+        if (ImGui.Button(Lang.Get("Confirm")))
         {
-            if (!string.IsNullOrWhiteSpace(EditGroupNameInput) &&
-                !ModuleConfig.DiscardGroups.Contains(new(EditGroupNameInput)))
+            if (!string.IsNullOrWhiteSpace(editGroupNameInput) &&
+                !moduleConfig.DiscardGroups.Contains(new(editGroupNameInput)))
             {
-                ModuleConfig.DiscardGroups
+                moduleConfig.DiscardGroups
                             .FirstOrDefault(x => x.UniqueName == group.UniqueName)
-                            .UniqueName = EditGroupNameInput;
+                            .UniqueName = editGroupNameInput;
 
-                SaveConfig(ModuleConfig);
-                EditGroupNameInput = string.Empty;
+                moduleConfig.Save(this);
+                editGroupNameInput = string.Empty;
 
                 ImGui.CloseCurrentPopup();
             }
         }
 
         ImGui.SameLine();
-        if (ImGui.Button(GetLoc("Cancel")))
+        if (ImGui.Button(Lang.Get("Cancel")))
             ImGui.CloseCurrentPopup();
     }
 
     private void ItemsColumn(int index)
     {
-        if (index < 0 || index > ModuleConfig.DiscardGroups.Count) return;
+        if (index < 0 || index > moduleConfig.DiscardGroups.Count) return;
 
-        var       group = ModuleConfig.DiscardGroups[index];
+        var       group = moduleConfig.DiscardGroups[index];
         using var id    = ImRaii.PushId(index);
 
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 2.5f);
@@ -248,7 +255,7 @@ public unsafe class AutoDiscard : DailyModuleBase
                 }
             }
             else
-                ImGui.TextUnformatted(GetLoc("AutoDiscard-NoItemInGroupHelp"));
+                ImGui.TextUnformatted(Lang.Get("AutoDiscard-NoItemInGroupHelp"));
         }
 
         if (ImGui.IsItemClicked())
@@ -265,13 +272,13 @@ public unsafe class AutoDiscard : DailyModuleBase
                 ImGui.Separator();
                 ImGui.Spacing();
 
-                if (ImGui.MenuItem(GetLoc("AutoDiscard-AddItemsBatch")))
+                if (ImGui.MenuItem(Lang.Get("AutoDiscard-AddItemsBatch")))
                 {
                     ImGui.CloseCurrentPopup();
                     popupToOpen = "AddItemsBatch";
                 }
 
-                if (ImGui.MenuItem(GetLoc("AutoDiscard-AddItemsManual")))
+                if (ImGui.MenuItem(Lang.Get("AutoDiscard-AddItemsManual")))
                 {
                     ImGui.CloseCurrentPopup();
                     popupToOpen = "AddItemsManual";
@@ -286,80 +293,84 @@ public unsafe class AutoDiscard : DailyModuleBase
         {
             if (popup)
             {
-                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("AutoDiscard-AddItemsByName"));
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoDiscard-AddItemsByName"));
 
                 using (ImRaii.PushIndent())
                 {
-                    using (ImRaii.Disabled(string.IsNullOrWhiteSpace(AddItemsByNameInput)))
+                    using (ImRaii.Disabled(string.IsNullOrWhiteSpace(addItemsByNameInput)))
                     {
-                        if (ImGui.Button($"{GetLoc("Add")}##AddItemByName"))
+                        if (ImGui.Button($"{Lang.Get("Add")}##AddItemByName"))
                         {
-                            LastAddedItemsByName = ItemSearcher.Data
-                                                               .Where(x => x.Name.ToString().Contains(AddItemsByNameInput, StringComparison.OrdinalIgnoreCase))
+                            lastAddedItemsByName = itemSearcher.Data
+                                                               .Where(x => x.Name.ToString().Contains(addItemsByNameInput, StringComparison.OrdinalIgnoreCase))
                                                                .ToList();
-                            LastAddedItemsByName.ForEach(x => group.Items.Add(x.RowId));
-                            SaveConfig(ModuleConfig);
+                            lastAddedItemsByName.ForEach(x => group.Items.Add(x.RowId));
+                            moduleConfig.Save(this);
 
-                            NotificationSuccess(GetLoc("AutoDiscard-Notification-ItemsAdded", LastAddedItemsByName.Count));
+                            NotifyHelper.Instance().NotificationSuccess(Lang.Get("AutoDiscard-Notification-ItemsAdded", lastAddedItemsByName.Count));
                         }
                     }
 
                     ImGui.SameLine();
 
-                    using (ImRaii.Disabled(LastAddedItemsByName.Count == 0))
+                    using (ImRaii.Disabled(lastAddedItemsByName.Count == 0))
                     {
-                        if (ImGui.Button($"{GetLoc("Cancel")}##AddItemByName"))
+                        if (ImGui.Button($"{Lang.Get("Cancel")}##AddItemByName"))
                         {
-                            LastAddedItemsByName.ForEach(x => group.Items.Remove(x.RowId));
-                            SaveConfig(ModuleConfig);
+                            lastAddedItemsByName.ForEach(x => group.Items.Remove(x.RowId));
+                            moduleConfig.Save(this);
 
-                            LastAddedItemsByName.Clear();
+                            lastAddedItemsByName.Clear();
                         }
                     }
 
                     ImGui.SameLine();
-                    ImGui.SetNextItemWidth(300f * GlobalFontScale);
-                    ImGui.InputText("###AddByItemName", ref AddItemsByNameInput, 128);
+                    ImGui.SetNextItemWidth(300f * GlobalUIScale);
+                    ImGui.InputText("###AddByItemName", ref addItemsByNameInput, 128);
                 }
 
-                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("AutoDiscard-AddItemsByCategory"));
+                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoDiscard-AddItemsByCategory"));
 
                 using (ImRaii.PushIndent())
                 {
-                    using (ImRaii.Disabled(!LuminaGetter.TryGetRow<ItemUICategory>(AddItemsByCategoryInput, out _)))
+                    using (ImRaii.Disabled(!LuminaGetter.TryGetRow<ItemUICategory>(addItemsByCategoryInput, out _)))
                     {
-                        if (ImGui.Button($"{GetLoc("Add")}##AddItemByCategory"))
+                        if (ImGui.Button($"{Lang.Get("Add")}##AddItemByCategory"))
                         {
-                            LastAddedItemsByCategory = ItemSearcher.Data
-                                                                   .Where(x => x.ItemUICategory.RowId == AddItemsByCategoryInput)
+                            lastAddedItemsByCategory = itemSearcher.Data
+                                                                   .Where(x => x.ItemUICategory.RowId == addItemsByCategoryInput)
                                                                    .ToList();
-                            LastAddedItemsByCategory.ForEach(x => group.Items.Add(x.RowId));
-                            SaveConfig(ModuleConfig);
+                            lastAddedItemsByCategory.ForEach(x => group.Items.Add(x.RowId));
+                            moduleConfig.Save(this);
 
-                            NotificationSuccess(GetLoc("AutoDiscard-Notification-ItemsAdded", LastAddedItemsByCategory.Count));
+                            NotifyHelper.Instance().NotificationSuccess(Lang.Get("AutoDiscard-Notification-ItemsAdded", lastAddedItemsByCategory.Count));
                         }
                     }
 
                     ImGui.SameLine();
 
-                    using (ImRaii.Disabled(LastAddedItemsByCategory.Count == 0))
+                    using (ImRaii.Disabled(lastAddedItemsByCategory.Count == 0))
                     {
-                        if (ImGui.Button($"{GetLoc("Cancel")}##AddItemByCategory"))
+                        if (ImGui.Button($"{Lang.Get("Cancel")}##AddItemByCategory"))
                         {
-                            LastAddedItemsByCategory.ForEach(x => group.Items.Remove(x.RowId));
-                            SaveConfig(ModuleConfig);
+                            lastAddedItemsByCategory.ForEach(x => group.Items.Remove(x.RowId));
+                            moduleConfig.Save(this);
 
-                            LastAddedItemsByCategory.Clear();
+                            lastAddedItemsByCategory.Clear();
                         }
                     }
 
                     ImGui.SameLine();
-                    ImGui.SetNextItemWidth(300f * GlobalFontScale);
+                    ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-                    using (var combo = ImRaii.Combo("###AddItemsByCategoryCombo",
-                                                    LuminaGetter.TryGetRow<ItemUICategory>(AddItemsByCategoryInput, out var uiCategory)
-                                                        ? uiCategory.Name.ToString()
-                                                        : string.Empty, ImGuiComboFlags.HeightLarge))
+                    using (var combo = ImRaii.Combo
+                           (
+                               "###AddItemsByCategoryCombo",
+                               LuminaGetter.TryGetRow<ItemUICategory>(addItemsByCategoryInput, out var uiCategory)
+                                   ? uiCategory.Name.ToString()
+                                   : string.Empty,
+                               ImGuiComboFlags.HeightLarge
+                           ))
                     {
                         if (combo)
                         {
@@ -369,9 +380,14 @@ public unsafe class AutoDiscard : DailyModuleBase
                                 if (string.IsNullOrEmpty(name)) continue;
                                 if (!ImageHelper.TryGetGameIcon((uint)itemUiCategory.Icon, out var icon)) continue;
 
-                                if (ImGuiOm.SelectableImageWithText(icon.Handle, new(ImGui.GetTextLineHeightWithSpacing()), name,
-                                                                    AddItemsByCategoryInput == itemUiCategory.RowId))
-                                    AddItemsByCategoryInput = itemUiCategory.RowId;
+                                if (ImGuiOm.SelectableImageWithText
+                                    (
+                                        icon.Handle,
+                                        new(ImGui.GetTextLineHeightWithSpacing()),
+                                        name,
+                                        addItemsByCategoryInput == itemUiCategory.RowId
+                                    ))
+                                    addItemsByCategoryInput = itemUiCategory.RowId;
                             }
                         }
                     }
@@ -383,14 +399,14 @@ public unsafe class AutoDiscard : DailyModuleBase
         {
             if (popup)
             {
-                var leftChildSize = new Vector2(300 * GlobalFontScale, 500 * GlobalFontScale);
+                var leftChildSize = new Vector2(300 * GlobalUIScale, 500 * GlobalUIScale);
 
                 using (var leftChild = ImRaii.Child("SelectedItemChild", leftChildSize, true))
                 {
                     if (leftChild)
                     {
                         ImGui.SetNextItemWidth(-1f);
-                        ImGui.InputTextWithHint("###SelectedItemSearchInput", GetLoc("PleaseSearch"), ref SelectedItemSearchInput, 100);
+                        ImGui.InputTextWithHint("###SelectedItemSearchInput", Lang.Get("PleaseSearch"), ref selectedItemSearchInput, 100);
 
                         ImGui.Separator();
 
@@ -402,14 +418,17 @@ public unsafe class AutoDiscard : DailyModuleBase
                             var specificItemIcon = DService.Instance().Texture.GetFromGameIcon(new(specificItem.Icon)).GetWrapOrDefault();
                             if (specificItemIcon == null) continue;
 
-                            if (!string.IsNullOrWhiteSpace(SelectedItemSearchInput) &&
-                                !specificItem.Name.ToString().Contains(SelectedItemSearchInput, StringComparison.OrdinalIgnoreCase)) continue;
+                            if (!string.IsNullOrWhiteSpace(selectedItemSearchInput) &&
+                                !specificItem.Name.ToString().Contains(selectedItemSearchInput, StringComparison.OrdinalIgnoreCase)) continue;
 
-                            if (ImGuiOm.SelectableImageWithText(specificItemIcon.Handle,
-                                                                new(ImGui.GetTextLineHeightWithSpacing()),
-                                                                specificItem.Name.ToString(),
-                                                                false,
-                                                                ImGuiSelectableFlags.DontClosePopups))
+                            if (ImGuiOm.SelectableImageWithText
+                                (
+                                    specificItemIcon.Handle,
+                                    new(ImGui.GetTextLineHeightWithSpacing()),
+                                    specificItem.Name.ToString(),
+                                    false,
+                                    ImGuiSelectableFlags.DontClosePopups
+                                ))
                                 group.Items.Remove(specificItem.RowId);
                         }
                     }
@@ -436,28 +455,31 @@ public unsafe class AutoDiscard : DailyModuleBase
                     if (rightChild)
                     {
                         ImGui.SetNextItemWidth(-1f);
-                        if (ImGui.InputTextWithHint("###GameItemSearchInput", GetLoc("PleaseSearch"), ref ItemSearchInput, 100))
-                            ItemSearcher.Search(ItemSearchInput);
+                        if (ImGui.InputTextWithHint("###GameItemSearchInput", Lang.Get("PleaseSearch"), ref itemSearchInput, 100))
+                            itemSearcher.Search(itemSearchInput);
 
                         ImGui.Separator();
 
-                        foreach (var item in ItemSearcher.SearchResult)
+                        foreach (var item in itemSearcher.SearchResult)
                         {
                             if (group.Items.Contains(item.RowId)) continue;
 
                             var itemIcon = DService.Instance().Texture.GetFromGameIcon(new(item.Icon)).GetWrapOrDefault();
                             if (itemIcon == null) continue;
 
-                            if (ImGuiOm.SelectableImageWithText(itemIcon.Handle,
-                                                                new(ImGui.GetTextLineHeightWithSpacing()),
-                                                                item.Name.ToString(),
-                                                                group.Items.Contains(item.RowId),
-                                                                ImGuiSelectableFlags.DontClosePopups))
+                            if (ImGuiOm.SelectableImageWithText
+                                (
+                                    itemIcon.Handle,
+                                    new(ImGui.GetTextLineHeightWithSpacing()),
+                                    item.Name.ToString(),
+                                    group.Items.Contains(item.RowId),
+                                    ImGuiSelectableFlags.DontClosePopups
+                                ))
                             {
                                 if (!group.Items.Remove(item.RowId))
                                     group.Items.Add(item.RowId);
 
-                                SaveConfig(ModuleConfig);
+                                moduleConfig.Save(this);
                             }
                         }
                     }
@@ -468,9 +490,9 @@ public unsafe class AutoDiscard : DailyModuleBase
 
     private void BehaviourColumn(int index)
     {
-        if (index < 0 || index > ModuleConfig.DiscardGroups.Count) return;
+        if (index < 0 || index > moduleConfig.DiscardGroups.Count) return;
 
-        var       group = ModuleConfig.DiscardGroups[index];
+        var       group = moduleConfig.DiscardGroups[index];
         using var id    = ImRaii.PushId(index);
 
         foreach (var behaviourPair in DiscardBehaviourLoc)
@@ -478,7 +500,7 @@ public unsafe class AutoDiscard : DailyModuleBase
             if (ImGui.RadioButton(behaviourPair.Value, behaviourPair.Key == group.Behaviour))
             {
                 group.Behaviour = behaviourPair.Key;
-                SaveConfig(ModuleConfig);
+                moduleConfig.Save(this);
             }
 
             ImGui.SameLine();
@@ -487,26 +509,26 @@ public unsafe class AutoDiscard : DailyModuleBase
 
     private void OperationColumn(int index)
     {
-        if (index < 0 || index > ModuleConfig.DiscardGroups.Count) return;
+        if (index < 0 || index > moduleConfig.DiscardGroups.Count) return;
 
-        var       group = ModuleConfig.DiscardGroups[index];
+        var       group = moduleConfig.DiscardGroups[index];
         using var id    = ImRaii.PushId(index);
 
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
-            if (ImGuiOm.ButtonIcon($"Run_{index}", FontAwesomeIcon.Play, GetLoc("Run")))
+            if (ImGuiOm.ButtonIcon($"Run_{index}", FontAwesomeIcon.Play, Lang.Get("Run")))
                 group.Enqueue(TaskHelper);
         }
 
         ImGui.SameLine();
-        if (ImGuiOm.ButtonIcon($"Stop_{index}", FontAwesomeIcon.Stop, GetLoc("Stop")))
+        if (ImGuiOm.ButtonIcon($"Stop_{index}", FontAwesomeIcon.Stop, Lang.Get("Stop")))
             TaskHelper.Abort();
 
         using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
             ImGui.SameLine();
 
-            if (ImGuiOm.ButtonIcon($"Copy_{index}", FontAwesomeIcon.Copy, GetLoc("Copy")))
+            if (ImGuiOm.ButtonIcon($"Copy_{index}", FontAwesomeIcon.Copy, Lang.Get("Copy")))
             {
                 var newGroup = new DiscardItemsGroup(GenerateUniqueName(group.UniqueName))
                 {
@@ -514,22 +536,22 @@ public unsafe class AutoDiscard : DailyModuleBase
                     Items     = group.Items
                 };
 
-                ModuleConfig.DiscardGroups.Add(newGroup);
-                SaveConfig(ModuleConfig);
+                moduleConfig.DiscardGroups.Add(newGroup);
+                moduleConfig.Save(this);
             }
 
             ImGui.SameLine();
-            if (ImGuiOm.ButtonIcon($"Export_{index}", FontAwesomeIcon.FileExport, GetLoc("Export")))
+            if (ImGuiOm.ButtonIcon($"Export_{index}", FontAwesomeIcon.FileExport, Lang.Get("Export")))
                 ExportToClipboard(group);
 
             ImGui.SameLine();
 
-            if (ImGuiOm.ButtonIcon($"Delete_{index}", FontAwesomeIcon.TrashAlt, GetLoc("HoldCtrlToDelete")))
+            if (ImGuiOm.ButtonIcon($"Delete_{index}", FontAwesomeIcon.TrashAlt, Lang.Get("HoldCtrlToDelete")))
             {
                 if (ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
                 {
-                    ModuleConfig.DiscardGroups.Remove(group);
-                    SaveConfig(ModuleConfig);
+                    moduleConfig.DiscardGroups.Remove(group);
+                    moduleConfig.Save(this);
                 }
             }
         }
@@ -539,52 +561,32 @@ public unsafe class AutoDiscard : DailyModuleBase
 
     private void OnCommand(string command, string arguments) =>
         EnqueueDiscardGroup(arguments.Trim());
+    
+    private void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        if (!TaskHelper.IsBusy) return;
+        AddonSelectYesnoEvent.ClickYes();
+    }
 
     public void EnqueueDiscardGroup(int index)
     {
-        if (index < 0 || index >= ModuleConfig.DiscardGroups.Count) return;
-        var group = ModuleConfig.DiscardGroups[index];
+        if (index < 0 || index >= moduleConfig.DiscardGroups.Count) return;
+        var group = moduleConfig.DiscardGroups[index];
         if (group.Items.Count > 0)
             group.Enqueue(TaskHelper);
     }
 
     public void EnqueueDiscardGroup(string uniqueName)
     {
-        var group = ModuleConfig.DiscardGroups.FirstOrDefault(x => x.UniqueName == uniqueName && x.Items.Count > 0);
+        var group = moduleConfig.DiscardGroups.FirstOrDefault(x => x.UniqueName == uniqueName && x.Items.Count > 0);
         if (group == null) return;
 
         group.Enqueue(TaskHelper);
     }
 
-    private static bool TrySearchItemInInventory(uint itemID, out List<InventoryItem> foundItem)
+    private string GenerateUniqueName(string baseName)
     {
-        foundItem = [];
-        if (InventoryExpansion == null) return false;
-
-        var inventoryManager = InventoryManager.Instance();
-        if (inventoryManager == null) return false;
-
-        foreach (var type in InventoryTypes)
-        {
-            var container = inventoryManager->GetInventoryContainer(type);
-            if (container == null) return false;
-
-            for (var i = 0; i < container->Size; i++)
-            {
-                var slot       = container->GetInventorySlot(i);
-                var slotItemID = slot->ItemId % 100_0000;
-                if (slotItemID != itemID) continue;
-
-                foundItem.Add(*slot);
-            }
-        }
-
-        return foundItem.Count > 0;
-    }
-
-    private static string GenerateUniqueName(string baseName)
-    {
-        var existingNames = ModuleConfig.DiscardGroups.Select(x => x.UniqueName).ToHashSet();
+        var existingNames = moduleConfig.DiscardGroups.Select(x => x.UniqueName).ToHashSet();
 
         if (!existingNames.Contains(baseName))
             return baseName;
@@ -616,28 +618,7 @@ public unsafe class AutoDiscard : DailyModuleBase
             counter++;
         }
     }
-
-    private void OnAddon(AddonEvent type, AddonArgs args)
-    {
-        if (!TaskHelper.IsBusy) return;
-        ClickSelectYesnoYes();
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-        CommandManager.RemoveCommand(COMMAND);
-        ItemSearcher = null;
-
-        LastAddedItemsByName.Clear();
-        LastAddedItemsByCategory.Clear();
-    }
-
-    [IPCProvider("DailyRoutines.Modules.AutoDiscard.IsBusy")]
-    private bool IsBusy() =>
-        TaskHelper.IsBusy;
-
+    
     private enum DiscardBehaviour
     {
         Discard,
@@ -654,6 +635,14 @@ public unsafe class AutoDiscard : DailyModuleBase
         public HashSet<uint>    Items      { get; set; } = [];
         public DiscardBehaviour Behaviour  { get; set; } = DiscardBehaviour.Discard;
 
+        public bool Equals(DiscardItemsGroup? other)
+        {
+            if (other is null || GetType() != other.GetType())
+                return false;
+
+            return UniqueName == other.UniqueName;
+        }
+
         public void Enqueue(TaskHelper? taskHelper)
         {
             if (taskHelper == null) return;
@@ -662,7 +651,7 @@ public unsafe class AutoDiscard : DailyModuleBase
 
             foreach (var item in Items)
             {
-                if (!TrySearchItemInInventory(item, out var foundItem) || foundItem.Count <= 0) continue;
+                if (!Inventories.Player.TryGetItems(x => x.GetBaseItemId() == item, out var foundItem) || foundItem.Count <= 0) continue;
 
                 foreach (var fItem in foundItem)
                 {
@@ -677,11 +666,16 @@ public unsafe class AutoDiscard : DailyModuleBase
 
                     if (Behaviour == DiscardBehaviour.Discard)
                     {
-                        taskHelper.Enqueue(() => AgentInventoryContext.Instance()->DiscardItem(itemInventory,
-                                                                                               type,
-                                                                                               slot,
-                                                                                               AgentInventory.Instance()->GetActiveAddonID()));
-                        taskHelper.Enqueue(() => { ClickSelectYesnoYes(); });
+                        taskHelper.Enqueue
+                        (() => AgentInventoryContext.Instance()->DiscardItem
+                         (
+                             itemInventory,
+                             type,
+                             slot,
+                             AgentInventory.Instance()->GetActiveAddonID()
+                         )
+                        );
+                        taskHelper.Enqueue(() => { AddonSelectYesnoEvent.ClickYes(); });
                     }
                     else
                     {
@@ -705,20 +699,20 @@ public unsafe class AutoDiscard : DailyModuleBase
             switch (Behaviour)
             {
                 case DiscardBehaviour.Discard:
-                    if (!ClickContextMenu(LuminaWrapper.GetAddonText(91)))
+                    if (!AddonContextMenuEvent.Select(LuminaWrapper.GetAddonText(91)))
                     {
                         ContextMenuAddon->Close(true);
                         break;
                     }
 
-                    taskHelper.Enqueue(() => ClickSelectYesnoYes(), "ConfirmDiscard", weight: 1);
+                    taskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes(), "ConfirmDiscard", weight: 1);
                     break;
                 case DiscardBehaviour.Sell:
-                    if (!ClickContextMenu(LuminaWrapper.GetAddonText(5480)) &&
-                        !ClickContextMenu(LuminaWrapper.GetAddonText(93)))
+                    if (!AddonContextMenuEvent.Select(LuminaWrapper.GetAddonText(5480)) &&
+                        !AddonContextMenuEvent.Select(LuminaWrapper.GetAddonText(93)))
                     {
                         ContextMenuAddon->Close(true);
-                        ChatError(GetLoc("AutoDiscard-NoSellPage"));
+                        NotifyHelper.Instance().ChatError(Lang.Get("AutoDiscard-NoSellPage"));
 
                         taskHelper.Abort();
                     }
@@ -727,14 +721,6 @@ public unsafe class AutoDiscard : DailyModuleBase
             }
 
             return true;
-        }
-
-        public bool Equals(DiscardItemsGroup? other)
-        {
-            if (other is null || GetType() != other.GetType())
-                return false;
-
-            return UniqueName == other.UniqueName;
         }
 
         public override bool Equals(object? obj) => Equals(obj as DiscardItemsGroup);
@@ -750,8 +736,28 @@ public unsafe class AutoDiscard : DailyModuleBase
         public static bool operator !=(DiscardItemsGroup lhs, DiscardItemsGroup rhs) => !(lhs == rhs);
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public List<DiscardItemsGroup> DiscardGroups = [];
     }
+
+    #region IPC
+    
+    [IPCProvider("DailyRoutines.Modules.AutoDiscard.IsBusy")]
+    private bool IsBusy() =>
+        TaskHelper.IsBusy;
+
+    #endregion
+
+    #region 常量
+
+    private const string COMMAND = "/pdrdiscard";
+
+    private static readonly FrozenDictionary<DiscardBehaviour, string> DiscardBehaviourLoc = new Dictionary<DiscardBehaviour, string>
+    {
+        [DiscardBehaviour.Discard] = LuminaWrapper.GetAddonText(91),
+        [DiscardBehaviour.Sell]    = LuminaWrapper.GetAddonText(93)
+    }.ToFrozenDictionary();
+
+    #endregion
 }

@@ -1,29 +1,32 @@
-using System;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyLeveUpdate : DailyModuleBase
+public unsafe class AutoNotifyLeveUpdate : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyLeveUpdateTitle"),
-        Description = GetLoc("AutoNotifyLeveUpdateDescription"),
-        Category    = ModuleCategories.Notice,
+        Title       = Lang.Get("AutoNotifyLeveUpdateTitle"),
+        Description = Lang.Get("AutoNotifyLeveUpdateDescription"),
+        Category    = ModuleCategory.Notice,
         Author      = ["HSS"]
     };
+    
+    private Config config = null!;
 
-    private static Config ModuleConfig = null!;
-
-    private static DateTime NextLeveCheck = DateTime.MinValue;
-    private static DateTime FinishTime    = StandardTimeManager.Instance().UTCNow;
-    private static int      LastLeve;
+    private DateTime nextLeveCheck = DateTime.MinValue;
+    private DateTime finishTime    = StandardTimeManager.Instance().UTCNow;
+    private int      lastLeve;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
         FrameworkManager.Instance().Reg(OnUpdate, 60_000);
     }
 
@@ -32,52 +35,52 @@ public unsafe class AutoNotifyLeveUpdate : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-NumText")}{LastLeve}");
-        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{FinishTime.ToLocalTime():g}");
-        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{NextLeveCheck.ToLocalTime():g}");
+        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-NumText")}{lastLeve}");
+        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{finishTime.ToLocalTime():g}");
+        ImGui.TextUnformatted($"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{nextLeveCheck.ToLocalTime():g}");
 
-        if (ImGui.Checkbox(Lang.Get("AutoNotifyLeveUpdate-OnChatMessageConfig"), ref ModuleConfig.OnChatMessage))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("AutoNotifyLeveUpdate-OnChatMessageConfig"), ref config.OnChatMessage))
+            config.Save(this);
 
-        ImGui.SetNextItemWidth(200f * GlobalFontScale);
+        ImGui.SetNextItemWidth(200f * GlobalUIScale);
 
         if (ImGui.SliderInt
             (
                 Lang.Get("AutoNotifyLeveUpdate-NotificationThreshold"),
-                ref ModuleConfig.NotificationThreshold,
+                ref config.NotificationThreshold,
                 1,
                 100
             ))
         {
-            LastLeve = 0;
-            SaveConfig(ModuleConfig);
+            lastLeve = 0;
+            config.Save(this);
         }
     }
 
-    private static void OnUpdate(IFramework _)
+    private void OnUpdate(IFramework _)
     {
         if (!GameState.IsLoggedIn)
             return;
 
         var nowUTC         = StandardTimeManager.Instance().UTCNow;
         var leveAllowances = QuestManager.Instance()->NumLeveAllowances;
-        if (LastLeve == leveAllowances) return;
+        if (lastLeve == leveAllowances) return;
 
-        var decreasing = leveAllowances > LastLeve;
-        LastLeve      = leveAllowances;
-        NextLeveCheck = MathNextTime(nowUTC);
-        FinishTime    = MathFinishTime(leveAllowances, nowUTC);
+        var decreasing = leveAllowances > lastLeve;
+        lastLeve      = leveAllowances;
+        nextLeveCheck = MathNextTime(nowUTC);
+        finishTime    = MathFinishTime(leveAllowances, nowUTC);
 
-        if (leveAllowances >= ModuleConfig.NotificationThreshold && decreasing)
+        if (leveAllowances >= config.NotificationThreshold && decreasing)
         {
             var message = $"{Lang.Get("AutoNotifyLeveUpdate-NotificationTitle")}\n"                        +
                           $"{Lang.Get("AutoNotifyLeveUpdate-NumText")}{leveAllowances}\n"                  +
-                          $"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{FinishTime.ToLocalTime():g}\n" +
-                          $"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{NextLeveCheck.ToLocalTime():g}";
+                          $"{Lang.Get("AutoNotifyLeveUpdate-FullTimeText")}{finishTime.ToLocalTime():g}\n" +
+                          $"{Lang.Get("AutoNotifyLeveUpdate-UpdateTimeText")}{nextLeveCheck.ToLocalTime():g}";
 
-            if (ModuleConfig.OnChatMessage)
-                Chat(message);
-            NotificationInfo(message);
+            if (config.OnChatMessage)
+                NotifyHelper.Instance().Chat(message);
+            NotifyHelper.Instance().NotificationInfo(message);
         }
     }
 
@@ -86,17 +89,17 @@ public unsafe class AutoNotifyLeveUpdate : DailyModuleBase
 
     private static DateTime MathFinishTime(int num, DateTime nowUTC)
     {
-        if (num >= 100) 
+        if (num >= 100)
             return nowUTC;
-        
+
         var requiredPeriods      = (100 - num + 2) / 3;
         var lastIncrementTimeUTC = new DateTime(nowUTC.Year, nowUTC.Month, nowUTC.Day, nowUTC.Hour >= 12 ? 12 : 0, 0, 0, DateTimeKind.Utc);
         return lastIncrementTimeUTC.AddHours(12 * requiredPeriods);
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
-        public bool OnChatMessage         = true;
         public int  NotificationThreshold = 97;
+        public bool OnChatMessage         = true;
     }
 }

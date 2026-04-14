@@ -1,54 +1,18 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
+using System.Collections.Frozen;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using DailyRoutines.Helpers;
 using Dalamud.Game.Text;
 using Dalamud.Utility;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using OmenTools.Dalamud;
+using OmenTools.OmenService;
+using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoReplyChatBot
 {
-    private const string HTTP_CLIENT_NAME = "AutoReplyChatBot-Default";
-
-    private static readonly Dictionary<APIProvider, IChatBackend> Backends = new()
-    {
-        [APIProvider.OpenAI] = new OpenAIBackend(),
-        [APIProvider.Ollama] = new OllamaBackend()
-    };
-
-    private static readonly Dictionary<XivChatType, string> ChatTypeToCommand = new()
-    {
-        [XivChatType.Party]           = "/p",
-        [XivChatType.FreeCompany]     = "/fc",
-        [XivChatType.Ls1]             = "/l1",
-        [XivChatType.Ls2]             = "/l2",
-        [XivChatType.Ls3]             = "/l3",
-        [XivChatType.Ls4]             = "/l4",
-        [XivChatType.Ls5]             = "/l5",
-        [XivChatType.Ls6]             = "/l6",
-        [XivChatType.Ls7]             = "/l7",
-        [XivChatType.Ls8]             = "/l8",
-        [XivChatType.CrossLinkShell1] = "/cwlinkshell1",
-        [XivChatType.CrossLinkShell2] = "/cwlinkshell2",
-        [XivChatType.CrossLinkShell3] = "/cwlinkshell3",
-        [XivChatType.CrossLinkShell4] = "/cwlinkshell4",
-        [XivChatType.CrossLinkShell5] = "/cwlinkshell5",
-        [XivChatType.CrossLinkShell6] = "/cwlinkshell6",
-        [XivChatType.CrossLinkShell7] = "/cwlinkshell7",
-        [XivChatType.CrossLinkShell8] = "/cwlinkshell8",
-        [XivChatType.Say]             = "/say",
-        [XivChatType.Yell]            = "/yell",
-        [XivChatType.Shout]           = "/shout"
-    };
-
     private static void SendReply(XivChatType originalType, string target, string reply)
     {
         if (originalType == XivChatType.TellIncoming || !ChatTypeToCommand.TryGetValue(originalType, out var command))
@@ -60,7 +24,7 @@ public partial class AutoReplyChatBot
         ChatManager.Instance().SendMessage($"{command} {reply}");
     }
 
-    private static async Task GenerateAndReplyAsync(string name, string world, XivChatType originalType, CancellationToken ct)
+    private async Task GenerateAndReplyAsync(string name, string world, XivChatType originalType, CancellationToken ct)
     {
         var target = $"{name}@{world}";
         var reply  = string.Empty;
@@ -69,7 +33,7 @@ public partial class AutoReplyChatBot
 
         try
         {
-            reply = await GenerateReplyAsync(ModuleConfig, target, ct) ?? string.Empty;
+            reply = await GenerateReplyAsync(config, target, ct) ?? string.Empty;
         }
         catch (OperationCanceledException)
         {
@@ -77,8 +41,8 @@ public partial class AutoReplyChatBot
         }
         catch (Exception ex)
         {
-            NotificationError(GetLoc("AutoReplyChatBot-ErrorTitle"));
-            Error($"{GetLoc("AutoReplyChatBot-ErrorTitle")}:", ex);
+            NotifyHelper.Instance().NotificationError(Lang.Get("AutoReplyChatBot-ErrorTitle"));
+            DLog.Error($"{Lang.Get("AutoReplyChatBot-ErrorTitle")}:", ex);
 
             reply = string.Empty;
         }
@@ -88,18 +52,18 @@ public partial class AutoReplyChatBot
 
         SendReply(originalType, target, reply);
 
-        NotificationInfo(reply, $"{GetLoc("AutoReplyChatBot-AutoRepliedTo")}{target}");
+        NotifyHelper.Instance().NotificationInfo(reply, $"{Lang.Get("AutoReplyChatBot-AutoRepliedTo")}{target}");
         AppendHistory(target, "assistant", reply);
     }
 
-    private static async Task<string?> GenerateReplyAsync(Config cfg, string historyKey, CancellationToken ct)
+    private async Task<string?> GenerateReplyAsync(Config cfg, string historyKey, CancellationToken ct)
     {
         UpdateGameContextInWorldBook();
 
         if (cfg.APIKey.IsNullOrWhitespace() || cfg.BaseURL.IsNullOrWhitespace() || cfg.Model.IsNullOrWhitespace())
             return null;
 
-        var hist = ModuleConfig.Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
+        var hist = config.Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
         if (hist.Count == 0)
             return null;
 
@@ -118,7 +82,7 @@ public partial class AutoReplyChatBot
 
             if (filteredMessage != userMessage)
             {
-                if (ModuleConfig.Histories.TryGetValue(historyKey, out var originalList))
+                if (config.Histories.TryGetValue(historyKey, out var originalList))
                 {
                     for (var i = originalList.Count - 1; i >= 0; i--)
                         if (originalList[i].Role == "user")
@@ -157,7 +121,7 @@ public partial class AutoReplyChatBot
 
             if (!string.IsNullOrWhiteSpace(lastUserMessage))
             {
-                var relevantEntries = WorldBookManager.FindRelevantEntries(lastUserMessage, cfg.WorldBookEntry);
+                var relevantEntries = WorldBookManager.FindRelevantEntries(this, lastUserMessage, cfg.WorldBookEntry);
                 worldBookContext = WorldBookManager.BuildWorldBookContext(relevantEntries, cfg.MaxWorldBookContext);
             }
         }
@@ -187,7 +151,7 @@ public partial class AutoReplyChatBot
         var json = JsonConvert.SerializeObject(body);
         req.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        using var resp = await HTTPClientHelper.Get(HTTP_CLIENT_NAME).SendAsync(req, ct).ConfigureAwait(false);
+        using var resp = await HTTPClientHelper.Instance().Get(HTTP_CLIENT_NAME).SendAsync(req, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
 
         var jsonResponse = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -225,7 +189,7 @@ public partial class AutoReplyChatBot
 
         try
         {
-            using var resp = await HTTPClientHelper.Get(HTTP_CLIENT_NAME).SendAsync(req, ct).ConfigureAwait(false);
+            using var resp = await HTTPClientHelper.Instance().Get(HTTP_CLIENT_NAME).SendAsync(req, ct).ConfigureAwait(false);
             resp.EnsureSuccessStatusCode();
 
             var jsonResponse = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -237,7 +201,7 @@ public partial class AutoReplyChatBot
         }
         catch (Exception ex)
         {
-            Error($"过滤失败: {ex.Message}");
+            DLog.Error($"过滤失败: {ex.Message}");
             return null;
         }
     }
@@ -319,4 +283,41 @@ public partial class AutoReplyChatBot
             return messageToken?["content"]?.Value<string>();
         }
     }
+    
+    #region 常量
+    
+    private const string HTTP_CLIENT_NAME = "AutoReplyChatBot-Default";
+
+    private static readonly FrozenDictionary<APIProvider, IChatBackend> Backends = new Dictionary<APIProvider, IChatBackend>()
+    {
+        [APIProvider.OpenAI] = new OpenAIBackend(),
+        [APIProvider.Ollama] = new OllamaBackend()
+    }.ToFrozenDictionary();
+
+    private static readonly FrozenDictionary<XivChatType, string> ChatTypeToCommand = new Dictionary<XivChatType, string>
+    {
+        [XivChatType.Party]           = "/p",
+        [XivChatType.FreeCompany]     = "/fc",
+        [XivChatType.Ls1]             = "/l1",
+        [XivChatType.Ls2]             = "/l2",
+        [XivChatType.Ls3]             = "/l3",
+        [XivChatType.Ls4]             = "/l4",
+        [XivChatType.Ls5]             = "/l5",
+        [XivChatType.Ls6]             = "/l6",
+        [XivChatType.Ls7]             = "/l7",
+        [XivChatType.Ls8]             = "/l8",
+        [XivChatType.CrossLinkShell1] = "/cwlinkshell1",
+        [XivChatType.CrossLinkShell2] = "/cwlinkshell2",
+        [XivChatType.CrossLinkShell3] = "/cwlinkshell3",
+        [XivChatType.CrossLinkShell4] = "/cwlinkshell4",
+        [XivChatType.CrossLinkShell5] = "/cwlinkshell5",
+        [XivChatType.CrossLinkShell6] = "/cwlinkshell6",
+        [XivChatType.CrossLinkShell7] = "/cwlinkshell7",
+        [XivChatType.CrossLinkShell8] = "/cwlinkshell8",
+        [XivChatType.Say]             = "/say",
+        [XivChatType.Yell]            = "/yell",
+        [XivChatType.Shout]           = "/shout"
+    }.ToFrozenDictionary();
+    
+    #endregion
 }

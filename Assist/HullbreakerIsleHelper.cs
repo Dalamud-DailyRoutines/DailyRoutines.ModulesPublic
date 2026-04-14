@@ -1,75 +1,76 @@
-using System.Collections.Generic;
+using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class HullbreakerIsleHelper : DailyModuleBase
+public class HullbreakerIsleHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("HullbreakerIsleHelperTitle"),
-        Description = GetLoc("HullbreakerIsleHelperDescription"),
-        Category    = ModuleCategories.Assist
+        Title       = Lang.Get("HullbreakerIsleHelperTitle"),
+        Description = Lang.Get("HullbreakerIsleHelperDescription"),
+        Category    = ModuleCategory.Assist
     };
-
-    private static readonly HashSet<uint> FakeTreasuresID = [2004074, 2004075, 2004076, 2004077, 2004078, 2004079];
-
-    private static List<Vector3> TrapPositions         = [];
-    private static List<Vector3> FakeTreasurePositions = [];
+    
+    private List<Vector3> trapPositions         = [];
+    private List<Vector3> fakeTreasurePositions = [];
 
     protected override void Init()
     {
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-        WindowManager.Draw -= OnDraw;
+        WindowManager.Instance().PostDraw -= OnDraw;
         FrameworkManager.Instance().Unreg(OnUpdate);
-        
-        TrapPositions.Clear();
-        FakeTreasurePositions.Clear();
+
+        trapPositions.Clear();
+        fakeTreasurePositions.Clear();
     }
 
-    private static void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(ushort zone)
     {
-        WindowManager.Draw -= OnDraw;
+        WindowManager.Instance().PostDraw -= OnDraw;
         FrameworkManager.Instance().Unreg(OnUpdate);
-        TrapPositions.Clear();
-        FakeTreasurePositions.Clear();
+        trapPositions.Clear();
+        fakeTreasurePositions.Clear();
 
         if (GameState.TerritoryType != 361) return;
 
         FrameworkManager.Instance().Reg(OnUpdate, 2_000);
-        WindowManager.Draw += OnDraw;
+        WindowManager.Instance().PostDraw += OnDraw;
     }
 
-    private static void OnDraw()
+    private void OnDraw()
     {
         var list = ImGui.GetBackgroundDrawList();
 
-        foreach (var trap in TrapPositions)
+        foreach (var trap in trapPositions)
         {
             if (!DService.Instance().GameGUI.WorldToScreen(trap, out var screenPos)) continue;
             list.AddText(screenPos, KnownColor.Yellow.ToUInt(), LuminaWrapper.GetEObjName(2000947));
         }
 
-        foreach (var fakeTreasure in FakeTreasurePositions)
+        foreach (var fakeTreasure in fakeTreasurePositions)
         {
             if (!DService.Instance().GameGUI.WorldToScreen(fakeTreasure, out var screenPos)) continue;
             list.AddText(screenPos, KnownColor.Yellow.ToUInt(), LuminaWrapper.GetBNPCName(2896));
         }
     }
 
-    private static unsafe void OnUpdate(IFramework _)
+    private unsafe void OnUpdate(IFramework _)
     {
         List<Vector3> trapCollect         = [];
         List<Vector3> fakeTreasureCollect = [];
@@ -97,7 +98,13 @@ public class HullbreakerIsleHelper : DailyModuleBase
             treasure.ToStruct()->Highlight(ObjectHighlightColor.Yellow);
         }
 
-        TrapPositions         = trapCollect;
-        FakeTreasurePositions = fakeTreasureCollect;
+        trapPositions         = trapCollect;
+        fakeTreasurePositions = fakeTreasureCollect;
     }
+
+    #region 常量
+
+    private static readonly FrozenSet<uint> FakeTreasuresID = [2004074, 2004075, 2004076, 2004077, 2004078, 2004079];
+
+    #endregion
 }

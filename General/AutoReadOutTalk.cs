@@ -1,29 +1,33 @@
-﻿using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
+using OmenTools.OmenService;
+using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoReadOutTalk : DailyModuleBase
+public unsafe class AutoReadOutTalk : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = GetLoc("AutoReadOutTalkTitle"),
-        Description     = GetLoc("AutoReadOutTalkDescription"),
-        Category        = ModuleCategories.General,
+        Title           = Lang.Get("AutoReadOutTalkTitle"),
+        Description     = Lang.Get("AutoReadOutTalkDescription"),
+        Category        = ModuleCategory.General,
         ModulesConflict = ["AutoTalkSkip"]
     };
 
-    private static Config ModuleConfig = null!;
-
-    private delegate void                          ShowBattleTalkDelegate(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style);
-    private static   Hook<ShowBattleTalkDelegate>? ShowBattleTalkHook;
-
+    private Config config = null!;
+    
+    private delegate void ShowBattleTalkDelegate(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style);
+    private Hook<ShowBattleTalkDelegate>? ShowBattleTalkHook;
+    
     private delegate void ShowBattleTalkImageDelegate
     (
         UIModule*      module,
@@ -35,11 +39,11 @@ public unsafe class AutoReadOutTalk : DailyModuleBase
         int            sound,
         uint           entityID
     );
-    private static Hook<ShowBattleTalkImageDelegate>? ShowBattleTalkImageHook;
+    private Hook<ShowBattleTalkImageDelegate>? ShowBattleTalkImageHook;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "Talk", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Talk", OnAddon);
@@ -61,17 +65,17 @@ public unsafe class AutoReadOutTalk : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), GetLoc("Format"));
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Format"));
 
         using (ImRaii.PushIndent())
         {
-            ImGui.InputText($"##FormatInput", ref ModuleConfig.Format);
+            ImGui.InputText($"##FormatInput", ref config.Format);
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                config.Save(this);
         }
     }
 
-    private static void ShowBattleTalkDetour(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style)
+    private void ShowBattleTalkDetour(UIModule* module, CStringPointer name, CStringPointer text, float duration, byte style)
     {
         ShowBattleTalkHook.Original(module, name, text, duration, style);
 
@@ -81,10 +85,10 @@ public unsafe class AutoReadOutTalk : DailyModuleBase
         if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(speaker) || duration < 3) return;
 
         CancelBefore();
-        Speak(string.Format(ModuleConfig.Format, speaker, line));
+        NotifyHelper.Speak(string.Format(config.Format, speaker, line));
     }
 
-    private static void ShowBattleTalkImageDetour
+    private void ShowBattleTalkImageDetour
     (
         UIModule*      module,
         CStringPointer name,
@@ -104,12 +108,12 @@ public unsafe class AutoReadOutTalk : DailyModuleBase
         var line    = text.HasValue ? text.ExtractText() : string.Empty;
 
         if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(speaker) || duration < 3) return;
-        
+
         CancelBefore();
-        Speak(string.Format(ModuleConfig.Format, speaker, line));
+        NotifyHelper.Speak(string.Format(config.Format, speaker, line));
     }
 
-    private static void OnAddon(AddonEvent type, AddonArgs args)
+    private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
@@ -134,7 +138,7 @@ public unsafe class AutoReadOutTalk : DailyModuleBase
                 if (string.IsNullOrEmpty(line)) return;
 
                 CancelBefore();
-                Speak(string.Format(ModuleConfig.Format, speaker, line));
+                NotifyHelper.Speak(string.Format(config.Format, speaker, line));
                 break;
 
             case AddonEvent.PreFinalize:
@@ -145,9 +149,9 @@ public unsafe class AutoReadOutTalk : DailyModuleBase
     }
 
     private static void CancelBefore() =>
-        StopSpeak();
+        NotifyHelper.StopSpeak();
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public string Format = "{0}: {1}";
     }

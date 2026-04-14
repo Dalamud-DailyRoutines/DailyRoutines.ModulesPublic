@@ -1,38 +1,37 @@
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
+using System.Collections.Frozen;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Fates;
 using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Helpers;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyBonusFate : DailyModuleBase
+public class AutoNotifyBonusFate : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoNotifyBonusFateTitle"),
-        Description = GetLoc("AutoNotifyBonusFateDescription"),
-        Category    = ModuleCategories.Notice,
+        Title       = Lang.Get("AutoNotifyBonusFateTitle"),
+        Description = Lang.Get("AutoNotifyBonusFateDescription"),
+        Category    = ModuleCategory.Notice,
         Author      = ["Due"]
     };
 
-    private static readonly HashSet<uint> ValidTerritories =
-        LuminaGetter.Get<TerritoryType>()
-                    .Where(x => x.TerritoryIntendedUse.RowId == 1)
-                    .Where(x => x.ExVersion.Value.RowId      >= 2)
-                    .Select(x => x.RowId)
-                    .ToHashSet();
+    private Config config = null!;
 
-    private static Config ModuleConfig = null!;
-
-    private static readonly HashSet<ushort> NotifiedFates = [];
+    private readonly HashSet<ushort> notifiedFates = [];
 
     protected override void Init()
     {
-        ModuleConfig =   LoadConfig<Config>() ?? new();
-        TaskHelper   ??= new();
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
@@ -43,31 +42,31 @@ public class AutoNotifyBonusFate : DailyModuleBase
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         ExecuteCommandManager.Instance().Unreg(OnPostExecuteCommand);
 
-        NotifiedFates.Clear();
+        notifiedFates.Clear();
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("SendChat"), ref ModuleConfig.SendChat))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
 
-        if (ImGui.Checkbox(GetLoc("SendNotification"), ref ModuleConfig.SendNotification))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
+            config.Save(this);
 
-        if (ImGui.Checkbox(GetLoc("SendTTS"), ref ModuleConfig.SendTTS))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref config.SendTTS))
+            config.Save(this);
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(GetLoc("OpenMap"), ref ModuleConfig.AutoOpenMap))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("OpenMap"), ref config.AutoOpenMap))
+            config.Save(this);
     }
 
     private void OnZoneChanged(ushort zone)
     {
         ExecuteCommandManager.Instance().Unreg(OnPostExecuteCommand);
         TaskHelper.Abort();
-        NotifiedFates.Clear();
+        notifiedFates.Clear();
 
         if (!ValidTerritories.Contains(GameState.TerritoryType)) return;
 
@@ -83,7 +82,7 @@ public class AutoNotifyBonusFate : DailyModuleBase
         TaskHelper.Enqueue(UpdateAndNotify);
     }
 
-    private static void UpdateAndNotify()
+    private void UpdateAndNotify()
     {
         if (!ValidTerritories.Contains(GameState.TerritoryType) || GameState.Map == 0) return;
 
@@ -91,7 +90,7 @@ public class AutoNotifyBonusFate : DailyModuleBase
 
         if (fateTable.Length == 0)
         {
-            if (NotifiedFates.Count > 0) NotifiedFates.Clear();
+            if (notifiedFates.Count > 0) notifiedFates.Clear();
             return;
         }
 
@@ -103,35 +102,35 @@ public class AutoNotifyBonusFate : DailyModuleBase
 
             currentBonusFates.Add(fate.FateId);
 
-            if (NotifiedFates.Add(fate.FateId))
+            if (notifiedFates.Add(fate.FateId))
                 NotifyFate(fate);
         }
 
-        if (NotifiedFates.Count > 0)
-            NotifiedFates.IntersectWith(currentBonusFates);
+        if (notifiedFates.Count > 0)
+            notifiedFates.IntersectWith(currentBonusFates);
     }
 
-    private static unsafe void NotifyFate(IFate fate)
+    private unsafe void NotifyFate(IFate fate)
     {
-        var mapPos = WorldToMap(fate.Position.ToVector2(), GameState.MapData);
+        var mapPos = PositionHelper.WorldToMap(fate.Position.ToVector2(), GameState.MapData);
 
-        var chatMessage = GetSLoc
+        var chatMessage = Lang.GetSe
         (
             "AutoNotifyBonusFate-Chat",
             fate.Name.ToString(),
             fate.Progress,
             SeString.CreateMapLink(GameState.TerritoryType, GameState.Map, mapPos.X, mapPos.Y)
         );
-        var notificationMessage = GetLoc("AutoNotifyBonusFate-Notification", fate.Name.ToString(), fate.Progress);
+        var notificationMessage = Lang.Get("AutoNotifyBonusFate-Notification", fate.Name.ToString(), fate.Progress);
 
-        if (ModuleConfig.SendChat)
-            Chat(chatMessage);
-        if (ModuleConfig.SendNotification)
-            NotificationInfo(notificationMessage);
-        if (ModuleConfig.SendTTS)
-            Speak(notificationMessage);
+        if (config.SendChat)
+            NotifyHelper.Instance().Chat(chatMessage);
+        if (config.SendNotification)
+            NotifyHelper.Instance().NotificationInfo(notificationMessage);
+        if (config.SendTTS)
+            NotifyHelper.Speak(notificationMessage);
 
-        if (ModuleConfig.AutoOpenMap)
+        if (config.AutoOpenMap)
         {
             var instance = AgentMap.Instance();
             if (instance == null) return;
@@ -147,11 +146,22 @@ public class AutoNotifyBonusFate : DailyModuleBase
         }
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
+        public bool AutoOpenMap = true;
         public bool SendChat;
         public bool SendNotification = true;
         public bool SendTTS          = true;
-        public bool AutoOpenMap      = true;
     }
+    
+    #region 常量
+    
+    private static readonly FrozenSet<uint> ValidTerritories =
+        LuminaGetter.Get<TerritoryType>()
+                    .Where(x => x.TerritoryIntendedUse.RowId == 1)
+                    .Where(x => x.ExVersion.Value.RowId      >= 2)
+                    .Select(x => x.RowId)
+                    .ToFrozenSet();
+    
+    #endregion
 }

@@ -1,56 +1,64 @@
-using System;
-using System.Collections.Generic;
 using System.Numerics;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class MultiTargetTracker : DailyModuleBase
+public class MultiTargetTracker : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = GetLoc("MultiTargetTrackerTitle"),
-        Description     = GetLoc("MultiTargetTrackerDescription"),
-        Category        = ModuleCategories.General,
+        Title           = Lang.Get("MultiTargetTrackerTitle"),
+        Description     = Lang.Get("MultiTargetTrackerDescription"),
+        Category        = ModuleCategory.General,
         Author          = ["KirisameVanilla"],
         ModulesConflict = ["AutoHighlightFlagMarker"]
     };
-
+    
     private static Config ModuleConfig = null!;
 
-    private static readonly TempTrackMenuItem      TempTrackItem      = new();
-    private static readonly PermanentTrackMenuItem PermanentTrackItem = new();
+    private readonly TempTrackMenuItem      tempTrackItem;
+    private readonly PermanentTrackMenuItem permanentTrackItem;
 
-    private static readonly HashSet<TrackPlayer> TempTrackedPlayers = [];
+    private readonly HashSet<TrackPlayer> tempTrackedPlayers = [];
 
+    public MultiTargetTracker()
+    {
+        tempTrackItem      = new(this);
+        permanentTrackItem = new();
+    }
+    
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        ModuleConfig = Config.Load(this) ?? new();
 
-        PlayersManager.ReceivePlayersAround              += OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersAround              += OnReceivePlayers;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().ContextMenu.OnMenuOpened     += OnMenuOpen;
     }
 
     protected override void Uninit()
     {
-        PlayersManager.ReceivePlayersAround -= OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersAround -= OnReceivePlayers;
         FrameworkManager.Instance().Unreg(OnUpdate);
 
         DService.Instance().ContextMenu.OnMenuOpened     -= OnMenuOpen;
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-        TempTrackedPlayers.Clear();
+        tempTrackedPlayers.Clear();
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextUnformatted(GetLoc("MultiTargetTracker-TempTrackHelp"));
+        ImGui.TextUnformatted(Lang.Get("MultiTargetTracker-TempTrackHelp"));
 
         ImGui.Spacing();
 
@@ -59,10 +67,10 @@ public class MultiTargetTracker : DailyModuleBase
         using var table = ImRaii.Table("PermanentTrackedPlayers", 4);
         if (!table) return;
 
-        ImGui.TableSetupColumn(GetLoc("Name"),                                ImGuiTableColumnFlags.WidthStretch, 15);
-        ImGui.TableSetupColumn(GetLoc("MultiTargetTracker-LastSeenTime"),     ImGuiTableColumnFlags.WidthStretch, 10);
-        ImGui.TableSetupColumn(GetLoc("MultiTargetTracker-LastSeenLocation"), ImGuiTableColumnFlags.WidthStretch, 10);
-        ImGui.TableSetupColumn(GetLoc("Note"),                                ImGuiTableColumnFlags.WidthStretch, 15);
+        ImGui.TableSetupColumn(Lang.Get("Name"),                                ImGuiTableColumnFlags.WidthStretch, 15);
+        ImGui.TableSetupColumn(Lang.Get("MultiTargetTracker-LastSeenTime"),     ImGuiTableColumnFlags.WidthStretch, 10);
+        ImGui.TableSetupColumn(Lang.Get("MultiTargetTracker-LastSeenLocation"), ImGuiTableColumnFlags.WidthStretch, 10);
+        ImGui.TableSetupColumn(Lang.Get("Note"),                                ImGuiTableColumnFlags.WidthStretch, 15);
 
         ImGui.TableHeadersRow();
 
@@ -80,7 +88,7 @@ public class MultiTargetTracker : DailyModuleBase
             {
                 if (context)
                 {
-                    if (ImGui.MenuItem(GetLoc("Delete")))
+                    if (ImGui.MenuItem(Lang.Get("Delete")))
                     {
                         ModuleConfig.PermanentTrackedPlayers.Remove(player);
                         ModuleConfig.Save(this);
@@ -101,23 +109,23 @@ public class MultiTargetTracker : DailyModuleBase
             if (ImGui.InputText("###Note", ref note, 256))
                 ModuleConfig.PermanentTrackedPlayers[i].Note = note;
             if (ImGui.IsItemDeactivatedAfterEdit())
-                SaveConfig(ModuleConfig);
+                ModuleConfig.Save(this);
         }
     }
 
-    private static void OnMenuOpen(IMenuOpenedArgs args)
+    private void OnMenuOpen(IMenuOpenedArgs args)
     {
         if (!ShouldMenuOpen(args)) return;
 
-        args.AddMenuItem(TempTrackItem.Get());
-        args.AddMenuItem(PermanentTrackItem.Get());
+        args.AddMenuItem(tempTrackItem.Get());
+        args.AddMenuItem(permanentTrackItem.Get());
     }
 
-    private static void OnZoneChanged(ushort obj) =>
-        TempTrackedPlayers.Clear();
+    private void OnZoneChanged(ushort obj) =>
+        tempTrackedPlayers.Clear();
 
     // 反正不会重复注册大胆造
-    private static void OnReceivePlayers(IReadOnlyList<IPlayerCharacter> characters)
+    private void OnReceivePlayers(IReadOnlyList<IPlayerCharacter> characters)
     {
         if (characters.Count == 0)
             FrameworkManager.Instance().Unreg(OnUpdate);
@@ -125,11 +133,11 @@ public class MultiTargetTracker : DailyModuleBase
             FrameworkManager.Instance().Reg(OnUpdate);
     }
 
-    private static void OnUpdate(IFramework framework)
+    private void OnUpdate(IFramework framework)
     {
-        if (ModuleConfig.PermanentTrackedPlayers.Count == 0 && TempTrackedPlayers.Count == 0) return;
+        if (ModuleConfig.PermanentTrackedPlayers.Count == 0 && tempTrackedPlayers.Count == 0) return;
 
-        if (PlayersManager.PlayersAroundCount == 0 || !GameState.IsLoggedIn)
+        if (PlayersManager.Instance().PlayersAroundCount == 0 || !GameState.IsLoggedIn)
         {
             FrameworkManager.Instance().Unreg(OnUpdate);
             return;
@@ -137,13 +145,13 @@ public class MultiTargetTracker : DailyModuleBase
 
         List<(ulong, Vector3)> validPlayers = new(8);
 
-        foreach (var player in PlayersManager.PlayersAround)
+        foreach (var player in PlayersManager.Instance().PlayersAround)
         {
             if (validPlayers.Count >= 8) break;
 
             var isAdd = false;
 
-            foreach (var trackPlayer in TempTrackedPlayers)
+            foreach (var trackPlayer in tempTrackedPlayers)
             {
                 if (trackPlayer.ContentID != player.ContentID) continue;
 
@@ -189,22 +197,13 @@ public class MultiTargetTracker : DailyModuleBase
         return target.TargetContentId != 0 && target.TargetContentId != LocalPlayerState.ContentID;
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
         public List<TrackPlayer> PermanentTrackedPlayers = [];
     }
 
     public class TrackPlayer : IEquatable<TrackPlayer>
     {
-        public ulong  ContentID { get; set; }
-        public string Name      { get; set; } = string.Empty;
-        public string WorldName { get; set; } = string.Empty;
-
-        public DateTime Added            { get; set; } = DateTime.MinValue;
-        public DateTime LastSeen         { get; set; } = DateTime.MinValue;
-        public string   LastSeenLocation { get; set; } = string.Empty;
-        public string   Note             { get; set; } = string.Empty;
-
         public unsafe TrackPlayer(IPlayerCharacter ipc)
         {
             var chara = ipc.ToStruct();
@@ -225,6 +224,15 @@ public class MultiTargetTracker : DailyModuleBase
             LastSeen = DateTime.MinValue;
         }
 
+        public ulong  ContentID { get; set; }
+        public string Name      { get; set; } = string.Empty;
+        public string WorldName { get; set; } = string.Empty;
+
+        public DateTime Added            { get; set; } = DateTime.MinValue;
+        public DateTime LastSeen         { get; set; } = DateTime.MinValue;
+        public string   LastSeenLocation { get; set; } = string.Empty;
+        public string   Note             { get; set; } = string.Empty;
+
         public bool Equals(TrackPlayer? other) => ContentID == other.ContentID;
 
         public override bool Equals(object? obj)
@@ -238,9 +246,9 @@ public class MultiTargetTracker : DailyModuleBase
         public override string ToString() => $"{ContentID}";
     }
 
-    private class TempTrackMenuItem : MenuItemBase
+    private class TempTrackMenuItem(MultiTargetTracker module) : MenuItemBase
     {
-        public override string Name       { get; protected set; } = $"{GetLoc("MultiTargetTracker-TempTrack")}: {GetLoc("Add")}/{GetLoc("Delete")}";
+        public override string Name       { get; protected set; } = $"{Lang.Get("MultiTargetTracker-TempTrack")}: {Lang.Get("Add")}/{Lang.Get("Delete")}";
         public override string Identifier { get; protected set; } = nameof(MultiTargetTracker);
 
         protected override void OnClicked(IMenuItemClickedArgs args)
@@ -254,19 +262,19 @@ public class MultiTargetTracker : DailyModuleBase
                 target.TargetHomeWorld.ValueNullable?.Name.ToString()
             );
 
-            if (!TempTrackedPlayers.Add(data))
+            if (!module.tempTrackedPlayers.Add(data))
             {
-                TempTrackedPlayers.Remove(data);
-                NotificationSuccess(GetLoc("Deleted"));
+                module.tempTrackedPlayers.Remove(data);
+                NotifyHelper.Instance().NotificationSuccess(Lang.Get("Deleted"));
             }
             else
-                NotificationSuccess(GetLoc("Added"));
+                NotifyHelper.Instance().NotificationSuccess(Lang.Get("Added"));
         }
     }
 
     private class PermanentTrackMenuItem : MenuItemBase
     {
-        public override string Name       { get; protected set; } = $"{GetLoc("MultiTargetTracker-PermanentTrack")}: {GetLoc("Add")}/{GetLoc("Delete")}";
+        public override string Name       { get; protected set; } = $"{Lang.Get("MultiTargetTracker-PermanentTrack")}: {Lang.Get("Add")}/{Lang.Get("Delete")}";
         public override string Identifier { get; protected set; } = nameof(MultiTargetTracker);
 
         protected override void OnClicked(IMenuItemClickedArgs args)
@@ -280,15 +288,15 @@ public class MultiTargetTracker : DailyModuleBase
             if (ModuleConfig.PermanentTrackedPlayers.Contains(new(player)))
             {
                 ModuleConfig.PermanentTrackedPlayers.Remove(new(player));
-                NotificationSuccess(GetLoc("Deleted"));
+                NotifyHelper.Instance().NotificationSuccess(Lang.Get("Deleted"));
             }
             else
             {
                 ModuleConfig.PermanentTrackedPlayers.Add(new(player));
-                NotificationSuccess(GetLoc("Added"));
+                NotifyHelper.Instance().NotificationSuccess(Lang.Get("Added"));
             }
 
-            ModuleConfig.Save(ModuleManager.GetModule<MultiTargetTracker>());
+            ModuleConfig.Save(ModuleManager.Instance().GetModule<MultiTargetTracker>());
         }
     }
 }

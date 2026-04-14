@@ -1,49 +1,65 @@
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Command;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using System;
-using System.Threading;
+using OmenTools.Info.Game.Enums;
+using OmenTools.OmenService;
 
-namespace DailyRoutines.Modules;
+namespace DailyRoutines.ModulesPublic;
 
-public class FastResetAllSDEnmity : DailyModuleBase
+public class FastResetAllSDEnmity : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = GetLoc("FastResetAllSDEnmityTitle"),
-        Description = GetLoc("FastResetAllSDEnmityDescription"),
-        Category = ModuleCategories.Combat,
+        Title       = Lang.Get("FastResetAllSDEnmityTitle"),
+        Description = Lang.Get("FastResetAllSDEnmityDescription"),
+        Category    = ModuleCategory.Combat
     };
 
-    private static CancellationTokenSource? CancelSource;
-    
-    private const string Command = "resetallsd";
+    private readonly CancellationTokenSource cancelSource = new();
 
     protected override void Init()
     {
-        CancelSource ??= new();
-
         ExecuteCommandManager.Instance().RegPre(OnResetStrikingDummies);
-        CommandManager.AddSubCommand(Command, new CommandInfo(OnCommand)
-        {
-            HelpMessage = GetLoc("FastResetAllSDEnmity-CommandHelp"),
-        });
+        CommandManager.Instance().AddSubCommand
+        (
+            COMMAND,
+            new CommandInfo(OnCommand)
+            {
+                HelpMessage = Lang.Get("FastResetAllSDEnmity-CommandHelp")
+            }
+        );
+    }
+    
+    protected override void Uninit()
+    {
+        ExecuteCommandManager.Instance().Unreg(OnResetStrikingDummies);
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
+
+        cancelSource.Cancel();
+        cancelSource.Dispose();
     }
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{GetLoc("Command")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"/pdr {Command} → {GetLoc("FastResetAllSDEnmity-CommandHelp")}");
+        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("FastResetAllSDEnmity-CommandHelp")}");
     }
 
-    private static void OnCommand(string command, string arguments) => ResetAllStrikingDummies();
+    private void OnCommand(string command, string arguments) => ResetAllStrikingDummies();
 
-    public static void OnResetStrikingDummies(
-        ref bool isPrevented, ref ExecuteCommandFlag command, ref uint param1, ref uint param2, ref uint param3, ref uint param4)
+    public void OnResetStrikingDummies
+    (
+        ref bool               isPrevented,
+        ref ExecuteCommandFlag command,
+        ref uint               param1,
+        ref uint               param2,
+        ref uint               param3,
+        ref uint               param4
+    )
     {
         if (command != ExecuteCommandFlag.ResetStrikingDummy) return;
         isPrevented = true;
@@ -51,12 +67,12 @@ public class FastResetAllSDEnmity : DailyModuleBase
         ResetAllStrikingDummies();
     }
 
-    private static void ResetAllStrikingDummies()
+    private void ResetAllStrikingDummies()
     {
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.Zero,                   0, CancelSource.Token);
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(500),  0, CancelSource.Token);
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(1000), 0, CancelSource.Token);
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(1500), 0, CancelSource.Token);
+        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.Zero,                   0, cancelSource.Token);
+        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(500),  0, cancelSource.Token);
+        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(1000), 0, cancelSource.Token);
+        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(1500), 0, cancelSource.Token);
     }
 
     private static unsafe void FindAndResetInternal()
@@ -65,14 +81,10 @@ public class FastResetAllSDEnmity : DailyModuleBase
         foreach (var targetID in targets)
             ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.ResetStrikingDummy, targetID.EntityId);
     }
+    
+    #region 常量
 
-    protected override void Uninit()
-    {
-        ExecuteCommandManager.Instance().Unreg(OnResetStrikingDummies);
-        CommandManager.RemoveSubCommand(Command);
+    private const string COMMAND = "resetallsd";
 
-        CancelSource?.Cancel();
-        CancelSource?.Dispose();
-        CancelSource = null;
-    }
+    #endregion
 }

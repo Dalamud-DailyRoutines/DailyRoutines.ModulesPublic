@@ -1,32 +1,35 @@
-using System;
 using System.Runtime.InteropServices;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Hooking;
+using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class PFPageSizeCustomize : DailyModuleBase
+public class PFPageSizeCustomize : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("PFPageSizeCustomizeTitle"),
-        Description = GetLoc("PFPageSizeCustomizeDescription"),
-        Category    = ModuleCategories.Recruitment,
+        Title       = Lang.Get("PFPageSizeCustomizeTitle"),
+        Description = Lang.Get("PFPageSizeCustomizeDescription"),
+        Category    = ModuleCategory.Recruitment,
         Author      = ["逆光"]
     };
-    
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
     private static readonly CompSig PartyFinderDisplayAmountSig =
         new("48 89 5C 24 ?? 55 56 57 48 ?? ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? 48 89 85 ?? ?? ?? ?? 48 ?? ?? 0F");
     private delegate byte                                    PartyFinderDisplayAmountDelegate(nint a1, int a2);
-    private static   Hook<PartyFinderDisplayAmountDelegate>? PartyFinderDisplayAmountHook;
+    private          Hook<PartyFinderDisplayAmountDelegate>? PartyFinderDisplayAmountHook;
 
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         PartyFinderDisplayAmountHook ??= PartyFinderDisplayAmountSig.GetHook<PartyFinderDisplayAmountDelegate>(PartyFinderDisplayAmountDetour);
         PartyFinderDisplayAmountHook.Enable();
@@ -34,20 +37,20 @@ public class PFPageSizeCustomize : DailyModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(100f * GlobalFontScale);
-        if (ImGui.InputShort(GetLoc("PFPageSizeCustomize-DisplayAmount"), ref ModuleConfig.PageSize, 1, 10))
-            ModuleConfig.PageSize = Math.Clamp(ModuleConfig.PageSize, (short)1, (short)100);
+        ImGui.SetNextItemWidth(100f * GlobalUIScale);
+        if (ImGui.InputShort(Lang.Get("PFPageSizeCustomize-DisplayAmount"), ref config.PageSize, 1, 10))
+            config.PageSize = Math.Clamp(config.PageSize, (short)1, (short)100);
         if (ImGui.IsItemDeactivatedAfterEdit())
-            SaveConfig(ModuleConfig);
+            config.Save(this);
     }
 
-    private static byte PartyFinderDisplayAmountDetour(nint a1, int a2)
+    private byte PartyFinderDisplayAmountDetour(nint a1, int a2)
     {
-        Marshal.WriteInt16(a1 + 1128, ModuleConfig.PageSize);
+        Marshal.WriteInt16(a1 + 1128, config.PageSize);
         return PartyFinderDisplayAmountHook.Original(a1, a2);
     }
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public short PageSize = 100;
     }

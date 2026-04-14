@@ -1,34 +1,37 @@
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
+using System.Collections.Frozen;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
-using Lumina.Excel.Sheets;
-using OmenTools.Extensions;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
+public unsafe class AutoReplaceActionLowLevel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoReplaceActionLowLevelTitle"),
-        Description = GetLoc("AutoReplaceActionLowLevelDescription"),
-        Category    = ModuleCategories.Action,
+        Title       = Lang.Get("AutoReplaceActionLowLevelTitle"),
+        Description = Lang.Get("AutoReplaceActionLowLevelDescription"),
+        Category    = ModuleCategory.Action
     };
-
+    
     private static readonly CompSig IsActionReplaceableSig =
         new("40 53 48 83 EC ?? 8B D9 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 10 48 8B C8 FF 92 ?? ?? ?? ?? 8B D3");
-    private delegate        bool IsActionReplaceableDelegate(uint actionID);
-    private static          Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
+    private delegate bool                              IsActionReplaceableDelegate(uint actionID);
+    private          Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
 
     private static readonly CompSig                           GetAdjustedActionIDSig = new("E8 ?? ?? ?? ?? 89 03 8B 03");
     private delegate        uint                              GetAdjustedActionIDDelegate(ActionManager* manager, uint actionID);
-    private static          Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
+    private                 Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
 
     private static readonly CompSig GetIconIDForSlotSig = new("E8 ?? ?? ?? ?? 85 C0 89 83 ?? ?? ?? ?? 0F 94 C0");
-    private delegate        uint GetIconIDForSlotDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
-    private static          Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
+    private delegate        uint    GetIconIDForSlotDelegate(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID);
+    private                 Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
 
     protected override void Init()
     {
@@ -75,11 +78,26 @@ public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
         }
     }
 
-    private static uint GetAdjustedActionIDDetour(ActionManager* manager, uint actionID) =>
+    private uint GetAdjustedActionIDDetour(ActionManager* manager, uint actionID) =>
         !TryGetReplacement(actionID, out var adjustedActionID)
             ? GetAdjustedActionIDHook.Original(manager, actionID)
             : adjustedActionID;
+    
+    private uint GetIconIDForSlotDetour(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID)
+    {
+        if (type != RaptureHotbarModule.HotbarSlotType.Action)
+            return GetIconIDForSlotHook.Original(slot, type, actionID);
 
+        return !TryGetReplacement(actionID, out var adjustedActionID)
+                   ? GetIconIDForSlotHook.Original(slot, type, actionID)
+                   : LuminaGetter.TryGetRow<Action>(adjustedActionID, out var row)
+                       ? row.Icon
+                       : 0u;
+    }
+
+    private bool IsActionReplaceableDetour(uint actionID) =>
+        ActionReplacements.ContainsKey(actionID) || IsActionReplaceableHook.Original(actionID);
+    
     private static bool TryGetReplacement(uint actionID, out uint adjustedActionID)
     {
         while (true)
@@ -98,23 +116,10 @@ public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
         }
     }
 
-    private static uint GetIconIDForSlotDetour(RaptureHotbarModule.HotbarSlot* slot, RaptureHotbarModule.HotbarSlotType type, uint actionID)
-    {
-        if (type != RaptureHotbarModule.HotbarSlotType.Action)
-            return GetIconIDForSlotHook.Original(slot, type, actionID);
-        
-        return !TryGetReplacement(actionID, out var adjustedActionID)
-                   ? GetIconIDForSlotHook.Original(slot, type, actionID)
-                   : LuminaGetter.TryGetRow<Action>(adjustedActionID, out var row)
-                       ? row.Icon
-                       : 0u;
-    }
+    #region 常量
 
-    private static bool IsActionReplaceableDetour(uint actionID) => 
-        ActionReplacements.ContainsKey(actionID) || IsActionReplaceableHook.Original(actionID);
-    
     // 原技能 ID - 替换后技能 ID (递归替换)
-    private static readonly Dictionary<uint, uint> ActionReplacements = new()
+    private static readonly FrozenDictionary<uint, uint> ActionReplacements = new Dictionary<uint, uint>()
     {
         // 狂喜之心 - 医济
         [16534] = 133,
@@ -134,5 +139,7 @@ public unsafe class AutoReplaceActionLowLevel : DailyModuleBase
         [16507] = 7422,
         // 必杀剑·闪影 - 必杀剑·红莲
         [16481] = 7496
-    };
+    }.ToFrozenDictionary();
+
+    #endregion
 }

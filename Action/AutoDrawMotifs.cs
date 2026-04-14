@@ -1,29 +1,29 @@
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.JobGauge.Types;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using OmenTools.Extensions;
+using OmenTools.Info.Game.Data;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDrawMotifs : DailyModuleBase
+public class AutoDrawMotifs : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDrawMotifsTitle"),
-        Description = GetLoc("AutoDrawMotifsDescription"),
-        Category    = ModuleCategories.Action,
+        Title       = Lang.Get("AutoDrawMotifsTitle"),
+        Description = Lang.Get("AutoDrawMotifsDescription"),
+        Category    = ModuleCategory.Action
     };
-
-    private static readonly HashSet<uint> InvalidContentTypes = [16, 17, 18, 19, 31, 32, 34, 35];
     
-    private static Config ModuleConfig = null!;
+    private Config config = null!;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         TaskHelper ??= new() { TimeoutMS = 30_000 };
 
@@ -32,20 +32,28 @@ public class AutoDrawMotifs : DailyModuleBase
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
         DService.Instance().DutyState.DutyCompleted      += OnDutyCompleted;
     }
+    
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
+        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
+        DService.Instance().DutyState.DutyCompleted      -= OnDutyCompleted;
+    }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("AutoDrawMotifs-DrawWhenOutOfCombat"), ref ModuleConfig.DrawWhenOutOfCombat))
-            SaveConfig(ModuleConfig);
+        if (ImGui.Checkbox(Lang.Get("AutoDrawMotifs-DrawWhenOutOfCombat"), ref config.DrawWhenOutOfCombat))
+            config.Save(this);
     }
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
     {
         if (flag != ConditionFlag.InCombat) return;
-        
+
         TaskHelper.Abort();
-        
-        if (value || !ModuleConfig.DrawWhenOutOfCombat) return;
+
+        if (value || !config.DrawWhenOutOfCombat) return;
 
         TaskHelper.Enqueue(CheckCurrentJob);
     }
@@ -58,22 +66,23 @@ public class AutoDrawMotifs : DailyModuleBase
     }
 
     // 完成副本
-    private void OnDutyCompleted(object? sender, ushort e) => 
+    private void OnDutyCompleted(object? sender, ushort e) =>
         TaskHelper.Abort();
 
     // 进入副本
     private void OnZoneChanged(ushort zone)
     {
         TaskHelper.Abort();
-        
-        if (!PresetSheet.Contents.ContainsKey(zone)) return;
+
+        if (!Sheets.Contents.ContainsKey(zone)) return;
         TaskHelper.Enqueue(CheckCurrentJob);
     }
 
     private bool CheckCurrentJob()
     {
-        if (BetweenAreas || OccupiedInEvent) return false;
-        if (DService.Instance().ObjectTable.LocalPlayer is not { ClassJob.RowId: 42, Level: >= 30 } || !IsValidPVEDuty())
+        if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition.IsOccupiedInEvent) return false;
+
+        if (DService.Instance().ObjectTable.LocalPlayer is not { ClassJob.RowId: 42, Level: >= 30 } || !GameState.IsInPVEActonZone)
         {
             TaskHelper.Abort();
             return true;
@@ -87,14 +96,16 @@ public class AutoDrawMotifs : DailyModuleBase
     {
         var gauge = DService.Instance().JobGauges.Get<PCTGauge>();
 
-        if (DService.Instance().ObjectTable.LocalPlayer == null || BetweenAreas || DService.Instance().Condition[ConditionFlag.Casting]) return false;
+        if (DService.Instance().ObjectTable.LocalPlayer == null ||
+            DService.Instance().Condition.IsBetweenAreas        ||
+            DService.Instance().Condition[ConditionFlag.Casting]) return false;
 
         if (DService.Instance().Condition.Any(ConditionFlag.InCombat, ConditionFlag.Mounted, ConditionFlag.Mounting, ConditionFlag.InFlight))
         {
             TaskHelper.Abort();
             return true;
         }
-        
+
         var motifAction = 0U;
         if (!gauge.CreatureMotifDrawn && ActionManager.IsActionUnlocked(34689))
             motifAction = 34689;
@@ -114,21 +125,8 @@ public class AutoDrawMotifs : DailyModuleBase
         TaskHelper.Enqueue(DrawNeededMotif, "DrawNeededMotif", 5_000, weight: 1);
         return true;
     }
-
-    private static bool IsValidPVEDuty() =>
-        !GameState.IsInPVPArea &&
-        (GameState.ContentFinderConditionData.RowId == 0 ||
-         !InvalidContentTypes.Contains(GameState.ContentFinderConditionData.ContentType.RowId));
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
-        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
-        DService.Instance().DutyState.DutyCompleted      -= OnDutyCompleted;
-    }
-
-    private class Config : ModuleConfiguration
+    
+    private class Config : ModuleConfig
     {
         public bool DrawWhenOutOfCombat;
     }

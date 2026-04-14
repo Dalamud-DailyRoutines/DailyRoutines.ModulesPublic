@@ -1,80 +1,57 @@
-using System;
 using System.Collections.Frozen;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
-using DailyRoutines.Windows;
+using DailyRoutines.Common.Interface.Windows;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Helpers;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using OmenTools.Threading;
 using Aetheryte = Lumina.Excel.Sheets.Aetheryte;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 using Treasure = FFXIVClientStructs.FFXIV.Client.Game.Object.Treasure;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class FastObjectInteract : DailyModuleBase
+public unsafe partial class FastObjectInteract : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = GetLoc("FastObjectInteractTitle"),
-        Description         = GetLoc("FastObjectInteractDescription"),
-        Category            = ModuleCategories.UIOptimization,
+        Title               = Lang.Get("FastObjectInteractTitle"),
+        Description         = Lang.Get("FastObjectInteractDescription"),
+        Category            = ModuleCategory.UIOptimization,
         ModulesPrerequisite = ["FastWorldTravel", "FastInstanceZoneChange"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private const string ENPC_TITLE_FORMAT = "[{0}] {1}";
+    private Config config = null!;
 
-    private static FrozenDictionary<uint, string> ENPCTitle     { get; } = LoadEnpcTitles();
-    private static FrozenSet<uint>                ImportantENPC { get; } = LoadImportantEnpcs();
+    private Dictionary<uint, string> dcWorlds = [];
 
-    private static readonly FrozenSet<uint> WorldTravelValidZones = new[] { 132U, 129U, 130U }.ToFrozenSet();
+    private string blacklistKeyInput = string.Empty;
+    private float  windowWidth;
+    private bool   isUpdatingObjects;
+    private bool   isOnWorldTraveling;
 
-    private static readonly FrozenDictionary<ObjectKind, float> IncludeDistance = new Dictionary<ObjectKind, float>
-    {
-        [ObjectKind.Aetheryte]      = 400,
-        [ObjectKind.GatheringPoint] = 100,
-        [ObjectKind.CardStand]      = 150,
-        [ObjectKind.EventObj]       = 100,
-        [ObjectKind.Housing]        = 30,
-        [ObjectKind.Treasure]       = 100
-    }.ToFrozenDictionary();
-
-    private static Config ModuleConfig = null!;
-    
-    private static Dictionary<uint, string> DCWorlds = [];
-    
-    private static string BlacklistKeyInput = string.Empty;
-    private static float  WindowWidth;
-    private static bool   IsUpdatingObjects;
-    private static bool   IsOnWorldTraveling;
-    
-    private static readonly List<InteractableObject> CurrentObjects = new(20);
-    private static          bool                     ForceObjectUpdate;
-
-    private static FrozenDictionary<uint, string> LoadEnpcTitles() =>
-        LuminaGetter.Get<ENpcResident>()
-                    .Where(x => x.Unknown1 && !string.IsNullOrWhiteSpace(x.Title.ToString()))
-                    .ToDictionary(x => x.RowId, x => x.Title.ToString())
-                    .ToFrozenDictionary();
-
-    private static FrozenSet<uint> LoadImportantEnpcs() =>
-        LuminaGetter.Get<ENpcResident>()
-                    .Where(x => x.Unknown1)
-                    .Select(x => x.RowId)
-                    .ToFrozenSet();
+    private readonly List<InteractableObject> currentObjects = new(20);
+    private          bool                     forceObjectUpdate;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ??
+        config = Config.Load(this) ??
                        new()
                        {
                            SelectedKinds =
@@ -100,63 +77,20 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
 
         DService.Instance().ClientState.Login            += OnLogin;
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
-        
+
         FrameworkManager.Instance().Reg(OnUpdate, 250);
 
         LoadWorldData();
     }
-    
+
     protected override void Uninit()
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         DService.Instance().ClientState.Login            -= OnLogin;
         DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
 
-        CurrentObjects.Clear();
+        currentObjects.Clear();
     }
-    
-    private void OnUpdate(IFramework framework)
-    {
-        if (IsUpdatingObjects) return;
-
-        var localPlayer    = Control.GetLocalPlayer();
-        var canShowOverlay = !BetweenAreas && localPlayer != null;
-
-        if (!canShowOverlay)
-        {
-            if (Overlay.IsOpen)
-            {
-                CurrentObjects.Clear();
-                WindowWidth    = 0f;
-                Overlay.IsOpen = false;
-            }
-
-            return;
-        }
-        
-        if (ForceObjectUpdate || Throttler.Throttle("FastObjectInteract-Monitor"))
-        {
-            IsUpdatingObjects = true;
-            ForceObjectUpdate = false;
-
-            UpdateObjectsList((GameObject*)localPlayer);
-
-            IsUpdatingObjects = false;
-        }
-
-        var shouldShowWindow = CurrentObjects.Count > 0 && IsWindowShouldBeOpen();
-        if (Overlay != null)
-        {
-            Overlay.IsOpen = shouldShowWindow;
-            if (!shouldShowWindow) WindowWidth = 0f;
-        }
-    }
-    
-    private static void OnLogin() => 
-        LoadWorldData();
-
-    private static void OnTerritoryChanged(ushort zoneID) => 
-        ForceObjectUpdate = true;
     
     #region UI
 
@@ -164,44 +98,38 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
     {
         var changed = false;
 
-        using var width = ImRaii.ItemWidth(300f * GlobalFontScale);
-        
-        changed |= ImGui.Checkbox(GetLoc("FastObjectInteract-WindowInvisibleWhenInteract"), ref ModuleConfig.WindowInvisibleWhenInteract);
-        changed |= ImGui.Checkbox(GetLoc("FastObjectInteract-WindowInvisibleWhenCombat"),   ref ModuleConfig.WindowInvisibleWhenCombat);
+        using var width = ImRaii.ItemWidth(300f * GlobalUIScale);
 
-        if (ImGui.Checkbox(GetLoc("FastObjectInteract-LockWindow"), ref ModuleConfig.LockWindow))
+        changed |= ImGui.Checkbox(Lang.Get("FastObjectInteract-WindowInvisibleWhenInteract"), ref config.WindowInvisibleWhenInteract);
+        changed |= ImGui.Checkbox(Lang.Get("FastObjectInteract-WindowInvisibleWhenCombat"),   ref config.WindowInvisibleWhenCombat);
+
+        if (ImGui.Checkbox(Lang.Get("FastObjectInteract-LockWindow"), ref config.LockWindow))
         {
             changed = true;
             UpdateWindowFlags();
         }
 
-        if (ImGui.Checkbox(GetLoc("FastObjectInteract-OnlyDisplayInViewRange"), ref ModuleConfig.OnlyDisplayInViewRange))
+        if (ImGui.Checkbox(Lang.Get("FastObjectInteract-OnlyDisplayInViewRange"), ref config.OnlyDisplayInViewRange))
         {
             changed           = true;
-            ForceObjectUpdate = true;
+            forceObjectUpdate = true;
         }
 
-        changed |= ImGui.Checkbox(GetLoc("FastObjectInteract-AllowClickToTarget"), ref ModuleConfig.AllowClickToTarget);
-        
+        changed |= ImGui.Checkbox(Lang.Get("FastObjectInteract-AllowClickToTarget"), ref config.AllowClickToTarget);
+
         ImGui.NewLine();
-        
-        ImGui.InputFloat($"{GetLoc("FontScale")}##FontScaleInput", ref ModuleConfig.FontScale, format: "%.1f");
-        if (ImGui.IsItemDeactivatedAfterEdit())
-        {
-            changed = true;
-            
-            ModuleConfig.FontScale = Math.Max(0.1f, ModuleConfig.FontScale);
-        }
 
-        ImGui.InputFloat($"{GetLoc("FastObjectInteract-MinButtonWidth")}##MinButtonWidthInput", ref ModuleConfig.MinButtonWidth, format: "%.1f");
+        ImGui.InputFloat($"{Lang.Get("FontScale")}##FontScaleInput", ref config.FontScale, format: "%.1f");
+
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             changed = true;
 
-            ValidateButtonWidthSettings();
+            config.FontScale = Math.Max(0.1f, config.FontScale);
         }
-        
-        ImGui.InputFloat($"{GetLoc("FastObjectInteract-MaxButtonWidth")}##MaxButtonWidthInput", ref ModuleConfig.MaxButtonWidth, format: "%.1f");
+
+        ImGui.InputFloat($"{Lang.Get("FastObjectInteract-MinButtonWidth")}##MinButtonWidthInput", ref config.MinButtonWidth, format: "%.1f");
+
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             changed = true;
@@ -209,77 +137,88 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             ValidateButtonWidthSettings();
         }
 
-        ImGui.InputInt($"{GetLoc("FastObjectInteract-MaxDisplayAmount")}##MaxDisplayAmountInput", ref ModuleConfig.MaxDisplayAmount);
+        ImGui.InputFloat($"{Lang.Get("FastObjectInteract-MaxButtonWidth")}##MaxButtonWidthInput", ref config.MaxButtonWidth, format: "%.1f");
+
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             changed = true;
-            
-            ModuleConfig.MaxDisplayAmount = Math.Max(1, ModuleConfig.MaxDisplayAmount);
-        }
-        
-        using (var combo = ImRaii.Combo
-        (
-            $"{GetLoc("FastObjectInteract-SelectedObjectKinds")}##ObjectKindsSelection",
-            GetLoc("FastObjectInteract-SelectedObjectKindsAmount", ModuleConfig.SelectedKinds.Count),
-            ImGuiComboFlags.HeightLarge
-        ))
-        {
-            if (combo)
-            {
-                foreach (var kind in Enum.GetValues<ObjectKind>())
-                {
-                    var state = ModuleConfig.SelectedKinds.Contains(kind);
 
-                    if (ImGui.Checkbox(kind.ToString(), ref state))
-                    {
-                        changed = true;
-                        
-                        if (state)
-                            ModuleConfig.SelectedKinds.Add(kind);
-                        else
-                            ModuleConfig.SelectedKinds.Remove(kind);
-                        
-                        ForceObjectUpdate = true;
-                    }
-                }
-            }
+            ValidateButtonWidthSettings();
         }
-        
+
+        ImGui.InputInt($"{Lang.Get("FastObjectInteract-MaxDisplayAmount")}##MaxDisplayAmountInput", ref config.MaxDisplayAmount);
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+        {
+            changed = true;
+
+            config.MaxDisplayAmount = Math.Max(1, config.MaxDisplayAmount);
+        }
+
         using (var combo = ImRaii.Combo
                (
-                   $"{GetLoc("FastObjectInteract-BlacklistKeysList")}##BlacklistObjectsSelection",
-                   GetLoc("FastObjectInteract-BlacklistKeysListAmount", ModuleConfig.BlacklistKeys.Count),
+                   $"{Lang.Get("FastObjectInteract-SelectedObjectKinds")}##ObjectKindsSelection",
+                   Lang.Get("FastObjectInteract-SelectedObjectKindsAmount", config.SelectedKinds.Count),
                    ImGuiComboFlags.HeightLarge
                ))
         {
             if (combo)
             {
-                if (ImGuiOm.ButtonIcon("###BlacklistKeyInputAdd", FontAwesomeIcon.Plus, GetLoc("Add")))
+                foreach (var kind in Enum.GetValues<ObjectKind>())
                 {
-                    if (ModuleConfig.BlacklistKeys.Add(BlacklistKeyInput))
+                    var state = config.SelectedKinds.Contains(kind);
+
+                    if (ImGui.Checkbox(kind.ToString(), ref state))
                     {
-                        SaveConfig(ModuleConfig);
-                        ForceObjectUpdate = true;
+                        changed = true;
+
+                        if (state)
+                            config.SelectedKinds.Add(kind);
+                        else
+                            config.SelectedKinds.Remove(kind);
+
+                        forceObjectUpdate = true;
+                    }
+                }
+            }
+        }
+
+        using (var combo = ImRaii.Combo
+               (
+                   $"{Lang.Get("FastObjectInteract-BlacklistKeysList")}##BlacklistObjectsSelection",
+                   Lang.Get("FastObjectInteract-BlacklistKeysListAmount", config.BlacklistKeys.Count),
+                   ImGuiComboFlags.HeightLarge
+               ))
+        {
+            if (combo)
+            {
+                if (ImGuiOm.ButtonIcon("###BlacklistKeyInputAdd", FontAwesomeIcon.Plus, Lang.Get("Add")))
+                {
+                    if (config.BlacklistKeys.Add(blacklistKeyInput))
+                    {
+                        config.Save(this);
+                        forceObjectUpdate = true;
                     }
                 }
 
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(-1);
-                ImGui.InputTextWithHint("###BlacklistKeyInput", $"{GetLoc("FastObjectInteract-BlacklistKeysListInputHelp")}", ref BlacklistKeyInput, 100);
+                ImGui.InputTextWithHint("###BlacklistKeyInput", $"{Lang.Get("FastObjectInteract-BlacklistKeysListInputHelp")}", ref blacklistKeyInput, 100);
 
                 ImGui.Spacing();
                 ImGui.Separator();
                 ImGui.Spacing();
 
                 var listToRemove = new List<string>();
-                foreach (var key in ModuleConfig.BlacklistKeys.ToList())
+
+                foreach (var key in config.BlacklistKeys.ToList())
                 {
-                    if (ImGuiOm.ButtonIcon(key, FontAwesomeIcon.TrashAlt, GetLoc("Delete")))
+                    if (ImGuiOm.ButtonIcon(key, FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
                     {
                         changed = true;
 
                         listToRemove.Add(key);
-                        ForceObjectUpdate = true;
+                        forceObjectUpdate = true;
                     }
 
                     ImGui.SameLine();
@@ -287,17 +226,17 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
                 }
 
                 if (listToRemove.Count > 0)
-                    ModuleConfig.BlacklistKeys.RemoveRange(listToRemove);
+                    config.BlacklistKeys.RemoveRange(listToRemove);
             }
         }
 
-        if (changed) 
-            SaveConfig(ModuleConfig);
+        if (changed)
+            config.Save(this);
     }
-    
+
     protected override void OverlayUI()
     {
-        using var fontPush = FontManager.Instance().GetUIFont(ModuleConfig.FontScale).Push();
+        using var fontPush = FontManager.Instance().GetUIFont(config.FontScale).Push();
 
         RenderObjectButtons(out var instanceChangeObj, out var worldTravelObj);
 
@@ -312,21 +251,21 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             }
         }
 
-        WindowWidth = Math.Clamp(ImGui.GetItemRectSize().X, ModuleConfig.MinButtonWidth, ModuleConfig.MaxButtonWidth);
+        windowWidth = Math.Clamp(ImGui.GetItemRectSize().X, config.MinButtonWidth, config.MaxButtonWidth);
     }
 
-    private static void ValidateButtonWidthSettings()
+    private void ValidateButtonWidthSettings()
     {
-        if (ModuleConfig.MinButtonWidth >= ModuleConfig.MaxButtonWidth)
+        if (config.MinButtonWidth >= config.MaxButtonWidth)
         {
-            ModuleConfig.MinButtonWidth = 300f;
-            ModuleConfig.MaxButtonWidth = 350f;
+            config.MinButtonWidth = 300f;
+            config.MaxButtonWidth = 350f;
         }
 
-        ModuleConfig.MinButtonWidth = Math.Max(1, ModuleConfig.MinButtonWidth);
-        ModuleConfig.MaxButtonWidth = Math.Max(1, ModuleConfig.MaxButtonWidth);
+        config.MinButtonWidth = Math.Max(1, config.MinButtonWidth);
+        config.MaxButtonWidth = Math.Max(1, config.MaxButtonWidth);
     }
-    
+
     private void RenderObjectButtons(out InteractableObject? instanceChangeObject, out InteractableObject? worldTravelObject)
     {
         instanceChangeObject = null;
@@ -335,7 +274,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         using var group = ImRaii.Group();
 
 
-        foreach (var obj in CurrentObjects)
+        foreach (var obj in currentObjects)
         {
             if (obj.Pointer == null) continue;
 
@@ -346,7 +285,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
                     instanceChangeObject = obj;
             }
 
-            if (!IsOnWorldTraveling                                     &&
+            if (!isOnWorldTraveling                                     &&
                 WorldTravelValidZones.Contains(GameState.TerritoryType) &&
                 obj.Kind == ObjectKind.Aetheryte)
             {
@@ -362,10 +301,10 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
     private void RenderSingleObjectButton(InteractableObject obj)
     {
         var isReachable   = obj.Pointer->IsReachable();
-        var clickToTarget = ModuleConfig.AllowClickToTarget;
-        
+        var clickToTarget = config.AllowClickToTarget;
+
         using var alpha = ImRaii.PushStyle(ImGuiStyleVar.Alpha, 0.5f, !isReachable);
-        
+
         if (clickToTarget)
         {
 
@@ -390,36 +329,36 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         {
             if (popup)
             {
-                if (ImGui.MenuItem(GetLoc("FastObjectInteract-AddToBlacklist")))
+                if (ImGui.MenuItem(Lang.Get("FastObjectInteract-AddToBlacklist")))
                 {
                     var cleanName = FastObjectInteractTitleRegex().Replace(obj.Name, string.Empty).Trim();
 
-                    if (ModuleConfig.BlacklistKeys.Add(cleanName))
+                    if (config.BlacklistKeys.Add(cleanName))
                     {
-                        SaveConfig(ModuleConfig);
-                        ForceObjectUpdate = true;
+                        config.Save(this);
+                        forceObjectUpdate = true;
                     }
                 }
             }
         }
     }
 
-    private static void RenderInstanceZoneChangeButtons()
+    private void RenderInstanceZoneChangeButtons()
     {
 
         for (var i = 1; i <= InstancesManager.Instance().GetInstancesCount(); i++)
         {
             if (i == InstancesManager.CurrentInstance) continue;
-            if (ButtonCenterText($"InstanceChangeWidget_{i}", GetLoc("FastObjectInteract-InstanceAreaChange", i)))
+            if (ButtonCenterText($"InstanceChangeWidget_{i}", Lang.Get("FastObjectInteract-InstanceAreaChange", i)))
                 ChatManager.Instance().SendMessage($"/pdr insc {i}");
         }
     }
 
-    private static void RenderWorldChangeButtons()
+    private void RenderWorldChangeButtons()
     {
-        using var disabled = ImRaii.Disabled(IsOnWorldTraveling);
+        using var disabled = ImRaii.Disabled(isOnWorldTraveling);
 
-        foreach (var worldPair in DCWorlds)
+        foreach (var worldPair in dcWorlds)
         {
             if (worldPair.Key == GameState.CurrentWorld) continue;
             if (ButtonCenterText($"WorldTravelWidget_{worldPair.Key}", $"{worldPair.Value}{(worldPair.Key == GameState.HomeWorld ? " (★)" : "")}"))
@@ -427,14 +366,14 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         }
     }
 
-    public static bool ButtonCenterText(string id, string text)
+    public bool ButtonCenterText(string id, string text)
     {
         using var idPush = ImRaii.PushId($"{id}_{text}");
 
         var textSize    = ImGui.CalcTextSize(text);
         var cursorPos   = ImGui.GetCursorScreenPos();
         var padding     = ImGui.GetStyle().FramePadding;
-        var buttonWidth = Math.Clamp(textSize.X + padding.X * 2, WindowWidth, ModuleConfig.MaxButtonWidth);
+        var buttonWidth = Math.Clamp(textSize.X + padding.X * 2, windowWidth, config.MaxButtonWidth);
         var result      = ImGui.Button(string.Empty, new Vector2(buttonWidth, textSize.Y + padding.Y * 2));
 
         ImGuiOm.TooltipHover(text);
@@ -446,23 +385,67 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
     }
 
     #endregion
-    
+
+    private void OnUpdate(IFramework framework)
+    {
+        if (isUpdatingObjects) return;
+
+        var localPlayer    = Control.GetLocalPlayer();
+        var canShowOverlay = !DService.Instance().Condition.IsBetweenAreas && localPlayer != null;
+
+        if (!canShowOverlay)
+        {
+            if (Overlay.IsOpen)
+            {
+                currentObjects.Clear();
+                windowWidth    = 0f;
+                Overlay.IsOpen = false;
+            }
+
+            return;
+        }
+
+        if (forceObjectUpdate || Throttler.Shared.Throttle("FastObjectInteract-Monitor"))
+        {
+            isUpdatingObjects = true;
+            forceObjectUpdate = false;
+
+            UpdateObjectsList((GameObject*)localPlayer);
+
+            isUpdatingObjects = false;
+        }
+
+        var shouldShowWindow = currentObjects.Count > 0 && IsWindowShouldBeOpen();
+
+        if (Overlay != null)
+        {
+            Overlay.IsOpen = shouldShowWindow;
+            if (!shouldShowWindow) windowWidth = 0f;
+        }
+    }
+
+    private void OnLogin() =>
+        LoadWorldData();
+
+    private void OnTerritoryChanged(ushort zoneID) =>
+        forceObjectUpdate = true;
+
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private void UpdateObjectsList(GameObject* localPlayer)
     {
-        CurrentObjects.Clear();
+        currentObjects.Clear();
 
         var mgr = GameObjectManager.Instance();
         if (mgr == null) return;
 
-        IsOnWorldTraveling = DService.Instance().Condition.Any
+        isOnWorldTraveling = DService.Instance().Condition.Any
         (
             ConditionFlag.ReadyingVisitOtherWorld,
             ConditionFlag.WaitingToVisitOtherWorld
         );
 
         var playerPos = localPlayer->Position;
-        var maxAmount = ModuleConfig.MaxDisplayAmount;
+        var maxAmount = config.MaxDisplayAmount;
 
         for (var i = 200; i < mgr->Objects.IndexSorted.Length; i++)
         {
@@ -473,18 +456,18 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             if (obj == null) continue;
 
             if (!obj->GetIsTargetable()) continue;
-            
+
             var kind = (ObjectKind)obj->ObjectKind;
-            if (!ModuleConfig.SelectedKinds.Contains(kind)) continue;
-            
+            if (!config.SelectedKinds.Contains(kind)) continue;
+
             var distSq = Vector2.DistanceSquared(playerPos.ToVector2(), obj->Position.ToVector2());
-            
+
             var limit = 400f;
-            if (IncludeDistance.TryGetValue(kind, out var l)) 
+            if (IncludeDistance.TryGetValue(kind, out var l))
                 limit = l;
 
             if (distSq > limit) continue;
-            
+
             if (!DService.Instance().Condition[ConditionFlag.InFlight] && MathF.Abs(obj->Position.Y - playerPos.Y) >= 4) continue;
 
             if (kind == ObjectKind.Treasure)
@@ -497,7 +480,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             var name = obj->NameString;
             if (string.IsNullOrEmpty(name)) continue;
 
-            if (ModuleConfig.BlacklistKeys.Contains(name)) continue;
+            if (config.BlacklistKeys.Contains(name)) continue;
 
             if (kind == ObjectKind.EventNpc)
             {
@@ -510,39 +493,39 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
                         name = string.Format(ENPC_TITLE_FORMAT, title, name);
                 }
             }
-            
-            if (ModuleConfig.OnlyDisplayInViewRange)
+
+            if (config.OnlyDisplayInViewRange)
             {
                 if (!GameViewHelper.WorldToScreen(obj->Position, out _, out var view) || !view)
                     continue;
             }
-            
-            CurrentObjects.Add(new(obj, name, kind, distSq));
-        }
-        
-        CurrentObjects.Sort(InteractableObjectComparer.Instance);
 
-        if (CurrentObjects.Count > maxAmount)
-            CurrentObjects.RemoveRange(maxAmount, CurrentObjects.Count - maxAmount);
+            currentObjects.Add(new(obj, name, kind, distSq));
+        }
+
+        currentObjects.Sort(InteractableObjectComparer.Instance);
+
+        if (currentObjects.Count > maxAmount)
+            currentObjects.RemoveRange(maxAmount, currentObjects.Count - maxAmount);
     }
-    
+
     private void UpdateWindowFlags()
     {
         if (Overlay == null) return;
-        if (ModuleConfig.LockWindow)
+        if (config.LockWindow)
             Overlay.Flags |= ImGuiWindowFlags.NoMove;
         else
             Overlay.Flags &= ~ImGuiWindowFlags.NoMove;
     }
-    
-    private static bool IsWindowShouldBeOpen()
+
+    private bool IsWindowShouldBeOpen()
     {
-        if (CurrentObjects.Count == 0) return false;
-        
-        if (ModuleConfig.WindowInvisibleWhenInteract && OccupiedInEvent) 
+        if (currentObjects.Count == 0) return false;
+
+        if (config.WindowInvisibleWhenInteract && DService.Instance().Condition.IsOccupiedInEvent)
             return false;
 
-        if (ModuleConfig.WindowInvisibleWhenCombat && DService.Instance().Condition[ConditionFlag.InCombat])
+        if (config.WindowInvisibleWhenCombat && DService.Instance().Condition[ConditionFlag.InCombat])
             return false;
 
         return true;
@@ -552,14 +535,14 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
     {
         TaskHelper.RemoveQueueTasks(2);
 
-        if (IsOnMount)
+        if (DService.Instance().Condition.IsOnMount)
         {
-            TaskHelper.Enqueue(() => MovementManager.Dismount(), "DismountInteract", weight: 2);
+            TaskHelper.Enqueue(() => MovementManager.Instance().Dismount(), "DismountInteract", weight: 2);
             TaskHelper.DelayNext(500, weight: 2);
         }
 
         TaskHelper.Enqueue(IsAbleToInteract, "等待可交互状态", weight: 2);
-        
+
         TaskHelper.Enqueue
         (
             () =>
@@ -575,43 +558,46 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
 
         if (kind is ObjectKind.EventObj)
             TaskHelper.Enqueue(() => TargetSystem.Instance()->OpenObjectInteraction(obj), "OpenInteraction", weight: 2);
-        
+
         return;
 
-        static bool IsAbleToInteract() =>
-            !IsOnMount && !DService.Instance().Condition.Any(ConditionFlag.Jumping, ConditionFlag.InFlight) && !MovementManager.IsManagerBusy;
+        static bool IsAbleToInteract()
+        {
+            return !DService.Instance().Condition.IsOnMount                                          &&
+                   !DService.Instance().Condition.Any(ConditionFlag.Jumping, ConditionFlag.InFlight) &&
+                   !MovementManager.Instance().IsManagerBusy;
+        }
     }
 
-    private static void LoadWorldData()
+    private void LoadWorldData()
     {
         if (!GameState.IsLoggedIn) return;
 
-        DCWorlds = PresetSheet.Worlds
-                              .Where(x => x.Value.DataCenter.RowId == GameState.CurrentDataCenter)
-                              .OrderBy(x => x.Key                  == GameState.HomeWorld)
-                              .ThenBy(x => x.Value.Name.ToString())
-                              .ToDictionary(x => x.Key, x => x.Value.Name.ToString());
-    }
-    
-    private sealed class Config : ModuleConfiguration
-    {
-        public HashSet<string>     BlacklistKeys = [];
-        public HashSet<ObjectKind> SelectedKinds = [];
-
-        public bool  AllowClickToTarget;
-        public float FontScale = 1f;
-        public bool  LockWindow;
-        public int   MaxDisplayAmount = 5;
-        public float MinButtonWidth   = 300f;
-        public float MaxButtonWidth   = 400f;
-        public bool  OnlyDisplayInViewRange;
-        public bool  WindowInvisibleWhenInteract = true;
-        public bool  WindowInvisibleWhenCombat   = true;
+        dcWorlds = Sheets.Worlds
+                         .Where(x => x.Value.DataCenter.RowId == GameState.CurrentDataCenter)
+                         .OrderBy(x => x.Key                  == GameState.HomeWorld)
+                         .ThenBy(x => x.Value.Name.ToString())
+                         .ToDictionary(x => x.Key, x => x.Value.Name.ToString());
     }
 
     [GeneratedRegex(@"\[.*?\]")]
     private static partial Regex FastObjectInteractTitleRegex();
-    
+
+    private sealed class Config : ModuleConfig
+    {
+        public bool                AllowClickToTarget;
+        public HashSet<string>     BlacklistKeys = [];
+        public float               FontScale     = 1f;
+        public bool                LockWindow;
+        public float               MaxButtonWidth   = 400f;
+        public int                 MaxDisplayAmount = 5;
+        public float               MinButtonWidth   = 300f;
+        public bool                OnlyDisplayInViewRange;
+        public HashSet<ObjectKind> SelectedKinds               = [];
+        public bool                WindowInvisibleWhenCombat   = true;
+        public bool                WindowInvisibleWhenInteract = true;
+    }
+
     private readonly struct InteractableObject
     (
         GameObject* ptr,
@@ -637,7 +623,7 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
         {
             var c = x.DistanceSq.CompareTo(y.DistanceSq);
             if (c != 0) return c;
-            
+
             return GetPriority(x.Kind).CompareTo(GetPriority(y.Kind));
         }
 
@@ -652,4 +638,34 @@ public unsafe partial class FastObjectInteract : DailyModuleBase
             _                         => 10
         };
     }
+    
+    #region 常量
+
+    private const string ENPC_TITLE_FORMAT = "[{0}] {1}";
+
+    private static readonly FrozenSet<uint> WorldTravelValidZones = [132U, 129U, 130U];
+
+    private static readonly FrozenDictionary<ObjectKind, float> IncludeDistance = new Dictionary<ObjectKind, float>
+    {
+        [ObjectKind.Aetheryte]      = 400,
+        [ObjectKind.GatheringPoint] = 100,
+        [ObjectKind.CardStand]      = 150,
+        [ObjectKind.EventObj]       = 100,
+        [ObjectKind.Housing]        = 30,
+        [ObjectKind.Treasure]       = 100
+    }.ToFrozenDictionary();
+    
+    private static FrozenDictionary<uint, string> ENPCTitle { get; } =
+        LuminaGetter.Get<ENpcResident>()
+                    .Where(x => x.Unknown1 && !string.IsNullOrWhiteSpace(x.Title.ToString()))
+                    .ToDictionary(x => x.RowId, x => x.Title.ToString())
+                    .ToFrozenDictionary();
+
+    private static FrozenSet<uint> ImportantENPC { get; } =
+        LuminaGetter.Get<ENpcResident>()
+                    .Where(x => x.Unknown1)
+                    .Select(x => x.RowId)
+                    .ToFrozenSet();
+
+    #endregion
 }

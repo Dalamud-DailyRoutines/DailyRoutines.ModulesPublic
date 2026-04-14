@@ -1,12 +1,10 @@
-using System;
 using System.Collections.Frozen;
-using System.Collections.Generic;
 using System.Numerics;
-using System.Threading;
-using System.Threading.Tasks;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Helpers;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
@@ -14,47 +12,45 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Newtonsoft.Json;
+using OmenTools.Dalamud;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using OmenTools.Threading;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using LuminaStatus = Lumina.Excel.Sheets.Status;
 using GameBattleChara = FFXIVClientStructs.FFXIV.Client.Game.Character.BattleChara;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDisplayMitigationInfo : DailyModuleBase
+public class AutoDisplayMitigationInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoDisplayMitigationInfoTitle"),
-        Description = GetLoc("AutoDisplayMitigationInfoDescription"),
-        Category    = ModuleCategories.Combat,
+        Title       = Lang.Get("AutoDisplayMitigationInfoTitle"),
+        Description = Lang.Get("AutoDisplayMitigationInfoDescription"),
+        Category    = ModuleCategory.Combat,
         Author      = ["HaKu"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static readonly byte[] DamagePhysicalStr = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
-    private static readonly byte[] DamageMagicalStr  = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
+    private          Config          config = null!;
+    private          IDtrBarEntry?   barEntry;
+    private readonly MitigationState state = new();
 
-    private static Config                   ModuleConfig = null!;
-    private static CancellationTokenSource? RemoteFetchCancelSource;
-    private static IDtrBarEntry?            BarEntry;
+    private readonly CancellationTokenSource? remoteFetchCancelSource = new();
 
-    private static readonly MitigationState State = new();
-
-    private static bool IsCombatEventsRegistered;
-    private static bool IsNeedToDrawOnPartyList;
+    private bool isCombatEventsRegistered;
+    private bool isNeedToDrawOnPartyList;
 
     protected override void Init()
     {
-        ModuleConfig = LoadConfig<Config>() ?? new Config();
+        config = Config.Load(this) ?? new();
 
-        SetOverlay();
-
-        RemoteFetchCancelSource = new();
-        _                       = RemoteRepoManager.FetchMitigationStatusesAsync(RemoteFetchCancelSource.Token);
+        _ = RemoteRepoManager.FetchMitigationStatusesAsync(remoteFetchCancelSource.Token);
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
@@ -72,21 +68,20 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
         UnregCombatEvents();
 
-        BarEntry?.Remove();
-        BarEntry = null;
+        barEntry?.Remove();
+        barEntry = null;
 
-        RemoteFetchCancelSource?.Cancel();
-        RemoteFetchCancelSource?.Dispose();
-        RemoteFetchCancelSource = null;
+        remoteFetchCancelSource?.Cancel();
+        remoteFetchCancelSource?.Dispose();
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(GetLoc("TransparentOverlay"), ref ModuleConfig.TransparentOverlay))
+        if (ImGui.Checkbox(Lang.Get("TransparentOverlay"), ref config.TransparentOverlay))
         {
-            SaveConfig(ModuleConfig);
+            config.Save(this);
 
-            if (ModuleConfig.TransparentOverlay)
+            if (config.TransparentOverlay)
             {
                 Overlay.Flags |= ImGuiWindowFlags.NoBackground;
                 Overlay.Flags |= ImGuiWindowFlags.NoTitleBar;
@@ -98,21 +93,21 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             }
         }
 
-        if (ImGui.Checkbox(GetLoc("ResizeableOverlay"), ref ModuleConfig.ResizeableOverlay))
+        if (ImGui.Checkbox(Lang.Get("ResizeableOverlay"), ref config.ResizeableOverlay))
         {
-            SaveConfig(ModuleConfig);
+            config.Save(this);
 
-            if (ModuleConfig.ResizeableOverlay)
+            if (config.ResizeableOverlay)
                 Overlay.Flags &= ~ImGuiWindowFlags.NoResize;
             else
                 Overlay.Flags |= ImGuiWindowFlags.NoResize;
         }
 
-        if (ImGui.Checkbox(GetLoc("MoveableOverlay"), ref ModuleConfig.MoveableOverlay))
+        if (ImGui.Checkbox(Lang.Get("MoveableOverlay"), ref config.MoveableOverlay))
         {
-            SaveConfig(ModuleConfig);
+            config.Save(this);
 
-            if (!ModuleConfig.MoveableOverlay)
+            if (!config.MoveableOverlay)
             {
                 Overlay.Flags |= ImGuiWindowFlags.NoMove;
                 Overlay.Flags |= ImGuiWindowFlags.NoInputs;
@@ -127,10 +122,10 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     protected override void OverlayUI()
     {
-        if (State.IsLocalEmpty)
+        if (state.IsLocalEmpty)
             return;
 
-        ImGuiHelpers.SeStringWrapped(BarEntry?.Text?.Encode() ?? []);
+        ImGuiHelpers.SeStringWrapped(barEntry?.Text?.Encode() ?? []);
 
         ImGui.Separator();
 
@@ -138,22 +133,22 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         if (!table)
             return;
 
-        ImGui.TableSetupColumn("Icon",  ImGuiTableColumnFlags.WidthFixed,   24f * GlobalFontScale);
+        ImGui.TableSetupColumn("Icon",  ImGuiTableColumnFlags.WidthFixed,   24f * GlobalUIScale);
         ImGui.TableSetupColumn("Name",  ImGuiTableColumnFlags.WidthStretch, 20);
         ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch, 20);
 
         if (!DService.Instance().Texture.TryGetFromGameIcon(new(210405), out var barrierIcon))
             return;
 
-        foreach (var status in State.LocalActiveStatus)
+        foreach (var status in state.LocalActiveStatus)
             DrawStatusRow(status);
 
-        foreach (var status in State.TargetActiveStatus)
+        foreach (var status in state.TargetActiveStatus)
             DrawStatusRow(status);
 
-        if (State.LocalShield > 0)
+        if (state.LocalShield > 0)
         {
-            if (!State.IsLocalEmpty)
+            if (!state.IsLocalEmpty)
                 ImGui.TableNextRow();
 
             ImGui.TableNextRow();
@@ -162,21 +157,21 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
             ImGui.TableNextColumn();
             ImGui.AlignTextToFramePadding();
-            ImGui.TextUnformatted($"{GetLoc("Shield")}");
+            ImGui.TextUnformatted($"{Lang.Get("Shield")}");
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{State.LocalShield}");
+            ImGui.TextUnformatted($"{state.LocalShield}");
         }
     }
 
     private void SetOverlay()
     {
         Overlay            ??= new(this);
-        Overlay.WindowName =   GetLoc("AutoDisplayMitigationInfoTitle");
+        Overlay.WindowName =   Lang.Get("AutoDisplayMitigationInfoTitle");
         Overlay.Flags      &=  ~ImGuiWindowFlags.NoTitleBar;
         Overlay.Flags      &=  ~ImGuiWindowFlags.AlwaysAutoResize;
 
-        if (ModuleConfig.TransparentOverlay)
+        if (config.TransparentOverlay)
         {
             Overlay.Flags |= ImGuiWindowFlags.NoBackground;
             Overlay.Flags |= ImGuiWindowFlags.NoTitleBar;
@@ -187,12 +182,12 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             Overlay.Flags &= ~ImGuiWindowFlags.NoTitleBar;
         }
 
-        if (ModuleConfig.ResizeableOverlay)
+        if (config.ResizeableOverlay)
             Overlay.Flags &= ~ImGuiWindowFlags.NoResize;
         else
             Overlay.Flags |= ImGuiWindowFlags.NoResize;
 
-        if (!ModuleConfig.MoveableOverlay)
+        if (!config.MoveableOverlay)
         {
             Overlay.Flags |= ImGuiWindowFlags.NoMove;
             Overlay.Flags |= ImGuiWindowFlags.NoInputs;
@@ -222,18 +217,134 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         ImGuiOm.TooltipHover($"{status.StatusID}");
 
         ImGui.TableNextColumn();
-        ImGuiHelpers.SeStringWrapped(DamagePhysicalStr);
+        ImGuiHelpers.SeStringWrapped(DamagePhysicalString);
 
         ImGui.SameLine();
         ImGui.TextUnformatted($"{status.Physical}% ");
 
         ImGui.SameLine();
-        ImGuiHelpers.SeStringWrapped(DamageMagicalStr);
+        ImGuiHelpers.SeStringWrapped(DamageMagicalString);
 
         ImGui.SameLine();
         ImGui.TextUnformatted($"{status.Magical}% ");
     }
 
+    private void RegCombatEvents()
+    {
+        if (isCombatEventsRegistered)
+            return;
+
+        WindowManager.Instance().PostDraw += Draw;
+        FrameworkManager.Instance().Reg(OnUpdate, 500);
+
+        barEntry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayMitigationInfo");
+        barEntry.OnClick =   _ =>
+        {
+            if (Overlay == null)
+                SetOverlay();
+            
+            Overlay.IsOpen ^= true;
+        };
+
+        isCombatEventsRegistered = true;
+    }
+
+    private void UnregCombatEvents()
+    {
+        if (!isCombatEventsRegistered)
+            return;
+
+        WindowManager.Instance().PostDraw -= Draw;
+        FrameworkManager.Instance().Unreg(OnUpdate);
+        state.Clear();
+
+        if (barEntry != null)
+        {
+            barEntry.Shown   = false;
+            barEntry.Tooltip = null;
+            barEntry.Text    = null;
+        }
+
+        isCombatEventsRegistered = false;
+    }
+
+    private void UpdateStatusBar()
+    {
+        if (barEntry == null)
+            return;
+
+        if (state.IsLocalEmpty)
+        {
+            barEntry.Shown   = false;
+            barEntry.Tooltip = null;
+            barEntry.Text    = null;
+            return;
+        }
+
+        var textBuilder  = new SeStringBuilder();
+        var firstBarItem = true;
+
+        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamagePhysical, state.LocalPhysical, true);
+        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamageMagical,  state.LocalMagical,  true);
+        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.Tank,           state.LocalShield,   false);
+
+        barEntry.Text = textBuilder.Build();
+
+        var tipBuilder   = new SeStringBuilder();
+        var firstTipItem = true;
+
+        foreach (var status in state.LocalActiveStatus)
+        {
+            if (!firstTipItem)
+                tipBuilder.Append("\n");
+            tipBuilder.Append($"{LuminaWrapper.GetStatusName(status.StatusID)}:");
+            tipBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
+            tipBuilder.Append($"{status.Physical}% ");
+            tipBuilder.AddIcon(BitmapFontIcon.DamageMagical);
+            tipBuilder.Append($"{status.Magical}% ");
+            firstTipItem = false;
+        }
+
+        if (state.LocalShield > 0)
+        {
+            if (!firstTipItem)
+                tipBuilder.Append("\n");
+            tipBuilder.AddIcon(BitmapFontIcon.Tank);
+            tipBuilder.Append($"{Lang.Get("Shield")}: {state.LocalShield}");
+            firstTipItem = false;
+        }
+
+        foreach (var status in state.TargetActiveStatus)
+        {
+            if (!firstTipItem)
+                tipBuilder.Append("\n");
+            tipBuilder.Append($"{LuminaWrapper.GetStatusName(status.StatusID)}:");
+            tipBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
+            tipBuilder.Append($"{status.Physical}% ");
+            tipBuilder.AddIcon(BitmapFontIcon.DamageMagical);
+            tipBuilder.Append($"{status.Magical}% ");
+            firstTipItem = false;
+        }
+
+        barEntry.Tooltip = tipBuilder.Build();
+        barEntry.Shown   = true;
+
+        return;
+
+        void AppendSummary(ref SeStringBuilder builder, ref bool first, BitmapFontIcon icon, float value, bool suffixPercent)
+        {
+            if (value <= 0)
+                return;
+
+            if (!first)
+                builder.Append(" ");
+
+            builder.AddIcon(icon);
+            builder.Append($"{value:0}" + (suffixPercent ? "%" : ""));
+            first = false;
+        }
+    }
+    
     #region 事件
 
     private void OnZoneChanged(ushort obj)
@@ -269,136 +380,26 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             return;
         }
 
-        State.Update();
+        state.Update();
         UpdateStatusBar();
     }
 
     #endregion
 
-    private void RegCombatEvents()
-    {
-        if (IsCombatEventsRegistered)
-            return;
-
-        WindowManager.Draw += Draw;
-        FrameworkManager.Instance().Reg(OnUpdate, 500);
-
-        BarEntry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayMitigationInfo");
-        BarEntry.OnClick =   _ => Overlay?.IsOpen ^= true;
-
-        IsCombatEventsRegistered = true;
-    }
-
-    private void UnregCombatEvents()
-    {
-        if (!IsCombatEventsRegistered)
-            return;
-
-        WindowManager.Draw -= Draw;
-        FrameworkManager.Instance().Unreg(OnUpdate);
-        State.Clear();
-
-        if (BarEntry != null)
-        {
-            BarEntry.Shown   = false;
-            BarEntry.Tooltip = null;
-            BarEntry.Text    = null;
-        }
-
-        IsCombatEventsRegistered = false;
-    }
-
-    private static void UpdateStatusBar()
-    {
-        if (BarEntry == null)
-            return;
-
-        if (State.IsLocalEmpty)
-        {
-            BarEntry.Shown   = false;
-            BarEntry.Tooltip = null;
-            BarEntry.Text    = null;
-            return;
-        }
-
-        var textBuilder  = new SeStringBuilder();
-        var firstBarItem = true;
-
-        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamagePhysical, State.LocalPhysical, true);
-        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.DamageMagical,  State.LocalMagical,  true);
-        AppendSummary(ref textBuilder, ref firstBarItem, BitmapFontIcon.Tank,           State.LocalShield,   false);
-
-        BarEntry.Text = textBuilder.Build();
-
-        var tipBuilder   = new SeStringBuilder();
-        var firstTipItem = true;
-
-        foreach (var status in State.LocalActiveStatus)
-        {
-            if (!firstTipItem)
-                tipBuilder.Append("\n");
-            tipBuilder.Append($"{LuminaWrapper.GetStatusName(status.StatusID)}:");
-            tipBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
-            tipBuilder.Append($"{status.Physical}% ");
-            tipBuilder.AddIcon(BitmapFontIcon.DamageMagical);
-            tipBuilder.Append($"{status.Magical}% ");
-            firstTipItem = false;
-        }
-
-        if (State.LocalShield > 0)
-        {
-            if (!firstTipItem)
-                tipBuilder.Append("\n");
-            tipBuilder.AddIcon(BitmapFontIcon.Tank);
-            tipBuilder.Append($"{GetLoc("Shield")}: {State.LocalShield}");
-            firstTipItem = false;
-        }
-
-        foreach (var status in State.TargetActiveStatus)
-        {
-            if (!firstTipItem)
-                tipBuilder.Append("\n");
-            tipBuilder.Append($"{LuminaWrapper.GetStatusName(status.StatusID)}:");
-            tipBuilder.AddIcon(BitmapFontIcon.DamagePhysical);
-            tipBuilder.Append($"{status.Physical}% ");
-            tipBuilder.AddIcon(BitmapFontIcon.DamageMagical);
-            tipBuilder.Append($"{status.Magical}% ");
-            firstTipItem = false;
-        }
-
-        BarEntry.Tooltip = tipBuilder.Build();
-        BarEntry.Shown   = true;
-
-        return;
-
-        void AppendSummary(ref SeStringBuilder builder, ref bool first, BitmapFontIcon icon, float value, bool suffixPercent)
-        {
-            if (value <= 0)
-                return;
-
-            if (!first)
-                builder.Append(" ");
-
-            builder.AddIcon(icon);
-            builder.Append($"{value:0}" + (suffixPercent ? "%" : ""));
-            first = false;
-        }
-    }
-
     #region PartyList
 
-    private static unsafe void Draw()
+    private unsafe void Draw()
     {
-        if (Throttler.Throttle("AutoDisplayMitigationInfo-OnUpdatePartyDrawCondition"))
-            IsNeedToDrawOnPartyList = PartyList->IsAddonAndNodesReady() && !GameState.IsInPVPArea;
+        if (Throttler.Shared.Throttle("AutoDisplayMitigationInfo-OnUpdatePartyDrawCondition"))
+            isNeedToDrawOnPartyList = PartyList->IsAddonAndNodesReady() && !GameState.IsInPVPArea;
 
-        if (!IsNeedToDrawOnPartyList)
+        if (!isNeedToDrawOnPartyList)
             return;
 
         var drawList = ImGui.GetBackgroundDrawList();
         var addon    = (AddonPartyList*)PartyList;
 
-        var snapshot = State.PartySnapshot;
+        var snapshot = state.PartySnapshot;
         var count    = snapshot.Length;
 
         for (var i = 0; i < count; i++)
@@ -545,12 +546,12 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
 
     private sealed unsafe class MitigationState
     {
-        private          ActiveMitigation[]        localActiveStatusBuffer  = new ActiveMitigation[16];
-        private          ActiveMitigation[]        targetActiveStatusBuffer = new ActiveMitigation[16];
-        private readonly PartyMitigationSnapshot[] partySnapshotBuffer      = new PartyMitigationSnapshot[9];
+        private readonly PartyMitigationSnapshot[] partySnapshotBuffer = new PartyMitigationSnapshot[9];
         private          int                       localActiveCount;
-        private          int                       targetActiveCount;
+        private          ActiveMitigation[]        localActiveStatusBuffer = new ActiveMitigation[16];
         private          int                       partyCount;
+        private          int                       targetActiveCount;
+        private          ActiveMitigation[]        targetActiveStatusBuffer = new ActiveMitigation[16];
 
         public float LocalShield { get; private set; }
 
@@ -864,12 +865,12 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
         {
             try
             {
-                var json = await HTTPClientHelper.Get().GetStringAsync($"{URI}/mitigation.json", ct).ConfigureAwait(false);
+                var json = await HTTPClientHelper.Instance().Get().GetStringAsync($"{URI}/mitigation.json", ct).ConfigureAwait(false);
                 var resp = JsonConvert.DeserializeObject<MitigationInfoDto[]>(json);
 
                 if (resp == null)
                 {
-                    Error("[AutoDisplayMitigationInfo] 远程减伤技能文件解析失败");
+                    DLog.Error("[AutoDisplayMitigationInfo] 远程减伤技能文件解析失败");
                     return;
                 }
 
@@ -891,28 +892,43 @@ public class AutoDisplayMitigationInfo : DailyModuleBase
             }
             catch (Exception ex)
             {
-                Error($"[AutoDisplayMitigationInfo] 远程减伤技能文件获取失败: {ex}");
+                DLog.Error($"[AutoDisplayMitigationInfo] 远程减伤技能文件获取失败: {ex}");
             }
         }
     }
 
-    private class Config : ModuleConfiguration
+    private class Config : ModuleConfig
     {
-        public bool TransparentOverlay;
-        public bool ResizeableOverlay = true;
         public bool MoveableOverlay   = true;
+        public bool ResizeableOverlay = true;
+        public bool TransparentOverlay;
     }
 
     private sealed class MitigationInfoDto
     {
-        [JsonProperty("id")]         public uint           ID         { get; private set; }
-        [JsonProperty("mitigation")] public StatusInfoDto? Mitigation { get; private set; }
-        [JsonProperty("on_member")]  public bool           OnMember   { get; private set; }
+        [JsonProperty("id")]
+        public uint ID { get; private set; }
+
+        [JsonProperty("mitigation")]
+        public StatusInfoDto? Mitigation { get; private set; }
+
+        [JsonProperty("on_member")]
+        public bool OnMember { get; private set; }
     }
 
     private sealed class StatusInfoDto
     {
-        [JsonProperty("physical")] public float Physical { get; private set; }
-        [JsonProperty("magical")]  public float Magical  { get; private set; }
+        [JsonProperty("physical")]
+        public float Physical { get; private set; }
+
+        [JsonProperty("magical")]
+        public float Magical { get; private set; }
     }
+
+    #region 常量
+
+    private static byte[] DamagePhysicalString { get; } = new SeString(new IconPayload(BitmapFontIcon.DamagePhysical)).Encode();
+    private static byte[] DamageMagicalString  { get; } = new SeString(new IconPayload(BitmapFontIcon.DamageMagical)).Encode();
+
+    #endregion
 }

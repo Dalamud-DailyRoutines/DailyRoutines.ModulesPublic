@@ -1,25 +1,26 @@
-using System.Collections.Generic;
-using DailyRoutines.Abstracts;
-using DailyRoutines.Infos;
-using DailyRoutines.Managers;
+using System.Collections.Frozen;
+using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Manager;
 using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastRetainerStore : DailyModuleBase
+public unsafe class FastRetainerStore : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("FastRetainerStoreTitle"),
-        Description = GetLoc("FastRetainerStoreDescription"),
-        Category    = ModuleCategories.UIOperation,
+        Title       = Lang.Get("FastRetainerStoreTitle"),
+        Description = Lang.Get("FastRetainerStoreDescription"),
+        Category    = ModuleCategory.UIOperation,
         Author      = ["YLCHEN"]
     };
-    
-    private static readonly HashSet<string> PlayerAddonNames   = ["Inventory", "InventoryLarge", "InventoryExpansion"];
-    private static readonly HashSet<string> RetainerAddonNames = ["InventoryRetainer", "InventoryRetainerLarge"];
 
     protected override void Init()
     {
@@ -28,7 +29,7 @@ public unsafe class FastRetainerStore : DailyModuleBase
         DService.Instance().ContextMenu.OnMenuOpened += OnContextMenuOpened;
     }
 
-    protected override void Uninit() => 
+    protected override void Uninit() =>
         DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenuOpened;
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)
@@ -43,58 +44,66 @@ public unsafe class FastRetainerStore : DailyModuleBase
 
         if (PlayerAddonNames.Contains(addonName))
         {
-            if (TryFindTargetSlot(RetainerInventories, item.ItemId, item.IsHq, item.IsCollectable, out _))
+            if (TryFindTargetSlot(Inventories.Retainer, item.ItemId, item.IsHq, item.IsCollectable, out _))
                 args.AddMenuItem(new ItemMoveMenu(item.ItemId, item.IsHq, item.IsCollectable, true).Get());
-        }        
+        }
         else if (RetainerAddonNames.Contains(addonName))
         {
-            if (TryFindTargetSlot(PlayerInventories, item.ItemId, item.IsHq, item.IsCollectable, out _))
+            if (TryFindTargetSlot(Inventories.Player, item.ItemId, item.IsHq, item.IsCollectable, out _))
                 args.AddMenuItem(new ItemMoveMenu(item.ItemId, item.IsHq, item.IsCollectable, false).Get());
         }
-        
+
         return;
 
         bool IsRetainerInventoryOpen()
-            => InventoryRetainer->IsAddonAndNodesReady() ||
-               InventoryRetainerLarge->IsAddonAndNodesReady();
+        {
+            return InventoryRetainer->IsAddonAndNodesReady() ||
+                   InventoryRetainerLarge->IsAddonAndNodesReady();
+        }
 
         bool IsPlayerInventoryOpen()
-            => Inventory->IsAddonAndNodesReady()      ||
-               InventoryLarge->IsAddonAndNodesReady() ||
-               InventoryExpansion->IsAddonAndNodesReady();
+        {
+            return Inventory->IsAddonAndNodesReady()      ||
+                   InventoryLarge->IsAddonAndNodesReady() ||
+                   InventoryExpansion->IsAddonAndNodesReady();
+        }
     }
 
     private void ExecuteMoveAll(uint itemID, bool isHQ, bool isCollectable, bool storeToRetainer)
     {
         if (TaskHelper.IsBusy) return;
 
-        var sourceInvs = storeToRetainer ? PlayerInventories : RetainerInventories;
-        var targetInvs = storeToRetainer ? RetainerInventories : PlayerInventories;
+        var sourceInvs = storeToRetainer ? Inventories.Player : Inventories.Retainer;
+        var targetInvs = storeToRetainer ? Inventories.Retainer : Inventories.Player;
 
-        TaskHelper.Enqueue(() =>
-        {
-            var manager = InventoryManager.Instance();
-            if (manager == null) return false;
-            
-            foreach (var sourceInv in sourceInvs)
+        TaskHelper.Enqueue
+        (
+            () =>
             {
-                var container = manager->GetInventoryContainer(sourceInv);
-                if (container == null) continue;
+                var manager = InventoryManager.Instance();
+                if (manager == null) return false;
 
-                for (var i = 0; i < container->Size; i++)
+                foreach (var sourceInv in sourceInvs)
                 {
-                    var slot = container->GetInventorySlot(i);
-                    if (slot == null || !IsSameItem(slot, itemID, isHQ, isCollectable)) continue;
+                    var container = manager->GetInventoryContainer(sourceInv);
+                    if (container == null) continue;
 
-                    if (!TryFindTargetSlot(targetInvs, itemID, isHQ, isCollectable, out var targetSlot))
-                        return true;
+                    for (var i = 0; i < container->Size; i++)
+                    {
+                        var slot = container->GetInventorySlot(i);
+                        if (slot == null || !IsSameItem(slot, itemID, isHQ, isCollectable)) continue;
 
-                    manager->MoveItemSlot(sourceInv, (ushort)slot->Slot, targetSlot.Inventory, (ushort)targetSlot.Slot, true);
+                        if (!TryFindTargetSlot(targetInvs, itemID, isHQ, isCollectable, out var targetSlot))
+                            return true;
+
+                        manager->MoveItemSlot(sourceInv, (ushort)slot->Slot, targetSlot.Inventory, (ushort)targetSlot.Slot, true);
+                    }
                 }
-            }
 
-            return true;
-        }, storeToRetainer ? "存入雇员" : "取出到背包");
+                return true;
+            },
+            storeToRetainer ? "存入雇员" : "取出到背包"
+        );
     }
 
     private static bool IsSameItem(InventoryItem* slot, uint itemID, bool isHQ, bool isCollectable)
@@ -114,11 +123,17 @@ public unsafe class FastRetainerStore : DailyModuleBase
         return baseItemID == itemID && currentIsHQ == isHQ && currentIsCollectable == isCollectable;
     }
 
-    private static bool TryFindTargetSlot(List<InventoryType> targetInvs, uint itemID, bool isHQ, bool isCollectable, 
-                                          out (InventoryType Inventory, int Slot) targetSlot)
+    private static bool TryFindTargetSlot
+    (
+        FrozenSet<InventoryType>                targetInvs,
+        uint                                    itemID,
+        bool                                    isHQ,
+        bool                                    isCollectable,
+        out (InventoryType Inventory, int Slot) targetSlot
+    )
     {
         var manager = InventoryManager.Instance();
-        
+
         if (!LuminaGetter.TryGetRow<Item>(itemID, out var itemData))
         {
             targetSlot = (InventoryType.Invalid, -1);
@@ -165,14 +180,27 @@ public unsafe class FastRetainerStore : DailyModuleBase
         return false;
     }
 
-    private class ItemMoveMenu(uint ItemID, bool IsHQ, bool IsCollectable, bool IsStoreToRetainer) : MenuItemBase
+    private class ItemMoveMenu
+    (
+        uint ItemID,
+        bool IsHQ,
+        bool IsCollectable,
+        bool IsStoreToRetainer
+    ) : MenuItemBase
     {
-        public override string Name       { get; protected set; } = GetLoc(IsStoreToRetainer ? "SaveAll" : "RetrieveAll");
+        public override string Name       { get; protected set; } = Lang.Get(IsStoreToRetainer ? "SaveAll" : "RetrieveAll");
         public override string Identifier { get; protected set; } = nameof(FastRetainerStore);
 
         protected override bool WithDRPrefix { get; set; } = true;
 
-        protected override void OnClicked(IMenuItemClickedArgs args) => 
-            ModuleManager.GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
+        protected override void OnClicked(IMenuItemClickedArgs args) =>
+            ModuleManager.Instance().GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
     }
+    
+    #region 常量
+
+    private static readonly FrozenSet<string> PlayerAddonNames   = ["Inventory", "InventoryLarge", "InventoryExpansion"];
+    private static readonly FrozenSet<string> RetainerAddonNames = ["InventoryRetainer", "InventoryRetainerLarge"];
+
+    #endregion
 }

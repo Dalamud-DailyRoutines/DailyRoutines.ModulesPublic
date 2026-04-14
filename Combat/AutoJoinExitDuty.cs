@@ -1,80 +1,93 @@
-using DailyRoutines.Abstracts;
-using DailyRoutines.Managers;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Manager;
 using Dalamud.Game.Command;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Helpers;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoJoinExitDuty : DailyModuleBase
+public unsafe class AutoJoinExitDuty : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = GetLoc("AutoJoinExitDutyTitle"),
-        Description         = GetLoc("AutoJoinExitDutyDescription"),
-        Category            = ModuleCategories.Combat,
+        Title               = Lang.Get("AutoJoinExitDutyTitle"),
+        Description         = Lang.Get("AutoJoinExitDutyDescription"),
+        Category            = ModuleCategory.Combat,
         ModulesPrerequisite = ["AutoCommenceDuty"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    // 伊弗利特讨伐战
-    private const uint TargetContent = 56U;
-
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 15_000 };
-        
-        CommandManager.AddSubCommand("joinexitduty",
-                                             new CommandInfo(OnCommand) { HelpMessage = GetLoc("AutoJoinExitDutyTitle") });
+
+        CommandManager.Instance().AddSubCommand
+        (
+            "joinexitduty",
+            new CommandInfo(OnCommand) { HelpMessage = Lang.Get("AutoJoinExitDutyTitle") }
+        );
     }
 
-    protected override void Uninit() => 
-        CommandManager.RemoveSubCommand("joinexitduty");
+    protected override void Uninit() =>
+        CommandManager.Instance().RemoveSubCommand("joinexitduty");
 
     private void OnCommand(string command, string arguments)
     {
         if (DService.Instance().PartyList.Length > 0)
         {
-            NotificationError(GetLoc("AutoJoinExitDuty-AlreadyInParty"));
+            NotifyHelper.Instance().NotificationError(Lang.Get("AutoJoinExitDuty-AlreadyInParty"));
             return;
         }
 
-        if (BoundByDuty)
+        if (DService.Instance().Condition.IsBoundByDuty)
         {
-            NotificationError(GetLoc("AutoJoinExitDuty-AlreadyInDutyNotice"));
+            NotifyHelper.Instance().NotificationError(Lang.Get("AutoJoinExitDuty-AlreadyInDutyNotice"));
             return;
         }
-        
-        if (!LuminaGetter.TryGetRow<ContentFinderCondition>(TargetContent, out var contentData)) return;
-        if (!UIState.IsInstanceContentUnlocked(TargetContent))
+
+        if (!LuminaGetter.TryGetRow<ContentFinderCondition>(TARGET_CONTENT, out var contentData)) return;
+
+        if (!UIState.IsInstanceContentUnlocked(TARGET_CONTENT))
         {
-            NotificationError(GetLoc("AutoJoinExitDuty-DutyLockedNotice", contentData.Name.ToString()));
+            NotifyHelper.Instance().NotificationError(Lang.Get("AutoJoinExitDuty-DutyLockedNotice", contentData.Name.ToString()));
             return;
         }
 
         TaskHelper.Abort();
-        EnqueueARound(TargetContent, contentData.AllowExplorerMode);
+        EnqueueARound(TARGET_CONTENT, contentData.AllowExplorerMode);
     }
 
     private void EnqueueARound(uint targetContent, bool isExplorerMode)
     {
         TaskHelper.Enqueue(CheckAndSwitchJob);
-        TaskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(targetContent,
-                                                                        new()
-                                                                        {
-                                                                            Config817to820    = true,
-                                                                            UnrestrictedParty = true,
-                                                                            ExplorerMode      = isExplorerMode
-                                                                        }));
+        TaskHelper.Enqueue
+        (() => ContentsFinderHelper.RequestDutyNormal
+         (
+             targetContent,
+             new()
+             {
+                 Config817to820    = true,
+                 UnrestrictedParty = true,
+                 ExplorerMode      = isExplorerMode
+             }
+         )
+        );
         TaskHelper.Enqueue(() => ExitDuty(targetContent));
     }
 
     private bool CheckAndSwitchJob()
     {
         var localPlayer = DService.Instance().ObjectTable.LocalPlayer;
+
         if (localPlayer == null)
         {
             TaskHelper.Abort();
@@ -84,6 +97,7 @@ public unsafe class AutoJoinExitDuty : DailyModuleBase
         if (localPlayer.ClassJob.RowId is >= 8 and <= 18)
         {
             var gearsetModule = RaptureGearsetModule.Instance();
+
             for (var i = 0; i < 100; i++)
             {
                 var gearset = gearsetModule->GetGearset(i);
@@ -91,6 +105,7 @@ public unsafe class AutoJoinExitDuty : DailyModuleBase
                 if (!gearset->Flags.HasFlag(RaptureGearsetModule.GearsetFlag.Exists)) continue;
                 if (gearset->Flags.HasFlag(RaptureGearsetModule.GearsetFlag.MainHandMissing)) continue;
                 if (gearset->Id != i) continue;
+
                 if (gearset->ClassJob > 18)
                 {
                     ChatManager.Instance().SendMessage($"/gearset change {gearset->Id + 1}");
@@ -110,4 +125,11 @@ public unsafe class AutoJoinExitDuty : DailyModuleBase
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty);
         return true;
     }
+
+    #region 常量
+
+    // 伊弗利特讨伐战
+    private const uint TARGET_CONTENT = 56U;
+
+    #endregion
 }

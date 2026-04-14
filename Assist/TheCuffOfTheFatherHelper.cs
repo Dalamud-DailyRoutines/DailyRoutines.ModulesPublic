@@ -1,20 +1,23 @@
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.OmenService;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class TheCuffOfTheFatherHelper : DailyModuleBase
+public class TheCuffOfTheFatherHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("TheCuffOfTheFatherHelperTitle"),
-        Description = GetLoc("TheCuffOfTheFatherHelperDescription"),
-        Category    = ModuleCategories.Assist
+        Title       = Lang.Get("TheCuffOfTheFatherHelperTitle"),
+        Description = Lang.Get("TheCuffOfTheFatherHelperDescription"),
+        Category    = ModuleCategory.Assist
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

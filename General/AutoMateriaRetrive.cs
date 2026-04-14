@@ -1,102 +1,73 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Lumina.Excel.Sheets;
+using OmenTools.ImGuiOm.Widgets.Combos;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
+using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoMateriaRetrive : DailyModuleBase
+public unsafe class AutoMateriaRetrive : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = GetLoc("AutoMateriaRetriveTitle"),
-        Description = GetLoc("AutoMateriaRetriveDescription"),
-        Category    = ModuleCategories.General,
+        Title       = Lang.Get("AutoMateriaRetriveTitle"),
+        Description = Lang.Get("AutoMateriaRetriveDescription"),
+        Category    = ModuleCategory.General
     };
-
+    
     // TODO: 找一下这个 a6 到底是干什么的
-    private static readonly CompSig RetriveMateriaSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 41 8B F8");
-    private delegate        bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6);
-    private static          Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
+    private static readonly CompSig                       RetriveMateriaSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 41 8B F8");
+    private delegate bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6);
+    private          Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
 
-    private static readonly InventoryType[] Inventories =
-    [
-        InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4,
-        InventoryType.EquippedItems, InventoryType.ArmoryOffHand, InventoryType.ArmoryHead, InventoryType.ArmoryHands,
-        InventoryType.ArmoryWaist, InventoryType.ArmoryLegs, InventoryType.ArmoryFeets, InventoryType.ArmoryEar,
-        InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings, InventoryType.ArmoryMainHand
-    ];
-
-    private static Dictionary<string, Item>? ItemNames;
-    private static Dictionary<string, Item> ItemNamesAnother = [];
-
-    private static string ItemSearchInput = string.Empty;
-    private static Item? SelectedItem;
+    private readonly ItemSelectCombo itemSelectCombo = new
+    (
+        "Item",
+        LuminaGetter.Get<Item>()
+                    .Where(x => x.MateriaSlotCount > 0 && !string.IsNullOrEmpty(x.Name.ToString()))
+                    .GroupBy(x => x.Name.ToString())
+                    .Select(x => x.First())
+                    .ToList()
+    );
 
     protected override void Init()
     {
-        ItemNames ??= LuminaGetter.Get<Item>()
-                                 .Where(x => x.MateriaSlotCount > 0 && !string.IsNullOrEmpty(x.Name.ToString()))
-                                 .GroupBy(x => x.Name.ToString())
-                                 .ToDictionary(x => x.Key, x => x.First());
-
-        ItemNamesAnother = ItemNames.Take(10).ToDictionary(x => x.Key, x => x.Value);
-
-        RetriveMateriaHook ??= 
-            DService.Instance().Hook.HookFromSignature<RetriveMateriaDelegate>(RetriveMateriaSig.Get(), RetriveMateriaDetour);
-        RetriveMateriaHook.Enable();
         TaskHelper ??= new() { TimeoutMS = 5_000 };
+        
+        RetriveMateriaHook ??= RetriveMateriaSig.GetHook<RetriveMateriaDelegate>(RetriveMateriaDetour);
+        RetriveMateriaHook.Enable();
     }
 
     protected override void ConfigUI()
     {
-        ConflictKeyText();
+        ImGuiOm.ConflictKeyText();
 
-        ImGui.Spacing();
+        ImGui.NewLine();
 
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMateriaRetrive-ManuallySelect")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMateriaRetrive-ManuallySelect")}");
 
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(300f * GlobalFontScale);
-        if (ImGui.BeginCombo("###ItemSelectCombo",
-                             SelectedItem == null ? string.Empty : SelectedItem.Value.Name.ToString(),
-                             ImGuiComboFlags.HeightLargest))
+        using (ImRaii.PushIndent())
         {
-            ImGui.InputTextWithHint("###GameItemSearchInput", Lang.Get("PleaseSearch"), ref ItemSearchInput, 128);
-            if (ImGui.IsItemDeactivatedAfterEdit())
+            ImGui.SetNextItemWidth(300f * GlobalUIScale);
+            itemSelectCombo.DrawRadio();
+
+            ImGui.SameLine();
+
+            using (ImRaii.Disabled(itemSelectCombo.SelectedID == 0))
             {
-                if (!string.IsNullOrWhiteSpace(ItemSearchInput))
+                if (ImGui.Button(Lang.Get("Start")))
                 {
-                    ItemNamesAnother = ItemNames
-                                 .Where(x => x.Key.Contains(ItemSearchInput, StringComparison.OrdinalIgnoreCase))
-                                 .OrderBy(x => !x.Key.StartsWith(ItemSearchInput))
-                                 .Take(100)
-                                 .ToDictionary(x => x.Key, x => x.Value);
+                    TaskHelper.Abort();
+                    EnqueueRetriveTaskByItemID(itemSelectCombo.SelectedID);
                 }
-            }
-
-            ImGui.Separator();
-            foreach (var (itemName, item) in ItemNamesAnother)
-                if (ImGuiOm.SelectableImageWithText(ImageHelper.GetGameIcon(item.Icon).Handle,
-                                                    ScaledVector2(24f), itemName,
-                                                    (SelectedItem?.RowId ?? 0) == item.RowId,
-                                                    ImGuiSelectableFlags.DontClosePopups))
-                    SelectedItem = (SelectedItem?.RowId ?? 0) == item.RowId ? null : item;
-            ImGui.EndCombo();
-        }
-
-        ImGui.SameLine();
-        using (ImRaii.Disabled((SelectedItem?.RowId ?? 0) == 0))
-        {
-            if (ImGui.Button(Lang.Get("Start")))
-            {
-                TaskHelper.Abort();
-                EnqueueRetriveTaskByItemID(SelectedItem?.RowId ?? 0);
             }
         }
     }
@@ -105,98 +76,126 @@ public unsafe class AutoMateriaRetrive : DailyModuleBase
     {
         TaskHelper.Abort();
 
-        TaskHelper.Enqueue(() =>
-        {
-            if (InterruptByConflictKey(TaskHelper, this))
+        TaskHelper.Enqueue
+        (() =>
             {
-                TaskHelper.Abort();
-                return;
-            }
-
-            var instance = InventoryManager.Instance();
-            foreach (var inventoryType in Inventories)
-            {
-                var container = instance->GetInventoryContainer(inventoryType);
-                if (container == null || !container->IsLoaded) continue;
-                for (var i = 0; i < container->Size; i++)
+                if (TaskHelper.AbortByConflictKey(this))
                 {
-                    var slot = container->GetInventorySlot(i);
-                    if (slot == null || slot->ItemId == 0 || slot->ItemId != itemID || slot->Materia.ToArray().All(x => x == 0)) continue;
-                    EnqueueRetriveTask(inventoryType, (short)i);
+                    TaskHelper.Abort();
                     return;
                 }
-            }
 
-            TaskHelper.Abort();
-            NotificationWarning(Lang.Get("AutoMateriaRetrive-NoItemFound"));
-        });
+                var instance = InventoryManager.Instance();
 
-        TaskHelper.Enqueue(() =>
-        {
-            if (InterruptByConflictKey(TaskHelper, this))
-            {
+                foreach (var inventoryType in Inventories.PlayerWithArmory)
+                {
+                    var container = instance->GetInventoryContainer(inventoryType);
+                    if (container == null || !container->IsLoaded) continue;
+
+                    for (var i = 0; i < container->Size; i++)
+                    {
+                        var slot = container->GetInventorySlot(i);
+                        if (slot == null || slot->ItemId == 0 || slot->ItemId != itemID || slot->Materia.ToArray().All(x => x == 0)) continue;
+                        EnqueueRetriveTask(inventoryType, (short)i);
+                        return;
+                    }
+                }
+
                 TaskHelper.Abort();
-                return;
+                NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMateriaRetrive-NoItemFound"));
             }
+        );
 
-            EnqueueRetriveTaskByItemID(itemID);
-        });
+        TaskHelper.Enqueue
+        (() =>
+            {
+                if (TaskHelper.AbortByConflictKey(this))
+                {
+                    TaskHelper.Abort();
+                    return;
+                }
+
+                EnqueueRetriveTaskByItemID(itemID);
+            }
+        );
     }
 
     private void EnqueueRetriveTask(InventoryType inventoryType, short inventorySlot)
     {
         TaskHelper.Abort();
 
-        TaskHelper.Enqueue(() =>
-        {
-            if (InterruptByConflictKey(TaskHelper, this))
+        TaskHelper.Enqueue
+        (
+            () =>
             {
-                TaskHelper.Abort();
-                return true;
-            }
-            return !OccupiedInEvent;
-        }, "WaitEventEndBefore", weight: 1);
+                if (TaskHelper.AbortByConflictKey(this))
+                {
+                    TaskHelper.Abort();
+                    return true;
+                }
 
-        TaskHelper.Enqueue(() =>
-        {
-            if (InterruptByConflictKey(TaskHelper, this) || PlayerInventories.IsFull())
+                return !DService.Instance().Condition.IsOccupiedInEvent;
+            },
+            "WaitEventEndBefore",
+            weight: 1
+        );
+
+        TaskHelper.Enqueue
+        (
+            () =>
             {
-                TaskHelper.Abort();
-                return;
-            }
+                if (TaskHelper.AbortByConflictKey(this) || Inventories.Player.IsFull())
+                {
+                    TaskHelper.Abort();
+                    return;
+                }
 
-            Retrive(inventoryType, inventorySlot);
-        }, "RetriveWork", weight: 1);
+                Retrive(inventoryType, inventorySlot);
+            },
+            "RetriveWork",
+            weight: 1
+        );
 
-        TaskHelper.Enqueue(() =>
-        {
-            if (InterruptByConflictKey(TaskHelper, this))
+        TaskHelper.Enqueue
+        (
+            () =>
             {
-                TaskHelper.Abort();
-                return true;
-            }
-            return !OccupiedInEvent;
-        }, "WaitEventEndAfter", weight: 1);
+                if (TaskHelper.AbortByConflictKey(this))
+                {
+                    TaskHelper.Abort();
+                    return true;
+                }
 
-        TaskHelper.Enqueue(() =>
-        {
-            if (InterruptByConflictKey(TaskHelper, this))
+                return !DService.Instance().Condition.IsOccupiedInEvent;
+            },
+            "WaitEventEndAfter",
+            weight: 1
+        );
+
+        TaskHelper.Enqueue
+        (
+            () =>
             {
-                TaskHelper.Abort();
-                return;
-            }
+                if (TaskHelper.AbortByConflictKey(this))
+                {
+                    TaskHelper.Abort();
+                    return;
+                }
 
-            var manager = InventoryManager.Instance();
-            var slot    = manager->GetInventorySlot(inventoryType, inventorySlot);
-            if (slot == null || slot->ItemId == 0 || slot->Materia.ToArray().All(x => x == 0)) return;
-            EnqueueRetriveTask(inventoryType, inventorySlot);
-        }, "EnqueueNewRound_SingleSlot", weight: 1);
+                var manager = InventoryManager.Instance();
+                var slot    = manager->GetInventorySlot(inventoryType, inventorySlot);
+                if (slot == null || slot->ItemId == 0 || slot->Materia.ToArray().All(x => x == 0)) return;
+                EnqueueRetriveTask(inventoryType, inventorySlot);
+            },
+            "EnqueueNewRound_SingleSlot",
+            weight: 1
+        );
     }
 
-    private static void Retrive(InventoryType type, short slot)
+    private void Retrive(InventoryType type, short slot)
     {
-        var instance = EventFramework.Instance();
-        const int eventID = 0x390001;
+        var       instance = EventFramework.Instance();
+        const int eventID  = 0x390001;
 
         RetriveMateriaHook.Original(instance, eventID, type, slot, 0, 0);
     }

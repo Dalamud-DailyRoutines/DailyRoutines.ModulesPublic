@@ -1,5 +1,7 @@
 using System.Numerics;
-using DailyRoutines.Abstracts;
+using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
+using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Utility;
@@ -11,50 +13,56 @@ using Lumina.Text.ReadOnly;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class SelectableRecruitmentText : DailyModuleBase
+public unsafe class SelectableRecruitmentText : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = GetLoc("SelectableRecruitmentTextTitle"),
-        Description     = GetLoc("SelectableRecruitmentTextDescription"),
-        Category        = ModuleCategories.Recruitment,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/SelectableRecruitmentText-UI.png"]
+        Title           = Lang.Get("SelectableRecruitmentTextTitle"),
+        Description     = Lang.Get("SelectableRecruitmentTextDescription"),
+        Category        = ModuleCategory.Recruitment,
+        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/SelectableRecruitmentText-UI.png"] // TODO: 调整仓库
     };
     
-    private static TextMultiLineInputNode? RecruitmentTextNode;
-    
+    private TextMultiLineInputNode? recruitmentTextNode;
+
     protected override void Init()
     {
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroupDetail", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
     }
     
-    private static void OnAddon(AddonEvent type, AddonArgs? args)
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+    }
+
+    private void OnAddon(AddonEvent type, AddonArgs? args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                RecruitmentTextNode?.Dispose();
-                RecruitmentTextNode = null;
-                
+                recruitmentTextNode?.Dispose();
+                recruitmentTextNode = null;
+
                 break;
-            
+
             case AddonEvent.PostDraw:
                 if (!LookingForGroupDetail->IsAddonAndNodesReady()) return;
 
                 var agent = AgentLookingForGroup.Instance();
                 if (agent == null) return;
-                
+
                 var origText = LookingForGroupDetail->GetTextNodeById(20);
                 if (origText == null) return;
-                
+
                 var origButton = LookingForGroupDetail->GetComponentButtonById(18);
                 if (origButton == null) return;
-                
-                if (RecruitmentTextNode != null)
+
+                if (recruitmentTextNode != null)
                 {
-                    RecruitmentTextNode.Position = new Vector2(origButton->OwnerNode->X, origButton->OwnerNode->Y) - new Vector2(10, 8);
-                    
+                    recruitmentTextNode.Position = new Vector2(origButton->OwnerNode->X, origButton->OwnerNode->Y) - new Vector2(10, 8);
+
                     var formatAddon = (AddonLookingForGroupDetail*)LookingForGroupDetail;
 
                     var leaderNode = formatAddon->PartyLeaderTextNode;
@@ -62,19 +70,19 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
 
                     var leaderText = leaderNode->NodeText;
                     if (leaderText.IsEmpty || !leaderText.StringPtr.HasValue) return;
-                    
+
                     if (leaderText.StringPtr.ExtractText() != agent->LastViewedListing.LeaderString)
                         return;
-                    
-                    if (RecruitmentTextNode is { IsFocused: false, String.IsEmpty: true })
+
+                    if (recruitmentTextNode is { IsFocused: false, String.IsEmpty: true })
                     {
                         var seString = new ReadOnlySeStringSpan(agent->LastViewedListing.Comment).PraseAutoTranslate().ToDalamudString();
-                        RecruitmentTextNode.String = seString.Encode();
+                        recruitmentTextNode.String = seString.Encode();
                     }
-                    
-                    if (RecruitmentTextNode is { IsVisible: false, String.IsEmpty: false })
-                        RecruitmentTextNode.IsVisible = true;
-                    
+
+                    if (recruitmentTextNode is { IsVisible: false, String.IsEmpty: false })
+                        recruitmentTextNode.IsVisible = true;
+
                     return;
                 }
 
@@ -85,26 +93,20 @@ public unsafe class SelectableRecruitmentText : DailyModuleBase
                 origText->ToggleVisibility(false);
                 textNodeContainer->ToggleVisibility(false);
 
-                RecruitmentTextNode = new()
+                recruitmentTextNode = new()
                 {
                     AutoUpdateHeight = false,
                     Size             = new(520, 60),
                     Position         = new Vector2(origButton->OwnerNode->X, origButton->OwnerNode->Y) - new Vector2(10, 8),
                     ShowLimitText    = false,
                     IsVisible        = false,
-                    MaxLines         = 2,
+                    MaxLines         = 2
                 };
-                RecruitmentTextNode.TextLimitsNode.DetachNode();
-                RecruitmentTextNode.CurrentTextNode.TextFlags |= TextFlags.WordWrap;
-                RecruitmentTextNode.AttachNode(LookingForGroupDetail);
+                recruitmentTextNode.TextLimitsNode.DetachNode();
+                recruitmentTextNode.CurrentTextNode.TextFlags |= TextFlags.WordWrap;
+                recruitmentTextNode.AttachNode(LookingForGroupDetail);
 
                 break;
         }
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
     }
 }
