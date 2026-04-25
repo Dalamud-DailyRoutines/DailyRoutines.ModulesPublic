@@ -113,7 +113,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         public override void DrawConfig()
         {
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(KnownColor.RoyalBlue.ToVector4(), Lang.Get("AutoRetainerWork-Dispatch-Title"));
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoRetainerWork-Dispatch-Title"));
 
             var imageState = ImageHelper.Instance().TryGetImage
             (
@@ -913,7 +913,8 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             if (!worker.DrawConfigCondition()) continue;
 
             worker.DrawConfig();
-            ImGui.Spacing();
+            
+            ImGui.NewLine();
         }
     }
 

@@ -49,7 +49,6 @@ public unsafe partial class AutoRetainerWork
         private readonly Vector2        childSizeLeft     = ScaledVector2(200, 400);
         private          Vector2        childSizeRight    = ScaledVector2(450, 400);
         private          string         presetSearchInput = string.Empty;
-        private          uint           newConfigItemID;
         private          bool           newConfigItemHQ;
         private          AbortCondition conditionInput = AbortCondition.低于最小值;
         private          AbortBehavior  behaviorInput  = AbortBehavior.无;
@@ -98,7 +97,7 @@ public unsafe partial class AutoRetainerWork
 
         public override void DrawConfig()
         {
-            ImGui.TextColored(KnownColor.RoyalBlue.ToVector4(), Lang.Get("AutoRetainerWork-PriceAdjust-Title"));
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoRetainerWork-PriceAdjust-Title"));
 
             ItemConfigSelector();
 
@@ -457,8 +456,8 @@ public unsafe partial class AutoRetainerWork
                     AddNewConfigItemPopup
                     (() =>
                         {
-                            var newConfigStr = new ItemKey(newConfigItemID, newConfigItemHQ).ToString();
-                            var newConfig    = new ItemConfig(newConfigItemID, newConfigItemHQ);
+                            var newConfigStr = new ItemKey(itemSelectCombo.SelectedID, newConfigItemHQ).ToString();
+                            var newConfig    = new ItemConfig(itemSelectCombo.SelectedID, newConfigItemHQ);
 
                             if (Module.config.ItemConfigs.TryAdd(newConfigStr, newConfig))
                             {
@@ -523,12 +522,12 @@ public unsafe partial class AutoRetainerWork
                         AddNewConfigItemPopup
                         (() =>
                             {
-                                var newConfigStr = new ItemKey(newConfigItemID, newConfigItemHQ).ToString();
+                                var newConfigStr = new ItemKey(itemSelectCombo.SelectedID, newConfigItemHQ).ToString();
                                 var newConfig = new ItemConfig
                                 {
-                                    ItemID            = newConfigItemID,
+                                    ItemID            = itemSelectCombo.SelectedID,
                                     IsHQ              = newConfigItemHQ,
-                                    ItemName          = LuminaGetter.GetRow<Item>(newConfigItemID)?.Name.ToString() ?? string.Empty,
+                                    ItemName          = itemSelectCombo.SelectedItem.Name.ToString() ?? string.Empty,
                                     AbortLogic        = itemConfig.Value.AbortLogic,
                                     AdjustBehavior    = itemConfig.Value.AdjustBehavior,
                                     AdjustValues      = itemConfig.Value.AdjustValues,
