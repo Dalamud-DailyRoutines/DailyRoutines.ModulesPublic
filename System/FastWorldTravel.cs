@@ -621,7 +621,7 @@ public class FastWorldTravel : ModuleBase
         private static bool IsPluginValid =>
             IsPluginEnabled && IsDCTravelerValid;
 
-        protected override unsafe void OnSetup(AtkUnitBase* addon)
+        protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             ContextMenuService = new();
 

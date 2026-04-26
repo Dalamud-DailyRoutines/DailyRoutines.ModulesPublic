@@ -320,7 +320,7 @@ public unsafe class AutoTenChiJin : ModuleBase
     
     private sealed class AddonDRNinJutsuActionsPreview : NativeAddon
     {
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             var flexGrid = new HorizontalFlexNode
             {

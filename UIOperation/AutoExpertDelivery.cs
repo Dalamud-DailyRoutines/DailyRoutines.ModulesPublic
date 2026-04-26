@@ -249,7 +249,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         private static List<CheckboxNode> DefaultPageCheckboxes = [];
 
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             // 禁止 ESC 键关闭
             FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x4, true);

@@ -522,7 +522,7 @@ public unsafe class OptimizedMacro : ModuleBase
         public string          PlaceholderString { get; set; } = string.Empty;
         public string          DefaultString     { get; set; } = string.Empty;
 
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             inputNode = new TextInputNode
             {
@@ -551,7 +551,7 @@ public unsafe class OptimizedMacro : ModuleBase
     {
         public Action? OnConfirm { get; set; }
 
-        protected override void OnSetup(AtkUnitBase* addon) =>
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues) =>
             SetupButtons(-5f);
 
         protected override void OnConfirmClick()

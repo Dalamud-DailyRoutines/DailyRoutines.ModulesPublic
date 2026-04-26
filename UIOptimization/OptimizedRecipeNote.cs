@@ -837,7 +837,7 @@ public class OptimizedRecipeNote : ModuleBase
             ).ContinueWith(_ => OpenAddonTask = null);
         }
 
-        protected override unsafe void OnSetup(AtkUnitBase* addon)
+        protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             if (Result.Actions.Count == 0) return;
 

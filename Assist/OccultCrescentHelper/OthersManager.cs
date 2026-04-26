@@ -534,7 +534,7 @@ public partial class OccultCrescentHelper
 
             public bool PressedButtonOnce { get; set; }
 
-            protected override void OnSetup(AtkUnitBase* addon)
+            protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
             {
                 const int   MAX_ITEMS_PER_ROW = 5;
                 const float HEADER_HEIGHT      = 65f;

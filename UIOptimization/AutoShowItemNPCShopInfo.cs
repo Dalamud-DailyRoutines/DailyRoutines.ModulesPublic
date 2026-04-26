@@ -150,7 +150,7 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
             ).ContinueWith(_ => OpenAddonTask = null);
         }
 
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             var item = LuminaGetter.GetRowOrDefault<Item>(SourceInfo.ItemID);
 

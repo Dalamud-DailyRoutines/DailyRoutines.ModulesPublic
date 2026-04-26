@@ -372,7 +372,7 @@ public class BetterFPSLimitation : ModuleBase
         private static NumericInputNode FPSInputNode;
         private static CheckboxNode     IsEnabledNode;
 
-        protected override unsafe void OnSetup(AtkUnitBase* addon)
+        protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             FPSWidget          = CreateFPSWidget();
             FPSWidget.Position = ContentStartPosition;
@@ -380,8 +380,6 @@ public class BetterFPSLimitation : ModuleBase
             FPSWidget.AttachNode(this);
 
             Size = Size with { Y = FPSWidget.Height + 65 };
-
-            base.OnSetup(addon);
         }
 
         protected override unsafe void OnUpdate(AtkUnitBase* addon)

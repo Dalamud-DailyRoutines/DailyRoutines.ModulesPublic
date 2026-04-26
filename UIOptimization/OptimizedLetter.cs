@@ -169,7 +169,7 @@ public class OptimizedLetter : ModuleBase
     {
         private static AtkEventWrapper? FireRequestEvent;
 
-        protected override unsafe void OnSetup(AtkUnitBase* addon)
+        protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             if (LetterList->IsAddonAndNodesReady())
             {

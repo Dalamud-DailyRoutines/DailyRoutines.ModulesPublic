@@ -501,7 +501,7 @@ public unsafe class OptimizedFriendList : ModuleBase
 
         private OptimizedFriendList Instance { get; init; } = instance;
 
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             if (ContentID == 0 || string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(WorldName))
             {
@@ -782,7 +782,7 @@ public unsafe class OptimizedFriendList : ModuleBase
         private OptimizedFriendList Instance   { get; init; } = instance;
         private TaskHelper          TaskHelper { get; init; } = taskHelper;
 
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             var searchTypeTitleNode = new TextNode
             {

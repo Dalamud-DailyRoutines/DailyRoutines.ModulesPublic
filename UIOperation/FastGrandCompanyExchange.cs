@@ -228,7 +228,7 @@ public class FastGrandCompanyExchange : ModuleBase
     {
         private bool IsNotClosed { get; set; }
 
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             var layoutNode = new VerticalListNode
             {

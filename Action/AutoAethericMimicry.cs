@@ -79,7 +79,7 @@ public class AutoAethericMimicry : ModuleBase
             Addon.Open();
         }
 
-        protected override unsafe void OnSetup(AtkUnitBase* addon)
+        protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             ((WindowNode)WindowNode).CloseButtonNode.IsVisible = false;
 

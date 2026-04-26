@@ -329,7 +329,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
         private       Dictionary<byte, (IconButtonNode IconButton, SimpleNineGridNode EnabledIcon)> weatherButtons = [];
         public static AddonDRFastSetWeather?                                                        Addon { get; set; }
 
-        protected override void OnSetup(AtkUnitBase* addon)
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             weatherButtons.Clear();
 
