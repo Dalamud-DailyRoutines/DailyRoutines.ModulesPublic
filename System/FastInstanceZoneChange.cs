@@ -15,6 +15,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
@@ -221,14 +222,13 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
                 ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Dismount);
 
-                if (MovementManager.TryDetectGroundDownwards
+                if (RaycastHelper.TryGetGroundPosition
                     (
                         DService.Instance().ObjectTable.LocalPlayer.Position.WithY(300),
-                        out var hitInfo
-                    ) ??
-                    false)
+                        out var groundPosition
+                    ))
                 {
-                    MovementManager.Instance().TPMountAddress(hitInfo.Point with { Y = hitInfo.Point.Y - 0.5f });
+                    MovementManager.Instance().TPMountAddress(groundPosition with { Y = groundPosition.Y - 0.5f });
                     UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9);
                 }
 

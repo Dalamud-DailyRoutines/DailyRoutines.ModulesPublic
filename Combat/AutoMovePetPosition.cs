@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -394,8 +395,8 @@ public class AutoMovePetPosition : ModuleBase
 
         var groundY  = pet->Position.Y;
         var location = position.ToVector3(groundY);
-        if (MovementManager.TryDetectGroundDownwards(position.ToVector3(groundY + 5f), out var groundPos) ?? false)
-            location = groundPos.Point;
+        if (RaycastHelper.TryGetGroundPosition(position.ToVector3(groundY), out var groundPos))
+            location = groundPos;
 
         TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommandComplexLocation(ExecuteCommandComplexFlag.PetAction, location, 3));
     }

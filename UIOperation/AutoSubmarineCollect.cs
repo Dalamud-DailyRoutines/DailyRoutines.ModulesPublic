@@ -225,8 +225,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         }
 
         var entryPos = entryObject.Position;
-        if (MovementManager.TryDetectGroundDownwards(entryPos - new Vector3(0, 1, 0), out var hitInfo) ?? false)
-            entryPos = hitInfo.Point;
+        if (RaycastHelper.TryGetGroundPosition(entryPos, out var groundPosition))
+            entryPos = groundPosition;
 
         // 在坐骑上
         if (DService.Instance().Condition.IsOnMount)
@@ -317,7 +317,10 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         if (LocalPlayerState.DistanceToObject3D(panelObject, false) > 1)
         {
-            MovementManager.Instance().TPSmart_InZone(MovementManager.TryDetectGround(realPanelPosition, out var result) ?? false ? result : realPanelPosition);
+            MovementManager.Instance().TPSmart_InZone
+            (
+                RaycastHelper.TryGetNearestVerticalHit(realPanelPosition, out var result) ? result.Point : realPanelPosition
+            );
             return false;
         }
 

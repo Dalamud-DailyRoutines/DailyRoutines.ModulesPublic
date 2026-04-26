@@ -12,6 +12,7 @@ using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -243,7 +244,7 @@ public class RightClickToMoveMode : ModuleBase
         if (MathF.Abs(localPlayerPosition.Y - targetPosition.Y) > SMART_GAME_HEIGHT_DELTA)
             return false;
         
-        var isBlocked = MovementManager.TryDetectTwoPoints(localPlayerPosition, targetPosition, out _) ?? true;
+        var isBlocked = !RaycastHelper.HasLineOfSight(localPlayerPosition, targetPosition);
         return !isBlocked && Vector2.DistanceSquared(localPlayerPosition.ToVector2(), targetPosition.ToVector2()) <= SMART_GAME_DISTANCE_SQ;
     }
     
@@ -405,9 +406,9 @@ public class RightClickToMoveMode : ModuleBase
                 return true;
             }
 
-            if (MovementManager.TryDetectGroundDownwards(worldPosition, out var hitInfo, 1024) ?? false)
+            if (RaycastHelper.TryGetGroundPosition(worldPosition, out var groundPosition))
             {
-                targetPosition = hitInfo.Point;
+                targetPosition = groundPosition;
                 return true;
             }
 
