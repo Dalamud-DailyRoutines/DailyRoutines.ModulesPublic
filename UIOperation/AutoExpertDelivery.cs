@@ -58,10 +58,6 @@ public unsafe class AutoExpertDelivery : ModuleBase
             RememberClosePosition = true
         };
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "GrandCompanySupplyList", OnAddonSupplyList);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,  "GrandCompanySupplyList", OnAddonSupplyList);
-        if (GrandCompanySupplyList->IsAddonAndNodesReady())
-            OnAddonSupplyList(AddonEvent.PostSetup, null);
     }
 
     private bool EnqueueDelivery()
@@ -205,28 +201,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
         return false;
     }
 
-    // 悬浮窗控制
-    private void OnAddonSupplyList(AddonEvent type, AddonArgs? args)
-    {
-        switch (type)
-        {
-            case AddonEvent.PostSetup:
-                if (GrandCompanySupplyList == null) return;
-
-                if (config.AutoSwitchWhenOpen)
-                    GrandCompanySupplyList->Callback(0, config.DefaultPage);
-                break;
-            case AddonEvent.PostDraw:
-                if (TaskHelper.IsBusy || addonExpertDelivery.IsOpen || !GrandCompanySupplyList->IsAddonAndNodesReady()) return;
-                addonExpertDelivery.Open();
-                break;
-        }
-    }
-
     protected override void Uninit()
     {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSupplyList);
-
         addonExpertDelivery?.Dispose();
         addonExpertDelivery = null;
     }
@@ -243,14 +219,21 @@ public unsafe class AutoExpertDelivery : ModuleBase
     private class DRAutoExpertDelivery
     (
         AutoExpertDelivery instance
-    ) : AttachedAddon
+    ) : AttachedAddon("GrandCompanySupplyList", AddonEvent.PostSetup)
     {
         private static VerticalListNode ControlTabLayout;
         private static VerticalListNode SettingTabLayout;
 
         private static List<CheckboxNode> DefaultPageCheckboxes = [];
+        
+        protected override bool CanOpenAddon => !instance.TaskHelper.IsBusy;
 
-        protected override AtkUnitBase* HostAddon => GrandCompanySupplyList;
+        protected override void OnHostAddon(AddonEvent type, AddonArgs? args)
+        {
+            if (type != AddonEvent.PostSetup || GrandCompanySupplyList == null || !instance.config.AutoSwitchWhenOpen) return;
+
+            GrandCompanySupplyList->Callback(0, instance.config.DefaultPage);
+        }
 
         protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
@@ -460,7 +443,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
             SettingTabLayout.AttachNode(this);
         }
 
-        protected override bool ShouldCloseHostAddon(AtkUnitBase* hostAddon) => !instance.TaskHelper.IsBusy;
+        protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) =>
+            base.CanCloseHostAddon(hostAddon) && !instance.TaskHelper.IsBusy;
     }
 
     private record ExpertDeliveryItem

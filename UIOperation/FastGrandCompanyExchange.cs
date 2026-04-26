@@ -5,8 +5,6 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -53,15 +51,12 @@ public class FastGrandCompanyExchange : ModuleBase
             RememberClosePosition = true
         };
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "GrandCompanyExchange", OnAddon);
-
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("FastGrandCompanyExchange-CommandHelp") });
     }
 
     protected override void Uninit()
     {
         CommandManager.Instance().RemoveSubCommand(COMMAND);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
         addon?.Dispose();
         addon = null;
@@ -73,12 +68,6 @@ public class FastGrandCompanyExchange : ModuleBase
 
         ImGui.SameLine();
         ImGui.TextWrapped($"/pdr {COMMAND} {Lang.Get("FastGrandCompanyExchange-CommandHelp")}");
-    }
-
-    private unsafe void OnAddon(AddonEvent type, AddonArgs? args)
-    {
-        if (addon.IsOpen || !GrandCompanyExchange->IsAddonAndNodesReady()) return;
-        addon.Open();
     }
 
     private void OnCommand(string command, string args)
@@ -225,10 +214,8 @@ public class FastGrandCompanyExchange : ModuleBase
     private unsafe class DRFastGCExchange
     (
         FastGrandCompanyExchange instance
-    ) : AttachedAddon
+    ) : AttachedAddon("GrandCompanyExchange")
     {
-        protected override AtkUnitBase* HostAddon => GrandCompanyExchange;
-
         protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             var layoutNode = new VerticalListNode
@@ -344,7 +331,7 @@ public class FastGrandCompanyExchange : ModuleBase
             if (instance.config.ExchangeItemName == x.ToString())
                 return;
 
-            CloseWithoutClosingHostAddon();
+            CloseAddonOnly();
             instance.config.Save(instance);
         }
     }
