@@ -523,7 +523,7 @@ public partial class OccultCrescentHelper
 
             private bool isFocused;
 
-            private List<SupportJobActionListNode> jobActionsContainer = [];
+            private readonly Dictionary<uint, SupportJobActionListNode> jobActionNodes = [];
 
             private VerticalListNode jobContainer;
 
@@ -536,8 +536,39 @@ public partial class OccultCrescentHelper
 
             protected override void OnSetup(AtkUnitBase* addon)
             {
-                PressedButtonOnce =  false;
-                RootNode.Size     += new Vector2(200, 0);
+                const int   MAX_ITEMS_PER_ROW = 5;
+                const float HEADER_HEIGHT      = 65f;
+                const float ROW_HEIGHT         = 53f;
+                const float ROW_SPACING        = 30f;
+                const float MIN_HEIGHT         = 490f;
+
+                var supportJobs = new List<(MKDSupportJob Data, CrescentSupportJob Job)>();
+
+                foreach (var data in LuminaGetter.Get<MKDSupportJob>())
+                {
+                    var presetJob = CrescentSupportJob.AllJobs.FirstOrDefault(job => job.DataID == data.RowId);
+                    if (presetJob == null) continue;
+
+                    supportJobs.Add((data, presetJob));
+                }
+
+                supportJobs = supportJobs
+                              .OrderBy
+                              (x =>
+                                  {
+                                      var index = manager.MainModule.config.AddonSupportJobOrder.IndexOf(x.Data.RowId);
+                                      return index < 0 ? int.MaxValue : index;
+                                  }
+                              )
+                              .ThenBy(x => x.Data.RowId)
+                              .ToList();
+
+                var rowCount     = Math.Max(1, (supportJobs.Count + MAX_ITEMS_PER_ROW - 1) / MAX_ITEMS_PER_ROW);
+                var windowHeight = Math.Max(MIN_HEIGHT, HEADER_HEIGHT + (ROW_HEIGHT * rowCount) + (ROW_SPACING * Math.Max(0, rowCount - 1)) + 12f);
+
+                PressedButtonOnce = false;
+                SetWindowSize(500f, windowHeight);
+                RootNode.Size = Size + new Vector2(200, 0);
 
                 var windowNode = (WindowNode)WindowNode;
 
@@ -546,11 +577,12 @@ public partial class OccultCrescentHelper
                 windowNode.BorderNode.Alpha          = 0f;
                 windowNode.TitleNode.IsVisible       = false;
 
-                jobActionsContainer.Clear();
+                SupportJobButtons.Clear();
+                jobActionNodes.Clear();
 
                 CreateWindowStyle();
 
-                CreateJobContainer();
+                CreateJobContainer(supportJobs);
 
                 CreateWindowControll();
             }
@@ -571,7 +603,7 @@ public partial class OccultCrescentHelper
 
                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-OthersManager-UpdateAddon", 10)) return;
 
-                foreach (var node in jobActionsContainer)
+                foreach (var node in jobActionNodes.Values)
                 {
                     if (!node.IsVisible) continue;
 
@@ -625,9 +657,8 @@ public partial class OccultCrescentHelper
                 }
             }
 
-            private void CreateJobContainer()
+            private void CreateJobContainer(List<(MKDSupportJob Data, CrescentSupportJob Job)> supportJobs)
             {
-                const int   MAX_ROWS_PER_PAGE = 4;
                 const int   MAX_ITEMS_PER_ROW = 5;
                 const float ROW_HEIGHT        = 53f;
                 const float CONTAINER_WIDTH   = 500f;
@@ -636,7 +667,7 @@ public partial class OccultCrescentHelper
                 jobContainer = new VerticalListNode
                 {
                     Position  = new(10, 0),
-                    Size      = new(CONTAINER_WIDTH, 478),
+                    Size      = new(CONTAINER_WIDTH, Size.Y - 12f),
                     IsVisible = true
                 };
 
@@ -644,7 +675,9 @@ public partial class OccultCrescentHelper
 
                 var rows = new List<HorizontalFlexNode>();
 
-                for (var i = 0; i < MAX_ROWS_PER_PAGE; i++)
+                var rowCount = Math.Max(1, (supportJobs.Count + MAX_ITEMS_PER_ROW - 1) / MAX_ITEMS_PER_ROW);
+
+                for (var i = 0; i < rowCount; i++)
                 {
                     var row = new HorizontalFlexNode
                     {
@@ -656,16 +689,11 @@ public partial class OccultCrescentHelper
                     rows.Add(row);
                 }
 
-                var counter = -1;
-
-                foreach (var data in LuminaGetter.Get<MKDSupportJob>().OrderBy(x => manager.MainModule.config.AddonSupportJobOrder.IndexOf(x.RowId)))
+                for (var i = 0; i < supportJobs.Count; i++)
                 {
-                    counter++;
+                    var (data, presetJob) = supportJobs[i];
 
-                    var rowIndex = counter / MAX_ITEMS_PER_ROW;
-                    if (rowIndex >= MAX_ROWS_PER_PAGE) continue;
-
-                    var presetJob = CrescentSupportJob.AllJobs[(int)data.RowId];
+                    var rowIndex = i / MAX_ITEMS_PER_ROW;
 
                     // 预览用的
                     var jobActionContainer = new SupportJobActionListNode
@@ -674,7 +702,7 @@ public partial class OccultCrescentHelper
                         Size     = new(200, backgroundNode.Height)
                     };
                     jobActionContainer.AttachNode(this);
-                    jobActionsContainer.Add(jobActionContainer);
+                    jobActionNodes[data.RowId] = jobActionContainer;
 
                     var unlockLink = string.Empty;
 
@@ -841,6 +869,19 @@ public partial class OccultCrescentHelper
                         );
                     }
 
+                    void ShowJobActions()
+                    {
+                        foreach (var (jobID, node) in jobActionNodes)
+                        {
+                            node.IsVisible = jobID == data.RowId;
+                            if (node is { IsVisible: true, BackgroundNode: null })
+                                node.LoadNodes(manager, presetJob, isFocused);
+                        }
+
+                        WindowNode.CollisionNode.Size = WindowNode.CollisionNode.Size with { X = 750 };
+                        WindowNode.Size               = WindowNode.Size with { X = 750 };
+                    }
+
                     iconButton.AddEvent
                     (
                         AtkEventType.MouseOver,
@@ -848,16 +889,7 @@ public partial class OccultCrescentHelper
                         {
                             if (PressedButtonOnce) return;
 
-                            for (var index = 0; index < jobActionsContainer.Count; index++)
-                            {
-                                var node = jobActionsContainer[index];
-                                node.IsVisible = index == (int)data.RowId;
-                                if (node is { IsVisible: true, BackgroundNode: null })
-                                    node.LoadNodes(manager, presetJob, isFocused);
-                            }
-
-                            WindowNode.CollisionNode.Size = WindowNode.CollisionNode.Size with { X = 750 };
-                            WindowNode.Size               = WindowNode.Size with { X = 750 };
+                            ShowJobActions();
                         }
                     );
 
@@ -868,16 +900,7 @@ public partial class OccultCrescentHelper
                         {
                             PressedButtonOnce = true;
 
-                            for (var index = 0; index < jobActionsContainer.Count; index++)
-                            {
-                                var node = jobActionsContainer[index];
-                                node.IsVisible = index == (int)data.RowId;
-                                if (node is { IsVisible: true, BackgroundNode: null })
-                                    node.LoadNodes(manager, presetJob, isFocused);
-                            }
-
-                            WindowNode.CollisionNode.Size = WindowNode.CollisionNode.Size with { X = 750 };
-                            WindowNode.Size               = WindowNode.Size with { X = 750 };
+                            ShowJobActions();
                         }
                     );
 
@@ -951,7 +974,7 @@ public partial class OccultCrescentHelper
                     TextureSize        = new(500, 490),
                     TexturePath        = "ui/uld/MKDWallPaper_hr1.tex",
                     IsVisible          = true,
-                    Size               = new(502, 483),
+                    Size               = new(502, Size.Y - 7f),
                     Position           = new(-2),
                     Alpha              = 0.9f
                 };
@@ -989,7 +1012,7 @@ public partial class OccultCrescentHelper
                     TexturePath        = "ui/uld/MKDWallMoon_hr1.tex",
                     IsVisible          = true,
                     Size               = new(190),
-                    Position           = new(310, 285),
+                    Position           = new(310, Size.Y - 205f),
                     Alpha              = 0.9f
                 };
                 moonPatternNode.AttachNode(this);
@@ -1013,7 +1036,7 @@ public partial class OccultCrescentHelper
                     TexturePath        = "ui/uld/MKDWindowPattern_hr1.tex",
                     IsVisible          = true,
                     Size               = new(128, 132),
-                    Position           = new(0, 300),
+                    Position           = new(0, Size.Y - 190f),
                     Alpha              = 0.3f
                 };
                 patternLeftCornerNode.AttachNode(this);
@@ -1052,7 +1075,7 @@ public partial class OccultCrescentHelper
                     TextureSize        = new(60, 70),
                     TexturePath        = "ui/uld/MKDWindow_hr1.tex",
                     IsVisible          = true,
-                    Size               = new(515f, 497f),
+                    Size               = new(515f, Size.Y + 7f),
                     Position           = new(-8, -5),
                     Alpha              = 0.9f,
                     Offsets            = new(24),
