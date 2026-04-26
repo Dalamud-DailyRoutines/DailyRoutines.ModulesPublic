@@ -225,13 +225,21 @@ public partial class OccultCrescentHelper
 
             ImGui.NewLine();
 
-            ImGui.AlignTextToFramePadding();
             ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("OccultCrescentHelper-CEManager-NotifyCEStarts"));
             ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-CEManager-NotifyCEStarts-Help"), 20f * GlobalUIScale);
 
-            ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGui.Checkbox("###NotifyCEStarts", ref MainModule.config.IsEnabledNotifyCEStarts))
-                MainModule.config.Save(MainModule);
+            using (ImRaii.PushId("NotifyCEStarts"))
+            using (ImRaii.PushIndent())
+            {
+                if (ImGui.Checkbox(Lang.Get("SendNotification"), ref MainModule.config.IsEnabledNotifyCENotification))
+                    MainModule.config.Save(MainModule);
+                
+                if (ImGui.Checkbox(Lang.Get("SendTTS"), ref MainModule.config.IsEnabledNotifyCETTS))
+                    MainModule.config.Save(MainModule);
+                
+                if (ImGui.Checkbox(Lang.Get("SendSystemSound"), ref MainModule.config.IsEnabledNotifyCESystemSound))
+                    MainModule.config.Save(MainModule);
+            }
 
             ImGui.NewLine();
 
@@ -327,16 +335,20 @@ public partial class OccultCrescentHelper
         // CE 开始
         private void OnPostReceivedMessage(uint logMessageID, LogMessageQueueItem values)
         {
-            if (logMessageID                   != 11002                               ||
-                GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
-                !MainModule.config.IsEnabledNotifyCEStarts)
+            if (logMessageID                   != 11002 ||
+                GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
                 return;
 
             ceTaskHelper.Abort();
 
             var message = Lang.Get("OccultCrescentHelper-CEManager-Notification-CEStart");
-            NotifyHelper.Instance().NotificationInfo(message);
-            NotifyHelper.Speak(message);
+
+            if (MainModule.config.IsEnabledNotifyCENotification)
+                NotifyHelper.Instance().NotificationInfo(message);
+            if (MainModule.config.IsEnabledNotifyCETTS)
+                NotifyHelper.Speak(message);
+            if (MainModule.config.IsEnabledNotifyCESystemSound)
+                NotifyHelper.SystemInformation();
         }
 
         private void OnClickTeleport(uint id, SeString message)

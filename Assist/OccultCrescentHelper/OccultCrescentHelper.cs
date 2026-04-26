@@ -232,7 +232,9 @@ public partial class OccultCrescentHelper : ModuleBase
         public bool IsEnabledMoveToEvent = true;
 
         // 通知 CE 开始
-        public bool IsEnabledNotifyCEStarts = true;
+        public bool IsEnabledNotifyCENotification = true;
+        public bool IsEnabledNotifyCETTS          = true;
+        public bool IsEnabledNotifyCESystemSound  = true;
 
         // 通知任务出现
         public bool                                IsEnabledNotifyEvents           = true;
