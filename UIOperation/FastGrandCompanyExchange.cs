@@ -1,4 +1,5 @@
 using System.Numerics;
+using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -224,9 +225,9 @@ public class FastGrandCompanyExchange : ModuleBase
     private unsafe class DRFastGCExchange
     (
         FastGrandCompanyExchange instance
-    ) : NativeAddon
+    ) : AttachedAddon
     {
-        private bool IsNotClosed { get; set; }
+        protected override AtkUnitBase* HostAddon => GrandCompanyExchange;
 
         protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
@@ -343,40 +344,8 @@ public class FastGrandCompanyExchange : ModuleBase
             if (instance.config.ExchangeItemName == x.ToString())
                 return;
 
-            IsNotClosed = true;
-            Close();
+            CloseWithoutClosingHostAddon();
             instance.config.Save(instance);
-        }
-
-        protected override void OnUpdate(AtkUnitBase* addon)
-        {
-            if (GrandCompanyExchange == null)
-            {
-                Close();
-                return;
-            }
-
-            var position = new Vector2
-            (
-                GrandCompanyExchange->RootNode->ScreenX - addon->GetScaledWidth(true),
-                GrandCompanyExchange->RootNode->ScreenY
-            );
-
-            SetWindowPosition(position);
-        }
-
-        protected override void OnFinalize(AtkUnitBase* addon)
-        {
-            if (IsNotClosed)
-            {
-                IsNotClosed = false;
-                return;
-            }
-
-            IsNotClosed = false;
-
-            if (GrandCompanyExchange == null) return;
-            GrandCompanyExchange->Close(true);
         }
     }
 

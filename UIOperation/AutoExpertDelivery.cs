@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -242,12 +243,14 @@ public unsafe class AutoExpertDelivery : ModuleBase
     private class DRAutoExpertDelivery
     (
         AutoExpertDelivery instance
-    ) : NativeAddon
+    ) : AttachedAddon
     {
         private static VerticalListNode ControlTabLayout;
         private static VerticalListNode SettingTabLayout;
 
         private static List<CheckboxNode> DefaultPageCheckboxes = [];
+
+        protected override AtkUnitBase* HostAddon => GrandCompanySupplyList;
 
         protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
@@ -457,28 +460,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             SettingTabLayout.AttachNode(this);
         }
 
-        protected override void OnUpdate(AtkUnitBase* addon)
-        {
-            if (GrandCompanySupplyList == null)
-            {
-                Close();
-                return;
-            }
-
-            var position = new Vector2
-            (
-                GrandCompanySupplyList->RootNode->ScreenX - addon->GetScaledWidth(true),
-                GrandCompanySupplyList->RootNode->ScreenY
-            );
-
-            SetWindowPosition(position);
-        }
-
-        protected override void OnFinalize(AtkUnitBase* addon)
-        {
-            if (GrandCompanySupplyList == null || instance.TaskHelper.IsBusy) return;
-            GrandCompanySupplyList->Close(true);
-        }
+        protected override bool ShouldCloseHostAddon(AtkUnitBase* hostAddon) => !instance.TaskHelper.IsBusy;
     }
 
     private record ExpertDeliveryItem
