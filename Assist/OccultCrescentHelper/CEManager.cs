@@ -96,39 +96,42 @@ public partial class OccultCrescentHelper
 
             using (FontManager.Instance().UIFont.Push())
             {
-                ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("OccultCrescentHelper-FastTeleport"));
-
-                ImGui.SameLine(0, 8f * GlobalUIScale);
-
-                if (ImGui.SmallButton($"{Lang.Get("Stop")}##StopCE"))
+                if (allIslandEvents.Count > 0)
                 {
-                    ceTaskHelper.Abort();
-                    vnavmeshIPC.StopPathfind();
-                }
+                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("OccultCrescentHelper-FastTeleport"));
 
-                using (ImRaii.PushIndent())
-                {
-                    foreach (var ce in allIslandEvents)
+                    ImGui.SameLine(0, 8f * GlobalUIScale);
+
+                    if (ImGui.SmallButton($"{Lang.Get("Stop")}##StopCE"))
                     {
-                        if (!DService.Instance().Texture.TryGetFromGameIcon(new(ce.Event.IconID), out var texture)) continue;
+                        ceTaskHelper.Abort();
+                        vnavmeshIPC.StopPathfind();
+                    }
 
-                        using (ImRaii.Disabled(ce.Event.Type == CrescentEventType.CE && ce.Event.CEState != DynamicEventState.Register))
+                    using (ImRaii.PushIndent())
+                    {
+                        foreach (var ce in allIslandEvents)
                         {
-                            if (ImGuiOm.SelectableImageWithText
-                                (
-                                    texture.GetWrapOrEmpty().Handle,
-                                    new(ImGui.GetTextLineHeightWithSpacing()),
-                                    $"{ce.Event.NameDisplay}",
-                                    false
-                                ))
-                                TeleportToCE(ce);
+                            if (!DService.Instance().Texture.TryGetFromGameIcon(new(ce.Event.IconID), out var texture)) continue;
+
+                            using (ImRaii.Disabled(ce.Event.Type == CrescentEventType.CE && ce.Event.CEState != DynamicEventState.Register))
+                            {
+                                if (ImGuiOm.SelectableImageWithText
+                                    (
+                                        texture.GetWrapOrEmpty().Handle,
+                                        new(ImGui.GetTextLineHeightWithSpacing()),
+                                        $"{ce.Event.NameDisplay}",
+                                        false
+                                    ))
+                                    TeleportToCE(ce);
+                            }
                         }
                     }
+                    
+                    ImGui.NewLine();
                 }
             }
-
-            ImGui.NewLine();
-
+            
             if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent &&
                 ImGui.CollapsingHeader($"{Lang.Get("OccultCrescentHelper-CEManager-CEHistory")} ({MainModule.GetIslandID()})###CEHistory"))
             {
@@ -170,11 +173,15 @@ public partial class OccultCrescentHelper
             }
 
             ImGui.NewLine();
-
-
+            
             if (ImGui.Checkbox($"{Lang.Get("OccultCrescentHelper-PrioritizeMoveTo")}", ref MainModule.config.IsEnabledMoveToEvent))
                 MainModule.config.Save(MainModule);
-            ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-CEManager-PrioritizeMoveTo-Help"), 20f * GlobalUIScale);
+
+            if (MainModule.config.IsEnabledMoveToEvent)
+            {
+                if (ImGui.Checkbox($"{Lang.Get("OccultCrescentHelper-AutoDismount")}", ref MainModule.config.IsEnabledDismount))
+                    MainModule.config.Save(MainModule);
+            }
 
             if (MainModule.config.IsEnabledMoveToEvent)
             {
@@ -471,15 +478,18 @@ public partial class OccultCrescentHelper
                 }
             );
             
-            ceTaskHelper.DelayNext(1500, 2000);
+            ceTaskHelper.DelayNext(1000, 2000);
 
-            ceTaskHelper.Enqueue
-            (() =>
-                {
-                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Dismount);
-                    vnavmeshIPC.StopPathfind();
-                }
-            );
+            if (MainModule.config.IsEnabledDismount)
+            {
+                ceTaskHelper.Enqueue
+                (() =>
+                    {
+                        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Dismount);
+                        vnavmeshIPC.StopPathfind();
+                    }
+                );
+            }
 
             if (data.Event.Type is CrescentEventType.FATE or CrescentEventType.MagicPot)
             {

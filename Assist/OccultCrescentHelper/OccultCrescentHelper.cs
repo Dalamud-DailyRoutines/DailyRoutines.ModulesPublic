@@ -230,6 +230,9 @@ public partial class OccultCrescentHelper : ModuleBase
 
         // 优先移动到 CE / FATE
         public bool IsEnabledMoveToEvent = true;
+        
+        // 到 CE / FATE 时自动下坐骑
+        public bool IsEnabledDismount = true;
 
         // 通知 CE 开始
         public bool IsEnabledNotifyCENotification = true;
