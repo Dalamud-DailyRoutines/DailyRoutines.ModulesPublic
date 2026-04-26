@@ -32,7 +32,7 @@ public unsafe class AutoLogin : ModuleBase
 
     private readonly WorldSelectCombo worldSelectCombo = new("World");
 
-    private int selectedCharaIndex;
+    private string selectedCharaName = string.Empty;
     private int dropIndex = -1;
 
     private bool              hasLoginOnce;
@@ -40,7 +40,7 @@ public unsafe class AutoLogin : ModuleBase
     private LoginAttemptState loginAttemptState;
     private long              loginAttemptStartTicks;
     private ushort            manualWorldID;
-    private int               manualCharaIndex = -1;
+    private string            manualCharaName = string.Empty;
 
     protected override void Init()
     {
@@ -115,15 +115,17 @@ public unsafe class AutoLogin : ModuleBase
                                 worldSelectCombo.SelectedID = world.RowId;
                         }
 
-                        // 角色登录索引选择
+                        // 角色名选择
                         ImGui.AlignTextToFramePadding();
-                        ImGui.TextUnformatted($"{Lang.Get("AutoLogin-CharacterIndex")}:");
+                        ImGui.TextUnformatted("角色名:");
 
                         ImGui.SameLine();
                         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-                        ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref selectedCharaIndex);
-                        selectedCharaIndex = Math.Clamp(selectedCharaIndex, 0, 7);
-                        ImGuiOm.TooltipHover(Lang.Get("AutoLogin-CharaIndexInputTooltip"));
+                        ImGui.InputText("##AutoLogin-EnterCharaName", ref selectedCharaName, 32);
+
+                        ImGui.SameLine();
+                        if (ImGui.SmallButton("当前角色") && DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
+                            selectedCharaName = localPlayer.Name.ToString();
                     }
 
                     ImGui.SameLine();
@@ -133,8 +135,9 @@ public unsafe class AutoLogin : ModuleBase
 
                     if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, Lang.Get("Add")))
                     {
-                        if (selectedCharaIndex is < 0 or > 7 || worldSelectCombo.SelectedID == 0) return;
-                        var info = new LoginInfo(worldSelectCombo.SelectedID, selectedCharaIndex);
+                        var charaName = selectedCharaName.Trim();
+                        if (string.IsNullOrWhiteSpace(charaName) || worldSelectCombo.SelectedID == 0) return;
+                        var info = new LoginInfo(worldSelectCombo.SelectedID, charaName);
 
                         if (!config.LoginInfos.Contains(info))
                         {
@@ -159,7 +162,7 @@ public unsafe class AutoLogin : ModuleBase
                         {
                             ImGui.Selectable
                             (
-                                $"{i + 1}. {Lang.Get("AutoLogin-LoginInfoDisplayText", world.Name.ToString(), world.DataCenter.Value.Name.ToString(), info.CharaIndex)}"
+                                $"{i + 1}. {world.Name} ({world.DataCenter.Value.Name}) - {info.CharaName}"
                             );
                         }
 
@@ -173,13 +176,7 @@ public unsafe class AutoLogin : ModuleBase
                                 ImGui.TextColored
                                 (
                                     ImGuiColors.DalamudYellow,
-                                    Lang.Get
-                                    (
-                                        "AutoLogin-LoginInfoDisplayText",
-                                        world.Name.ToString(),
-                                        world.DataCenter.Value.Name.ToString(),
-                                        info.CharaIndex
-                                    )
+                                    $"{world.Name} ({world.DataCenter.Value.Name}) - {info.CharaName}"
                                 );
                             }
                         }
@@ -270,15 +267,15 @@ public unsafe class AutoLogin : ModuleBase
         if (string.IsNullOrWhiteSpace(args) || !DService.Instance().ClientState.IsLoggedIn || DService.Instance().Condition.IsBoundByDuty)
             return;
 
-        var parts = args.Split(' ');
+        var parts = args.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         switch (parts.Length)
         {
             case 1:
-                if (!int.TryParse(args, out var charaIndex0) || charaIndex0 < 0 || charaIndex0 > 8) return;
+                if (string.IsNullOrWhiteSpace(parts[0])) return;
 
                 manualWorldID    = (ushort)GameState.HomeWorld;
-                manualCharaIndex = charaIndex0;
+                manualCharaName  = parts[0];
                 break;
             case 2:
                 var world1 = Sheets.Worlds.Where(x => x.Value.Name.ToString().Contains(parts[0]))
@@ -287,10 +284,10 @@ public unsafe class AutoLogin : ModuleBase
                                    .Key;
                 if (world1 == 0) return;
 
-                if (!int.TryParse(parts[1], out var charaIndex1) || charaIndex1 < 0 || charaIndex1 > 8) return;
+                if (string.IsNullOrWhiteSpace(parts[1])) return;
 
                 manualWorldID    = (ushort)world1;
-                manualCharaIndex = charaIndex1;
+                manualCharaName  = parts[1];
                 break;
             default:
                 return;
@@ -321,8 +318,8 @@ public unsafe class AutoLogin : ModuleBase
             }
         );
 
-        if (manualWorldID != 0 && manualCharaIndex != -1)
-            TaskHelper.Enqueue(() => SelectCharacter(manualWorldID, manualCharaIndex), "SelectCharaManual");
+        if (manualWorldID != 0 && !string.IsNullOrWhiteSpace(manualCharaName))
+            TaskHelper.Enqueue(() => SelectCharacter(manualWorldID, manualCharaName), "SelectCharaManual");
         else
             TaskHelper.Enqueue(SelectCharacterDefault, "SelectCharaDefault0");
     }
@@ -365,12 +362,12 @@ public unsafe class AutoLogin : ModuleBase
         defaultLoginIndex++;
         TaskHelper.Enqueue
         (
-            () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
-            $"选择默认角色_{loginInfo.WorldID}_{loginInfo.CharaIndex}"
+            () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaName),
+            $"选择默认角色_{loginInfo.WorldID}_{loginInfo.CharaName}"
         );
     }
 
-    private bool SelectCharacter(ushort worldID, int charaIndex)
+    private bool SelectCharacter(ushort worldID, string charaName)
     {
         if (TaskHelper.AbortByConflictKey(this)) return true;
         if (!Throttler.Shared.Throttle("AutoLogin-SelectCharacter", 100)) return false;
@@ -385,11 +382,18 @@ public unsafe class AutoLogin : ModuleBase
         if (agent->WorldId != worldID)
         {
             TaskHelper.Enqueue(() => SelectWorld(worldID),                 "重新选择世界", weight: 2);
-            TaskHelper.Enqueue(() => SelectCharacter(worldID, charaIndex), "重新选择角色");
+            TaskHelper.Enqueue(() => SelectCharacter(worldID, charaName),  "重新选择角色");
             return true;
         }
 
-        AgentLobbyEvent.SelectCharacterByIndex((uint)charaIndex);
+        if (!AgentLobbyEvent.SelectCharacter(entry => IsCharacterMatched(entry, worldID, charaName)))
+        {
+            if (config.Mode == BehaviourMode.Repeat && IsDefaultLoginFlow)
+                EnqueueNextDefaultCharacter();
+
+            return true;
+        }
+
         if (config.Mode == BehaviourMode.Repeat && IsDefaultLoginFlow)
         {
             loginAttemptState      = LoginAttemptState.Waiting;
@@ -397,7 +401,7 @@ public unsafe class AutoLogin : ModuleBase
             TaskHelper.Enqueue
             (
                 WaitForLoginAttemptResult,
-                $"WaitLoginAttemptResult_{worldID}_{charaIndex}",
+                $"WaitLoginAttemptResult_{worldID}_{charaName}",
                 timeoutAction: EnqueueNextDefaultCharacter
             );
         }
@@ -434,6 +438,10 @@ public unsafe class AutoLogin : ModuleBase
         return true;
     }
 
+    private static bool IsCharacterMatched(CharaSelectCharacterEntry entry, ushort worldID, string charaName) =>
+        (entry.CurrentWorldId == worldID || entry.HomeWorldId == worldID) &&
+        string.Equals(entry.NameString, charaName.Trim(), StringComparison.OrdinalIgnoreCase);
+
     private bool SelectWorld(ushort worldID)
     {
         if (TaskHelper.AbortByConflictKey(this)) return true;
@@ -459,11 +467,11 @@ public unsafe class AutoLogin : ModuleBase
         defaultLoginIndex = -1;
         loginAttemptState = LoginAttemptState.None;
         manualWorldID     = 0;
-        manualCharaIndex  = -1;
+        manualCharaName   = string.Empty;
     }
 
     private bool IsDefaultLoginFlow =>
-        manualWorldID == 0 && manualCharaIndex == -1;
+        manualWorldID == 0 && string.IsNullOrWhiteSpace(manualCharaName);
 
     private void Swap(int index1, int index2)
     {
@@ -489,25 +497,26 @@ public unsafe class AutoLogin : ModuleBase
     private class LoginInfo
     (
         uint worldID,
-        int  index
+        string charaName
     ) : IEquatable<LoginInfo>
     {
-        public uint WorldID    { get; set; } = worldID;
-        public int  CharaIndex { get; set; } = index;
+        public uint   WorldID   { get; set; } = worldID;
+        public string CharaName { get; set; } = charaName;
 
         public bool Equals(LoginInfo? other)
         {
             if (other is null || GetType() != other.GetType())
                 return false;
 
-            return WorldID == other.WorldID && CharaIndex == other.CharaIndex;
+            return WorldID == other.WorldID &&
+                   string.Equals(CharaName, other.CharaName, StringComparison.OrdinalIgnoreCase);
         }
 
         public override bool Equals(object? obj) =>
             Equals(obj as LoginInfo);
 
         public override int GetHashCode() =>
-            HashCode.Combine(WorldID, CharaIndex);
+            HashCode.Combine(WorldID, StringComparer.OrdinalIgnoreCase.GetHashCode(CharaName));
 
         public static bool operator ==(LoginInfo? lhs, LoginInfo? rhs)
         {
