@@ -117,14 +117,15 @@ public unsafe class AutoLogin : ModuleBase
 
                         // 角色名选择
                         ImGui.AlignTextToFramePadding();
-                        ImGui.TextUnformatted("角色名:");
+                        ImGui.TextUnformatted($"{Lang.Get("AutoLogin-CharacterName")}:");
 
                         ImGui.SameLine();
                         ImGui.SetNextItemWidth(200f * GlobalUIScale);
                         ImGui.InputText("##AutoLogin-EnterCharaName", ref selectedCharaName, 32);
 
                         ImGui.SameLine();
-                        if (ImGui.SmallButton("当前角色") && DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
+                        if (ImGui.SmallButton(Lang.Get("AutoLogin-CurrentCharacter")) &&
+                            DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
                             selectedCharaName = localPlayer.Name.ToString();
                     }
 
@@ -162,7 +163,7 @@ public unsafe class AutoLogin : ModuleBase
                         {
                             ImGui.Selectable
                             (
-                                $"{i + 1}. {world.Name} ({world.DataCenter.Value.Name}) - {info.CharaName}"
+                                $"{i + 1}. {Lang.Get("AutoLogin-LoginInfoNameDisplayText", world.Name.ToString(), world.DataCenter.Value.Name.ToString(), info.CharaName)}"
                             );
                         }
 
@@ -176,7 +177,13 @@ public unsafe class AutoLogin : ModuleBase
                                 ImGui.TextColored
                                 (
                                     ImGuiColors.DalamudYellow,
-                                    $"{world.Name} ({world.DataCenter.Value.Name}) - {info.CharaName}"
+                                    Lang.Get
+                                    (
+                                        "AutoLogin-LoginInfoNameDisplayText",
+                                        world.Name.ToString(),
+                                        world.DataCenter.Value.Name.ToString(),
+                                        info.CharaName
+                                    )
                                 );
                             }
                         }
