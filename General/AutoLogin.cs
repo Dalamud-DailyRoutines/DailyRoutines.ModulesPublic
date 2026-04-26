@@ -536,7 +536,7 @@ public unsafe class AutoLogin : ModuleBase
     #region 常量
 
     private const string COMMAND = "/pdrlogin";
-    private const int    LoginAttemptNoProgressTimeoutMS = 5_000;
+    private const int    LoginAttemptNoProgressTimeoutMS = 2_000;
 
     private static readonly Dictionary<BehaviourMode, string> BehaviourModeLoc = new()
     {
