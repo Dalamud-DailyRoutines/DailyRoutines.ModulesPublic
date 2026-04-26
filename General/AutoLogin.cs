@@ -35,10 +35,12 @@ public unsafe class AutoLogin : ModuleBase
     private int selectedCharaIndex;
     private int dropIndex = -1;
 
-    private bool   hasLoginOnce;
-    private int    defaultLoginIndex = -1;
-    private ushort manualWorldID;
-    private int    manualCharaIndex = -1;
+    private bool              hasLoginOnce;
+    private int               defaultLoginIndex = -1;
+    private LoginAttemptState loginAttemptState;
+    private long              loginAttemptStartTicks;
+    private ushort            manualWorldID;
+    private int               manualCharaIndex = -1;
 
     protected override void Init()
     {
@@ -119,8 +121,8 @@ public unsafe class AutoLogin : ModuleBase
 
                         ImGui.SameLine();
                         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-                        if (ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref selectedCharaIndex, flags: ImGuiInputTextFlags.EnterReturnsTrue))
-                            selectedCharaIndex = Math.Clamp(selectedCharaIndex, 0, 8);
+                        ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref selectedCharaIndex);
+                        selectedCharaIndex = Math.Clamp(selectedCharaIndex, 0, 7);
                         ImGuiOm.TooltipHover(Lang.Get("AutoLogin-CharaIndexInputTooltip"));
                     }
 
@@ -256,8 +258,11 @@ public unsafe class AutoLogin : ModuleBase
         }
     }
 
-    private void OnLogin() =>
+    private void OnLogin()
+    {
+        ResetStates();
         TaskHelper.Abort();
+    }
 
     private void OnCommand(string command, string args)
     {
@@ -322,7 +327,7 @@ public unsafe class AutoLogin : ModuleBase
             TaskHelper.Enqueue(SelectCharacterDefault, "SelectCharaDefault0");
     }
 
-    private static void OnDialogue(AddonEvent type, AddonArgs args)
+    private void OnDialogue(AddonEvent type, AddonArgs args)
     {
         var addon = Dialogue;
         if (!addon->IsAddonAndNodesReady()) return;
@@ -331,14 +336,33 @@ public unsafe class AutoLogin : ModuleBase
         if (buttonNode == null) return;
 
         buttonNode->Click();
+
+        if (IsDefaultLoginFlow && loginAttemptState != LoginAttemptState.None)
+            loginAttemptState = LoginAttemptState.Failed;
     }
 
     private void SelectCharacterDefault()
     {
+        defaultLoginIndex = 0;
+        EnqueueNextDefaultCharacter();
+    }
+
+    private void EnqueueNextDefaultCharacter()
+    {
         if (config.LoginInfos.Count == 0) return;
 
-        var loginInfo = config.LoginInfos[0];
-        defaultLoginIndex = 0;
+        loginAttemptState = LoginAttemptState.None;
+
+        if (defaultLoginIndex < 0) return;
+
+        if (defaultLoginIndex >= config.LoginInfos.Count)
+        {
+            if (config.Mode != BehaviourMode.Repeat) return;
+            defaultLoginIndex = 0;
+        }
+
+        var loginInfo = config.LoginInfos[defaultLoginIndex];
+        defaultLoginIndex++;
         TaskHelper.Enqueue
         (
             () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
@@ -366,6 +390,47 @@ public unsafe class AutoLogin : ModuleBase
         }
 
         AgentLobbyEvent.SelectCharacterByIndex((uint)charaIndex);
+        if (config.Mode == BehaviourMode.Repeat && IsDefaultLoginFlow)
+        {
+            loginAttemptState      = LoginAttemptState.Waiting;
+            loginAttemptStartTicks = Environment.TickCount64;
+            TaskHelper.Enqueue
+            (
+                WaitForLoginAttemptResult,
+                $"WaitLoginAttemptResult_{worldID}_{charaIndex}",
+                timeoutAction: EnqueueNextDefaultCharacter
+            );
+        }
+
+        return true;
+    }
+
+    private bool WaitForLoginAttemptResult()
+    {
+        if (DService.Instance().ClientState.IsLoggedIn) return true;
+
+        if (loginAttemptState == LoginAttemptState.Failed)
+        {
+            EnqueueNextDefaultCharacter();
+            return true;
+        }
+
+        if (!CharaSelectListMenu->IsAddonAndNodesReady())
+        {
+            loginAttemptState = LoginAttemptState.CharaSelectLeft;
+            return false;
+        }
+
+        if (loginAttemptState == LoginAttemptState.Waiting &&
+            Environment.TickCount64 - loginAttemptStartTicks >= LoginAttemptNoProgressTimeoutMS)
+        {
+            EnqueueNextDefaultCharacter();
+            return true;
+        }
+
+        if (loginAttemptState != LoginAttemptState.CharaSelectLeft) return false;
+
+        EnqueueNextDefaultCharacter();
         return true;
     }
 
@@ -382,18 +447,7 @@ public unsafe class AutoLogin : ModuleBase
         if (!AgentLobbyEvent.SelectWorldByID(worldID))
         {
             // 没找到
-            TaskHelper.Abort();
-
-            if (defaultLoginIndex != -1 && defaultLoginIndex < config.LoginInfos.Count)
-            {
-                var loginInfo = config.LoginInfos[defaultLoginIndex];
-                defaultLoginIndex++;
-                TaskHelper.Enqueue
-                (
-                    () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
-                    $"SelectCharaDefault_{loginInfo.WorldID}_{loginInfo.CharaIndex}"
-                );
-            }
+            EnqueueNextDefaultCharacter();
         }
 
         return true;
@@ -403,9 +457,13 @@ public unsafe class AutoLogin : ModuleBase
     {
         hasLoginOnce      = true;
         defaultLoginIndex = -1;
+        loginAttemptState = LoginAttemptState.None;
         manualWorldID     = 0;
         manualCharaIndex  = -1;
     }
+
+    private bool IsDefaultLoginFlow =>
+        manualWorldID == 0 && manualCharaIndex == -1;
 
     private void Swap(int index1, int index2)
     {
@@ -466,10 +524,19 @@ public unsafe class AutoLogin : ModuleBase
         Once,
         Repeat
     }
+
+    private enum LoginAttemptState
+    {
+        None,
+        Waiting,
+        CharaSelectLeft,
+        Failed
+    }
     
     #region 常量
 
     private const string COMMAND = "/pdrlogin";
+    private const int    LoginAttemptNoProgressTimeoutMS = 5_000;
 
     private static readonly Dictionary<BehaviourMode, string> BehaviourModeLoc = new()
     {
