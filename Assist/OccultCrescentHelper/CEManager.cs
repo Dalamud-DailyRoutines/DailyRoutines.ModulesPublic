@@ -452,12 +452,20 @@ public partial class OccultCrescentHelper
                         FateManager.Instance()->CurrentFate         != null                     &&
                         FateManager.Instance()->CurrentFate->FateId == data.Event.DataID)
                     {
-                        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Dismount);
-                        vnavmeshIPC.StopPathfind();
                         return true;
                     }
 
                     return false;
+                }
+            );
+            
+            ceTaskHelper.DelayNext(1500, 2000);
+
+            ceTaskHelper.Enqueue
+            (() =>
+                {
+                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Dismount);
+                    vnavmeshIPC.StopPathfind();
                 }
             );
 
