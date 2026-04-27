@@ -116,14 +116,14 @@ public unsafe class AutoLogin : ModuleBase
 
                         // 角色名选择
                         ImGui.AlignTextToFramePadding();
-                        ImGui.TextUnformatted($"{Lang.Get("Name")}:");
+                        ImGui.TextUnformatted($"{Lang.Get("AutoLogin-CharacterName")}:");
 
                         ImGui.SameLine();
                         ImGui.SetNextItemWidth(200f * GlobalUIScale);
                         ImGui.InputText("##AutoLogin-EnterCharaName", ref selectedCharaName, 32);
 
                         ImGui.SameLine();
-                        if (ImGui.SmallButton(Lang.Get("Current")) &&
+                        if (ImGui.SmallButton(Lang.Get("AutoLogin-CurrentCharacter")) &&
                             DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
                             selectedCharaName = localPlayer.Name.ToString();
                     }
@@ -534,7 +534,13 @@ public unsafe class AutoLogin : ModuleBase
                   world.DataCenter.Value.Name.ToString(),
                   info.CharaIndex
               )
-            : $"{LuminaWrapper.GetAddonText(15834)}: {world.Name} ({world.DataCenter.Value.Name}) / {Lang.Get("Name")}: {info.CharaName}";
+            : Lang.Get
+              (
+                  "AutoLogin-LoginInfoNameDisplayText",
+                  world.Name.ToString(),
+                  world.DataCenter.Value.Name.ToString(),
+                  info.CharaName
+              );
 
     private void Swap(int index1, int index2)
     {
