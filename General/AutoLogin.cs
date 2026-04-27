@@ -116,14 +116,14 @@ public unsafe class AutoLogin : ModuleBase
 
                         // 角色名选择
                         ImGui.AlignTextToFramePadding();
-                        ImGui.TextUnformatted($"{Lang.Get("AutoLogin-CharacterName")}:");
+                        ImGui.TextUnformatted($"{Lang.Get("Name")}:");
 
                         ImGui.SameLine();
                         ImGui.SetNextItemWidth(200f * GlobalUIScale);
                         ImGui.InputText("##AutoLogin-EnterCharaName", ref selectedCharaName, 32);
 
                         ImGui.SameLine();
-                        if (ImGui.SmallButton(Lang.Get("AutoLogin-CurrentCharacter")) &&
+                        if (ImGui.SmallButton(Lang.Get("Current")) &&
                             DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
                             selectedCharaName = localPlayer.Name.ToString();
                     }
@@ -438,8 +438,8 @@ public unsafe class AutoLogin : ModuleBase
         // 不对应, 重新选
         if (agent->WorldId != worldID)
         {
-            TaskHelper.Enqueue(() => SelectWorld(worldID),                 "重新选择世界", weight: 2);
-            TaskHelper.Enqueue(() => SelectCharacter(worldID, charaName),  "重新选择角色");
+            TaskHelper.Enqueue(() => SelectWorld(worldID),                "重新选择世界", weight: 2);
+            TaskHelper.Enqueue(() => SelectCharacter(worldID, charaName), "重新选择角色");
             return true;
         }
 
@@ -534,13 +534,7 @@ public unsafe class AutoLogin : ModuleBase
                   world.DataCenter.Value.Name.ToString(),
                   info.CharaIndex
               )
-            : Lang.Get
-              (
-                  "AutoLogin-LoginInfoNameDisplayText",
-                  world.Name.ToString(),
-                  world.DataCenter.Value.Name.ToString(),
-                  info.CharaName
-              );
+            : $"{LuminaWrapper.GetAddonText(15834)}: {world.Name} ({world.DataCenter.Value.Name}) / {Lang.Get("Name")}: {info.CharaName}";
 
     private void Swap(int index1, int index2)
     {
