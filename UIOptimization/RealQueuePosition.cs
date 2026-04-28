@@ -33,8 +33,8 @@ public unsafe class RealQueuePosition : ModuleBase
     private delegate        void                                UpdateWorldTravelDataDelegate(nint a1, nint a2);
     private                 Hook<UpdateWorldTravelDataDelegate> UpdateWorldTravelDataHook;
 
-    private static readonly CompSig                                       ContentFinderQueuePositionDataSig = new("40 ?? 57 41 ?? 48 ?? ?? ?? 0f ?? ?? ?? 49");
-    private delegate        byte                                          ContentFinderQueuePositionDataDelegate(nint a1, uint a2, nint a3);
+    private static readonly CompSig                                       ContentFinderQueuePositionDataSig = new("40 53 56 57 41 57 48 83 EC ?? 0F B6 41");
+    private delegate        byte                                          ContentFinderQueuePositionDataDelegate(nint a1, uint a2, nint a3, byte a4);
     private                 Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
     
     private DateTime eta = StandardTimeManager.Instance().Now;
@@ -91,7 +91,7 @@ public unsafe class RealQueuePosition : ModuleBase
         return true;
     }
 
-    private byte ContentFinderQueuePositionDataDetour(nint a1, uint a2, nint a3)
+    private byte ContentFinderQueuePositionDataDetour(nint a1, uint a2, nint a3, byte a4)
     {
         uint v9 = Marshal.ReadByte(new nint(a3 + 4));
 
@@ -101,7 +101,7 @@ public unsafe class RealQueuePosition : ModuleBase
             Marshal.WriteByte(new nint(a1 + 92), (byte)v9);
         }
 
-        return ContentFinderQueuePositionDataHook.Original(a1, a2, a3);
+        return ContentFinderQueuePositionDataHook.Original(a1, a2, a3, a4);
     }
     
     private static double CalculateWaitTime(int position)

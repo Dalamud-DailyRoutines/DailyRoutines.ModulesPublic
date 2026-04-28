@@ -22,7 +22,7 @@ public unsafe class PlaceFurnitureAnywhere : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private static readonly CompSig                      RaycastFilterSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 41");
+    private static readonly CompSig                      RaycastFilterSig = new("48 8B C4 48 89 58 ?? 48 89 70 ?? 57 48 81 EC ?? ?? ?? ?? 33 DB 48 8B F2");
     [return: MarshalAs(UnmanagedType.U1)]
     private delegate bool RaycastFilterDelegate
     (
@@ -42,7 +42,7 @@ public unsafe class PlaceFurnitureAnywhere : ModuleBase
 
     protected override void Init()
     {
-        var baseAddress0 = DService.Instance().SigScanner.ScanText("C6 ?? ?? ?? 00 00 00 8B FE 48 89") + 6;
+        var baseAddress0 = DService.Instance().SigScanner.ScanText("C6 83 ?? ?? ?? ?? ?? 0F 29 44 24") + 6;
         patch0 = new(baseAddress0, [0x1]);
         patch0.Enable();
 

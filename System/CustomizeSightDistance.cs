@@ -25,7 +25,7 @@ public unsafe class CustomizeSightDistance : ModuleBase
     private delegate        nint                        CameraUpdateDelegate(Camera* camera);
     private                 Hook<CameraUpdateDelegate>? CameraUpdateHook;
 
-    private static readonly CompSig CameraCurrentSightDistanceSig = new("48 83 EC ?? 48 8B 15 ?? ?? ?? ?? 0F 29 74 24");
+    private static readonly CompSig CameraCurrentSightDistanceSig = new("40 53 48 83 EC ?? 48 8B 15 ?? ?? ?? ?? 48 8B D9 0F 29 74 24");
     private delegate float CameraCurrentSightDistanceDelegate
     (
         nint  a1,
