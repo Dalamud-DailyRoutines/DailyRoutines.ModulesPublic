@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -199,7 +200,7 @@ public unsafe class AutoRepair : ModuleBase
     
     #region 事件
 
-    private void OnDutyRecommenced(object? sender, ushort e) =>
+    private void OnDutyRecommenced(IDutyStateEventArgs args) =>
         EnqueueRepair();
 
     private void OnConditionChanged(ConditionFlag flag, bool value)
@@ -208,7 +209,7 @@ public unsafe class AutoRepair : ModuleBase
         EnqueueRepair();
     }
 
-    private void OnZoneChanged(ushort zoneID) =>
+    private void OnZoneChanged(uint u) =>
         EnqueueRepair();
 
     private static void OnExecuteCommand(ExecuteCommandFlag command, uint param1, uint param2, uint param3, uint param4)

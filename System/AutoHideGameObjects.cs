@@ -271,7 +271,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
         zoneUpdateCount = 0;
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         zoneUpdateCount = 0;
         processedObjects.Clear();

@@ -29,7 +29,7 @@ public class Alphascape3Helper : ModuleBase
         FrameworkManager.Instance().Unreg(OnUpdate);
     }
 
-    private static void OnZoneChanged(ushort zoneID)
+    private static void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         if (GameState.TerritoryType != 800) return;

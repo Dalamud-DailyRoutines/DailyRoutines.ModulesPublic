@@ -32,7 +32,7 @@ public unsafe class AutoCheckItemLevel : ModuleBase
     protected override void Uninit() =>
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         TaskHelper.Abort();
 

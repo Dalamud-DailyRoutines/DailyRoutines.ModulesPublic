@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -35,14 +36,14 @@ public class AutoSummonPet : ModuleBase
     }
 
     // 重新挑战
-    private void OnDutyRecommenced(object? sender, ushort e)
+    private void OnDutyRecommenced(IDutyStateEventArgs args)
     {
         TaskHelper.Abort();
         TaskHelper.Enqueue(CheckCurrentJob);
     }
 
     // 进入副本
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         TaskHelper.Abort();
 

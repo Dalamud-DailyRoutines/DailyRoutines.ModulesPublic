@@ -1,6 +1,7 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 
@@ -21,9 +22,9 @@ public class AutoBlockSystemNotice : ModuleBase
     protected override void Uninit() =>
         DService.Instance().Chat.CheckMessageHandled -= OnChat;
 
-    private static void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
+    private static void OnChat(IHandleableChatMessage message)
     {
-        if (type is not XivChatType.Notice) return;
-        ishandled = true;
+        if (message.LogKind != XivChatType.Notice) return;
+        message.PreventOriginal();
     }
 }

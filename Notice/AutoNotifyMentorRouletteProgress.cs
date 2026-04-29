@@ -48,7 +48,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
             LinkPayloadManager.Instance().Unreg(achievementLinkPayload.CommandId);
     }
 
-    private void OnZoneChanged(ushort obj)
+    private void OnZoneChanged(uint u)
     {
         if (GameState.TerritoryType == 0) return;
 

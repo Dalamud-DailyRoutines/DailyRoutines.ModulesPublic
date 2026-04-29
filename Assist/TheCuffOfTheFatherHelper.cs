@@ -34,7 +34,7 @@ public class TheCuffOfTheFatherHelper : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
     }
 
-    private static void OnZoneChanged(ushort zone)
+    private static void OnZoneChanged(uint u)
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 

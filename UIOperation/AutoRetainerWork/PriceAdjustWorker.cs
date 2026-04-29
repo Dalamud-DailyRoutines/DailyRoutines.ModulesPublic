@@ -1296,7 +1296,7 @@ public unsafe partial class AutoRetainerWork
                                               .Where
                                               (x => x.ItemId    == info->SearchItemId &&
                                                     x.UnitPrice != 0                  &&
-                                                    !Module.playerRetainers.Contains(x.SellingRetainerContentId)
+                                                    !Module.playerRetainers.Contains(x.RetainerId)
                                               )
                                               .OrderBy(x => x.UnitPrice)
                                               .ToArray();

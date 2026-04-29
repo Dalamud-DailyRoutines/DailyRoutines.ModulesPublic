@@ -65,7 +65,7 @@ public unsafe class SpecialRenderMode : ModuleBase
             {
                 UIModule.Instance()->ToggleUi
                 (
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Chat | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    UiFlags.ActionBars | UiFlags.Chat | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
                     false
                 );
                 DTR->IsVisible = false;
@@ -77,7 +77,7 @@ public unsafe class SpecialRenderMode : ModuleBase
             {
                 UIModule.Instance()->ToggleUi
                 (
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Chat | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    UiFlags.ActionBars | UiFlags.Chat | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
                     true
                 );
                 DTR->IsVisible = true;
@@ -95,7 +95,7 @@ public unsafe class SpecialRenderMode : ModuleBase
             {
                 UIModule.Instance()->ToggleUi
                 (
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Nameplates | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    UiFlags.ActionBars | UiFlags.Nameplates | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
                     false
                 );
                 DTR->IsVisible = false;
@@ -107,7 +107,7 @@ public unsafe class SpecialRenderMode : ModuleBase
             {
                 UIModule.Instance()->ToggleUi
                 (
-                    UIModule.UiFlags.ActionBars | UIModule.UiFlags.Nameplates | UIModule.UiFlags.Hud | UIModule.UiFlags.TargetInfo | UIModule.UiFlags.Shortcuts,
+                    UiFlags.ActionBars | UiFlags.Nameplates | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
                     true
                 );
                 DTR->IsVisible = true;
@@ -122,11 +122,11 @@ public unsafe class SpecialRenderMode : ModuleBase
         using (ImRaii.PushIndent())
         {
             if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.Chat, false);
+                UIModule.Instance()->ToggleUi(UiFlags.Chat, false);
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.Chat, true);
+                UIModule.Instance()->ToggleUi(UiFlags.Chat, true);
         }
 
         ImGui.NewLine();
@@ -137,11 +137,11 @@ public unsafe class SpecialRenderMode : ModuleBase
         using (ImRaii.PushIndent())
         {
             if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.ActionBars, false);
+                UIModule.Instance()->ToggleUi(UiFlags.ActionBars, false);
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.ActionBars, true);
+                UIModule.Instance()->ToggleUi(UiFlags.ActionBars, true);
         }
 
         ImGui.NewLine();
@@ -152,11 +152,11 @@ public unsafe class SpecialRenderMode : ModuleBase
         using (ImRaii.PushIndent())
         {
             if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.TargetInfo, false);
+                UIModule.Instance()->ToggleUi(UiFlags.TargetInfo, false);
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.TargetInfo, true);
+                UIModule.Instance()->ToggleUi(UiFlags.TargetInfo, true);
         }
 
         ImGui.NewLine();
@@ -167,11 +167,11 @@ public unsafe class SpecialRenderMode : ModuleBase
         using (ImRaii.PushIndent())
         {
             if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.Nameplates, false);
+                UIModule.Instance()->ToggleUi(UiFlags.Nameplates, false);
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UIModule.UiFlags.Nameplates, true);
+                UIModule.Instance()->ToggleUi(UiFlags.Nameplates, true);
         }
     }
     

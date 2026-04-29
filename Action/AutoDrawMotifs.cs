@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.JobGauge.Types;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Info.Game.Data;
 using OmenTools.OmenService;
@@ -18,7 +19,7 @@ public class AutoDrawMotifs : ModuleBase
         Description = Lang.Get("AutoDrawMotifsDescription"),
         Category    = ModuleCategory.Action
     };
-    
+
     private Config config = null!;
 
     protected override void Init()
@@ -32,7 +33,7 @@ public class AutoDrawMotifs : ModuleBase
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
         DService.Instance().DutyState.DutyCompleted      += OnDutyCompleted;
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
@@ -59,18 +60,18 @@ public class AutoDrawMotifs : ModuleBase
     }
 
     // 重新挑战
-    private void OnDutyRecommenced(object? sender, ushort e)
+    private void OnDutyRecommenced(IDutyStateEventArgs args)
     {
         TaskHelper.Abort();
         TaskHelper.Enqueue(CheckCurrentJob);
     }
 
     // 完成副本
-    private void OnDutyCompleted(object? sender, ushort e) =>
+    private void OnDutyCompleted(IDutyStateEventArgs args) =>
         TaskHelper.Abort();
 
     // 进入副本
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint zone)
     {
         TaskHelper.Abort();
 
@@ -80,9 +81,12 @@ public class AutoDrawMotifs : ModuleBase
 
     private bool CheckCurrentJob()
     {
-        if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition.IsOccupiedInEvent) return false;
+        if (DService.Instance().Condition.IsBetweenAreas ||
+            DService.Instance().Condition.IsOccupiedInEvent)
+            return false;
 
-        if (DService.Instance().ObjectTable.LocalPlayer is not { ClassJob.RowId: 42, Level: >= 30 } || !GameState.IsInPVEActonZone)
+        if (DService.Instance().ObjectTable.LocalPlayer is not { ClassJob.RowId: 42, Level: >= 30 } ||
+            !GameState.IsInPVEActonZone)
         {
             TaskHelper.Abort();
             return true;
@@ -125,7 +129,7 @@ public class AutoDrawMotifs : ModuleBase
         TaskHelper.Enqueue(DrawNeededMotif, "DrawNeededMotif", 5_000, weight: 1);
         return true;
     }
-    
+
     private class Config : ModuleConfig
     {
         public bool DrawWhenOutOfCombat;

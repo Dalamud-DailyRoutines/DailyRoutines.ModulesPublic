@@ -24,14 +24,12 @@ using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Dalamud.Helpers;
-using OmenTools.Info.Game;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
-using ActionKind = FFXIVClientStructs.FFXIV.Client.UI.Agent.ActionKind;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -1021,7 +1019,7 @@ public class OptimizedRecipeNote : ModuleBase
                         Int2 = (int)actionID
                     },
                     OnRollOver = node =>
-                        node.ShowTooltip(AtkTooltipManager.AtkTooltipType.Action, actionID > 10_0000 ? ActionKind.CraftingAction : ActionKind.Action),
+                        node.ShowTooltip(AtkTooltipType.Action, actionID > 10_0000 ? ActionKind.CraftAction : ActionKind.Action),
                     OnRollOut = node => node.HideTooltip()
                 };
                 dragDropNode.OnClicked = _ =>

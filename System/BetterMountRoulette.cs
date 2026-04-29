@@ -210,7 +210,7 @@ public class BetterMountRoulette : ModuleBase
         }
     }
 
-    private void OnZoneChanged(ushort obj) =>
+    private void OnZoneChanged(uint u) =>
         OnLogin();
 
     private unsafe void OnLogin()

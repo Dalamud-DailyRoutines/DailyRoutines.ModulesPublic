@@ -7,9 +7,9 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
 using OmenTools.OmenService;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -122,16 +122,16 @@ public unsafe class AutoReadOutTalk : ModuleBase
                 string? speaker = null;
 
                 if (Talk == null) return;
-
+                
                 // 没有实际文本
-                if (Talk->AtkValues[0].Type != ValueType.ManagedString || !Talk->AtkValues[0].String.HasValue) return;
+                if (Talk->AtkValues[0].Type != AtkValueType.ManagedString || !Talk->AtkValues[0].String.HasValue) return;
 
                 // 没有说话人
-                if (Talk->AtkValues[1].Type == ValueType.ManagedString && Talk->AtkValues[1].String.HasValue)
+                if (Talk->AtkValues[1].Type == AtkValueType.ManagedString && Talk->AtkValues[1].String.HasValue)
                     speaker = Talk->AtkValues[1].String.ExtractText();
 
                 // 非普通对话
-                if (Talk->AtkValues[3].Type != ValueType.UInt || Talk->AtkValues[3].UInt != 0) return;
+                if (Talk->AtkValues[3].Type != AtkValueType.UInt || Talk->AtkValues[3].UInt != 0) return;
 
                 line = Talk->AtkValues[0].String.ExtractText();
 

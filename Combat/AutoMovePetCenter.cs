@@ -1,6 +1,7 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game.DutyState;
 using Dalamud.Hooking;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
@@ -39,7 +40,7 @@ public unsafe class AutoMovePetCenter : ModuleBase
     protected override void Uninit() =>
         DService.Instance().DutyState.DutyStarted -= OnDutyStarted;
 
-    private static void OnDutyStarted(object? sender, ushort e) =>
+    private static void OnDutyStarted(IDutyStateEventArgs args) =>
         MovePetToMapCenter(LocalPlayerState.EntityID);
 
     private void ProcessPacketSpawnNPCDetour(uint targetID, byte* packetData)

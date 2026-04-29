@@ -1,7 +1,6 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -10,7 +9,6 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using AgentReceiveEventDelegate = OmenTools.Interop.Game.Models.Native.AgentReceiveEventDelegate;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -61,7 +59,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
             return InvokeOriginal();
 
         var index = values[1].UInt;
-        if (values[1].Type != ValueType.UInt || index > 4) return InvokeOriginal();
+        if (values[1].Type != AtkValueType.UInt || index > 4) return InvokeOriginal();
 
         ApplyByIndex(index);
 

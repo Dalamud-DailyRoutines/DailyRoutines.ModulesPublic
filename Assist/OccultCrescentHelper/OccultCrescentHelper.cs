@@ -81,7 +81,7 @@ public partial class OccultCrescentHelper : ModuleBase
             module.Uninit();
     }
 
-    private void OnZoneChanged(ushort obj)
+    private void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;

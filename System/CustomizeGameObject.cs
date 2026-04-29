@@ -93,7 +93,7 @@ public unsafe class CustomizeGameObject : ModuleBase
         return ret;
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         customizeHistory.Clear();
         failureCache.Clear();

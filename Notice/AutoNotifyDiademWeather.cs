@@ -78,7 +78,7 @@ public class AutoNotifyDiademWeather : ModuleBase
         }
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
 

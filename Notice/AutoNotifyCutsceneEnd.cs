@@ -6,6 +6,7 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game.Group;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.OmenService;
@@ -65,7 +66,7 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
             config.Save(this);
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         ClearResources();
 
@@ -155,7 +156,7 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
         }
     }
 
-    private void OnDutyComplete(object? sender, ushort zone) =>
+    private void OnDutyComplete(IDutyStateEventArgs args) =>
         isDutyEnd = true;
 
     private void CheckStopwatchAndRelay()

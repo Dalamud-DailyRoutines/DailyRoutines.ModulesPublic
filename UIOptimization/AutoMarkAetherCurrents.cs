@@ -85,7 +85,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         Overlay.IsOpen ^= true;
     }
 
-    private void OnZoneChanged(ushort zoneID) =>
+    private void OnZoneChanged(uint zoneID) =>
         MarkAetherCurrents(zoneID, true, useLocalMark);
 
     #endregion

@@ -33,7 +33,7 @@ public class AutoStellarSprint : ModuleBase
         CharacterStatusManager.Instance().Unreg(OnLoseStatus);
     }
 
-    private static void OnZoneChange(ushort zone)
+    private static void OnZoneChange(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         CharacterStatusManager.Instance().Unreg(OnLoseStatus);

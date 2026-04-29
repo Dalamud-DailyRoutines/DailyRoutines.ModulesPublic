@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.JobGauge.Types;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
@@ -87,14 +88,14 @@ public class AutoChakraFormShift : ModuleBase
     }
 
     // 重新挑战
-    private void OnDutyRecommenced(object? sender, ushort e)
+    private void OnDutyRecommenced(IDutyStateEventArgs args)
     {
         TaskHelper.Abort();
         TaskHelper.Enqueue(CheckCurrentJob);
     }
 
     // 进入副本
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint zone)
     {
         if (LuminaGetter.GetRow<TerritoryType>(zone) is not { ContentFinderCondition.RowId: > 0 }) return;
 

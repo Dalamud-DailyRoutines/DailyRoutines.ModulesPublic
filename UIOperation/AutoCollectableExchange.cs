@@ -104,7 +104,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
 
             ImGui.SameLine();
 
-            if (ImGui.Button(LuminaGetter.GetRow<InclusionShop>(3801094)!.Value.Unknown0.ToString()))
+            if (ImGui.Button(LuminaGetter.GetRowOrDefault<InclusionShop>(3801094).ShopName.ToString()))
             {
                 TaskHelper.Enqueue
                 (() =>

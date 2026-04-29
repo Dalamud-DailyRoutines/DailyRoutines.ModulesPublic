@@ -347,7 +347,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
     
     #region 事件
 
-    private void OnZoneChanged(ushort obj)
+    private void OnZoneChanged(uint u)
     {
         UnregCombatEvents();
 

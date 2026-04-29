@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.DutyState;
 using Newtonsoft.Json;
 using OmenTools.Dalamud;
 using OmenTools.OmenService;
@@ -103,7 +104,7 @@ public class DungeonLoggerUploader : ModuleBase
         }
     }
 
-    private void OnZoneChanged(ushort _)
+    private void OnZoneChanged(uint u)
     {
         if (!isLoggedIn) return;
 
@@ -130,7 +131,7 @@ public class DungeonLoggerUploader : ModuleBase
             NotifyHelper.Instance().Chat("已进入 “随机任务：指导者” 任务, 完成后将自动上传记录至网站");
     }
 
-    private void OnDutyCompleted(object? sender, ushort e)
+    private void OnDutyCompleted(IDutyStateEventArgs args)
     {
         if (!inDungeon) return;
 

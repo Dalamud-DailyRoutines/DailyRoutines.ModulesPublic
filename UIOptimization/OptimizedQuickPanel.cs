@@ -33,7 +33,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private delegate void ToggleUIDelegate(UIModule* module, UIModule.UiFlags flags, bool enable, bool unknown = true);
+    private delegate void ToggleUIDelegate(UIModule* module, UiFlags flags, bool enable, bool unknown = true);
     private Hook<ToggleUIDelegate>? ToggleUIHook;
 
     private Hook<AgentShowDelegate>? AgentQuickPanelShowHook;
@@ -279,11 +279,11 @@ public unsafe class OptimizedQuickPanel : ModuleBase
     }
 
     // 随着 ActionBar 隐藏一并隐藏, 和 ActionBar 逻辑保持一致
-    private void ToggleUIDetour(UIModule* module, UIModule.UiFlags flags, bool enable, bool unknown)
+    private void ToggleUIDetour(UIModule* module, UiFlags flags, bool enable, bool unknown)
     {
         ToggleUIHook.Original(module, flags, enable, unknown);
 
-        if (flags.IsSetAny(UIModule.UiFlags.ActionBars))
+        if (flags.IsSetAny(UiFlags.ActionBars))
         {
             // 隐藏
             if (!enable)

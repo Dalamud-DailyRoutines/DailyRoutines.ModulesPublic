@@ -100,7 +100,7 @@ public class AutoSortItems : ModuleBase
             config.Save(this);
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         TaskHelper.Abort();
 

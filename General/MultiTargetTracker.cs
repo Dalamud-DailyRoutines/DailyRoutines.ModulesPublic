@@ -6,7 +6,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.Gui.ContextMenu;
-using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using OmenTools.OmenService;
 
@@ -22,7 +21,7 @@ public class MultiTargetTracker : ModuleBase
         Author          = ["KirisameVanilla"],
         ModulesConflict = ["AutoHighlightFlagMarker"]
     };
-    
+
     private static Config ModuleConfig = null!;
 
     private readonly TempTrackMenuItem      tempTrackItem;
@@ -35,12 +34,12 @@ public class MultiTargetTracker : ModuleBase
         tempTrackItem      = new(this);
         permanentTrackItem = new();
     }
-    
+
     protected override void Init()
     {
         ModuleConfig = Config.Load(this) ?? new();
 
-        PlayersManager.Instance().ReceivePlayersAround              += OnReceivePlayers;
+        PlayersManager.Instance().ReceivePlayersAround   += OnReceivePlayers;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         DService.Instance().ContextMenu.OnMenuOpened     += OnMenuOpen;
     }
@@ -121,7 +120,7 @@ public class MultiTargetTracker : ModuleBase
         args.AddMenuItem(permanentTrackItem.Get());
     }
 
-    private void OnZoneChanged(ushort obj) =>
+    private void OnZoneChanged(uint u) =>
         tempTrackedPlayers.Clear();
 
     // 反正不会重复注册大胆造
@@ -246,7 +245,10 @@ public class MultiTargetTracker : ModuleBase
         public override string ToString() => $"{ContentID}";
     }
 
-    private class TempTrackMenuItem(MultiTargetTracker module) : MenuItemBase
+    private class TempTrackMenuItem
+    (
+        MultiTargetTracker module
+    ) : MenuItemBase
     {
         public override string Name       { get; protected set; } = $"{Lang.Get("MultiTargetTracker-TempTrack")}: {Lang.Get("Add")}/{Lang.Get("Delete")}";
         public override string Identifier { get; protected set; } = nameof(MultiTargetTracker);

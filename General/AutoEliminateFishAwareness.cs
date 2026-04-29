@@ -4,9 +4,8 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
+using Dalamud.Game.Chat;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.ImGuiOm.Widgets.Combos;
@@ -31,19 +30,19 @@ public class AutoEliminateFishAwareness : ModuleBase
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
     private Config config = null!;
-    
+
     private readonly ZoneSelectCombo zoneSelectCombo = new("BlacklistZone");
-    
+
     protected override void Init()
     {
-        config =   Config.Load(this) ?? new();
-        TaskHelper   ??= new() { TimeoutMS = 30_000, ShowDebug = true };
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
 
         zoneSelectCombo.SelectedIDs = config.BlacklistZones;
 
         DService.Instance().Chat.ChatMessage += OnChatMessage;
     }
-    
+
     protected override void Uninit() =>
         DService.Instance().Chat.ChatMessage -= OnChatMessage;
 
@@ -83,14 +82,10 @@ public class AutoEliminateFishAwareness : ModuleBase
 
     private unsafe void OnChatMessage
     (
-        XivChatType  type,
-        int          timestamp,
-        ref SeString sender,
-        ref SeString message,
-        ref bool     ishandled
+        IHandleableChatMessage message
     )
     {
-        if ((ushort)type != 2243 || config.BlacklistZones.Contains(GameState.TerritoryType)) return;
+        if ((ushort)message.LogKind != 2243 || config.BlacklistZones.Contains(GameState.TerritoryType)) return;
         if (!ValidChatMessages.Contains(message.ToString())) return;
 
         TaskHelper.Abort();
@@ -110,7 +105,7 @@ public class AutoEliminateFishAwareness : ModuleBase
             TaskHelper.Enqueue(() => GameState.TerritoryType == 939 && DService.Instance().ObjectTable.LocalPlayer != null, "等待进入");
             TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(currentPos), $"传送到原始位置 {currentPos}");
             TaskHelper.DelayNext(500, "等待 500 毫秒");
-            TaskHelper.Enqueue(() => !MovementManager.Instance().IsManagerBusy,                                                       "等待传送完毕");
+            TaskHelper.Enqueue(() => !MovementManager.Instance().IsManagerBusy,                                            "等待传送完毕");
             TaskHelper.Enqueue(() => DService.Instance().ObjectTable.LocalPlayer.ToStruct()->SetRotation(currentRotation), "设置面向");
         }
         else if (!DService.Instance().Condition.IsBoundByDuty)
@@ -168,14 +163,14 @@ public class AutoEliminateFishAwareness : ModuleBase
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fish);
         return DService.Instance().Condition[ConditionFlag.Fishing];
     }
-    
+
     private class Config : ModuleConfig
     {
         public bool          AutoCast       = true;
         public HashSet<uint> BlacklistZones = [];
         public string        ExtraCommands  = string.Empty;
     }
-    
+
     #region 常量
 
     private const uint TARGET_CONTENT = 195;

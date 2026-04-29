@@ -45,7 +45,7 @@ public unsafe class AutoFateStart : ModuleBase
     protected override void Uninit() =>
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-    private void OnZoneChanged(ushort obj)
+    private void OnZoneChanged(uint u)
     {
         HandleSpawnNPCPacketHook.Disable();
 

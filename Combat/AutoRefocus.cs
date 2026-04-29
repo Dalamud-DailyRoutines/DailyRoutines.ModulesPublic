@@ -15,7 +15,7 @@ public class AutoRefocus : ModuleBase
         Description = Lang.Get("AutoRefocusDescription"),
         Category    = ModuleCategory.Combat
     };
-    
+
     private ulong focusTarget = 0xE000_0000;
 
     protected override void Init()
@@ -24,9 +24,9 @@ public class AutoRefocus : ModuleBase
 
         TargetManager.Instance().RegPostSetFocusTarget(OnSetFocusTarget);
         DService.Instance().ClientState.TerritoryChanged += OnZoneChange;
-        PlayersManager.Instance().ReceivePlayersAround              += OnReceivePlayerAround;
+        PlayersManager.Instance().ReceivePlayersAround   += OnReceivePlayerAround;
     }
-    
+
     protected override void Uninit()
     {
         PlayersManager.Instance().ReceivePlayersAround   -= OnReceivePlayerAround;
@@ -43,6 +43,6 @@ public class AutoRefocus : ModuleBase
     private void OnSetFocusTarget(GameObjectId gameObjectID) =>
         focusTarget = gameObjectID;
 
-    private void OnZoneChange(ushort zone) =>
+    private void OnZoneChange(uint u) =>
         focusTarget = 0xE000_0000;
 }

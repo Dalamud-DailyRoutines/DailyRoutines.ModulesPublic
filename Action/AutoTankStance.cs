@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.OmenService;
@@ -43,7 +44,7 @@ public class AutoTankStance : ModuleBase
         ImGuiOm.HelpMarker(Lang.Get("AutoTankStance-OnlyAutoStanceWhenOneTankHelp"));
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         TaskHelper.Abort();
 
@@ -57,7 +58,7 @@ public class AutoTankStance : ModuleBase
         TaskHelper.Enqueue(CheckCurrentJob);
     }
 
-    private void OnDutyRecommenced(object? sender, ushort e)
+    private void OnDutyRecommenced(IDutyStateEventArgs args)
     {
         TaskHelper.Abort();
         TaskHelper.Enqueue(CheckCurrentJob);

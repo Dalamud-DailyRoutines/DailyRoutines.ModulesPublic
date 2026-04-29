@@ -17,8 +17,6 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using OmenTools.Threading.TaskHelper;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -446,11 +444,11 @@ public unsafe class FCMemberManagePanel : ModuleBase
         try
         {
             var value1 = (AtkValue*)memoryBlock;
-            value1->Type = ValueType.Int;
+            value1->Type = AtkValueType.Int;
             value1->SetInt(1);
 
             var value2 = (AtkValue*)(memoryBlock + 16);
-            value2->Type = ValueType.UInt;
+            value2->Type = AtkValueType.UInt;
             value2->SetUInt((uint)page);
 
             AgentFCReceiveEventInternal(agent, memoryBlock);

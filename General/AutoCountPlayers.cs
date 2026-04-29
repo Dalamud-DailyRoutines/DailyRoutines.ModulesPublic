@@ -306,7 +306,7 @@ public unsafe class AutoCountPlayers : ModuleBase
         }
     }
 
-    private static void OnZoneChanged(ushort obj)
+    private static void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
 

@@ -32,7 +32,7 @@ public unsafe class AutoCancelStarContributor : ModuleBase
         FrameworkManager.Instance().Unreg(OnUpdate);
     }
 
-    private static void OnZoneChanged(ushort zone)
+    private static void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         DService.Instance().ClientState.ClassJobChanged -= OnClassJobChanged;

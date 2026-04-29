@@ -45,7 +45,7 @@ public class AutoNotifyDutyName : ModuleBase
             config.Save(this);
     }
 
-    private unsafe void OnZoneChange(ushort territory)
+    private unsafe void OnZoneChange(uint u)
     {
         if (GameMain.Instance()->CurrentContentFinderConditionId == 0 ||
             !LuminaGetter.TryGetRow<ContentFinderCondition>(GameMain.Instance()->CurrentContentFinderConditionId, out var content))

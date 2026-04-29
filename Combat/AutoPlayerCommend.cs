@@ -4,17 +4,18 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.DutyState;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -84,7 +85,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
             config.Save(this);
     }
 
-    private void OnZoneChanged(ushort zone) =>
+    private void OnZoneChanged(uint u) =>
         assignedContentID = 0;
 
     private void OnMenuOpen(IMenuOpenedArgs args)
@@ -93,7 +94,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
         args.AddMenuItem(menuItem.Get());
     }
 
-    private void OnDutyComplete(object? sender, ushort dutyZoneID)
+    private void OnDutyComplete(IDutyStateEventArgs args)
     {
         if (TaskHelper.AbortByConflictKey(this)) return;
         if (config.BlacklistContents.Contains(GameState.ContentFinderCondition)) return;
@@ -282,7 +283,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
                 if (!isEnabled) continue;
 
                 var nameValue = VoteMvp->AtkValues[9 + i];
-                if (nameValue.Type != ValueType.String || !nameValue.String.HasValue) continue;
+                if (nameValue.Type != AtkValueType.String || !nameValue.String.HasValue) continue;
 
                 var name = nameValue.String.ToString();
                 if (string.IsNullOrWhiteSpace(name) || name != playerName) continue;

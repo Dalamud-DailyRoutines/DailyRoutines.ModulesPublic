@@ -336,7 +336,6 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         private        int   bufferSize;
 
         private CancellationTokenSource? ipInfoCancelSource;
-        private Task?                    ipInfoTask;
 
         private int needToRefreshAddress;
 
@@ -384,7 +383,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         private void OnLogin() =>
             Interlocked.Exchange(ref needToRefreshAddress, 1);
 
-        private void OnZoneChanged(ushort obj) =>
+        private void OnZoneChanged(uint u) =>
             Interlocked.Exchange(ref needToRefreshAddress, 1);
 
         public async Task UpdateAsync()
@@ -436,7 +435,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
             AddressInfo = null;
 
             var token = ipInfoCancelSource.Token;
-            ipInfoTask = Task.Run
+            Task.Run
             (
                 async () =>
                 {

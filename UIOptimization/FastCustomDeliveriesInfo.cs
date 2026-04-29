@@ -15,7 +15,6 @@ using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using AgentReceiveEventDelegate = OmenTools.Interop.Game.Models.Native.AgentReceiveEventDelegate;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -175,7 +174,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         isNeedToRefresh = true;
         Overlay.IsOpen  = true;
 
-        var defaultValue = new AtkValue { Type = ValueType.Bool, Bool = false };
+        var defaultValue = new AtkValue { Type = AtkValueType.Bool, Bool = false };
         return &defaultValue;
 
         AtkValue* InvokeOriginal() =>

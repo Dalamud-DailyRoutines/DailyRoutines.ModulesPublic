@@ -25,7 +25,6 @@ using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using Action = Lumina.Excel.Sheets.Action;
-using ActionKind = FFXIVClientStructs.FFXIV.Client.UI.Agent.ActionKind;
 using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
@@ -322,7 +321,7 @@ public partial class OccultCrescentHelper
             SupportJobChangeAddon.Toggle();
         }
 
-        private void OnZoneChanged(ushort zone)
+        private void OnZoneChanged(uint u)
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
             {
@@ -1270,7 +1269,7 @@ public partial class OccultCrescentHelper
                                 Int2 = (int)trait
                             },
                             IsClickable = false,
-                            OnRollOver  = node => node.ShowTooltip(AtkTooltipManager.AtkTooltipType.Action, ActionKind.MKDTrait),
+                            OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, ActionKind.Trait), // TODO: 需要验证
                             OnRollOut   = node => node.HideTooltip()
                         };
 
@@ -1487,7 +1486,7 @@ public partial class OccultCrescentHelper
                         };
 
                         OnRollOver = node =>
-                            node.ShowTooltip(AtkTooltipManager.AtkTooltipType.Action, IsRealAction ? ActionKind.Action : ActionKind.GeneralAction);
+                            node.ShowTooltip(AtkTooltipType.Action, IsRealAction ? ActionKind.Action : ActionKind.GeneralAction);
                         OnRollOut = node => node.HideTooltip();
                         OnClicked = _ =>
                         {

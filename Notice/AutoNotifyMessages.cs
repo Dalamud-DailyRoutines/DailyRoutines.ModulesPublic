@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
@@ -140,23 +141,23 @@ public class AutoNotifyMessages : ModuleBase
         }
     }
 
-    private unsafe void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool ishandled)
+    private unsafe void OnChatMessage(IHandleableChatMessage message)
     {
-        if (!KnownChatTypes.Contains(type)) return;
+        if (!KnownChatTypes.Contains(message.LogKind)) return;
         if (config.OnlyNotifyWhenBackground  && !Framework.Instance()->WindowInactive) return;
         if (config.ValidChatTypes.Count == 0 && config.ValidKeywords.Count == 0) return;
 
-        var messageContent = message.ToString();
-        var conditionType  = config.ValidChatTypes.Count > 0 && config.ValidChatTypes.Contains(type);
+        var messageContent = message.Message.ToString();
+        var conditionType  = config.ValidChatTypes.Count > 0 && config.ValidChatTypes.Contains(message.LogKind);
         var conditionMessage = config.ValidKeywords.Count                                                                               > 0 &&
                                config.ValidKeywords.FirstOrDefault(x => messageContent.Contains(x, StringComparison.OrdinalIgnoreCase)) != null;
         if (!conditionType && !conditionMessage) return;
 
-        var title   = $"[{type}]  {sender.TextValue}";
-        var content = message.TextValue;
+        var title   = $"[{message.LogKind}]  {message.Sender.TextValue}";
+        var content = message.Message.TextValue;
 
         NotifyHelper.Instance().NotificationInfo(content, title);
-        NotifyHelper.Speak($"{sender.TextValue}{Lang.Get("AutoNotifyMessages-SomeoneSay")}: {content}");
+        NotifyHelper.Speak($"{message.Sender.TextValue}{Lang.Get("AutoNotifyMessages-SomeoneSay")}: {content}");
     }
 
     private class Config : ModuleConfig

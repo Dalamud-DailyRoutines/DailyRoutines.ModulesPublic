@@ -2,6 +2,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.DutyState;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -23,7 +24,7 @@ public class AutoNotifyDutyStart : ModuleBase
     protected override void Uninit() =>
         DService.Instance().DutyState.DutyStarted -= OnDutyStart;
 
-    private static void OnDutyStart(object? sender, ushort e)
+    private static void OnDutyStart(IDutyStateEventArgs args)
     {
         var message = Lang.Get("AutoNotifyDutyStart-NotificationMessage");
         NotifyHelper.Instance().NotificationInfo(message);

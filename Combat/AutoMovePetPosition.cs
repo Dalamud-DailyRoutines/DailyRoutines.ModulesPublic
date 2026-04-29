@@ -6,6 +6,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
@@ -311,7 +312,7 @@ public class AutoMovePetPosition : ModuleBase
         }
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         ResetBattleTimer();
 
@@ -319,7 +320,7 @@ public class AutoMovePetPosition : ModuleBase
         TaskHelper.Enqueue(SchedulePetMovements);
     }
 
-    private void OnDutyRecommenced(object? sender, ushort e)
+    private void OnDutyRecommenced(IDutyStateEventArgs args)
     {
         ResetBattleTimer();
 

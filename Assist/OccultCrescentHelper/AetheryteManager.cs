@@ -119,7 +119,7 @@ public partial class OccultCrescentHelper
             vnavmeshIPC.StopPathfind();
         }
 
-        private void OnZoneChanged(ushort obj)
+        private void OnZoneChanged(uint u)
         {
             moveTaskHelper?.Abort();
             vnavmeshIPC.StopPathfind();

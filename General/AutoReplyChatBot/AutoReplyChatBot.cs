@@ -2,12 +2,13 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 支持现代化 AI, 比如流式传输等等
 public partial class AutoReplyChatBot : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -19,7 +20,7 @@ public partial class AutoReplyChatBot : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-    
+
     private Config config = null!;
 
     protected override void Init()
@@ -49,16 +50,16 @@ public partial class AutoReplyChatBot : ModuleBase
         DisposeAllSessions();
     }
 
-    private void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+    private void OnChat(IHandleableChatMessage message)
     {
-        if (!config.ValidChatTypes.Contains(type)) return;
+        if (!config.ValidChatTypes.Contains(message.LogKind)) return;
 
-        var (playerName, worldID, worldName) = ExtractNameWorld(sender);
+        var (playerName, worldID, worldName) = ExtractNameWorld(message.Sender);
         if (string.IsNullOrEmpty(playerName) || string.IsNullOrEmpty(worldName)) return;
-        if (playerName == LocalPlayerState.Name    && worldID == GameState.HomeWorld) return;
-        if (type       == XivChatType.TellIncoming && config.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
+        if (playerName      == LocalPlayerState.Name    && worldID == GameState.HomeWorld) return;
+        if (message.LogKind == XivChatType.TellIncoming && config.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
 
-        var userText = message.TextValue;
+        var userText = message.Message.TextValue;
         if (string.IsNullOrWhiteSpace(userText)) return;
 
         var historyKey = $"{playerName}@{worldName}";
@@ -68,6 +69,6 @@ public partial class AutoReplyChatBot : ModuleBase
         helper.Abort();
         helper.DelayNext(1000, "等待 1 秒收集更多消息");
         helper.Enqueue(() => IsCooldownReady(historyKey));
-        helper.EnqueueAsync(ct => GenerateAndReplyAsync(playerName, worldName, type, ct));
+        helper.EnqueueAsync(ct => GenerateAndReplyAsync(playerName, worldName, message.LogKind, ct));
     }
 }

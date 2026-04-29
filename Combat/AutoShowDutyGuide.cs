@@ -122,7 +122,7 @@ public class AutoShowDutyGuide : ModuleBase
         }
     }
 
-    private void OnZoneChange(ushort zone)
+    private void OnZoneChange(uint u)
     {
         TaskHelper.Abort();
         guideData.Clear();

@@ -16,7 +16,6 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
-using ActionKind = FFXIVClientStructs.FFXIV.Client.UI.Agent.ActionKind;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
@@ -348,7 +347,7 @@ public unsafe class AutoTenChiJin : ModuleBase
                         Int2 = (int)actionID
                     },
                     IsClickable = false,
-                    OnRollOver  = node => node.ShowTooltip(AtkTooltipManager.AtkTooltipType.Action, ActionKind.Action),
+                    OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, ActionKind.Action),
                     OnRollOut   = node => node.HideTooltip()
                 };
 

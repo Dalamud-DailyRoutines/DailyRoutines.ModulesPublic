@@ -92,7 +92,7 @@ public class RightClickToMoveMode : ModuleBase
         TargetIndicatorRenderer.Draw(this, SessionManager.Current);
     }
     
-    private void OnZoneChanged(ushort _) 
+    private void OnZoneChanged(uint u) 
     {
         SessionManager.Stop(this);
         TargetIndicatorRenderer.Reset();

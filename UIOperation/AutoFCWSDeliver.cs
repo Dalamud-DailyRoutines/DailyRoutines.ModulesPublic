@@ -1,5 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Common.Interface.Windows;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -14,9 +13,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using OmenTools.Threading.TaskHelper;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -106,7 +103,7 @@ public unsafe class AutoFCWSDeliver : ModuleBase
                     if (TaskHelper.AbortByConflictKey(this)) return;
                     var atkValue = new AtkValue
                     {
-                        Type  = (ValueType)(item.ItemID % 500000),
+                        Type  = (AtkValueType)(item.ItemID % 500000),
                         Int64 = SetHighDword((int)item.ItemCount)
                     };
                     AgentId.CompanyCraftMaterial.SendEvent(0, 0, item.Index, item.ItemCount, atkValue);

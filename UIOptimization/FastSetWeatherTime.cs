@@ -160,7 +160,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
         return UpdateBgmSituationHook.Original(manager, bgmSituationID, column, a4, a5);
     }
 
-    private void OnZoneChanged(ushort _)
+    private void OnZoneChanged(uint u)
     {
         config.ZoneSettings.TryGetValue(GameState.TerritoryType, out var info);
 

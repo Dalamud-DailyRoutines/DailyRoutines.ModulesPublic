@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
+using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -75,23 +76,23 @@ public unsafe class AutoRepeatChatMessage : ModuleBase
             config.Save(this);
     }
 
-    private void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+    private void OnChat(IHandleableChatMessage message)
     {
-        if (isHandled) return;
-        if (!ChatTypesToChannel.TryGetValue(type, out var channel)) return;
+        if (message.IsHandled) return;
+        if (!ChatTypesToChannel.TryGetValue(message.LogKind, out var channel)) return;
 
         var senderStr = string.Empty;
 
-        foreach (var senderPayload in sender.Payloads)
+        foreach (var senderPayload in message.Sender.Payloads)
         {
             if (senderPayload is PlayerPayload playerPayload)
                 senderStr = $"{playerPayload.PlayerName}@{playerPayload.World.Value.Name.ToString()}";
         }
 
         var linkPayload = LinkPayloadManager.Instance().Reg(OnClickRepeat, out var id);
-        savedPayload.TryAdd(id, (channel, message.Encode(), senderStr));
+        savedPayload.TryAdd(id, (channel, message.Message.Encode(), senderStr));
 
-        message.Append(new UIForegroundPayload(24))
+        message.Message.Append(new UIForegroundPayload(24))
                .Append(new TextPayload(" ["))
                .Append(new UIForegroundPayload(0))
                .Append(RawPayload.LinkTerminator)

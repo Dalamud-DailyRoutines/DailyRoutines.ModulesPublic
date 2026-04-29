@@ -146,7 +146,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private void OnMapChanged(uint obj) =>
         UpdateDTRInfo();
 
-    private void OnZoneChanged(ushort obj) =>
+    private void OnZoneChanged(uint u) =>
         UpdateDTRInfo();
 
     private void OnAddon(AddonEvent type, AddonArgs args)
@@ -274,7 +274,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private void ModifyStatusTooltip
     (
         AtkTooltipManager*                manager,
-        AtkTooltipManager.AtkTooltipType  type,
+        AtkTooltipType  type,
         ushort                            parentID,
         AtkResNode*                       targetNode,
         AtkTooltipManager.AtkTooltipArgs* args
@@ -327,7 +327,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private void ModifyWeatherTooltip
     (
         AtkTooltipManager*                manager,
-        AtkTooltipManager.AtkTooltipType  type,
+        AtkTooltipType  type,
         ushort                            parentID,
         AtkResNode*                       targetNode,
         AtkTooltipManager.AtkTooltipArgs* args

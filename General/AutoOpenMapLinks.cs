@@ -6,6 +6,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Chat;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -175,29 +176,25 @@ public partial class AutoOpenMapLinks : ModuleBase
 
     private void HandleChatMessage
     (
-        XivChatType  type,
-        int          timestamp,
-        ref SeString sender,
-        ref SeString message,
-        ref bool     isHandled
+        IHandleableChatMessage message
     )
     {
-        if (!ValidChatTypes.Contains(type)) return;
+        if (!ValidChatTypes.Contains(message.LogKind)) return;
         if (config.WhitelistPlayer.Count == 0 && config.WhitelistChannel.Count == 0) return;
-        if (message.Payloads.OfType<MapLinkPayload>().FirstOrDefault() is not { } mapPayload) return;
+        if (message.Message.Payloads.OfType<MapLinkPayload>().FirstOrDefault() is not { } mapPayload) return;
 
         var territoryID = mapPayload.TerritoryType.RowId;
         var mapID       = mapPayload.Map.RowId;
 
-        if (config.WhitelistChannel.Contains(type))
+        if (config.WhitelistChannel.Contains(message.LogKind))
         {
             SetFlag(territoryID, mapID, mapPayload.RawX, mapPayload.RawY);
             return;
         }
 
-        if (sender.Payloads.Count == 0) return;
+        if (message.Sender.Payloads.Count == 0) return;
 
-        foreach (var payload in sender.Payloads)
+        foreach (var payload in message.Sender.Payloads)
         {
             if (payload is PlayerPayload playerPayload)
             {

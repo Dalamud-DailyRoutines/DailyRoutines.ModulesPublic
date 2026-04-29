@@ -6,6 +6,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
@@ -53,7 +54,7 @@ public class HealerHelper : ModuleBase
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
 
         if (GameState.ContentFinderCondition != 0 && DService.Instance().DutyState.IsDutyStarted)
-            OnDutyStarted(null, 0);
+            OnDutyStarted(null);
     }
 
     protected override void Uninit()
@@ -970,16 +971,16 @@ public class HealerHelper : ModuleBase
         }
     }
 
-    private void OnZoneChanged(ushort _) =>
+    private void OnZoneChanged(uint u) =>
         autoPlayCardService.CurrentDutySection = AutoPlayCardManager.DutySection.Enter;
 
-    private void OnDutyRecommenced(object? sender, ushort e)
+    private void OnDutyRecommenced(IDutyStateEventArgs args)
     {
         autoPlayCardService.CurrentDutySection = AutoPlayCardManager.DutySection.Enter;
         autoPlayCardService.OrderCandidates();
     }
 
-    private void OnDutyStarted(object? sender, ushort e)
+    private void OnDutyStarted(IDutyStateEventArgs args)
     {
         autoPlayCardService.CurrentDutySection = AutoPlayCardManager.DutySection.Enter;
         autoPlayCardService.OrderCandidates();

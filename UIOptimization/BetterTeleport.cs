@@ -1055,7 +1055,7 @@ public unsafe class BetterTeleport : ModuleBase
         Overlay.IsOpen ^= true;
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         Overlay.IsOpen = false;
         TaskHelper.RemoveQueueTasks(1);

@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
@@ -78,15 +79,13 @@ public class AutoLeaveDuty : ModuleBase
         }
     }
 
-    private void OnDutyComplete(object? sender, ushort zone)
+    private void OnDutyComplete(IDutyStateEventArgs args)
     {
         if (config.BlacklistContent.Contains(GameState.ContentFinderCondition))
             return;
 
         if (config.NoLeaveHighEndDuties &&
-            LuminaGetter.Get<ContentFinderCondition>()
-                        .FirstOrDefault(x => x.HighEndDuty && x.TerritoryType.RowId == zone).RowId !=
-            0)
+            args.ContentFinderCondition.RowId != 0)
             return;
 
         if (config.Delay > 0)
@@ -101,7 +100,7 @@ public class AutoLeaveDuty : ModuleBase
             TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty, 1U));
     }
 
-    private void OnZoneChanged(ushort obj) =>
+    private void OnZoneChanged(uint u) =>
         TaskHelper.Abort();
 
     // 拦截一下那个信息

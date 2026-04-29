@@ -42,7 +42,7 @@ public class BrayfloxsLongstopHelper : ModuleBase
             config.Save(this);
     }
 
-    private unsafe void OnZoneChanged(ushort zone)
+    private unsafe void OnZoneChanged(uint u)
     {
         TaskHelper.Abort();
 

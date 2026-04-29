@@ -20,7 +20,6 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -279,11 +278,11 @@ public class CrossDCPartyFinder : ModuleBase
         if (selectedDataCenter != LocatedDataCenter)
         {
             // 招募类别刷新
-            if (formatted is { EventKind: 1, ValueCount: 3 } && atkValues[1].Type == ValueType.UInt)
+            if (formatted is { EventKind: 1, ValueCount: 3 } && atkValues[1].Type == AtkValueType.UInt)
                 SendRequestDynamic();
 
             // 招募刷新
-            if (formatted is { EventKind: 1, ValueCount: 1 } && atkValues[0].Type == ValueType.Int && atkValues[0].Int == 17)
+            if (formatted is { EventKind: 1, ValueCount: 1 } && atkValues[0].Type == AtkValueType.Int && atkValues[0].Int == 17)
                 SendRequestDynamic();
         }
     }

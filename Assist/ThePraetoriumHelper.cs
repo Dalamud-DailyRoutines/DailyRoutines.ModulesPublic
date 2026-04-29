@@ -32,7 +32,7 @@ public unsafe class ThePraetoriumHelper : ModuleBase
         FrameworkManager.Instance().Unreg(OnUpdate);
     }
 
-    private static void OnZoneChanged(ushort zoneID)
+    private static void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
         if (GameState.TerritoryType != 1044) return;

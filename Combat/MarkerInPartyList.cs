@@ -107,7 +107,7 @@ public unsafe class MarkerInPartyList : ModuleBase
         }
     }
 
-    private void ResetMarkedObject(ushort obj)
+    private void ResetMarkedObject(uint u)
     {
         foreach (var i in Enumerable.Range(0, 8))
             HideImageNode(i);

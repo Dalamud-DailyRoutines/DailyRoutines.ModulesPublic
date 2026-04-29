@@ -195,7 +195,7 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         OnRoleBonusUpdated();
     }
 
-    private void OnZoneChanged(ushort _)
+    private void OnZoneChanged(uint u)
     {
         TaskHelper.Abort();
         TaskHelper.Enqueue(() => UIModule.IsScreenReady() && !DService.Instance().Condition.IsBetweenAreas);

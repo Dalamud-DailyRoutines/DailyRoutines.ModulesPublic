@@ -263,7 +263,7 @@ public partial class OccultCrescentHelper
         private void OnLogout() =>
             ceTaskHelper.Abort();
 
-        private void OnZoneChanged(ushort obj)
+        private void OnZoneChanged(uint u)
         {
             allIslandEvents.Clear();
             knownCENames.Clear();

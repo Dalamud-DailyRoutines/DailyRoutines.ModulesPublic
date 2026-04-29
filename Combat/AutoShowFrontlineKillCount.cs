@@ -88,7 +88,7 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         }
     }
     
-    private void OnZoneChanged(ushort obj) =>
+    private void OnZoneChanged(uint u) =>
         lastKillCount = 0;
     
     private static void DisplayKillCount(uint killCount)

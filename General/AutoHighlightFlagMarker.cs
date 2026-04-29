@@ -5,7 +5,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
-using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -24,9 +23,17 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         Category        = ModuleCategory.General,
         ModulesConflict = ["MultiTargetTracker"]
     };
-    
-    private delegate void                         SetFlagMarkerDelegate(AgentMap* agent, uint zoneID, uint mapID, float worldX, float worldZ, uint iconID = 60561);
-    private          Hook<SetFlagMarkerDelegate>? SetFlagMarkerHook;
+
+    private delegate void SetFlagMarkerDelegate
+    (
+        AgentMap* agent,
+        uint      zoneID,
+        uint      mapID,
+        float     worldX,
+        float     worldZ,
+        uint      iconID = 60561
+    );
+    private Hook<SetFlagMarkerDelegate>? SetFlagMarkerHook;
 
     private Hook<AgentReceiveEventDelegate>? AgentMapReceiveEventHook;
 
@@ -54,7 +61,7 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         FrameworkManager.Instance().Reg(OnUpdate, 3000);
     }
-    
+
     protected override void Uninit()
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
@@ -85,7 +92,7 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         return ret;
     }
 
-    private void OnZoneChanged(ushort obj)
+    private void OnZoneChanged(uint u)
     {
         if (!IsFlagMarkerValid()) return;
 

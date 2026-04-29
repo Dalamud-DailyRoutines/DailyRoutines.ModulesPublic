@@ -45,7 +45,7 @@ public unsafe class SastashaHelper : ModuleBase
         correctCoralHighlightColor = ObjectHighlightColor.None;
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         TaskHelper?.Abort();
         FrameworkManager.Instance().Unreg(OnUpdate);

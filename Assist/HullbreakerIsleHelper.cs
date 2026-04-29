@@ -40,7 +40,7 @@ public class HullbreakerIsleHelper : ModuleBase
         fakeTreasurePositions.Clear();
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         WindowManager.Instance().PostDraw -= OnDraw;
         FrameworkManager.Instance().Unreg(OnUpdate);

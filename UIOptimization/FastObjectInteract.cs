@@ -427,7 +427,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
     private void OnLogin() =>
         LoadWorldData();
 
-    private void OnTerritoryChanged(ushort zoneID) =>
+    private void OnTerritoryChanged(uint u) =>
         forceObjectUpdate = true;
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]

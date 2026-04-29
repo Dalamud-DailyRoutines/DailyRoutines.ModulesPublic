@@ -38,7 +38,7 @@ public partial class OccultCrescentHelper
         {
             treasureTaskHelper ??= new() { TimeoutMS = 180_000 };
 
-            WindowManager.Instance().PostDraw                               += OnPosDraw;
+            WindowManager.Instance().PostDraw                += OnPosDraw;
             DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
 
             GamePacketManager.Instance().RegPreSendPacket(OnPreSendPacket);
@@ -205,7 +205,7 @@ public partial class OccultCrescentHelper
             GamePacketManager.Instance().Unreg(OnPreSendPacket);
 
             DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-            WindowManager.Instance().PostDraw                               -= OnPosDraw;
+            WindowManager.Instance().PostDraw                -= OnPosDraw;
 
             treasureTaskHelper?.Abort();
             treasureTaskHelper?.Dispose();
@@ -342,7 +342,7 @@ public partial class OccultCrescentHelper
         }
 
         // 区域切换时清除掉宝藏信息和地图纹理
-        private void OnZoneChanged(ushort obj)
+        private void OnZoneChanged(uint u)
         {
             treasureDatas.Clear();
             currentRoute.Clear();
@@ -457,7 +457,7 @@ public partial class OccultCrescentHelper
                     treasureObj->Flags.HasFlag(Treasure.TreasureFlags.FadedOut))
                     continue;
 
-                if (LocalPlayerState.DistanceTo2D(treasure.Position.ToVector2()) > MainModule.config.DistanceToAutoOpenTreasure) 
+                if (LocalPlayerState.DistanceTo2D(treasure.Position.ToVector2()) > MainModule.config.DistanceToAutoOpenTreasure)
                     continue;
 
                 // 一次只开 1 个, 避免移速上限
@@ -619,7 +619,7 @@ public partial class OccultCrescentHelper
         {
             Invisible = 256
         }
-        
+
         private enum SpecialObjectType : uint
         {
             /// <summary>
@@ -723,7 +723,7 @@ public partial class OccultCrescentHelper
                 }
             }
         }
-        
+
         #region 常量
 
         private const ImGuiWindowFlags WINDOW_FLAGS =
@@ -746,7 +746,7 @@ public partial class OccultCrescentHelper
         private static readonly uint LineColorBlue = KnownColor.CadetBlue.ToVector4().ToUInt();
         private static readonly uint DotColor      = KnownColor.IndianRed.ToVector4().ToUInt();
         private static readonly uint PlayerColor   = KnownColor.Orange.ToVector4().ToUInt();
-        
+
         private static readonly FrozenDictionary<string, List<TreasureHuntPoint>> Routes = new Dictionary<string, List<TreasureHuntPoint>>
         {
             [Lang.Get("OccultCrescentHelper-TreasureManager-AutoHuntTresures-Route-SouthHornNorth")] =

@@ -522,7 +522,7 @@ public class AutoCheckFoodUsage : ModuleBase
         return original;
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         if (!config.EnabledCheckpoints[FoodCheckpoint.区域切换时] || GameMain.IsInPvPArea()) return;
 

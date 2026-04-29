@@ -28,22 +28,23 @@ public unsafe class AutoCutsceneSkip : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-    
-    private static readonly CompSig                            CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
-    private delegate        byte                               CutsceneHandleInputDelegate(nint a1, float a2);
-    private          Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
+
+    private static readonly CompSig CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
+
+    private delegate byte CutsceneHandleInputDelegate(nint a1, float a2);
+    private Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
 
     private static readonly CompSig PlayCutsceneSig =
         new("40 53 55 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B 59");
-    private delegate nint                               PlayCutsceneDelegate(EventFramework* a1, lua_State* state);
+    private delegate nint PlayCutsceneDelegate(EventFramework* a1, lua_State* state);
     private Hook<PlayCutsceneDelegate>? PlayCutsceneHook;
-
+    
     private static readonly CompSig                    PlayCutsceneLuaSig = new("48 89 5C 24 ?? 57 48 83 EC 50 48 8B F9 48 8B D1");
-    private          Hook<LuaFunctionDelegate>? PlayCutsceneLuaHook;
+    private                 Hook<LuaFunctionDelegate>? PlayCutsceneLuaHook;
 
     private static readonly CompSig IsCutsceneSeenSig = new("E8 ?? ?? ?? ?? 33 D2 0F B6 CB 3A C3");
-    private delegate        bool    IsCutsceneSeenDelegate(UIState* state, uint cutsceneID);
-    private          Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
+    private delegate bool IsCutsceneSeenDelegate(UIState* state, uint cutsceneID);
+    private Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
 
     private static readonly CompSig PlayStaffRollSig =
         new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 30 04 00 00");
@@ -80,7 +81,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
@@ -122,7 +123,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         }
     }
 
-    private void OnZoneChanged(ushort zone)
+    private void OnZoneChanged(uint u)
     {
         var isValidCurrentZone = !IsProhibitToSkipInZone();
 
@@ -173,7 +174,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
             false => config.BlacklistZones.Contains(currentZone)
         };
     }
-    
+
     private class Config : ModuleConfig
     {
         public HashSet<uint> BlacklistZones = [];

@@ -188,7 +188,7 @@ public class OptimizedLetter : ModuleBase
 
                             if (buttonNode != null)
                             {
-                                AgentId.LetterList.SendEvent(9, 0);
+                                AgentId.Letter.SendEvent(9, 0);
                                 buttonNode->SetEnabledState(false);
 
                                 taskHelper.Abort();
@@ -229,8 +229,8 @@ public class OptimizedLetter : ModuleBase
 
                     foreach (var (index, _) in letters)
                     {
-                        AgentId.LetterList.SendEvent(0, 0, index, 0, 1);
-                        AgentId.LetterList.SendEvent(4, 0);
+                        AgentId.Letter.SendEvent(0, 0, index, 0, 1);
+                        AgentId.Letter.SendEvent(4, 0);
                     }
                 }
             };
@@ -249,8 +249,8 @@ public class OptimizedLetter : ModuleBase
 
                     foreach (var (index, _) in letters)
                     {
-                        AgentId.LetterList.SendEvent(0, 0, index, 0, 1);
-                        AgentId.LetterList.SendEvent(4, 0);
+                        AgentId.Letter.SendEvent(0, 0, index, 0, 1);
+                        AgentId.Letter.SendEvent(4, 0);
                     }
                 }
             };
@@ -271,8 +271,8 @@ public class OptimizedLetter : ModuleBase
 
                     foreach (var (index, _) in letters)
                     {
-                        taskHelper.Enqueue(() => AgentId.LetterList.SendEvent(0, 0, index, 0,  1));
-                        taskHelper.Enqueue(() => AgentId.LetterList.SendEvent(1, 0, 0,     0U, 0, 0));
+                        taskHelper.Enqueue(() => AgentId.Letter.SendEvent(0, 0, index, 0,  1));
+                        taskHelper.Enqueue(() => AgentId.Letter.SendEvent(1, 0, 0,     0U, 0, 0));
                         taskHelper.Enqueue(() => LetterViewer->IsAddonAndNodesReady());
                         taskHelper.Enqueue(() => AgentId.LetterView.SendEvent(0, 1));
                         taskHelper.Enqueue(() => AtkStage.Instance()->GetNumberArrayData(NumberArrayType.Letter)->IntArray[136] == 0);

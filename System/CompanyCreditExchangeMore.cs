@@ -9,7 +9,6 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Models;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -60,7 +59,7 @@ public unsafe class CompanyCreditExchangeMore : ModuleBase
         {
             for (var i = 110; i < 130; i++)
             {
-                if (addon->AtkValues[i].Type != ValueType.Int) continue;
+                if (addon->AtkValues[i].Type != AtkValueType.Int) continue;
                 addon->AtkValues[i].Int = 255;
             }
         }
