@@ -257,33 +257,10 @@ public unsafe class ScrollableTabs : ModuleBase
             addon->PreviousTab(0);
     }
 
-    // TODO: 改成 AtkValueArray
     private void UpdateInventory(AddonInventory* addon)
     {
         if (addon->TabIndex == NUM_INVENTORY_TABS - 1 && wheelState > 0)
-        {
-            var values = stackalloc AtkValue[3];
-
-            values[0] = new()
-            {
-                Type = AtkValueType.Int,
-                Int  = 22
-            };
-
-            values[1] = new()
-            {
-                Type = AtkValueType.Int,
-                Int  = *(int*)((nint)addon + 0x228)
-            };
-
-            values[2] = new()
-            {
-                Type = AtkValueType.UInt,
-                UInt = 0
-            };
-
-            addon->AtkUnitBase.FireCallback(3, values);
-        }
+            addon->AtkUnitBase.Callback(22, *(int*)((nint)addon + 0x228), 0);
         else
         {
             var tabIndex = GetTabIndex(addon->TabIndex, NUM_INVENTORY_TABS);
@@ -295,34 +272,10 @@ public unsafe class ScrollableTabs : ModuleBase
         }
     }
 
-    // TODO: 改成 AtkValueArray
     private void UpdateInventoryEvent(AddonInventoryEvent* addon)
     {
         if (addon->TabIndex == 0 && wheelState < 0)
-        {
-            // inside Vf68, fn call before return with a2 being 2
-            var values = stackalloc AtkValue[3];
-
-            values[0] = new()
-            {
-                Type = AtkValueType.Int,
-                Int  = 22
-            };
-
-            values[1] = new()
-            {
-                Type = AtkValueType.Int,
-                Int  = *(int*)((nint)addon + 0x228)
-            };
-
-            values[2] = new()
-            {
-                Type = AtkValueType.UInt,
-                UInt = 2
-            };
-
-            addon->AtkUnitBase.FireCallback(3, values);
-        }
+            addon->AtkUnitBase.Callback(22, *(int*)((nint)addon + 0x228), 2);
         else
         {
             var numEnabledButtons = 0;

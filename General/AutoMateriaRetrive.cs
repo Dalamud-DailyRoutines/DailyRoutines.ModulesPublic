@@ -22,7 +22,6 @@ public unsafe class AutoMateriaRetrive : ModuleBase
         Category    = ModuleCategory.General
     };
     
-    // TODO: 找一下这个 a6 到底是干什么的
     private Hook<EventFramework.Delegates.MaterializeItem>? RetriveMateriaHook;
 
     private readonly ItemSelectCombo itemSelectCombo = new
