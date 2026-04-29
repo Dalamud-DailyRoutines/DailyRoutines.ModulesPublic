@@ -46,7 +46,7 @@ public class PFPageSizeCustomize : ModuleBase
 
     private byte PartyFinderDisplayAmountDetour(nint a1, int a2)
     {
-        Marshal.WriteInt16(a1 + 1128, config.PageSize);
+        Marshal.WriteInt16(a1 + 1152, config.PageSize);
         return PartyFinderDisplayAmountHook.Original(a1, a2);
     }
     
