@@ -10,6 +10,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
+using Dalamud.Game.Gui;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -1019,7 +1020,7 @@ public class OptimizedRecipeNote : ModuleBase
                         Int2 = (int)actionID
                     },
                     OnRollOver = node =>
-                        node.ShowTooltip(AtkTooltipType.Action, actionID > 10_0000 ? ActionKind.CraftAction : ActionKind.Action),
+                        node.ShowTooltip(AtkTooltipType.Action, actionID > 10_0000 ? HoverActionKind.CraftingAction : HoverActionKind.Action),
                     OnRollOut = node => node.HideTooltip()
                 };
                 dragDropNode.OnClicked = _ =>

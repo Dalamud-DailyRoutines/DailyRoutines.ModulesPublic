@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Gui;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -347,7 +348,7 @@ public unsafe class AutoTenChiJin : ModuleBase
                         Int2 = (int)actionID
                     },
                     IsClickable = false,
-                    OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, ActionKind.Action),
+                    OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, HoverActionKind.Action),
                     OnRollOut   = node => node.HideTooltip()
                 };
 

@@ -6,6 +6,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
+using Dalamud.Game.Gui;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -1269,7 +1270,7 @@ public partial class OccultCrescentHelper
                                 Int2 = (int)trait
                             },
                             IsClickable = false,
-                            OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, ActionKind.Trait), // TODO: 需要验证
+                            OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, HoverActionKind.MKDTrait), // TODO: 需要验证
                             OnRollOut   = node => node.HideTooltip()
                         };
 
@@ -1486,7 +1487,7 @@ public partial class OccultCrescentHelper
                         };
 
                         OnRollOver = node =>
-                            node.ShowTooltip(AtkTooltipType.Action, IsRealAction ? ActionKind.Action : ActionKind.GeneralAction);
+                            node.ShowTooltip(AtkTooltipType.Action, IsRealAction ? HoverActionKind.Action : HoverActionKind.GeneralAction);
                         OnRollOut = node => node.HideTooltip();
                         OnClicked = _ =>
                         {
