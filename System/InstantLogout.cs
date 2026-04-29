@@ -7,7 +7,6 @@ using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
@@ -22,10 +21,8 @@ public unsafe class InstantLogout : ModuleBase
         Description = Lang.Get("InstantLogoutDescription"),
         Category    = ModuleCategory.System
     };
-    
-    private static readonly CompSig                          SystemMenuExecuteSig = new("E8 ?? ?? ?? ?? 40 B5 01 41 B9 ?? ?? ?? ??");
-    private delegate        nint                             SystemMenuExecuteDelegate(AgentHUD* agentHud, int a2, uint a3, int a4, nint a5);
-    private                 Hook<SystemMenuExecuteDelegate>? SystemMenuExecuteHook;
+
+    private Hook<AgentHUD.Delegates.HandleMainCommandOperation>? HandleMainCommandOperationHook;
 
     private Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
 
@@ -33,10 +30,15 @@ public unsafe class InstantLogout : ModuleBase
     {
         TaskHelper ??= new();
 
-        SystemMenuExecuteHook ??= SystemMenuExecuteSig.GetHook<SystemMenuExecuteDelegate>(SystemMenuExecuteDetour);
-        SystemMenuExecuteHook.Enable();
+        HandleMainCommandOperationHook = DService.Instance().Hook.HookFromMemberFunction
+        (
+            typeof(AgentHUD.MemberFunctionPointers),
+            "HandleMainCommandOperation",
+            (AgentHUD.Delegates.HandleMainCommandOperation)HandleMainCommandOperationDetour
+        );
+        HandleMainCommandOperationHook.Enable();
 
-        AgentCloseMessageShowHook ??= DService.Instance().Hook.HookFromAddress<AgentShowDelegate>
+        AgentCloseMessageShowHook = DService.Instance().Hook.HookFromAddress<AgentShowDelegate>
         (
             AgentModule.Instance()->GetAgentByInternalId(AgentId.CloseMessage)->VirtualTable->GetVFuncByName("Show"),
             AgentCloseMessageShowDetour
@@ -65,22 +67,29 @@ public unsafe class InstantLogout : ModuleBase
         }
     }
 
-    private nint SystemMenuExecuteDetour(AgentHUD* agentHud, int a2, uint a3, int a4, nint a5)
+    private bool HandleMainCommandOperationDetour
+    (
+        AgentHUD*            agent,
+        MainCommandOperation operation,
+        uint                 param1,
+        int                  param2,
+        byte*                param3
+    )
     {
-        if (a2 is 1 && a4 is -1)
+        if (operation == MainCommandOperation.ExecuteMainCommand && param2 is -1)
         {
-            switch (a3)
+            switch (param1)
             {
                 case 23:
                     Logout(TaskHelper);
-                    return 0;
+                    return false;
                 case 24:
                     Shutdown(TaskHelper);
-                    return 0;
+                    return false;
             }
         }
 
-        return SystemMenuExecuteHook.Original(agentHud, a2, a3, a4, a5);
+        return HandleMainCommandOperationHook.Original(agent, operation, param1, param2, param3);
     }
 
     private void AgentCloseMessageShowDetour(AgentInterface* agent) =>
@@ -125,7 +134,7 @@ public unsafe class InstantLogout : ModuleBase
             }
         );
     }
-    
+
     #region 常量
 
     private static readonly TextCommand LogoutLine   = LuminaGetter.GetRowOrDefault<TextCommand>(172);

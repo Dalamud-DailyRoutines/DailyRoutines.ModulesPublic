@@ -28,7 +28,7 @@ public unsafe class AutoHideBanners : ModuleBase
     
     // TODO: bannerID 从 uint 变成了 int, 需要测试
     private static readonly CompSig                 SetImageSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
-    private delegate        void*                   SetImageDelegate(AddonImage* addon, int bannerID, IconSubFolder folder, int soundEffectID);
+    private delegate        void                    SetImageDelegate(AddonImage* addon, int bannerID, IconSubFolder folder, int soundEffectID);
     private                 Hook<SetImageDelegate>? SetImageHook;
 
     private Config config = null!;
@@ -126,14 +126,13 @@ public unsafe class AutoHideBanners : ModuleBase
         addon->Hide(true, true, 1);
     }
 
-    private void* SetImageDetour(AddonImage* addonImage, int bannerID, IconSubFolder folder, int soundEffectID)
+    private void SetImageDetour(AddonImage* addonImage, int bannerID, IconSubFolder folder, int soundEffectID)
     {
-        if (IsWKSMissionChainBannerSelected((uint)bannerID))
-            return SetImageHook.Original(addonImage, bannerID, folder, soundEffectID);
-
-        return config.HiddenBanners.GetValueOrDefault((uint)bannerID)
-                   ? null
-                   : SetImageHook.Original(addonImage, bannerID, folder, soundEffectID);
+        if (IsWKSMissionChainBannerSelected((uint)bannerID) ||
+            config.HiddenBanners.GetValueOrDefault((uint)bannerID))
+            return;
+        
+        SetImageHook.Original(addonImage, bannerID, folder, soundEffectID);
     }
 
     private bool ShouldHideWKSMissionChain(AtkUnitBase* addon)

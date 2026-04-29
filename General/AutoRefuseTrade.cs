@@ -26,8 +26,7 @@ public unsafe class AutoRefuseTrade : ModuleBase
     
     private Hook<AgentShowDelegate>? AgentTradeShowHook;
 
-    private delegate int                         TradeRequestDelegate(InventoryManager* instance, uint entityID);
-    private          Hook<TradeRequestDelegate>? TradeRequestHook;
+    private Hook<InventoryManager.Delegates.SendTradeRequest>? SendTradeRequestHook;
 
     private Config config = null!;
 
@@ -35,19 +34,21 @@ public unsafe class AutoRefuseTrade : ModuleBase
     {
         config = Config.Load(this) ?? new();
 
-        AgentTradeShowHook ??= DService.Instance().Hook.HookFromAddress<AgentShowDelegate>
+
+        AgentTradeShowHook = AgentModule.Instance()->GetAgentByInternalId(AgentId.Trade)->VirtualTable->HookVFuncFromName
         (
-            AgentModule.Instance()->GetAgentByInternalId(AgentId.Trade)->VirtualTable->GetVFuncByName("Show"),
-            AgentTradeShowDetour
+            "Show",
+            (AgentShowDelegate)AgentTradeShowDetour
         );
         AgentTradeShowHook.Enable();
 
-        TradeRequestHook ??= DService.Instance().Hook.HookFromAddress<TradeRequestDelegate>
+        SendTradeRequestHook = DService.Instance().Hook.HookFromMemberFunction
         (
-            DalamudReflector.GetMemberFuncByName(typeof(InventoryManager.MemberFunctionPointers), "SendTradeRequest"),
-            TradeRequestDetour
+            typeof(InventoryManager.MemberFunctionPointers),
+            "SendTradeRequest",
+            (InventoryManager.Delegates.SendTradeRequest)SendTradeRequestDetour
         );
-        TradeRequestHook.Enable();
+        SendTradeRequestHook.Enable();
     }
 
     protected override void ConfigUI()
@@ -67,10 +68,10 @@ public unsafe class AutoRefuseTrade : ModuleBase
             config.Save(this);
     }
 
-    private int TradeRequestDetour(InventoryManager* instance, uint entityID)
+    private void SendTradeRequestDetour(InventoryManager* instance, uint entityID)
     {
         Throttler.Shared.Throttle("AutoRefuseTrade-Show", 3_000, true);
-        return TradeRequestHook.Original(instance, entityID);
+        SendTradeRequestHook.Original(instance, entityID);
     }
 
     private void AgentTradeShowDetour(AgentInterface* agent)
