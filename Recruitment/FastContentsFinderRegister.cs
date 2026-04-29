@@ -26,6 +26,8 @@ public unsafe class FastContentsFinderRegister : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private readonly ContentFinderDataManager manager = new();
+    
     protected override void Init()
     {
         Overlay       ??= new(this);
@@ -40,7 +42,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        ContentFinderDataManager.ClearCache();
+        manager.ClearCache();
     }
 
     protected override void OverlayUI()
@@ -57,23 +59,26 @@ public unsafe class FastContentsFinderRegister : ModuleBase
         if (isLoading) return;
 
         if (Throttler.Shared.Throttle("UpdateContentFinderData", 100))
-            ContentFinderDataManager.UpdateCacheData();
+            manager.UpdateCacheData();
 
-        var cachedData = ContentFinderDataManager.GetCachedData();
+        var cachedData = manager.GetCachedData();
         if (cachedData == null || cachedData.Items.Count == 0) return;
 
-        HideLevelNodes();
+        AdjustOriginalNodes();
+
+        var itemSpacing = ImGui.GetStyle().ItemSpacing;
 
         foreach (var item in cachedData.Items)
         {
-            ImGui.SetNextWindowPos(item.Position);
-
+            var startPosition = cachedData.CurrentTab == 0 ? item.Position + new Vector2(20, 0) : item.Position;
+            ImGui.SetNextWindowPos(startPosition - itemSpacing);
             if (ImGui.Begin($"FastContentsFinderRouletteOverlay-{item.NodeID}", WINDOW_FLAGS))
             {
                 if (cachedData.InDutyQueue)
                 {
                     if (DService.Instance().Texture.TryGetFromGameIcon(new(61502), out var explorerTexture))
                     {
+                        ImGui.SetCursorScreenPos(startPosition);
                         if (ImGui.ImageButton(explorerTexture.GetWrapOrEmpty().Handle, new(item.Height)))
                             ContentsFinderHelper.CancelDutyApply();
                         ImGuiOm.TooltipHover($"{Lang.Get("Cancel")}");
@@ -89,6 +94,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
                         {
                             if (DService.Instance().Texture.TryGetFromGameIcon(new(60081), out var joinTexture))
                             {
+                                ImGui.SetCursorScreenPos(startPosition);
                                 if (ImGui.ImageButton(joinTexture.GetWrapOrEmpty().Handle, new(item.Height)))
                                 {
                                     ChatManager.Instance().SendMessage($"/pdrduty {(cachedData.CurrentTab == 0 ? "r" : "n")} {item.CleanName}");
@@ -134,7 +140,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
         }
     }
 
-    private static void HideLevelNodes()
+    private static void AdjustOriginalNodes()
     {
         if (ContentsFinder == null) return;
 
@@ -149,7 +155,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
             var listLength = treelistComponent->ListLength;
             if (listLength == 0) return;
 
-            for (var i = 0; i < Math.Min(listLength, 45); i++)
+            for (var i = 0; i < MathF.Min(listLength, 45); i++)
             {
                 var offset = 3 + i;
                 if (offset >= listComponent->Component->UldManager.NodeListCount) break;
@@ -157,11 +163,16 @@ public unsafe class FastContentsFinderRegister : ModuleBase
                 var listItemComponent = (AtkComponentNode*)listComponent->Component->UldManager.NodeList[offset];
                 if (listItemComponent == null) continue;
 
-                var levelNode = (AtkTextNode*)listItemComponent->Component->UldManager.SearchNodeById(18);
+                var levelNode = (AtkTextNode*)listItemComponent->Component->UldManager.SearchNodeById(19);
                 if (levelNode == null) continue;
 
                 if (levelNode->IsVisible())
                     levelNode->ToggleVisibility(false);
+                
+                var syncNode = listItemComponent->Component->UldManager.SearchNodeById(14);
+                if (syncNode == null) return;
+                
+                syncNode->SetPositionFloat(322, 1);
             }
         }
         catch
@@ -182,10 +193,10 @@ public unsafe class FastContentsFinderRegister : ModuleBase
         switch (type)
         {
             case AddonEvent.PostSetup:
-                ContentFinderDataManager.UpdateCacheData();
+                manager.UpdateCacheData();
                 break;
             case AddonEvent.PreFinalize:
-                ContentFinderDataManager.ClearCache();
+                manager.ClearCache();
                 break;
         }
     }
@@ -212,11 +223,11 @@ public unsafe class FastContentsFinderRegister : ModuleBase
     }
 
     // 数据管理器
-    private static class ContentFinderDataManager
+    private sealed class ContentFinderDataManager
     {
-        private static ContentFinderCacheData? cachedData;
+        private ContentFinderCacheData? cachedData;
 
-        public static ContentFinderCacheData? GetCachedData()
+        public ContentFinderCacheData? GetCachedData()
         {
             if (cachedData != null && StandardTimeManager.Instance().Now - cachedData.LastUpdateTime > TimeSpan.FromSeconds(5))
                 cachedData = null;
@@ -224,7 +235,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
             return cachedData;
         }
 
-        public static void UpdateCacheData()
+        public void UpdateCacheData()
         {
             if (ContentsFinder == null) return;
             if (ContentsFinder->AtkValues == null || ContentsFinder->AtkValues[1].Bool || ContentsFinder->AtkValues[26].UInt > 10)
@@ -253,7 +264,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
 
                 var items = new List<ContentFinderItemData>();
 
-                for (var i = 0; i < Math.Min(listLength, 16); i++)
+                for (var i = 0; i < MathF.Min(listLength, 16); i++)
                 {
                     var offset = 3 + i;
                     if (offset >= listComponent->Component->UldManager.NodeListCount) break;
@@ -262,9 +273,10 @@ public unsafe class FastContentsFinderRegister : ModuleBase
                     if (listItemComponent               == null                  ||
                         listItemComponent->Y            >= 300                   ||
                         listItemComponent->ScreenY      < listComponent->ScreenY ||
-                        listItemComponent->ScreenY + 20 > otherPFNode->ScreenY) continue;
+                        listItemComponent->ScreenY + 20 > otherPFNode->ScreenY) 
+                        continue;
 
-                    var nameNode = (AtkTextNode*)listItemComponent->Component->UldManager.SearchNodeById(5);
+                    var nameNode = (AtkTextNode*)listItemComponent->Component->UldManager.SearchNodeById(6);
                     if (nameNode == null) continue;
 
                     var name = nameNode->NodeText.StringPtr.HasValue ? nameNode->NodeText.ToString() : string.Empty;
@@ -272,12 +284,18 @@ public unsafe class FastContentsFinderRegister : ModuleBase
 
                     var lockNode = (AtkImageNode*)listItemComponent->Component->UldManager.SearchNodeById(3);
                     if (lockNode == null) continue;
+                    
+                    var lockNode2 = (AtkImageNode*)listItemComponent->Component->UldManager.SearchNodeById(4);
+                    if (lockNode2 == null) continue;
 
-                    var levelNode = (AtkTextNode*)listItemComponent->Component->UldManager.SearchNodeById(18);
+                    var levelNode = (AtkTextNode*)listItemComponent->Component->UldManager.SearchNodeById(19);
                     if (levelNode == null) continue;
 
                     var level = levelNode->NodeText.StringPtr.HasValue ? levelNode->NodeText.ToString() : string.Empty;
                     if (string.IsNullOrWhiteSpace(level)) continue;
+
+                    var syncNode = listItemComponent->Component->UldManager.SearchNodeById(14);
+                    if (syncNode == null) continue;
 
                     var nodeStateLevel = levelNode->AtkResNode.GetNodeState();
                     var itemData = new ContentFinderItemData
@@ -285,9 +303,9 @@ public unsafe class FastContentsFinderRegister : ModuleBase
                         NodeID    = listItemComponent->NodeId,
                         Name      = name,
                         Level     = level,
-                        Position  = nodeStateLevel.TopLeft - new Vector2(0, 9f),
-                        Height    = nodeStateLevel.Height * 0.75f,
-                        IsLocked  = lockNode->IsVisible(),
+                        Position  = nodeStateLevel.TopLeft - new Vector2(24, 0),
+                        Height    = nodeStateLevel.Height / GlobalUIScale,
+                        IsLocked  = lockNode->IsVisible() || lockNode2->IsVisible(),
                         IsVisible = levelNode->IsVisible(),
                         CleanName = name.Replace(" ", string.Empty)
                     };
@@ -305,7 +323,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
             }
         }
 
-        public static void ClearCache() =>
+        public void ClearCache() =>
             cachedData = null;
     }
     
