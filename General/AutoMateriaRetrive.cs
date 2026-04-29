@@ -8,7 +8,6 @@ using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
@@ -24,9 +23,7 @@ public unsafe class AutoMateriaRetrive : ModuleBase
     };
     
     // TODO: 找一下这个 a6 到底是干什么的
-    private static readonly CompSig                       RetriveMateriaSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 7C 24 ?? 41 56 48 83 EC ?? 41 8B F8");
-    private delegate bool RetriveMateriaDelegate(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6);
-    private          Hook<RetriveMateriaDelegate>? RetriveMateriaHook;
+    private Hook<EventFramework.Delegates.MaterializeItem>? RetriveMateriaHook;
 
     private readonly ItemSelectCombo itemSelectCombo = new
     (
@@ -42,7 +39,12 @@ public unsafe class AutoMateriaRetrive : ModuleBase
     {
         TaskHelper ??= new() { TimeoutMS = 5_000 };
         
-        RetriveMateriaHook ??= RetriveMateriaSig.GetHook<RetriveMateriaDelegate>(RetriveMateriaDetour);
+        RetriveMateriaHook = DService.Instance().Hook.HookFromMemberFunction
+        (
+            typeof(EventFramework.MemberFunctionPointers),
+            "MaterializeItem",
+            (EventFramework.Delegates.MaterializeItem)RetriveMateriaDetour
+        );
         RetriveMateriaHook.Enable();
     }
 
@@ -194,18 +196,14 @@ public unsafe class AutoMateriaRetrive : ModuleBase
 
     private void Retrive(InventoryType type, short slot)
     {
-        var       instance = EventFramework.Instance();
-        const int eventID  = 0x390001;
-
-        RetriveMateriaHook.Original(instance, eventID, type, slot, 0, 0);
+        const uint EVENT_ID = 0x390001;
+        RetriveMateriaHook.Original(EventFramework.Instance(), EVENT_ID, type, slot, 0);
     }
 
-    private bool RetriveMateriaDetour(EventFramework* framework, int eventID, InventoryType inventoryType, short inventorySlot, int extraParam, byte a6)
+    private void RetriveMateriaDetour(EventFramework* framework, EventId eventID, InventoryType inventoryType, short inventorySlot, int extraParam)
     {
-        var original = RetriveMateriaHook.Original(framework, eventID, inventoryType, inventorySlot, extraParam, a6);
-        if (eventID == 0x390001 && original && !TaskHelper.IsBusy)
+        RetriveMateriaHook.Original(framework, eventID, inventoryType, inventorySlot, extraParam);
+        if (eventID == 0x390001 && !TaskHelper.IsBusy)
             EnqueueRetriveTask(inventoryType, inventorySlot);
-
-        return original;
     }
 }

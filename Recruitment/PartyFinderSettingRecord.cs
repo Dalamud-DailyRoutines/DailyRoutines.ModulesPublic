@@ -23,8 +23,8 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
     };
     
     private static readonly CompSig AddonFireCallBackSig = new("E8 ?? ?? ?? ?? 0F B6 E8 8B 44 24 20");
-    private delegate        void*   AddonFireCallBackDelegate(AtkUnitBase* atkunitbase, int valuecount, AtkValue* atkvalues, byte updateVisibility);
-    private          Hook<AddonFireCallBackDelegate>? AgentReceiveEventHook;
+    private delegate        bool   AddonFireCallBackDelegate(AtkUnitBase* atkunitbase, int valuecount, AtkValue* atkvalues, byte updateVisibility);
+    private                 Hook<AddonFireCallBackDelegate>? AgentReceiveEventHook;
 
     private Config config = null!;
 
@@ -117,7 +117,7 @@ public unsafe class PartyFinderSettingRecord : ModuleBase
         }
     }
 
-    private void* AddonFireCallBackDetour
+    private bool AddonFireCallBackDetour
     (
         AtkUnitBase* atkUnitBase,
         int          valueCount,

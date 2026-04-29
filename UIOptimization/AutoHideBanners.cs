@@ -7,6 +7,7 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
@@ -25,9 +26,10 @@ public unsafe class AutoHideBanners : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private static readonly CompSig                        SetImageTextureSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
-    private delegate        void*                          SetImageTextureDelegate(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID);
-    private                 Hook<SetImageTextureDelegate>? SetImageTextureHook;
+    // TODO: bannerID 从 uint 变成了 int, 需要测试
+    private static readonly CompSig                 SetImageSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
+    private delegate        void*                   SetImageDelegate(AddonImage* addon, int bannerID, IconSubFolder folder, int soundEffectID);
+    private                 Hook<SetImageDelegate>? SetImageHook;
 
     private Config config = null!;
 
@@ -36,7 +38,6 @@ public unsafe class AutoHideBanners : ModuleBase
         config = Config.Load(this) ?? new();
 
         var isAnyAdded = false;
-
         foreach (var bannerID in BannersData)
         {
             if (!config.HiddenBanners.TryAdd(bannerID, DefaultEnabledBanners.Contains(bannerID))) continue;
@@ -46,8 +47,9 @@ public unsafe class AutoHideBanners : ModuleBase
         if (isAnyAdded)
             config.Save(this);
 
-        SetImageTextureHook ??= SetImageTextureSig.GetHook<SetImageTextureDelegate>(SetImageTextureDetour);
-        SetImageTextureHook.Enable();
+        SetImageHook = SetImageSig.GetHook<SetImageDelegate>(SetImageDetour);
+        SetImageHook.Enable();
+        
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "_WKSMissionChain", OnAddon);
     }
 
@@ -124,14 +126,14 @@ public unsafe class AutoHideBanners : ModuleBase
         addon->Hide(true, true, 1);
     }
 
-    private void* SetImageTextureDetour(AtkUnitBase* addon, uint bannerID, uint a3, int soundEffectID)
+    private void* SetImageDetour(AddonImage* addonImage, int bannerID, IconSubFolder folder, int soundEffectID)
     {
-        if (IsWKSMissionChainBannerSelected(bannerID))
-            return SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
+        if (IsWKSMissionChainBannerSelected((uint)bannerID))
+            return SetImageHook.Original(addonImage, bannerID, folder, soundEffectID);
 
-        return config.HiddenBanners.GetValueOrDefault(bannerID)
+        return config.HiddenBanners.GetValueOrDefault((uint)bannerID)
                    ? null
-                   : SetImageTextureHook.Original(addon, bannerID, a3, soundEffectID);
+                   : SetImageHook.Original(addonImage, bannerID, folder, soundEffectID);
     }
 
     private bool ShouldHideWKSMissionChain(AtkUnitBase* addon)

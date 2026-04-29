@@ -4,6 +4,8 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.Enums;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
@@ -33,9 +35,14 @@ public unsafe class RealQueuePosition : ModuleBase
     private delegate        void                                UpdateWorldTravelDataDelegate(nint a1, nint a2);
     private                 Hook<UpdateWorldTravelDataDelegate> UpdateWorldTravelDataHook;
 
-    private static readonly CompSig                                       ContentFinderQueuePositionDataSig = new("40 53 56 57 41 57 48 83 EC ?? 0F B6 41");
-    private delegate        byte                                          ContentFinderQueuePositionDataDelegate(nint a1, uint a2, nint a3, byte a4);
-    private                 Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
+    private static readonly CompSig ContentFinderQueuePositionDataSig = new("40 53 56 57 41 57 48 83 EC ?? 0F B6 41");
+    private delegate void ContentFinderQueuePositionDataDelegate
+    (
+        ContentsFinderQueueInfo* info,
+        ContentsFinderQueueState state,
+        QueueInfoState*          infoState
+    );
+    private Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
     
     private DateTime eta = StandardTimeManager.Instance().Now;
 
@@ -91,17 +98,17 @@ public unsafe class RealQueuePosition : ModuleBase
         return true;
     }
 
-    private byte ContentFinderQueuePositionDataDetour(nint a1, uint a2, nint a3, byte a4)
+    // TODO: 需要验证
+    private void ContentFinderQueuePositionDataDetour(ContentsFinderQueueInfo* info, ContentsFinderQueueState state, QueueInfoState* infoState)
     {
-        uint v9 = Marshal.ReadByte(new nint(a3 + 4));
-
-        if (v9 != 0)
+        var positionInQueue = (sbyte)infoState->PositionInQueue;
+        if (positionInQueue != 0)
         {
-            Marshal.WriteByte(new nint(a1 + 91), (byte)v9);
-            Marshal.WriteByte(new nint(a1 + 92), (byte)v9);
+            info->PositionInQueue        = positionInQueue;
+            info->ClampedPositionInQueue = positionInQueue;
         }
 
-        return ContentFinderQueuePositionDataHook.Original(a1, a2, a3, a4);
+        ContentFinderQueuePositionDataHook.Original(info, state, infoState);
     }
     
     private static double CalculateWaitTime(int position)

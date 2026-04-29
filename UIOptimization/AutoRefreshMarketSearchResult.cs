@@ -22,10 +22,8 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private static readonly CompSig ProcessRequestResultSig = new("E8 ?? ?? ?? ?? 83 3B 00 74 16");
-    private delegate        nint    ProcessRequestResultDelegate(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4);
-    private Hook<ProcessRequestResultDelegate>? ProcessRequestResultHook;
+
+    private Hook<InfoProxyItemSearch.Delegates.ProcessRequestResult>? ProcessRequestResultHook;
 
     private static readonly CompSig     WaitMessageSig   = new("BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 8B C0 BA ?? ?? ?? ?? 48 8B CE E8 ?? ?? ?? ?? 45 33 C9");
     private readonly        MemoryPatch waitMessagePatch = new(WaitMessageSig.Get(), [0xBA, 0xB9, 0x1A, 0x00, 0x00]);
@@ -34,7 +32,12 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
 
     protected override void Init()
     {
-        ProcessRequestResultHook ??= ProcessRequestResultSig.GetHook<ProcessRequestResultDelegate>(ProcessRequestResultDetour);
+        ProcessRequestResultHook = DService.Instance().Hook.HookFromMemberFunction
+        (
+            typeof(InfoProxyItemSearch.MemberFunctionPointers),
+            "ProcessRequestResult",
+            (InfoProxyItemSearch.Delegates.ProcessRequestResult)ProcessRequestResultDetour
+        );
         ProcessRequestResultHook.Enable();
 
         waitMessagePatch.Set(true);
@@ -43,9 +46,10 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
     protected override void Uninit() =>
         waitMessagePatch.Dispose();
 
-    private nint ProcessRequestResultDetour(InfoProxyItemSearch* info, int entryCount, nint a3, nint a4)
+    // TODO: 需要验证参数情况
+    private void ProcessRequestResultDetour(InfoProxyItemSearch* info, byte a2, int a3)
     {
-        if (entryCount                       == 0                              &&
+        if (a2                       == 0                              &&
             a3                               > 0                               &&
             GameState.ContentFinderCondition == 0                              &&
             info->SearchItemId               != 0                              &&
@@ -55,11 +59,11 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
             isMarketStuck = true;
 
             info->RequestData();
-            return nint.Zero;
+            return;
         }
 
         isMarketStuck = false;
-        return ProcessRequestResultHook.Original(info, entryCount, a3, a4);
+        ProcessRequestResultHook.Original(info, a2, a3);
     }
     
     #region IPC
