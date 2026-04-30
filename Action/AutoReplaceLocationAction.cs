@@ -5,15 +5,16 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
-using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -21,7 +22,7 @@ using MapType = FFXIVClientStructs.FFXIV.Client.UI.Agent.MapType;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoReplaceLocationAction : ModuleBase
+public unsafe class AutoReplaceLocationAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,18 +30,15 @@ public class AutoReplaceLocationAction : ModuleBase
         Description = Lang.Get("AutoReplaceLocationActionDescription"),
         Category    = ModuleCategory.Action
     };
-    
-    // 返回值为 GameObject*, 无对象则为 0
-    private static readonly CompSig                              ParseActionCommandArgSig = new("E8 ?? ?? ?? ?? 33 ED 4C 8B F8");
-    private delegate        nint                                 ParseActionCommandArgDelegate(nint a1, nint arg, bool a3, bool a4);
-    private                 Hook<ParseActionCommandArgDelegate>? ParseActionCommandArgHook;
+
+    private Hook<PronounModule.Delegates.ResolvePlaceholder>? ParseActionCommandArgHook;
 
     private Config? config;
-    
+
     private readonly ContentSelectCombo contentSelectCombo = new("Blakclist");
 
     private bool isNeedToReplace;
-    
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -50,10 +48,15 @@ public class AutoReplaceLocationAction : ModuleBase
         UseActionManager.Instance().RegPreUseActionLocation(OnPreUseActionLocation);
         ExecuteCommandManager.Instance().RegPreComplexLocation(OnPreExecuteCommandComplexLocation);
 
-        ParseActionCommandArgHook ??= ParseActionCommandArgSig.GetHook<ParseActionCommandArgDelegate>(ParseActionCommandArgDetour);
+        ParseActionCommandArgHook = DService.Instance().Hook.HookFromMemberFunction
+        (
+            typeof(PronounModule.MemberFunctionPointers),
+            "ResolvePlaceholder",
+            (PronounModule.Delegates.ResolvePlaceholder)ParseActionCommandArgDetour
+        );
         ParseActionCommandArgHook.Enable();
     }
-    
+
     protected override void Uninit()
     {
         UseActionManager.Instance().Unreg(OnPreUseActionLocation);
@@ -163,7 +166,7 @@ public class AutoReplaceLocationAction : ModuleBase
         }
     }
 
-    private unsafe void DrawConfigCustom()
+    private void DrawConfigCustom()
     {
         var agent = AgentMap.Instance();
         if (agent == null) return;
@@ -368,17 +371,19 @@ public class AutoReplaceLocationAction : ModuleBase
         }
     }
 
-    private unsafe nint ParseActionCommandArgDetour(nint a1, nint arg, bool a3, bool a4)
+    private GameObject* ParseActionCommandArgDetour(PronounModule* manager, CStringPointer placeholder, byte unknown0, byte unknown1)
     {
-        var original = ParseActionCommandArgHook.Original(a1, arg, a3, a4);
+        var original = ParseActionCommandArgHook.Original(manager, placeholder, unknown0, unknown1);
         if (!config.EnableCenterArgument ||
-            config.BlacklistContents.Contains(GameState.ContentFinderCondition)) return original;
+            config.BlacklistContents.Contains(GameState.ContentFinderCondition))
+            return original;
 
-        var parsedArg = MemoryHelper.ReadSeStringNullTerminated(arg).TextValue;
-        if (!parsedArg.Equals("<center>")) return original;
+        var parsedArg = placeholder.ToString();
+        if (!parsedArg.Equals("<center>"))
+            return original;
 
         isNeedToReplace = true;
-        return (nint)Control.GetLocalPlayer();
+        return (GameObject*)Control.GetLocalPlayer();
     }
 
     // 自定义中心点场中
@@ -417,7 +422,7 @@ public class AutoReplaceLocationAction : ModuleBase
     }
 
     // 预设场中
-    private unsafe bool HandlePresetCenterLocation(ref Vector3 sourceLocation)
+    private bool HandlePresetCenterLocation(ref Vector3 sourceLocation)
     {
         if (!LuminaGetter.TryGetRow<ContentFinderCondition>
                 (GameMain.Instance()->CurrentContentFinderConditionId, out var content) ||
@@ -465,7 +470,7 @@ public class AutoReplaceLocationAction : ModuleBase
             );
         }
     }
-    
+
     private class Config : ModuleConfig
     {
         public float         AdjustDistance    = 15;
@@ -490,9 +495,9 @@ public class AutoReplaceLocationAction : ModuleBase
         public bool SendChat         = true;
         public bool SendNotification = true;
     }
-    
+
     #region 常量
-    
+
     // MapID - Markers
     private static Dictionary<uint, Dictionary<MapMarker, Vector2>> ZoneMapMarkers
     {
@@ -518,6 +523,6 @@ public class AutoReplaceLocationAction : ModuleBase
             return field;
         }
     }
-    
+
     #endregion
 }
