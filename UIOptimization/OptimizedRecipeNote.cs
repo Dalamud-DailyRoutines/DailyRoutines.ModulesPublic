@@ -17,6 +17,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using KamiToolKit.Premade.Node.Simple;
 using KamiToolKit.Timelines;
@@ -880,6 +881,9 @@ public class OptimizedRecipeNote : ModuleBase
             jobTextNode.Size =  jobTextNode.GetTextDrawSize($"{jobTextNode.String}123");
             statsRow.Width   += jobTextNode.Width;
             statsRow.AddNode(jobTextNode);
+            
+            statsRow.Width += 12;
+            statsRow.AddDummy(12);
 
             var craftmanshipTextNode = new TextNode
             {
@@ -890,8 +894,8 @@ public class OptimizedRecipeNote : ModuleBase
             statsRow.Width += craftmanshipTextNode.Width;
             statsRow.AddNode(craftmanshipTextNode);
 
-            statsRow.Width += 4;
-            statsRow.AddDummy(4);
+            statsRow.Width += 12;
+            statsRow.AddDummy(12);
 
             var controlTextNode = new TextNode
             {
@@ -902,8 +906,8 @@ public class OptimizedRecipeNote : ModuleBase
             statsRow.Width += controlTextNode.Width;
             statsRow.AddNode(controlTextNode);
 
-            statsRow.Width += 4;
-            statsRow.AddDummy(4);
+            statsRow.Width += 12;
+            statsRow.AddDummy(12);
 
             var craftPointTextNode = new TextNode
             {
@@ -1068,8 +1072,9 @@ public class OptimizedRecipeNote : ModuleBase
                     Position         = new(-4),
                     String           = $"{index + 1}",
                     FontType         = FontType.MiedingerMed,
-                    TextFlags        = TextFlags.Edge,
-                    TextOutlineColor = KnownColor.OrangeRed.ToVector4()
+                    TextFlags        = TextFlags.Edge | TextFlags.Emboss,
+                    TextColor        = ColorHelper.GetColor(50),
+                    TextOutlineColor = ColorHelper.GetColor(28),
                 };
                 actionIndexNode.AttachNode(dragDropNode);
 
