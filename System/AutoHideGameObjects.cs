@@ -183,7 +183,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
             index                                 <= 200                      &&
             index % 2                             == 0                        &&
             gameObject->ObjectKind                == ObjectKind.BattleNpc     &&
-            (BattleNpcSubKind)gameObject->SubKind == BattleNpcSubKind.Chocobo &&
+            (BattleNpcSubKind)gameObject->SubKind == BattleNpcSubKind.Buddy   &&
             gameObject->OwnerId                   != LocalPlayerState.EntityID)
             return true;
 

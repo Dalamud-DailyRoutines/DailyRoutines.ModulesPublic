@@ -27,6 +27,7 @@ using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using Action = Lumina.Excel.Sheets.Action;
 using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
+using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic;
@@ -696,7 +697,7 @@ public partial class OccultCrescentHelper
                     var rowIndex = i / MAX_ITEMS_PER_ROW;
 
                     // 预览用的
-                    var jobActionContainer = new SupportJobActionListNode
+                    var jobActionContainer = new SupportJobActionListNode(this)
                     {
                         Position = new(500, 0),
                         Size     = new(200, backgroundNode.Height)
@@ -1127,7 +1128,7 @@ public partial class OccultCrescentHelper
                 closeButtonNode.AttachNode(this);
             }
 
-            private class SupportJobActionListNode : SimpleComponentNode
+            private class SupportJobActionListNode(AddonDRMKDSupportJobChange addon) : SimpleComponentNode
             {
                 public SimpleNineGridNode      BackgroundNode       { get; private set; }
                 public SimpleNineGridNode      BorderNode           { get; private set; }
@@ -1138,7 +1139,7 @@ public partial class OccultCrescentHelper
                 public TextureButtonNode       SettingButtonNode    { get; private set; }
                 public CheckboxNode            IsRealActionNode     { get; private set; }
                 public List<SupportActionNode> ActionDragDropNodes  { get; private set; } = [];
-
+                
                 public void LoadNodes(OthersManager manager, CrescentSupportJob presetJob, bool isCurrentFoucused)
                 {
                     BackgroundNode = new SimpleNineGridNode
@@ -1212,7 +1213,15 @@ public partial class OccultCrescentHelper
                             Size      = new(40f)
                         };
 
-                        var dragDropNode = new SupportActionNode(presetJob, this, action.RowId, ActionDragDropNodes.Count,manager.MainModule.config.AddonIsDragRealAction)
+                        var dragDropNode = new SupportActionNode
+                        (
+                            addon,
+                            presetJob,
+                            this,
+                            action.RowId,
+                            ActionDragDropNodes.Count,
+                            manager.MainModule.config.AddonIsDragRealAction
+                        )
                         {
                             Size         = new(40f),
                             IsVisible    = true,
@@ -1270,7 +1279,16 @@ public partial class OccultCrescentHelper
                                 Int2 = (int)trait
                             },
                             IsClickable = false,
-                            OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, HoverActionKind.MKDTrait), // TODO: 需要验证
+                            OnRollOver  = node =>
+                            {
+                                var tooltipArgs = new AtkTooltipManager.AtkTooltipArgs();
+
+                                tooltipArgs.ActionArgs.Flags = 1;
+                                tooltipArgs.ActionArgs.Kind  = DetailKind.MKDTrait;
+                                tooltipArgs.ActionArgs.Id    = (int)trait;
+
+                                AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Action, (ushort)manager.SupportJobChangeAddon.AddonId, node, &tooltipArgs);
+                            }, // TODO: 需要验证
                             OnRollOut   = node => node.HideTooltip()
                         };
 
@@ -1425,7 +1443,7 @@ public partial class OccultCrescentHelper
                         Action4 = 1 << 4
                     }
 
-                    public SupportActionNode(CrescentSupportJob job, SupportJobActionListNode list, uint actionID, int actionIndex, bool isRealAction = false)
+                    public SupportActionNode(AddonDRMKDSupportJobChange addon, CrescentSupportJob job, SupportJobActionListNode list, uint actionID, int actionIndex, bool isRealAction = false)
                     {
                         Job  = job;
                         List = list;
@@ -1459,8 +1477,9 @@ public partial class OccultCrescentHelper
                         Toggle(IsRealAction);
                     }
 
-                    public CrescentSupportJob       Job  { get; private set; }
-                    public SupportJobActionListNode List { get; private set; }
+                    public CrescentSupportJob         Job   { get; private set; }
+                    public SupportJobActionListNode   List  { get; private set; }
+                    public AddonDRMKDSupportJobChange Addon { get; private set; }
 
                     public bool IsRealAction { get; private set; }
                     public int  ActionIndex  { get; private set; }
@@ -1487,8 +1506,16 @@ public partial class OccultCrescentHelper
                         };
 
                         OnRollOver = node =>
-                            node.ShowTooltip(AtkTooltipType.Action, IsRealAction ? HoverActionKind.Action : HoverActionKind.GeneralAction);
-                        OnRollOut = node => node.HideTooltip();
+                        {
+                            var tooltipArgs = new AtkTooltipManager.AtkTooltipArgs();
+
+                            tooltipArgs.ActionArgs.Flags = 1;
+                            tooltipArgs.ActionArgs.Kind  = isRealAction ? DetailKind.Action : DetailKind.GeneralAction;
+                            tooltipArgs.ActionArgs.Id    = IsRealAction ? (int)ActionID : 31 + ActionIndex;
+
+                            AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Action, (ushort)Addon.AddonId, node, &tooltipArgs);
+                        };
+                        OnRollOut  = node => node.HideTooltip();
                         OnClicked = _ =>
                         {
                             UpdateActionInfo();

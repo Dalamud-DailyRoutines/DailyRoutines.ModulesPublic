@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Lumina.ExtraSheets;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 using Action = System.Action;
-using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
+using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -298,7 +298,7 @@ public unsafe class AutoGardensWork : ModuleBase
                 ToggleOverlayConfig(false);
                 break;
 
-            case { ObjectKind: ObjectKind.EventObj, DataID: 2003757 }:
+            case { ObjectKind: Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj, DataID: 2003757 }:
                 ToggleOverlayConfig(true);
                 break;
 
@@ -407,10 +407,10 @@ public unsafe class AutoGardensWork : ModuleBase
         // 找一下有没有园圃
         List<(ulong GameObjectID, Vector3 Position)> gardenCenters = [];
 
-        foreach (var housingObj in outdoorZone->FurnitureStruct.ObjectManager.ObjectArray.Objects)
+        foreach (var housingObj in outdoorZone->FurnitureManager.ObjectManager.ObjectArray.Objects)
         {
             if (housingObj == null || housingObj.Value == null) continue;
-            if (housingObj.Value->ObjectKind                              != FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind.HousingEventObject) continue;
+            if (housingObj.Value->ObjectKind                              != ObjectKind.HousingEventObject) continue;
             if (housingObj.Value->BaseId                                  != 131128) continue;
             if (LocalPlayerState.DistanceTo3D(housingObj.Value->Position) > 10) continue;
 
@@ -422,7 +422,7 @@ public unsafe class AutoGardensWork : ModuleBase
         // 园圃家具周围绕一圈的那个实际可交互的坑位
         objectIDs = DService.Instance().ObjectTable
                             .Where
-                            (x => x is { ObjectKind: ObjectKind.EventObj, DataID: 2003757 } &&
+                            (x => x is { ObjectKind: Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj, DataID: 2003757 } &&
                                   gardenCenters.Any(g => Vector3.DistanceSquared(x.Position, g.Position) <= 25)
                             )
                             .Select(x => x.GameObjectID)

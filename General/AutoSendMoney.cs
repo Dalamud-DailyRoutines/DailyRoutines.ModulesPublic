@@ -347,7 +347,7 @@ public unsafe class AutoSendMoney : ModuleBase
         var target = TargetSystem.Instance()->GetTargetObject();
 
         if (target is not null &&
-            DService.Instance().ObjectTable.SearchByEntityID(target->EntityId) is ICharacter { ObjectKind: ObjectKind.Player } player)
+            DService.Instance().ObjectTable.SearchByEntityID(target->EntityId) is ICharacter { ObjectKind: ObjectKind.Pc } player)
         {
             if (members.Any(p => p.EntityID == player.EntityID))
                 return;

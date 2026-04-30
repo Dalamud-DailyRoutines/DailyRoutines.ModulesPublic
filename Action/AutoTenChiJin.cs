@@ -347,9 +347,8 @@ public unsafe class AutoTenChiJin : ModuleBase
                         Type = DragDropType.Action,
                         Int2 = (int)actionID
                     },
-                    IsClickable = false,
-                    OnRollOver  = node => node.ShowTooltip(AtkTooltipType.Action, HoverActionKind.Action),
-                    OnRollOut   = node => node.HideTooltip()
+                    IsClickable   = false,
+                    ActionTooltip = actionID
                 };
 
                 flexGrid.AddNode(dragDropNode);

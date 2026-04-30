@@ -647,12 +647,12 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
     private static readonly FrozenDictionary<ObjectKind, float> IncludeDistance = new Dictionary<ObjectKind, float>
     {
-        [ObjectKind.Aetheryte]      = 400,
-        [ObjectKind.GatheringPoint] = 100,
-        [ObjectKind.CardStand]      = 150,
-        [ObjectKind.EventObj]       = 100,
-        [ObjectKind.Housing]        = 30,
-        [ObjectKind.Treasure]       = 100
+        [ObjectKind.Aetheryte]          = 400,
+        [ObjectKind.GatheringPoint]     = 100,
+        [ObjectKind.CardStand]          = 150,
+        [ObjectKind.EventObj]           = 100,
+        [ObjectKind.HousingEventObject] = 30,
+        [ObjectKind.Treasure]           = 100
     }.ToFrozenDictionary();
     
     private static FrozenDictionary<uint, string> ENPCTitle { get; } =

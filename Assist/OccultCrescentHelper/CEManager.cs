@@ -649,8 +649,10 @@ public partial class OccultCrescentHelper
 
             public static IslandEventData? Parse(IFate fate)
             {
-                if (fate.MapIconId == 0 || fate.State is FateState.Ended or FateState.WaitingForEnd or FateState.Failed) return null;
-                if (fate.Position == default) return null;
+                if (fate.MapIconId == 0                                                   ||
+                    fate.State is FateState.Ended or FateState.Ending or FateState.Failed ||
+                    fate.Position == default)
+                    return null;
 
                 var name = $"{fate.Name} ({fate.Progress}%)";
                 if (string.IsNullOrEmpty(name)) return null;

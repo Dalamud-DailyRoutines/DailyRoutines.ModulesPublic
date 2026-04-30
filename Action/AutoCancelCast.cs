@@ -101,7 +101,7 @@ public unsafe class AutoCancelCast : ModuleBase
     
     private static readonly FrozenSet<ObjectKind> ValidObjectKinds =
     [
-        ObjectKind.Player,
+        ObjectKind.Pc,
         ObjectKind.BattleNpc
     ];
 

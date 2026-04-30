@@ -326,7 +326,7 @@ public class AutoNotifySPPlayers : ModuleBase
             return;
         if (!DService.Instance().ClientState.IsLoggedIn || DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer)
             return;
-        if (obj == null || obj.Address == localPlayer.Address || obj.ObjectKind != ObjectKind.Player)
+        if (obj == null || obj.Address == localPlayer.Address || obj.ObjectKind != ObjectKind.Pc)
             return;
         if (!objThrottler.Throttle(obj.GameObjectID, 3_000))
             return;

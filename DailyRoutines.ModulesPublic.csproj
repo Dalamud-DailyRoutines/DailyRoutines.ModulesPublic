@@ -1,4 +1,4 @@
-<Project Sdk="Dalamud.CN.NET.Sdk/14.0.2">
+<Project Sdk="Dalamud.CN.NET.Sdk/15.0.0">
 
     <PropertyGroup>
         <UseWindowsForms>true</UseWindowsForms>

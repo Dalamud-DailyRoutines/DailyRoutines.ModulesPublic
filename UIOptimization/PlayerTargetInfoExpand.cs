@@ -141,13 +141,13 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
         // 目标
         var target = TargetManager.Target;
         var node0  = addon->GetTextNodeById(16);
-        if (node0 != null && target is ICharacter { ObjectKind: ObjectKind.Player } chara0)
+        if (node0 != null && target is ICharacter { ObjectKind: ObjectKind.Pc } chara0)
             node0->SetText(ReplacePatterns(config.TargetPattern, Payloads, chara0));
 
         // 目标的目标
         var targetsTarget = TargetManager.Target?.TargetObject;
         var node1         = addon->GetTextNodeById(7);
-        if (node1 != null && targetsTarget is ICharacter { ObjectKind: ObjectKind.Player } chara1)
+        if (node1 != null && targetsTarget is ICharacter { ObjectKind: ObjectKind.Pc } chara1)
             node1->SetText(ReplacePatterns(config.TargetsTargetPattern, Payloads, chara1));
     }
 
@@ -159,13 +159,13 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
         // 目标
         var target = TargetManager.Target;
         var node0  = addon->GetTextNodeById(10);
-        if (node0 != null && target is ICharacter { ObjectKind: ObjectKind.Player } chara0)
+        if (node0 != null && target is ICharacter { ObjectKind: ObjectKind.Pc } chara0)
             node0->SetText(ReplacePatterns(config.TargetPattern, Payloads, chara0));
 
         // 目标的目标
         var targetsTarget = TargetManager.Target?.TargetObject;
         var node1         = addon->GetTextNodeById(7);
-        if (node1 != null && targetsTarget is ICharacter { ObjectKind: ObjectKind.Player } chara1)
+        if (node1 != null && targetsTarget is ICharacter { ObjectKind: ObjectKind.Pc } chara1)
             node1->SetText(ReplacePatterns(config.TargetsTargetPattern, Payloads, chara1));
     }
 
@@ -177,7 +177,7 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
         // 焦点目标
         var target = TargetManager.FocusTarget;
         var node0  = addon->GetTextNodeById(10);
-        if (node0 != null && target is ICharacter { ObjectKind: ObjectKind.Player } chara0)
+        if (node0 != null && target is ICharacter { ObjectKind: ObjectKind.Pc } chara0)
             node0->SetText(ReplacePatterns(config.FocusTargetPattern, Payloads, chara0));
     }
 
