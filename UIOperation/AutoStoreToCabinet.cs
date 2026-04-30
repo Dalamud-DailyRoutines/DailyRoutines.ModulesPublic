@@ -1,12 +1,10 @@
 using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Common.Interface.Windows;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
@@ -31,7 +29,7 @@ public class AutoStoreToCabinet : ModuleBase
 
     protected override void Init()
     {
-        Overlay ??= new(this);
+        Overlay = new(this);
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Cabinet", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Cabinet", OnAddon);
@@ -41,7 +39,17 @@ public class AutoStoreToCabinet : ModuleBase
     {
         cancelSource.Cancel();
         cancelSource.Dispose();
+        
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
     }
+    
+    private void OnAddon(AddonEvent type, AddonArgs args) =>
+        Overlay.IsOpen = type switch
+        {
+            AddonEvent.PostSetup   => true,
+            AddonEvent.PreFinalize => false,
+            _                      => Overlay.IsOpen
+        };
 
     protected override unsafe void OverlayPreDraw()
     {
@@ -51,65 +59,66 @@ public class AutoStoreToCabinet : ModuleBase
 
     protected override void OverlayUI()
     {
-        using (FontManager.Instance().UIFont.Push())
+        using var font = FontManager.Instance().UIFont.Push();
+
+        unsafe
         {
-            unsafe
-            {
-                var addon = CabinetAddon;
-                var pos   = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight() + 6);
-                ImGui.SetWindowPos(pos);
-            }
+            var addon = CabinetAddon;
+            var pos   = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight() + 6);
+            ImGui.SetWindowPos(pos);
+        }
 
-            ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(ImGuiColors.DalamudYellow, Lang.Get("AutoStoreToCabinetTitle"));
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoStoreToCabinetTitle"));
 
-            ImGui.SameLine();
-            ImGui.Spacing();
+        ImGui.SameLine();
+        ImGui.Spacing();
 
-            ImGui.SameLine();
-            ImGui.BeginDisabled(isOnTask);
+        ImGui.SameLine();
+        ImGui.BeginDisabled(isOnTask);
 
-            if (ImGui.Button(Lang.Get("Start")))
-            {
-                isOnTask = true;
-                DService.Instance().Framework.RunOnTick
-                (
-                    async () =>
+        if (ImGui.Button(Lang.Get("Start")))
+        {
+            isOnTask = true;
+            DService.Instance().Framework.RunOnTick
+            (
+                async () =>
+                {
+                    try
                     {
-                        try
-                        {
-                            var list = ScanValidCabinetItems();
+                        var list = ScanValidCabinetItems();
 
-                            if (list.Count > 0)
+                        if (list.Count > 0)
+                        {
+                            foreach (var item in list)
                             {
-                                foreach (var item in list)
-                                {
-                                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StoreToCabinet, item);
-                                    await Task.Delay(100).ConfigureAwait(false);
-                                }
+                                ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StoreToCabinet, item);
+                                ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.InventoryRefresh);
+                                await Task.Delay(100).ConfigureAwait(false);
                             }
                         }
-                        finally
-                        {
-                            isOnTask = false;
-                        }
-                    },
-                    cancellationToken: cancelSource.Token
-                );
-            }
-
-            ImGui.EndDisabled();
-
-            ImGui.SameLine();
-
-            if (ImGui.Button(Lang.Get("Stop")))
-            {
-                cancelSource.Cancel();
-                isOnTask = false;
-            }
-
-            ImGuiOm.HelpMarker(Lang.Get("AutoStoreToCabinet-StoreHelp"));
+                    }
+                    finally
+                    {
+                        isOnTask = false;
+                    }
+                },
+                cancellationToken: cancelSource.Token
+            );
         }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(Lang.Get("Stop")))
+        {
+            cancelSource.Cancel();
+            isOnTask = false;
+        }
+
+        ImGuiOm.HelpMarker(Lang.Get("AutoStoreToCabinet-StoreHelp"));
+
     }
 
     private static List<uint> ScanValidCabinetItems()
@@ -141,16 +150,6 @@ public class AutoStoreToCabinet : ModuleBase
         }
 
         return list;
-    }
-
-    private void OnAddon(AddonEvent type, AddonArgs args)
-    {
-        Overlay.IsOpen = type switch
-        {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
-        };
     }
     
     #region 常量
