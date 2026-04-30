@@ -437,7 +437,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
             var targetChara = TargetChara;
             if (targetChara == null) return;
 
-            var region = LuminaGetter.GetRow<World>(targetChara.WorldID)?.DataCenter.ValueNullable?.Region ?? 0;
+            var region = LuminaGetter.GetRow<World>(targetChara.WorldID)?.DataCenter.ValueNullable?.Region.RowId ?? 0;
             Util.OpenLink(string.Format(URL, RegionToFFLogsAbbvr(region), targetChara.World, targetChara.Name));
         }
 

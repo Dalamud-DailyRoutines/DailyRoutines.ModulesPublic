@@ -206,14 +206,11 @@ public class CrossDCPartyFinder : ModuleBase
     {
         ClearResources();
 
-        if (DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
-        {
-            dataCenters = LuminaGetter.Get<WorldDCGroupType>()
-                                      .Where(x => x.Region == localPlayer.HomeWorld.Value.DataCenter.Value.Region)
-                                      .Select(x => x.Name.ToString())
-                                      .ToList();
-            selectedDataCenter = GameState.CurrentDataCenterData.Name.ToString();
-        }
+        dataCenters = LuminaGetter.Get<WorldDCGroupType>()
+                                  .Where(x => x.Region.RowId == GameState.HomeDataCenterData.Region.RowId)
+                                  .Select(x => x.Name.ToString())
+                                  .ToList();
+        selectedDataCenter = GameState.CurrentDataCenterData.Name.ToString();
 
         switch (type)
         {
