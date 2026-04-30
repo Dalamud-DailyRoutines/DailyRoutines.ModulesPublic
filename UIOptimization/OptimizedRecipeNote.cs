@@ -200,7 +200,14 @@ public class OptimizedRecipeNote : ModuleBase
                         var craftPoint    = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.CraftingPoints);
                         var craftsmanship = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.Craftsmanship);
                         var control       = PlayerState.Instance()->GetAttributeByIndex(PlayerAttribute.Control);
-                        var id            = RaphaelIPC.StartCalculation();
+                        var id            = RaphaelIPC.StartCalculation(recipeID, new()
+                        {
+                            BackloadProgress     = true,
+                            EnsureReliability    = false,
+                            TargetQuality        = GetRecipeMaxQuality(recipe),
+                            MaxThreads           = Environment.ProcessorCount,
+                            TimeoutSeconds       = 90
+                        });
                         recipeCaculationButton.IsEnabled = false;
                         TaskHelper.Enqueue
                         (
@@ -229,6 +236,9 @@ public class OptimizedRecipeNote : ModuleBase
                                         return true;
                                     case RaphaelCalculationStatus.Failed:
                                         recipeCaculationButton.IsEnabled = true;
+                                        if (!string.IsNullOrWhiteSpace(response.ErrorMessage))
+                                            NotifyHelper.Instance().ChatError(response.ErrorMessage);
+
                                         TaskHelper.Abort();
                                         return true;
                                     default:
@@ -791,6 +801,14 @@ public class OptimizedRecipeNote : ModuleBase
 
         return data->RecipeId;
     }
+
+    private static int GetRecipeMaxQuality(Recipe recipe) =>
+        (int)(GetRecipeLevelTable(recipe).Quality * (float)recipe.QualityFactor / 100f);
+
+    private static RecipeLevelTable GetRecipeLevelTable(Recipe recipe) =>
+        recipe.Number == 0 && LocalPlayerState.CurrentLevel < 100
+            ? LuminaGetter.Get<RecipeLevelTable>().First(x => x.ClassJobLevel == LocalPlayerState.CurrentLevel)
+            : recipe.RecipeLevelTable.Value;
 
     private class AddonActionsPreview
     (
