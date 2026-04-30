@@ -203,7 +203,7 @@ public class OptimizedRecipeNote : ModuleBase
                         var id            = RaphaelIPC.StartCalculation(recipeID, new()
                         {
                             BackloadProgress     = true,
-                            EnsureReliability    = false,
+                            EnsureReliability    = true,
                             TargetQuality        = GetRecipeMaxQuality(recipe),
                             MaxThreads           = Environment.ProcessorCount,
                             TimeoutSeconds       = 90
