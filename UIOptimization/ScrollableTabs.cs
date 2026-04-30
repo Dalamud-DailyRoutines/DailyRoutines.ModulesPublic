@@ -549,9 +549,6 @@ public unsafe class ScrollableTabs : ModuleBase
         if (nextButton == null || IsNext && !nextButton->IsEnabled)
             return;
 
-        // if (IsAddonOpen("MiragePrismPrismBoxFilter"))
-        // return;
-        // TODO 先这样写着，但可能有BUG
         if (MiragePrismPrismBoxFilter->IsAddonAndNodesReady())
             return;
 

@@ -98,10 +98,15 @@ public unsafe class RealQueuePosition : ModuleBase
         return true;
     }
 
-    // TODO: 需要验证
-    private void ContentFinderQueuePositionDataDetour(ContentsFinderQueueInfo* info, ContentsFinderQueueState state, QueueInfoState* infoState)
+    private void ContentFinderQueuePositionDataDetour
+    (
+        ContentsFinderQueueInfo* info,
+        ContentsFinderQueueState state,
+        QueueInfoState*          infoState
+    )
     {
         var positionInQueue = (sbyte)infoState->PositionInQueue;
+
         if (positionInQueue != 0)
         {
             info->PositionInQueue        = positionInQueue;
