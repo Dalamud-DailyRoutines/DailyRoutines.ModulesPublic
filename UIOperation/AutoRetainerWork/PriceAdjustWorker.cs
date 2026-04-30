@@ -15,6 +15,7 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Algorithms;
@@ -67,9 +68,6 @@ public unsafe partial class AutoRetainerWork
         private uint          upshelfQuantityInput;
         private bool          isDisplayingTooltip;
 
-        public override bool DrawOverlayCondition(string activeAddonName) =>
-            activeAddonName is "RetainerList";
-
         public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
         public override void Init()
@@ -105,33 +103,45 @@ public unsafe partial class AutoRetainerWork
             ItemConfigEditor();
         }
 
-        public override void DrawOverlay(string activeAddonName)
-        {
-            using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-PriceAdjust-Title"));
-            if (!node) return;
-            if (activeAddonName != "RetainerList") return;
-
-            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoRetainerWork-PriceAdjust-AdjustForRetainers"));
-            ImGui.Spacing();
-
-            using (ImRaii.Disabled(taskHelper.IsBusy))
-            {
-                if (ImGui.Button(Lang.Get("Start")))
-                    EnqueuePriceAdjustAll();
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Stop")))
-                taskHelper.Abort();
-
-            ImGuiOm.ScaledDummy(6f);
-
-            if (ImGui.Checkbox(Lang.Get("AutoRetainerWork-PriceAdjust-SendProcessMessage"), ref Module.config.SendPriceAdjustProcessMessage))
-                Module.config.Save(Module);
-
-            if (ImGui.Checkbox(Lang.Get("AutoRetainerWork-PriceAdjust-AutoAdjustWhenNewOnSale"), ref Module.config.AutoPriceAdjustWhenNewOnSale))
-                Module.config.Save(Module);
-        }
+        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+            CreateOverlayCategory
+            (
+                Lang.Get("AutoRetainerWork-PriceAdjust-Title"),
+                width,
+                CreateOverlayText(Lang.Get("AutoRetainerWork-PriceAdjust-AdjustForRetainers"), width),
+                CreateOverlayButtonRow
+                (
+                    () =>
+                    {
+                        if (taskHelper is not { IsBusy: false }) return;
+                        EnqueuePriceAdjustAll();
+                    },
+                    () => taskHelper?.Abort(),
+                    width
+                ),
+                CreateOverlayCheckbox
+                (
+                    Lang.Get("AutoRetainerWork-PriceAdjust-SendProcessMessage"),
+                    Module.config.SendPriceAdjustProcessMessage,
+                    isChecked =>
+                    {
+                        Module.config.SendPriceAdjustProcessMessage = isChecked;
+                        Module.config.Save(Module);
+                    },
+                    width
+                ),
+                CreateOverlayCheckbox
+                (
+                    Lang.Get("AutoRetainerWork-PriceAdjust-AutoAdjustWhenNewOnSale"),
+                    Module.config.AutoPriceAdjustWhenNewOnSale,
+                    isChecked =>
+                    {
+                        Module.config.AutoPriceAdjustWhenNewOnSale = isChecked;
+                        Module.config.Save(Module);
+                    },
+                    width
+                )
+            );
 
         private void DrawMarketListWindow()
         {

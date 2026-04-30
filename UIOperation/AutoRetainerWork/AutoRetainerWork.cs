@@ -1,5 +1,6 @@
 using System.Numerics;
-using DailyRoutines.Common.Interface.Windows;
+using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -11,6 +12,10 @@ using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit;
+using KamiToolKit.Classes;
+using KamiToolKit.Enums;
+using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.AddonEvent;
@@ -19,6 +24,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
+using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -34,9 +40,11 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private          Config            config      = null!;
+    private          Config            config            = null!;
     private readonly Throttler<string> retainerThrottler = new();
     private readonly HashSet<ulong>    playerRetainers   = [];
+
+    private DRAutoRetainerWork? addon;
 
     private readonly RetainerWorkerBase[] workers;
 
@@ -56,39 +64,28 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     protected override void Init()
     {
-        config =   Config.Load(this) ?? new();
-        Overlay      ??= new(this);
-
-        // 雇员列表
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "RetainerList", OnRetainerList);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RetainerList", OnRetainerList);
+        config = Config.Load(this) ?? new();
 
         foreach (var worker in workers)
             worker.Init();
+
+        addon ??= new(this)
+        {
+            InternalName          = "DRAutoRetainerWork",
+            Title                 = Info.Title,
+            Size                  = new(260f, 320f),
+            RememberClosePosition = true
+        };
     }
 
     protected override void Uninit()
     {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnRetainerList);
+        addon?.Dispose();
+        addon = null;
 
         foreach (var worker in workers)
             worker.Uninit();
     }
-
-    #region 界面监控
-
-    // 雇员列表 (悬浮窗控制)
-    private void OnRetainerList(AddonEvent type, AddonArgs args)
-    {
-        Overlay.IsOpen = type switch
-        {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
-        };
-    }
-
-    #endregion
 
     private class TownDispatchWorker
     (
@@ -188,8 +185,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public override bool DrawConfigCondition() => false;
 
-        public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
-
         public override bool IsWorkerBusy() => TaskHelper?.IsBusy ?? false;
 
         public override void Init() => TaskHelper ??= new() { TimeoutMS = 15_000 };
@@ -201,18 +196,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             TaskHelper = null;
         }
 
-        public override void DrawOverlay(string activeAddonName)
-        {
-            using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-GilsWithdraw-Title"));
-            if (!node) return;
-
-            if (ImGui.Button(Lang.Get("Start")))
-                EnqueueRetainersGilWithdraw();
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Stop")))
-                TaskHelper.Abort();
-        }
+        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+            CreateOverlayCategory
+            (
+                Lang.Get("AutoRetainerWork-GilsWithdraw-Title"),
+                width,
+                CreateOverlayButtonRow(EnqueueRetainersGilWithdraw, () => TaskHelper?.Abort(), width)
+            );
 
         private void EnqueueRetainersGilWithdraw()
         {
@@ -289,8 +279,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public override bool DrawConfigCondition() => false;
 
-        public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
-
         public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
         public override void Init() => taskHelper ??= new() { TimeoutMS = 15_000 };
@@ -302,26 +290,68 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             taskHelper = null;
         }
 
-        public override void DrawOverlay(string activeAddonName)
+        public override TreeListCategoryNode CreateOverlayCategory(float width)
         {
-            using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-GilsShare-Title"));
-            if (!node) return;
+            CheckboxNode? methodOneNode   = null;
+            CheckboxNode? methodTwoNode   = null;
+            var           methodNodeWidth = width / 2f;
 
-            if (ImGui.RadioButton($"{Lang.Get("Method")} 1", ref Module.config.GilsShareMethod, 0))
-                Module.config.Save(Module);
+            methodOneNode = CreateOverlayCheckbox
+            (
+                $"{Lang.Get("Method")} 1",
+                Module.config.GilsShareMethod == 0,
+                isChecked =>
+                {
+                    if (!isChecked)
+                    {
+                        methodOneNode!.IsChecked = true;
+                        return;
+                    }
 
-            ImGui.SameLine();
-            if (ImGui.RadioButton($"{Lang.Get("Method")} 2", ref Module.config.GilsShareMethod, 1))
-                Module.config.Save(Module);
+                    Module.config.GilsShareMethod = 0;
+                    Module.config.Save(Module);
+                    methodTwoNode!.IsChecked = false;
+                },
+                methodNodeWidth,
+                Lang.Get("AutoRetainerWork-GilsShare-MethodsHelp")
+            );
 
-            ImGuiOm.HelpMarker(Lang.Get("AutoRetainerWork-GilsShare-MethodsHelp"));
+            methodTwoNode = CreateOverlayCheckbox
+            (
+                $"{Lang.Get("Method")} 2",
+                Module.config.GilsShareMethod == 1,
+                isChecked =>
+                {
+                    if (!isChecked)
+                    {
+                        methodTwoNode!.IsChecked = true;
+                        return;
+                    }
 
-            if (ImGui.Button(Lang.Get("Start")))
-                EnqueueRetainersGilShare();
+                    Module.config.GilsShareMethod = 1;
+                    Module.config.Save(Module);
+                    methodOneNode!.IsChecked = false;
+                },
+                methodNodeWidth,
+                Lang.Get("AutoRetainerWork-GilsShare-MethodsHelp")
+            );
 
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Stop")))
-                taskHelper.Abort();
+            var methodRow = new HorizontalListNode
+            {
+                IsVisible          = true,
+                Size               = new(width, 24f),
+                ItemSpacing        = 4f,
+                FitToContentHeight = true
+            };
+            methodRow.AddNode([methodOneNode, methodTwoNode]);
+
+            return CreateOverlayCategory
+            (
+                Lang.Get("AutoRetainerWork-GilsShare-Title"),
+                width,
+                methodRow,
+                CreateOverlayButtonRow(EnqueueRetainersGilShare, () => taskHelper?.Abort(), width)
+            );
         }
 
         private void EnqueueRetainersGilShare()
@@ -488,8 +518,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public override bool DrawConfigCondition() => false;
 
-        public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
-
         public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
         public override void Init()
@@ -509,18 +537,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             taskHelper = null;
         }
 
-        public override void DrawOverlay(string activeAddonName)
-        {
-            using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-EntrustDups-Title"));
-            if (!node) return;
-
-            if (ImGui.Button(Lang.Get("Start")))
-                EnqueueRetainersEntrust();
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Stop")))
-                taskHelper.Abort();
-        }
+        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+            CreateOverlayCategory
+            (
+                Lang.Get("AutoRetainerWork-EntrustDups-Title"),
+                width,
+                CreateOverlayButtonRow(EnqueueRetainersEntrust, () => taskHelper?.Abort(), width)
+            );
 
         private void EnqueueRetainersEntrust()
         {
@@ -634,8 +657,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public override bool DrawConfigCondition() => false;
 
-        public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
-
         public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
         public override void Init() => taskHelper ??= new() { TimeoutMS = 15_000 };
@@ -647,18 +668,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             taskHelper = null;
         }
 
-        public override void DrawOverlay(string activeAddonName)
-        {
-            using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-Refresh-Title"));
-            if (!node) return;
-
-            if (ImGui.Button(Lang.Get("Start")))
-                EnqueueRetainersRefresh();
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Stop")))
-                taskHelper.Abort();
-        }
+        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+            CreateOverlayCategory
+            (
+                Lang.Get("AutoRetainerWork-Refresh-Title"),
+                width,
+                CreateOverlayButtonRow(EnqueueRetainersRefresh, () => taskHelper?.Abort(), width)
+            );
 
         private void EnqueueRetainersRefresh()
         {
@@ -704,8 +720,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public override bool DrawConfigCondition() => false;
 
-        public override bool DrawOverlayCondition(string activeAddonName) => activeAddonName == "RetainerList";
-
         public override bool IsWorkerBusy() => taskHelper?.IsBusy ?? false;
 
         public override void Init()
@@ -725,25 +739,26 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             taskHelper = null;
         }
 
-        public override void DrawOverlay(string activeAddonName)
-        {
-            using var node = ImRaii.TreeNode(Lang.Get("AutoRetainerWork-Collect-Title"));
-            if (!node) return;
-
-            if (ImGui.Checkbox(Lang.Get("AutoRetainerWork-Collect-AutoCollect"), ref Module.config.AutoRetainerCollect))
-            {
-                if (Module.config.AutoRetainerCollect)
-                    EnqueueRetainersCollect();
-                Module.config.Save(Module);
-            }
-
-            if (ImGui.Button(Lang.Get("Start")))
-                EnqueueRetainersCollect();
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Stop")))
-                taskHelper.Abort();
-        }
+        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+            CreateOverlayCategory
+            (
+                Lang.Get("AutoRetainerWork-Collect-Title"),
+                width,
+                CreateOverlayCheckbox
+                (
+                    Lang.Get("AutoRetainerWork-Collect-AutoCollect"),
+                    Module.config.AutoRetainerCollect,
+                    isChecked =>
+                    {
+                        Module.config.AutoRetainerCollect = isChecked;
+                        if (Module.config.AutoRetainerCollect)
+                            EnqueueRetainersCollect();
+                        Module.config.Save(Module);
+                    },
+                    width
+                ),
+                CreateOverlayButtonRow(EnqueueRetainersCollect, () => taskHelper?.Abort(), width)
+            );
 
         private void OnRetainerList(AddonEvent type, AddonArgs args)
         {
@@ -875,17 +890,107 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public abstract bool IsWorkerBusy();
 
-        public virtual bool DrawOverlayCondition(string activeAddonName) => true;
-
         public virtual bool DrawConfigCondition() => true;
 
         public abstract void Init();
 
-        public virtual void DrawOverlay(string activeAddonName) { }
+        public virtual TreeListCategoryNode? CreateOverlayCategory(float width) => null;
 
         public virtual void DrawConfig() { }
 
         public abstract void Uninit();
+
+        protected static TreeListCategoryNode CreateOverlayCategory(string title, float width, params NodeBase[] nodes)
+        {
+            var contentNode = new VerticalListNode
+            {
+                IsVisible        = true,
+                Size             = new(width, 0f),
+                FitContents      = true,
+                FitWidth         = true,
+                FirstItemSpacing = 4f,
+                ItemSpacing      = 4f
+            };
+            contentNode.AddNode(nodes);
+
+            var categoryNode = new TreeListCategoryNode
+            {
+                IsVisible = true,
+                Size      = new(width, 28f),
+                String    = title
+            };
+            categoryNode.AddNode(contentNode);
+            categoryNode.IsCollapsed = true;
+
+            return categoryNode;
+        }
+
+        protected static HorizontalFlexNode CreateOverlayButtonRow(Action startAction, Action stopAction, float width)
+        {
+            var row = new HorizontalFlexNode
+            {
+                IsVisible      = true,
+                Size           = new(width, 28f),
+                AlignmentFlags = FlexFlags.FitContentHeight | FlexFlags.FitWidth,
+                FitPadding     = 4f
+            };
+            row.AddNode
+            (
+                [
+                    new TextButtonNode
+                    {
+                        IsVisible = true,
+                        IsEnabled = true,
+                        Size      = new(100f, 28f),
+                        String    = Lang.Get("Start"),
+                        OnClick   = startAction
+                    },
+                    new TextButtonNode
+                    {
+                        IsVisible = true,
+                        IsEnabled = true,
+                        Size      = new(100f, 28f),
+                        String    = Lang.Get("Stop"),
+                        OnClick   = stopAction
+                    }
+                ]
+            );
+
+            return row;
+        }
+
+        protected static CheckboxNode CreateOverlayCheckbox(string title, bool isChecked, Action<bool> onClick, float width, string? tooltip = null)
+        {
+            var node = new CheckboxNode
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                Size      = new(width, 24f),
+                IsChecked = isChecked,
+                String    = title,
+                OnClick   = onClick
+            };
+
+            if (!string.IsNullOrWhiteSpace(tooltip))
+                node.TextTooltip = tooltip;
+
+            return node;
+        }
+
+        protected static TextNode CreateOverlayText(string text, float width)
+        {
+            var node = new TextNode
+            {
+                IsVisible     = true,
+                Size          = new(width, 24f),
+                FontSize      = 14,
+                String        = text,
+                AlignmentType = AlignmentType.Left,
+            };
+            node.AutoAdjustTextSize();
+
+            return node;
+        }
     }
 
     public class ClickBank
@@ -904,6 +1009,61 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         public static ClickBank Using(AtkUnitBase* addon) => new(addon);
     }
 
+    private class DRAutoRetainerWork
+    (
+        AutoRetainerWork module
+    ) : AttachedAddon("RetainerList")
+    {
+        private TreeListNode? treeListNode;
+
+        protected override Vector2 PositionOffset =>
+            new(0f, 6f);
+
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
+        {
+            if (WindowNode is WindowNode windowNode)
+                windowNode.CloseButtonNode.IsVisible = false;
+
+            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x4,  true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A0, 0x80, true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x40, true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A3, 0x1,  true);
+
+            var width = ContentSize.X;
+            treeListNode = new()
+            {
+                IsVisible               = true,
+                Position                = ContentStartPosition,
+                Size                    = new(width, 0f),
+                CategoryVerticalSpacing = 4f,
+                OnLayoutUpdate = height =>
+                {
+                    SetWindowSize(Size.X, ContentStartPosition.Y + height + 16f);
+                    if (treeListNode == null) return;
+
+                    treeListNode.Position = ContentStartPosition;
+                    treeListNode.Height   = height;
+                }
+            };
+
+            foreach (var worker in module.workers)
+            {
+                var categoryNode = worker.CreateOverlayCategory(width);
+                if (categoryNode == null) continue;
+
+                treeListNode.AddCategoryNode(categoryNode);
+            }
+
+            treeListNode.AttachNode(addon);
+            
+            treeListNode.RefreshLayout();
+        }
+
+        protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) => false;
+
+        protected override bool CanOpenAddon => module.IsAnyWorkerBusy();
+    }
+
     #region 模块界面
 
     protected override void ConfigUI()
@@ -913,26 +1073,8 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             if (!worker.DrawConfigCondition()) continue;
 
             worker.DrawConfig();
-            
+
             ImGui.NewLine();
-        }
-    }
-
-    protected override void OverlayUI()
-    {
-        var activeAddon = RetainerList != null ? RetainerList : null;
-        if (activeAddon == null) return;
-
-        var pos = new Vector2(activeAddon->GetX() - ImGui.GetWindowSize().X, activeAddon->GetY() + 6);
-        ImGui.SetWindowPos(pos);
-
-        ImGuiOm.ScaledDummy(200f, 0.1f);
-
-        foreach (var worker in workers)
-        {
-            if (!worker.DrawOverlayCondition(activeAddon->NameString)) continue;
-            worker.DrawOverlay(activeAddon->NameString);
-            ImGui.Spacing();
         }
     }
 
@@ -1073,6 +1215,22 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         {
             if (!worker.IsWorkerBusy()) continue;
             if (current == worker.GetType()) continue;
+            
+            return true;
+        }
+
+        return false;
+    }
+    
+    /// <summary>
+    ///     是否有 Worker 正在运行
+    /// </summary>
+    private bool IsAnyWorkerBusy()
+    {
+        foreach (var worker in workers)
+        {
+            if (!worker.IsWorkerBusy()) continue;
+            
             return true;
         }
 
