@@ -43,6 +43,7 @@ public class AutoStoreToCabinet : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
     }
     
+    // TODO: 改成原生的
     private void OnAddon(AddonEvent type, AddonArgs args) =>
         Overlay.IsOpen = type switch
         {
