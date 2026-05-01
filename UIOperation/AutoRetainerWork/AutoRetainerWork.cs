@@ -240,15 +240,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                             if (TaskHelper.AbortByConflictKey(Module)) return true;
                             if (!Bank->IsAddonAndNodesReady()) return false;
 
-                            var retainerGils = Bank->AtkValues[6].Int;
-                            var handler      = new ClickBank(Bank);
-
-                            if (retainerGils == 0)
-                                handler.Cancel();
+                            var gils = AddonBankEvent.RetainerGilAmount;
+                            if (gils <= 0)
+                                AddonBankEvent.ClickCancel();
                             else
                             {
-                                handler.DepositInput((uint)retainerGils);
-                                handler.Confirm();
+                                AddonBankEvent.SetNumber((uint)gils);
+                                AddonBankEvent.ClickConfirm();
                             }
 
                             Bank->Close(true);
@@ -414,28 +412,26 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                     if (taskHelper.AbortByConflictKey(Module)) return true;
                     if (!Bank->IsAddonAndNodesReady()) return false;
 
-                    var retainerGils = Bank->AtkValues[6].Int;
-                    var handler      = new ClickBank(Bank);
-
-                    if (retainerGils == avgAmount) // 金币恰好相等
+                    var gils = AddonBankEvent.RetainerGilAmount;
+                    if (gils < 0 || gils == avgAmount) // 金币恰好相等
                     {
-                        handler.Cancel();
+                        AddonBankEvent.ClickCancel();
                         Bank->Close(true);
                         return true;
                     }
 
-                    if (retainerGils > avgAmount) // 雇员金币多于平均值
+                    if (gils > avgAmount) // 雇员金币多于平均值
                     {
-                        handler.DepositInput((uint)(retainerGils - avgAmount));
-                        handler.Confirm();
+                        AddonBankEvent.SetNumber((uint)(gils - avgAmount));
+                        AddonBankEvent.ClickConfirm();
                         Bank->Close(true);
                         return true;
                     }
 
                     // 雇员金币少于平均值
-                    handler.Switch();
-                    handler.DepositInput((uint)(avgAmount - retainerGils));
-                    handler.Confirm();
+                    AddonBankEvent.SwitchMode();
+                    AddonBankEvent.SetNumber((uint)(avgAmount - gils));
+                    AddonBankEvent.ClickConfirm();
                     Bank->Close(true);
                     return true;
                 },
@@ -479,15 +475,14 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                     if (taskHelper.AbortByConflictKey(Module)) return true;
                     if (!Bank->IsAddonAndNodesReady()) return false;
 
-                    var retainerGils = Bank->AtkValues[6].Int;
-                    var handler      = new ClickBank(Bank);
+                    var gils = AddonBankEvent.RetainerGilAmount;
 
-                    if (retainerGils == 0)
-                        handler.Cancel();
+                    if (gils <= 0)
+                        AddonBankEvent.ClickCancel();
                     else
                     {
-                        handler.DepositInput((uint)retainerGils);
-                        handler.Confirm();
+                        AddonBankEvent.SetNumber((uint)gils);
+                        AddonBankEvent.ClickConfirm();
                     }
 
                     Bank->Close(true);
@@ -993,22 +988,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         }
     }
 
-    public class ClickBank
-    (
-        AtkUnitBase* addon
-    )
-    {
-        public void Switch() => addon->Callback(2, 0);
-
-        public void DepositInput(uint amount) => addon->Callback(3, amount);
-
-        public void Confirm() => addon->Callback(0, 0);
-
-        public void Cancel() => addon->Callback(1, 0);
-
-        public static ClickBank Using(AtkUnitBase* addon) => new(addon);
-    }
-
     private class DRAutoRetainerWork
     (
         AutoRetainerWork module
@@ -1061,7 +1040,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) => false;
 
-        protected override bool CanOpenAddon => module.IsAnyWorkerBusy();
+        protected override bool CanOpenAddon => !module.IsAnyWorkerBusy();
     }
 
     #region 模块界面
