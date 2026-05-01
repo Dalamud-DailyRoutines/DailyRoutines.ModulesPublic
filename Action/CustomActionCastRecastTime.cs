@@ -4,7 +4,10 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
@@ -12,6 +15,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 复唱修改失效, 需要进一步逆向
 public unsafe class CustomActionCastRecastTime : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -23,29 +27,13 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
     
-    private delegate int GetAdjustedCastTimeDelegate
-    (
-        ActionType                  actionType,
-        uint                        actionID,
-        bool                        applyProc,
-        ActionManager.CastTimeProc* outCastTimeProc
-    );
-    private Hook<GetAdjustedCastTimeDelegate>? GetAdjustedCastTimeHook;
+    private Hook<ActionManager.Delegates.GetAdjustedCastTime>? GetAdjustedCastTimeHook;
 
-    private delegate int GetAdjustedRecastTimeDelegate
-    (
-        ActionType actionType,
-        uint       actionID,
-        bool       applyClassMechanics
-    );
-    private Hook<GetAdjustedRecastTimeDelegate>? GetAdjustedRecastTimeHook;
-
+    private Hook<ActionManager.Delegates.GetAdjustedRecastTime>? GetAdjustedRecastTimeHook;
+    
     private static readonly CompSig                            CastInfoUpdateTotalSig = new("48 89 5C 24 ?? 57 48 83 EC ?? 48 8B F9 0F 29 74 24 ?? 0F B6 49");
-    private delegate        uint                               CastInfoUpdateTotalDelegate(nint data, uint spellActionID, float process, float processTotal);
+    private delegate        uint                               CastInfoUpdateTotalDelegate(CastInfo* data, uint spellActionID, float process, float processTotal);
     private                 Hook<CastInfoUpdateTotalDelegate>? CastInfoUpdateTotalHook;
-
-    private static readonly CompSig CastTimeCurrentSig = new("F3 44 0F 2C C0 BA ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? F3 44 0F 10 1D");
-    private                 float*  CastTimeCurrent;
 
     private Config config = null!;
 
@@ -58,27 +46,25 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-
+        
         GetAdjustedCastTimeHook ??=
             DService.Instance().Hook.HookFromMemberFunction
             (
                 typeof(ActionManager.MemberFunctionPointers),
                 "GetAdjustedCastTime",
-                (GetAdjustedCastTimeDelegate)GetAdjustedCastTimeDetour
+                (ActionManager.Delegates.GetAdjustedCastTime)GetAdjustedCastTimeDetour
             );
         GetAdjustedCastTimeHook.Enable();
-
+            
         GetAdjustedRecastTimeHook ??=
             DService.Instance().Hook.HookFromMemberFunction
             (
                 typeof(ActionManager.MemberFunctionPointers),
                 "GetAdjustedRecastTime",
-                (GetAdjustedRecastTimeDelegate)GetAdjustedRecastTimeDetour
+                (ActionManager.Delegates.GetAdjustedRecastTime)GetAdjustedRecastTimeDetour
             );
         GetAdjustedRecastTimeHook.Enable();
-
-        CastTimeCurrent = CastTimeCurrentSig.GetStatic<float>(0x12);
-
+        
         CastInfoUpdateTotalHook ??= CastInfoUpdateTotalSig.GetHook<CastInfoUpdateTotalDelegate>(CastInfoUpdateTotalDetour);
         CastInfoUpdateTotalHook.Enable();
     }
@@ -312,8 +298,13 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
             }
         }
     }
-
-    private int GetAdjustedRecastTimeDetour(ActionType actionType, uint actionID, bool applyClassMechanics)
+    
+    private int GetAdjustedRecastTimeDetour
+    (
+        ActionType actionType,
+        uint       actionID,
+        bool       applyClassMechanics
+    )
     {
         var orig = GetAdjustedRecastTimeHook.Original(actionType, actionID, applyClassMechanics);
         if (actionType != ActionType.Action) return orig;
@@ -324,7 +315,13 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
         return orig;
     }
 
-    private int GetAdjustedCastTimeDetour(ActionType actionType, uint actionID, bool applyProcess, ActionManager.CastTimeProc* castTimeProc)
+    private int GetAdjustedCastTimeDetour
+    (
+        ActionType                  actionType,
+        uint                        actionID,
+        bool                        applyProcess,
+        ActionManager.CastTimeProc* castTimeProc
+    )
     {
         var orig = GetAdjustedCastTimeHook.Original(actionType, actionID, applyProcess, castTimeProc);
         if (actionType != ActionType.Action) return orig;
@@ -340,17 +337,23 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
         return orig;
     }
 
-    private uint CastInfoUpdateTotalDetour(nint data, uint spellActionID, float processTotal, float processStart)
+    private uint CastInfoUpdateTotalDetour
+    (
+        CastInfo* data,
+        uint      spellActionID,
+        float     processTotal,
+        float     processStart
+    )
     {
-        var actionID   = *(uint*)((byte*)data + 4);
-        var actionType = (ActionType)(*((byte*)data + 2));
+        var actionID   = data->ActionId;
+        var actionType = (ActionType)data->ActionType;
 
         if (actionID == spellActionID && actionType == ActionType.Action)
         {
             if (config.CustomCastTimeSet.TryGetValue(actionID, out var customTime))
             {
-                processTotal     = customTime / 1000f;
-                *CastTimeCurrent = processTotal;
+                processTotal                                 = customTime / 1000f;
+                CastBarNumberArray.Instance()->TotalCastTime = (int)processTotal;
             }
             else
             {
@@ -358,8 +361,8 @@ public unsafe class CustomActionCastRecastTime : ModuleBase
 
                 if (recastTime <= processTotal * 1000)
                 {
-                    processTotal     = Math.Max(processTotal - config.LongCastTimeReduction / 1000f, 0);
-                    *CastTimeCurrent = processTotal;
+                    processTotal                                 = MathF.Max(processTotal - config.LongCastTimeReduction / 1000f, 0);
+                    CastBarNumberArray.Instance()->TotalCastTime = (int)processTotal;
                 }
             }
         }
