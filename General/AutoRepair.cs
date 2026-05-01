@@ -245,9 +245,7 @@ public unsafe class AutoRepair : ModuleBase
         ExecuteCommandFlag.RepairAllItemsNPC,
         ExecuteCommandFlag.RepairEquippedItemsNPC,
 
-        ExecuteCommandFlag.RepairItem,
-        ExecuteCommandFlag.RepairAllItems,
-        ExecuteCommandFlag.RepairEquippedItems
+        ExecuteCommandFlag.EventFrameworkAction,
     ];
 
     #endregion
