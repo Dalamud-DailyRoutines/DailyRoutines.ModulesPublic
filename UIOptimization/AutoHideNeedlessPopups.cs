@@ -17,8 +17,11 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
         Category    = ModuleCategory.UIOptimization
     };
 
-    protected override void Init() =>
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, AddonNames, OnAddon);
+    protected override void Init()
+    {
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreSetup, AddonNames, OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  AddonNames, OnAddon);
+    }
 
     protected override void Uninit() =>
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
@@ -29,8 +32,10 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
         if (addon == null) return;
 
         addon->RootNode->ToggleVisibility(false);
-        addon->Close(false);
-        addon->FireCloseCallback();
+        addon->Close(true);
+        
+        if (type == AddonEvent.PreDraw)
+            args.PreventOriginal();
     }
     
     #region 常量
@@ -38,6 +43,8 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
     private static readonly FrozenSet<string> AddonNames =
     [
         "_NotificationCircleBook",
+        "_NotificationAchieveLogIn",
+        "_NotificationAchieveZoneIn",
         "AchievementInfo",
         "RecommendList",
         "PlayGuide",
