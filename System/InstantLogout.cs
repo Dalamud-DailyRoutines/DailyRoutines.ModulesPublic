@@ -1,14 +1,20 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game.Agent;
+using Dalamud.Game.Agent.AgentArgTypes;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
+using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
 
 namespace DailyRoutines.ModulesPublic;
@@ -26,6 +32,12 @@ public unsafe class InstantLogout : ModuleBase
 
     private Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
 
+    // TODO: FFCS
+    private static readonly CompSig ExitGameSig = new
+        ("40 53 48 83 EC ?? 48 8B D9 BA ?? ?? ?? ?? 48 81 C1 ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 78 ?? ?? 74 ?? 83 78 ?? ?? 74");
+    private delegate void ExitGameDelegate(Framework* framework);
+    private Hook<ExitGameDelegate>? ExitGameHook;
+
     protected override void Init()
     {
         TaskHelper ??= new();
@@ -38,18 +50,26 @@ public unsafe class InstantLogout : ModuleBase
         );
         HandleMainCommandOperationHook.Enable();
 
-        AgentCloseMessageShowHook = DService.Instance().Hook.HookFromAddress<AgentShowDelegate>
+        AgentCloseMessageShowHook = AgentModule.Instance()->GetAgentByInternalId(AgentId.CloseMessage)->VirtualTable->HookVFuncFromName
         (
-            AgentModule.Instance()->GetAgentByInternalId(AgentId.CloseMessage)->VirtualTable->GetVFuncByName("Show"),
-            AgentCloseMessageShowDetour
+            "Show",
+            (AgentShowDelegate)AgentCloseMessageShowDetour
         );
         AgentCloseMessageShowHook.Enable();
+        
+        DService.Instance().AgentLifecycle.RegisterListener(AgentEvent.PreReceiveEvent, Dalamud.Game.Agent.AgentId.Lobby, OnAgentLobby);
+
+        ExitGameHook = ExitGameSig.GetHook<ExitGameDelegate>(ExitGameDetour);
+        ExitGameHook.Enable();
 
         ChatManager.Instance().RegPreExecuteCommandInner(OnPreExecuteCommandInner);
     }
 
-    protected override void Uninit() =>
+    protected override void Uninit()
+    {
         ChatManager.Instance().Unreg(OnPreExecuteCommandInner);
+        DService.Instance().AgentLifecycle.UnregisterListener(AgentEvent.PreReceiveEvent, Dalamud.Game.Agent.AgentId.Lobby, OnAgentLobby);
+    }
 
     protected override void ConfigUI()
     {
@@ -67,6 +87,24 @@ public unsafe class InstantLogout : ModuleBase
         }
     }
 
+    // 从窗口标题栏退出
+    private void ExitGameDetour(Framework* framework) =>
+        Shutdown(TaskHelper);
+    
+    // 从标题界面退出游戏
+    private void OnAgentLobby(AgentEvent type, AgentArgs args)
+    {
+        var eventArgs = args as AgentReceiveEventArgs;
+        if (eventArgs.EventKind != 0 || eventArgs.ValueCount != 1) return;
+
+        var atkValues = (AtkValue*)eventArgs.AtkValues;
+        if (atkValues[0].Int != 12) return;
+
+        args.PreventOriginal();
+        Shutdown(TaskHelper);
+    }
+    
+    // 从系统菜单退出
     private bool HandleMainCommandOperationDetour
     (
         AgentHUD*            agent,
@@ -92,9 +130,11 @@ public unsafe class InstantLogout : ModuleBase
         return HandleMainCommandOperationHook.Original(agent, operation, param1, param2, param3);
     }
 
+    // 从关闭程序对话框退出
     private void AgentCloseMessageShowDetour(AgentInterface* agent) =>
         Shutdown(TaskHelper);
 
+    // 从文本指令退出
     private void OnPreExecuteCommandInner(ref bool isPrevented, ref ReadOnlySeString message)
     {
         var messageDecode = message.ToString();
@@ -106,17 +146,8 @@ public unsafe class InstantLogout : ModuleBase
             CheckCommand(messageDecode, ShutdownLine, TaskHelper, Shutdown))
             isPrevented = true;
     }
-
-    private static bool CheckCommand(string message, TextCommand command, TaskHelper taskHelper, Action<TaskHelper> action)
-    {
-        if (message == command.Command.ToString() || message == command.Alias.ToString())
-        {
-            action(taskHelper);
-            return true;
-        }
-
-        return false;
-    }
+    
+    #region 实际操作
 
     private static void Logout(TaskHelper _) =>
         ContentsFinderHelper.RequestDutyNormal(167, ContentsFinderHelper.DefaultOption);
@@ -127,12 +158,25 @@ public unsafe class InstantLogout : ModuleBase
         taskHelper.Enqueue
         (() =>
             {
-                if (DService.Instance().ClientState.IsLoggedIn) return false;
+                if (GameState.IsLoggedIn) return false;
 
                 ChatManager.Instance().SendMessage("/xlkill");
                 return true;
             }
         );
+    }
+
+    #endregion
+    
+    private static bool CheckCommand(string message, TextCommand command, TaskHelper taskHelper, Action<TaskHelper> action)
+    {
+        if (message == command.Command.ToString() || message == command.Alias.ToString())
+        {
+            action(taskHelper);
+            return true;
+        }
+
+        return false;
     }
 
     #region 常量
