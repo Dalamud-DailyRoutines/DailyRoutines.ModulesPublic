@@ -10,6 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 加入右键菜单
 public class AutoReuseEmote : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -57,17 +58,17 @@ public class AutoReuseEmote : ModuleBase
         name = name.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(name)) return false;
 
-        var first = LuminaGetter.Get<Emote>()
-                                .Where
-                                (x => !string.IsNullOrWhiteSpace(x.Name.ToString()) &&
-                                      x.TextCommand.ValueNullable != null
-                                )
-                                .Where
-                                (x => x.Name.ToString().ToLowerInvariant() == name ||
-                                      x.TextCommand.Value.Command.ToString().ToLowerInvariant().Trim('/') ==
-                                      name
-                                )
-                                .FirstOrDefault();
+        var first = LuminaGetter
+                    .Get<Emote>()
+                    .Where
+                    (x => !string.IsNullOrWhiteSpace(x.Name.ToString()) &&
+                          x.TextCommand.ValueNullable != null
+                    )
+                    .FirstOrDefault
+                    (x => x.Name.ToString().ToLowerInvariant() == name ||
+                          x.TextCommand.Value.Command.ToString().ToLowerInvariant().Trim('/') ==
+                          name
+                    );
         if (first.RowId == 0) return false;
         // 情感动作需要解锁
         if (first.UnlockLink != 0 && !UIState.Instance()->IsUnlockLinkUnlockedOrQuestCompleted(first.UnlockLink))
@@ -110,13 +111,13 @@ public class AutoReuseEmote : ModuleBase
 
             unsafe
             {
-                AgentEmote.Instance()->ExecuteEmote(id, default, false, false);
+                AgentEmote.Instance()->ExecuteEmote(id, null, false, false);
             }
 
             await Task.Delay(interval, cts.Token);
         }
     }
-    
+
     #region 常量
 
     private const string COMMAND = "remote";
