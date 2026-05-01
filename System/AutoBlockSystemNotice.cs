@@ -17,10 +17,10 @@ public class AutoBlockSystemNotice : ModuleBase
     };
 
     protected override void Init() =>
-        DService.Instance().Chat.CheckMessageHandled += OnChat;
+        DService.Instance().Chat.ChatMessage += OnChat;
     
     protected override void Uninit() =>
-        DService.Instance().Chat.CheckMessageHandled -= OnChat;
+        DService.Instance().Chat.ChatMessage -= OnChat;
 
     private static void OnChat(IHandleableChatMessage message)
     {
