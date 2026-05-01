@@ -20,10 +20,10 @@ public unsafe class CustomizeSightDistance : ModuleBase
         Description = Lang.Get("CustomizeSightDistanceDescription"),
         Category    = ModuleCategory.System
     };
-    
-    private static readonly CompSig                     CameraUpdateSig = new("8B 81 ?? ?? ?? ?? 33 D2 F3 0F 10 05");
-    private delegate        nint                        CameraUpdateDelegate(Camera* camera);
-    private                 Hook<CameraUpdateDelegate>? CameraUpdateHook;
+
+    private static readonly CompSig                       SetActiveCameraSig = new("40 57 41 54 41 57 48 83 EC ?? 4C 63 FA");
+    private delegate        void                          SetActiveCameraDelegate(CameraManager* manager, int cameraIndex, void* a3);
+    private                 Hook<SetActiveCameraDelegate> SetActiveCameraHook;
 
     private static readonly CompSig CameraCurrentSightDistanceSig = new("40 53 48 83 EC ?? 48 8B 15 ?? ?? ?? ?? 48 8B D9 0F 29 74 24");
     private delegate float CameraCurrentSightDistanceDelegate
@@ -37,7 +37,7 @@ public unsafe class CustomizeSightDistance : ModuleBase
         float currentValue,
         float targetValue
     );
-    private          Hook<CameraCurrentSightDistanceDelegate>? CameraCurrentSightDistanceHook;
+    private Hook<CameraCurrentSightDistanceDelegate>? CameraCurrentSightDistanceHook;
 
     private static readonly CompSig     CameraCollisionBaseSig = new("84 C0 0F 84 ?? ?? ?? ?? F3 0F 10 44 24 ?? 41 B7");
     private readonly        MemoryPatch cameraCollisionPatch   = new(CameraCollisionBaseSig.Get(), [0x90, 0x90, 0xE9, 0xA7, 0x01, 0x00, 0x00, 0x90]);
@@ -48,15 +48,15 @@ public unsafe class CustomizeSightDistance : ModuleBase
     {
         config = Config.Load(this) ?? new();
 
-        CameraUpdateHook ??= CameraUpdateSig.GetHook<CameraUpdateDelegate>(CameraUpdateDetour);
-        CameraUpdateHook.Enable();
+        SetActiveCameraHook = SetActiveCameraSig.GetHook<SetActiveCameraDelegate>(SetActiveCameraDetour);
+        SetActiveCameraHook.Enable();
 
         CameraCurrentSightDistanceHook ??= CameraCurrentSightDistanceSig.GetHook<CameraCurrentSightDistanceDelegate>(CameraCurrentSightDistanceDetour);
         CameraCurrentSightDistanceHook.Enable();
 
         if (config.IgnoreCollision)
             cameraCollisionPatch.Enable();
-
+        
         UpdateCamera
         (
             CameraManager.Instance()->Camera,
@@ -69,7 +69,7 @@ public unsafe class CustomizeSightDistance : ModuleBase
             config.FoV
         );
     }
-    
+
     protected override void Uninit()
     {
         if (!IsEnabled) return;
@@ -156,13 +156,13 @@ public unsafe class CustomizeSightDistance : ModuleBase
         }
     }
     
-    private nint CameraUpdateDetour(Camera* camera)
+    private void SetActiveCameraDetour(CameraManager* manager, int cameraIndex, void* a3)
     {
-        var original = CameraUpdateHook.Original(camera);
-
+        SetActiveCameraHook.Original(manager, cameraIndex, a3);
+        
         UpdateCamera
         (
-            camera,
+            manager->GetActiveCamera(),
             config.MaxDistance,
             config.MinDistance,
             config.MaxRotation,
@@ -171,8 +171,6 @@ public unsafe class CustomizeSightDistance : ModuleBase
             config.MinFoV,
             config.FoV
         );
-
-        return original;
     }
 
     private float CameraCurrentSightDistanceDetour
@@ -187,11 +185,11 @@ public unsafe class CustomizeSightDistance : ModuleBase
         float targetValue
     )
     {
-        const float Epsilon = 0.001f;
+        const float EPSILON = 0.001f;
 
         var framework          = Framework.Instance();
-        var adjustedUpperBound = Math.Min(upperBound - Epsilon, maxValue);
-        var adjustedLowerBound = Math.Min(lowerBound - Epsilon, maxValue);
+        var adjustedUpperBound = Math.Min(upperBound - EPSILON, maxValue);
+        var adjustedLowerBound = Math.Min(lowerBound - EPSILON, maxValue);
 
         var newValue = mode switch
         {
@@ -206,7 +204,7 @@ public unsafe class CustomizeSightDistance : ModuleBase
 
         float Interpolate(float target, float multiplier)
         {
-            if (Math.Abs(target - currentValue) < Epsilon)
+            if (Math.Abs(target - currentValue) < EPSILON)
                 return target;
 
             var delta = Math.Min(framework->FrameDeltaTime * 60.0f * multiplier, 1.0f);
