@@ -28,6 +28,8 @@ public unsafe class InstantLogout : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+
     private Hook<AgentHUD.Delegates.HandleMainCommandOperation>? HandleMainCommandOperationHook;
 
     private Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
