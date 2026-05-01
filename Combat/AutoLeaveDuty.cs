@@ -85,7 +85,7 @@ public class AutoLeaveDuty : ModuleBase
             return;
 
         if (config.NoLeaveHighEndDuties &&
-            args.ContentFinderCondition.RowId != 0)
+            args.ContentFinderCondition.Value.HighEndDuty)
             return;
 
         if (config.Delay > 0)
