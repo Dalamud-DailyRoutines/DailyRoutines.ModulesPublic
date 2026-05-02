@@ -6,6 +6,8 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Threading;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
@@ -82,16 +84,16 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
         var addon = args.Addon.ToStruct();
         if (addon == null) return;
 
-        var itemCount = addon->AtkValues[3].UInt;
+        var itemCount = addon->AtkValues[76].UInt;
         if (itemCount == 0) return;
 
         for (var i = 0; i < itemCount; i++)
         {
-            var itemID = addon->AtkValues[65 + i].UInt;
+            var itemID = addon->AtkValues[138 + i].UInt;
             if (itemID == 0) continue;
             if (!LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) continue;
 
-            addon->AtkValues[126 + i].SetUInt(itemRow.Icon);
+            addon->AtkValues[199 + i].SetUInt(itemRow.Icon);
         }
     }
 
@@ -135,7 +137,7 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
             var nameNode = (AtkTextNode*)listItemComponent->Component->UldManager.SearchNodeById(4);
             if (nameNode == null) return;
 
-            var name = nameNode->NodeText.ToString().SanitizeSEIcon();
+            var name = new ReadOnlySeString(nameNode->NodeText).ToString().SanitizeSEIcon();
             var data = collectablesShopItemDatas.FirstOrDefault(x => x.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
             if (data == default) continue;
 
