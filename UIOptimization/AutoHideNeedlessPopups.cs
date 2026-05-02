@@ -50,7 +50,8 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
         "PlayGuide",
         "HowTo",
         "WebLauncher",
-        "LicenseViewer"
+        "LicenseViewer",
+        "WKSEnterInfo"
     ];
 
     #endregion
