@@ -2,17 +2,22 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Agent;
+using Dalamud.Game.Agent.AgentArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Interface.Components;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Common.Lua;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Models;
+using OmenTools.Interop.Game.Models.Native;
 using OmenTools.Interop.Windows.Helpers;
 using OmenTools.OmenService;
+using AgentId = Dalamud.Game.Agent.AgentId;
 using LuaFunctionDelegate = OmenTools.Interop.Game.Models.Native.LuaFunctionDelegate;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
@@ -29,30 +34,34 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private static readonly CompSig CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
+    private static readonly CompSig                            CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
+    private delegate        byte                               CutsceneHandleInputDelegate(nint a1, float a2);
+    private                 Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
 
-    private delegate byte CutsceneHandleInputDelegate(nint a1, float a2);
-    private Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
+    private static readonly CompSig PlayCutsceneSig = new("40 53 55 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B 59");
+    private delegate        nint PlayCutsceneDelegate(EventFramework* a1, lua_State* state);
+    private                 Hook<PlayCutsceneDelegate>? PlayCutsceneHook;
 
-    private static readonly CompSig PlayCutsceneSig =
-        new("40 53 55 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B 59");
-    private delegate nint PlayCutsceneDelegate(EventFramework* a1, lua_State* state);
-    private Hook<PlayCutsceneDelegate>? PlayCutsceneHook;
+    private static readonly CompSig                       IsCutsceneSeenSig = new("E8 ?? ?? ?? ?? 33 D2 0F B6 CB 3A C3");
+    private delegate        bool                          IsCutsceneSeenDelegate(UIState* state, uint cutsceneID);
+    private                 Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
     
-    private static readonly CompSig                    PlayCutsceneLuaSig = new("48 89 5C 24 ?? 57 48 83 EC 50 48 8B F9 48 8B D1");
-    private                 Hook<LuaFunctionDelegate>? PlayCutsceneLuaHook;
+    private static readonly CompSig LuaBaseSig01 = new
+    (
+        "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B B9 ?? ?? ?? ?? 48 8B D9 48 8B 4F ?? E8 ?? ?? ?? ?? 48 8D 8B ?? ?? ?? ?? 8B F0 E8 ?? ?? ?? ?? 48 8B 4F ?? 48 8B D0 E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 85 C0 74 ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? 48 8B 5C 24 ?? 48 8B 74 24 ?? 48 83 C4 ?? 5F E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC 48 89 5C 24"
+    );
 
-    private static readonly CompSig IsCutsceneSeenSig = new("E8 ?? ?? ?? ?? 33 D2 0F B6 CB 3A C3");
-    private delegate bool IsCutsceneSeenDelegate(UIState* state, uint cutsceneID);
-    private Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
+    private Hook<LuaFunctionDelegate>? PlayCutsceneLuaHook;
+    
 
-    private static readonly CompSig PlayStaffRollSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 30 04 00 00");
+    private static readonly CompSig LuaBaseSig02 = new("40 55 56 57 41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24");
+
     private Hook<LuaFunctionDelegate>? PlayStaffRollHook;
-
-    private static readonly CompSig PlayToBeContinuedSig =
-        new("40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B D3 48 8B 88 ?? ?? ?? ?? 48 8B 01 48 83 C4 20 5B 48 FF A0 38 04 00 00");
     private Hook<LuaFunctionDelegate>? PlayToBeContinuedHook;
+
+    private delegate void PushAgentResultToLuaDelegate(void* agent);
+    private readonly PushAgentResultToLuaDelegate PushAgentResultToLua =
+        new CompSig("40 53 48 83 EC ?? 0F B6 41 ?? 48 8B D9 A8 ?? 74 ?? 24 ?? 88 41 ?? 48 83 3D").GetDelegate<PushAgentResultToLuaDelegate>();
 
     private readonly MemoryPatch cutsceneUnskippablePatch =
         new("75 ?? 48 8B 4B ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 80 7B", [0xEB]);
@@ -70,13 +79,29 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         blacklistZoneCombo.SelectedIDs = config.BlacklistZones;
 
         cutsceneUnskippablePatch.Set(true);
-
+        
         CutsceneHandleInputHook ??= CutsceneHandleInputSig.GetHook<CutsceneHandleInputDelegate>(CutsceneHandleInputDetour);
         PlayCutsceneHook        ??= PlayCutsceneSig.GetHook<PlayCutsceneDelegate>(PlayCutsceneDetour);
-        PlayCutsceneLuaHook     ??= PlayCutsceneLuaSig.GetHook<LuaFunctionDelegate>(LuaFunctionDetour);
         IsCutsceneSeenHook      ??= IsCutsceneSeenSig.GetHook<IsCutsceneSeenDelegate>(IsCutsceneSeenDetour);
-        PlayStaffRollHook       ??= PlayStaffRollSig.GetHook<LuaFunctionDelegate>(LuaFunction2Detour);
-        PlayToBeContinuedHook   ??= PlayToBeContinuedSig.GetHook<LuaFunctionDelegate>(LuaFunction2Detour);
+
+        var baseAddress01 = LuaBaseSig01.ScanText();
+        PlayCutsceneLuaHook ??= DService.Instance().Hook.HookFromAddress<LuaFunctionDelegate>
+        (
+            baseAddress01.GetLuaFunctionByName("PlayCutScene"),
+            LuaFunctionDetour
+        );
+        
+        var baseAddress02 = LuaBaseSig02.ScanText();
+        PlayStaffRollHook ??= DService.Instance().Hook.HookFromAddress<LuaFunctionDelegate>
+        (
+            baseAddress02.GetLuaFunctionByName("PlayStaffRoll"),
+            LuaFunction2Detour
+        );
+        PlayToBeContinuedHook ??= DService.Instance().Hook.HookFromAddress<LuaFunctionDelegate>
+        (
+            baseAddress02.GetLuaFunctionByName("PlayToBeContinued"),
+            LuaFunction2Detour
+        );
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
@@ -85,6 +110,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().AgentLifecycle.UnregisterListener(OnAgent);
         cutsceneUnskippablePatch.Dispose();
     }
 
@@ -133,6 +159,35 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         IsCutsceneSeenHook.Toggle(isValidCurrentZone);
         PlayStaffRollHook.Toggle(isValidCurrentZone);
         PlayToBeContinuedHook.Toggle(isValidCurrentZone);
+        
+        if (isValidCurrentZone)
+            DService.Instance().AgentLifecycle.RegisterListener(AgentEvent.PostReceiveEvent, AgentId.PointMenu, OnAgent);
+        else
+            DService.Instance().AgentLifecycle.UnregisterListener(OnAgent);
+    }
+
+    private void OnAgent(AgentEvent type, AgentArgs args)
+    {
+        var receiveEventArgs = args as AgentReceiveEventArgs;
+        var agent            = (AgentPointMenu*)receiveEventArgs.Agent.Address;
+        var atkValues        = (AtkValue*)receiveEventArgs.AtkValues;
+
+        if (atkValues[0].Int != 12) return;
+        if (agent->Context == null) return;
+
+        var index = agent->FindFirstUncompletedEntry();
+        if (index < 0)
+        {
+            agent->AgentInterface.Hide();
+            return;
+        }
+
+        agent->SelectedIndex = index;
+
+        agent->PendingResultFlags |= AgentPointMenu.PendingResultFlag.HasPendingResult;
+        PushAgentResultToLua(agent);
+        
+        agent->AgentInterface.Hide();
     }
 
     private byte CutsceneHandleInputDetour(nint a1, float a2)
