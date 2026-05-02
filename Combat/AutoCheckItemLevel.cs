@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -36,10 +37,12 @@ public unsafe class AutoCheckItemLevel : ModuleBase
     {
         TaskHelper.Abort();
 
-        if (GameState.IsInPVPArea || GameState.ContentFinderCondition == 0) return;
-        if (GameState.ContentFinderConditionData.PvP                                                               ||
+        if (GameState.IsInPVPArea                                                                                  ||
+            GameState.ContentFinderCondition == 0                                                                  ||
+            GameState.ContentFinderConditionData.PvP                                                               ||
             !ValidContentJobCategories.Contains(GameState.ContentFinderConditionData.AcceptClassJobCategory.RowId) ||
-            GameState.ContentFinderConditionData.ContentMemberType.Value.MeleesPerParty == 0)
+            GameState.ContentFinderConditionData.ContentMemberType.Value.MeleesPerParty == 0                       ||
+            DService.Instance().Condition[ConditionFlag.DutyRecorderPlayback])
             return;
 
         TaskHelper.Enqueue(() => !DService.Instance().Condition.IsBetweenAreas && DService.Instance().ObjectTable.LocalPlayer != null, "WaitForEnteringDuty");
