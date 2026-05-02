@@ -23,13 +23,8 @@ public class AutoQuestAccept : ModuleBase
     protected override void Uninit() =>
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
 
-    protected override void ConfigUI() =>
-        ImGuiOm.ConflictKeyText();
-
-    private unsafe void OnAddonSetup(AddonEvent type, AddonArgs args)
+    private static unsafe void OnAddonSetup(AddonEvent type, AddonArgs args)
     {
-        TaskHelper.AbortByConflictKey(this);
-
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
 
