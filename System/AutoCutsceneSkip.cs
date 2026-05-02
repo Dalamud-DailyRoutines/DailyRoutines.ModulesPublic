@@ -34,25 +34,24 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private static readonly CompSig                            CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
-    private delegate        byte                               CutsceneHandleInputDelegate(nint a1, float a2);
-    private                 Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
-
-    private static readonly CompSig PlayCutsceneSig = new("40 53 55 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B 59");
-    private delegate        nint PlayCutsceneDelegate(EventFramework* a1, lua_State* state);
-    private                 Hook<PlayCutsceneDelegate>? PlayCutsceneHook;
-
-    private static readonly CompSig                       IsCutsceneSeenSig = new("E8 ?? ?? ?? ?? 33 D2 0F B6 CB 3A C3");
-    private delegate        bool                          IsCutsceneSeenDelegate(UIState* state, uint cutsceneID);
-    private                 Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
+    private static readonly CompSig CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
+    private delegate byte CutsceneHandleInputDelegate(nint a1, float a2);
+    private Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
     
+    private static readonly CompSig PlayCutsceneSig = new("40 53 55 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B 59");
+    private delegate nint PlayCutsceneDelegate(EventFramework* a1, lua_State* state);
+    private Hook<PlayCutsceneDelegate>? PlayCutsceneHook;
+
+    private static readonly CompSig IsCutsceneSeenSig = new("E8 ?? ?? ?? ?? 33 D2 0F B6 CB 3A C3");
+    private delegate bool IsCutsceneSeenDelegate(UIState* state, uint cutsceneID);
+    private Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
+
     private static readonly CompSig LuaBaseSig01 = new
     (
         "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B B9 ?? ?? ?? ?? 48 8B D9 48 8B 4F ?? E8 ?? ?? ?? ?? 48 8D 8B ?? ?? ?? ?? 8B F0 E8 ?? ?? ?? ?? 48 8B 4F ?? 48 8B D0 E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 85 C0 74 ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? 48 8B 5C 24 ?? 48 8B 74 24 ?? 48 83 C4 ?? 5F E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC 48 89 5C 24"
     );
-
     private Hook<LuaFunctionDelegate>? PlayCutsceneLuaHook;
-    
+
 
     private static readonly CompSig LuaBaseSig02 = new("40 55 56 57 41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24");
 
@@ -65,6 +64,19 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
     private readonly MemoryPatch cutsceneUnskippablePatch =
         new("75 ?? 48 8B 4B ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 80 7B", [0xEB]);
+    private static readonly MemoryPatch BeginPlayCutscenePatch = new
+    (
+        "0F B6 41 ?? A8 ?? 75 ?? 0F B6 51",
+        [
+            0xC6, 0x41, 0x10, 0x15, 0xC6, 0x41, 0x11, 0x02,
+            0xB0, 0x01, 0xC3, 0x90, 0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90
+        ]
+    );
 
     private Config config = null!;
 
@@ -79,7 +91,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         blacklistZoneCombo.SelectedIDs = config.BlacklistZones;
 
         cutsceneUnskippablePatch.Set(true);
-        
+
         CutsceneHandleInputHook ??= CutsceneHandleInputSig.GetHook<CutsceneHandleInputDelegate>(CutsceneHandleInputDetour);
         PlayCutsceneHook        ??= PlayCutsceneSig.GetHook<PlayCutsceneDelegate>(PlayCutsceneDetour);
         IsCutsceneSeenHook      ??= IsCutsceneSeenSig.GetHook<IsCutsceneSeenDelegate>(IsCutsceneSeenDetour);
@@ -90,7 +102,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
             baseAddress01.GetLuaFunctionByName("PlayCutScene"),
             LuaFunctionDetour
         );
-        
+
         var baseAddress02 = LuaBaseSig02.ScanText();
         PlayStaffRollHook ??= DService.Instance().Hook.HookFromAddress<LuaFunctionDelegate>
         (
@@ -159,11 +171,18 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         IsCutsceneSeenHook.Toggle(isValidCurrentZone);
         PlayStaffRollHook.Toggle(isValidCurrentZone);
         PlayToBeContinuedHook.Toggle(isValidCurrentZone);
-        
+
         if (isValidCurrentZone)
+        {
+            BeginPlayCutscenePatch.Enable();
+
             DService.Instance().AgentLifecycle.RegisterListener(AgentEvent.PostReceiveEvent, AgentId.PointMenu, OnAgent);
+        }
         else
+        {
             DService.Instance().AgentLifecycle.UnregisterListener(OnAgent);
+            BeginPlayCutscenePatch.Disable();
+        }
     }
 
     private void OnAgent(AgentEvent type, AgentArgs args)
@@ -173,9 +192,10 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         var atkValues        = (AtkValue*)receiveEventArgs.AtkValues;
 
         if (atkValues[0].Int != 12) return;
-        if (agent->Context == null) return;
+        if (agent->Context   == null) return;
 
         var index = agent->FindFirstUncompletedEntry();
+
         if (index < 0)
         {
             agent->AgentInterface.Hide();
@@ -186,8 +206,9 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
         agent->PendingResultFlags |= AgentPointMenu.PendingResultFlag.HasPendingResult;
         PushAgentResultToLua(agent);
-        
+
         agent->AgentInterface.Hide();
+        agent->PendingResultFlags &= ~AgentPointMenu.PendingResultFlag.HasPendingResult;
     }
 
     private byte CutsceneHandleInputDetour(nint a1, float a2)
