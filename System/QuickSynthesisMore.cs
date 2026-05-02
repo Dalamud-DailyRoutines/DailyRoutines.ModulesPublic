@@ -9,6 +9,7 @@ using RecipeNote = FFXIVClientStructs.FFXIV.Client.Game.UI.RecipeNote;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 新增一个模块可以随意指定初期品质
 public unsafe class QuickSynthesisMore : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()

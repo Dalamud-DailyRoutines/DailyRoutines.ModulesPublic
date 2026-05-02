@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -43,9 +44,9 @@ public unsafe class GlamourPlateApplyCommand : ModuleBase
 
     private static void ApplyGlamourPlate(int index)
     {
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.EnterGlamourPlateState, 1, 1);
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.ApplyGlamourPlate,      (uint)index - 1);
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.EnterGlamourPlateState, 0, 1);
+        GlamourPlateCommand.Enter();
+        GlamourPlateCommand.Apply((uint)index - 1);
+        GlamourPlateCommand.Exit();
     }
 
     #region 常量

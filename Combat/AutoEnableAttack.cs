@@ -6,6 +6,7 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -36,17 +37,18 @@ public unsafe class AutoEnableAttack : ModuleBase
         uint                        comboRouteID
     )
     {
-        if (actionType != ActionType.Action || targetID == 0xE000_0000 || InvalidActions.Contains(actionID)) return;
-
+        if (actionType != ActionType.Action ||
+            targetID   == 0xE000_0000       ||
+            InvalidActions.Contains(actionID))
+            return;
 
         if (GameState.IsInPVPArea                                  ||
             !DService.Instance().Condition[ConditionFlag.InCombat] ||
-            DService.Instance().Condition[ConditionFlag.Casting])
+            DService.Instance().Condition[ConditionFlag.Casting]   ||
+            UIState.Instance()->WeaponState.AutoAttackState.IsAutoAttacking)
             return;
 
-        if (UIState.Instance()->WeaponState.AutoAttackState.IsAutoAttacking) return;
-
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.AutoAttack, 1, (uint)targetID);
+        AutoAttackCommand.Enable((uint)targetID);
     }
 
     #region 常量
