@@ -779,6 +779,7 @@ public class FastWorldTravel : ModuleBase
             // 当前大区
             var currentDCWorlds = Sheets.Worlds
                                         .Where(x => x.Value.DataCenter.RowId == GameState.CurrentDataCenter)
+                                        .OrderBy(x => x.Value.Name.ToString())
                                         .ToList();
             if (currentDCWorlds is not { Count: > 0 }) return mainLayoutContainer;
 
@@ -791,6 +792,7 @@ public class FastWorldTravel : ModuleBase
             // 其他大区 (仅国服)
             var otherDataCenters = Sheets.CNWorlds
                                          .Where(kvp => kvp.Value.DataCenter.RowId != GameState.CurrentDataCenter)
+                                         .OrderBy(x => x.Value.Name.ToString())
                                          .GroupBy(x => x.Value.DataCenter.RowId)
                                          .ToDictionary(x => x.Key, x => x.ToList());
 
