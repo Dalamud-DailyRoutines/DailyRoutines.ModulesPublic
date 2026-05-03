@@ -64,7 +64,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
     private readonly MemoryPatch cutsceneUnskippablePatch =
         new("75 ?? 48 8B 4B ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 80 7B", [0xEB]);
-    private static readonly MemoryPatch BeginPlayCutscenePatch = new
+    /*private static readonly MemoryPatch BeginPlayCutscenePatch = new
     (
         "0F B6 41 ?? A8 ?? 75 ?? 0F B6 51",
         [
@@ -76,7 +76,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
             0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
             0x90, 0x90, 0x90
         ]
-    );
+    );*/
 
     private Config config = null!;
 
@@ -174,14 +174,13 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
         if (isValidCurrentZone)
         {
-            BeginPlayCutscenePatch.Enable();
-
+            // BeginPlayCutscenePatch.Enable();
             DService.Instance().AgentLifecycle.RegisterListener(AgentEvent.PostReceiveEvent, AgentId.PointMenu, OnAgent);
         }
         else
         {
             DService.Instance().AgentLifecycle.UnregisterListener(OnAgent);
-            BeginPlayCutscenePatch.Disable();
+            // BeginPlayCutscenePatch.Disable();
         }
     }
 
