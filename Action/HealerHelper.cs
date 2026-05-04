@@ -705,24 +705,27 @@ public class HealerHelper : ModuleBase
             if (index != cardOrder.Length - 1)
                 ImGui.SameLine();
 
-            if (ImGui.BeginDragDropSource())
+            using (var source = ImRaii.DragDropSource())
             {
-                CustomCardOrderDragIndex = index;
-                ImGui.SetDragDropPayload("##CustomCardOrder", []);
-                ImGui.EndDragDropSource();
+                if (source)
+                {
+                    CustomCardOrderDragIndex = index;
+                    ImGui.SetDragDropPayload("##CustomCardOrder", []);
+                }
             }
 
-            if (ImGui.BeginDragDropTarget())
+            using (var target = ImRaii.DragDropTarget())
             {
-                ImGui.AcceptDragDropPayload("##CustomCardOrder");
-
-                if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && CustomCardOrderDragIndex.HasValue)
+                if (target)
                 {
-                    (cardOrder[index], cardOrder[CustomCardOrderDragIndex.Value]) = (cardOrder[CustomCardOrderDragIndex.Value], cardOrder[index]);
-                    modified                                                      = true;
-                }
+                    ImGui.AcceptDragDropPayload("##CustomCardOrder");
 
-                ImGui.EndDragDropTarget();
+                    if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && CustomCardOrderDragIndex.HasValue)
+                    {
+                        (cardOrder[index], cardOrder[CustomCardOrderDragIndex.Value]) = (cardOrder[CustomCardOrderDragIndex.Value], cardOrder[index]);
+                        modified                                                      = true;
+                    }
+                }
             }
         }
 

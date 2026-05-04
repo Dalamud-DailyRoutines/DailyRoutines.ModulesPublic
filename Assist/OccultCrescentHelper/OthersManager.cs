@@ -198,7 +198,6 @@ public partial class OccultCrescentHelper
                                 }
                             }
 
-                            // TODO: 统一按如下模式重写所有的拖拽
                             using (var target = ImRaii.DragDropTarget())
                             {
                                 if (target)

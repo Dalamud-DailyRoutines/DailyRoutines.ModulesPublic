@@ -661,24 +661,27 @@ public unsafe class QuickChatPanel : ModuleBase
 
                     if (ImGui.IsKeyDown(ImGuiKey.LeftShift))
                     {
-                        if (ImGui.BeginDragDropSource())
+                        using (var source = ImRaii.DragDropSource())
                         {
-                            if (ImGui.SetDragDropPayload("MessageReorder", []))
-                                Instance.dropMacroIndex = i;
-                            ImGui.TextColored(ImGuiColors.DalamudYellow, message);
-                            ImGui.EndDragDropSource();
+                            if (source)
+                            {
+                                if (ImGui.SetDragDropPayload("MessageReorder", []))
+                                    Instance.dropMacroIndex = i;
+                                ImGui.TextColored(ImGuiColors.DalamudYellow, message);
+                            }
                         }
 
-                        if (ImGui.BeginDragDropTarget())
+                        using (var target = ImRaii.DragDropTarget())
                         {
-                            if (Instance.dropMacroIndex                                       >= 0 ||
-                                ImGui.AcceptDragDropPayload("MessageReorder").Handle != null)
+                            if (target)
                             {
-                                Instance.SwapMessages(Instance.dropMacroIndex, i);
-                                Instance.dropMacroIndex = -1;
+                                if (Instance.dropMacroIndex                                       >= 0 ||
+                                    ImGui.AcceptDragDropPayload("MessageReorder").Handle != null)
+                                {
+                                    Instance.SwapMessages(Instance.dropMacroIndex, i);
+                                    Instance.dropMacroIndex = -1;
+                                }
                             }
-
-                            ImGui.EndDragDropTarget();
                         }
                     }
 
@@ -756,24 +759,27 @@ public unsafe class QuickChatPanel : ModuleBase
 
                         if (ImGui.IsKeyDown(ImGuiKey.LeftShift))
                         {
-                            if (ImGui.BeginDragDropSource())
+                            using (var source = ImRaii.DragDropSource())
                             {
-                                if (ImGui.SetDragDropPayload("MacroReorder", []))
-                                    Instance.dropMacroIndex = i;
-                                ImGui.TextColored(ImGuiColors.DalamudYellow, name);
-                                ImGui.EndDragDropSource();
+                                if (source)
+                                {
+                                    if (ImGui.SetDragDropPayload("MacroReorder", []))
+                                        Instance.dropMacroIndex = i;
+                                    ImGui.TextColored(ImGuiColors.DalamudYellow, name);
+                                }
                             }
 
-                            if (ImGui.BeginDragDropTarget())
+                            using (var target = ImRaii.DragDropTarget())
                             {
-                                if (Instance.dropMacroIndex                                     >= 0 ||
-                                    ImGui.AcceptDragDropPayload("MacroReorder").Handle != null)
+                                if (target)
                                 {
-                                    Instance.SwapMacros(Instance.dropMacroIndex, i);
-                                    Instance.dropMacroIndex = -1;
+                                    if (Instance.dropMacroIndex                                     >= 0 ||
+                                        ImGui.AcceptDragDropPayload("MacroReorder").Handle != null)
+                                    {
+                                        Instance.SwapMacros(Instance.dropMacroIndex, i);
+                                        Instance.dropMacroIndex = -1;
+                                    }
                                 }
-
-                                ImGui.EndDragDropTarget();
                             }
                         }
 
