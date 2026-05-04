@@ -747,6 +747,14 @@ public unsafe class AutoDiscard : ModuleBase
     private bool IsBusy() =>
         TaskHelper.IsBusy;
 
+    [IPCProvider("DailyRoutines.Modules.AutoDiscard.EnqueueByItems")]
+    private void EnqueueByItems(HashSet<uint> itemIDs)
+    {
+        if (itemIDs.Count == 0) return;
+
+        new DiscardItemsGroup { Items = [.. itemIDs] }.Enqueue(TaskHelper);
+    }
+
     #endregion
 
     #region 常量
