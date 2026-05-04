@@ -149,10 +149,8 @@ public class BaitSwitchCommand : ModuleBase
 
     private static unsafe List<uint> GetSwimBaitInfo()
     {
-        var handler   = EventFramework.Instance()->GetEventHandlerById(0x150001);
-        var itemArray = (uint*)((byte*)handler + 568);
-
-        return [itemArray[0], itemArray[1], itemArray[2]];
+        var handler = (FishingEventHandler*)EventFramework.Instance()->GetEventHandlerById(0x150001);
+        return handler->SwimBaitItemIds.ToArray().ToList();
     }
 
     #region 常量
