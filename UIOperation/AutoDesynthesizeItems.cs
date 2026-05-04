@@ -83,9 +83,10 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
                     {
                         IsVisible = true,
                         Size      = new(SalvageItemSelector->WindowNode->Width, 28),
-                        Position  = new(-33, 10),
+                        Position  = new(-33, 8),
                         Alignment = HorizontalListAnchor.Right
                     };
+                    
                     layoutNode.AddNode([buttonNode, checkboxNode]);
                     layoutNode.AttachNode(SalvageItemSelector->RootNode);
                 }
@@ -148,18 +149,16 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
             return true;
         }
 
-        var itemAmount = SalvageItemSelector->AtkValues[9].Int;
-
-        if (itemAmount == 0)
+        var itemCount = SalvageItemSelector->AtkValues[9].Int;
+        if (itemCount == 0)
         {
             TaskHelper.Abort();
             return true;
         }
 
-        for (var i = 0; i < itemAmount; i++)
+        for (var i = 0; i < itemCount; i++)
         {
-            var itemName = MemoryHelper.ReadStringNullTerminated((nint)SalvageItemSelector->AtkValues[i * 8 + 14].String.Value);
-
+            var itemName = SalvageItemSelector->AtkValues[i * 8 + 14].String.ToString();
             if (config.SkipWhenHQ)
             {
                 if (itemName.Contains('\ue03c')) // HQ 符号
