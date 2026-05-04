@@ -2,247 +2,306 @@ using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Bindings.ImGui;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Enums;
+using KamiToolKit.Nodes;
+using KamiToolKit.Overlay.UiOverlay;
+using KamiToolKit.Premade.Node.Simple;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
+using Dalamud.Bindings.ImGui;
 
 namespace DailyRoutines.ModulesPublic;
 
 public unsafe class DyeColorPreview : ModuleBase
 {
+    #region Module
+
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = "染剂颜色预览",
-        Description = "鼠标移动至通用染剂、追加染剂1、追加染剂2时，会显示其可染颜色。",
-        Category    = ModuleCategory.UIOptimization,
-        Author      = ["ErxCharlotte"]
+        Title = Lang.Get("DyeColorPreviewTitle"),
+        Description = Lang.Get("DyeColorPreviewDescription"),
+        Category = ModuleCategory.UIOptimization,
+        Author = ["ErxCharlotte"],
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true,
+    };
+
+    #endregion
+
+    #region Fields
 
     private DyeInfo? currentDye;
-    private bool     hideNativeTooltip;
+    private OverlayController? overlayController;
+    private TooltipModification? tooltipModification;
+
+    #endregion
+
+    #region Module Lifecycle
 
     protected override void Init()
     {
-        DService.Instance().GameGUI.HoveredItemChanged += OnHoveredItemChanged;
-        DService.Instance().UIBuilder.Draw             += DrawOverlay;
+        GameTooltipManager.Instance().RegGenerateItemTooltipModifier(OnItemTooltipGenerate);
 
-        foreach (var addonName in TooltipAddonNames)
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, addonName, OnTooltipPreDraw);
+        overlayController = new OverlayController();
+        overlayController.AddNode(new DyePreviewOverlayNode(() => currentDye));
     }
 
     protected override void Uninit()
     {
-        DService.Instance().GameGUI.HoveredItemChanged -= OnHoveredItemChanged;
-        DService.Instance().UIBuilder.Draw             -= DrawOverlay;
+        GameTooltipManager.Instance().Unreg(generateItemModifiers: OnItemTooltipGenerate);
+        RemoveTooltipModification();
 
-        foreach (var addonName in TooltipAddonNames)
-            DService.Instance().AddonLifecycle.UnregisterListener(AddonEvent.PreDraw, addonName, OnTooltipPreDraw);
-
-        currentDye        = null;
-        hideNativeTooltip = false;
+        overlayController?.Dispose();
+        overlayController = null;
+        currentDye = null;
     }
 
-    private void OnHoveredItemChanged(object? sender, ulong rawItemID)
+    #endregion
+
+    #region Tooltip
+
+    private void OnItemTooltipGenerate(AtkUnitBase* addonItemDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
     {
-        currentDye        = null;
-        hideNativeTooltip = false;
+        RemoveTooltipModification();
+        currentDye = null;
 
-        if (!Dyes.TryGetValue(NormalizeItemID(rawItemID), out var dye)) return;
+        var itemID = AgentItemDetail.Instance()->ItemId % 100_000;
+        if (!Dyes.TryGetValue(itemID, out var dye)) return;
 
-        currentDye        = dye;
-        hideNativeTooltip = true;
-    }
-
-    private unsafe void OnTooltipPreDraw(AddonEvent type, AddonArgs args)
-    {
-        if (!hideNativeTooltip) return;
-
-        var addon = (AtkUnitBase*)args.Addon.Address;
-        if (addon == null) return;
-
-        addon->IsVisible = false;
-    }
-
-    private void DrawOverlay()
-    {
-        if (currentDye == null) return;
-
-        var count   = currentDye.StainIDs.Length;
-        var compact = count > 40;
-
-        var perRow     = compact ? 8 : 5;
-        var cellWidth  = compact ? 56f : 82f;
-        var cellHeight = compact ? 54f : 58f;
-        var colorSize  = compact ? 34f : 42f;
-        var rows       = (int)MathF.Ceiling(count / (float)perRow);
-        var size       = new Vector2(perRow * cellWidth + 46f, (compact ? 104f : 84f) + rows * cellHeight + (compact ? 8f : 2f));
-        var mouse      = ImGui.GetMousePos();
-        var display    = ImGui.GetIO().DisplaySize;
-        var pos        = mouse + new Vector2(36f, 24f);
-
-        if (pos.X + size.X > display.X)
-            pos.X = mouse.X - size.X - 36f;
-
-        if (pos.Y + size.Y > display.Y)
-            pos.Y = display.Y - size.Y - 20f;
-
-        pos.X = MathF.Max(pos.X, 20f);
-        pos.Y = MathF.Max(pos.Y, 20f);
-
-        ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
-        ImGui.SetNextWindowSize(size, ImGuiCond.Always);
-        ImGui.SetNextWindowBgAlpha(0.95f);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 12f);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(14f, 12f));
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(4f, 3f));
-        ImGui.PushStyleColor(ImGuiCol.Border, currentDye.HighlightColor);
-
-        if (ImGui.Begin("##DyeColorPreviewOverlay", WindowFlags))
-        {
-            ImGui.SetWindowFontScale(1.15f);
-            ImGui.TextColored(currentDye.HighlightColor, $"★ {currentDye.Name}");
-            ImGui.Text($"可用颜色：{count}");
-            ImGui.Separator();
-            DrawPalette(currentDye.StainIDs, perRow, cellWidth, cellHeight, colorSize);
-            ImGui.SetWindowFontScale(1f);
-        }
-
-        ImGui.End();
-        ImGui.PopStyleColor();
-        ImGui.PopStyleVar(3);
-    }
-
-    private static void DrawPalette(uint[] stainIDs, int perRow, float cellWidth, float cellHeight, float colorSize)
-    {
-        var stainSheet = DService.Instance().Data.GetExcelSheet<Stain>();
-
-        for (var i = 0; i < stainIDs.Length; i++)
-        {
-            var stainID = stainIDs[i];
-            var stain   = stainSheet.GetRowOrDefault(stainID);
-            if (stain == null) continue;
-
-            var name  = stain.Value.Name.ExtractText();
-            var color = stain.Value.Color;
-
-            ImGui.PushID((int)stainID);
-            DrawStainCell(stainID, name, color, cellWidth, cellHeight, colorSize);
-            ImGui.PopID();
-
-            if ((i + 1) % perRow != 0)
-                ImGui.SameLine();
-        }
-    }
-
-    private static void DrawStainCell(uint stainID, string name, uint color, float cellWidth, float cellHeight, float colorSize)
-    {
-        var start = ImGui.GetCursorScreenPos();
-
-        ImGui.BeginGroup();
-
-        var x = ImGui.GetCursorPosX();
-        ImGui.SetCursorPosX(x + (cellWidth - colorSize) / 2f);
-        ImGui.ColorButton("##Color", ToVector4(color), ImGuiColorEditFlags.NoTooltip | ImGuiColorEditFlags.NoDragDrop, new Vector2(colorSize, colorSize));
-
-        if (ImGui.IsItemHovered())
-            DrawStainTooltip(stainID, name, color);
-
-        ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 2f);
-
-        var shortName = name.Replace("染剂", string.Empty);
-        var textSize  = ImGui.CalcTextSize(shortName);
-
-        ImGui.SetCursorPosX(x + MathF.Max(0f, (cellWidth - textSize.X) / 2f));
-        ImGui.Text(shortName);
-        ImGui.Dummy(new Vector2(cellWidth, MathF.Max(0f, cellHeight - colorSize - textSize.Y - 4f)));
-        ImGui.EndGroup();
-
-        if (!ImGui.IsItemHovered()) return;
-
-        ImGui.GetWindowDrawList().AddRect
+        currentDye = dye;
+        tooltipModification = GameTooltipManager.Instance().AddItemDetail
         (
-            start,
-            start + new Vector2(cellWidth, cellHeight),
-            ImGui.ColorConvertFloat4ToU32(new Vector4(1f, 1f, 1f, 0.75f)),
-            6f,
-            ImDrawFlags.None,
-            1.5f
+            itemID,
+            TooltipItemType.ItemDescription,
+            BuildTooltipText(dye),
+            TooltipModifyMode.Append
         );
     }
 
-    private static void DrawStainTooltip(uint id, string name, uint color)
+    private void RemoveTooltipModification()
     {
-        ImGui.BeginTooltip();
-        ImGui.Text($"Stain ID: {id}");
-        ImGui.Text($"名称: {name}");
-        ImGui.Text($"HEX: #{color:X6}");
-        ImGui.Text($"RGB: {GetR(color)}, {GetG(color)}, {GetB(color)}");
-        ImGui.ColorButton("##TooltipColor", ToVector4(color), ImGuiColorEditFlags.NoTooltip | ImGuiColorEditFlags.NoDragDrop, new Vector2(80f, 32f));
-        ImGui.EndTooltip();
+        if (tooltipModification == null) return;
+
+        GameTooltipManager.Instance().RemoveItemDetail(tooltipModification);
+        tooltipModification = null;
     }
 
-    private static uint NormalizeItemID(ulong rawItemID)
+    private static SeString BuildTooltipText(DyeInfo dye)
     {
-        if (rawItemID == 0) return 0;
-        if (rawItemID > 1_000_000) rawItemID -= 1_000_000;
-        return (uint)rawItemID;
+        return new SeString
+        (
+            new NewLinePayload(),
+            new UIForegroundPayload(3),
+            new TextPayload(Lang.Get("DyeColorPreviewTooltip", dye.StainIDs.Length)),
+            new UIForegroundPayload(0)
+        );
     }
 
-    private static Vector4 ToVector4(uint rgb) => new(GetR(rgb) / 255f, GetG(rgb) / 255f, GetB(rgb) / 255f, 1f);
+    #endregion
 
-    private static int GetR(uint rgb) => (int)((rgb >> 16) & 0xFF);
-    private static int GetG(uint rgb) => (int)((rgb >> 8) & 0xFF);
-    private static int GetB(uint rgb) => (int)(rgb & 0xFF);
+    #region Overlay
 
-    private sealed class DyeInfo
+    private sealed class DyePreviewOverlayNode : OverlayNode
     {
-        public required string  Name           { get; init; }
-        public required Vector4 HighlightColor { get; init; }
-        public required uint[]  StainIDs       { get; init; }
+        public override OverlayLayer OverlayLayer => OverlayLayer.Foreground;
+        public override bool HideWithNativeUi => false;
+
+        private const float BackgroundPadding = 24f;
+        private const float ContentPaddingX = 18f;
+        private const float TitleY = 12f;
+        private const float CountY = 46f;
+        private const float FirstRowY = 84f;
+
+        private readonly Func<DyeInfo?> getCurrentDye;
+        private readonly List<TextNode> colorNodes = [];
+
+        private readonly SimpleNineGridNode backgroundNode = new()
+        {
+            TexturePath = "ui/uld/EnemyList_hr1.tex",
+            TextureCoordinates = new Vector2(96, 80),
+            TextureSize = new Vector2(24, 20),
+            Offsets = new Vector4(8, 8, 8, 8),
+            MultiplyColor = new Vector3(0f),
+            Alpha = 1f,
+            IsVisible = true,
+        };
+
+        private readonly TextNode titleNode = new()
+        {
+            Position = new Vector2(ContentPaddingX, TitleY),
+            Size = new Vector2(560, 34),
+            FontSize = 22,
+            TextFlags = TextFlags.Edge,
+            TextColor = Vector4.One,
+            TextOutlineColor = new Vector4(0, 0, 0, 1),
+            AlignmentType = AlignmentType.TopLeft,
+        };
+
+        private readonly TextNode countNode = new()
+        {
+            Position = new Vector2(ContentPaddingX, CountY),
+            Size = new Vector2(560, 26),
+            FontSize = 16,
+            TextFlags = TextFlags.Edge,
+            TextColor = Vector4.One,
+            TextOutlineColor = new Vector4(0, 0, 0, 1),
+            AlignmentType = AlignmentType.TopLeft,
+        };
+
+        private DyeInfo? lastDye;
+
+        public DyePreviewOverlayNode(Func<DyeInfo?> getCurrentDye)
+        {
+            this.getCurrentDye = getCurrentDye;
+
+            Size = new Vector2(600, 160);
+
+            backgroundNode.Position = new Vector2(-BackgroundPadding, -BackgroundPadding);
+            backgroundNode.Size = Size + new Vector2(BackgroundPadding * 2f);
+            backgroundNode.AttachNode(this);
+
+            titleNode.AttachNode(this);
+            countNode.AttachNode(this);
+        }
+
+        protected override void OnUpdate()
+        {
+            var dye = getCurrentDye();
+            IsVisible = dye != null;
+            if (dye == null) return;
+
+            if (!ReferenceEquals(lastDye, dye))
+            {
+                Rebuild(dye);
+                lastDye = dye;
+            }
+
+            Position = GetOverlayPosition();
+        }
+
+        private Vector2 GetOverlayPosition()
+        {
+            var mouse = ImGui.GetMousePos();
+            var display = ImGui.GetIO().DisplaySize;
+            var position = mouse + new Vector2(36f, 24f);
+
+            if (position.X + Size.X > display.X)
+                position.X = mouse.X - Size.X - 36f;
+
+            if (position.Y + Size.Y > display.Y)
+                position.Y = display.Y - Size.Y - 20f;
+
+            return Vector2.Max(position, new Vector2(20f));
+        }
+
+        private void Rebuild(DyeInfo dye)
+        {
+            titleNode.String = $"★ {Lang.Get(dye.NameKey)}";
+            titleNode.TextColor = dye.HighlightColor;
+            countNode.String = Lang.Get("DyeColorPreviewAvailableColors", dye.StainIDs.Length);
+
+            ClearColorNodes();
+
+            var count = dye.StainIDs.Length;
+            var compact = count > 40;
+            var perRow = compact ? 5 : 4;
+            var cellWidth = compact ? 112f : 132f;
+            var cellHeight = compact ? 36f : 40f;
+            var squareSize = compact ? 24 : 28;
+            var nameSize = compact ? 14 : 16;
+
+            for (var i = 0; i < count; i++)
+                AddStainNode(dye.StainIDs[i], i, perRow, cellWidth, cellHeight, squareSize, nameSize);
+
+            var rows = (int)MathF.Ceiling(count / (float)perRow);
+            Size = new Vector2(perRow * cellWidth + ContentPaddingX * 2f, 104f + rows * cellHeight);
+
+            backgroundNode.Position = new Vector2(-BackgroundPadding, -BackgroundPadding);
+            backgroundNode.Size = Size + new Vector2(BackgroundPadding * 2f);
+        }
+
+        private void AddStainNode(uint stainID, int index, int perRow, float cellWidth, float cellHeight, int squareSize, int nameSize)
+        {
+            if (!LuminaGetter.TryGetRow<Stain>(stainID, out var stain)) return;
+
+            var x = ContentPaddingX + index % perRow * cellWidth;
+            var y = FirstRowY + index / perRow * cellHeight;
+            var color = stain.Color.ToVector4();
+            color = new Vector4(color.Z, color.Y, color.X, 1f);
+
+            AddColorNode(new TextNode
+            {
+                Position = new Vector2(x, y),
+                Size = new Vector2(squareSize + 6, squareSize + 6),
+                FontSize = (byte)squareSize,
+                TextColor = color,
+                AlignmentType = AlignmentType.TopLeft,
+                String = "■",
+            });
+
+            AddColorNode(new TextNode
+            {
+                Position = new Vector2(x + squareSize + 8, y + 5),
+                Size = new Vector2(cellWidth - squareSize - 10, cellHeight),
+                FontSize = (byte)nameSize,
+                TextFlags = TextFlags.Edge,
+                TextColor = Vector4.One,
+                TextOutlineColor = new Vector4(0, 0, 0, 1),
+                AlignmentType = AlignmentType.TopLeft,
+                String = stain.Name.ExtractText(),
+            });
+        }
+
+        private void AddColorNode(TextNode node)
+        {
+            node.AttachNode(this);
+            colorNodes.Add(node);
+        }
+
+        private void ClearColorNodes()
+        {
+            foreach (var node in colorNodes)
+                node.Dispose();
+
+            colorNodes.Clear();
+        }
     }
 
-    #region 常量
+    #endregion
 
-    private static readonly string[] TooltipAddonNames =
-    [
-        "ItemDetail",
-        "ItemDetailCompare",
-        "ItemDetailContext"
-    ];
+    #region Data
+
+    private sealed record DyeInfo(string NameKey, Vector4 HighlightColor, uint[] StainIDs);
 
     private static readonly Dictionary<uint, DyeInfo> Dyes = new()
     {
-        [52254] = new()
-        {
-            Name           = "通用染剂",
-            HighlightColor = new(1f, 0.95f, 0.65f, 1f),
-            StainIDs       = Enumerable.Range(1, 85).Select(x => (uint)x).ToArray()
-        },
-        [52255] = new()
-        {
-            Name           = "追加染剂1",
-            HighlightColor = new(1f, 0.25f, 0.25f, 1f),
-            StainIDs       = [86, 87, 88, 89, 90, 91, 92, 93, 94]
-        },
-        [52256] = new()
-        {
-            Name           = "追加染剂2",
-            HighlightColor = new(0.25f, 0.45f, 1f, 1f),
-            StainIDs       = [95, 96, 97, 98, 99, 100, 121, 122, 123, 124, 125]
-        }
+        [52254] = new
+        (
+            "DyeColorPreviewGeneralDye",
+            new Vector4(1f, 0.95f, 0.65f, 1f),
+            Enumerable.Range(1, 85).Select(x => (uint)x).ToArray()
+        ),
+        [52255] = new
+        (
+            "DyeColorPreviewExtraDye1",
+            new Vector4(1f, 0.25f, 0.25f, 1f),
+            [86, 87, 88, 89, 90, 91, 92, 93, 94]
+        ),
+        [52256] = new
+        (
+            "DyeColorPreviewExtraDye2",
+            new Vector4(0.25f, 0.45f, 1f, 1f),
+            [95, 96, 97, 98, 99, 100, 121, 122, 123, 124, 125]
+        ),
     };
-
-    private const ImGuiWindowFlags WindowFlags = ImGuiWindowFlags.NoTitleBar        |
-                                                ImGuiWindowFlags.NoResize          |
-                                                ImGuiWindowFlags.NoSavedSettings   |
-                                                ImGuiWindowFlags.NoFocusOnAppearing |
-                                                ImGuiWindowFlags.NoNav             |
-                                                ImGuiWindowFlags.NoMove            |
-                                                ImGuiWindowFlags.NoScrollbar;
 
     #endregion
 }
