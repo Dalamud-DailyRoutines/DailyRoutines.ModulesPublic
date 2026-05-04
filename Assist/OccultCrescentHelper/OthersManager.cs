@@ -895,7 +895,9 @@ public partial class OccultCrescentHelper
                     var jobName = data.Name.ToString()
                                       .Replace("Phantom", string.Empty)
                                       .Replace("辅助",      string.Empty)
-                                      .Replace("サポート",    string.Empty);
+                                      .Replace("サポート",    string.Empty)
+                                      .Replace("서포트",     string.Empty)
+                                      .Trim();
                     using var nameBuilder = new RentedSeStringBuilder();
                     var jobNameNode = new TextNode
                     {
