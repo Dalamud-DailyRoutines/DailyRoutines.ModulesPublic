@@ -5,7 +5,7 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Lumina.Excel.Sheets;
-using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using TinyPinyin;
@@ -69,9 +69,9 @@ public class BaitSwitchCommand : ModuleBase
     private static void SwitchBait(uint itemID, bool isBait, int swimBaitIndex = -1)
     {
         if (isBait)
-            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fish, 4, itemID);
+            FishingCommand.ChangeBait(itemID);
         else if (swimBaitIndex != -1)
-            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fish, 25, (uint)swimBaitIndex);
+            FishingCommand.SwimBait((uint)swimBaitIndex);
     }
 
     private static bool TryFindItemByName
@@ -149,7 +149,7 @@ public class BaitSwitchCommand : ModuleBase
 
     private static unsafe List<uint> GetSwimBaitInfo()
     {
-        var handler   = EventFramework.Instance()->GetEventHandlerById(0x150001u);
+        var handler   = EventFramework.Instance()->GetEventHandlerById(0x150001);
         var itemArray = (uint*)((byte*)handler + 568);
 
         return [itemArray[0], itemArray[1], itemArray[2]];
