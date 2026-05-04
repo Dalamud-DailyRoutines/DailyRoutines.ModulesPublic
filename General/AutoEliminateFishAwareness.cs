@@ -4,10 +4,10 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
-using Dalamud.Game.Chat;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
@@ -17,14 +17,14 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoEliminateFishAwareness : ModuleBase
+public unsafe class AutoEliminateFishAwareness : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
         Title               = Lang.Get("AutoEliminateFishAwarenessTitle"),
         Description         = Lang.Get("AutoEliminateFishAwarenessDescription"),
         Category            = ModuleCategory.General,
-        ModulesPrerequisite = ["FieldEntryCommand", "AutoCommenceDuty"]
+        ModulesPrerequisite = ["FieldEntryCommand", "AutoCommenceDuty", "InstantLogout"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
@@ -40,11 +40,11 @@ public class AutoEliminateFishAwareness : ModuleBase
 
         zoneSelectCombo.SelectedIDs = config.BlacklistZones;
 
-        DService.Instance().Chat.ChatMessage += OnChatMessage;
+        LogMessageManager.Instance().RegPost(OnPost);
     }
 
     protected override void Uninit() =>
-        DService.Instance().Chat.ChatMessage -= OnChatMessage;
+        LogMessageManager.Instance().Unreg(OnPost);
 
     protected override void ConfigUI()
     {
@@ -78,70 +78,85 @@ public class AutoEliminateFishAwareness : ModuleBase
         if (ImGui.Checkbox(Lang.Get("AutoEliminateFishAwareness-AutoCast"), ref config.AutoCast))
             config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoEliminateFishAwareness-AutoCastHelp"));
+        
+        if (ImGui.Checkbox(Lang.Get("AutoEliminateFishAwareness-LogoutWhenGlobalWarning"), ref config.LogoutWhenGlobalWarning))
+            config.Save(this);
     }
 
-    private unsafe void OnChatMessage
-    (
-        IHandleableChatMessage message
-    )
+    private void OnPost(uint logMessageID, LogMessageQueueItem item)
     {
-        if ((ushort)message.LogKind != 2243 || config.BlacklistZones.Contains(GameState.TerritoryType)) return;
-        if (!ValidChatMessages.Contains(message.ToString())) return;
-
-        TaskHelper.Abort();
-
-        // 云冠群岛
-        if (GameState.TerritoryType == 939)
-        {
-            var currentPos      = DService.Instance().ObjectTable.LocalPlayer.Position;
-            var currentRotation = DService.Instance().ObjectTable.LocalPlayer.Rotation;
-
-            TaskHelper.Enqueue(ExitFishing, "离开钓鱼状态");
-            TaskHelper.DelayNext(5_000, "等待 5 秒");
-            TaskHelper.Enqueue(() => !DService.Instance().Condition.IsOccupiedInEvent, "等待不在钓鱼状态");
-            TaskHelper.Enqueue(() => ExitDuty(753), "离开副本");
-            TaskHelper.Enqueue(() => !DService.Instance().Condition.IsBoundByDuty && UIModule.IsScreenReady() && GameState.TerritoryType != 939, "等待离开副本");
-            TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/pdrfe diadem"), "发送进入指令");
-            TaskHelper.Enqueue(() => GameState.TerritoryType == 939 && DService.Instance().ObjectTable.LocalPlayer != null, "等待进入");
-            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(currentPos), $"传送到原始位置 {currentPos}");
-            TaskHelper.DelayNext(500, "等待 500 毫秒");
-            TaskHelper.Enqueue(() => !MovementManager.Instance().IsManagerBusy,                                            "等待传送完毕");
-            TaskHelper.Enqueue(() => DService.Instance().ObjectTable.LocalPlayer.ToStruct()->SetRotation(currentRotation), "设置面向");
-        }
-        else if (!DService.Instance().Condition.IsBoundByDuty)
-        {
-            TaskHelper.Enqueue(ExitFishing, "离开钓鱼状态");
-            TaskHelper.DelayNext(5_000);
-            TaskHelper.Enqueue(() => !DService.Instance().Condition.IsOccupiedInEvent,                                           "等待离开忙碌状态");
-            TaskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(TARGET_CONTENT, ContentsFinderHelper.DefaultOption), "申请目标副本");
-            TaskHelper.Enqueue(() => ExitDuty(TARGET_CONTENT),                                                                   "离开目标副本");
-        }
-        else
+        if (config.BlacklistZones.Contains(GameState.TerritoryType))
             return;
 
-        if (config.AutoCast)
-            TaskHelper.Enqueue(EnterFishing, "进入钓鱼状态");
-        else
-            TaskHelper.Enqueue(() => ActionManager.Instance()->GetActionStatus(ActionType.Action, 289) == 0, "等待技能抛竿可用");
+        switch (logMessageID)
+        {
+            case 5518:
+                NotifyHelper.SystemWarning();
+                NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoEliminateFishAwareness-Notification-GlobalWarning"));
+                NotifyHelper.Speak(Lang.Get("AutoEliminateFishAwareness-Notification-GlobalWarning"));
+                
+                if (config.LogoutWhenGlobalWarning)
+                    ChatManager.Instance().SendCommand("/logout");
+                break;
+            
+            // 非全局警惕
+            case 3516 or 5517:
+                TaskHelper.Abort();
 
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (string.IsNullOrWhiteSpace(config.ExtraCommands)) return;
+                // 云冠群岛
+                if (GameState.TerritoryType == 939)
+                {
+                    var currentPos      = DService.Instance().ObjectTable.LocalPlayer.Position;
+                    var currentRotation = DService.Instance().ObjectTable.LocalPlayer.Rotation;
 
-                foreach (var command in config.ExtraCommands.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-                    ChatManager.Instance().SendMessage(command);
-            },
-            "执行文本指令"
-        );
+                    TaskHelper.Enqueue(ExitFishing, "离开钓鱼状态");
+                    TaskHelper.DelayNext(5_000, "等待 5 秒");
+                    TaskHelper.Enqueue(() => !DService.Instance().Condition.IsOccupiedInEvent, "等待不在钓鱼状态");
+                    TaskHelper.Enqueue(() => ExitDuty(753), "离开副本");
+                    TaskHelper.Enqueue(() => !DService.Instance().Condition.IsBoundByDuty && UIModule.IsScreenReady() && GameState.TerritoryType != 939, "等待离开副本");
+                    TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/pdrfe diadem"), "发送进入指令");
+                    TaskHelper.Enqueue(() => GameState.TerritoryType == 939 && DService.Instance().ObjectTable.LocalPlayer != null, "等待进入");
+                    TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(currentPos), $"传送到原始位置 {currentPos}");
+                    TaskHelper.DelayNext(500, "等待 500 毫秒");
+                    TaskHelper.Enqueue(() => !MovementManager.Instance().IsManagerBusy,                                            "等待传送完毕");
+                    TaskHelper.Enqueue(() => DService.Instance().ObjectTable.LocalPlayer.ToStruct()->SetRotation(currentRotation), "设置面向");
+                }
+                else if (!DService.Instance().Condition.IsBoundByDuty)
+                {
+                    TaskHelper.Enqueue(ExitFishing, "离开钓鱼状态");
+                    TaskHelper.DelayNext(5_000);
+                    TaskHelper.Enqueue(() => !DService.Instance().Condition.IsOccupiedInEvent,                                           "等待离开忙碌状态");
+                    TaskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(TARGET_CONTENT, ContentsFinderHelper.DefaultOption), "申请目标副本");
+                    TaskHelper.Enqueue(() => ExitDuty(TARGET_CONTENT),                                                                   "离开目标副本");
+                }
+                else
+                    return;
+
+                if (config.AutoCast)
+                    TaskHelper.Enqueue(EnterFishing, "进入钓鱼状态");
+                else
+                    TaskHelper.Enqueue(() => ActionManager.Instance()->GetActionStatus(ActionType.Action, 289) == 0, "等待技能抛竿可用");
+
+                TaskHelper.Enqueue
+                (
+                    () =>
+                    {
+                        if (string.IsNullOrWhiteSpace(config.ExtraCommands)) return;
+
+                        foreach (var command in config.ExtraCommands.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                            ChatManager.Instance().SendMessage(command);
+                    },
+                    "执行文本指令"
+                );
+                break;
+        }
     }
 
     private static bool ExitFishing()
     {
         if (!Throttler.Shared.Throttle("AutoEliminateFishAwareness-ExitFishing")) return false;
 
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fish, 1);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fishing, 1);
         return !DService.Instance().Condition[ConditionFlag.Fishing];
     }
 
@@ -160,7 +175,7 @@ public class AutoEliminateFishAwareness : ModuleBase
         if (!Throttler.Shared.Throttle("AutoEliminateFishAwareness-EnterFishing")) return false;
         if (DService.Instance().ObjectTable.LocalPlayer == null || DService.Instance().Condition.IsBetweenAreas || !UIModule.IsScreenReady()) return false;
 
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fish);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fishing);
         return DService.Instance().Condition[ConditionFlag.Fishing];
     }
 
@@ -169,6 +184,8 @@ public class AutoEliminateFishAwareness : ModuleBase
         public bool          AutoCast       = true;
         public HashSet<uint> BlacklistZones = [];
         public string        ExtraCommands  = string.Empty;
+
+        public bool LogoutWhenGlobalWarning;
     }
 
     #region 常量
