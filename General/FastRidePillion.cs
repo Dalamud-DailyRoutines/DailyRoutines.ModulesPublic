@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Group;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using AgentReceiveEventDelegate = OmenTools.Interop.Game.Models.Native.AgentReceiveEventDelegate;
 
@@ -79,7 +80,7 @@ public unsafe class FastRidePillion : ModuleBase
         if (!LuminaGetter.TryGetRow<Mount>(mount.MountId, out var mountRow) || mountRow.ExtraSeats <= 0)
             return AgentContextReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
 
-        chara->RidePillion(10);
+        MountCommand.RidePillion(chara->EntityId);
         return AgentContextReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
     }
 }
