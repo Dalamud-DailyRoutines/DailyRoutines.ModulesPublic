@@ -56,10 +56,21 @@ public class OptimizedRecipeNote : ModuleBase
     private                 Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
     
     private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
-
     // ja → nop
     private readonly MemoryPatch simpleCraftAmountJudgePatch =
         new(SimpleCraftAmountJudgeSig.Get(), [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]);
+
+    private static readonly CompSig RecipeNotePraticeSettingSetupSig = new
+    (
+        "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? BA ?? ?? ?? ?? 49 8B F0 48 8B E9 E8 ?? ?? ?? ?? 48 8D 4E ?? 48 8B D8 E8 ?? ?? ?? ?? 48 8B D0 48 8B CB E8 ?? ?? ?? ?? 48 8D 4E"
+    );
+    private unsafe delegate AtkValue* RecipeNotePraticeSettingSetupDelegate
+    (
+        AtkEventListener* listener,
+        AtkValue*         returnValue,
+        AtkValue*         values
+    );
+    private Hook<RecipeNotePraticeSettingSetupDelegate>? RecipeNotePraticeSettingSetupHook;
     
     private Config config = null!;
     
@@ -84,7 +95,7 @@ public class OptimizedRecipeNote : ModuleBase
 
     private uint lastRecipeID;
 
-    protected override void Init()
+    protected override unsafe void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 15_000 };
 
@@ -93,11 +104,17 @@ public class OptimizedRecipeNote : ModuleBase
         SimpleCraftGetAmountUpperLimitHook = 
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
+        RecipeNotePraticeSettingSetupHook =
+            RecipeNotePraticeSettingSetupSig.GetHook<RecipeNotePraticeSettingSetupDelegate>(RecipeNotePraticeSettingSetupDetour);
+
         if (config.IsQuickSynthesisMore)
         {
             simpleCraftAmountJudgePatch.Enable();
             SimpleCraftGetAmountUpperLimitHook.Enable();
         }
+        
+        if (config.IsMorePraticeQuality)
+            RecipeNotePraticeSettingSetupHook.Enable();
         
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,           "RecipeNote", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "RecipeNote", OnAddon);
@@ -170,6 +187,14 @@ public class OptimizedRecipeNote : ModuleBase
             SimpleCraftGetAmountUpperLimitHook.Toggle(config.IsQuickSynthesisMore);
         }
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-QuickSynthesisMore-Help"));
+        
+        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality"), ref config.IsMorePraticeQuality))
+        {
+            config.Save(this);
+            
+            RecipeNotePraticeSettingSetupHook.Toggle(config.IsMorePraticeQuality);
+        }
+        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
     }
     
     public static unsafe int SimpleCraftGetAmountUpperLimitDetour(nint agentRecipeNote, bool isHQ)
@@ -197,6 +222,20 @@ public class OptimizedRecipeNote : ModuleBase
         }
 
         return maxPortion;
+    }
+    
+    private unsafe AtkValue* RecipeNotePraticeSettingSetupDetour(AtkEventListener* listener, AtkValue* returnValue, AtkValue* values)
+    {
+        // 初始品质
+        values[1].SetUInt(values[1].UInt * 2);
+        
+        // 当前品质
+        values[0].SetUInt(values[1].UInt);
+        
+        // 初始品质文字
+        values[2].SetManagedString(DService.Instance().SeStringEvaluator.EvaluateFromAddon(14222, [values[1].UInt]));
+
+        return RecipeNotePraticeSettingSetupHook.Original(listener, returnValue, values);
     }
 
     private unsafe void OnAddon(AddonEvent type, AddonArgs args)
@@ -1394,6 +1433,9 @@ public class OptimizedRecipeNote : ModuleBase
         
         // 突破简易制作上限
         public bool IsQuickSynthesisMore = true;
+        
+        // 突破制作练习初期品质上限
+        public bool IsMorePraticeQuality = true;
     }
     
     #region IPC
