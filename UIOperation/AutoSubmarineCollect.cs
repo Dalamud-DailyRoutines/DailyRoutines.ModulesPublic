@@ -676,7 +676,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private static void SendRefreshSubmarineInfo()
     {
         if (!GameState.IsLoggedIn) return;
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RefreshSubmarineInfo, 1);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestSubmarine, 1);
     }
 
     private static string SantisizeText(string text)
