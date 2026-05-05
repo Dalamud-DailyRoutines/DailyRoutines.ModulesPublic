@@ -26,6 +26,7 @@ using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
+using OmenTools.Threading.TaskHelper.Enums;
 using GrandCompany = FFXIVClientStructs.FFXIV.Client.UI.Agent.GrandCompany;
 
 namespace DailyRoutines.ModulesPublic;
@@ -57,7 +58,6 @@ public unsafe class AutoExpertDelivery : ModuleBase
             Size                  = new(300f, 250f),
             RememberClosePosition = true
         };
-
     }
 
     private bool EnqueueDelivery()
@@ -145,9 +145,20 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         if (isAutoExchange && ModuleManager.Instance().IsModuleEnabled(typeof(FastGrandCompanyExchange)))
         {
-            TaskHelper.Enqueue(() => EnqueueByNameIPC.InvokeFunc("default", -1));
-            TaskHelper.Enqueue(() => IsCurrentlyBusyIPC.Value);
-            TaskHelper.Enqueue(() => !IsCurrentlyBusyIPC.Value);
+            TaskHelper.Enqueue
+            (
+                () =>
+                {
+                    if (IsCurrentlyBusyIPC.Value)
+                        return true;
+
+                    EnqueueByNameIPC.InvokeFunc("default", -1);
+                    return false;
+                },
+                timeoutMS: 5_000,
+                timeoutBehaviour: TaskAbortBehaviour.AbortCurrent
+            );
+            TaskHelper.Enqueue(() => !IsCurrentlyBusyIPC.Value, timeoutMS: 5_000, timeoutBehaviour: TaskAbortBehaviour.AbortCurrent);
             TaskHelper.Enqueue(() => GrandCompanyExchange->Close(true));
         }
 
