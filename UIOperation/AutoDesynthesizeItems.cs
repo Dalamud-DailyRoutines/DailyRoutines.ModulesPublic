@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Memory;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using KamiToolKit.Enums;
@@ -127,6 +126,7 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
         if (!Throttler.Shared.Throttle("AutoDesynthesizeItems-Process", 100)) return;
         if (!SalvageDialog->IsAddonAndNodesReady()) return;
 
+        SalvageDialog->Callback(13, true);
         SalvageDialog->Callback(0, 0);
     }
 
