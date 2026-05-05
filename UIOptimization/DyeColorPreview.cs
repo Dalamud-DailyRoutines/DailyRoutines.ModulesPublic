@@ -41,6 +41,7 @@ public unsafe class DyeColorPreview : ModuleBase
     private DyeInfo? currentDye;
     private OverlayController? overlayController;
     private TooltipModification? tooltipModification;
+    private AtkUnitBase* currentTooltipAddon;
 
     #endregion
 
@@ -51,7 +52,7 @@ public unsafe class DyeColorPreview : ModuleBase
         GameTooltipManager.Instance().RegGenerateItemTooltipModifier(OnItemTooltipGenerate);
 
         overlayController = new OverlayController();
-        overlayController.AddNode(new DyePreviewOverlayNode(() => currentDye));
+        overlayController.AddNode(new DyePreviewOverlayNode(() => currentDye, IsCurrentTooltipVisible));
     }
 
     protected override void Uninit()
@@ -62,6 +63,7 @@ public unsafe class DyeColorPreview : ModuleBase
         overlayController?.Dispose();
         overlayController = null;
         currentDye = null;
+        currentTooltipAddon = null;
     }
 
     #endregion
@@ -72,11 +74,17 @@ public unsafe class DyeColorPreview : ModuleBase
     {
         RemoveTooltipModification();
         currentDye = null;
+        currentTooltipAddon = null;
 
-        var itemID = AgentItemDetail.Instance()->ItemId % 100_000;
-        if (!Dyes.TryGetValue(itemID, out var dye)) return;
+        var itemID = AgentItemDetail.Instance()->ItemId % 100_0000;
+        if (!Dyes.TryGetValue(itemID, out var dye))
+        {
+            return;
+        }
 
+        currentTooltipAddon = addonItemDetail;
         currentDye = dye;
+
         tooltipModification = GameTooltipManager.Instance().AddItemDetail
         (
             itemID,
@@ -85,13 +93,27 @@ public unsafe class DyeColorPreview : ModuleBase
             TooltipModifyMode.Append
         );
     }
-
+    
     private void RemoveTooltipModification()
     {
         if (tooltipModification == null) return;
 
         GameTooltipManager.Instance().RemoveItemDetail(tooltipModification);
         tooltipModification = null;
+    }
+    
+    private bool IsCurrentTooltipVisible()
+    {
+        if (currentDye == null || currentTooltipAddon == null)
+            return false;
+        
+        if (currentTooltipAddon->IsVisible)
+            return true;
+
+        currentDye = null;
+        currentTooltipAddon = null;
+        RemoveTooltipModification();
+        return false;
     }
 
     private static SeString BuildTooltipText(DyeInfo dye)
@@ -121,6 +143,7 @@ public unsafe class DyeColorPreview : ModuleBase
         private const float FirstRowY = 84f;
 
         private readonly Func<DyeInfo?> getCurrentDye;
+        private readonly Func<bool> isTooltipVisible;
         private readonly List<TextNode> colorNodes = [];
 
         private readonly SimpleNineGridNode backgroundNode = new()
@@ -158,9 +181,10 @@ public unsafe class DyeColorPreview : ModuleBase
 
         private DyeInfo? lastDye;
 
-        public DyePreviewOverlayNode(Func<DyeInfo?> getCurrentDye)
+        public DyePreviewOverlayNode(Func<DyeInfo?> getCurrentDye, Func<bool> isTooltipVisible)
         {
             this.getCurrentDye = getCurrentDye;
+            this.isTooltipVisible = isTooltipVisible;
 
             Size = new Vector2(600, 160);
 
@@ -175,8 +199,13 @@ public unsafe class DyeColorPreview : ModuleBase
         protected override void OnUpdate()
         {
             var dye = getCurrentDye();
-            IsVisible = dye != null;
-            if (dye == null) return;
+            IsVisible = dye != null && isTooltipVisible();
+
+            if (!IsVisible)
+            {
+                lastDye = null;
+                return;
+            }
 
             if (!ReferenceEquals(lastDye, dye))
             {
