@@ -39,7 +39,7 @@ public unsafe class QuickChatPanel : ModuleBase
     };
 
     private Config config = null!;
-    
+
     private string messageInput   = string.Empty;
     private int    dropMacroIndex = -1;
 
@@ -816,10 +816,8 @@ public unsafe class QuickChatPanel : ModuleBase
                 return;
             }
 
-            for (var i = 0; i < instance.config.SavedMessages.Count; i++)
+            foreach (var message in instance.config.SavedMessages)
             {
-                var index   = i;
-                var message = instance.config.SavedMessages[i];
                 contentList?.AddNode
                 (
                     CreateTextActionRow
@@ -829,27 +827,9 @@ public unsafe class QuickChatPanel : ModuleBase
                         () => CopyText(message),
                         (_, _, _, _, data) =>
                         {
-                            if (data->MouseData.ButtonId == 1)
-                            {
-                                instance.SendSavedMessage(message);
-                                return;
-                            }
-
-                            if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift) && instance.dropMacroIndex >= 0)
-                            {
-                                instance.SwapMessages(instance.dropMacroIndex, index);
-                                instance.dropMacroIndex = -1;
-                                RequestRebuild();
-                                return;
-                            }
-
-                            if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift))
-                            {
-                                instance.dropMacroIndex = index;
-                                return;
-                            }
-
-                            CopyText(message);
+                            if (data->IsRightClick) instance.SendSavedMessage(message);
+                            else if (data->IsLeftClick)
+                                CopyText(message);
                         }
                     )
                 );
@@ -972,9 +952,7 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 if (string.IsNullOrWhiteSpace(macro.Name)) continue;
 
-                var macro1 = macro;
-                var button = CreateMacroCardButton(macro.IconID, macro.Name, () => instance.ExecuteMacro(macro1));
-
+                var button = CreateMacroCardButton(macro.IconID, macro.Name, () => instance.ExecuteMacro(macro));
                 if (currentWidth + button.Width > contentList.ContentWidth)
                 {
                     contentList?.AddNode(row);
