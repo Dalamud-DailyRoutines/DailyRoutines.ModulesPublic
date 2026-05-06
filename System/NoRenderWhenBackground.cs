@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.Interop.Game.Lumina;
@@ -26,8 +27,15 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     (
         "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 B8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 8B 15"
     );
-    private delegate void                              DeviceDX11PostTickDelegate(nint instance);
+    private delegate void                              DeviceDX11PostTickDelegate(Device* device);
     private          Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
+    
+    private static readonly CompSig DeviceDX11PreTickSig = new
+    (
+        "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 83 EC ?? 8B 41 ?? 45 33 FF 4C 89 B9"
+    );
+    private delegate void                             DeviceDX11PreTickDelegate(Device* device);
+    private          Hook<DeviceDX11PreTickDelegate>? DeviceDX11PreTickHook;
 
     private Config config = null!;
 
@@ -39,6 +47,9 @@ public unsafe class NoRenderWhenBackground : ModuleBase
 
         DeviceDX11PostTickHook = DeviceDX11PostTickSig.GetHook<DeviceDX11PostTickDelegate>(DeviceDX11PostTickDetour);
         DeviceDX11PostTickHook.Enable();
+        
+        DeviceDX11PreTickHook = DeviceDX11PreTickSig.GetHook<DeviceDX11PreTickDelegate>(DeviceDX11PreTickDetour);
+        DeviceDX11PreTickHook.Enable();
     }
 
     protected override void ConfigUI()
@@ -46,12 +57,12 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         if (ImGui.Checkbox(Lang.Get("NoRenderWhenBackground-OnlyProhibitedInIconic", LuminaWrapper.GetAddonText(4024)), ref config.OnlyProhibitedInIconic))
             config.Save(this);
     }
-
-    private void DeviceDX11PostTickDetour(nint a1)
+    
+    private void DeviceDX11PreTickDetour(Device* device)
     {
         if (!GameState.IsLoggedIn || GameState.IsForeground)
         {
-            DeviceDX11PostTickHook.Original(a1);
+            DeviceDX11PreTickHook.Original(device);
             return;
         }
 
@@ -59,7 +70,7 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         {
             if (!IsIconic(Framework.Instance()->GameWindow->WindowHandle))
             {
-                DeviceDX11PostTickHook.Original(a1);
+                DeviceDX11PreTickHook.Original(device);
                 return;
             }
         }
@@ -69,7 +80,34 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         if (currentTick - nextRenderTick > 0)
         {
             nextRenderTick = currentTick + 5_000;
-            DeviceDX11PostTickHook.Original(a1);
+            DeviceDX11PreTickHook.Original(device);
+            return;
+        }
+    }
+
+    private void DeviceDX11PostTickDetour(Device* device)
+    {
+        if (!GameState.IsLoggedIn || GameState.IsForeground)
+        {
+            DeviceDX11PostTickHook.Original(device);
+            return;
+        }
+
+        if (config.OnlyProhibitedInIconic)
+        {
+            if (!IsIconic(Framework.Instance()->GameWindow->WindowHandle))
+            {
+                DeviceDX11PostTickHook.Original(device);
+                return;
+            }
+        }
+
+        // 每过 5 秒必定渲染一帧, 防止渲染管线堆积
+        var currentTick = Environment.TickCount64;
+        if (currentTick - nextRenderTick > 0)
+        {
+            nextRenderTick = currentTick + 5_000;
+            DeviceDX11PostTickHook.Original(device);
             return;
         }
 
