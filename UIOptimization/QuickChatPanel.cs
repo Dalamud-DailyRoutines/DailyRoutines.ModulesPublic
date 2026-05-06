@@ -12,6 +12,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
@@ -22,9 +23,10 @@ using KamiToolKit.Nodes;
 using KamiToolKit.Premade.Node.ListItem;
 using KamiToolKit.Premade.Node.Simple;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
@@ -43,7 +45,7 @@ public unsafe class QuickChatPanel : ModuleBase
     private string messageInput   = string.Empty;
     private int    dropMacroIndex = -1;
 
-    private IconButtonNode?      imageButton;
+    private TextButtonNode?      sendButton;
     private QuickChatPanelAddon? chatPanelAddon;
 
     protected override void Init()
@@ -70,6 +72,36 @@ public unsafe class QuickChatPanel : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "ChatLog", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "ChatLog", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "ChatLog", OnAddon);
+    }
+
+    protected override void Uninit()
+    {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        OnAddon(AddonEvent.PreFinalize, null);
+
+        chatPanelAddon?.Dispose();
+        chatPanelAddon = null;
+
+        // 恢复
+        if (ChatLog != null)
+        {
+            var textInputNode = ChatLog->GetComponentNodeById(5);
+            if (textInputNode == null) return;
+
+            var inputBackground = textInputNode->Component->UldManager.SearchNodeById(17);
+            if (inputBackground == null) return;
+
+            var textInputDisplayNode = textInputNode->Component->UldManager.SearchNodeById(16);
+            if (textInputDisplayNode == null) return;
+
+            var windowNode = ChatLog->RootNode;
+            if (windowNode == null) return;
+
+            var width = (ushort)(windowNode->Width - 38);
+            inputBackground->SetWidth(width);
+            textInputDisplayNode->SetWidth(width);
+            textInputNode->SetWidth(width);
+        }
     }
 
     protected override void ConfigUI()
@@ -186,65 +218,6 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        // ButtonOffset 行
-        ImGui.TableNextRow();
-
-        ImGui.TableNextColumn();
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("QuickChatPanel-ButtonOffset")}:");
-
-        ImGui.TableNextColumn();
-        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat2("###ButtonOffsetInput", ref config.ButtonOffset, format: "%.1f");
-        if (ImGui.IsItemDeactivatedAfterEdit())
-            config.Save(this);
-
-        // ButtonIcon 行
-        ImGui.TableNextRow();
-
-        ImGui.TableNextColumn();
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("QuickChatPanel-ButtonIcon")}:");
-
-        ImGui.TableNextColumn();
-        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputInt("###ButtonIconInput", ref config.ButtonIcon);
-
-        if (ImGui.IsItemDeactivatedAfterEdit())
-        {
-            config.ButtonIcon = Math.Max(config.ButtonIcon, 1);
-            config.Save(this);
-        }
-
-        // ButtonBackground 行
-        ImGui.TableNextRow();
-
-        ImGui.TableNextColumn();
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("QuickChatPanel-ButtonBackgroundVisible")}:");
-
-        ImGui.TableNextColumn();
-        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        if (ImGui.Checkbox("###ButtonBackgroundVisibleInput", ref config.ButtonBackgroundVisible))
-            config.Save(this);
-
-        // FontScale 行
-        ImGui.TableNextRow();
-
-        ImGui.TableNextColumn();
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("FontScale")}:");
-
-        ImGui.TableNextColumn();
-        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat("###FontScaleInput", ref config.FontScale, 0, 0, "%.1f");
-
-        if (ImGui.IsItemDeactivatedAfterEdit())
-        {
-            config.FontScale = (float)Math.Clamp(config.FontScale, 0.1, 10f);
-            config.Save(this);
-        }
-
         // OverlayPosOffset 行
         ImGui.TableNextRow();
 
@@ -272,7 +245,7 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             if (combo)
             {
-                foreach (MacroDisplayMode mode in Enum.GetValues(typeof(MacroDisplayMode)))
+                foreach (var mode in Enum.GetValues<MacroDisplayMode>())
                 {
                     if (ImGui.Selectable(MacroDisplayModeLoc[mode], mode == config.OverlayMacroDisplayMode))
                     {
@@ -379,149 +352,73 @@ public unsafe class QuickChatPanel : ModuleBase
                 var windowNode = ChatLog->RootNode;
                 if (windowNode == null) return;
 
-                inputBackground->SetWidth((ushort)(windowNode->Width      - textInputNode->Height - 40));
-                textInputDisplayNode->SetWidth((ushort)(windowNode->Width - textInputNode->Height - 40));
-                textInputNode->SetWidth((ushort)(windowNode->Width        - textInputNode->Height - 40));
+                const float OFFSET = 40f;
 
-                if (imageButton == null)
+                if (sendButton == null)
                 {
-                    imageButton = new()
+                    sendButton = new()
                     {
-                        Size        = new(textInputNode->Height),
+                        Size        = new(64, textInputNode->Height + 4),
                         IsVisible   = true,
                         IsEnabled   = true,
-                        IconId      = (uint)config.ButtonIcon,
-                        OnClick     = () => { chatPanelAddon?.TogglePanel(); },
-                        TextTooltip = Info.Title,
-                        Position = new Vector2(textInputNode->Width - textInputNode->Height, 0) +
-                                   config.ButtonOffset
+                        String      = Lang.Get("Send"),
+                        TextTooltip = Info.Title
+
                     };
 
-                    imageButton?.AttachNode(textInputNode);
+                    sendButton.AddEvent
+                    (
+                        AtkEventType.MouseClick,
+                        (_, _, _, _, data) =>
+                        {
+                            if (data->IsRightClick)
+                                chatPanelAddon.TogglePanel();
+                            else if (data->IsLeftClick)
+                            {
+                                if (!SendChatboxMessage())
+                                    chatPanelAddon.TogglePanel();
+                            }
+                        }
+                    );
+
+                    sendButton.Position = new Vector2(windowNode->Width - sendButton.Width - OFFSET, 0);
+                    sendButton.LabelNode.AutoAdjustTextSize();
+
+                    sendButton?.AttachNode(textInputNode);
                 }
 
-                if (Throttler.Shared.Throttle("QuickChatPanel-UpdateButtonNodes"))
-                {
-                    imageButton.IconId   = (uint)config.ButtonIcon;
-                    imageButton.Position = new Vector2(windowNode->Width - 2 * textInputNode->Height, 0) + config.ButtonOffset;
-                    imageButton.Size     = new(textInputNode->Height);
+                inputBackground->SetWidth((ushort)(windowNode->Width      - sendButton.Width - OFFSET));
+                textInputDisplayNode->SetWidth((ushort)(windowNode->Width - sendButton.Width - OFFSET));
+                textInputNode->SetWidth((ushort)(windowNode->Width        - sendButton.Width - OFFSET));
 
-                    imageButton.BackgroundNode.IsVisible = config.ButtonBackgroundVisible;
-                }
+                sendButton.X      = windowNode->Width - sendButton.Width - OFFSET;
+                sendButton.Size   = sendButton.Size with { Y = textInputNode->Height + 4 };
+                sendButton.String = Lang.Get(IsAnyTextInBlock() ? "Send" : "Open");
 
                 break;
             case AddonEvent.PreFinalize:
-                imageButton?.Dispose();
-                imageButton = null;
+                sendButton?.Dispose();
+                sendButton = null;
                 break;
         }
     }
 
-    public void SwapMacros(int index1, int index2)
+    private static bool IsAnyTextInBlock()
     {
-        (config.SavedMacros[index1], config.SavedMacros[index2]) =
-            (config.SavedMacros[index2], config.SavedMacros[index1]);
+        if (ChatLog == null || !ChatLog->IsAddonAndNodesReady()) return false;
 
-        TaskHelper.Abort();
+        var inputNode = (AtkComponentNode*)ChatLog->GetNodeById(5);
+        if (inputNode == null) return false;
 
-        TaskHelper.DelayNext(500);
-        TaskHelper.Enqueue(() => { config.Save(this); });
+        var textNode = inputNode->Component->UldManager.SearchNodeById(16)->GetAsAtkTextNode();
+        if (textNode == null) return false;
+
+        var text = textNode->NodeText.ToString();
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        return true;
     }
-
-    public void SwapMessages(int index1, int index2)
-    {
-        (config.SavedMessages[index1], config.SavedMessages[index2]) =
-            (config.SavedMessages[index2], config.SavedMessages[index1]);
-
-        TaskHelper.Abort();
-
-        TaskHelper.DelayNext(500);
-        TaskHelper.Enqueue(() => { config.Save(this); });
-    }
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
-
-        chatPanelAddon?.Dispose();
-        chatPanelAddon = null;
-
-        // 恢复
-        if (ChatLog != null)
-        {
-            var textInputNode = ChatLog->GetComponentNodeById(5);
-            if (textInputNode == null) return;
-
-            var inputBackground = textInputNode->Component->UldManager.SearchNodeById(17);
-            if (inputBackground == null) return;
-
-            var textInputDisplayNode = textInputNode->Component->UldManager.SearchNodeById(16);
-            if (textInputDisplayNode == null) return;
-
-            var windowNode = ChatLog->RootNode;
-            if (windowNode == null) return;
-
-            var width = (ushort)(windowNode->Width - 38);
-            inputBackground->SetWidth(width);
-            textInputDisplayNode->SetWidth(width);
-            textInputNode->SetWidth(width);
-        }
-    }
-
-    public class SavedMacro : IEquatable<SavedMacro>
-    {
-        public uint     Category       { get; set; } // 0 - Individual; 1 - Shared
-        public int      Position       { get; set; }
-        public string   Name           { get; set; } = string.Empty;
-        public uint     IconID         { get; set; }
-        public DateTime LastUpdateTime { get; set; } = DateTime.MinValue;
-
-        public bool Equals(SavedMacro? other)
-        {
-            if (other is null) return false;
-            if (ReferenceEquals(this, other)) return true;
-            return Category == other.Category && Position == other.Position;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            if (obj is null) return false;
-            if (ReferenceEquals(this, obj)) return true;
-            return obj.GetType() == GetType() && Equals((SavedMacro)obj);
-        }
-
-        public override int GetHashCode() => HashCode.Combine(Category, Position);
-    }
-
-    private enum MacroDisplayMode
-    {
-        List,
-        Buttons
-    }
-
-    private enum QuickChatTab
-    {
-        Messages,
-        Macros,
-        SystemSounds,
-        GameItems,
-        SpecialIconChars
-    }
-
-    private class Config : ModuleConfig
-    {
-        public bool                     ButtonBackgroundVisible = true;
-        public int                      ButtonIcon              = 46;
-        public Vector2                  ButtonOffset            = new(0);
-        public float                    FontScale               = 1.5f;
-        public MacroDisplayMode         OverlayMacroDisplayMode = MacroDisplayMode.Buttons;
-        public Vector2                  OverlayOffset           = new(0);
-        public List<SavedMacro>         SavedMacros             = [];
-        public List<string>             SavedMessages           = [];
-        public Dictionary<uint, string> SoundEffectNotes        = [];
-    }
-
+    
     private bool SendChatboxMessage()
     {
         if (ChatLog == null || !ChatLog->IsAddonAndNodesReady()) return false;
@@ -532,10 +429,9 @@ public unsafe class QuickChatPanel : ModuleBase
         var textNode = inputNode->Component->UldManager.SearchNodeById(16)->GetAsAtkTextNode();
         if (textNode == null) return false;
 
-        var text = SeString.Parse(textNode->NodeText);
+        var text = new ReadOnlySeString(textNode->NodeText);
         if (string.IsNullOrWhiteSpace(text.ToString())) return false;
-
-        ChatManager.Instance().SendMessage(text.Encode());
+        ChatManager.Instance().SendMessage(text);
 
         var inputComponent = (AtkComponentTextInput*)inputNode->Component;
         inputComponent->EvaluatedString.Clear();
@@ -576,6 +472,15 @@ public unsafe class QuickChatPanel : ModuleBase
                 .AddItemLink(item.RowId, PluginConfig.Instance().ConflictKeyBinding.IsPressed())
                 .Build()
         );
+
+    private class Config : ModuleConfig
+    {
+        public MacroDisplayMode         OverlayMacroDisplayMode = MacroDisplayMode.Buttons;
+        public Vector2                  OverlayOffset           = new(0);
+        public List<SavedMacro>         SavedMacros             = [];
+        public List<string>             SavedMessages           = [];
+        public Dictionary<uint, string> SoundEffectNotes        = [];
+    }
 
     private class QuickChatPanelAddon : AttachedAddon
     {
@@ -627,14 +532,6 @@ public unsafe class QuickChatPanel : ModuleBase
             }
 
             Open();
-        }
-
-        public void RequestRebuild()
-        {
-            rebuildRequested = true;
-
-            if (IsOpen)
-                CloseAddonOnly();
         }
 
         protected override void OnAttachedAddonUpdate(AtkUnitBase* addon, AtkUnitBase* hostAddon)
@@ -852,10 +749,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
         private void BuildMacroList()
         {
-            for (var i = 0; i < instance.config.SavedMacros.Count; i++)
+            foreach (var macro in instance.config.SavedMacros)
             {
-                var index = i;
-                var macro = instance.config.SavedMacros[i];
                 if (string.IsNullOrWhiteSpace(macro.Name)) continue;
 
                 contentList?.AddNode
@@ -864,25 +759,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     (
                         macro.IconID,
                         macro.Name,
-                        () => instance.ExecuteMacro(macro),
-                        (_, _, _, _, data) =>
-                        {
-                            if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift) && instance.dropMacroIndex >= 0)
-                            {
-                                instance.SwapMacros(instance.dropMacroIndex, index);
-                                instance.dropMacroIndex = -1;
-                                RequestRebuild();
-                                return;
-                            }
-
-                            if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift))
-                            {
-                                instance.dropMacroIndex = index;
-                                return;
-                            }
-
-                            instance.ExecuteMacro(macro);
-                        }
+                        (_, _, _, _, _) => instance.ExecuteMacro(macro)
                     )
                 );
             }
@@ -893,7 +770,6 @@ public unsafe class QuickChatPanel : ModuleBase
             (
                 uint                                     iconID,
                 string                                   title,
-                Action                                   onClick,
                 AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
             )
             {
@@ -903,8 +779,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     IsEnabled   = true,
                     Size        = new(contentList.ContentWidth, 52f),
                     String      = string.Empty,
-                    TextTooltip = title,
-                    OnClick     = onClick
+                    TextTooltip = title
                 };
 
                 button.LabelNode.IsVisible = false;
@@ -953,6 +828,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 if (string.IsNullOrWhiteSpace(macro.Name)) continue;
 
                 var button = CreateMacroCardButton(macro.IconID, macro.Name, () => instance.ExecuteMacro(macro));
+
                 if (currentWidth + button.Width > contentList.ContentWidth)
                 {
                     contentList?.AddNode(row);
@@ -1262,6 +1138,46 @@ public unsafe class QuickChatPanel : ModuleBase
 
             return button;
         }
+    }
+
+    public class SavedMacro : IEquatable<SavedMacro>
+    {
+        public uint     Category       { get; set; } // 0 - Individual; 1 - Shared
+        public int      Position       { get; set; }
+        public string   Name           { get; set; } = string.Empty;
+        public uint     IconID         { get; set; }
+        public DateTime LastUpdateTime { get; set; } = DateTime.MinValue;
+
+        public bool Equals(SavedMacro? other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Category == other.Category && Position == other.Position;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is null) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            return obj.GetType() == GetType() && Equals((SavedMacro)obj);
+        }
+
+        public override int GetHashCode() => HashCode.Combine(Category, Position);
+    }
+
+    private enum MacroDisplayMode
+    {
+        List,
+        Buttons
+    }
+
+    private enum QuickChatTab
+    {
+        Messages,
+        Macros,
+        SystemSounds,
+        GameItems,
+        SpecialIconChars
     }
 
     #region 常量
