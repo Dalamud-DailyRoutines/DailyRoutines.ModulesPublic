@@ -948,6 +948,61 @@ public unsafe class QuickChatPanel : ModuleBase
                     )
                 );
             }
+            
+            return;
+
+            TextButtonNode CreateMacroListButton
+            (
+                uint                                     iconID,
+                string                                   title,
+                Action                                   onClick,
+                AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
+            )
+            {
+                var button = new TextButtonNode
+                {
+                    IsVisible   = true,
+                    IsEnabled   = true,
+                    Size        = new(contentList.ContentWidth, 52f),
+                    String      = string.Empty,
+                    TextTooltip = title,
+                    OnClick     = onClick
+                };
+
+                button.LabelNode.IsVisible = false;
+
+                var icon = new IconImageNode
+                {
+                    IsVisible   = true,
+                    Size        = new(28f),
+                    TextureSize = new(28f),
+                    IconId      = iconID,
+                    FitTexture  = true
+                };
+
+                icon.Position = new(12f, (button.Size.Y - icon.Size.Y) / 2 - 2f);
+                icon.AttachNode(button);
+
+                var text = new TextNode
+                {
+                    IsVisible        = true,
+                    Position         = new(icon.Position.X + icon.Size.X + 6f, 0f),
+                    String           = title,
+                    AlignmentType    = AlignmentType.Left,
+                    FontSize         = 14,
+                    TextFlags        = TextFlags.Bold | TextFlags.Edge,
+                    TextColor        = ColorHelper.GetColor(50),
+                    TextOutlineColor = ColorHelper.GetColor(1),
+                };
+
+                text.Size = new(button.Size.X - text.Position.X, 46f);
+                text.AttachNode(button);
+
+                if (onMouseClick != null)
+                    button.AddEvent(AtkEventType.MouseClick, onMouseClick);
+
+                return button;
+            }
         }
 
         private void BuildMacroButtonGrid()
@@ -975,6 +1030,49 @@ public unsafe class QuickChatPanel : ModuleBase
 
             if (row.Nodes.Count > 0)
                 contentList?.AddNode(row);
+            
+            return;
+            
+            TextButtonNode CreateMacroCardButton(uint iconID, string text, Action onClick)
+            {
+                var button = new TextButtonNode
+                {
+                    IsVisible   = true,
+                    IsEnabled   = true,
+                    Size        = new(110f, 100f),
+                    String      = string.Empty,
+                    TextTooltip = text,
+                    OnClick     = onClick
+                };
+
+                button.LabelNode.IsVisible = false;
+
+                var icon = new IconImageNode
+                {
+                    IsVisible  = true,
+                    Size       = new(50f),
+                    IconId     = iconID,
+                    FitTexture = true,
+                };
+                icon.Position = new((button.Size.X - icon.Size.X) / 2, 10f);
+            
+                icon.AttachNode(button);
+
+                new TextNode
+                {
+                    IsVisible        = true,
+                    Position         = new(0f, 60f),
+                    Size             = new(button.Width, 24f),
+                    String           = text,
+                    AlignmentType    = AlignmentType.Center,
+                    FontSize         = 12,
+                    TextFlags        = TextFlags.Bold | TextFlags.Edge,
+                    TextColor        = ColorHelper.GetColor(50),
+                    TextOutlineColor = ColorHelper.GetColor(1),
+                }.AttachNode(button);
+
+                return button;
+            }
         }
 
         private void BuildSystemSoundsTab()
@@ -1047,6 +1145,34 @@ public unsafe class QuickChatPanel : ModuleBase
 
             if (row.Nodes.Count > 0)
                 contentList?.AddNode(row);
+            
+            return;
+
+            HorizontalListNode CreateGlyphRow() =>
+                new()
+                {
+                    IsVisible          = true,
+                    Size               = new(contentList.ContentWidth, 36f),
+                    ItemSpacing        = 4f,
+                    FirstItemSpacing   = 0f,
+                    FitToContentHeight = true
+                };
+            
+            TextButtonNode CreateGlyphButton(string text, string tooltip, Action onClick)
+            {
+                var button = new TextButtonNode
+                {
+                    IsVisible   = true,
+                    IsEnabled   = true,
+                    Size        = new(48f, 32f),
+                    String      = text,
+                    TextTooltip = tooltip,
+                    OnClick     = onClick
+                };
+
+                button.LabelNode.FontSize = 18;
+                return button;
+            }
         }
 
         private void AddEmptyState(string text, string? detail = null)
@@ -1138,16 +1264,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 FitToContentHeight = true
             };
 
-        private HorizontalListNode CreateGlyphRow() =>
-            new()
-            {
-                IsVisible          = true,
-                Size               = new(contentList.ContentWidth, 36f),
-                ItemSpacing        = 4f,
-                FirstItemSpacing   = 0f,
-                FitToContentHeight = true
-            };
-
         private HorizontalListNode CreateIconTextRow
         (
             uint                                     iconID,
@@ -1235,116 +1351,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
             if (onMouseClick != null)
                 button.AddEvent(AtkEventType.MouseClick, onMouseClick);
-
-            return button;
-        }
-
-        private static TextButtonNode CreateGlyphButton(string text, string tooltip, Action onClick)
-        {
-            var button = new TextButtonNode
-            {
-                IsVisible   = true,
-                IsEnabled   = true,
-                Size        = new(48f, 32f),
-                String      = text,
-                TextTooltip = tooltip,
-                OnClick     = onClick
-            };
-
-            button.LabelNode.FontSize = 18;
-            return button;
-        }
-
-        private TextButtonNode CreateMacroListButton
-        (
-            uint                                     iconID,
-            string                                   title,
-            Action                                   onClick,
-            AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
-        )
-        {
-            var button = new TextButtonNode
-            {
-                IsVisible   = true,
-                IsEnabled   = true,
-                Size        = new(contentList.ContentWidth, 52f),
-                String      = string.Empty,
-                TextTooltip = title,
-                OnClick     = onClick
-            };
-
-            button.LabelNode.IsVisible = false;
-
-            var icon = new IconImageNode
-            {
-                IsVisible   = true,
-                Size        = new(28f),
-                TextureSize = new(28f),
-                IconId      = iconID,
-                FitTexture  = true
-            };
-
-            icon.Position = new(12f, (button.Size.Y - icon.Size.Y) / 2 - 2f);
-            icon.AttachNode(button);
-
-            var text = new TextNode
-            {
-                IsVisible        = true,
-                Position         = new(icon.Position.X + icon.Size.X + 6f, 0f),
-                String           = title,
-                AlignmentType    = AlignmentType.Left,
-                FontSize         = 14,
-                TextFlags        = TextFlags.Bold | TextFlags.Edge,
-                TextColor        = ColorHelper.GetColor(50),
-                TextOutlineColor = ColorHelper.GetColor(1),
-            };
-            
-            text.Size = new(button.Size.X - text.Position.X, 46f);
-            text.AttachNode(button);
-
-            if (onMouseClick != null)
-                button.AddEvent(AtkEventType.MouseClick, onMouseClick);
-
-            return button;
-        }
-
-        private static TextButtonNode CreateMacroCardButton(uint iconID, string text, Action onClick)
-        {
-            var button = new TextButtonNode
-            {
-                IsVisible   = true,
-                IsEnabled   = true,
-                Size        = new(110f, 100f),
-                String      = string.Empty,
-                TextTooltip = text,
-                OnClick     = onClick
-            };
-
-            button.LabelNode.IsVisible = false;
-
-            var icon = new IconImageNode
-            {
-                IsVisible  = true,
-                Size       = new(50f),
-                IconId     = iconID,
-                FitTexture = true,
-            };
-            icon.Position = new((button.Size.X - icon.Size.X) / 2, 10f);
-            
-            icon.AttachNode(button);
-
-            new TextNode
-            {
-                IsVisible        = true,
-                Position         = new(0f, 60f),
-                Size             = new(button.Width, 24f),
-                String           = text,
-                AlignmentType    = AlignmentType.Center,
-                FontSize         = 12,
-                TextFlags        = TextFlags.Bold | TextFlags.Edge,
-                TextColor        = ColorHelper.GetColor(50),
-                TextOutlineColor = ColorHelper.GetColor(1),
-            }.AttachNode(button);
 
             return button;
         }
