@@ -25,6 +25,7 @@ using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using OmenTools.Threading.TaskHelper;
 using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
@@ -62,7 +63,7 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             InternalName          = "DRQuickChatPanel",
             Title                 = Info.Title,
-            Size                  = new(554f, 400f),
+            Size                  = new(542f, 400f),
             RememberClosePosition = false,
             DisableClose          = true
         };
@@ -350,6 +351,7 @@ public unsafe class QuickChatPanel : ModuleBase
         private readonly Dictionary<QuickChatTab, ListButtonNode> tabButtons = [];
         private readonly LuminaSearcher<Item>                     searcher;
         private readonly QuickChatPanel                           instance;
+        private readonly TaskHelper                               TaskHelper = new();
 
         private QuickChatTab         selectedTab;
         private ScrollingListNode?   contentList;
@@ -358,7 +360,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
         private string itemSearchInput  = string.Empty;
         private bool   rebuildRequested = true;
-        private bool   isUpdatingContent;
 
         public QuickChatPanelAddon(QuickChatPanel instance) : base("ChatLog")
         {
@@ -420,9 +421,80 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             tabButtons.Clear();
 
-            CreateBody().AttachNode(this);
+            var body = new HorizontalListNode
+            {
+                IsVisible   = true,
+                Position    = ContentStartPosition,
+                Size        = ContentSize,
+                ItemSpacing = 8f,
+                FitHeight   = true
+            };
+
+            var nav = new VerticalListNode
+            {
+                IsVisible   = true,
+                Size        = new(108f, body.Height),
+                ItemSpacing = 5f,
+                FitWidth    = true
+            };
+            nav.AddNode(CreateNavButton(QuickChatTab.Messages,         Lang.Get("QuickChatPanel-Messages")));
+            nav.AddNode(CreateNavButton(QuickChatTab.Macros,           Lang.Get("QuickChatPanel-Macro")));
+            nav.AddNode(CreateNavButton(QuickChatTab.SystemSounds,     Lang.Get("QuickChatPanel-SystemSound")));
+            nav.AddNode(CreateNavButton(QuickChatTab.GameItems,        Lang.Get("QuickChatPanel-GameItems")));
+            nav.AddNode(CreateNavButton(QuickChatTab.SpecialIconChars, Lang.Get("QuickChatPanel-SpecialIconChar")));
+
+            nav.AddDummy(8f);
+            nav.AddNode(CreateNavButton(QuickChatTab.Settings, Lang.Get("Settings")));
+
+            var contentSize = new Vector2(ContentSize.X - nav.Width - 16f, body.Height - 16f);
+            
+            contentPanel = new SimpleComponentNode
+            {
+                IsVisible = true,
+                Size      = contentSize
+            };
+
+            contentPanelBackground = new SimpleNineGridNode
+            {
+                IsVisible          = true,
+                TexturePath        = "ui/uld/ToolTipS.tex",
+                TextureCoordinates = Vector2.Zero,
+                TextureSize        = new(32f, 24f),
+                TopOffset          = 10f,
+                BottomOffset       = 10f,
+                LeftOffset         = 12f,
+                RightOffset        = 12f,
+                Size               = contentSize + new Vector2(12f),
+                Alpha              = 0.42f
+            };
+            contentPanelBackground.AttachNode(contentPanel);
+
+            contentList = new()
+            {
+                IsVisible         = true,
+                Position          = new(9f),
+                Size              = contentSize - new Vector2(8f, 12f),
+                ItemSpacing       = 5f,
+                FitWidth          = true,
+                AutoHideScrollBar = true,
+                ScrollSpeed       = 36
+            };
+            contentList.AttachNode(contentPanel);
+            
+            body.AddNode(nav);
+            body.AddNode(contentPanel);
+
+            RefreshTabButtons();
+            
+            body.AttachNode(this);
 
             RefreshCurrentTab();
+        }
+        
+        public override void Dispose()
+        {
+            TaskHelper.Dispose();
+            base.Dispose();
         }
 
         private void SelectTab(QuickChatTab tab)
@@ -442,12 +514,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
         private void RefreshCurrentTab()
         {
-            if (contentList == null || isUpdatingContent) return;
-
-            try
+            TaskHelper.Enqueue(() =>
             {
-                isUpdatingContent = true;
-
                 contentList.Clear();
 
                 switch (selectedTab)
@@ -473,47 +541,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 }
 
                 contentList.RecalculateLayout();
-            }
-            finally
-            {
-                isUpdatingContent = false;
-            }
-        }
-
-        private HorizontalListNode CreateBody()
-        {
-            var body = new HorizontalListNode
-            {
-                IsVisible   = true,
-                Position    = ContentStartPosition,
-                Size        = ContentSize,
-                ItemSpacing = 8f,
-                FitHeight   = true
-            };
-
-            var nav = new VerticalListNode
-            {
-                IsVisible   = true,
-                Size        = new(116f, body.Height),
-                ItemSpacing = 5f,
-                FitWidth    = true
-            };
-            nav.AddNode(CreateNavButton(QuickChatTab.Messages,         Lang.Get("QuickChatPanel-Messages")));
-            nav.AddNode(CreateNavButton(QuickChatTab.Macros,           Lang.Get("QuickChatPanel-Macro")));
-            nav.AddNode(CreateNavButton(QuickChatTab.SystemSounds,     Lang.Get("QuickChatPanel-SystemSound")));
-            nav.AddNode(CreateNavButton(QuickChatTab.GameItems,        Lang.Get("QuickChatPanel-GameItems")));
-            nav.AddNode(CreateNavButton(QuickChatTab.SpecialIconChars, Lang.Get("QuickChatPanel-SpecialIconChar")));
-
-            nav.AddDummy(8f);
-            nav.AddNode(CreateNavButton(QuickChatTab.Settings, Lang.Get("Settings")));
-
-            contentPanel = CreateContentPanel(new(MathF.Max(360f, ContentSize.X - 132f), body.Height));
-
-            body.AddNode(nav);
-            body.AddNode(contentPanel);
-
-            RefreshTabButtons();
-            return body;
+            });
         }
 
         private ListButtonNode CreateNavButton(QuickChatTab tab, string text)
@@ -532,44 +560,6 @@ public unsafe class QuickChatPanel : ModuleBase
             button.LabelNode.AutoAdjustTextSize();
             tabButtons[tab] = button;
             return button;
-        }
-
-        private SimpleComponentNode CreateContentPanel(Vector2 size)
-        {
-            var panel = new SimpleComponentNode
-            {
-                IsVisible = true,
-                Size      = size
-            };
-
-            contentPanelBackground = new SimpleNineGridNode
-            {
-                IsVisible          = true,
-                TexturePath        = "ui/uld/ToolTipS.tex",
-                TextureCoordinates = Vector2.Zero,
-                TextureSize        = new(32f, 24f),
-                TopOffset          = 10f,
-                BottomOffset       = 10f,
-                LeftOffset         = 12f,
-                RightOffset        = 12f,
-                Size               = size,
-                Alpha              = 0.42f
-            };
-            contentPanelBackground.AttachNode(panel);
-
-            contentList = new()
-            {
-                IsVisible         = true,
-                Position          = new(9f),
-                Size              = new(MathF.Max(330f, size.X - 18f), MathF.Max(70f, size.Y - 18f)),
-                ItemSpacing       = 5f,
-                FitWidth          = true,
-                AutoHideScrollBar = true,
-                ScrollSpeed       = 36
-            };
-            contentList.AttachNode(panel);
-
-            return panel;
         }
 
         private void BuildMessagesTab()
@@ -1346,15 +1336,13 @@ public unsafe class QuickChatPanel : ModuleBase
                     IsVisible = true,
                     Size      = new(132f, 30f),
                     Position  = new(0, -4),
-                    String    = value.ToString()
+                    String    = value.ToString(),
+                    
                 };
                 input.CurrentTextNode.FontSize = 14;
                 input.OnFocusLost = () =>
                 {
                     if (!int.TryParse(input.String, out var newValue)) return;
-
-                    newValue = Math.Clamp(newValue, -1000, 1000);
-                    if (newValue == value) return;
 
                     updateValue(newValue);
                     instance.config.Save(instance);
