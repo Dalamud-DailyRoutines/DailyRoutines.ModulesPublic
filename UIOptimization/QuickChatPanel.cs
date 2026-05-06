@@ -19,6 +19,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Interop;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
+using KamiToolKit.Premade.Node.ListItem;
 using KamiToolKit.Premade.Node.Simple;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
@@ -28,7 +29,6 @@ using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-// TODO: 优化掉
 public unsafe class QuickChatPanel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -39,9 +39,7 @@ public unsafe class QuickChatPanel : ModuleBase
     };
 
     private Config config = null!;
-
-    private LuminaSearcher<Item>? searcher;
-
+    
     private string messageInput   = string.Empty;
     private int    dropMacroIndex = -1;
 
@@ -59,8 +57,6 @@ public unsafe class QuickChatPanel : ModuleBase
             for (var i = 1U; i < 17; i++)
                 config.SoundEffectNotes[i] = $"<se.{i}>";
         }
-
-        searcher = new(LuminaGetter.Get<Item>(), [x => x.Name.ToString(), x => x.RowId.ToString()]);
 
         chatPanelAddon = new(this)
         {
@@ -471,8 +467,6 @@ public unsafe class QuickChatPanel : ModuleBase
             textInputDisplayNode->SetWidth(width);
             textInputNode->SetWidth(width);
         }
-
-        searcher = null;
     }
 
     public class SavedMacro : IEquatable<SavedMacro>
@@ -575,22 +569,42 @@ public unsafe class QuickChatPanel : ModuleBase
         chatPanelAddon?.Close();
     }
 
-    private class QuickChatPanelAddon
-    (
-        QuickChatPanel instance
-    ) : AttachedAddon("ChatLog")
+    private static void SendGameItemLink(Item item) =>
+        NotifyHelper.Instance().Chat
+        (
+            new SeStringBuilder()
+                .AddItemLink(item.RowId, PluginConfig.Instance().ConflictKeyBinding.IsPressed())
+                .Build()
+        );
+
+    private class QuickChatPanelAddon : AttachedAddon
     {
         private readonly Dictionary<QuickChatTab, ListButtonNode> tabButtons = [];
+        private readonly LuminaSearcher<Item>                     searcher;
+        private readonly QuickChatPanel                           instance;
 
         private QuickChatTab         selectedTab;
         private ScrollingListNode?   contentList;
         private SimpleComponentNode? contentPanel;
         private SimpleNineGridNode?  contentPanelBackground;
-        private TextInputNode?       itemSearchInputNode;
-        private VerticalListNode?    itemResultsLayout;
 
         private string itemSearchInput  = string.Empty;
         private bool   rebuildRequested = true;
+
+        public QuickChatPanelAddon(QuickChatPanel instance) : base("ChatLog")
+        {
+            this.instance = instance;
+            searcher = new
+            (
+                LuminaGetter.Get<Item>(),
+                [
+                    x => x.Name.ToString(),
+                    x => x.Description.ToString(),
+                    x => x.RowId.ToString()
+                ],
+                resultLimit: 50
+            );
+        }
 
         protected override AttachedAddonPosition AttachPosition =>
             AttachedAddonPosition.RightBottom;
@@ -771,8 +785,6 @@ public unsafe class QuickChatPanel : ModuleBase
             if (contentList == null) return;
 
             contentList.Clear();
-            itemSearchInputNode = null;
-            itemResultsLayout   = null;
 
             switch (selectedTab)
             {
@@ -792,60 +804,6 @@ public unsafe class QuickChatPanel : ModuleBase
                     BuildSpecialIconCharsTab();
                     break;
             }
-
-            contentList.RecalculateLayout();
-        }
-
-        private void RefreshGameItemResults()
-        {
-            if (contentList == null || selectedTab != QuickChatTab.GameItems) return;
-
-            if (itemResultsLayout != null)
-                contentList.RemoveNode(itemResultsLayout);
-
-            if (string.IsNullOrWhiteSpace(itemSearchInput))
-            {
-                AddEmptyState(Lang.Get("PleaseSearch"), Lang.Get("QuickChatPanel-GameItems"));
-                contentList.RecalculateLayout();
-                return;
-            }
-
-            itemResultsLayout = new()
-            {
-                IsVisible   = true,
-                Size        = new(contentList.ContentWidth, MathF.Max(80f, ContentSize.Y - 48f)),
-                ItemSpacing = 4f,
-                FitWidth    = true
-            };
-
-            var isConflictKeyHolding = PluginConfig.Instance().ConflictKeyBinding.IsPressed();
-            var added                = 0;
-
-            foreach (var data in instance.searcher?.SearchResult.Take(80) ?? [])
-            {
-                if (!LuminaGetter.TryGetRow(data.RowId, out Item itemData)) continue;
-
-                var itemName = itemData.Name.ToString();
-                var row = CreateIconTextRow
-                (
-                    itemData.Icon,
-                    itemName,
-                    itemData.RowId.ToString(),
-                    () => NotifyHelper.Instance().Chat
-                    (
-                        new SeStringBuilder()
-                            .AddItemLink(itemData.RowId, isConflictKeyHolding)
-                            .Build()
-                    )
-                );
-                itemResultsLayout.AddNode(row);
-                added++;
-            }
-
-            contentList.AddNode(itemResultsLayout);
-
-            if (added == 0)
-                AddEmptyState(Lang.Get("None"), itemSearchInput);
 
             contentList.RecalculateLayout();
         }
@@ -948,7 +906,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     )
                 );
             }
-            
+
             return;
 
             TextButtonNode CreateMacroListButton
@@ -992,7 +950,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     FontSize         = 14,
                     TextFlags        = TextFlags.Bold | TextFlags.Edge,
                     TextColor        = ColorHelper.GetColor(50),
-                    TextOutlineColor = ColorHelper.GetColor(1),
+                    TextOutlineColor = ColorHelper.GetColor(1)
                 };
 
                 text.Size = new(button.Size.X - text.Position.X, 46f);
@@ -1013,7 +971,7 @@ public unsafe class QuickChatPanel : ModuleBase
             foreach (var macro in instance.config.SavedMacros)
             {
                 if (string.IsNullOrWhiteSpace(macro.Name)) continue;
-                
+
                 var macro1 = macro;
                 var button = CreateMacroCardButton(macro.IconID, macro.Name, () => instance.ExecuteMacro(macro1));
 
@@ -1030,9 +988,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
             if (row.Nodes.Count > 0)
                 contentList?.AddNode(row);
-            
+
             return;
-            
+
             TextButtonNode CreateMacroCardButton(uint iconID, string text, Action onClick)
             {
                 var button = new TextButtonNode
@@ -1052,10 +1010,10 @@ public unsafe class QuickChatPanel : ModuleBase
                     IsVisible  = true,
                     Size       = new(50f),
                     IconId     = iconID,
-                    FitTexture = true,
+                    FitTexture = true
                 };
                 icon.Position = new((button.Size.X - icon.Size.X) / 2, 10f);
-            
+
                 icon.AttachNode(button);
 
                 new TextNode
@@ -1068,7 +1026,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     FontSize         = 12,
                     TextFlags        = TextFlags.Bold | TextFlags.Edge,
                     TextColor        = ColorHelper.GetColor(50),
-                    TextOutlineColor = ColorHelper.GetColor(1),
+                    TextOutlineColor = ColorHelper.GetColor(1)
                 }.AttachNode(button);
 
                 return button;
@@ -1116,9 +1074,45 @@ public unsafe class QuickChatPanel : ModuleBase
 
         private void BuildGameItemsTab()
         {
-            itemSearchInputNode = CreateSearchInput();
-            contentList?.AddNode(itemSearchInputNode);
-            RefreshGameItemResults();
+            var listNode = new ListNode<Item, ItemListItemNode>
+            {
+                IsVisible   = true,
+                Size        = new(contentList.ContentWidth, contentList.Size.Y - 48f),
+                ItemSpacing = 4f,
+                OptionsList = GetGameItemResults(),
+                OnItemSelected = item =>
+                {
+                    if (item.RowId != 0)
+                        SendGameItemLink(item);
+                }
+            };
+
+            var searchBarNode = new TextInputNode
+            {
+                IsVisible       = true,
+                Size            = new(contentList.ContentWidth, 36f),
+                String          = itemSearchInput,
+                MaxCharacters   = 128,
+                OnInputReceived = text => UpdateGameItemList(listNode, text.ToString()),
+                OnInputComplete = text => UpdateGameItemList(listNode, text.ToString())
+            };
+
+            searchBarNode.CurrentTextNode.FontSize =  14;
+            searchBarNode.CurrentTextNode.Position += new Vector2(0, 3);
+            contentList?.AddNode(searchBarNode);
+
+            contentList?.AddNode(listNode);
+        }
+
+        private List<Item> GetGameItemResults() =>
+            string.IsNullOrWhiteSpace(itemSearchInput) ? [] : searcher.SearchResult;
+
+        private void UpdateGameItemList(ListNode<Item, ItemListItemNode> listNode, string searchString)
+        {
+            itemSearchInput = searchString;
+            searcher.Search(itemSearchInput);
+            listNode.OptionsList = GetGameItemResults();
+            listNode.ResetScroll();
         }
 
         private void BuildSpecialIconCharsTab()
@@ -1145,11 +1139,12 @@ public unsafe class QuickChatPanel : ModuleBase
 
             if (row.Nodes.Count > 0)
                 contentList?.AddNode(row);
-            
+
             return;
 
-            HorizontalListNode CreateGlyphRow() =>
-                new()
+            HorizontalListNode CreateGlyphRow()
+            {
+                return new HorizontalListNode
                 {
                     IsVisible          = true,
                     Size               = new(contentList.ContentWidth, 36f),
@@ -1157,7 +1152,8 @@ public unsafe class QuickChatPanel : ModuleBase
                     FirstItemSpacing   = 0f,
                     FitToContentHeight = true
                 };
-            
+            }
+
             TextButtonNode CreateGlyphButton(string text, string tooltip, Action onClick)
             {
                 var button = new TextButtonNode
@@ -1216,34 +1212,6 @@ public unsafe class QuickChatPanel : ModuleBase
             contentList?.AddNode(state);
         }
 
-        private TextInputNode CreateSearchInput()
-        {
-            var input = new TextInputNode
-            {
-                IsVisible         = true,
-                Size              = new(contentList.ContentWidth, 34f),
-                String            = itemSearchInput,
-                PlaceholderString = Lang.Get("PleaseSearch"),
-                MaxCharacters     = 128
-            };
-
-            input.OnInputReceived = text =>
-            {
-                itemSearchInput = text.ToString();
-                instance.searcher?.Search(itemSearchInput);
-                RefreshGameItemResults();
-            };
-
-            input.OnInputComplete = text =>
-            {
-                itemSearchInput = text.ToString();
-                instance.searcher?.Search(itemSearchInput);
-                RefreshGameItemResults();
-            };
-
-            return input;
-        }
-
         private HorizontalListNode CreateCardRow() =>
             new()
             {
@@ -1263,44 +1231,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 FirstItemSpacing   = 0f,
                 FitToContentHeight = true
             };
-
-        private HorizontalListNode CreateIconTextRow
-        (
-            uint                                     iconID,
-            string                                   title,
-            string                                   detail,
-            Action                                   onClick,
-            AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
-        )
-        {
-            var row = new HorizontalListNode
-            {
-                IsVisible   = true,
-                Size        = new(contentList.ContentWidth, 46f),
-                ItemSpacing = 8f,
-                FitHeight   = true
-            };
-
-            row.AddNode
-            (
-                new IconButtonNode
-                {
-                    IsVisible   = true,
-                    IsEnabled   = true,
-                    Size        = new(42f),
-                    IconId      = iconID,
-                    TextTooltip = title,
-                    OnClick     = onClick
-                }
-            );
-
-            var label = CreateTextActionRow($"{title}\n{detail}", detail, onClick, onMouseClick);
-            label.Size               = new(contentList.ContentWidth - 50f, 44f);
-            label.LabelNode.FontSize = 13;
-            row.AddNode(label);
-
-            return row;
-        }
 
         private TextButtonNode CreateTextActionRow
         (
