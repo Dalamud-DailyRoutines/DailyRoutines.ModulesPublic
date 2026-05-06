@@ -18,7 +18,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Shell;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Interop;
 using KamiToolKit.Classes;
-using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Premade.Node.Simple;
 using Lumina.Excel.Sheets;
@@ -582,14 +581,14 @@ public unsafe class QuickChatPanel : ModuleBase
     ) : AttachedAddon("ChatLog")
     {
         private readonly Dictionary<QuickChatTab, ListButtonNode> tabButtons = [];
-        
+
         private QuickChatTab         selectedTab;
         private ScrollingListNode?   contentList;
         private SimpleComponentNode? contentPanel;
         private SimpleNineGridNode?  contentPanelBackground;
         private TextInputNode?       itemSearchInputNode;
         private VerticalListNode?    itemResultsLayout;
-        
+
         private string itemSearchInput  = string.Empty;
         private bool   rebuildRequested = true;
 
@@ -671,19 +670,19 @@ public unsafe class QuickChatPanel : ModuleBase
             nav.AddNode(CreateNavButton(QuickChatTab.SystemSounds,     Lang.Get("QuickChatPanel-SystemSound")));
             nav.AddNode(CreateNavButton(QuickChatTab.GameItems,        Lang.Get("QuickChatPanel-GameItems")));
             nav.AddNode(CreateNavButton(QuickChatTab.SpecialIconChars, Lang.Get("QuickChatPanel-SpecialIconChar")));
-            
+
             var settingButton = new ListButtonNode
             {
-                IsVisible   = true,
-                IsEnabled   = true,
-                Size        = new(116f, 34f),
-                String      = Lang.Get("Settings"),
-                OnClick     = () => ChatManager.Instance().SendMessage($"/pdr search {Lang.Get("QuickChatPanelTitle")}")
+                IsVisible = true,
+                IsEnabled = true,
+                Size      = new(116f, 34f),
+                String    = Lang.Get("Settings"),
+                OnClick   = () => ChatManager.Instance().SendMessage($"/pdr search {Lang.Get("QuickChatPanelTitle")}")
             };
 
             settingButton.LabelNode.FontSize = 15;
             settingButton.LabelNode.AutoAdjustTextSize();
-            
+
             nav.AddDummy(8f);
             nav.AddNode(settingButton);
 
@@ -921,53 +920,57 @@ public unsafe class QuickChatPanel : ModuleBase
                 var macro = instance.config.SavedMacros[i];
                 if (string.IsNullOrWhiteSpace(macro.Name)) continue;
 
-                var row = CreateIconTextRow
+                contentList?.AddNode
                 (
-                    macro.IconID,
-                    macro.Name,
-                    $"{Lang.Get("QuickChatPanel-LastUpdateTime")}: {macro.LastUpdateTime}",
-                    () => instance.ExecuteMacro(macro),
-                    (_, _, _, _, data) =>
-                    {
-                        if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift) && instance.dropMacroIndex >= 0)
+                    CreateMacroListButton
+                    (
+                        macro.IconID,
+                        macro.Name,
+                        () => instance.ExecuteMacro(macro),
+                        (_, _, _, _, data) =>
                         {
-                            instance.SwapMacros(instance.dropMacroIndex, index);
-                            instance.dropMacroIndex = -1;
-                            RequestRebuild();
-                            return;
-                        }
+                            if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift) && instance.dropMacroIndex >= 0)
+                            {
+                                instance.SwapMacros(instance.dropMacroIndex, index);
+                                instance.dropMacroIndex = -1;
+                                RequestRebuild();
+                                return;
+                            }
 
-                        if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift))
-                        {
-                            instance.dropMacroIndex = index;
-                            return;
-                        }
+                            if (data->MouseData.Modifier.HasFlag(ModifierFlag.Shift))
+                            {
+                                instance.dropMacroIndex = index;
+                                return;
+                            }
 
-                        instance.ExecuteMacro(macro);
-                    }
+                            instance.ExecuteMacro(macro);
+                        }
+                    )
                 );
-
-                contentList?.AddNode(row);
             }
         }
 
         private void BuildMacroButtonGrid()
         {
-            var row   = CreateCardRow();
-            var count = 0;
+            var row          = CreateCardRow();
+            var currentWidth = 0f;
 
-            for (var i = 0; i < instance.config.SavedMacros.Count; i++)
+            foreach (var macro in instance.config.SavedMacros)
             {
-                var macro = instance.config.SavedMacros[i];
                 if (string.IsNullOrWhiteSpace(macro.Name)) continue;
+                
+                var macro1 = macro;
+                var button = CreateMacroCardButton(macro.IconID, macro.Name, () => instance.ExecuteMacro(macro1));
 
-                row.AddNode(CreateIconCard(macro.IconID, macro.Name, () => instance.ExecuteMacro(macro)));
-                count++;
+                if (currentWidth + button.Width > contentList.ContentWidth)
+                {
+                    contentList?.AddNode(row);
+                    row          = CreateCardRow();
+                    currentWidth = 0f;
+                }
 
-                if (count % 4 != 0) continue;
-
-                contentList?.AddNode(row);
-                row = CreateCardRow();
+                row.AddNode(button);
+                currentWidth += button.Width;
             }
 
             if (row.Nodes.Count > 0)
@@ -997,7 +1000,7 @@ public unsafe class QuickChatPanel : ModuleBase
                         UIGlobals.PlayChatSoundEffect(key);
                     }
                 );
-                
+
                 if (currentWidth + button.Width > contentList.ContentWidth)
                 {
                     contentList?.AddNode(row);
@@ -1034,10 +1037,10 @@ public unsafe class QuickChatPanel : ModuleBase
                 if (currentWidth + button.Width > contentList.ContentWidth)
                 {
                     contentList?.AddNode(row);
-                    row = CreateGlyphRow();
+                    row          = CreateGlyphRow();
                     currentWidth = 0f;
                 }
-                
+
                 row.AddNode(button);
                 currentWidth += button.Width;
             }
@@ -1045,7 +1048,7 @@ public unsafe class QuickChatPanel : ModuleBase
             if (row.Nodes.Count > 0)
                 contentList?.AddNode(row);
         }
-        
+
         private void AddEmptyState(string text, string? detail = null)
         {
             var state = new VerticalListNode
@@ -1145,31 +1148,14 @@ public unsafe class QuickChatPanel : ModuleBase
                 FitToContentHeight = true
             };
 
-        private TextButtonNode CreateTextActionRow(string text,
-                                                   string tooltip, Action onClick, AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null)
-        {
-            var button = new TextButtonNode
-            {
-                IsVisible   = true,
-                IsEnabled   = true,
-                Size        = new(contentList.ContentWidth, 32f),
-                String      = text,
-                TextTooltip = tooltip,
-                OnClick     = onClick
-            };
-
-            button.LabelNode.AlignmentType = AlignmentType.Left;
-            button.LabelNode.FontSize      = 14;
-
-            if (onMouseClick != null)
-                button.AddEvent(AtkEventType.MouseClick, onMouseClick);
-
-            return button;
-        }
-
         private HorizontalListNode CreateIconTextRow
-            (uint iconID, 
-             string title, string detail, Action onClick, AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null)
+        (
+            uint                                     iconID,
+            string                                   title,
+            string                                   detail,
+            Action                                   onClick,
+            AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
+        )
         {
             var row = new HorizontalListNode
             {
@@ -1198,6 +1184,33 @@ public unsafe class QuickChatPanel : ModuleBase
             row.AddNode(label);
 
             return row;
+        }
+
+        private TextButtonNode CreateTextActionRow
+        (
+            string                                   text,
+            string                                   tooltip,
+            Action                                   onClick,
+            AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
+        )
+        {
+            var button = new TextButtonNode
+            {
+                IsVisible   = true,
+                IsEnabled   = true,
+                Size        = new(contentList.ContentWidth, 32f),
+                String      = text,
+                TextTooltip = tooltip,
+                OnClick     = onClick
+            };
+
+            button.LabelNode.AlignmentType = AlignmentType.Left;
+            button.LabelNode.FontSize      = 14;
+
+            if (onMouseClick != null)
+                button.AddEvent(AtkEventType.MouseClick, onMouseClick);
+
+            return button;
         }
 
         private static TextButtonNode CreateCompactTextButton
@@ -1242,44 +1255,98 @@ public unsafe class QuickChatPanel : ModuleBase
             return button;
         }
 
-        private static VerticalListNode CreateIconCard(uint iconID, string text, Action onClick)
+        private TextButtonNode CreateMacroListButton
+        (
+            uint                                     iconID,
+            string                                   title,
+            Action                                   onClick,
+            AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
+        )
         {
-            var layout = new VerticalListNode
-            {
-                IsVisible   = true,
-                Size        = new(118f, 78f),
-                ItemSpacing = 2f,
-                FitWidth    = true,
-                Alignment   = VerticalListAlignment.Left
-            };
-
-            var iconButton = new IconButtonNode
+            var button = new TextButtonNode
             {
                 IsVisible   = true,
                 IsEnabled   = true,
-                Size        = new(50f),
+                Size        = new(contentList.ContentWidth, 52f),
+                String      = string.Empty,
+                TextTooltip = title,
+                OnClick     = onClick
+            };
+
+            button.LabelNode.IsVisible = false;
+
+            var icon = new IconImageNode
+            {
+                IsVisible   = true,
+                Size        = new(28f),
+                TextureSize = new(28f),
                 IconId      = iconID,
-                TextTooltip = text,
-                OnClick     = onClick
+                FitTexture  = true
             };
-            iconButton.Position = new((layout.Width - iconButton.Width) / 2f, 0f);
 
-            var labelButton = new TextButtonNode
+            icon.Position = new(12f, (button.Size.Y - icon.Size.Y) / 2 - 2f);
+            icon.AttachNode(button);
+
+            var text = new TextNode
+            {
+                IsVisible        = true,
+                Position         = new(icon.Position.X + icon.Size.X + 6f, 0f),
+                String           = title,
+                AlignmentType    = AlignmentType.Left,
+                FontSize         = 14,
+                TextFlags        = TextFlags.Bold | TextFlags.Edge,
+                TextColor        = ColorHelper.GetColor(50),
+                TextOutlineColor = ColorHelper.GetColor(1),
+            };
+            
+            text.Size = new(button.Size.X - text.Position.X, 46f);
+            text.AttachNode(button);
+
+            if (onMouseClick != null)
+                button.AddEvent(AtkEventType.MouseClick, onMouseClick);
+
+            return button;
+        }
+
+        private static TextButtonNode CreateMacroCardButton(uint iconID, string text, Action onClick)
+        {
+            var button = new TextButtonNode
             {
                 IsVisible   = true,
                 IsEnabled   = true,
-                Size        = new(118f, 28f),
-                String      = text,
+                Size        = new(110f, 100f),
+                String      = string.Empty,
                 TextTooltip = text,
                 OnClick     = onClick
             };
-            labelButton.LabelNode.FontSize = 12;
-            labelButton.LabelNode.AutoAdjustTextSize();
 
-            layout.AddNode(iconButton);
-            layout.AddNode(labelButton);
+            button.LabelNode.IsVisible = false;
 
-            return layout;
+            var icon = new IconImageNode
+            {
+                IsVisible  = true,
+                Size       = new(50f),
+                IconId     = iconID,
+                FitTexture = true,
+            };
+            icon.Position = new((button.Size.X - icon.Size.X) / 2, 10f);
+            
+            icon.AttachNode(button);
+
+            new TextNode
+            {
+                IsVisible        = true,
+                Position         = new(0f, 60f),
+                Size             = new(button.Width, 24f),
+                String           = text,
+                AlignmentType    = AlignmentType.Center,
+                FontSize         = 12,
+                TextFlags        = TextFlags.Bold | TextFlags.Edge,
+                TextColor        = ColorHelper.GetColor(50),
+                TextOutlineColor = ColorHelper.GetColor(1),
+            }.AttachNode(button);
+
+            return button;
         }
     }
 
