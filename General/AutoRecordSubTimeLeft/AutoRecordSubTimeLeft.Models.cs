@@ -188,8 +188,8 @@ public partial class AutoRecordSubTimeLeft
         textNode->SetPositionFloat(-20, 40);
         textNode->SetText
         (
-            $"剩余天数: {FormatTimeSpan(leftMonth == TimeSpan.MinValue ? TimeSpan.Zero : leftMonth)}\n" +
-            $"剩余时长: {FormatTimeSpan(leftTime  == TimeSpan.MinValue ? TimeSpan.Zero : leftTime)}"
+            $"月卡: {FormatTimeSpan(leftMonth == TimeSpan.MinValue ? TimeSpan.Zero : leftMonth)}\n" +
+            $"点卡: {FormatTimeSpan(leftTime  == TimeSpan.MinValue ? TimeSpan.Zero : leftTime)}"
         );
     }
 

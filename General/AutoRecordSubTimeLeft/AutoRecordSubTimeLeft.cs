@@ -10,9 +10,10 @@ using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
-using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Lumina.Text.Payloads;
+using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.ImGuiOm.Widgets;
 using OmenTools.Interop.Game.Models;
@@ -237,42 +238,60 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         var now        = StandardTimeManager.Instance().Now;
         var stats      = tracker.Snapshot;
 
-        var textBuilder = new SeStringBuilder();
-        textBuilder.AddUiForeground($"[{(isMonth ? "月卡" : "点卡")}] ", 25)
-                   .AddText($"{expireTime:MM/dd HH:mm}");
-        entry.Text = textBuilder.Build();
+        using var builder = new RentedSeStringBuilder();
+        builder.Builder
+               .PushColorType(25)
+               .Append($"[{(isMonth ? "月卡" : "点卡")}] ")
+               .PopColorType()
+               .Append($"{expireTime:MM/dd HH:mm}");
+        entry.Text = builder.Builder.ToReadOnlySeString().ToDalamudString();
 
-        var tooltipBuilder = new SeStringBuilder();
-        tooltipBuilder.AddUiForeground("[过期时间]", 28)
-                      .Add(NewLinePayload.Payload)
-                      .AddText($"{expireTime:yyyy/MM/dd HH:mm:ss}")
-                      .Add(NewLinePayload.Payload)
-                      .AddUiForeground("[剩余时长]", 28)
-                      .Add(NewLinePayload.Payload)
-                      .AddText(FormatTimeSpan(expireTime - now))
-                      .Add(NewLinePayload.Payload)
-                      .Add(NewLinePayload.Payload)
-                      .AddUiForeground("[本日游玩时长]", 28)
-                      .Add(NewLinePayload.Payload)
-                      .AddText(FormatTimeSpan(stats.Today))
-                      .Add(NewLinePayload.Payload)
-                      .AddUiForeground("[昨日游玩时长]", 28)
-                      .Add(NewLinePayload.Payload)
-                      .AddText(FormatTimeSpan(stats.Yesterday))
-                      .Add(NewLinePayload.Payload)
-                      .AddUiForeground("[近 7 天游玩时长]", 28)
-                      .Add(NewLinePayload.Payload)
-                      .AddText(FormatTimeSpan(stats.Last7Days))
-                      .Add(NewLinePayload.Payload)
-                      .Add(NewLinePayload.Payload)
-                      .AddText("(左键: ")
-                      .AddUiForeground("模块配置界面", 34)
-                      .AddText(")")
-                      .Add(NewLinePayload.Payload)
-                      .AddText("(右键: ")
-                      .AddUiForeground("时长充值页面", 34)
-                      .AddText(")");
-        entry.Tooltip = tooltipBuilder.Build();
+        using var tooltipBuilder = new RentedSeStringBuilder();
+        tooltipBuilder.Builder
+                      .PushColorType(28)
+                      .Append("[过期时间]")
+                      .PopColorType()
+                      .AppendNewLine()
+                      .Append($"{expireTime:yyyy/MM/dd HH:mm:ss}")
+                      .AppendNewLine()
+                      .PushColorType(28)
+                      .Append("[剩余时长]")
+                      .PopColorType()
+                      .AppendNewLine()
+                      .Append(FormatTimeSpan(expireTime - now))
+                      .AppendNewLine()
+                      .AppendNewLine()
+                      .PushColorType(28)
+                      .Append("[本日游玩时长]")
+                      .PopColorType()
+                      .AppendNewLine()
+                      .Append(FormatTimeSpan(stats.Today))
+                      .AppendNewLine()
+                      .PushColorType(28)
+                      .Append("[昨日游玩时长]")
+                      .PopColorType()
+                      .AppendNewLine()
+                      .Append(FormatTimeSpan(stats.Yesterday))
+                      .AppendNewLine()
+                      .PushColorType(28)
+                      .Append("[近 7 天游玩时长]")
+                      .PopColorType()
+                      .AppendNewLine()
+                      .Append(FormatTimeSpan(stats.Last7Days))
+                      .AppendNewLine()
+                      .AppendNewLine()
+                      .Append("(左键: ")
+                      .PushColorType(34)
+                      .Append("模块配置界面")
+                      .PopColorType()
+                      .Append(")")
+                      .AppendNewLine()
+                      .Append("(右键: ")
+                      .PushColorType(34)
+                      .Append("时长充值页面")
+                      .PopColorType()
+                      .Append(")");
+        entry.Tooltip = tooltipBuilder.Builder.ToReadOnlySeString().ToDalamudString();
         entry.Shown   = true;
     }
 
