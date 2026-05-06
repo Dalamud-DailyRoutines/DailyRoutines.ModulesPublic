@@ -192,12 +192,12 @@ public partial class AutoReplyChatBot
                 ImGui.SetScrollHereY(1f);
         }
 
-        ImGui.SetNextItemWidth(chatWidth - ImGui.CalcTextSize(Lang.Get("AutoReplyChatBot-Send")).X - 4 * ImGui.GetStyle().ItemSpacing.X);
+        ImGui.SetNextItemWidth(chatWidth - ImGui.CalcTextSize(Lang.Get("Send")).X - 4 * ImGui.GetStyle().ItemSpacing.X);
         ImGui.InputText("##MessageInput", ref currentWindow.InputText, 512, ImGuiInputTextFlags.EnterReturnsTrue);
 
         ImGui.SameLine();
 
-        if ((ImGui.Button(Lang.Get("AutoReplyChatBot-Send")) || ImGui.IsKeyPressed(ImGuiKey.Enter)) &&
+        if ((ImGui.Button(Lang.Get("Send")) || ImGui.IsKeyPressed(ImGuiKey.Enter)) &&
             !string.IsNullOrWhiteSpace(currentWindow.InputText))
         {
             var text       = currentWindow.InputText;
