@@ -814,7 +814,7 @@ public unsafe class QuickChatPanel : ModuleBase
             itemResultsLayout = new()
             {
                 IsVisible   = true,
-                Size        = new(ContentListWidth, MathF.Max(80f, ContentSize.Y - 48f)),
+                Size        = new(contentList.ContentWidth, MathF.Max(80f, ContentSize.Y - 48f)),
                 ItemSpacing = 4f,
                 FitWidth    = true
             };
@@ -1051,7 +1051,7 @@ public unsafe class QuickChatPanel : ModuleBase
             var state = new VerticalListNode
             {
                 IsVisible   = true,
-                Size        = new(ContentListWidth, 72f),
+                Size        = new(contentList.ContentWidth, 72f),
                 ItemSpacing = 2f,
                 FitWidth    = true
             };
@@ -1061,7 +1061,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 new TextNode
                 {
                     IsVisible     = true,
-                    Size          = new(ContentListWidth, 30f),
+                    Size          = new(contentList.ContentWidth, 30f),
                     String        = text,
                     FontSize      = 16,
                     TextColor     = ColorHelper.GetColor(3),
@@ -1076,7 +1076,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     new TextNode
                     {
                         IsVisible     = true,
-                        Size          = new(ContentListWidth, 24f),
+                        Size          = new(contentList.ContentWidth, 24f),
                         String        = detail,
                         TextColor     = ColorHelper.GetColor(3),
                         AlignmentType = AlignmentType.Center
@@ -1092,7 +1092,7 @@ public unsafe class QuickChatPanel : ModuleBase
             var input = new TextInputNode
             {
                 IsVisible         = true,
-                Size              = new(ContentListWidth, 34f),
+                Size              = new(contentList.ContentWidth, 34f),
                 String            = itemSearchInput,
                 PlaceholderString = Lang.Get("PleaseSearch"),
                 MaxCharacters     = 128
@@ -1119,7 +1119,7 @@ public unsafe class QuickChatPanel : ModuleBase
             new()
             {
                 IsVisible          = true,
-                Size               = new(ContentListWidth, 82f),
+                Size               = new(contentList.ContentWidth, 82f),
                 ItemSpacing        = 8f,
                 FirstItemSpacing   = 0f,
                 FitToContentHeight = true
@@ -1129,7 +1129,7 @@ public unsafe class QuickChatPanel : ModuleBase
             new()
             {
                 IsVisible          = true,
-                Size               = new(ContentListWidth, 38f),
+                Size               = new(contentList.ContentWidth, 38f),
                 ItemSpacing        = 6f,
                 FirstItemSpacing   = 0f,
                 FitToContentHeight = true
@@ -1139,7 +1139,7 @@ public unsafe class QuickChatPanel : ModuleBase
             new()
             {
                 IsVisible          = true,
-                Size               = new(ContentListWidth, 36f),
+                Size               = new(contentList.ContentWidth, 36f),
                 ItemSpacing        = 4f,
                 FirstItemSpacing   = 0f,
                 FitToContentHeight = true
@@ -1174,7 +1174,7 @@ public unsafe class QuickChatPanel : ModuleBase
             var row = new HorizontalListNode
             {
                 IsVisible   = true,
-                Size        = new(ContentListWidth, 46f),
+                Size        = new(contentList.ContentWidth, 46f),
                 ItemSpacing = 8f,
                 FitHeight   = true
             };
@@ -1193,7 +1193,7 @@ public unsafe class QuickChatPanel : ModuleBase
             );
 
             var label = CreateTextActionRow($"{title}\n{detail}", detail, onClick, onMouseClick);
-            label.Size               = new(ContentListWidth - 50f, 44f);
+            label.Size               = new(contentList.ContentWidth - 50f, 44f);
             label.LabelNode.FontSize = 13;
             row.AddNode(label);
 
@@ -1281,9 +1281,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
             return layout;
         }
-
-        private float ContentListWidth =>
-            MathF.Max(320f, contentList?.Width ?? ContentSize.X - 150f);
     }
 
     #region 常量
