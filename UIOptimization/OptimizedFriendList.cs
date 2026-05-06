@@ -633,43 +633,6 @@ public unsafe class OptimizedFriendList : ModuleBase
                     var name      = Name;
                     var region    = WorldRegionResolver.Resolve(GameState.HomeWorld);
                     _ = OptimizedFriendListAsyncHelper.QueryUsedNamesAsync(contentID, name, region);
-#if false
-                    _ = Task.Run
-                    (
-                        async () =>
-                        {
-                            try
-                            {
-                                var data = await PlayerUsedNamesOnline.GetFreshAsync(contentId, region).ConfigureAwait(false);
-                                await DService.Instance().Framework.RunOnTick
-                                (
-                                    () =>
-                                    {
-                                        if (data.Count == 0)
-                                        {
-                                            NotifyHelper.Instance().Chat(Lang.Get("OptimizedFriendList-FriendUseNamesNotFound", name));
-                                            return;
-                                        }
-
-                                        NotifyHelper.Instance().Chat($"{Lang.Get("OptimizedFriendList-FriendUseNamesFound", name)}:");
-                                        var counter = 1;
-
-                                        foreach (var nameChange in data)
-                                        {
-                                            NotifyHelper.Instance().Chat($"{counter}. {nameChange.ChangedTime}:");
-                                            NotifyHelper.Instance().Chat($"     {nameChange.BeforeName} -> {nameChange.AfterName}:");
-                                            counter++;
-                                        }
-                                    }
-                                ).ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                DLog.Error("获取好友曾用名时发生错误", ex);
-                            }
-                        }
-                    );
-#endif
                 }
             };
             quertUsedNameButtonNode.AttachNode(this);
@@ -700,9 +663,8 @@ public unsafe class OptimizedFriendList : ModuleBase
 
     private static class OptimizedFriendListAsyncHelper
     {
-        public static Task QueryUsedNamesAsync(ulong contentID, string name, WorldRegion region)
-        {
-            return RemoteUsedNames.GetFreshAsync(contentID, region).AsTask().ContinueWith
+        public static Task QueryUsedNamesAsync(ulong contentID, string name, WorldRegion region) =>
+            RemoteUsedNames.GetFreshAsync(contentID, region).AsTask().ContinueWith
             (
                 task =>
                 {
@@ -739,38 +701,6 @@ public unsafe class OptimizedFriendList : ModuleBase
                 },
                 TaskScheduler.Default
             ).Unwrap();
-#if false
-        try
-        {
-            var data = await PlayerUsedNamesOnline.GetFreshAsync(contentId, region).ConfigureAwait(false);
-            await DService.Instance().Framework.RunOnTick
-            (
-                () =>
-                {
-                    if (data.Count == 0)
-                    {
-                        NotifyHelper.Instance().Chat(Lang.Get("OptimizedFriendList-FriendUseNamesNotFound", name));
-                        return;
-                    }
-
-                    NotifyHelper.Instance().Chat($"{Lang.Get("OptimizedFriendList-FriendUseNamesFound", name)}:");
-                    var counter = 1;
-
-                    foreach (var nameChange in data)
-                    {
-                        NotifyHelper.Instance().Chat($"{counter}. {nameChange.ChangedTime}:");
-                        NotifyHelper.Instance().Chat($"     {nameChange.BeforeName} -> {nameChange.AfterName}:");
-                        counter++;
-                    }
-                }
-            ).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            DLog.Error("获取好友曾用名时发生错误", ex);
-        }
-#endif
-        }
     }
 
     private class DRFriendlistSearchSetting
