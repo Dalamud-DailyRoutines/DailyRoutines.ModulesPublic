@@ -12,14 +12,13 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
-using Lumina.Text.Payloads;
 using OmenTools.Dalamud.Attributes;
-using OmenTools.Info.Game;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -70,15 +69,51 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
     {
         var result = ItemSourceInfo.Query(context.ItemID);
         if (result is not { State: ItemSourceQueryState.Ready, Data: { } itemInfo }) return;
-
+        
+        var shopInfo = itemInfo.NPCInfos
+                               .SelectMany(x => x.CostInfos)
+                               .DistinctBy(x => x.ItemID);
+        
         using var builder = new RentedSeStringBuilder();
+
         builder.Builder
                .AppendNewLine()
                .AppendNewLine()
                .PushColorType(32)
-               .Append($"[{Lang.Get("AutoShowItemNPCShopInfo-ItemDetail", itemInfo.NPCInfos.Count)}]")
+               .Append($"[{Lang.Get("AutoShowItemNPCShopInfo-ContextMenu")}]")
                .PopColorType();
 
+        foreach (var costInfo in shopInfo)
+        {
+            builder.Builder
+                   .AppendNewLine()
+                   .Append($"  - {LuminaWrapper.GetItemName(costInfo.ItemID)}: ")
+                   .Append($"x{costInfo.Cost}");
+            
+            if (CurrencyManager.Instance()->HasItem(costInfo.ItemID))
+            {
+                builder.Builder
+                       .AppendNewLine()
+                       .Append($"    ({Lang.Get("Current")}: ")
+                       .PushColorType(67)
+                       .Append($"{CurrencyManager.Instance()->GetItemCount(costInfo.ItemID)}")
+                       .PopColorType()
+                       .Append(")");
+            }
+            else if (LocalPlayerState.GetItemCount(costInfo.ItemID) is var itemCount and > 0)
+            {
+                builder.Builder
+                       .AppendNewLine()
+                       .Append($"    ({Lang.Get("Current")}: ")
+                       .PushColorType(67)
+                       .Append($"{itemCount}")
+                       .PopColorType()
+                       .Append(")");
+            }
+        }
+
+        builder.Builder.AppendNewLine();
+        
         context.Append(TooltipItemType.ItemDescription, builder.Builder.ToReadOnlySeString());
     }
     
