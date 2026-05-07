@@ -38,23 +38,23 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
     
     private readonly ShopInfoContextMenu contextMenu = new();
 
-    private readonly Dictionary<uint, TooltipModification> itemModifications = [];
+    private TooltipRule? itemRule;
 
     protected override void Init()
     {
         DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpen;
-        GameTooltipManager.Instance().RegGenerateItemTooltipModifier(OnItemTooltipGenerate);
+        itemRule = GameTooltipManager.Instance().RegItemRule(OnItemTooltipGenerate);
     }
 
     protected override void Uninit()
     {
         DService.Instance().ContextMenu.OnMenuOpened -= OnMenuOpen;
 
-        GameTooltipManager.Instance().Unreg(generateItemModifiers: OnItemTooltipGenerate);
-
-        foreach (var tooltipModification in itemModifications.Values)
-            GameTooltipManager.Instance().RemoveItemDetail(tooltipModification);
-        itemModifications.Clear();
+        if (itemRule != null)
+        {
+            GameTooltipManager.Instance().Unreg(itemRule);
+            itemRule = null;
+        }
 
         AddonShopsPreview.Addon?.Dispose();
         AddonShopsPreview.Addon = null;
@@ -66,12 +66,9 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         args.AddMenuItem(contextMenu.Get());
     }
 
-    private void OnItemTooltipGenerate(AtkUnitBase* addonItemDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
+    private void OnItemTooltipGenerate(ItemTooltipContext context)
     {
-        var itemID = AgentItemDetail.Instance()->ItemId;
-
-        if (itemModifications.TryGetValue(itemID, out _)) return;
-        var result = ItemSourceInfo.Query(itemID);
+        var result = ItemSourceInfo.Query(context.ItemID);
         if (result is not { State: ItemSourceQueryState.Ready, Data: { } itemInfo }) return;
 
         var text = new SeStringBuilder()
@@ -82,13 +79,7 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
                    .AddUiForegroundOff()
                    .Build();
 
-        itemModifications[itemID] = GameTooltipManager.Instance().AddItemDetail
-        (
-            itemID,
-            TooltipItemType.ItemDescription,
-            text,
-            TooltipModifyMode.Append
-        );
+        context.Append(TooltipItemType.ItemDescription, text);
     }
     
     private class ShopInfoContextMenu : MenuItemBase

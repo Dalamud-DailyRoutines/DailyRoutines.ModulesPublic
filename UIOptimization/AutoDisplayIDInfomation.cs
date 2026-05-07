@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -9,14 +10,11 @@ using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
-using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using RowStatus = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -33,21 +31,16 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private Config config = null!;
     private IDtrBarEntry? zoneInfoEntry;
 
-    private TooltipModification? itemModification;
-    private TooltipModification? actionModification;
-    private TooltipModification? statusModification;
-    private TooltipModification? weatherModification;
-
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
         
         zoneInfoEntry ??= DService.Instance().DTRBar.Get("AutoDisplayIDInfomation-ZoneInfo");
 
-        GameTooltipManager.Instance().RegGenerateItemTooltipModifier(ModifyItemTooltip);
-        GameTooltipManager.Instance().RegGenerateActionTooltipModifier(ModifyActionTooltip);
-        GameTooltipManager.Instance().RegTooltipShowModifier(ModifyStatusTooltip);
-        GameTooltipManager.Instance().RegTooltipShowModifier(ModifyWeatherTooltip);
+        GameTooltipManager.Instance().RegItemTooltip(ModifyItemTooltip);
+        GameTooltipManager.Instance().RegActionTooltip(ModifyActionTooltip);
+        GameTooltipManager.Instance().RegTooltipShow(ModifyStatusTooltip);
+        GameTooltipManager.Instance().RegTooltipShow(ModifyWeatherTooltip);
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ActionDetail",          OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ItemDetail",            OnAddon);
@@ -68,15 +61,10 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         zoneInfoEntry?.Remove();
         zoneInfoEntry = null;
 
-        GameTooltipManager.Instance().Unreg(generateItemModifiers: ModifyItemTooltip);
-        GameTooltipManager.Instance().Unreg(generateActionModifiers: ModifyActionTooltip);
+        GameTooltipManager.Instance().Unreg(ModifyItemTooltip);
+        GameTooltipManager.Instance().Unreg(ModifyActionTooltip);
         GameTooltipManager.Instance().Unreg(ModifyStatusTooltip);
         GameTooltipManager.Instance().Unreg(ModifyWeatherTooltip);
-
-        GameTooltipManager.Instance().RemoveItemDetail(itemModification);
-        GameTooltipManager.Instance().RemoveItemDetail(actionModification);
-        GameTooltipManager.Instance().RemoveItemDetail(statusModification);
-        GameTooltipManager.Instance().RemoveWeather(weatherModification);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
@@ -201,164 +189,61 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         }
     }
 
-    private void ModifyItemTooltip(AtkUnitBase* addonItemDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
+    private void ModifyItemTooltip(ItemTooltipContext context)
     {
-        if (itemModification != null)
-        {
-            GameTooltipManager.Instance().RemoveItemDetail(itemModification);
-            itemModification = null;
-        }
-
         if (!config.ShowItemID) return;
-
-        var itemID = AgentItemDetail.Instance()->ItemId;
-        if (itemID < 2000000)
-            itemID %= 500000;
 
         var payloads = new List<Payload>
         {
             new UIForegroundPayload(3),
             new TextPayload("   ["),
-            new TextPayload($"{itemID}"),
+            new TextPayload($"{context.ItemID}"),
             new TextPayload("]"),
             new UIForegroundPayload(0)
         };
 
-        itemModification = GameTooltipManager.Instance().AddItemDetail
-        (
-            itemID,
-            TooltipItemType.ItemUICategory,
-            new SeString(payloads),
-            TooltipModifyMode.Append
-        );
+        context.Append(TooltipItemType.ItemUICategory, new SeString(payloads));
     }
 
-    private void ModifyActionTooltip(AtkUnitBase* addonActionDetail, NumberArrayData* numberArrayData, StringArrayData* stringArrayData)
+    private void ModifyActionTooltip(ActionTooltipContext context)
     {
-        if (actionModification != null)
-        {
-            GameTooltipManager.Instance().RemoveItemDetail(actionModification);
-            actionModification = null;
-        }
-
         if (!config.ShowActionID) return;
 
-        var hoveredID = AgentActionDetail.Instance()->ActionId;
         var id = config is { ShowActionIDResolved: true, ShowActionIDOriginal: false }
-                     ? hoveredID
-                     : AgentActionDetail.Instance()->OriginalId;
+                     ? context.ActionID
+                     : context.OriginalActionID;
 
         var payloads    = new List<Payload>();
-        var needNewLine = config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != hoveredID;
+        var needNewLine = config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != context.ActionID;
 
         payloads.Add(needNewLine ? new NewLinePayload() : new TextPayload("   "));
         payloads.Add(new UIForegroundPayload(3));
         payloads.Add(new TextPayload("["));
         payloads.Add(new TextPayload($"{id}"));
 
-        if (config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != hoveredID)
-            payloads.Add(new TextPayload($" → {hoveredID}"));
+        if (config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != context.ActionID)
+            payloads.Add(new TextPayload($" → {context.ActionID}"));
 
         payloads.Add(new TextPayload("]"));
         payloads.Add(new UIForegroundPayload(0));
 
-        actionModification = GameTooltipManager.Instance().AddActionDetail
-        (
-            hoveredID,
-            TooltipActionType.ActionKind,
-            new SeString(payloads),
-            TooltipModifyMode.Append
-        );
+        context.Append(TooltipActionType.ActionKind, new SeString(payloads));
     }
 
-    private void ModifyStatusTooltip
-    (
-        AtkTooltipManager*                manager,
-        AtkTooltipType  type,
-        ushort                            parentID,
-        AtkResNode*                       targetNode,
-        AtkTooltipManager.AtkTooltipArgs* args
-    )
+    private void ModifyStatusTooltip(TooltipShowContext context)
     {
-        if (statusModification != null)
-        {
-            GameTooltipManager.Instance().RemoveItemDetail(statusModification);
-            statusModification = null;
-        }
-
         if (!config.ShowStatusID) return;
+        if (!context.TryGetStatusID(out var statusID)) return;
 
-        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer || targetNode == null) return;
-
-        var imageNode = targetNode->GetAsAtkImageNode();
-        if (imageNode == null) return;
-
-        var iconID = imageNode->PartsList->Parts[imageNode->PartId].UldAsset->AtkTexture.Resource->IconId;
-        if (iconID is < 210000 or > 230000) return;
-
-        var map = new Dictionary<uint, uint>();
-
-        if (TargetManager.Target is { } target && target.Address != localPlayer.Address)
-            AddStatuses(target.ToBCStruct()->StatusManager);
-
-        if (TargetManager.FocusTarget is { } focus)
-            AddStatuses(focus.ToBCStruct()->StatusManager);
-
-        foreach (var member in AgentHUD.Instance()->PartyMembers.ToArray().Where(m => m.Index != 0))
-        {
-            if (member.Object != null)
-                AddStatuses(member.Object->StatusManager);
-        }
-
-        AddStatuses(localPlayer.ToBCStruct()->StatusManager);
-
-        if (!map.TryGetValue(iconID, out var statuID) || statuID == 0) return;
-
-        statusModification = GameTooltipManager.Instance().AddStatus(statuID, $"  [{statuID}]", TooltipModifyMode.Regex, @"^(.*?)(?=\(|（|\n|$)");
-
-        return;
-
-        void AddStatuses(StatusManager sm)
-        {
-            AddStatusToMap(sm, ref map);
-        }
+        context.ReplaceText(current => new SeString().Append(Regex.Replace(current.TextValue, @"^(.*?)(?=\(|（|\n|$)", $"$1  [{statusID}]")));
     }
 
-    private void ModifyWeatherTooltip
-    (
-        AtkTooltipManager*                manager,
-        AtkTooltipType  type,
-        ushort                            parentID,
-        AtkResNode*                       targetNode,
-        AtkTooltipManager.AtkTooltipArgs* args
-    )
+    private void ModifyWeatherTooltip(TooltipShowContext context)
     {
-        if (weatherModification != null)
-        {
-            GameTooltipManager.Instance().RemoveWeather(weatherModification);
-            weatherModification = null;
-        }
-
         if (!config.ShowWeatherID) return;
+        if (!context.TryGetWeather(out var weatherID, out var weather)) return;
 
-        var weatherID = WeatherManager.Instance()->WeatherId;
-        if (!LuminaGetter.TryGetRow<Weather>(weatherID, out var weather)) return;
-
-        weatherModification = GameTooltipManager.Instance().AddWeatherTooltipModify($"{weather.Name} [{weatherID}]");
-    }
-
-    private static void AddStatusToMap(StatusManager statusManager, ref Dictionary<uint, uint> map)
-    {
-        foreach (var s in statusManager.Status)
-        {
-            if (s.StatusId == 0) continue;
-            if (!LuminaGetter.TryGetRow<RowStatus>(s.StatusId, out var row))
-                continue;
-
-            map.TryAdd(row.Icon, row.RowId);
-            for (var i = 1; i <= s.Param; i++)
-                map.TryAdd((uint)(row.Icon + i), row.RowId);
-        }
+        context.SetText($"{weather.Name} [{weatherID}]");
     }
 
     private void UpdateDTRInfo()
