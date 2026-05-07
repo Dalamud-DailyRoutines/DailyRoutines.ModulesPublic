@@ -6,13 +6,13 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Gui.ContextMenu;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
+using Lumina.Text.Payloads;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Game;
 using OmenTools.Info.Game.ItemSource;
@@ -66,20 +66,20 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         args.AddMenuItem(contextMenu.Get());
     }
 
-    private void OnItemTooltipGenerate(ItemTooltipContext context)
+    private static void OnItemTooltipGenerate(ItemTooltipContext context)
     {
         var result = ItemSourceInfo.Query(context.ItemID);
         if (result is not { State: ItemSourceQueryState.Ready, Data: { } itemInfo }) return;
 
-        var text = new SeStringBuilder()
-                   .Add(NewLinePayload.Payload)
-                   .Add(NewLinePayload.Payload)
-                   .AddUiForeground(32)
-                   .AddText($"[{Lang.Get("AutoShowItemNPCShopInfo-ItemDetail", itemInfo.NPCInfos.Count)}]")
-                   .AddUiForegroundOff()
-                   .Build();
+        using var builder = new RentedSeStringBuilder();
+        builder.Builder
+               .AppendNewLine()
+               .AppendNewLine()
+               .PushColorType(32)
+               .Append($"[{Lang.Get("AutoShowItemNPCShopInfo-ItemDetail", itemInfo.NPCInfos.Count)}]")
+               .PopColorType();
 
-        context.Append(TooltipItemType.ItemDescription, text);
+        context.Append(TooltipItemType.ItemDescription, builder.Builder.ToReadOnlySeString());
     }
     
     private class ShopInfoContextMenu : MenuItemBase

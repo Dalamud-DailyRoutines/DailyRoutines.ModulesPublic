@@ -7,11 +7,11 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Gui.Dtr;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Text.Payloads;
+using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
@@ -193,16 +193,16 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     {
         if (!config.ShowItemID) return;
 
-        var payloads = new List<Payload>
-        {
-            new UIForegroundPayload(3),
-            new TextPayload("   ["),
-            new TextPayload($"{context.ItemID}"),
-            new TextPayload("]"),
-            new UIForegroundPayload(0)
-        };
+        using var builder = new RentedSeStringBuilder();
 
-        context.Append(TooltipItemType.ItemUICategory, new SeString(payloads));
+        builder.Builder
+               .PushColorType(3)
+               .Append("   [")
+               .Append(context.ItemID)
+               .Append(']')
+               .PopColorType();
+
+        context.Append(TooltipItemType.ItemUICategory, builder.Builder.ToReadOnlySeString());
     }
 
     private void ModifyActionTooltip(ActionTooltipContext context)
@@ -213,21 +213,25 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
                      ? context.ActionID
                      : context.OriginalActionID;
 
-        var payloads    = new List<Payload>();
+        using var builder = new RentedSeStringBuilder();
         var needNewLine = config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != context.ActionID;
 
-        payloads.Add(needNewLine ? new NewLinePayload() : new TextPayload("   "));
-        payloads.Add(new UIForegroundPayload(3));
-        payloads.Add(new TextPayload("["));
-        payloads.Add(new TextPayload($"{id}"));
+        if (needNewLine)
+            builder.Builder.AppendNewLine();
+        else
+            builder.Builder.Append("   ");
+
+        builder.Builder.PushColorType(3);
+        builder.Builder.Append("[");
+        builder.Builder.Append(id);
 
         if (config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != context.ActionID)
-            payloads.Add(new TextPayload($" → {context.ActionID}"));
+            builder.Builder.Append($" → {context.ActionID}");
 
-        payloads.Add(new TextPayload("]"));
-        payloads.Add(new UIForegroundPayload(0));
+        builder.Builder.Append("]");
+        builder.Builder.PopColorType();
 
-        context.Append(TooltipActionType.ActionKind, new SeString(payloads));
+        context.Append(TooltipActionType.ActionKind, builder.Builder.ToReadOnlySeString());
     }
 
     private void ModifyStatusTooltip(TooltipShowContext context)
@@ -235,7 +239,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         if (!config.ShowStatusID) return;
         if (!context.TryGetStatusID(out var statusID)) return;
 
-        context.ReplaceText(current => new SeString().Append(Regex.Replace(current.TextValue, @"^(.*?)(?=\(|（|\n|$)", $"$1  [{statusID}]")));
+        context.ReplaceText(current => new ReadOnlySeString(Regex.Replace(current.ExtractText(), @"^(.*?)(?=\(|（|\n|$)", $"$1  [{statusID}]")));
     }
 
     private void ModifyWeatherTooltip(TooltipShowContext context)
@@ -243,7 +247,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         if (!config.ShowWeatherID) return;
         if (!context.TryGetWeather(out var weatherID, out var weather)) return;
 
-        context.SetText($"{weather.Name} [{weatherID}]");
+        context.SetText(new ReadOnlySeString($"{weather.Name} [{weatherID}]"));
     }
 
     private void UpdateDTRInfo()
