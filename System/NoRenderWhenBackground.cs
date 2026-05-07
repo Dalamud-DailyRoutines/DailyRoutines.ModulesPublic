@@ -7,6 +7,7 @@ using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
@@ -30,14 +31,22 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     private delegate void                              DeviceDX11PostTickDelegate(Device* device);
     private          Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
 
+    private static readonly CompSig AtkUnitBaseDrawSig = new("48 83 EC ?? F6 81 ?? ?? ?? ?? ?? 4C 8B C1");
+    private delegate        void AtkUnitBaseDrawDelegate(AtkUnitBase* manager);
+    private                 Hook<AtkUnitBaseDrawDelegate>? AtkUnitBaseDrawHook;
+    
     private Config config = null!;
 
     private long nextRenderTick;
+    private bool isNoRender;
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
 
+        AtkUnitBaseDrawHook = AtkUnitBaseDrawSig.GetHook<AtkUnitBaseDrawDelegate>(AtkUnitBaseDetour);
+        AtkUnitBaseDrawHook.Enable();
+        
         DeviceDX11PostTickHook = DeviceDX11PostTickSig.GetHook<DeviceDX11PostTickDelegate>(DeviceDX11PostTickDetour);
         DeviceDX11PostTickHook.Enable();
     }
@@ -52,6 +61,7 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     {
         if (GameState.IsForeground || !GameState.IsLoggedIn)
         {
+            isNoRender = false;
             DeviceDX11PostTickHook.Original(device);
             return;
         }
@@ -60,6 +70,7 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         {
             if (!IsIconic(Framework.Instance()->GameWindow->WindowHandle))
             {
+                isNoRender = false;
                 DeviceDX11PostTickHook.Original(device);
                 return;
             }
@@ -70,12 +81,24 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         if (currentTick - nextRenderTick > 0)
         {
             nextRenderTick = currentTick + 5_000;
+            isNoRender     = false;
+            
             DeviceDX11PostTickHook.Original(device);
             return;
         }
+        
+        isNoRender = true;
 
         if (UIModule.Instance()->ShouldLimitFps())
             Thread.Sleep(50);
+    }
+    
+    private void AtkUnitBaseDetour(AtkUnitBase* manager)
+    {
+        if (isNoRender)
+            return;
+
+        AtkUnitBaseDrawHook.Original(manager);
     }
 
     [DllImport("user32.dll")]
