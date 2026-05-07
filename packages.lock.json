@@ -38,8 +38,8 @@
       },
       "MemoEngine": {
         "type": "Transitive",
-        "resolved": "2.1.0",
-        "contentHash": "dGG5RziRDchDy2DrhPfShb6l59KA7ujhemTu7q6w2QElOYLdrCsCLYShp8SM+6fBMRyFiONOZBOe2xtv+9Z12Q==",
+        "resolved": "2.2.0",
+        "contentHash": "/xmmwOszf1NJz/qRMtaWFJV7EgcUJtZNRSgg1KcpVeQ86zhmIYYoIiMBofTwzX6YFOnITaB3IzAcWPoJenre4Q==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.4"
         }
@@ -156,7 +156,7 @@
           "DalamudPackager": "[15.0.0, )",
           "EdgeTTS": "[1.0.0, )",
           "KamiToolKit": "[1.0.0, )",
-          "MemoEngine": "[2.1.0, )",
+          "MemoEngine": "[2.2.0, )",
           "Microsoft.CodeAnalysis.CSharp": "[5.0.0, )",
           "OmenTools": "[1.0.0, )",
           "Otp.NET": "[1.4.1, )",
