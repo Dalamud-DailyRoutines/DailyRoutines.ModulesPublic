@@ -162,7 +162,7 @@ public unsafe class CustomizeSightDistance : ModuleBase
         
         UpdateCamera
         (
-            manager->GetActiveCamera(),
+            manager->Camera,
             config.MaxDistance,
             config.MinDistance,
             config.MaxRotation,
