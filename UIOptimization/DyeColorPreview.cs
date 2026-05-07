@@ -184,7 +184,7 @@ public unsafe class DyeColorPreview : ModuleBase
         {
             titleNode.String    = $"★ {Lang.Get(dye.NameKey)}";
             titleNode.TextColor = dye.HighlightColor;
-            countNode.String    = Lang.Get("DyeColorPreviewAvailableColors", dye.StainIDs.Length);
+            countNode.String    = Lang.Get("DyeColorPreview-AvailableColors", dye.StainIDs.Length);
 
             ClearColorNodes();
 
@@ -264,19 +264,19 @@ public unsafe class DyeColorPreview : ModuleBase
     {
         [52254] = new
         (
-            "DyeColorPreviewGeneralDye",
+            "DyeColorPreview-GeneralDye",
             new Vector4(1f, 0.95f, 0.65f, 1f),
             Enumerable.Range(1, 85).Select(static x => (uint)x).ToArray()
         ),
         [52255] = new
         (
-            "DyeColorPreviewExtraDye1",
+            "DyeColorPreview-ExtraDyeOne",
             new Vector4(1f, 0.25f, 0.25f, 1f),
             [86, 87, 88, 89, 90, 91, 92, 93, 94]
         ),
         [52256] = new
         (
-            "DyeColorPreviewExtraDye2",
+            "DyeColorPreview-ExtraDyeTwo",
             new Vector4(0.25f, 0.45f, 1f, 1f),
             [95, 96, 97, 98, 99, 100, 121, 122, 123, 124, 125]
         )
