@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -8,10 +7,9 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Text.Payloads;
-using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
@@ -37,10 +35,8 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         
         zoneInfoEntry ??= DService.Instance().DTRBar.Get("AutoDisplayIDInfomation-ZoneInfo");
 
-        GameTooltipManager.Instance().RegItemTooltip(ModifyItemTooltip);
-        GameTooltipManager.Instance().RegActionTooltip(ModifyActionTooltip);
-        GameTooltipManager.Instance().RegTooltipShow(ModifyStatusTooltip);
-        GameTooltipManager.Instance().RegTooltipShow(ModifyWeatherTooltip);
+        TooltipManager.Instance().RegItem(OnItemTooltip);
+        TooltipManager.Instance().RegAction(OnActionTooltip);
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ActionDetail",          OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ItemDetail",            OnAddon);
@@ -61,13 +57,10 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         zoneInfoEntry?.Remove();
         zoneInfoEntry = null;
 
-        GameTooltipManager.Instance().Unreg(ModifyItemTooltip);
-        GameTooltipManager.Instance().Unreg(ModifyActionTooltip);
-        GameTooltipManager.Instance().Unreg(ModifyStatusTooltip);
-        GameTooltipManager.Instance().Unreg(ModifyWeatherTooltip);
+        TooltipManager.Instance().Unreg(OnItemTooltip);
+        TooltipManager.Instance().Unreg(OnActionTooltip);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
     }
 
     protected override void ConfigUI()
@@ -143,25 +136,6 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         switch (args.AddonName)
         {
-            case "ActionDetail":
-                if (ActionDetail == null) return;
-
-                var actionTextNode = ActionDetail->GetTextNodeById(6);
-                if (actionTextNode == null) return;
-
-                actionTextNode->TextFlags |= TextFlags.MultiLine;
-                actionTextNode->FontSize  =  (byte)(actionTextNode->NodeText.StringPtr.ToString().Contains('\n') ? 10 : 12);
-                break;
-
-            case "ItemDetail":
-                if (ItemDetail == null) return;
-
-                var itemTextnode = ItemDetail->GetTextNodeById(35);
-                if (itemTextnode == null) return;
-
-                itemTextnode->TextFlags |= TextFlags.MultiLine;
-                break;
-
             case "_TargetInfoMainTarget" or "_TargetInfo":
                 if (TargetManager.Target is not { } target) return;
 
@@ -189,7 +163,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         }
     }
 
-    private void ModifyItemTooltip(ItemTooltipContext context)
+    private void OnItemTooltip(ItemKind itemKind, uint itemID, ref List<TooltipItemModification> modifications)
     {
         if (!config.ShowItemID) return;
 
@@ -197,57 +171,53 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         builder.Builder
                .PushColorType(3)
-               .Append("   [")
-               .Append(context.ItemID)
+               .Append(" [")
+               .Append(itemID)
                .Append(']')
                .PopColorType();
 
-        context.Append(TooltipItemType.UICategory, builder.Builder.ToReadOnlySeString());
+        modifications.Add
+        (
+            new()
+            {
+                Target = TooltipItemType.UICategory,
+                Type   = TooltipModificationType.Append,
+                Text   = builder.Builder.ToReadOnlySeString()
+            }
+        );
     }
 
-    private void ModifyActionTooltip(ActionTooltipContext context)
+    private void OnActionTooltip(DetailKind actionKind, uint actionID, ref List<TooltipActionModification> modifications)
     {
         if (!config.ShowActionID) return;
 
-        var id = config is { ShowActionIDResolved: true, ShowActionIDOriginal: false }
-                     ? context.ActionID
-                     : context.OriginalActionID;
-
         using var builder = new RentedSeStringBuilder();
-        var needNewLine = config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != context.ActionID;
+        var originalActionID = AgentActionDetail.Instance()->OriginalId;
+        var id = config is { ShowActionIDResolved: true, ShowActionIDOriginal: false }
+                     ? actionID
+                     : originalActionID;
 
-        if (needNewLine)
-            builder.Builder.AppendNewLine();
-        else
-            builder.Builder.Append("   ");
+        builder.Builder
+               .PushColorType(3)
+               .Append(" [")
+               .Append(id);
 
-        builder.Builder.PushColorType(3);
-        builder.Builder.Append("[");
-        builder.Builder.Append(id);
+        if (config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != actionID)
+            builder.Builder.Append($" → {actionID}");
 
-        if (config is { ShowActionIDResolved: true, ShowActionIDOriginal: true } && id != context.ActionID)
-            builder.Builder.Append($" → {context.ActionID}");
+        builder.Builder
+               .Append("]")
+               .PopColorType();
 
-        builder.Builder.Append("]");
-        builder.Builder.PopColorType();
-
-        context.Append(TooltipActionType.Category, builder.Builder.ToReadOnlySeString());
-    }
-
-    private void ModifyStatusTooltip(TooltipShowContext context)
-    {
-        if (!config.ShowStatusID) return;
-        if (!context.TryGetStatusID(out var statusID)) return;
-
-        context.ReplaceText(current => new ReadOnlySeString(Regex.Replace(current.ExtractText(), @"^(.*?)(?=\(|（|\n|$)", $"$1  [{statusID}]")));
-    }
-
-    private void ModifyWeatherTooltip(TooltipShowContext context)
-    {
-        if (!config.ShowWeatherID) return;
-        if (!context.TryGetWeather(out var weatherID, out var weather)) return;
-
-        context.SetText(new ReadOnlySeString($"{weather.Name} [{weatherID}]"));
+        modifications.Add
+        (
+            new()
+            {
+                Target = TooltipActionType.Category,
+                Type   = TooltipModificationType.Append,
+                Text   = builder.Builder.ToReadOnlySeString()
+            }
+        );
     }
 
     private void UpdateDTRInfo()
