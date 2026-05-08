@@ -37,23 +37,16 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
     
     private readonly ShopInfoContextMenu contextMenu = new();
 
-    private TooltipRule? itemRule;
-
     protected override void Init()
     {
         DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpen;
-        itemRule = GameTooltipManager.Instance().RegItemRule(OnItemTooltipGenerate);
+        TooltipManager.Instance().RegItem(OnItemTooltipUpdate);
     }
 
     protected override void Uninit()
     {
         DService.Instance().ContextMenu.OnMenuOpened -= OnMenuOpen;
-
-        if (itemRule != null)
-        {
-            GameTooltipManager.Instance().Unreg(itemRule);
-            itemRule = null;
-        }
+        TooltipManager.Instance().Unreg(OnItemTooltipUpdate);
 
         AddonShopsPreview.Addon?.Dispose();
         AddonShopsPreview.Addon = null;
@@ -65,9 +58,9 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         args.AddMenuItem(contextMenu.Get());
     }
 
-    private static void OnItemTooltipGenerate(ItemTooltipContext context)
+    private static void OnItemTooltipUpdate(uint itemID, ref List<TooltipItemModification> modifications)
     {
-        var result = ItemSourceInfo.Query(context.ItemID);
+        var result = ItemSourceInfo.Query(itemID);
         if (result is not { State: ItemSourceQueryState.Ready, Data: { } itemInfo }) return;
         
         var shopInfo = itemInfo.NPCInfos
@@ -114,7 +107,15 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
 
         builder.Builder.AppendNewLine();
         
-        context.Append(TooltipItemType.ItemDescription, builder.Builder.ToReadOnlySeString());
+        modifications.Add
+        (
+            new()
+            {
+                Target = TooltipItemType.ShopInfo,
+                Type   = TooltipModificationType.Contribute,
+                Text   = builder.Builder.ToReadOnlySeString()
+            }
+        );
     }
     
     private class ShopInfoContextMenu : MenuItemBase

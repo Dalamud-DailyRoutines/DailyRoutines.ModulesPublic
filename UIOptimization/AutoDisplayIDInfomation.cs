@@ -202,7 +202,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
                .Append(']')
                .PopColorType();
 
-        context.Append(TooltipItemType.ItemUICategory, builder.Builder.ToReadOnlySeString());
+        context.Append(TooltipItemType.UICategory, builder.Builder.ToReadOnlySeString());
     }
 
     private void ModifyActionTooltip(ActionTooltipContext context)
@@ -231,7 +231,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         builder.Builder.Append("]");
         builder.Builder.PopColorType();
 
-        context.Append(TooltipActionType.ActionKind, builder.Builder.ToReadOnlySeString());
+        context.Append(TooltipActionType.Category, builder.Builder.ToReadOnlySeString());
     }
 
     private void ModifyStatusTooltip(TooltipShowContext context)
