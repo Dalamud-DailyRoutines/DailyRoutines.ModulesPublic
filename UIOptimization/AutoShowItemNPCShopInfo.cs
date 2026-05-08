@@ -63,9 +63,9 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         args.AddMenuItem(contextMenu.Get());
     }
 
-    private static void OnItemTooltipUpdate(uint itemID, ItemKind itemKind, ref List<TooltipItemModification> modifications)
+    private static void OnItemTooltipUpdate(ItemKind kind, uint itemID, ref List<TooltipItemModification> modifications)
     {
-        if (itemKind is not ItemKind.Normal)
+        if (kind is not ItemKind.Normal)
             return;
         
         var result = ItemSourceInfo.Query(itemID);
