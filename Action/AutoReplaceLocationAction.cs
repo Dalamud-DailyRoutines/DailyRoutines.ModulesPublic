@@ -371,9 +371,16 @@ public unsafe class AutoReplaceLocationAction : ModuleBase
         }
     }
 
-    private GameObject* ParseActionCommandArgDetour(PronounModule* manager, CStringPointer placeholder, byte unknown0, byte unknown1)
+    private GameObject* ParseActionCommandArgDetour
+    (
+        PronounModule* manager,
+        CStringPointer placeholder,
+        byte           unknown0,
+        byte           unknown1,
+        bool           unknown2
+    )
     {
-        var original = ParseActionCommandArgHook.Original(manager, placeholder, unknown0, unknown1);
+        var original = ParseActionCommandArgHook.Original(manager, placeholder, unknown0, unknown1, unknown2);
         if (!config.EnableCenterArgument ||
             config.BlacklistContents.Contains(GameState.ContentFinderCondition))
             return original;
