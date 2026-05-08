@@ -31,9 +31,9 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     private delegate void                              DeviceDX11PostTickDelegate(Device* device);
     private          Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
 
-    private static readonly CompSig AtkUnitBaseDrawSig = new("48 83 EC ?? F6 81 ?? ?? ?? ?? ?? 4C 8B C1");
-    private delegate        void AtkUnitBaseDrawDelegate(AtkUnitBase* manager);
-    private                 Hook<AtkUnitBaseDrawDelegate>? AtkUnitBaseDrawHook;
+    private static readonly CompSig AddonNamePlateDrawSig = new("0F B7 81 ?? ?? ?? ?? 81 A1 ?? ?? ?? ?? ?? ?? ?? ?? 81 A1 ?? ?? ?? ?? ?? ?? ?? ?? 66 C1 E0 ?? 0F B7 D0 66 89 91 ?? ?? ?? ?? C1 E2 ?? 09 91 ?? ?? ?? ?? 09 91 ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 33 C0");
+    private delegate void                              AddonNamePlateDrawDelegate(AddonNamePlate* addon);
+    private          Hook<AddonNamePlateDrawDelegate>? AddonNamePlateDrawHook;
     
     private Config config = null!;
 
@@ -44,8 +44,8 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     {
         config = Config.Load(this) ?? new();
 
-        AtkUnitBaseDrawHook = AtkUnitBaseDrawSig.GetHook<AtkUnitBaseDrawDelegate>(AtkUnitBaseDetour);
-        AtkUnitBaseDrawHook.Enable();
+        AddonNamePlateDrawHook = AddonNamePlateDrawSig.GetHook<AddonNamePlateDrawDelegate>(AddonNamePlateDrawDetour);
+        AddonNamePlateDrawHook.Enable();
         
         DeviceDX11PostTickHook = DeviceDX11PostTickSig.GetHook<DeviceDX11PostTickDelegate>(DeviceDX11PostTickDetour);
         DeviceDX11PostTickHook.Enable();
@@ -93,12 +93,12 @@ public unsafe class NoRenderWhenBackground : ModuleBase
             Thread.Sleep(50);
     }
     
-    private void AtkUnitBaseDetour(AtkUnitBase* manager)
+    private void AddonNamePlateDrawDetour(AddonNamePlate* addon)
     {
         if (isNoRender)
             return;
 
-        AtkUnitBaseDrawHook.Original(manager);
+        AddonNamePlateDrawHook.Original(addon);
     }
 
     [DllImport("user32.dll")]
