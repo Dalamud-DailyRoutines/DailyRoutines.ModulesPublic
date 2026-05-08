@@ -3,6 +3,7 @@ using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
@@ -16,8 +17,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class DyeColorPreview : ModuleBase
 {
-    #region 模块
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("DyeColorPreviewTitle"),
@@ -26,25 +25,14 @@ public unsafe class DyeColorPreview : ModuleBase
         Author      = ["ErxCharlotte"]
     };
 
-    public override ModulePermission Permission { get; } = new()
-    {
-        AllDefaultEnabled = true
-    };
-
-    #endregion
-
-    #region 字段
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private DyeInfo?           currentDye;
     private OverlayController? overlayController;
 
-    #endregion
-
-    #region 生命周期
-
     protected override void Init()
     {
-        GameTooltipManager.Instance().RegItemTooltip(OnItemTooltipGenerate);
+        TooltipManager.Instance().RegItem(OnItemTooltip);
 
         overlayController = new();
         overlayController.AddNode(new DyePreviewOverlayNode(() => currentDye, IsCurrentTooltipVisible));
@@ -52,39 +40,27 @@ public unsafe class DyeColorPreview : ModuleBase
 
     protected override void Uninit()
     {
-        GameTooltipManager.Instance().Unreg(OnItemTooltipGenerate);
+        TooltipManager.Instance().Unreg(OnItemTooltip);
 
         overlayController?.Dispose();
         overlayController = null;
+        
         currentDye = null;
     }
 
-    #endregion
-
-    #region 悬浮提示
-
-    private void OnItemTooltipGenerate(ItemTooltipContext context)
+    private void OnItemTooltip(ItemKind itemKind, uint itemID, ref List<TooltipItemModification> modifications)
     {
-        currentDye = null;
-
-        var itemID = context.ItemID % 100_0000;
-        if (!Dyes.TryGetValue(itemID, out var dye))
+        if (itemKind != ItemKind.Normal || !Dyes.TryGetValue(itemID, out var dye))
+        {
+            currentDye = null;
             return;
+        }
 
         currentDye = dye;
     }
 
-    private bool IsCurrentTooltipVisible()
-    {
-        if (currentDye == null || ItemDetail == null || !ItemDetail->IsVisible)
-            return false;
-
-        return Dyes.ContainsKey((uint)(DService.Instance().GameGUI.HoveredItem % 100_0000));
-    }
-
-    #endregion
-
-    #region 覆盖层
+    private bool IsCurrentTooltipVisible() =>
+        currentDye != null && ItemDetail->IsAddonAndNodesReady();
 
     private sealed class DyePreviewOverlayNode : OverlayNode
     {
@@ -254,35 +230,7 @@ public unsafe class DyeColorPreview : ModuleBase
         }
     }
 
-    #endregion
-
-    #region 数据
-
     private sealed record DyeInfo(string NameKey, Vector4 HighlightColor, uint[] StainIDs);
-
-    private static readonly FrozenDictionary<uint, DyeInfo> Dyes = new Dictionary<uint, DyeInfo>
-    {
-        [52254] = new
-        (
-            "DyeColorPreview-GeneralDye",
-            new Vector4(1f, 0.95f, 0.65f, 1f),
-            Enumerable.Range(1, 85).Select(static x => (uint)x).ToArray()
-        ),
-        [52255] = new
-        (
-            "DyeColorPreview-ExtraDyeOne",
-            new Vector4(1f, 0.25f, 0.25f, 1f),
-            [86, 87, 88, 89, 90, 91, 92, 93, 94]
-        ),
-        [52256] = new
-        (
-            "DyeColorPreview-ExtraDyeTwo",
-            new Vector4(0.25f, 0.45f, 1f, 1f),
-            [95, 96, 97, 98, 99, 100, 121, 122, 123, 124, 125]
-        )
-    }.ToFrozenDictionary();
-
-    #endregion
 
     #region 常量
 
@@ -305,6 +253,28 @@ public unsafe class DyeColorPreview : ModuleBase
     private const float COMPACT_CELL_WIDTH   = 112f;
     private const float NORMAL_CELL_HEIGHT   = 40f;
     private const float COMPACT_CELL_HEIGHT  = 36f;
+    
+    private static readonly FrozenDictionary<uint, DyeInfo> Dyes = new Dictionary<uint, DyeInfo>
+    {
+        [52254] = new
+        (
+            "DyeColorPreview-GeneralDye",
+            new(1f, 0.95f, 0.65f, 1f),
+            Enumerable.Range(1, 85).Select(static x => (uint)x).ToArray()
+        ),
+        [52255] = new
+        (
+            "DyeColorPreview-ExtraDyeOne",
+            new(1f, 0.25f, 0.25f, 1f),
+            [86, 87, 88, 89, 90, 91, 92, 93, 94]
+        ),
+        [52256] = new
+        (
+            "DyeColorPreview-ExtraDyeTwo",
+            new(0.25f, 0.45f, 1f, 1f),
+            [95, 96, 97, 98, 99, 100, 121, 122, 123, 124, 125]
+        )
+    }.ToFrozenDictionary();
 
     #endregion
 }
