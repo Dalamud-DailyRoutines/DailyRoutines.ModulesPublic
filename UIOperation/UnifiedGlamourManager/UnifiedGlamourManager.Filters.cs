@@ -6,8 +6,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class UnifiedGlamourManager
 {
-    #region 筛选
-
     private bool PassFilter(UnifiedItem item)
     {
         if (filterByCurrentPlateSlot && !CanItemUseInCurrentPlateSlot(item))
@@ -97,10 +95,6 @@ public unsafe partial class UnifiedGlamourManager
         return result;
     }
 
-    #endregion
-
-    #region 投影模板槽位
-
     private bool CanItemUseInCurrentPlateSlot(UnifiedItem item)
     {
         var agent = AgentMiragePrismMiragePlate.Instance();
@@ -152,13 +146,7 @@ public unsafe partial class UnifiedGlamourManager
     }
 
     private static bool IsPlateEditorReady()
-    {
-        return MiragePrismMiragePlate->IsAddonAndNodesReady();
-    }
-
-    #endregion
-
-    #region 排序
+        => MiragePrismMiragePlate->IsAddonAndNodesReady();
 
     private IEnumerable<UnifiedItem> ApplySort(IEnumerable<UnifiedItem> source)
         => sortMode switch
@@ -186,10 +174,6 @@ public unsafe partial class UnifiedGlamourManager
                 .ThenBy(x => x.ParentSetName)
                 .ThenBy(x => x.Name)
         };
-
-    #endregion
-
-    #region 来源显示
 
     private static string GetSourceLabel(UnifiedItem item)
     {
@@ -246,10 +230,6 @@ public unsafe partial class UnifiedGlamourManager
             Lang.Get("UnifiedGlamourManager-PreviewSourceRetainer"),
             StringComparison.Ordinal);
     }
-
-    #endregion
-
-    #region 工具方法
 
     private static bool IsEquipSlotEnabled(EquipSlotCategory category, EquipSlotKind slot)
         => slot switch
@@ -315,9 +295,7 @@ public unsafe partial class UnifiedGlamourManager
             JobKind.PCT => category.PCT,
             _           => false
         };
-            
+
     private static byte SafeByte(uint value)
         => value > byte.MaxValue ? (byte)0 : (byte)value;
-
-    #endregion
 }

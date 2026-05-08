@@ -11,8 +11,6 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class UnifiedGlamourManager : ModuleBase
 {
-    #region 模块信息
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("UnifiedGlamourManagerTitle"),
@@ -21,14 +19,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         Author      = ["ErxCharlotte"]
     };
 
-    public override ModulePermission Permission { get; } = new()
-    {
-        AllDefaultEnabled = true
-    };
-
-    #endregion
-
-    #region 字段
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private Config config = null!;
 
@@ -66,10 +57,6 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     private uint lastFilterPlateSlot = uint.MaxValue;
     private int iconLoadCountThisFrame;
 
-    #endregion
-
-    #region 生命周期
-
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -95,10 +82,6 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnPlateEditorAddon);
     }
 
-    #endregion
-
-    #region 配置界面
-
     protected override void ConfigUI()
     {
         if (ImGui.Button(Lang.Get("UnifiedGlamourManager-Open")))
@@ -114,10 +97,6 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
         ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-LoadedStatus", items.Count, GetLoadedFavoriteCount()));
     }
-
-    #endregion
-
-    #region Overlay
 
     protected override void OverlayPreDraw()
     {
@@ -202,9 +181,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         return manager != null && manager->PrismBoxRequested && manager->PrismBoxLoaded;
     }
 
-    #endregion
-
-    #region 常量
+    #region 预定义
 
     private const string PRISM_BOX_ADDON_NAME = "MiragePrismPrismBox";
     private const string PLATE_EDITOR_ADDON_NAME = "MiragePrismMiragePlate";
