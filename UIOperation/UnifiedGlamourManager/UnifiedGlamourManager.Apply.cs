@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -15,6 +14,9 @@ public unsafe partial class UnifiedGlamourManager
     private void ApplySelectedItemToCurrentPlateSlot(UnifiedItem item)
     {
         if (item.PreviewOnly || !item.CanUseInPlate)
+            return;
+
+        if (!IsPlateEditorReady())
             return;
 
         var agent = AgentMiragePrismMiragePlate.Instance();
@@ -84,17 +86,13 @@ public unsafe partial class UnifiedGlamourManager
 
                 TryApplyCabinetItem(retryAgent, retryItem);
             },
-            TimeSpan.FromMilliseconds(50));
+            TimeSpan.FromMilliseconds(CABINET_APPLY_RETRY_DELAY_MS));
     }
 
     private bool TryApplyCabinetItem(AgentMiragePrismMiragePlate* agent, UnifiedItem item)
     {
-        var uiState = UIState.Instance();
-        if (uiState == null)
-            return false;
-
-        var cabinet = &uiState->Cabinet;
-        if (!cabinet->IsCabinetLoaded())
+        var cabinet = GetLoadedCabinet();
+        if (cabinet == null)
             return false;
 
         if (item.CabinetID == 0 || !cabinet->IsItemInCabinet(item.CabinetID))
@@ -118,7 +116,9 @@ public unsafe partial class UnifiedGlamourManager
         if (!CanRestorePrismBoxItem(item))
             return;
 
-        var manager = MirageManager.Instance();
+        if (!TryGetLoadedMirageManager(out var manager))
+            return;
+
         var rawItemID = manager->PrismBoxItemIds[(int)item.PrismBoxIndex];
         if (!IsExpectedPrismBoxItem(item, rawItemID))
             return;
@@ -128,8 +128,7 @@ public unsafe partial class UnifiedGlamourManager
         try
         {
             manager->RestorePrismBoxItem(item.PrismBoxIndex);
-            RefreshAll();
-            ReselectRestoredItem(item);
+            StartRefreshAll(item);
         }
         catch (Exception ex)
         {
@@ -150,8 +149,7 @@ public unsafe partial class UnifiedGlamourManager
         if (item.PrismBoxIndex >= PRISM_BOX_CAPACITY)
             return false;
 
-        var manager = MirageManager.Instance();
-        if (manager == null || !manager->PrismBoxRequested || !manager->PrismBoxLoaded)
+        if (!TryGetLoadedMirageManager(out _))
             return false;
 
         return !Inventories.Player.IsFull();
@@ -163,25 +161,12 @@ public unsafe partial class UnifiedGlamourManager
         if (rawItemID == 0)
             return false;
 
-        var itemID = rawItemID % 1_000_000;
+        var itemID = rawItemID % ITEM_ID_NORMALIZE_MODULO;
         var expectedItemID = item is { IsSetPart: true, ParentSetItemID: not 0 }
             ? item.ParentSetItemID
             : item.ItemID;
 
         return itemID == expectedItemID;
     }
-
-    private void ReselectRestoredItem(UnifiedItem item)
-    {
-        if (selectedItem == null)
-            return;
-
-        selectedItem = items.FirstOrDefault(x =>
-            x.ItemID == item.ItemID &&
-            x.PrismBoxIndex == item.PrismBoxIndex &&
-            x.IsSetPart == item.IsSetPart &&
-            x.ParentSetItemID == item.ParentSetItemID);
-    }
-
     #endregion
 }

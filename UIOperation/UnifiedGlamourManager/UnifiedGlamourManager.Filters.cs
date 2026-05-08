@@ -1,8 +1,6 @@
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
-using FFXIVClientStructs.FFXIV.Component.GUI;
-using System.Collections.Frozen;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -63,11 +61,11 @@ public unsafe partial class UnifiedGlamourManager
             return true;
 
         var text = searchText.Trim();
-        return ContainsIgnoreCase(item.Name, text) ||
-               ContainsIgnoreCase(item.ParentSetName, text) ||
-               ContainsIgnoreCase(item.SetPartLabel, text) ||
-               ContainsIgnoreCase(item.PreviewOwnerName, text) ||
-               ContainsIgnoreCase(item.PreviewSourceName, text);
+        return (!string.IsNullOrEmpty(item.Name) && item.Name.Contains(text, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrEmpty(item.ParentSetName) && item.ParentSetName.Contains(text, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrEmpty(item.SetPartLabel) && item.SetPartLabel.Contains(text, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrEmpty(item.PreviewOwnerName) && item.PreviewOwnerName.Contains(text, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrEmpty(item.PreviewSourceName) && item.PreviewSourceName.Contains(text, StringComparison.OrdinalIgnoreCase));
     }
 
     private bool PassSetRelationFilter(UnifiedItem item)
@@ -83,15 +81,20 @@ public unsafe partial class UnifiedGlamourManager
         if (selectedJobFilterIndex <= 0 || selectedJobFilterIndex >= JOB_FILTER_OPTIONS.Length)
             return true;
 
+        var cacheKey = ((ulong)(uint)selectedJobFilterIndex << 32) | item.ClassJobCategoryRowID;
+        if (jobFilterCache.TryGetValue(cacheKey, out var cached))
+            return cached;
+
         var option = JOB_FILTER_OPTIONS[selectedJobFilterIndex];
         if (option.Jobs.Length == 0)
             return true;
 
-        var categoryRow = LuminaGetter.GetRowOrDefault<ClassJobCategory>(item.ClassJobCategoryRowID);
-        if (categoryRow.RowId == 0)
+        if (!LuminaGetter.TryGetRow<ClassJobCategory>(item.ClassJobCategoryRowID, out var categoryRow))
             return false;
 
-        return option.Jobs.Any(job => ReadJobCategoryFlag(categoryRow, job));
+        var result = option.Jobs.Any(job => ReadJobCategoryFlag(categoryRow, job));
+        jobFilterCache[cacheKey] = result;
+        return result;
     }
 
     #endregion
@@ -104,13 +107,27 @@ public unsafe partial class UnifiedGlamourManager
         if (agent == null || agent->Data == null)
             return true;
 
-        return CanItemUseInPlateSlot(item, agent->Data->SelectedItemIndex);
+        var selectedSlot = agent->Data->SelectedItemIndex;
+        var cacheKey = ((ulong)selectedSlot << 32) | item.EquipSlotCategoryRowID;
+        if (plateSlotFilterCache.TryGetValue(cacheKey, out var cached))
+            return cached;
+
+        var result = CanItemUseInPlateSlot(item, selectedSlot);
+        plateSlotFilterCache[cacheKey] = result;
+        return result;
+    }
+
+    private static uint GetCurrentPlateSlotIndex()
+    {
+        var agent = AgentMiragePrismMiragePlate.Instance();
+        return agent == null || agent->Data == null
+            ? uint.MaxValue
+            : agent->Data->SelectedItemIndex;
     }
 
     private static bool CanItemUseInPlateSlot(UnifiedItem item, uint selectedSlot)
     {
-        var categoryRow = LuminaGetter.GetRowOrDefault<EquipSlotCategory>(item.EquipSlotCategoryRowID);
-        if (categoryRow.RowId == 0)
+        if (!LuminaGetter.TryGetRow<EquipSlotCategory>(item.EquipSlotCategoryRowID, out var categoryRow))
             return false;
 
         var definition = PLATE_SLOT_DEFINITIONS.FirstOrDefault(x => x.Index == selectedSlot);
@@ -136,15 +153,7 @@ public unsafe partial class UnifiedGlamourManager
 
     private static bool IsPlateEditorReady()
     {
-        try
-        {
-            var addon = DService.Instance().GameGUI.GetAddonByName(PLATE_EDITOR_ADDON_NAME);
-            return addon.Address != nint.Zero && ((AtkUnitBase*)addon.Address)->IsAddonAndNodesReady();
-        }
-        catch
-        {
-            return false;
-        }
+        return MiragePrismMiragePlate->IsAddonAndNodesReady();
     }
 
     #endregion
@@ -242,44 +251,70 @@ public unsafe partial class UnifiedGlamourManager
 
     #region 工具方法
 
-    private static bool ContainsIgnoreCase(string value, string search)
-        => !string.IsNullOrEmpty(value) && value.Contains(search, StringComparison.OrdinalIgnoreCase);
-
     private static bool IsEquipSlotEnabled(EquipSlotCategory category, EquipSlotKind slot)
-    => slot switch
-    {
-        EquipSlotKind.MainHand => category.MainHand != 0,
-        EquipSlotKind.OffHand  => category.OffHand != 0,
-        EquipSlotKind.Head     => category.Head != 0,
-        EquipSlotKind.Body     => category.Body != 0,
-        EquipSlotKind.Hands    => category.Gloves != 0,
-        EquipSlotKind.Legs     => category.Legs != 0,
-        EquipSlotKind.Feet     => category.Feet != 0,
-        EquipSlotKind.Ears     => category.Ears != 0,
-        EquipSlotKind.Neck     => category.Neck != 0,
-        EquipSlotKind.Wrists   => category.Wrists != 0,
-        EquipSlotKind.Ring     => category.FingerL != 0 || category.FingerR != 0,
-        _                      => false
-    };
+        => slot switch
+        {
+            EquipSlotKind.MainHand => category.MainHand != 0,
+            EquipSlotKind.OffHand  => category.OffHand != 0,
+            EquipSlotKind.Head     => category.Head != 0,
+            EquipSlotKind.Body     => category.Body != 0,
+            EquipSlotKind.Hands    => category.Gloves != 0,
+            EquipSlotKind.Legs     => category.Legs != 0,
+            EquipSlotKind.Feet     => category.Feet != 0,
+            EquipSlotKind.Ears     => category.Ears != 0,
+            EquipSlotKind.Neck     => category.Neck != 0,
+            EquipSlotKind.Wrists   => category.Wrists != 0,
+            EquipSlotKind.Ring     => category.FingerL != 0 || category.FingerR != 0,
+            _                      => false
+        };
 
     private static bool ReadJobCategoryFlag(ClassJobCategory category, JobKind job)
-        => JobCategoryReaders.TryGetValue(job, out var reader) && reader(category);
-
-    private static readonly FrozenDictionary<JobKind, Func<ClassJobCategory, bool>> JobCategoryReaders =
-        Enum.GetValues<JobKind>()
-            .Select(job => new
-            {
-                Job = job,
-                Property = typeof(ClassJobCategory).GetProperty(job.ToString())
-            })
-            .Where(x => x.Property is { PropertyType: not null } && x.Property.PropertyType == typeof(bool))
-            .ToFrozenDictionary(
-                x => x.Job,
-                x =>
-                {
-                    var property = x.Property!;
-                    return new Func<ClassJobCategory, bool>(category => property.GetValue(category) is true);
-                });
+        => job switch
+        {
+            JobKind.GLA => category.GLA,
+            JobKind.PGL => category.PGL,
+            JobKind.MRD => category.MRD,
+            JobKind.LNC => category.LNC,
+            JobKind.ARC => category.ARC,
+            JobKind.CNJ => category.CNJ,
+            JobKind.THM => category.THM,
+            JobKind.CRP => category.CRP,
+            JobKind.BSM => category.BSM,
+            JobKind.ARM => category.ARM,
+            JobKind.GSM => category.GSM,
+            JobKind.LTW => category.LTW,
+            JobKind.WVR => category.WVR,
+            JobKind.ALC => category.ALC,
+            JobKind.CUL => category.CUL,
+            JobKind.MIN => category.MIN,
+            JobKind.BTN => category.BTN,
+            JobKind.FSH => category.FSH,
+            JobKind.PLD => category.PLD,
+            JobKind.MNK => category.MNK,
+            JobKind.WAR => category.WAR,
+            JobKind.DRG => category.DRG,
+            JobKind.BRD => category.BRD,
+            JobKind.WHM => category.WHM,
+            JobKind.BLM => category.BLM,
+            JobKind.ACN => category.ACN,
+            JobKind.SMN => category.SMN,
+            JobKind.SCH => category.SCH,
+            JobKind.ROG => category.ROG,
+            JobKind.NIN => category.NIN,
+            JobKind.MCH => category.MCH,
+            JobKind.DRK => category.DRK,
+            JobKind.AST => category.AST,
+            JobKind.SAM => category.SAM,
+            JobKind.RDM => category.RDM,
+            JobKind.BLU => category.BLU,
+            JobKind.GNB => category.GNB,
+            JobKind.DNC => category.DNC,
+            JobKind.RPR => category.RPR,
+            JobKind.SGE => category.SGE,
+            JobKind.VPR => category.VPR,
+            JobKind.PCT => category.PCT,
+            _           => false
+        };
             
     private static byte SafeByte(uint value)
         => value > byte.MaxValue ? (byte)0 : (byte)value;

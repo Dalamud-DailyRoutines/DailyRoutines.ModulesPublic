@@ -12,17 +12,47 @@ public unsafe partial class UnifiedGlamourManager
 {
     #region 刷新
 
-    private void RefreshAll()
+    private void StartRefreshAll(UnifiedItem? reselectItem = null)
     {
+        TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
+        TaskHelper.Abort();
+
+        isRefreshingItems = true;
         items.Clear();
+        filteredItems.Clear();
+        ownedConcreteItemIDs.Clear();
         prismBoxItemCount = 0;
         cabinetItemCount = 0;
+        MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
 
-        RebuildOwnedConcreteItemIndex();
-        LoadPrismBoxItems();
-        LoadCabinetItems();
-        MergeItems();
-        LoadPreviewItems();
+        TaskHelper.Enqueue(() => RebuildOwnedConcreteItemIndex(), "刷新收藏柜索引");
+        TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
+        TaskHelper.Enqueue(() => LoadPrismBoxItems(), "读取投影台");
+        TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
+        TaskHelper.Enqueue(() => LoadCabinetItems(), "读取收藏柜");
+        TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
+        TaskHelper.Enqueue(
+            () =>
+            {
+                MergeItems();
+                LoadPreviewItems();
+
+                if (reselectItem != null)
+                    ReselectItem(reselectItem);
+
+                isRefreshingItems = false;
+                MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
+            },
+            "合并装备列表");
+    }
+
+    private void ReselectItem(UnifiedItem item)
+    {
+        selectedItem = items.FirstOrDefault(x =>
+            x.ItemID == item.ItemID &&
+            x.PrismBoxIndex == item.PrismBoxIndex &&
+            x.IsSetPart == item.IsSetPart &&
+            x.ParentSetItemID == item.ParentSetItemID);
     }
 
     private void RebuildOwnedConcreteItemIndex()
@@ -35,8 +65,7 @@ public unsafe partial class UnifiedGlamourManager
 
     private void AddOwnedPrismBoxItemIDs()
     {
-        var manager = MirageManager.Instance();
-        if (manager == null || !manager->PrismBoxRequested || !manager->PrismBoxLoaded)
+        if (!TryGetLoadedMirageManager(out var manager))
             return;
 
         for (var i = 0U; i < PRISM_BOX_CAPACITY; i++)
@@ -45,8 +74,8 @@ public unsafe partial class UnifiedGlamourManager
             if (rawItemID == 0)
                 continue;
 
-            var itemID = rawItemID % 1_000_000;
-            if (itemID > 1)
+            var itemID = rawItemID % ITEM_ID_NORMALIZE_MODULO;
+            if (itemID > MIN_VALID_ITEM_ID)
                 ownedConcreteItemIDs.Add(itemID);
         }
     }
@@ -73,8 +102,7 @@ public unsafe partial class UnifiedGlamourManager
 
     private void LoadPrismBoxItems()
     {
-        var manager = MirageManager.Instance();
-        if (manager == null || !manager->PrismBoxRequested || !manager->PrismBoxLoaded)
+        if (!TryGetLoadedMirageManager(out var manager))
             return;
 
         var itemSheet = LuminaGetter.Get<ItemSheet>();
@@ -86,12 +114,12 @@ public unsafe partial class UnifiedGlamourManager
             if (rawItemID == 0)
                 continue;
 
-            var itemID = rawItemID % 1_000_000;
+            var itemID = rawItemID % ITEM_ID_NORMALIZE_MODULO;
             var itemRow = itemSheet.GetRowOrDefault(itemID);
             if (itemRow == null || !TryGetItemName(itemRow.Value, out var name))
                 continue;
 
-            var setParts = GetSetParts(itemSheet, itemID);
+            var setParts = GetSetParts(itemID);
             items.Add(CreateUnifiedItem(
                 itemID,
                 rawItemID,
@@ -106,7 +134,7 @@ public unsafe partial class UnifiedGlamourManager
                 isSetContainer: setParts.Count > 0));
 
             count++;
-            AddPrismBoxSetParts(manager, itemSheet, setParts, rawItemID, i, itemID, name);
+            AddPrismBoxSetParts(manager, setParts, rawItemID, i, itemID, name);
         }
 
         prismBoxItemCount = count;
@@ -114,7 +142,6 @@ public unsafe partial class UnifiedGlamourManager
 
     private void AddPrismBoxSetParts(
         MirageManager* manager,
-        Lumina.Excel.ExcelSheet<ItemSheet> itemSheet,
         List<SetPartInfo> setParts,
         uint rawItemID,
         uint prismBoxIndex,
@@ -127,7 +154,6 @@ public unsafe partial class UnifiedGlamourManager
                 continue;
 
             AddSetPartItem(
-                itemSheet,
                 setPart,
                 rawItemID,
                 prismBoxIndex,
@@ -163,7 +189,7 @@ public unsafe partial class UnifiedGlamourManager
             if (itemRow == null || !TryGetItemName(itemRow.Value, out var name))
                 continue;
 
-            var setParts = GetSetParts(itemSheet, itemID);
+            var setParts = GetSetParts(itemID);
             items.Add(CreateUnifiedItem(
                 itemID,
                 itemID,
@@ -178,14 +204,13 @@ public unsafe partial class UnifiedGlamourManager
                 isSetContainer: setParts.Count > 0));
 
             count++;
-            AddCabinetSetParts(itemSheet, setParts, itemID, cabinetID, name);
+            AddCabinetSetParts(setParts, itemID, cabinetID, name);
         }
 
         cabinetItemCount = count;
     }
 
     private void AddCabinetSetParts(
-        Lumina.Excel.ExcelSheet<ItemSheet> itemSheet,
         List<SetPartInfo> setParts,
         uint parentItemID,
         uint cabinetID,
@@ -194,7 +219,6 @@ public unsafe partial class UnifiedGlamourManager
         foreach (var setPart in setParts)
         {
             AddSetPartItem(
-                itemSheet,
                 setPart,
                 rawItemID: parentItemID,
                 prismBoxIndex: 0,
@@ -220,46 +244,44 @@ public unsafe partial class UnifiedGlamourManager
 
     #region 套装部件
 
-    private static List<SetPartInfo> GetSetParts(Lumina.Excel.ExcelSheet<ItemSheet> itemSheet, uint setItemID)
+    private static List<SetPartInfo> GetSetParts(uint setItemID)
     {
-        var row = LuminaGetter.Get<MirageStoreSetItem>().GetRowOrDefault(setItemID);
-        if (row == null)
+        if (!LuminaGetter.TryGetRow<MirageStoreSetItem>(setItemID, out var row))
             return [];
 
         List<SetPartInfo> parts = [];
 
-        AddSetPart(itemSheet, parts, row.Value.MainHand.RowId, 0);
-        AddSetPart(itemSheet, parts, row.Value.OffHand.RowId, 1);
-        AddSetPart(itemSheet, parts, row.Value.Head.RowId, 2);
-        AddSetPart(itemSheet, parts, row.Value.Body.RowId, 3);
-        AddSetPart(itemSheet, parts, row.Value.Hands.RowId, 4);
-        AddSetPart(itemSheet, parts, row.Value.Legs.RowId, 5);
-        AddSetPart(itemSheet, parts, row.Value.Feet.RowId, 6);
-        AddSetPart(itemSheet, parts, row.Value.Earrings.RowId, 7);
-        AddSetPart(itemSheet, parts, row.Value.Necklace.RowId, 8);
-        AddSetPart(itemSheet, parts, row.Value.Bracelets.RowId, 9);
-        AddSetPart(itemSheet, parts, row.Value.Ring.RowId, 10);
+        AddSetPart(parts, row.MainHand.RowId, 0);
+        AddSetPart(parts, row.OffHand.RowId, 1);
+        AddSetPart(parts, row.Head.RowId, 2);
+        AddSetPart(parts, row.Body.RowId, 3);
+        AddSetPart(parts, row.Hands.RowId, 4);
+        AddSetPart(parts, row.Legs.RowId, 5);
+        AddSetPart(parts, row.Feet.RowId, 6);
+        AddSetPart(parts, row.Earrings.RowId, 7);
+        AddSetPart(parts, row.Necklace.RowId, 8);
+        AddSetPart(parts, row.Bracelets.RowId, 9);
+        AddSetPart(parts, row.Ring.RowId, 10);
 
         return parts;
     }
 
     private static void AddSetPart(
-        Lumina.Excel.ExcelSheet<ItemSheet> itemSheet,
         List<SetPartInfo> parts,
         uint itemID,
         int slotIndex)
     {
-        if (itemID <= 1)
+        if (itemID <= MIN_VALID_ITEM_ID)
             return;
 
-        var itemRow = itemSheet.GetRowOrDefault(itemID);
-        if (itemRow == null || !TryGetItemName(itemRow.Value, out _))
+        if (!LuminaGetter.TryGetRow<ItemSheet>(itemID, out var itemRow) ||
+            !TryGetItemName(itemRow, out _))
             return;
 
-        if (!CanItemRowUseSetPartLabel(itemRow.Value, slotIndex))
+        if (!CanItemRowUseSetPartLabel(itemRow, slotIndex))
             return;
 
-        var label = GetNativeItemCategoryName(itemRow.Value);
+        var label = GetNativeItemCategoryName(itemRow);
         if (parts.Any(x => x.ItemID == itemID && x.PartLabel == label))
             return;
 
@@ -267,7 +289,6 @@ public unsafe partial class UnifiedGlamourManager
     }
 
     private void AddSetPartItem(
-        Lumina.Excel.ExcelSheet<ItemSheet> itemSheet,
         SetPartInfo setPart,
         uint rawItemID,
         uint prismBoxIndex,
@@ -277,15 +298,15 @@ public unsafe partial class UnifiedGlamourManager
         bool inPrismBox,
         bool inCabinet)
     {
-        var partRow = itemSheet.GetRowOrDefault(setPart.ItemID);
-        if (partRow == null || !TryGetItemName(partRow.Value, out var partName))
+        if (!LuminaGetter.TryGetRow<ItemSheet>(setPart.ItemID, out var partRow) ||
+            !TryGetItemName(partRow, out var partName))
             return;
 
         items.Add(CreateUnifiedItem(
             setPart.ItemID,
             rawItemID,
             $"{partName}（{parentName} / {setPart.PartLabel}）",
-            partRow.Value,
+            partRow,
             inPrismBox,
             inCabinet,
             prismBoxIndex,

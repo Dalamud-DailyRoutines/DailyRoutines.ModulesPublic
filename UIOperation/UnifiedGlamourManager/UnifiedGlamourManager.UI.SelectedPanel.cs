@@ -8,7 +8,7 @@ public unsafe partial class UnifiedGlamourManager
 
     private void DrawSelectedPanel()
     {
-        using var padding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(12f, 10f));
+        using var padding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(PANEL_PADDING_X, PANEL_PADDING_Y));
         using var child = ImRaii.Child("##SelectedPanel", new Vector2(0f, 0f), true);
         if (!child)
             return;
@@ -137,7 +137,7 @@ public unsafe partial class UnifiedGlamourManager
                 ? Lang.Get("UnifiedGlamourManager-PreviewOnlyCannotApply")
                 : Lang.Get("UnifiedGlamourManager-ApplyToCurrentSlot");
 
-            if (ImGui.Button(buttonText, new Vector2(-1f, 36f)))
+            if (ImGui.Button(buttonText, new Vector2(-1f, CONTROL_HEIGHT)))
                 ApplySelectedItemToCurrentPlateSlot(item);
         }
 
@@ -162,7 +162,7 @@ public unsafe partial class UnifiedGlamourManager
 
         using (ImRaii.Disabled(!canRestore))
         {
-            if (ImGui.Button(restoreButtonText, new Vector2(-1f, 38f)))
+            if (ImGui.Button(restoreButtonText, new Vector2(-1f, RESTORE_BUTTON_HEIGHT)))
                 requestRestoreItemConfirm = true;
         }
 

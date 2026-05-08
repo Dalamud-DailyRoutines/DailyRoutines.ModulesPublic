@@ -1,4 +1,5 @@
 using Lumina.Excel.Sheets;
+using Dalamud.Interface.Textures;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -150,6 +151,8 @@ public unsafe partial class UnifiedGlamourManager
         public long UpdatedAt { get; set; }
     }
 
+    private sealed record IconTextureCacheEntry(ISharedImmediateTexture Texture, LinkedListNode<uint> Node);
+
     #endregion
 
     #region 临时数据
@@ -161,22 +164,13 @@ public unsafe partial class UnifiedGlamourManager
     private readonly record struct JobFilterOption(string Label, JobKind[] Jobs);
 
     private readonly record struct PlateSlotDefinition(
-    uint Index,
-    string LangKey,
-    Func<EquipSlotCategory, bool> CanEquip);
+        uint Index,
+        string LangKey,
+        Func<EquipSlotCategory, bool> CanEquip);
     
     #endregion
 
     #region 工具类型
-
-    private sealed class DisposableGroup(params IDisposable[] disposables) : IDisposable
-    {
-        public void Dispose()
-        {
-            for (var i = disposables.Length - 1; i >= 0; i--)
-                disposables[i].Dispose();
-        }
-    }
 
     #endregion
 }

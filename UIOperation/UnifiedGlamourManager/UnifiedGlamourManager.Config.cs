@@ -1,4 +1,5 @@
 using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Extensions;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -18,16 +19,11 @@ public unsafe partial class UnifiedGlamourManager
 
     #region 配置读写
 
-    private void LoadModuleConfig()
-    {
-        config = LoadConfig<Config>() ?? new();
-        NormalizeConfig();
-    }
-
-    private void SaveModuleConfig()
+    private void SaveConfig()
     {
         NormalizeConfig();
-        SaveConfig(config);
+        config.Save(this);
+        MarkFilteredItemsDirty();
     }
 
     private void NormalizeConfig()
@@ -36,6 +32,7 @@ public unsafe partial class UnifiedGlamourManager
         config.PreviewItems ??= [];
 
         CleanPreviewCache();
+        SyncFavoriteItemIDs();
     }
 
     #endregion
@@ -44,7 +41,7 @@ public unsafe partial class UnifiedGlamourManager
 
     private int GetLoadedFavoriteCount()
     {
-        if (config.Favorites.Count == 0 || items.Count == 0)
+        if (favoriteItemIDs.Count == 0 || items.Count == 0)
             return 0;
 
         return items
@@ -58,7 +55,7 @@ public unsafe partial class UnifiedGlamourManager
         => config.Favorites.FirstOrDefault(x => x.ItemID == itemID);
 
     private bool IsFavorite(uint itemID)
-        => GetSaved(itemID) != null;
+        => favoriteItemIDs.Contains(itemID);
 
     private void ToggleFavorite(UnifiedItem item)
     {
@@ -77,7 +74,18 @@ public unsafe partial class UnifiedGlamourManager
             });
         }
 
-        SaveModuleConfig();
+        SaveConfig();
+    }
+
+    private void SyncFavoriteItemIDs()
+    {
+        favoriteItemIDs.Clear();
+
+        foreach (var favorite in config.Favorites)
+        {
+            if (favorite.ItemID > MIN_VALID_ITEM_ID)
+                favoriteItemIDs.Add(favorite.ItemID);
+        }
     }
 
     #endregion
@@ -102,11 +110,9 @@ public unsafe partial class UnifiedGlamourManager
         }
     }
 
-    
-
     private void RemoveInvalidPreviewItems()
     {
-        config.PreviewItems.RemoveAll(x => x.ItemID <= 1);
+        config.PreviewItems.RemoveAll(x => x.ItemID <= MIN_VALID_ITEM_ID);
     }
 
     private void RemoveDuplicatePreviewItems()

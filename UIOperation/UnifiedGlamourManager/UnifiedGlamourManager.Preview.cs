@@ -17,15 +17,15 @@ public unsafe partial class UnifiedGlamourManager
         if (!changed)
             return;
 
-        SaveModuleConfig();
+        SaveConfig();
 
         if (isOpen)
-            RefreshAll();
+            StartRefreshAll();
     }
 
     private bool TryRecordInventoryPreview()
     {
-        var snapshot = ScanPreviewInventoryItems(GetInventoryPreviewContainerTypes()).ToList();
+        var snapshot = ScanPreviewInventoryItems(INVENTORY_PREVIEW_CONTAINER_TYPES).ToList();
         var fingerprint = BuildSnapshotFingerprint(snapshot);
 
         if (string.IsNullOrEmpty(fingerprint) || fingerprint == lastInventorySnapshotFingerprint)
@@ -52,7 +52,7 @@ public unsafe partial class UnifiedGlamourManager
 
     private bool TryRecordRetainerPreview()
     {
-        var snapshot = ScanPreviewInventoryItems(GetRetainerPreviewContainerTypes()).ToList();
+        var snapshot = ScanPreviewInventoryItems(RETAINER_PREVIEW_CONTAINER_TYPES).ToList();
         var fingerprint = BuildSnapshotFingerprint(snapshot);
 
         if (string.IsNullOrEmpty(fingerprint))
@@ -151,16 +151,15 @@ public unsafe partial class UnifiedGlamourManager
         string sourceKey,
         long updatedAt)
     {
-        var itemSheet = LuminaGetter.Get<ItemSheet>();
         List<CachedPreviewItem> result = [];
 
         foreach (var scanItem in snapshot)
         {
-            var itemRow = itemSheet.GetRowOrDefault(scanItem.ItemID);
-            if (itemRow == null || !IsGlamourPreviewCandidate(itemRow.Value))
+            if (!LuminaGetter.TryGetRow<ItemSheet>(scanItem.ItemID, out var itemRow) ||
+                !IsGlamourPreviewCandidate(itemRow))
                 continue;
 
-            var name = itemRow.Value.Name.ExtractText();
+            var name = itemRow.Name.ExtractText();
             if (string.IsNullOrWhiteSpace(name))
                 continue;
 
@@ -168,10 +167,10 @@ public unsafe partial class UnifiedGlamourManager
             {
                 ItemID = scanItem.ItemID,
                 Name = name,
-                IconID = itemRow.Value.Icon,
-                LevelEquip = (uint)itemRow.Value.LevelEquip,
-                EquipSlotCategoryRowID = itemRow.Value.EquipSlotCategory.RowId,
-                ClassJobCategoryRowID = itemRow.Value.ClassJobCategory.RowId,
+                IconID = itemRow.Icon,
+                LevelEquip = (uint)itemRow.LevelEquip,
+                EquipSlotCategoryRowID = itemRow.EquipSlotCategory.RowId,
+                ClassJobCategoryRowID = itemRow.ClassJobCategory.RowId,
                 Source = source,
                 Owner = owner,
                 SourceKey = sourceKey,
@@ -186,22 +185,11 @@ public unsafe partial class UnifiedGlamourManager
 
     private static bool IsGlamourPreviewCandidate(ItemSheet item)
     {
-        if (item.RowId <= 1)
+        if (item.RowId <= MIN_VALID_ITEM_ID)
             return false;
 
         var category = item.EquipSlotCategory.Value;
-        return category.MainHand != 0 ||
-               category.OffHand != 0 ||
-               category.Head != 0 ||
-               category.Body != 0 ||
-               category.Gloves != 0 ||
-               category.Legs != 0 ||
-               category.Feet != 0 ||
-               category.Ears != 0 ||
-               category.Neck != 0 ||
-               category.Wrists != 0 ||
-               category.FingerL != 0 ||
-               category.FingerR != 0;
+        return GLAMOUR_EQUIP_SLOT_KINDS.Any(slot => IsEquipSlotEnabled(category, slot));
     }
 
     private static string BuildSnapshotFingerprint(IReadOnlyList<PreviewScanItem> snapshot)
@@ -217,10 +205,6 @@ public unsafe partial class UnifiedGlamourManager
     #endregion
 
     #region 容器扫描
-
-    private static IEnumerable<InventoryType> GetInventoryPreviewContainerTypes() => INVENTORY_PREVIEW_CONTAINER_TYPES;
-
-    private static IEnumerable<InventoryType> GetRetainerPreviewContainerTypes() => RETAINER_PREVIEW_CONTAINER_TYPES;
 
     private static string GetInventoryContainerSourceLabel(InventoryType inventoryType)
     {
@@ -269,8 +253,8 @@ public unsafe partial class UnifiedGlamourManager
                 if (rawItemID == 0)
                     continue;
 
-                var itemID = rawItemID % 1_000_000;
-                if (itemID <= 1)
+                var itemID = rawItemID % ITEM_ID_NORMALIZE_MODULO;
+                if (itemID <= MIN_VALID_ITEM_ID)
                     continue;
 
                 result.Add(new PreviewScanItem(itemID, globalSlot + slot, sourceLabel));
@@ -293,7 +277,7 @@ public unsafe partial class UnifiedGlamourManager
 
         foreach (var preview in config.PreviewItems)
         {
-            if (preview.ItemID <= 1)
+            if (preview.ItemID <= MIN_VALID_ITEM_ID)
                 continue;
 
             items.Add(new UnifiedItem
@@ -347,7 +331,6 @@ public unsafe partial class UnifiedGlamourManager
 
     #region 常量
 
-    private const int INVENTORY_CONTAINER_SCAN_SIZE = 120;
     private const int INVENTORY_CONTAINER_SLOT_OFFSET = 1_000;
 
     private const string PREVIEW_SOURCE_INVENTORY = "InventoryPreview";

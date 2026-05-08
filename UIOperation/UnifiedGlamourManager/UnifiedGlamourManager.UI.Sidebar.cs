@@ -8,7 +8,7 @@ public unsafe partial class UnifiedGlamourManager
 
     private void DrawSidebar()
     {
-        using var padding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(12f, 10f));
+        using var padding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(PANEL_PADDING_X, PANEL_PADDING_Y));
         using var child = ImRaii.Child("##FilterPanel", new Vector2(0f, 0f), true);
         if (!child)
             return;
@@ -46,7 +46,10 @@ public unsafe partial class UnifiedGlamourManager
 
         var sortIndex = (int)sortMode;
         if (DrawCombo("##SortMode", SORT_MODE_NAMES, ref sortIndex))
+        {
             sortMode = (SortMode)sortIndex;
+            MarkFilteredItemsDirty();
+        }
 
         ImGui.Spacing();
     }
@@ -54,7 +57,8 @@ public unsafe partial class UnifiedGlamourManager
     private void DrawLevelFilter()
     {
         ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-EquipLevel"));
-        ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-EnableLevelRange"), ref enableLevelFilter);
+        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-EnableLevelRange"), ref enableLevelFilter))
+            MarkFilteredItemsDirty();
 
         using (ImRaii.Disabled(!enableLevelFilter))
             DrawLevelRangeInputs();
@@ -68,6 +72,9 @@ public unsafe partial class UnifiedGlamourManager
         var inputWidth = (ImGui.GetContentRegionAvail().X - 10f) * 0.5f;
 
         ImGui.SetNextItemWidth(inputWidth);
+        var oldMinLevel = minEquipLevel;
+        var oldMaxLevel = maxEquipLevel;
+
         ImGui.InputInt("##MinLevel", ref minEquipLevel);
 
         ImGui.SameLine();
@@ -75,17 +82,22 @@ public unsafe partial class UnifiedGlamourManager
         ImGui.SetNextItemWidth(-1f);
         ImGui.InputInt("##MaxLevel", ref maxEquipLevel);
 
-        minEquipLevel = Math.Clamp(minEquipLevel, 1, 999);
-        maxEquipLevel = Math.Clamp(maxEquipLevel, 1, 999);
+        minEquipLevel = Math.Clamp(minEquipLevel, DEFAULT_MIN_EQUIP_LEVEL, MAX_EQUIP_LEVEL_INPUT);
+        maxEquipLevel = Math.Clamp(maxEquipLevel, DEFAULT_MIN_EQUIP_LEVEL, MAX_EQUIP_LEVEL_INPUT);
 
         if (minEquipLevel > maxEquipLevel)
             (minEquipLevel, maxEquipLevel) = (maxEquipLevel, minEquipLevel);
+
+        if (oldMinLevel != minEquipLevel || oldMaxLevel != maxEquipLevel)
+            MarkFilteredItemsDirty();
     }
 
     private void DrawJobFilter()
     {
         ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Job"));
-        DrawCombo("##JobFilter", JOB_FILTER_NAMES, ref selectedJobFilterIndex);
+        if (DrawCombo("##JobFilter", JOB_FILTER_NAMES, ref selectedJobFilterIndex))
+            MarkFilteredItemsDirty(clearJobCache: true);
+
         ImGui.Spacing();
     }
 
@@ -98,7 +110,10 @@ public unsafe partial class UnifiedGlamourManager
             setIndex = 0;
 
         if (DrawCombo("##SetRelationFilter", SET_RELATION_FILTER_NAMES, ref setIndex))
+        {
             setRelationFilter = SET_RELATION_FILTER_VALUES[setIndex];
+            MarkFilteredItemsDirty();
+        }
 
         ImGui.Spacing();
     }
@@ -122,11 +137,12 @@ public unsafe partial class UnifiedGlamourManager
         sortMode = SortMode.FavoriteThenNameAsc;
         setRelationFilter = SetRelationFilter.All;
         enableLevelFilter = false;
-        minEquipLevel = 1;
-        maxEquipLevel = 100;
+        minEquipLevel = DEFAULT_MIN_EQUIP_LEVEL;
+        maxEquipLevel = DEFAULT_MAX_EQUIP_LEVEL;
         selectedJobFilterIndex = 0;
         searchText = string.Empty;
         filterByCurrentPlateSlot = true;
+        MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
     }
 
     #endregion
@@ -138,10 +154,10 @@ public unsafe partial class UnifiedGlamourManager
         var width = ImGui.GetContentRegionAvail().X;
         var halfWidth = (width - 6f) * 0.5f;
         var buttonSize = new Vector2(halfWidth, CONTROL_HEIGHT);
-        var hasInventoryPreview = HasPreviewSource("InventoryPreview") ||
-                                  HasPreviewSource("SaddleBagPreview") ||
-                                  HasPreviewSource("ArmoryPreview");
-        var hasRetainerPreview = HasPreviewSource("RetainerPreview");
+        var hasInventoryPreview = HasPreviewSource(PREVIEW_SOURCE_INVENTORY) ||
+                                  HasPreviewSource(PREVIEW_SOURCE_SADDLEBAG_LEGACY) ||
+                                  HasPreviewSource(PREVIEW_SOURCE_ARMORY_LEGACY);
+        var hasRetainerPreview = HasPreviewSource(PREVIEW_SOURCE_RETAINER);
 
         DrawSourceButtonRow(
             (Lang.Get("UnifiedGlamourManager-Source-All"), SourceFilter.All, false),
@@ -178,7 +194,10 @@ public unsafe partial class UnifiedGlamourManager
         using (ImRaii.PushColor(ImGuiCol.ButtonHovered, ACCENT_SOFT_COLOR, active))
         {
             if (ImGui.Button($"{label}##Source{value}", size))
+            {
                 sourceFilter = value;
+                MarkFilteredItemsDirty();
+            }
         }
     }
 
@@ -212,7 +231,8 @@ public unsafe partial class UnifiedGlamourManager
         var changed = false;
 
         ImGui.SetNextItemWidth(-1f);
-        if (!ImGui.BeginCombo(id, items[index]))
+        using var combo = ImRaii.Combo(id, items[index]);
+        if (!combo)
             return false;
 
         for (var i = 0; i < items.Length; i++)
@@ -228,7 +248,6 @@ public unsafe partial class UnifiedGlamourManager
                 ImGui.SetItemDefaultFocus();
         }
 
-        ImGui.EndCombo();
         return changed;
     }
 

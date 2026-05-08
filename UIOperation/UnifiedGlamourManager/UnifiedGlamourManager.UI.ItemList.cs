@@ -1,5 +1,6 @@
 using System.Numerics;
 using Dalamud.Interface.Textures;
+using Dalamud.Interface.Textures.TextureWraps;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -9,18 +10,25 @@ public unsafe partial class UnifiedGlamourManager
 
     private void DrawItemList()
     {
-        var filtered = ApplySort(items.Where(PassFilter)).ToList();
+        EnsureFilteredItems();
 
-        using var padding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(12f, 10f));
+        using var padding = ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(PANEL_PADDING_X, PANEL_PADDING_Y));
         using var listPanel = ImRaii.Child("##ListPanel", new Vector2(0f, 0f), true);
         if (!listPanel)
             return;
 
-        DrawItemListHeader(filtered.Count);
+        DrawItemListHeader(filteredItems.Count);
 
         ImGui.Separator();
 
-        if (filtered.Count == 0)
+        if (isRefreshingItems)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(Lang.Get("Loading"));
+            return;
+        }
+
+        if (filteredItems.Count == 0)
         {
             ImGui.Spacing();
             ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoResult"));
@@ -32,9 +40,9 @@ public unsafe partial class UnifiedGlamourManager
             return;
 
         if (useGridView)
-            DrawItemGrid(filtered);
+            DrawItemGrid(filteredItems);
         else
-            DrawItemCardsVirtualized(filtered);
+            DrawItemCardsVirtualized(filteredItems);
     }
 
     #endregion
@@ -52,8 +60,7 @@ public unsafe partial class UnifiedGlamourManager
             : ERROR_COLOR;
         ImGui.TextColored(slotColor, Lang.Get("UnifiedGlamourManager-CurrentSlotValue", GetCurrentPlateSlotNameForUI()));
 
-        const float viewButtonWidth = 72f;
-        var x = ImGui.GetContentRegionAvail().X - viewButtonWidth * 2f - 10f;
+        var x = ImGui.GetContentRegionAvail().X - VIEW_MODE_BUTTON_WIDTH * 2f - GRID_ICON_PADDING;
         if (x > 0f)
             ImGui.SameLine(x);
 
@@ -68,13 +75,54 @@ public unsafe partial class UnifiedGlamourManager
     {
         using var color = ImRaii.PushColor(ImGuiCol.Button, new Vector4(0.70f, 0.10f, 0.25f, 0.92f), active);
 
-        if (ImGui.Button(label, new Vector2(72f, 30f)))
+        if (ImGui.Button(label, new Vector2(VIEW_MODE_BUTTON_WIDTH, VIEW_MODE_BUTTON_HEIGHT)))
             onClick();
     }
 
     #endregion
 
     #region 卡片列表
+
+    #region 筛选缓存
+
+    private void EnsureFilteredItems()
+    {
+        UpdateCurrentSlotFilterCache();
+
+        if (!filteredItemsDirty)
+            return;
+
+        filteredItems.Clear();
+        filteredItems.AddRange(ApplySort(items.Where(PassFilter)));
+        filteredItemsDirty = false;
+    }
+
+    private void MarkFilteredItemsDirty(bool clearJobCache = false, bool clearPlateSlotCache = false)
+    {
+        filteredItemsDirty = true;
+
+        if (clearJobCache)
+            jobFilterCache.Clear();
+
+        if (clearPlateSlotCache)
+            plateSlotFilterCache.Clear();
+    }
+
+    private void UpdateCurrentSlotFilterCache()
+    {
+        if (!filterByCurrentPlateSlot)
+            return;
+
+        var slot = GetCurrentPlateSlotIndex();
+        if (slot == lastFilterPlateSlot)
+            return;
+
+        lastFilterPlateSlot = slot;
+        plateSlotFilterCache.Clear();
+        MarkFilteredItemsDirty();
+    }
+
+    #endregion
 
     private void DrawItemCardsVirtualized(IReadOnlyList<UnifiedItem> filtered)
     {
@@ -85,8 +133,8 @@ public unsafe partial class UnifiedGlamourManager
         var startCursorPos = ImGui.GetCursorPos();
         var scrollY = ImGui.GetScrollY();
         var visibleHeight = ImGui.GetWindowHeight();
-        var firstIndex = Math.Max(0, (int)MathF.Floor(scrollY / rowHeight) - 3);
-        var lastIndex = Math.Min(filtered.Count - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + 3);
+        var firstIndex = Math.Max(0, (int)MathF.Floor(scrollY / rowHeight) - VIRTUALIZED_LIST_BUFFER_ROWS);
+        var lastIndex = Math.Min(filtered.Count - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + VIRTUALIZED_LIST_BUFFER_ROWS);
 
         if (firstIndex > 0)
             ImGui.Dummy(new Vector2(0f, firstIndex * rowHeight));
@@ -129,14 +177,14 @@ public unsafe partial class UnifiedGlamourManager
         var hovered = ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
         var bgColor = GetCardBackgroundColor(item, selected, favorite, hovered);
 
-        drawList.AddRectFilled(min, max, ImGui.ColorConvertFloat4ToU32(bgColor), 8f);
+        drawList.AddRectFilled(min, max, ImGui.ColorConvertFloat4ToU32(bgColor), CARD_ROUNDING);
 
         if (selected)
-            drawList.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ACCENT_SOFT_COLOR), 8f, (ImDrawFlags)0, 2.0f);
+            drawList.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ACCENT_SOFT_COLOR), CARD_ROUNDING, (ImDrawFlags)0, CARD_BORDER_THICKNESS_SELECTED);
         else if (favorite)
-            drawList.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(FAVORITE_BORDER_COLOR), 8f, (ImDrawFlags)0, 1.8f);
+            drawList.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(FAVORITE_BORDER_COLOR), CARD_ROUNDING, (ImDrawFlags)0, CARD_BORDER_THICKNESS_FAVORITE);
         else if (hovered)
-            drawList.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ACCENT_COLOR), 8f, (ImDrawFlags)0, 1.2f);
+            drawList.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ACCENT_COLOR), CARD_ROUNDING, (ImDrawFlags)0, CARD_BORDER_THICKNESS_HOVERED);
 
         ImGui.SetCursorPos(new Vector2(12f, 12f));
 
@@ -172,7 +220,7 @@ public unsafe partial class UnifiedGlamourManager
         using var buttonActive = ImRaii.PushColor(ImGuiCol.ButtonActive, favorite ? new Vector4(1.00f, 0.82f, 0.32f, 1.00f) : new Vector4(0.72f, 0.26f, 0.54f, 1.00f));
         using var text = ImRaii.PushColor(ImGuiCol.Text, favorite ? STAR_ON_COLOR : STAR_OFF_COLOR);
 
-        if (ImGui.Button(favorite ? "★" : "☆", new Vector2(36f, ICON_SIZE_LIST)))
+        if (ImGui.Button(favorite ? FAVORITE_ICON_ON : FAVORITE_ICON_OFF, new Vector2(CONTROL_HEIGHT, ICON_SIZE_LIST)))
             ToggleFavorite(item);
     }
 
@@ -220,23 +268,20 @@ public unsafe partial class UnifiedGlamourManager
             return;
 
         var availableWidth = MathF.Max(180f, ImGui.GetContentRegionAvail().X);
-        const float minCellSize = 58f;
-        const float maxCellSize = 68f;
-        const float spacing = 4f;
-        var columns = Math.Max(1, (int)MathF.Floor((availableWidth + spacing) / (minCellSize + spacing)));
-        var cellSize = MathF.Floor((availableWidth - spacing * (columns - 1)) / columns);
-        cellSize = Math.Clamp(cellSize, minCellSize, maxCellSize);
+        var columns = Math.Max(1, (int)MathF.Floor((availableWidth + GRID_CELL_SPACING) / (GRID_MIN_CELL_SIZE + GRID_CELL_SPACING)));
+        var cellSize = MathF.Floor((availableWidth - GRID_CELL_SPACING * (columns - 1)) / columns);
+        cellSize = Math.Clamp(cellSize, GRID_MIN_CELL_SIZE, GRID_MAX_CELL_SIZE);
 
-        var iconSize = MathF.Max(42f, cellSize - 10f);
+        var iconSize = MathF.Max(GRID_ICON_MIN_SIZE, cellSize - GRID_ICON_PADDING);
         var start = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
         var rows = (filtered.Count + columns - 1) / columns;
-        var rowHeight = cellSize + spacing;
+        var rowHeight = cellSize + GRID_CELL_SPACING;
         var totalHeight = rows * rowHeight;
         var scrollY = ImGui.GetScrollY();
         var visibleHeight = ImGui.GetWindowHeight();
-        var firstVisibleRow = Math.Max(0, (int)MathF.Floor(scrollY / rowHeight) - 2);
-        var lastVisibleRow = Math.Min(rows - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + 2);
+        var firstVisibleRow = Math.Max(0, (int)MathF.Floor(scrollY / rowHeight) - VIRTUALIZED_GRID_BUFFER_ROWS);
+        var lastVisibleRow = Math.Min(rows - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + VIRTUALIZED_GRID_BUFFER_ROWS);
 
         ImGui.Dummy(new Vector2(0f, totalHeight));
 
@@ -249,7 +294,7 @@ public unsafe partial class UnifiedGlamourManager
                     continue;
 
                 var item = filtered[index];
-                var pos = new Vector2(start.X + col * (cellSize + spacing), start.Y + row * rowHeight);
+                var pos = new Vector2(start.X + col * (cellSize + GRID_CELL_SPACING), start.Y + row * rowHeight);
                 ImGui.SetCursorScreenPos(pos);
 
                 DrawGridCell(item, index, pos, cellSize, iconSize, drawList);
@@ -271,14 +316,14 @@ public unsafe partial class UnifiedGlamourManager
         var borderColor = GetGridBorderColor(item, selected, favorite);
         var bgColor = GetGridBackgroundColor(item, hovered);
 
-        drawList.AddRectFilled(pos, pos + new Vector2(cellSize, cellSize), ImGui.ColorConvertFloat4ToU32(bgColor), 6f);
+        drawList.AddRectFilled(pos, pos + new Vector2(cellSize, cellSize), ImGui.ColorConvertFloat4ToU32(bgColor), GRID_CELL_ROUNDING);
         drawList.AddRect(
             pos,
             pos + new Vector2(cellSize, cellSize),
             ImGui.ColorConvertFloat4ToU32(borderColor),
-            6f,
+            GRID_CELL_ROUNDING,
             (ImDrawFlags)0,
-            selected ? 2.2f : 1.2f);
+            selected ? 2.2f : CARD_BORDER_THICKNESS_HOVERED);
 
         var iconPos = pos + new Vector2((cellSize - iconSize) * 0.5f, (cellSize - iconSize) * 0.5f);
         ImGui.SetCursorScreenPos(iconPos);
@@ -287,7 +332,7 @@ public unsafe partial class UnifiedGlamourManager
             DrawItemIcon(item.IconID, iconSize);
 
         if (favorite)
-            drawList.AddText(pos + new Vector2(cellSize - 17f, 2f), ImGui.ColorConvertFloat4ToU32(STAR_ON_COLOR), "★");
+            drawList.AddText(pos + new Vector2(cellSize - 17f, 2f), ImGui.ColorConvertFloat4ToU32(STAR_ON_COLOR), FAVORITE_ICON_ON);
 
         if (!hovered)
             return;
@@ -394,6 +439,9 @@ public unsafe partial class UnifiedGlamourManager
 
     #region 图标
 
+    private readonly Dictionary<uint, IconTextureCacheEntry> iconTextureCache = [];
+    private readonly LinkedList<uint> iconTextureCacheOrder = [];
+
     private void DrawItemIcon(uint iconID, float size)
     {
         if (iconID == 0)
@@ -404,11 +452,7 @@ public unsafe partial class UnifiedGlamourManager
 
         try
         {
-            var texture = DService.Instance()
-                .Texture
-                .GetFromGameIcon(new GameIconLookup(iconID))
-                .GetWrapOrDefault();
-
+            var texture = GetCachedIconTexture(iconID);
             if (texture == null)
             {
                 ImGui.Dummy(new Vector2(size, size));
@@ -421,6 +465,47 @@ public unsafe partial class UnifiedGlamourManager
         {
             ImGui.Dummy(new Vector2(size, size));
         }
+    }
+
+    private IDalamudTextureWrap? GetCachedIconTexture(uint iconID)
+    {
+        if (iconTextureCache.TryGetValue(iconID, out var entry))
+        {
+            TouchIconCacheEntry(entry);
+            return entry.Texture.GetWrapOrDefault();
+        }
+
+        if (iconLoadCountThisFrame >= ICON_LOADS_PER_FRAME)
+            return null;
+
+        var node = iconTextureCacheOrder.AddFirst(iconID);
+        iconTextureCache[iconID] = new(DService.Instance().Texture.GetFromGameIcon(new GameIconLookup(iconID)), node);
+        iconLoadCountThisFrame++;
+
+        TrimIconTextureCache();
+        return iconTextureCache[iconID].Texture.GetWrapOrDefault();
+    }
+
+    private void TouchIconCacheEntry(IconTextureCacheEntry entry)
+    {
+        iconTextureCacheOrder.Remove(entry.Node);
+        iconTextureCacheOrder.AddFirst(entry.Node);
+    }
+
+    private void TrimIconTextureCache()
+    {
+        while (iconTextureCache.Count > ICON_TEXTURE_CACHE_LIMIT && iconTextureCacheOrder.Last != null)
+        {
+            var iconID = iconTextureCacheOrder.Last.Value;
+            iconTextureCacheOrder.RemoveLast();
+            iconTextureCache.Remove(iconID);
+        }
+    }
+
+    private void ClearIconCache()
+    {
+        iconTextureCache.Clear();
+        iconTextureCacheOrder.Clear();
     }
 
     #endregion
