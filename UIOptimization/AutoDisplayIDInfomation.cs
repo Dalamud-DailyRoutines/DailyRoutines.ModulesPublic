@@ -110,16 +110,6 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox($"{Lang.Get("Status")} ID", ref config.ShowStatusID))
-            config.Save(this);
-
-        ImGui.NewLine();
-
-        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(8555)} ID", ref config.ShowWeatherID))
-            config.Save(this);
-
-        ImGui.NewLine();
-
         if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(870)}", ref config.ShowZoneInfo))
             config.Save(this);
     }
@@ -247,15 +237,12 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         public bool ShowActionIDOriginal = true;
         public bool ShowActionIDResolved = true;
         public bool ShowItemID           = true;
-
-        public bool ShowStatusID = true;
-
+        
         public bool ShowTargetID          = true;
         public bool ShowTargetIDBattleNPC = true;
         public bool ShowTargetIDCompanion = true;
         public bool ShowTargetIDEventNPC  = true;
         public bool ShowTargetIDOthers    = true;
-        public bool ShowWeatherID         = true;
         public bool ShowZoneInfo          = true;
     }
 }
