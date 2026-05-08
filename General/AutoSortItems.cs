@@ -112,7 +112,7 @@ public class AutoSortItems : ModuleBase
     {
         if (!GameState.IsLoggedIn || !UIModule.IsScreenReady() || DService.Instance().Condition.IsOccupiedInEvent) return false;
 
-        if (!DService.Instance().ClientState.IsClientIdle() || !IsInValidZone())
+        if (!DService.Instance().Condition.IsIdle || !IsInValidZone())
         {
             TaskHelper.Abort();
             return true;
