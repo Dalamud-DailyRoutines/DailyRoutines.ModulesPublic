@@ -546,7 +546,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
     private sealed unsafe class MitigationState
     {
-        private readonly PartyMitigationSnapshot[] partySnapshotBuffer = new PartyMitigationSnapshot[9];
+        private readonly PartyMitigationSnapshot[] partySnapshotBuffer = new PartyMitigationSnapshot[8];
         private          int                       localActiveCount;
         private          ActiveMitigation[]        localActiveStatusBuffer = new ActiveMitigation[16];
         private          int                       partyCount;
@@ -680,7 +680,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
         private void UpdateParty(GameBattleChara* localPlayer, FrozenDictionary<uint, MitigationDefinition> definitions)
         {
-            Span<PartyMitigationSnapshot> buffer = stackalloc PartyMitigationSnapshot[9];
+            Span<PartyMitigationSnapshot> buffer = stackalloc PartyMitigationSnapshot[8];
             buffer.Clear();
 
             buffer[0] = new PartyMitigationSnapshot(localPlayer->EntityId, LocalPhysical, LocalMagical, LocalShield);
@@ -854,7 +854,8 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
     private static class RemoteRepoManager
     {
-        private const string URI = "https://assets.sumemo.dev";
+        private const string EndpointCN     = "https://haku.diemoe.net/assets/mitigation.json";
+        private const string EndpointGlobal = "https://assets.sumemo.dev/mitigation.json";
 
         private static FrozenDictionary<uint, MitigationDefinition> StatusDefinitions = FrozenDictionary<uint, MitigationDefinition>.Empty;
 
@@ -865,7 +866,8 @@ public class AutoDisplayMitigationInfo : ModuleBase
         {
             try
             {
-                var json = await HTTPClientHelper.Instance().Get().GetStringAsync($"{URI}/mitigation.json", ct).ConfigureAwait(false);
+                var endpoint = GameState.IsCN ? EndpointCN : EndpointGlobal;
+                var json     = await HTTPClientHelper.Instance().Get().GetStringAsync(endpoint, ct).ConfigureAwait(false);
                 var resp = JsonConvert.DeserializeObject<MitigationInfoDto[]>(json);
 
                 if (resp == null)
