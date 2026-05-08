@@ -12,6 +12,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Enums;
@@ -30,7 +31,11 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         Description         = Lang.Get("AutoShowItemNPCShopInfoDescription"),
         Category            = ModuleCategory.UIOptimization,
         ModulesPrerequisite = ["BetterMarketBoard", "BetterTeleport"],
-        PreviewImageURL     = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoShowItemNPCShopInfo-UI.png"] // TODO: 替换仓库
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/AutoShowItemNPCShopInfo-UI.png",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/AutoShowItemNPCShopInfo-Tooltip.png"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
@@ -58,8 +63,11 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
         args.AddMenuItem(contextMenu.Get());
     }
 
-    private static void OnItemTooltipUpdate(uint itemID, ref List<TooltipItemModification> modifications)
+    private static void OnItemTooltipUpdate(uint itemID, ItemKind itemKind, ref List<TooltipItemModification> modifications)
     {
+        if (itemKind is not ItemKind.Normal)
+            return;
+        
         var result = ItemSourceInfo.Query(itemID);
         if (result is not { State: ItemSourceQueryState.Ready, Data: { } itemInfo }) return;
         
@@ -71,49 +79,47 @@ public unsafe class AutoShowItemNPCShopInfo : ModuleBase
 
         builder.Builder
                .AppendNewLine()
-               .AppendNewLine()
-               .PushColorType(32)
-               .Append($"[{Lang.Get("AutoShowItemNPCShopInfo-ContextMenu")}]")
-               .PopColorType();
+               .Append($"[{Lang.Get("AutoShowItemNPCShopInfo-TooltipTitle")}]");
 
         foreach (var costInfo in shopInfo)
         {
             builder.Builder
                    .AppendNewLine()
-                   .Append($"  - {LuminaWrapper.GetItemName(costInfo.ItemID)}: ")
-                   .Append($"x{costInfo.Cost}");
-            
+                   .Append($"    {LuminaWrapper.GetItemName(costInfo.ItemID)} ")
+                   .PushColorType(32)
+                   .Append($"x{costInfo.Cost}")
+                   .PopColorType();
+
+            var itemCount = -1;
             if (CurrencyManager.Instance()->HasItem(costInfo.ItemID))
+                itemCount = (int)CurrencyManager.Instance()->GetItemCount(costInfo.ItemID);
+            else if (LocalPlayerState.GetItemCount(costInfo.ItemID) is var playerItemCount and > 0) 
+                itemCount = (int)playerItemCount;
+
+            if (itemCount > -1)
             {
                 builder.Builder
-                       .AppendNewLine()
-                       .Append($"    ({Lang.Get("Current")}: ")
-                       .PushColorType(67)
-                       .Append($"{CurrencyManager.Instance()->GetItemCount(costInfo.ItemID)}")
-                       .PopColorType()
-                       .Append(")");
-            }
-            else if (LocalPlayerState.GetItemCount(costInfo.ItemID) is var itemCount and > 0)
-            {
-                builder.Builder
-                       .AppendNewLine()
-                       .Append($"    ({Lang.Get("Current")}: ")
-                       .PushColorType(67)
+                       .Append($"  ({Lang.Get("Current")}: ")
+                       .PushColorType(itemCount >= costInfo.Cost ? 67U : 17)
                        .Append($"{itemCount}")
                        .PopColorType()
                        .Append(")");
             }
         }
-
-        builder.Builder.AppendNewLine();
         
         modifications.Add
         (
             new()
             {
+                Target = TooltipItemType.Description,
+                Type   = TooltipModificationType.Append,
+                Text   = builder.Builder.ToReadOnlySeString()
+            },
+            new()
+            {
                 Target = TooltipItemType.ShopInfo,
                 Type   = TooltipModificationType.Contribute,
-                Text   = builder.Builder.ToReadOnlySeString()
+                Text   = new()
             }
         );
     }
