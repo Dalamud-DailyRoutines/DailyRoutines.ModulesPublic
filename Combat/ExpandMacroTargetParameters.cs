@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
@@ -26,14 +27,17 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         Description = Lang.Get("ExpandMacroTargetParametersDescription"),
         Category    = ModuleCategory.Combat
     };
-    
-    private static readonly CompSig                           ResolvePlaceholderSig = new("E8 ?? ?? ?? ?? 33 ED 4C 8B F8");
-    private delegate        GameObject*                       ResolvePlaceholderDelegate(PronounModule* module, byte* str, byte a3, byte a4);
-    private                 Hook<ResolvePlaceholderDelegate>? ResolvePlaceholderHook;
+
+    private Hook<PronounModule.Delegates.ResolvePlaceholder>? ResolvePlaceholderHook;
 
     protected override void Init()
     {
-        ResolvePlaceholderHook ??= ResolvePlaceholderSig.GetHook<ResolvePlaceholderDelegate>(ResolvePlaceholderDetour);
+        ResolvePlaceholderHook = DService.Instance().Hook.HookFromMemberFunction
+        (
+            typeof(PronounModule.MemberFunctionPointers),
+            "ResolvePlaceholder",
+            (PronounModule.Delegates.ResolvePlaceholder)ResolvePlaceholderDetour
+        );
         ResolvePlaceholderHook.Enable();
     }
 
@@ -82,12 +86,19 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         }
     }
 
-    private GameObject* ResolvePlaceholderDetour(PronounModule* module, byte* str, byte a3, byte a4)
+    private GameObject* ResolvePlaceholderDetour
+    (
+        PronounModule* module,
+        CStringPointer placeholder,
+        byte           unknown0,
+        byte           unknown1,
+        bool           unknown2
+    )
     {
-        var orig = ResolvePlaceholderHook.Original(module, str, a3, a4);
+        var orig = ResolvePlaceholderHook.Original(module, placeholder, unknown0, unknown1, unknown2);
         if (orig != null) return orig;
 
-        var decoded = Marshal.PtrToStringUTF8((nint)str);
+        var decoded = placeholder.ToString();
         if (string.IsNullOrEmpty(decoded)) return null;
 
         if (Arguments.TryGetValue(decoded, out var info))
