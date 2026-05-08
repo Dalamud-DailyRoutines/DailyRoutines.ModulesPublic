@@ -15,12 +15,12 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class DyeColorPreview : ModuleBase
+public unsafe class AutoPreviewColorsInDye : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("DyeColorPreviewTitle"),
-        Description = Lang.Get("DyeColorPreviewDescription"),
+        Title       = Lang.Get("AutoPreviewColorsInDyeTitle"),
+        Description = Lang.Get("AutoPreviewColorsInDyeDescription"),
         Category    = ModuleCategory.UIOptimization,
         Author      = ["ErxCharlotte"]
     };
@@ -158,9 +158,9 @@ public unsafe class DyeColorPreview : ModuleBase
 
         private void Rebuild(DyeInfo dye)
         {
-            titleNode.String    = $"★ {Lang.Get(dye.NameKey)}";
+            titleNode.String    = $"★ {LuminaWrapper.GetItemName(dye.ItemID)}";
             titleNode.TextColor = dye.HighlightColor;
-            countNode.String    = Lang.Get("DyeColorPreview-AvailableColors", dye.StainIDs.Length);
+            countNode.String    = Lang.Get("AutoPreviewColorsInDye-AvailableColors", dye.StainIDs.Length);
 
             ClearColorNodes();
 
@@ -230,7 +230,7 @@ public unsafe class DyeColorPreview : ModuleBase
         }
     }
 
-    private sealed record DyeInfo(string NameKey, Vector4 HighlightColor, uint[] StainIDs);
+    private sealed record DyeInfo(uint ItemID, Vector4 HighlightColor, uint[] StainIDs);
 
     #region 常量
 
@@ -258,19 +258,19 @@ public unsafe class DyeColorPreview : ModuleBase
     {
         [52254] = new
         (
-            "DyeColorPreview-GeneralDye",
+            52254,
             new(1f, 0.95f, 0.65f, 1f),
             Enumerable.Range(1, 85).Select(static x => (uint)x).ToArray()
         ),
         [52255] = new
         (
-            "DyeColorPreview-ExtraDyeOne",
+            52255,
             new(1f, 0.25f, 0.25f, 1f),
             [86, 87, 88, 89, 90, 91, 92, 93, 94]
         ),
         [52256] = new
         (
-            "DyeColorPreview-ExtraDyeTwo",
+            52256,
             new(0.25f, 0.45f, 1f, 1f),
             [95, 96, 97, 98, 99, 100, 121, 122, 123, 124, 125]
         )
