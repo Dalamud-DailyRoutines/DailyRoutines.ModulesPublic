@@ -400,9 +400,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
         var addon    = (AddonPartyList*)PartyList;
 
         var snapshot = state.PartySnapshot;
-        var count    = snapshot.Length;
-
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < MathF.Min(snapshot.Length, AgentHUD.Instance()->PartyMemberCount); i++)
         {
             ref var partyMember = ref addon->PartyMembers[i];
             if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
@@ -504,82 +502,96 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
     #endregion
 
-    private readonly struct MitigationDefinition
-    (
-        float physical,
-        float magical,
-        bool  onMember
-    )
+    private readonly record struct MitigationDefinition(float Physical, float Magical, bool OnMember)
     {
-        public float Physical { get; } = physical;
-        public float Magical  { get; } = magical;
-        public bool  OnMember { get; } = onMember;
+        public MitigationValue Value => new(Physical, Magical);
     }
 
-    private readonly struct ActiveMitigation
-    (
-        uint  statusID,
-        float remainingTime,
-        float physical,
-        float magical
-    )
+    private readonly record struct MitigationValue(float Physical, float Magical)
     {
-        public uint  StatusID      { get; } = statusID;
-        public float RemainingTime { get; } = remainingTime;
-        public float Physical      { get; } = physical;
-        public float Magical       { get; } = magical;
+        public static MitigationValue Empty { get; } = new(0, 0);
     }
 
-    private readonly struct PartyMitigationSnapshot
+    private struct MitigationFactors(float physical, float magical)
+    {
+        private float physical = physical;
+        private float magical  = magical;
+        
+        public static MitigationFactors Full => new(1f, 1f);
+
+        public void Apply(ReadOnlySpan<ActiveMitigation> statuses)
+        {
+            foreach (var status in statuses)
+                Apply(status.Value);
+        }
+
+        public void Apply(MitigationValue value)
+        {
+            if (value.Physical > 0)
+                physical *= 1f - value.Physical / 100f;
+            if (value.Magical > 0)
+                magical *= 1f - value.Magical / 100f;
+        }
+
+        public MitigationValue ToReduction() =>
+            new(ReductionFromFactor(physical), ReductionFromFactor(magical));
+
+        private static float ReductionFromFactor(float factor) =>
+            factor >= 1f ? 0f : (1f - factor) * 100f;
+    }
+
+    private readonly record struct ActiveMitigation(uint StatusID, float RemainingTime, MitigationValue Value)
+    {
+        public float Physical => Value.Physical;
+
+        public float Magical => Value.Magical;
+    }
+
+    private readonly record struct PartyMitigationSnapshot(uint EntityID, MitigationValue Value, float Shield)
+    {
+        public float Physical => Value.Physical;
+
+        public float Magical => Value.Magical;
+    }
+
+    private sealed record MitigationSnapshot
     (
-        uint  entityID,
-        float physical,
-        float magical,
-        float shield
+        ActiveMitigation[]       LocalStatuses,
+        ActiveMitigation[]       TargetStatuses,
+        PartyMitigationSnapshot[] PartyMembers,
+        MitigationValue          LocalSummary,
+        float                    LocalShield
     )
     {
-        public uint  EntityID { get; } = entityID;
-        public float Physical { get; } = physical;
-        public float Magical  { get; } = magical;
-        public float Shield   { get; } = shield;
+        public static MitigationSnapshot Empty { get; } =
+            new([], [], new PartyMitigationSnapshot[9], MitigationValue.Empty, 0);
+
+        public bool IsLocalEmpty =>
+            LocalStatuses.Length == 0 && TargetStatuses.Length == 0 && LocalShield == 0;
     }
 
     private sealed unsafe class MitigationState
     {
-        private readonly PartyMitigationSnapshot[] partySnapshotBuffer = new PartyMitigationSnapshot[9];
-        private          int                       localActiveCount;
-        private          ActiveMitigation[]        localActiveStatusBuffer = new ActiveMitigation[16];
-        private          int                       partyCount;
-        private          int                       targetActiveCount;
-        private          ActiveMitigation[]        targetActiveStatusBuffer = new ActiveMitigation[16];
+        private MitigationSnapshot current = MitigationSnapshot.Empty;
 
-        public float LocalShield { get; private set; }
+        public float LocalShield => current.LocalShield;
 
-        public float LocalPhysical { get; private set; }
+        public float LocalPhysical => current.LocalSummary.Physical;
 
-        public float LocalMagical { get; private set; }
+        public float LocalMagical => current.LocalSummary.Magical;
 
-        public bool IsLocalEmpty =>
-            localActiveCount == 0 && LocalShield == 0 && targetActiveCount == 0;
+        public bool IsLocalEmpty => current.IsLocalEmpty;
 
         public ReadOnlySpan<ActiveMitigation> LocalActiveStatus =>
-            localActiveStatusBuffer.AsSpan(0, localActiveCount);
+            current.LocalStatuses;
 
         public ReadOnlySpan<ActiveMitigation> TargetActiveStatus =>
-            targetActiveStatusBuffer.AsSpan(0, targetActiveCount);
+            current.TargetStatuses;
 
         public ReadOnlySpan<PartyMitigationSnapshot> PartySnapshot =>
-            partySnapshotBuffer.AsSpan(0, partyCount);
+            current.PartyMembers.AsSpan(0, Math.Min(AgentHUD.Instance()->PartyMemberCount, current.PartyMembers.Length));
 
-        public void Clear()
-        {
-            localActiveCount  = 0;
-            targetActiveCount = 0;
-            partyCount        = 0;
-            LocalShield       = 0;
-            LocalPhysical     = 0;
-            LocalMagical      = 0;
-        }
+        public void Clear() => current = MitigationSnapshot.Empty;
 
         public void Update()
         {
@@ -593,111 +605,88 @@ public class AutoDisplayMitigationInfo : ModuleBase
                 return;
             }
 
-            LocalShield = (float)localPlayer->ShieldValue / 100 * localPlayer->Health;
+            var localStatuses  = CollectLocalStatuses(localPlayer, definitions);
+            var targetStatuses = CollectTargetStatuses(definitions);
+            var localSummary   = CalculateSummary(localStatuses, targetStatuses);
+            var localShield    = CalculateShield(localPlayer);
+            var partyMembers   = BuildPartySnapshot(localPlayer, localSummary, localShield, targetStatuses, definitions);
 
-            UpdateLocal(localPlayer, definitions);
-            UpdateTarget(definitions);
-            UpdateLocalSummaryWithTarget();
-            UpdateParty(localPlayer, definitions);
+            current = new MitigationSnapshot(localStatuses, targetStatuses, partyMembers, localSummary, localShield);
         }
 
-        private void UpdateLocal(GameBattleChara* localPlayer, FrozenDictionary<uint, MitigationDefinition> definitions)
+        private static ActiveMitigation[] CollectLocalStatuses
+        (
+            GameBattleChara*                             localPlayer,
+            FrozenDictionary<uint, MitigationDefinition> definitions
+        )
         {
-            Span<ActiveMitigation> buffer = stackalloc ActiveMitigation[64];
-            var                    count  = 0;
-
-            var factorPhysical = 1f;
-            var factorMagical  = 1f;
+            var statuses = new List<ActiveMitigation>();
 
             foreach (var status in localPlayer->StatusManager.Status)
             {
                 if (status.StatusId == 0)
                     continue;
 
-                if (!TryGetMitigationValues(localPlayer->EntityId, MemberStatus.From(status), definitions, out var physical, out var magical))
+                if (!TryGetMitigationValue(localPlayer->EntityId, MemberStatus.From(status), definitions, out var mitigation))
                     continue;
 
-                AddOrUpdateActiveMitigation(buffer, ref count, status.StatusId, status.RemainingTime, physical, magical);
-
-                MultiplyFactors(physical, magical, ref factorPhysical, ref factorMagical);
+                AddOrUpdateActiveMitigation(statuses, status.StatusId, status.RemainingTime, mitigation);
             }
 
-            LocalPhysical = ReductionFromFactor(factorPhysical);
-            LocalMagical  = ReductionFromFactor(factorMagical);
-
-            StoreSnapshot(ref localActiveStatusBuffer, ref localActiveCount, buffer, count);
+            return statuses.ToArray();
         }
 
-        private void UpdateTarget(FrozenDictionary<uint, MitigationDefinition> definitions)
+        private static ActiveMitigation[] CollectTargetStatuses(FrozenDictionary<uint, MitigationDefinition> definitions)
         {
-            Span<ActiveMitigation> buffer = stackalloc ActiveMitigation[64];
-            var                    count  = 0;
-
+            var statuses      = new List<ActiveMitigation>();
             var currentTarget = TargetManager.Target;
 
-            if (currentTarget is IBattleNPC battleNpc)
+            if (currentTarget is not IBattleNPC battleNpc)
+                return [];
+
+            var statusList = battleNpc.ToBCStruct()->StatusManager.Status;
+
+            foreach (var status in statusList)
             {
-                var statusList = battleNpc.ToBCStruct()->StatusManager.Status;
+                if (status.StatusId == 0)
+                    continue;
 
-                foreach (var status in statusList)
-                {
-                    if (status.StatusId == 0)
-                        continue;
+                if (!definitions.TryGetValue(status.StatusId, out var def))
+                    continue;
 
-                    if (!definitions.TryGetValue(status.StatusId, out var def))
-                        continue;
-
-                    AddOrUpdateActiveMitigation(buffer, ref count, status.StatusId, status.RemainingTime, def.Physical, def.Magical);
-                }
+                AddOrUpdateActiveMitigation(statuses, status.StatusId, status.RemainingTime, def.Value);
             }
 
-            StoreSnapshot(ref targetActiveStatusBuffer, ref targetActiveCount, buffer, count);
+            return statuses.ToArray();
         }
 
-        private void UpdateLocalSummaryWithTarget()
+        private static MitigationValue CalculateSummary(ReadOnlySpan<ActiveMitigation> localStatuses, ReadOnlySpan<ActiveMitigation> targetStatuses)
         {
-            if (targetActiveCount == 0)
-                return;
-
-            var factorPhysical = 1f;
-            var factorMagical  = 1f;
-
-            for (var i = 0; i < localActiveCount; i++)
-            {
-                ref readonly var s = ref localActiveStatusBuffer[i];
-                MultiplyFactors(s.Physical, s.Magical, ref factorPhysical, ref factorMagical);
-            }
-
-            for (var i = 0; i < targetActiveCount; i++)
-            {
-                ref readonly var s = ref targetActiveStatusBuffer[i];
-                MultiplyFactors(s.Physical, s.Magical, ref factorPhysical, ref factorMagical);
-            }
-
-            LocalPhysical = ReductionFromFactor(factorPhysical);
-            LocalMagical  = ReductionFromFactor(factorMagical);
+            var factors = MitigationFactors.Full;
+            factors.Apply(localStatuses);
+            factors.Apply(targetStatuses);
+            return factors.ToReduction();
         }
 
-        private void UpdateParty(GameBattleChara* localPlayer, FrozenDictionary<uint, MitigationDefinition> definitions)
+        private static PartyMitigationSnapshot[] BuildPartySnapshot
+        (
+            GameBattleChara*                             localPlayer,
+            MitigationValue                              localSummary,
+            float                                        localShield,
+            ReadOnlySpan<ActiveMitigation>               targetStatuses,
+            FrozenDictionary<uint, MitigationDefinition> definitions
+        )
         {
-            Span<PartyMitigationSnapshot> buffer = stackalloc PartyMitigationSnapshot[9];
-            buffer.Clear();
-
-            buffer[0] = new PartyMitigationSnapshot(localPlayer->EntityId, LocalPhysical, LocalMagical, LocalShield);
+            var partyMembers = new PartyMitigationSnapshot[9];
+            partyMembers[0] = new PartyMitigationSnapshot(localPlayer->EntityId, localSummary, localShield);
             var maxIndex = 1;
 
-            var enemyPhysicalFactor = 1f;
-            var enemyMagicalFactor  = 1f;
-
-            for (var i = 0; i < targetActiveCount; i++)
-            {
-                ref readonly var s = ref targetActiveStatusBuffer[i];
-                MultiplyFactors(s.Physical, s.Magical, ref enemyPhysicalFactor, ref enemyMagicalFactor);
-            }
+            var enemyFactors = MitigationFactors.Full;
+            enemyFactors.Apply(targetStatuses);
 
             foreach (var member in AgentHUD.Instance()->PartyMembers)
             {
-                if (member.Index < 0 || member.Index >= buffer.Length)
+                if (member.Index < 0 || member.Index >= partyMembers.Length)
                     continue;
 
                 if (member.Index == 0)
@@ -707,51 +696,50 @@ public class AutoDisplayMitigationInfo : ModuleBase
                     maxIndex = member.Index + 1;
 
                 var entityID = member.EntityId;
-
                 if (entityID == 0 || member.Object == null)
                 {
-                    buffer[member.Index] = new PartyMitigationSnapshot(entityID, 0, 0, 0);
+                    partyMembers[member.Index] = new PartyMitigationSnapshot(entityID, MitigationValue.Empty, 0);
                     continue;
                 }
 
-                var factorPhysical = enemyPhysicalFactor;
-                var factorMagical  = enemyMagicalFactor;
+                var memberFactors = enemyFactors;
 
                 foreach (var status in member.Object->StatusManager.Status)
                 {
                     if (status.StatusId == 0)
                         continue;
 
-                    if (!TryGetMitigationValues(entityID, MemberStatus.From(status), definitions, out var physical, out var magical))
+                    if (!TryGetMitigationValue(entityID, MemberStatus.From(status), definitions, out var mitigation))
                         continue;
 
-                    MultiplyFactors(physical, magical, ref factorPhysical, ref factorMagical);
+                    memberFactors.Apply(mitigation);
                 }
 
-                var physicalReduction = ReductionFromFactor(factorPhysical);
-                var magicalReduction  = ReductionFromFactor(factorMagical);
-                var shield            = (float)member.Object->ShieldValue / 100 * member.Object->Health;
-
-                buffer[member.Index] = new PartyMitigationSnapshot(entityID, physicalReduction, magicalReduction, shield);
+                partyMembers[member.Index] = new PartyMitigationSnapshot(
+                    entityID,
+                    memberFactors.ToReduction(),
+                    CalculateShield(member.Object));
             }
 
-            buffer[..maxIndex].CopyTo(partySnapshotBuffer);
-            partyCount = maxIndex;
+            return partyMembers[..maxIndex];
         }
 
-        private static bool TryGetMitigationValues
-            (uint targetID, MemberStatus memberStatus, FrozenDictionary<uint, MitigationDefinition> definitions, out float physical, out float magical)
+        private static bool TryGetMitigationValue
+        (
+            uint                                         targetID,
+            MemberStatus                                 memberStatus,
+            FrozenDictionary<uint, MitigationDefinition> definitions,
+            out MitigationValue                          mitigation
+        )
         {
-            physical = 0;
-            magical  = 0;
+            mitigation = MitigationValue.Empty;
 
             var statusID = memberStatus.StatusID;
 
             if (statusID == 2675)
             {
                 var value = memberStatus.SourceID == targetID ? 15f : 10f;
-                physical = value;
-                magical  = value;
+                mitigation = new MitigationValue(value, value);
                 return true;
             }
 
@@ -771,72 +759,36 @@ public class AutoDisplayMitigationInfo : ModuleBase
                     }
                 }
 
-                physical = value;
-                magical  = value;
+                mitigation = new MitigationValue(value, value);
                 return true;
             }
 
             if (!definitions.TryGetValue(statusID, out var def))
                 return false;
 
-            physical = def.Physical;
-            magical  = def.Magical;
+            mitigation = def.Value;
             return true;
         }
 
-        private static void AddOrUpdateActiveMitigation
-            (Span<ActiveMitigation> buffer, ref int count, uint statusID, float remainingTime, float physical, float magical)
+        private static void AddOrUpdateActiveMitigation(List<ActiveMitigation> statuses, uint statusID, float remainingTime, MitigationValue value)
         {
-            for (var i = 0; i < count; i++)
+            for (var i = 0; i < statuses.Count; i++)
             {
-                if (buffer[i].StatusID != statusID)
+                var existing = statuses[i];
+                if (existing.StatusID != statusID)
                     continue;
 
-                if (remainingTime > buffer[i].RemainingTime)
-                    buffer[i] = new ActiveMitigation(statusID, remainingTime, physical, magical);
+                if (remainingTime > existing.RemainingTime)
+                    statuses[i] = new ActiveMitigation(statusID, remainingTime, value);
 
                 return;
             }
 
-            if (count < buffer.Length)
-                buffer[count++] = new ActiveMitigation(statusID, remainingTime, physical, magical);
+            statuses.Add(new ActiveMitigation(statusID, remainingTime, value));
         }
 
-        private static void MultiplyFactors(float physical, float magical, ref float physicalFactor, ref float magicalFactor)
-        {
-            if (physical > 0)
-                physicalFactor *= 1f - physical / 100f;
-            if (magical > 0)
-                magicalFactor *= 1f - magical / 100f;
-        }
-
-        private static float ReductionFromFactor(float factor) =>
-            factor >= 1f ? 0f : (1f - factor) * 100f;
-
-        private static void StoreSnapshot(ref ActiveMitigation[] destination, ref int destinationCount, Span<ActiveMitigation> values, int count)
-        {
-            if (count == 0)
-            {
-                destinationCount = 0;
-                return;
-            }
-
-            EnsureCapacity(ref destination, count);
-            values[..count].CopyTo(destination);
-            destinationCount = count;
-        }
-
-        private static void EnsureCapacity(ref ActiveMitigation[] array, int needed)
-        {
-            if (array.Length >= needed)
-                return;
-
-            var newSize = array.Length == 0 ? 8 : array.Length * 2;
-            if (newSize < needed)
-                newSize = needed;
-
-            array = new ActiveMitigation[newSize];
-        }
+        private static float CalculateShield(GameBattleChara* chara) =>
+            (float)chara->ShieldValue / 100 * chara->Health;
 
         private readonly struct MemberStatus
         (
