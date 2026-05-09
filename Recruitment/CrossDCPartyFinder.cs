@@ -586,7 +586,7 @@ public class CrossDCPartyFinder : ModuleBase
     {
         public uint       Page          { get; set; } = 1;
         public uint       PageSize      { get; set; } = 100;
-        public uint?      Category      { get; set; }
+        public DutyCategory? Category   { get; set; }
         public string     World         { get; set; } = string.Empty;
         public string     DataCenter    { get; set; } = string.Empty;
         public List<uint> Jobs          { get; set; } = [];
@@ -629,7 +629,7 @@ public class CrossDCPartyFinder : ModuleBase
                 builder.Append($"&per_page={PageSize}");
 
             if (Category != null)
-                builder.Append($"&category_id={Category.Value}");
+                builder.Append($"&category_id={(uint)Category.Value}");
 
             if (World != string.Empty)
                 builder.Append($"&created_world_id={World}");
@@ -649,69 +649,69 @@ public class CrossDCPartyFinder : ModuleBase
             return $"{BASE_URL}{builder}";
         }
 
-        public static unsafe uint? ParseCategory(AgentLookingForGroup* agent) =>
+        public static unsafe DutyCategory? ParseCategory(AgentLookingForGroup* agent) =>
             agent->CategoryTab switch
             {
-                1  => 2,
-                2  => 4,
-                3  => 8,
-                4  => 16,
-                5  => 32,
-                6  => 64,
-                7  => 128,
-                8  => 256,
-                9  => 512,
-                10 => 1024,
-                11 => 2048,
-                12 => 4096,
-                13 => 8192,
-                14 => 16384,
-                15 => 32768,
-                16 => 0,
+                1  => DutyCategory.Roulette,
+                2  => DutyCategory.Dungeons,
+                3  => DutyCategory.GuildQuests,
+                4  => DutyCategory.Trials,
+                5  => DutyCategory.Raids,
+                6  => DutyCategory.HighEndDuty,
+                7  => DutyCategory.PvP,
+                8  => DutyCategory.GoldSaucer,
+                9  => DutyCategory.FATEs,
+                10 => DutyCategory.TreasureHunts,
+                11 => DutyCategory.TheHunt,
+                12 => DutyCategory.GatheringForays,
+                13 => DutyCategory.DeepDungeons,
+                14 => DutyCategory.FieldOperations,
+                15 => DutyCategory.VCDungeonFinder,
+                16 => DutyCategory.None,
                 _  => null
             };
 
-        public static string ParseCategoryIDToLoc(uint categoryID) =>
+        public static string ParseCategoryIDToLoc(DutyCategory categoryID) =>
             categoryID switch
             {
-                2    => LuminaWrapper.GetAddonText(8605),
-                4    => LuminaWrapper.GetAddonText(8607),
-                8    => LuminaWrapper.GetAddonText(8606),
-                16   => LuminaWrapper.GetAddonText(8608),
-                32   => LuminaWrapper.GetAddonText(8609),
-                64   => LuminaWrapper.GetAddonText(10822),
-                128  => LuminaWrapper.GetAddonText(8610),
-                256  => LuminaWrapper.GetAddonText(8612),
-                512  => LuminaWrapper.GetAddonText(8601),
-                1024 => LuminaWrapper.GetAddonText(8107),
-                2048 => LuminaWrapper.GetAddonText(8613),
-                4096 => LuminaWrapper.GetAddonText(2306),
-                8192 => LuminaWrapper.GetAddonText(2304),
-                16384 => LuminaWrapper.GetAddonText(2307),
-                32768 => LuminaGetter.GetRowOrDefault<ContentType>(30).Name.ToString(),
-                0     => LuminaWrapper.GetAddonText(7),
-                _     => string.Empty
+                DutyCategory.Roulette        => LuminaWrapper.GetAddonText(8605),
+                DutyCategory.Dungeons        => LuminaWrapper.GetAddonText(8607),
+                DutyCategory.GuildQuests     => LuminaWrapper.GetAddonText(8606),
+                DutyCategory.Trials          => LuminaWrapper.GetAddonText(8608),
+                DutyCategory.Raids           => LuminaWrapper.GetAddonText(8609),
+                DutyCategory.HighEndDuty     => LuminaWrapper.GetAddonText(10822),
+                DutyCategory.PvP             => LuminaWrapper.GetAddonText(8610),
+                DutyCategory.GoldSaucer      => LuminaWrapper.GetAddonText(8612),
+                DutyCategory.FATEs           => LuminaWrapper.GetAddonText(8601),
+                DutyCategory.TreasureHunts   => LuminaWrapper.GetAddonText(8107),
+                DutyCategory.TheHunt         => LuminaWrapper.GetAddonText(8613),
+                DutyCategory.GatheringForays => LuminaWrapper.GetAddonText(2306),
+                DutyCategory.DeepDungeons    => LuminaWrapper.GetAddonText(2304),
+                DutyCategory.FieldOperations => LuminaWrapper.GetAddonText(2307),
+                DutyCategory.VCDungeonFinder => LuminaGetter.GetRowOrDefault<ContentType>(30).Name.ToString(),
+                DutyCategory.None            => LuminaWrapper.GetAddonText(7),
+                _                            => string.Empty
             };
 
-        public static uint ParseCategoryIDToIconID(uint categoryID) =>
+        public static uint ParseCategoryIDToIconID(DutyCategory categoryID) =>
             categoryID switch
             {
-                2    => 61807,
-                4    => 61801,
-                8    => 61803,
-                16   => 61804,
-                32   => 61802,
-                64   => 61832,
-                128  => 61806,
-                256  => 61820,
-                512  => 61809,
-                1024 => 61808,
-                2048 => 61819,
-                4096 => 61815,
-                8192 => 61824,
-                16384 => 61837,
-                32768 => 61846,
-                _     => 0
+                DutyCategory.Roulette        => 61807,
+                DutyCategory.Dungeons        => 61801,
+                DutyCategory.GuildQuests     => 61803,
+                DutyCategory.Trials          => 61804,
+                DutyCategory.Raids           => 61802,
+                DutyCategory.HighEndDuty     => 61832,
+                DutyCategory.PvP             => 61806,
+                DutyCategory.GoldSaucer      => 61820,
+                DutyCategory.FATEs           => 61809,
+                DutyCategory.TreasureHunts   => 61808,
+                DutyCategory.TheHunt         => 61819,
+                DutyCategory.GatheringForays => 61815,
+                DutyCategory.DeepDungeons    => 61824,
+                DutyCategory.FieldOperations => 61837,
+                DutyCategory.VCDungeonFinder => 61846,
+                _                            => 0
             };
 
         public PartyFinderRequest Clone() =>
@@ -779,7 +779,7 @@ public class CrossDCPartyFinder : ModuleBase
             public uint HomeWorldId { get; set; }
 
             [JsonProperty("category_id")]
-            public uint CategoryId { get; set; }
+            public DutyCategory CategoryId { get; set; }
 
             [JsonProperty("duty_id")]
             public uint DutyId { get; set; }
