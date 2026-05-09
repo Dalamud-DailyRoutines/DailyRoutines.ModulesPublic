@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Numerics;
 using System.Text;
 using DailyRoutines.Common.Module.Abstractions;
@@ -482,9 +483,27 @@ public class CrossDCPartyFinder : ModuleBase
             },
             cancelSource.Token
         ).ContinueWith
-        (async _ =>
+        (async t =>
             {
                 isNeedToDisable = false;
+
+                if (t.IsFaulted && t.Exception?.InnerException is PartyFinderApiException)
+                {
+                    listings = listingsDisplay = [];
+                    lastUpdate  = DateTime.MinValue;
+                    lastRequest = new();
+                    await DService.Instance().Framework.RunOnFrameworkThread
+                    (() =>
+                        {
+                            unsafe
+                            {
+                                if (!LookingForGroup->IsAddonAndNodesReady()) return;
+                                LookingForGroup->GetTextNodeById(49)->SetText($"{selectedDataCenter}: 0");
+                            }
+                        }
+                    ).ConfigureAwait(false);
+                    return;
+                }
 
                 NotifyHelper.Instance().NotificationInfo($"获取了 {listingsDisplay.Count} 条招募信息");
 
@@ -565,22 +584,40 @@ public class CrossDCPartyFinder : ModuleBase
 
     private class PartyFinderRequest : IEquatable<PartyFinderRequest>
     {
-        public uint       Page       { get; set; } = 1;
-        public uint       PageSize   { get; set; } = 100;
-        public string     Category   { get; set; } = string.Empty;
-        public string     World      { get; set; } = string.Empty;
-        public string     DataCenter { get; set; } = string.Empty;
-        public List<uint> Jobs       { get; set; } = [];
+        public uint       Page          { get; set; } = 1;
+        public uint       PageSize      { get; set; } = 100;
+        public uint?      Category      { get; set; }
+        public string     World         { get; set; } = string.Empty;
+        public string     DataCenter    { get; set; } = string.Empty;
+        public List<uint> Jobs          { get; set; } = [];
+        public uint       HomeWorldId   { get; set; }
+        public string     Region        { get; set; } = string.Empty;
+        public uint       DutyId        { get; set; }
+        public List<uint> JobIds        { get; set; } = [];
 
         public bool Equals(PartyFinderRequest? other)
         {
             if (other is null) return false;
             if (ReferenceEquals(this, other)) return true;
-            return Category == other.Category && World == other.World && DataCenter == other.DataCenter;
+            return Category == other.Category && World == other.World && DataCenter == other.DataCenter &&
+                   HomeWorldId == other.HomeWorldId && Region == other.Region && DutyId == other.DutyId &&
+                   Jobs.SequenceEqual(other.Jobs) && JobIds.SequenceEqual(other.JobIds);
         }
 
-        public async Task<PartyFinderList> Request() =>
-            JsonConvert.DeserializeObject<PartyFinderList>(await HTTPClientHelper.Instance().Get().GetStringAsync(Format())) ?? new();
+        public async Task<PartyFinderList> Request()
+        {
+            var client = HTTPClientHelper.Instance().Get();
+            var response = await client.GetAsync(Format()).ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = JsonConvert.DeserializeObject<V2ErrorEnvelope>(content);
+                throw new PartyFinderApiException(response.StatusCode, error?.Error?.Code, error?.Error?.Message);
+            }
+
+            return JsonConvert.DeserializeObject<PartyFinderList>(content) ?? new();
+        }
 
         public string Format()
         {
@@ -591,110 +628,90 @@ public class CrossDCPartyFinder : ModuleBase
             if (PageSize != 20)
                 builder.Append($"&per_page={PageSize}");
 
-            if (Category != string.Empty)
-            {
-                if (Category.Contains(' '))
-                    builder.Append($"&category=\"{Category}\"");
-                else
-                    builder.Append($"&category={Category}");
-            }
+            if (Category != null)
+                builder.Append($"&category_id={Category.Value}");
 
             if (World != string.Empty)
-                builder.Append($"&world={World}");
+                builder.Append($"&created_world_id={World}");
+            if (HomeWorldId != 0)
+                builder.Append($"&home_world_id={HomeWorldId}");
             if (DataCenter != string.Empty)
                 builder.Append($"&datacenter={DataCenter}");
-            if (Jobs.Count != 0)
-                builder.Append($"&jobs=\"{string.Join(",", Jobs)}\"");
+            if (Region != string.Empty)
+                builder.Append($"&region={Region}");
+            if (DutyId != 0)
+                builder.Append($"&duty_id={DutyId}");
+            if (JobIds.Count != 0)
+                builder.Append($"&job_ids={string.Join(",", JobIds)}");
+            else if (Jobs.Count != 0)
+                builder.Append($"&job_ids={string.Join(",", Jobs)}");
 
             return $"{BASE_URL}{builder}";
         }
 
-        public static unsafe string ParseCategory(AgentLookingForGroup* agent) =>
+        public static unsafe uint? ParseCategory(AgentLookingForGroup* agent) =>
             agent->CategoryTab switch
             {
-                1  => "DutyRoulette",
-                2  => "Dungeons",
-                3  => "Guildhests",
-                4  => "Trials",
-                5  => "Raids",
-                6  => "HighEndDuty",
-                7  => "Pvp",
-                8  => "GoldSaucer",
-                9  => "Fates",
-                10 => "TreasureHunt",
-                11 => "TheHunt",
-                12 => "GatheringForays",
-                13 => "DeepDungeons",
-                14 => "FieldOperations",
-                15 => "V&C Dungeon Finder",
-                16 => "None",
-                _  => string.Empty
-            };
-
-        public static uint ParseOnlineCategoryToID(string onlineCategory) =>
-            onlineCategory.Trim() switch
-            {
-                "DutyRoulette"       => 1,
-                "Dungeons"           => 2,
-                "Guildhests"         => 3,
-                "Trials"             => 4,
-                "Raids"              => 5,
-                "HighEndDuty"        => 6,
-                "Pvp"                => 7,
-                "GoldSaucer"         => 8,
-                "Fates"              => 9,
-                "TreasureHunt"       => 10,
-                "TheHunt"            => 11,
-                "GatheringForays"    => 12,
-                "DeepDungeons"       => 13,
-                "DeepDungeon"        => 13,
-                "FieldOperations"    => 14,
-                "V&C Dungeon Finder" => 15,
-                "None"               => 16,
-                _                    => 0
+                1  => 2,
+                2  => 4,
+                3  => 8,
+                4  => 16,
+                5  => 32,
+                6  => 64,
+                7  => 128,
+                8  => 256,
+                9  => 512,
+                10 => 1024,
+                11 => 2048,
+                12 => 4096,
+                13 => 8192,
+                14 => 16384,
+                15 => 32768,
+                16 => 0,
+                _  => null
             };
 
         public static string ParseCategoryIDToLoc(uint categoryID) =>
             categoryID switch
             {
-                1  => LuminaWrapper.GetAddonText(8605),
-                2  => LuminaWrapper.GetAddonText(8607),
-                3  => LuminaWrapper.GetAddonText(8606),
-                4  => LuminaWrapper.GetAddonText(8608),
-                5  => LuminaWrapper.GetAddonText(8609),
-                6  => LuminaWrapper.GetAddonText(10822),
-                7  => LuminaWrapper.GetAddonText(8610),
-                8  => LuminaWrapper.GetAddonText(8612),
-                9  => LuminaWrapper.GetAddonText(8601),
-                10 => LuminaWrapper.GetAddonText(8107),
-                11 => LuminaWrapper.GetAddonText(8613),
-                12 => LuminaWrapper.GetAddonText(2306),
-                13 => LuminaWrapper.GetAddonText(2304),
-                14 => LuminaWrapper.GetAddonText(2307),
-                15 => LuminaGetter.GetRowOrDefault<ContentType>(30).Name.ToString(),
-                16 => LuminaWrapper.GetAddonText(7),
-                _  => string.Empty
+                2    => LuminaWrapper.GetAddonText(8605),
+                4    => LuminaWrapper.GetAddonText(8607),
+                8    => LuminaWrapper.GetAddonText(8606),
+                16   => LuminaWrapper.GetAddonText(8608),
+                32   => LuminaWrapper.GetAddonText(8609),
+                64   => LuminaWrapper.GetAddonText(10822),
+                128  => LuminaWrapper.GetAddonText(8610),
+                256  => LuminaWrapper.GetAddonText(8612),
+                512  => LuminaWrapper.GetAddonText(8601),
+                1024 => LuminaWrapper.GetAddonText(8107),
+                2048 => LuminaWrapper.GetAddonText(8613),
+                4096 => LuminaWrapper.GetAddonText(2306),
+                8192 => LuminaWrapper.GetAddonText(2304),
+                16384 => LuminaWrapper.GetAddonText(2307),
+                32768 => LuminaGetter.GetRowOrDefault<ContentType>(30).Name.ToString(),
+                0     => LuminaWrapper.GetAddonText(7),
+                _     => string.Empty
             };
 
         public static uint ParseCategoryIDToIconID(uint categoryID) =>
             categoryID switch
             {
-                1  => 61807,
-                2  => 61801,
-                3  => 61803,
-                4  => 61804,
-                5  => 61802,
-                6  => 61832,
-                7  => 61806,
-                8  => 61820,
-                9  => 61809,
-                10 => 61808,
-                11 => 61819,
-                12 => 61815,
-                13 => 61824,
-                14 => 61837,
-                15 => 61846,
-                _  => 0
+                2    => 61807,
+                4    => 61801,
+                8    => 61803,
+                16   => 61804,
+                32   => 61802,
+                64   => 61832,
+                128  => 61806,
+                256  => 61820,
+                512  => 61809,
+                1024 => 61808,
+                2048 => 61819,
+                4096 => 61815,
+                8192 => 61824,
+                16384 => 61837,
+                32768 => 61846,
+                _     => 0
             };
 
         public PartyFinderRequest Clone() =>
@@ -705,14 +722,23 @@ public class CrossDCPartyFinder : ModuleBase
                 Category   = Category,
                 World      = World,
                 DataCenter = DataCenter,
-                Jobs       = [..Jobs]
+                Jobs       = [..Jobs],
+                HomeWorldId = HomeWorldId,
+                Region     = Region,
+                DutyId     = DutyId,
+                JobIds     = [..JobIds]
             };
 
         public override bool Equals(object? obj) =>
             obj != null && Equals(obj as PartyFinderRequest);
 
         public override int GetHashCode() =>
-            HashCode.Combine(Category, World, DataCenter, Jobs);
+            HashCode.Combine
+            (
+                Category, World, DataCenter, HomeWorldId, Region, DutyId,
+                Jobs.Aggregate(0, (hash, job) => HashCode.Combine(hash, job)),
+                JobIds.Aggregate(0, (hash, job) => HashCode.Combine(hash, job))
+            );
 
         public static bool operator ==(PartyFinderRequest? left, PartyFinderRequest? right) =>
             Equals(left, right);
@@ -738,55 +764,37 @@ public class CrossDCPartyFinder : ModuleBase
             private Task<string>? detailReuqestTask;
 
             [JsonProperty("id")]
-            public int ID { get; set; }
+            public string ID { get; set; }
 
-            [JsonProperty("name")]
+            [JsonProperty("player_name")]
             public string PlayerName { get; set; }
 
             [JsonProperty("description")]
             public string Description { get; set; }
 
-            [JsonProperty("created_world")]
-            public string CreatedAtWorldName { get; set; }
-
             [JsonProperty("created_world_id")]
-            public string CreatedAtWorld { get; set; }
-
-            [JsonProperty("home_world")]
-            public string HomeWorldName { get; set; }
+            public uint CreatedAtWorldId { get; set; }
 
             [JsonProperty("home_world_id")]
-            public string HomeWorld { get; set; }
-
-            [JsonProperty("datacenter")]
-            public string DataCenter { get; set; }
-
-            [JsonProperty("category")]
-            public string CategoryName { get; set; }
+            public uint HomeWorldId { get; set; }
 
             [JsonProperty("category_id")]
-            public DutyCategory Category { get; set; }
+            public uint CategoryId { get; set; }
 
-            [JsonProperty("duty")]
-            public string Duty { get; set; }
+            [JsonProperty("duty_id")]
+            public uint DutyId { get; set; }
 
             [JsonProperty("min_item_level")]
             public uint MinItemLevel { get; set; }
-
-            [JsonProperty("time_left")]
-            public float TimeLeft { get; set; }
-
-            [JsonProperty("updated_at")]
-            public DateTime UpdatedAt { get; set; }
-
-            [JsonProperty("is_cross_world")]
-            public bool IsCrossWorld { get; set; }
 
             [JsonProperty("slots_filled")]
             public int SlotFilled { get; set; }
 
             [JsonProperty("slots_available")]
             public int SlotAvailable { get; set; }
+
+            [JsonProperty("time_left_seconds")]
+            public float TimeLeft { get; set; }
 
             public PartyFinderListingDetail? Detail { get; set; }
 
@@ -795,9 +803,21 @@ public class CrossDCPartyFinder : ModuleBase
                 get
                 {
                     if (categoryIcon != 0) return categoryIcon;
-                    return categoryIcon = PartyFinderRequest.ParseCategoryIDToIconID(PartyFinderRequest.ParseOnlineCategoryToID(CategoryName));
+                    return categoryIcon = PartyFinderRequest.ParseCategoryIDToIconID(CategoryId);
                 }
             }
+
+            public string CreatedAtWorldName =>
+                LuminaGetter.GetRowOrDefault<World>(CreatedAtWorldId).Name.ToString();
+
+            public string HomeWorldName =>
+                LuminaGetter.GetRowOrDefault<World>(HomeWorldId).Name.ToString();
+
+            public string Duty =>
+                LuminaWrapper.GetContentName(DutyId);
+
+            public string CategoryName =>
+                PartyFinderRequest.ParseCategoryIDToLoc(CategoryId);
 
             public bool Equals(PartyFinderListing? other)
             {
@@ -812,182 +832,141 @@ public class CrossDCPartyFinder : ModuleBase
             {
                 if (Detail != null || detailReuqestTask != null) return;
 
-                detailReuqestTask = HTTPClientHelper.Instance().Get().GetStringAsync($"{BASE_DETAIL_URL}{ID}");
-                Detail            = JsonConvert.DeserializeObject<PartyFinderListingDetail>(await detailReuqestTask.ConfigureAwait(false)) ?? new();
+                detailReuqestTask = RequestContentAsync();
+                Detail            = JsonConvert.DeserializeObject<PartyFinderDetailResponse>(await detailReuqestTask.ConfigureAwait(false))?.Data ?? new();
+
+                async Task<string> RequestContentAsync()
+                {
+                    var client = HTTPClientHelper.Instance().Get();
+                    var response = await client.GetAsync($"{BASE_DETAIL_URL}{ID}").ConfigureAwait(false);
+                    var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var error = JsonConvert.DeserializeObject<V2ErrorEnvelope>(content);
+                        throw new PartyFinderApiException(response.StatusCode, error?.Error?.Code, error?.Error?.Message);
+                    }
+
+                    return content;
+                }
             }
 
             public string GetSearchString() =>
-                $"{PlayerName}_{Description}_{PartyFinderRequest.ParseCategoryIDToLoc(PartyFinderRequest.ParseOnlineCategoryToID(CategoryName))}_{Duty}";
+                $"{PlayerName}_{Description}_{CategoryName}_{Duty}";
         }
 
         public class PartyFinderOverview
         {
             [JsonProperty("total")]
             public uint Total { get; set; }
-
-            [JsonProperty("page")]
-            public uint Page { get; set; }
-
-            [JsonProperty("per_page")]
-            public uint PerPage { get; set; }
-
-            [JsonProperty("total_pages")]
-            public uint TotalPages { get; set; }
         }
+    }
+
+    private class PartyFinderDetailResponse
+    {
+        [JsonProperty("data")]
+        public PartyFinderListingDetail Data { get; set; } = new();
     }
 
     private class PartyFinderListingDetail
     {
-        [JsonProperty("id")]
-        public long ID { get; set; }
-
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
-        [JsonProperty("description")]
-        public string Description { get; set; }
-
-        [JsonProperty("created_world")]
-        public string CreatedAtWorld { get; set; }
-
-        [JsonProperty("home_world")]
-        public string HomeWorld { get; set; }
-
-        [JsonProperty("category")]
-        public string Category { get; set; }
-
-        [JsonProperty("duty")]
-        public string Duty { get; set; }
-
-        [JsonProperty("min_item_level")]
-        public int MinItemLevel { get; set; }
-
-        [JsonProperty("slots_filled")]
-        public int SlotsFilled { get; set; }
-
-        [JsonProperty("slots_available")]
-        public int SlotsAvailable { get; set; }
-
-        [JsonProperty("time_left")]
-        public double TimeLeft { get; set; }
-
-        [JsonProperty("updated_at")]
-        public DateTime UpdatedAt { get; set; }
-
-        [JsonProperty("is_cross_world")]
-        public bool IsCrossWorld { get; set; }
-
-        [JsonProperty("beginners_welcome")]
-        public bool BeginnersWelcome { get; set; }
-
-        [JsonProperty("duty_type")]
-        public string DutyType { get; set; }
-
-        [JsonProperty("objective")]
-        public string Objective { get; set; }
-
-        [JsonProperty("conditions")]
-        public string Conditions { get; set; }
-
-        [JsonProperty("loot_rules")]
-        public string LootRules { get; set; }
-
         [JsonProperty("slots")]
         public List<Slot> Slots { get; set; }
 
-        [JsonProperty("datacenter")]
-        public string DataCenter { get; set; }
-
         public class Slot
         {
-            public static readonly HashSet<string> BattleJobs;
-            public static readonly HashSet<string> TankJobs;
-            public static readonly HashSet<string> DPSJobs;
-            public static readonly HashSet<string> HealerJobs;
-
-            static Slot()
-            {
-                BattleJobs = LuminaGetter.Get<ClassJob>()
-                                         .Where(x => x.RowId != 0 && x.DohDolJobIndex == -1)
-                                         .Select(x => x.Abbreviation.ToString())
-                                         .ToHashSet();
-
-                TankJobs = LuminaGetter.Get<ClassJob>()
-                                       .Where(x => x.RowId != 0 && x.Role is 1)
-                                       .Select(x => x.Abbreviation.ToString())
-                                       .ToHashSet();
-
-                DPSJobs = LuminaGetter.Get<ClassJob>()
-                                      .Where(x => x.RowId != 0 && x.Role is 2 or 3)
-                                      .Select(x => x.Abbreviation.ToString())
-                                      .ToHashSet();
-
-                HealerJobs = LuminaGetter.Get<ClassJob>()
-                                         .Where(x => x.RowId != 0 && x.Role is 4)
-                                         .Select(x => x.Abbreviation.ToString())
-                                         .ToHashSet();
-            }
-
             [JsonProperty("filled")]
             public bool Filled { get; set; }
 
-            [JsonProperty("role")]
-            public string? RoleName { get; set; }
-
             [JsonProperty("role_id")]
-            public string? Role { get; set; }
+            public uint RoleId { get; set; }
 
-            [JsonProperty("job")]
-            public string JobName { get; set; }
+            [JsonProperty("filled_job_id")]
+            public uint? FilledJobId { get; set; }
+
+            [JsonProperty("accepted_job_ids")]
+            public List<uint> AcceptedJobIds { get; set; }
+
+            private List<uint>? field;
 
             public List<uint> JobIcons
             {
                 get
                 {
-                    if (string.IsNullOrEmpty(JobName)) return [];
+                    if (field != null) return field;
 
-                    var splited = JobName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    var icons = new List<uint>();
 
-                    if (field.Count == 0)
+                    if (FilledJobId != null)
                     {
-                        if (splited.Length == 1)
-                            field = [ParseClassJobIdByName(JobName)];
-                        // 全战职
-                        else if (splited.Length == BattleJobs.Count && splited.All(BattleJobs.Contains))
-                            field = [62145];
-                        // 坦克
-                        else if (splited.All(TankJobs.Contains))
-                            field = [62571];
-                        // DPS
-                        else if (splited.All(DPSJobs.Contains))
-                            field = [62573];
-                        // 奶妈
-                        else if (splited.All(HealerJobs.Contains))
-                            field = [62572];
+                        icons.Add(62100 + FilledJobId.Value);
+                    }
+                    else if (AcceptedJobIds.Count != 0)
+                    {
+                        var role = RoleId;
+                        if (role == 1)
+                            icons.Add(62571);
+                        else if (role == 2 || role == 3)
+                            icons.Add(62573);
+                        else if (role == 4)
+                            icons.Add(62572);
                         else
                         {
-                            List<uint> icons = [];
-                            splited.ForEach(x => icons.Add(ParseClassJobIdByName(x)));
-                            field = icons.Where(x => x != 0).ToList();
+                            foreach (var jobId in AcceptedJobIds)
+                                icons.Add(62100 + jobId);
                         }
                     }
-
-                    return field;
-
-                    uint ParseClassJobIdByName(string job)
+                    else
                     {
-                        var rowID = LuminaGetter.Get<ClassJob>().FirstOrDefault(x => x.Abbreviation.ToString() == job).RowId;
-                        return rowID == 0 ? 62145 : 62100 + rowID;
+                        icons.Add(62145);
                     }
+
+                    field = icons;
+                    return field;
                 }
-            } = [];
+            }
         }
     }
     
     #region 常量
 
-    private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/listings?";
-    private const string BASE_DETAIL_URL = "https://xivpf.littlenightmare.top/api/listing/";
+    private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/v2/listings?";
+    private const string BASE_DETAIL_URL = "https://xivpf.littlenightmare.top/api/v2/listings/";
+
+    #endregion
+
+    #region v2 Error Handling
+
+    private class V2ErrorEnvelope
+    {
+        [JsonProperty("error")]
+        public V2Error? Error { get; set; }
+    }
+
+    private class V2Error
+    {
+        [JsonProperty("code")]
+        public string? Code { get; set; }
+
+        [JsonProperty("message")]
+        public string? Message { get; set; }
+
+        [JsonProperty("details")]
+        public string? Details { get; set; }
+    }
+
+    private class PartyFinderApiException : Exception
+    {
+        public HttpStatusCode StatusCode { get; }
+        public string? ErrorCode { get; }
+
+        public PartyFinderApiException(HttpStatusCode statusCode, string? errorCode, string? message)
+            : base(message ?? $"API error: {statusCode}")
+        {
+            StatusCode = statusCode;
+            ErrorCode = errorCode;
+        }
+    }
 
     #endregion
 }
