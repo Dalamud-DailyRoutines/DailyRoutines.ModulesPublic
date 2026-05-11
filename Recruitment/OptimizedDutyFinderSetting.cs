@@ -27,6 +27,7 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
+    private delegate void SetContentsFinderSettingsInitDelegate(byte* data, UIModule* module);
     private readonly SetContentsFinderSettingsInitDelegate SetContentsFinderSettingsInit =
         new CompSig("E8 ?? ?? ?? ?? 49 8B 06 45 33 FF 49 8B CE 45 89 7E 20 FF 50 28 B0 01").GetDelegate<SetContentsFinderSettingsInitDelegate>();
 
@@ -293,9 +294,7 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
 
         return false;
     }
-
-    private delegate void SetContentsFinderSettingsInitDelegate(byte* data, UIModule* module);
-
+    
     private enum DutyFinderSetting
     {
         Ja                      = 0,
@@ -327,7 +326,7 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         public Func<uint>? GetTooltip { get; init; }
     }
     
-    private static readonly FrozenSet<DutyFinderSettingDisplay> DutyFinderSettingIcons =
+    private static readonly DutyFinderSettingDisplay[] DutyFinderSettingIcons =
     [
         new(DutyFinderSetting.JoinPartyInProgress, 60644, 2519),
         new(DutyFinderSetting.UnrestrictedParty, 60641, 10008),
