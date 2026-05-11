@@ -98,6 +98,9 @@ public class FastGrandCompanyExchange : ModuleBase
             itemCount = config.ExchangeItemCount;
         }
 
+        if (string.IsNullOrWhiteSpace(itemName) || itemCount == 0)
+            return true;
+
         var grandCompany = PlayerState.Instance()->GrandCompany;
         var gcRank       = PlayerState.Instance()->GetGrandCompanyRank();
         var seals        = InventoryManager.Instance()->GetCompanySeals(grandCompany);
@@ -105,8 +108,9 @@ public class FastGrandCompanyExchange : ModuleBase
 
         var result = LuminaGetter.GetSub<GCScripShopItem>()
                                  .SelectMany(x => x)
-                                 .Where(x => LuminaGetter.GetRow<GCScripShopCategory>(x.RowId)!.Value.GrandCompany.RowId == grandCompany)
-                                 .Where(x => gcRank                                                                      >= x.RequiredGrandCompanyRank.RowId)
+                                 .Where(x => LuminaGetter.GetRowOrDefault<GCScripShopCategory>(x.RowId).GrandCompany.RowId == grandCompany)
+                                 .Where(x => x.CostGCSeals > 0)
+                                 .Where(x => gcRank >= x.RequiredGrandCompanyRank.RowId)
                                  .Where
                                  (x => (x.Item.ValueNullable?.Name.ToString() ?? string.Empty)
                                       .Contains(itemName, StringComparison.OrdinalIgnoreCase)
@@ -115,7 +119,9 @@ public class FastGrandCompanyExchange : ModuleBase
                                  .FirstOrDefault();
         if (result.RowId == 0) return true;
 
-        var singleCost             = result.CostGCSeals;
+        var singleCost = result.CostGCSeals;
+        if (singleCost == 0) return true;
+
         var availableExchangeCount = (int)(seals / singleCost);
         var exchangeCount          = Math.Min(itemCount == -1 ? availableExchangeCount : itemCount, availableExchangeCount);
 
