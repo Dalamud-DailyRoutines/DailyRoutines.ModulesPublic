@@ -27,7 +27,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
         Description = Lang.Get("AutoPlayerCommendDescription"),
         Category    = ModuleCategory.Combat
     };
-    
+
     private static uint MIPDisplayType
     {
         get => DService.Instance().GameConfig.UiConfig.GetUInt("MipDispType");
@@ -54,7 +54,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
         DService.Instance().ContextMenu.OnMenuOpened     += OnMenuOpen;
         DService.Instance().DutyState.DutyCompleted      += OnDutyComplete;
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
@@ -136,18 +136,23 @@ public unsafe class AutoPlayerCommend : ModuleBase
 
         foreach (var member in DService.Instance().PartyList)
         {
-            if ((ulong)member.ContentId == LocalPlayerState.ContentID) continue;
+            if (member.ContentId == LocalPlayerState.ContentID) continue;
 
-            var index = Math.Clamp(hudMembers.IndexOf(x => x.ContentId == (ulong)member.ContentId) - 1, 0, 6);
+            var index = Math.Clamp(hudMembers.IndexOf(x => x.ContentId == member.ContentId) - 1, 0, 6);
 
             var rawRole = member.ClassJob.Value.Role;
-            partyMembers[(member.Name.ToString(),
-                             member.World.RowId,
-                             member.ClassJob.RowId,
-                             member.ClassJob.Value.ClassJobCategory.RowId,
-                             rawRole,
-                             GetCharacterJobRole(rawRole),
-                             (ulong)member.ContentId)] = index;
+            partyMembers
+            [
+                (
+                    member.Name.ToString(),
+                    member.World.RowId,
+                    member.ClassJob.RowId,
+                    member.ClassJob.Value.ClassJobCategory.RowId,
+                    rawRole,
+                    GetCharacterJobRole(rawRole),
+                    member.ContentId
+                )
+            ] = index;
         }
 
         if (partyMembers.Count == 0) return true;
@@ -173,7 +178,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
                                (x =>
                                    {
                                        if (assignedContentID != 0 &&
-                                           x.Key.ContentID               == assignedContentID)
+                                           x.Key.ContentID   == assignedContentID)
                                            return 3;
 
                                        if (selfClassJob == x.Key.ClassJob)
@@ -308,7 +313,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
             4 => PlayerRole.Healer,
             _ => PlayerRole.None
         };
-    
+
     private enum PlayerRole
     {
         Tank,
@@ -324,7 +329,10 @@ public unsafe class AutoPlayerCommend : ModuleBase
         public HashSet<uint> BlacklistContents          = [];
     }
 
-    private class AssignPlayerCommendationMenu(AutoPlayerCommend module) : MenuItemBase
+    private class AssignPlayerCommendationMenu
+    (
+        AutoPlayerCommend module
+    ) : MenuItemBase
     {
         public override string Name       { get; protected set; } = Lang.Get("AutoPlayerCommend-AssignPlayerCommend");
         public override string Identifier { get; protected set; } = nameof(AutoPlayerCommend);
