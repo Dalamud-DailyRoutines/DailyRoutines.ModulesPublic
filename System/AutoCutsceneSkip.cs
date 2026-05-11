@@ -57,6 +57,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
     private Hook<LuaFunctionDelegate>? PlayStaffRollHook;
     private Hook<LuaFunctionDelegate>? PlayToBeContinuedHook;
+    private Hook<LuaFunctionDelegate>? IsEnterTerritoryEventLoginHook;
 
     private delegate void PushAgentResultToLuaDelegate(void* agent);
     private readonly PushAgentResultToLuaDelegate PushAgentResultToLua =
@@ -64,19 +65,6 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
     private readonly MemoryPatch cutsceneUnskippablePatch =
         new("75 ?? 48 8B 4B ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 80 7B", [0xEB]);
-    /*private static readonly MemoryPatch BeginPlayCutscenePatch = new
-    (
-        "0F B6 41 ?? A8 ?? 75 ?? 0F B6 51",
-        [
-            0xC6, 0x41, 0x10, 0x15, 0xC6, 0x41, 0x11, 0x02,
-            0xB0, 0x01, 0xC3, 0x90, 0x90, 0x90, 0x90, 0x90,
-            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
-            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
-            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
-            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
-            0x90, 0x90, 0x90
-        ]
-    );*/
 
     private Config config = null!;
 
@@ -112,6 +100,11 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         PlayToBeContinuedHook ??= DService.Instance().Hook.HookFromAddress<LuaFunctionDelegate>
         (
             baseAddress02.GetLuaFunctionByName("PlayToBeContinued"),
+            LuaFunction2Detour
+        );
+        IsEnterTerritoryEventLoginHook ??= DService.Instance().Hook.HookFromAddress<LuaFunctionDelegate>
+        (
+            baseAddress02.GetLuaFunctionByName("IsEnterTerritoryEventLogin"),
             LuaFunction2Detour
         );
 
@@ -171,6 +164,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         IsCutsceneSeenHook.Toggle(isValidCurrentZone);
         PlayStaffRollHook.Toggle(isValidCurrentZone);
         PlayToBeContinuedHook.Toggle(isValidCurrentZone);
+        IsEnterTerritoryEventLoginHook.Toggle(isValidCurrentZone);
 
         if (isValidCurrentZone)
         {
