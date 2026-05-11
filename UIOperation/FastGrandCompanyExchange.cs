@@ -88,7 +88,14 @@ public class FastGrandCompanyExchange : ModuleBase
         EnqueueByName(splited[0], itemCount);
     }
 
-    private unsafe bool EnqueueByName(string itemName, int itemCount = -1)
+    private bool EnqueueByName(string itemName, int itemCount = -1)
+    {
+        TaskHelper.DelayNext(500);
+        TaskHelper.Enqueue(() => EnqueueByNameInternal(itemName, itemCount));
+        return true;
+    }
+    
+    private unsafe bool EnqueueByNameInternal(string itemName, int itemCount = -1)
     {
         if (!GrandCompanyExchange->IsAddonAndNodesReady()) return false;
 
