@@ -76,7 +76,10 @@ public class HealerHelper : ModuleBase
         if (config.SendChat)
             NotifyHelper.Instance().Chat(Lang.GetSe(locKeySuffix, name, job.ToBitmapFontIcon(), job.Name));
         if (config.SendNotification)
-            NotifyHelper.Instance().NotificationInfo(Lang.Get(locKeySuffix, name, string.Empty, job.Name));
+            NotifyHelper.Instance().Notify(Lang.Get(locKeySuffix, name, string.Empty, job.Name), options: new()
+            {
+                Icon = DService.Instance().Texture.GetFromGameIcon(gameObject.ClassJob.Value.GetIcon())
+            });
     }
 
     #endregion
