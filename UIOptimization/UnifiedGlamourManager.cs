@@ -13,9 +13,9 @@ using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
-using GameCabinet = FFXIVClientStructs.FFXIV.Client.Game.UI.Cabinet;
-using ImageHelper = OmenTools.OmenService.ImageHelper;
-using ItemSheet = Lumina.Excel.Sheets.Item;
+using GameCabinet  = FFXIVClientStructs.FFXIV.Client.Game.UI.Cabinet;
+using ImageHelper  = OmenTools.OmenService.ImageHelper;
+using ItemSheet    = Lumina.Excel.Sheets.Item;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
 
 namespace DailyRoutines.ModulesPublic;
@@ -32,7 +32,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         Author      = ["ErxCharlotte"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Config config = null!;
 
@@ -40,35 +43,39 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     private bool isPrismBoxOpen;
     private bool requestFocusNextOpen;
     private bool autoOpenedByPlateEditor;
-    private string searchText = string.Empty;
-    private SourceFilter sourceFilter = SourceFilter.All;
-    private SortMode sortMode = SortMode.FavoriteThenNameAsc;
-    private SetRelationFilter setRelationFilter = SetRelationFilter.All;
-    private bool filterByCurrentPlateSlot = true;
+    private string searchText                    = string.Empty;
+    private SourceFilter sourceFilter            = SourceFilter.All;
+    private SortMode sortMode                    = SortMode.FavoriteThenNameAsc;
+    private SetRelationFilter setRelationFilter  = SetRelationFilter.All;
+    private bool filterByCurrentPlateSlot        = true;
     private bool enableLevelFilter;
-    private int minEquipLevel = DEFAULT_MIN_EQUIP_LEVEL;
-    private int maxEquipLevel = DEFAULT_MAX_EQUIP_LEVEL;
+    private int minEquipLevel                    = DEFAULT_MIN_EQUIP_LEVEL;
+    private int maxEquipLevel                    = DEFAULT_MAX_EQUIP_LEVEL;
     private int selectedJobFilterIndex;
-    private readonly List<UnifiedItem> items = [];
-    private readonly List<UnifiedItem> filteredItems = [];
-    private readonly HashSet<uint> favoriteItemIDs = [];
-    private readonly Dictionary<ulong, bool> jobFilterCache = [];
+    private readonly List<UnifiedItem> items                      = [];
+    private readonly List<UnifiedItem> filteredItems              = [];
+    private readonly HashSet<uint> favoriteItemIDs                = [];
+    private readonly Dictionary<ulong, bool> jobFilterCache       = [];
     private readonly Dictionary<ulong, bool> plateSlotFilterCache = [];
-    private bool useGridView = true;
+    private bool useGridView                                      = true;
     private int prismBoxItemCount;
     private int cabinetItemCount;
     private UnifiedItem? selectedItem;
     private bool requestClearFavoritesConfirm;
-    private bool filteredItemsDirty = true;
+    private bool filteredItemsDirty                 = true;
     private bool isRefreshingItems;
-    private uint lastFilterPlateSlot = uint.MaxValue;
+    private uint lastFilterPlateSlot                = uint.MaxValue;
     private int cachedLoadedFavoriteCount;
+    private int StoredItemCount => prismBoxItemCount + cabinetItemCount;
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
         NormalizeConfig();
-        TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
+        TaskHelper ??= new()
+        {
+            TimeoutMS = TASK_TIMEOUT_MS
+        };
 
         Overlay = new(this)
         {
@@ -101,7 +108,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
                 StartRefreshAll();
         }
 
-        ImGui.TextDisabled($"{GetTotalText()}: {items.Count} / {Lang.Get("Favorite")}: {cachedLoadedFavoriteCount}");
+        ImGui.TextDisabled($"{GetTotalText()}: {StoredItemCount} / {Lang.Get("Favorite")}: {cachedLoadedFavoriteCount}");
     }
 
     protected override void OverlayPreDraw()
@@ -152,23 +159,23 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void OpenWindow(bool openedByPlateEditor)
     {
-        isOpen = true;
-        autoOpenedByPlateEditor = openedByPlateEditor;
-        requestFocusNextOpen = true;
+        isOpen                    = true;
+        autoOpenedByPlateEditor   = openedByPlateEditor;
+        requestFocusNextOpen      = true;
 
         if (Overlay != null)
-            Overlay.IsOpen = true;
+            Overlay.IsOpen        = true;
 
         StartRefreshAll();
     }
 
     private void CloseWindow()
     {
-        isOpen = false;
-        autoOpenedByPlateEditor = false;
+        isOpen                    = false;
+        autoOpenedByPlateEditor   = false;
 
         if (Overlay != null)
-            Overlay.IsOpen = false;
+            Overlay.IsOpen        = false;
     }
 
     private static bool TryGetLoadedMirageManager(out MirageManager* manager)
@@ -261,14 +268,17 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         var itemToReselect = reselectItem ?? selectedItem;
 
-        TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
+        TaskHelper ??= new()
+        {
+            TimeoutMS = TASK_TIMEOUT_MS
+        };
         TaskHelper.Abort();
 
         isRefreshingItems = true;
         items.Clear();
         filteredItems.Clear();
         prismBoxItemCount = 0;
-        cabinetItemCount = 0;
+        cabinetItemCount  = 0;
         MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
 
         TaskHelper.Enqueue(() => RunRefreshStep(LoadPrismBoxItems, nameof(LoadPrismBoxItems)), nameof(LoadPrismBoxItems));
@@ -506,28 +516,28 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         var cabinet = group.FirstOrDefault(x => x.InCabinet);
 
         first.InPrismBox = prism != null;
-        first.InCabinet = cabinet != null;
+        first.InCabinet  = cabinet != null;
 
         if (prism != null)
         {
-            first.RawItemID = prism.RawItemID;
-            first.PrismBoxIndex = prism.PrismBoxIndex;
-            first.Stain0ID = prism.Stain0ID;
-            first.Stain1ID = prism.Stain1ID;
-            first.IconID = prism.IconID;
+            first.RawItemID              = prism.RawItemID;
+            first.PrismBoxIndex          = prism.PrismBoxIndex;
+            first.Stain0ID               = prism.Stain0ID;
+            first.Stain1ID               = prism.Stain1ID;
+            first.IconID                 = prism.IconID;
             first.EquipSlotCategoryRowID = prism.EquipSlotCategoryRowID;
-            first.ClassJobCategoryRowID = prism.ClassJobCategoryRowID;
-            first.LevelEquip = prism.LevelEquip;
-            first.IsSetContainer = prism.IsSetContainer;
+            first.ClassJobCategoryRowID  = prism.ClassJobCategoryRowID;
+            first.LevelEquip             = prism.LevelEquip;
+            first.IsSetContainer         = prism.IsSetContainer;
         }
 
         if (cabinet != null)
         {
-            first.CabinetID = cabinet.CabinetID;
-            first.IconID = first.IconID == 0 ? cabinet.IconID : first.IconID;
-            first.EquipSlotCategoryRowID = first.EquipSlotCategoryRowID == 0 ? cabinet.EquipSlotCategoryRowID : first.EquipSlotCategoryRowID;
-            first.ClassJobCategoryRowID = first.ClassJobCategoryRowID == 0 ? cabinet.ClassJobCategoryRowID : first.ClassJobCategoryRowID;
-            first.LevelEquip = first.LevelEquip == 0 ? cabinet.LevelEquip : first.LevelEquip;
+            first.CabinetID                 = cabinet.CabinetID;
+            first.IconID                    = first.IconID == 0 ? cabinet.IconID : first.IconID;
+            first.EquipSlotCategoryRowID    = first.EquipSlotCategoryRowID == 0 ? cabinet.EquipSlotCategoryRowID : first.EquipSlotCategoryRowID;
+            first.ClassJobCategoryRowID     = first.ClassJobCategoryRowID == 0 ? cabinet.ClassJobCategoryRowID : first.ClassJobCategoryRowID;
+            first.LevelEquip                = first.LevelEquip == 0 ? cabinet.LevelEquip : first.LevelEquip;
             first.IsSetContainer |= cabinet.IsSetContainer;
         }
 
@@ -638,10 +648,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void QueueApplyRetry(UnifiedItem item, ItemSource source)
     {
-        var itemID = item.ItemID;
-        var prismBoxIndex = item.PrismBoxIndex;
-        var cabinetID = item.CabinetID;
-        var isSetPart = item.IsSetPart;
+        var itemID          = item.ItemID;
+        var prismBoxIndex   = item.PrismBoxIndex;
+        var cabinetID       = item.CabinetID;
+        var isSetPart       = item.IsSetPart;
         var parentSetItemID = item.ParentSetItemID;
 
         DService.Instance().Framework.RunOnTick(
@@ -673,7 +683,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         if (agent == null || agent->Data == null) return;
 
-        agent->Data->HasChanges = true;
+        agent->Data->HasChanges          = true;
         agent->CharaView.IsUpdatePending = true;
     }
 
@@ -884,7 +894,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using var child = ImRaii.Child("##TopBar", new Vector2(0f, TOP_BAR_HEIGHT), true, ImGuiWindowFlags.NoScrollbar);
         if (!child) return;
 
-        ImGui.TextColored(SOFT_ACCENT_COLOR, $"{GetPrismBoxText()} {prismBoxItemCount} / {GetCabinetText()} {cabinetItemCount} / {GetTotalText()} {items.Count}");
+        ImGui.TextColored(SOFT_ACCENT_COLOR, $"{GetPrismBoxText()} {prismBoxItemCount} / {GetCabinetText()} {cabinetItemCount} / {GetTotalText()} {StoredItemCount}");
 
         ImGui.Spacing();
 
@@ -1076,14 +1086,14 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void ResetFilters()
     {
-        sourceFilter = SourceFilter.All;
-        sortMode = SortMode.FavoriteThenNameAsc;
-        setRelationFilter = SetRelationFilter.All;
-        enableLevelFilter = false;
-        minEquipLevel = DEFAULT_MIN_EQUIP_LEVEL;
-        maxEquipLevel = DEFAULT_MAX_EQUIP_LEVEL;
-        selectedJobFilterIndex = 0;
-        searchText = string.Empty;
+        sourceFilter             = SourceFilter.All;
+        sortMode                 = SortMode.FavoriteThenNameAsc;
+        setRelationFilter        = SetRelationFilter.All;
+        enableLevelFilter        = false;
+        minEquipLevel            = DEFAULT_MIN_EQUIP_LEVEL;
+        maxEquipLevel            = DEFAULT_MAX_EQUIP_LEVEL;
+        selectedJobFilterIndex   = 0;
+        searchText               = string.Empty;
         filterByCurrentPlateSlot = true;
         MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
     }
@@ -1532,7 +1542,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         public uint RawItemID { get; set; }
         public uint PrismBoxIndex { get; set; }
         public uint CabinetID { get; set; }
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; set; }          = string.Empty;
         public uint Stain0ID { get; set; }
         public uint Stain1ID { get; set; }
         public uint EquipSlotCategoryRowID { get; set; }
@@ -1545,7 +1555,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         public bool IsSetPart { get; set; }
         public uint ParentSetItemID { get; set; }
         public string ParentSetName { get; set; } = string.Empty;
-        public string SetPartLabel { get; set; } = string.Empty;
+        public string SetPartLabel { get; set; }  = string.Empty;
 
         public bool CanUseInPlate => (InPrismBox || InCabinet) && !IsSetContainer;
     }
@@ -1561,54 +1571,54 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private readonly record struct PlateSlotDefinition(uint AddonTextID, Func<EquipSlotCategory, bool> CanUse);
 
-    private const string PRISM_BOX_ADDON_NAME = nameof(MiragePrismPrismBox);
+    private const string PRISM_BOX_ADDON_NAME    = nameof(MiragePrismPrismBox);
     private const string PLATE_EDITOR_ADDON_NAME = nameof(MiragePrismMiragePlate);
-    private const string FAVORITE_ICON_ON = "★";
-    private const string FAVORITE_ICON_OFF = "☆";
+    private const string FAVORITE_ICON_ON        = "★";
+    private const string FAVORITE_ICON_OFF       = "☆";
 
-    private const int TASK_TIMEOUT_MS = 30_000;
-    private const int REFRESH_STEP_DELAY_MS = 1;
-    private const int APPLY_RETRY_DELAY_MS = 50;
-    private const int DEFAULT_MIN_EQUIP_LEVEL = 1;
-    private const int DEFAULT_MAX_EQUIP_LEVEL = 100;
-    private const int MAX_EQUIP_LEVEL_INPUT = 999;
+    private const int TASK_TIMEOUT_MS          = 30_000;
+    private const int REFRESH_STEP_DELAY_MS    = 1;
+    private const int APPLY_RETRY_DELAY_MS     = 50;
+    private const int DEFAULT_MIN_EQUIP_LEVEL  = 1;
+    private const int DEFAULT_MAX_EQUIP_LEVEL  = 100;
+    private const int MAX_EQUIP_LEVEL_INPUT    = 999;
 
-    private const uint PRISM_BOX_CAPACITY = 800;
+    private const uint PRISM_BOX_CAPACITY         = 800;
 
-    private const float WINDOW_DEFAULT_WIDTH = 1420f;
-    private const float WINDOW_DEFAULT_HEIGHT = 860f;
-    private const float WINDOW_MIN_WIDTH = 1120f;
-    private const float WINDOW_MIN_HEIGHT = 680f;
-    private const float WINDOW_MAX_SIZE = 9999f;
-    private const float LEFT_PANEL_WIDTH = 292f;
-    private const float RIGHT_PANEL_WIDTH = 352f;
-    private const float TOP_BAR_HEIGHT = 82f;
-    private const float TOP_BAR_BUTTON_WIDTH = 112f;
+    private const float WINDOW_DEFAULT_WIDTH       = 1420f;
+    private const float WINDOW_DEFAULT_HEIGHT      = 860f;
+    private const float WINDOW_MIN_WIDTH           = 1120f;
+    private const float WINDOW_MIN_HEIGHT          = 680f;
+    private const float WINDOW_MAX_SIZE            = 9999f;
+    private const float LEFT_PANEL_WIDTH           = 292f;
+    private const float RIGHT_PANEL_WIDTH          = 352f;
+    private const float TOP_BAR_HEIGHT             = 82f;
+    private const float TOP_BAR_BUTTON_WIDTH       = 112f;
     private const float TOP_BAR_CLEAR_BUTTON_WIDTH = 88f;
-    private const float SEARCH_MIN_WIDTH = 240f;
-    private const float SEARCH_MAX_WIDTH = 320f;
-    private const float MAIN_LAYOUT_MIN_HEIGHT = 420f;
-    private const float PANEL_PADDING_X = 12f;
-    private const float PANEL_PADDING_Y = 10f;
-    private const float POPUP_BUTTON_WIDTH = 132f;
-    private const float ICON_SIZE_LIST = 54f;
-    private const float ICON_SIZE_SELECTED = 82f;
-    private const float CARD_MIN_HEIGHT = 88f;
-    private const float ITEM_SPACING_Y = 8f;
-    private const float CARD_ROUNDING = 8f;
-    private const float CARD_BORDER_THICKNESS = 1.2f;
-    private const float CONTROL_HEIGHT = 36f;
-    private const float VIEW_MODE_BUTTON_WIDTH = 72f;
-    private const float VIEW_MODE_BUTTON_HEIGHT = 30f;
-    private const float GRID_MIN_CELL_SIZE = 58f;
-    private const float GRID_MAX_CELL_SIZE = 68f;
-    private const float GRID_CELL_SPACING = 4f;
-    private const float GRID_ICON_MIN_SIZE = 42f;
-    private const float GRID_ICON_PADDING = 10f;
-    private const float GRID_CELL_ROUNDING = 6f;
+    private const float SEARCH_MIN_WIDTH           = 240f;
+    private const float SEARCH_MAX_WIDTH           = 320f;
+    private const float MAIN_LAYOUT_MIN_HEIGHT     = 420f;
+    private const float PANEL_PADDING_X            = 12f;
+    private const float PANEL_PADDING_Y            = 10f;
+    private const float POPUP_BUTTON_WIDTH         = 132f;
+    private const float ICON_SIZE_LIST             = 54f;
+    private const float ICON_SIZE_SELECTED         = 82f;
+    private const float CARD_MIN_HEIGHT            = 88f;
+    private const float ITEM_SPACING_Y             = 8f;
+    private const float CARD_ROUNDING              = 8f;
+    private const float CARD_BORDER_THICKNESS      = 1.2f;
+    private const float CONTROL_HEIGHT             = 36f;
+    private const float VIEW_MODE_BUTTON_WIDTH     = 72f;
+    private const float VIEW_MODE_BUTTON_HEIGHT    = 30f;
+    private const float GRID_MIN_CELL_SIZE         = 58f;
+    private const float GRID_MAX_CELL_SIZE         = 68f;
+    private const float GRID_CELL_SPACING          = 4f;
+    private const float GRID_ICON_MIN_SIZE         = 42f;
+    private const float GRID_ICON_PADDING          = 10f;
+    private const float GRID_CELL_ROUNDING         = 6f;
     private const int VIRTUALIZED_LIST_BUFFER_ROWS = 3;
     private const int VIRTUALIZED_GRID_BUFFER_ROWS = 2;
-    private const int SEARCH_INPUT_MAX_LENGTH = 128;
+    private const int SEARCH_INPUT_MAX_LENGTH      = 128;
 
     private static readonly SourceFilter[] SourceFilters =
     [
@@ -1674,27 +1684,27 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         $"{Lang.Get("None")} {GetSetText()}"
     ];
 
-    private static readonly Vector4 TITLE_COLOR = KnownColor.HotPink.ToVector4();
-    private static readonly Vector4 SELECTED_COLOR = KnownColor.MediumVioletRed.ToVector4() with { W = 0.65f };
-    private static readonly Vector4 BUTTON_ACCENT_COLOR = KnownColor.PaleVioletRed.ToVector4() with { W = 0.4f };
-    private static readonly Vector4 BUTTON_HOVERED_COLOR = KnownColor.MediumVioletRed.ToVector4() with { W = 0.72f };
-    private static readonly Vector4 BUTTON_ACTIVE_COLOR = KnownColor.HotPink.ToVector4() with { W = 0.78f };
-    private static readonly Vector4 SOFT_ACCENT_COLOR = KnownColor.Plum.ToVector4();
-    private static readonly Vector4 GOLD_COLOR = KnownColor.Gold.ToVector4();
-    private static readonly Vector4 ERROR_COLOR = KnownColor.Crimson.ToVector4();
-    private static readonly Vector4 WINDOW_BG_COLOR = KnownColor.Black.ToVector4() with { W = 0.84f };
-    private static readonly Vector4 PANEL_BG_COLOR = KnownColor.Black.ToVector4() with { W = 0.48f };
-    private static readonly Vector4 POPUP_BG_COLOR = KnownColor.Black.ToVector4() with { W = 0.92f };
-    private static readonly Vector4 FRAME_BG_COLOR = KnownColor.DimGray.ToVector4() with { W = 0.48f };
-    private static readonly Vector4 FRAME_BG_HOVERED_COLOR = KnownColor.MediumPurple.ToVector4() with { W = 0.38f };
-    private static readonly Vector4 FRAME_BG_ACTIVE_COLOR = KnownColor.MediumVioletRed.ToVector4() with { W = 0.50f };
-    private static readonly Vector4 NORMAL_CARD_COLOR = KnownColor.Black.ToVector4() with { W = 0.34f };
-    private static readonly Vector4 NORMAL_CARD_HOVER_COLOR = KnownColor.Maroon.ToVector4() with { W = 0.26f };
-    private static readonly Vector4 FAVORITE_CARD_COLOR = KnownColor.Gold.ToVector4() with { W = 0.4f };
-    private static readonly Vector4 FAVORITE_CARD_HOVER_COLOR = KnownColor.Goldenrod.ToVector4() with { W = 0.68f };
-    private static readonly Vector4 SELECTED_BORDER_COLOR = KnownColor.Khaki.ToVector4();
-    private static readonly Vector4 MUTED_BORDER_COLOR = KnownColor.DarkGray.ToVector4();
-    private static readonly Vector4 STAR_OFF_COLOR = KnownColor.Gray.ToVector4();
+    private static readonly Vector4 TITLE_COLOR                = KnownColor.HotPink.ToVector4();
+    private static readonly Vector4 SELECTED_COLOR             = KnownColor.MediumVioletRed.ToVector4() with { W = 0.65f };
+    private static readonly Vector4 BUTTON_ACCENT_COLOR        = KnownColor.PaleVioletRed.ToVector4() with { W = 0.4f };
+    private static readonly Vector4 BUTTON_HOVERED_COLOR       = KnownColor.MediumVioletRed.ToVector4() with { W = 0.72f };
+    private static readonly Vector4 BUTTON_ACTIVE_COLOR        = KnownColor.HotPink.ToVector4() with { W = 0.78f };
+    private static readonly Vector4 SOFT_ACCENT_COLOR          = KnownColor.Plum.ToVector4();
+    private static readonly Vector4 GOLD_COLOR                 = KnownColor.Gold.ToVector4();
+    private static readonly Vector4 ERROR_COLOR                = KnownColor.Crimson.ToVector4();
+    private static readonly Vector4 WINDOW_BG_COLOR            = KnownColor.Black.ToVector4() with { W = 0.84f };
+    private static readonly Vector4 PANEL_BG_COLOR             = KnownColor.Black.ToVector4() with { W = 0.48f };
+    private static readonly Vector4 POPUP_BG_COLOR             = KnownColor.Black.ToVector4() with { W = 0.92f };
+    private static readonly Vector4 FRAME_BG_COLOR             = KnownColor.DimGray.ToVector4() with { W = 0.48f };
+    private static readonly Vector4 FRAME_BG_HOVERED_COLOR     = KnownColor.MediumPurple.ToVector4() with { W = 0.38f };
+    private static readonly Vector4 FRAME_BG_ACTIVE_COLOR      = KnownColor.MediumVioletRed.ToVector4() with { W = 0.50f };
+    private static readonly Vector4 NORMAL_CARD_COLOR          = KnownColor.Black.ToVector4() with { W = 0.34f };
+    private static readonly Vector4 NORMAL_CARD_HOVER_COLOR    = KnownColor.Maroon.ToVector4() with { W = 0.26f };
+    private static readonly Vector4 FAVORITE_CARD_COLOR        = KnownColor.Gold.ToVector4() with { W = 0.4f };
+    private static readonly Vector4 FAVORITE_CARD_HOVER_COLOR  = KnownColor.Goldenrod.ToVector4() with { W = 0.68f };
+    private static readonly Vector4 SELECTED_BORDER_COLOR      = KnownColor.Khaki.ToVector4();
+    private static readonly Vector4 MUTED_BORDER_COLOR         = KnownColor.DarkGray.ToVector4();
+    private static readonly Vector4 STAR_OFF_COLOR             = KnownColor.Gray.ToVector4();
 
     private static string GetAddonText(uint rowID, string fallback)
     {
