@@ -158,10 +158,10 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
 
         for (var i = 0; i < itemCount; i++)
         {
-            var itemID = addon->AtkValues[1064 + i].UInt;
+            var itemID = addon->AtkValues[1066 + i].UInt;
             if (itemID == 0 || !LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) continue;
 
-            addon->AtkValues[210 + i].SetUInt(itemRow.Icon);
+            addon->AtkValues[212 + i].SetUInt(itemRow.Icon);
         }
     }
 
