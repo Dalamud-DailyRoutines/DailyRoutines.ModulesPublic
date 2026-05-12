@@ -34,7 +34,7 @@ public class CrossDCPartyFinder : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
-    
+
     private static string LocatedDataCenter =>
         GameState.CurrentDataCenterData.Name.ToString();
 
@@ -62,7 +62,7 @@ public class CrossDCPartyFinder : ModuleBase
 
     protected override unsafe void Init()
     {
-        config  =   Config.Load(this) ?? new();
+        config        =   Config.Load(this) ?? new();
         Overlay       ??= new(this);
         Overlay.Flags |=  ImGuiWindowFlags.NoBackground;
 
@@ -457,7 +457,7 @@ public class CrossDCPartyFinder : ModuleBase
             {
                 if (StandardTimeManager.Instance().Now - lastUpdate < TimeSpan.FromSeconds(30) && lastRequest.Equals(req))
                 {
-                    listingsDisplay = FilterAndSort(this.listings);
+                    listingsDisplay = FilterAndSort(listings);
                     return;
                 }
 
@@ -475,11 +475,11 @@ public class CrossDCPartyFinder : ModuleBase
                 Enumerable.Range(1, (int)totalPage).ForEach(x => tasks.Add(Gather((uint)x)));
                 await Task.WhenAll(tasks).ConfigureAwait(false);
 
-                this.listings = bag.OrderByDescending(x => x.TimeLeft)
-                                        .DistinctBy(x => x.ID)
-                                        .DistinctBy(x => $"{x.PlayerName}@{x.HomeWorldName}")
-                                        .ToList();
-                listingsDisplay = FilterAndSort(this.listings);
+                listings = bag.OrderByDescending(x => x.TimeLeft)
+                              .DistinctBy(x => x.ID)
+                              .DistinctBy(x => $"{x.PlayerName}@{x.HomeWorldName}")
+                              .ToList();
+                listingsDisplay = FilterAndSort(listings);
             },
             cancelSource.Token
         ).ContinueWith
@@ -487,9 +487,9 @@ public class CrossDCPartyFinder : ModuleBase
             {
                 isNeedToDisable = false;
 
-                if (t.IsFaulted && t.Exception?.InnerException is PartyFinderApiException)
+                if (t is { IsFaulted: true, Exception.InnerException: PartyFinderApiException })
                 {
-                    listings = listingsDisplay = [];
+                    listings    = listingsDisplay = [];
                     lastUpdate  = DateTime.MinValue;
                     lastRequest = new();
                     await DService.Instance().Framework.RunOnFrameworkThread
@@ -584,31 +584,36 @@ public class CrossDCPartyFinder : ModuleBase
 
     private class PartyFinderRequest : IEquatable<PartyFinderRequest>
     {
-        public uint       Page          { get; set; } = 1;
-        public uint       PageSize      { get; set; } = 100;
-        public DutyCategory? Category   { get; set; }
-        public string     World         { get; set; } = string.Empty;
-        public string     DataCenter    { get; set; } = string.Empty;
-        public List<uint> Jobs          { get; set; } = [];
-        public uint       HomeWorldId   { get; set; }
-        public string     Region        { get; set; } = string.Empty;
-        public uint       DutyId        { get; set; }
-        public List<uint> JobIds        { get; set; } = [];
+        public uint          Page        { get; set; } = 1;
+        public uint          PageSize    { get; set; } = 100;
+        public DutyCategory? Category    { get; set; }
+        public string        World       { get; set; } = string.Empty;
+        public string        DataCenter  { get; set; } = string.Empty;
+        public List<uint>    Jobs        { get; set; } = [];
+        public uint          HomeWorldID { get; set; }
+        public string        Region      { get; set; } = string.Empty;
+        public uint          DutyID      { get; set; }
+        public List<uint>    JobIds      { get; set; } = [];
 
         public bool Equals(PartyFinderRequest? other)
         {
             if (other is null) return false;
             if (ReferenceEquals(this, other)) return true;
-            return Category == other.Category && World == other.World && DataCenter == other.DataCenter &&
-                   HomeWorldId == other.HomeWorldId && Region == other.Region && DutyId == other.DutyId &&
-                   Jobs.SequenceEqual(other.Jobs) && JobIds.SequenceEqual(other.JobIds);
+            return Category    == other.Category    &&
+                   World       == other.World       &&
+                   DataCenter  == other.DataCenter  &&
+                   HomeWorldID == other.HomeWorldID &&
+                   Region      == other.Region      &&
+                   DutyID      == other.DutyID      &&
+                   Jobs.SequenceEqual(other.Jobs)   &&
+                   JobIds.SequenceEqual(other.JobIds);
         }
 
         public async Task<PartyFinderList> Request()
         {
-            var client = HTTPClientHelper.Instance().Get();
+            var client   = HTTPClientHelper.Instance().Get();
             var response = await client.GetAsync(Format()).ConfigureAwait(false);
-            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var content  = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -633,14 +638,14 @@ public class CrossDCPartyFinder : ModuleBase
 
             if (World != string.Empty)
                 builder.Append($"&created_world_id={World}");
-            if (HomeWorldId != 0)
-                builder.Append($"&home_world_id={HomeWorldId}");
+            if (HomeWorldID != 0)
+                builder.Append($"&home_world_id={HomeWorldID}");
             if (DataCenter != string.Empty)
                 builder.Append($"&datacenter={DataCenter}");
             if (Region != string.Empty)
                 builder.Append($"&region={Region}");
-            if (DutyId != 0)
-                builder.Append($"&duty_id={DutyId}");
+            if (DutyID != 0)
+                builder.Append($"&duty_id={DutyID}");
             if (JobIds.Count != 0)
                 builder.Append($"&job_ids={string.Join(",", JobIds)}");
             else if (Jobs.Count != 0)
@@ -717,16 +722,16 @@ public class CrossDCPartyFinder : ModuleBase
         public PartyFinderRequest Clone() =>
             new()
             {
-                Page       = Page,
-                PageSize   = PageSize,
-                Category   = Category,
-                World      = World,
-                DataCenter = DataCenter,
-                Jobs       = [..Jobs],
-                HomeWorldId = HomeWorldId,
-                Region     = Region,
-                DutyId     = DutyId,
-                JobIds     = [..JobIds]
+                Page        = Page,
+                PageSize    = PageSize,
+                Category    = Category,
+                World       = World,
+                DataCenter  = DataCenter,
+                Jobs        = [..Jobs],
+                HomeWorldID = HomeWorldID,
+                Region      = Region,
+                DutyID      = DutyID,
+                JobIds      = [..JobIds]
             };
 
         public override bool Equals(object? obj) =>
@@ -735,9 +740,14 @@ public class CrossDCPartyFinder : ModuleBase
         public override int GetHashCode() =>
             HashCode.Combine
             (
-                Category, World, DataCenter, HomeWorldId, Region, DutyId,
-                Jobs.Aggregate(0, (hash, job) => HashCode.Combine(hash, job)),
-                JobIds.Aggregate(0, (hash, job) => HashCode.Combine(hash, job))
+                Category,
+                World,
+                DataCenter,
+                HomeWorldID,
+                Region,
+                DutyID,
+                Jobs.Aggregate(0, HashCode.Combine),
+                JobIds.Aggregate(0, HashCode.Combine)
             );
 
         public static bool operator ==(PartyFinderRequest? left, PartyFinderRequest? right) =>
@@ -773,16 +783,16 @@ public class CrossDCPartyFinder : ModuleBase
             public string Description { get; set; }
 
             [JsonProperty("created_world_id")]
-            public uint CreatedAtWorldId { get; set; }
+            public uint CreatedAtWorldID { get; set; }
 
             [JsonProperty("home_world_id")]
-            public uint HomeWorldId { get; set; }
+            public uint HomeWorldID { get; set; }
 
             [JsonProperty("category_id")]
-            public DutyCategory CategoryId { get; set; }
+            public DutyCategory CategoryID { get; set; }
 
             [JsonProperty("duty_id")]
-            public uint DutyId { get; set; }
+            public uint DutyID { get; set; }
 
             [JsonProperty("min_item_level")]
             public uint MinItemLevel { get; set; }
@@ -803,21 +813,21 @@ public class CrossDCPartyFinder : ModuleBase
                 get
                 {
                     if (categoryIcon != 0) return categoryIcon;
-                    return categoryIcon = PartyFinderRequest.ParseCategoryIDToIconID(CategoryId);
+                    return categoryIcon = PartyFinderRequest.ParseCategoryIDToIconID(CategoryID);
                 }
             }
 
             public string CreatedAtWorldName =>
-                LuminaGetter.GetRowOrDefault<World>(CreatedAtWorldId).Name.ToString();
+                LuminaGetter.GetRowOrDefault<World>(CreatedAtWorldID).Name.ToString();
 
             public string HomeWorldName =>
-                LuminaGetter.GetRowOrDefault<World>(HomeWorldId).Name.ToString();
+                LuminaGetter.GetRowOrDefault<World>(HomeWorldID).Name.ToString();
 
             public string Duty =>
-                LuminaWrapper.GetContentName(DutyId);
+                LuminaWrapper.GetContentName(DutyID);
 
             public string CategoryName =>
-                PartyFinderRequest.ParseCategoryIDToLoc(CategoryId);
+                PartyFinderRequest.ParseCategoryIDToLoc(CategoryID);
 
             public bool Equals(PartyFinderListing? other)
             {
@@ -837,9 +847,9 @@ public class CrossDCPartyFinder : ModuleBase
 
                 async Task<string> RequestContentAsync()
                 {
-                    var client = HTTPClientHelper.Instance().Get();
+                    var client   = HTTPClientHelper.Instance().Get();
                     var response = await client.GetAsync($"{BASE_DETAIL_URL}{ID}").ConfigureAwait(false);
-                    var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var content  = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
                     if (!response.IsSuccessStatusCode)
                     {
@@ -879,15 +889,13 @@ public class CrossDCPartyFinder : ModuleBase
             public bool Filled { get; set; }
 
             [JsonProperty("role_id")]
-            public uint RoleId { get; set; }
+            public uint RoleID { get; set; }
 
             [JsonProperty("filled_job_id")]
-            public uint? FilledJobId { get; set; }
+            public uint? FilledJobID { get; set; }
 
             [JsonProperty("accepted_job_ids")]
             public List<uint> AcceptedJobIds { get; set; }
-
-            private List<uint>? field;
 
             public List<uint> JobIcons
             {
@@ -897,29 +905,32 @@ public class CrossDCPartyFinder : ModuleBase
 
                     var icons = new List<uint>();
 
-                    if (FilledJobId != null)
-                    {
-                        icons.Add(62100 + FilledJobId.Value);
-                    }
+                    if (FilledJobID               != null) icons.Add(62100 + FilledJobID.Value);
                     else if (AcceptedJobIds.Count != 0)
                     {
-                        var role = RoleId;
-                        if (role == 1)
-                            icons.Add(62571);
-                        else if (role == 2 || role == 3)
-                            icons.Add(62573);
-                        else if (role == 4)
-                            icons.Add(62572);
-                        else
+                        var role = RoleID;
+
+                        switch (role)
                         {
-                            foreach (var jobId in AcceptedJobIds)
-                                icons.Add(62100 + jobId);
+                            case 1:
+                                icons.Add(62571);
+                                break;
+                            case 2:
+                            case 3:
+                                icons.Add(62573);
+                                break;
+                            case 4:
+                                icons.Add(62572);
+                                break;
+                            default:
+                            {
+                                foreach (var jobId in AcceptedJobIds)
+                                    icons.Add(62100 + jobId);
+                                break;
+                            }
                         }
                     }
-                    else
-                    {
-                        icons.Add(62145);
-                    }
+                    else icons.Add(62145);
 
                     field = icons;
                     return field;
@@ -927,7 +938,7 @@ public class CrossDCPartyFinder : ModuleBase
             }
         }
     }
-    
+
     #region 常量
 
     private const string BASE_URL        = "https://xivpf.littlenightmare.top/api/v2/listings?";
@@ -955,17 +966,15 @@ public class CrossDCPartyFinder : ModuleBase
         public string? Details { get; set; }
     }
 
-    private class PartyFinderApiException : Exception
+    private class PartyFinderApiException
+    (
+        HttpStatusCode statusCode,
+        string?        errorCode,
+        string?        message
+    ) : Exception(message ?? $"API error: {statusCode}")
     {
-        public HttpStatusCode StatusCode { get; }
-        public string? ErrorCode { get; }
-
-        public PartyFinderApiException(HttpStatusCode statusCode, string? errorCode, string? message)
-            : base(message ?? $"API error: {statusCode}")
-        {
-            StatusCode = statusCode;
-            ErrorCode = errorCode;
-        }
+        public HttpStatusCode StatusCode { get; } = statusCode;
+        public string?        ErrorCode  { get; } = errorCode;
     }
 
     #endregion
