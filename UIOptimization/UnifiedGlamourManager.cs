@@ -20,7 +20,7 @@ using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlat
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class UnifiedGlamourManager : ModuleBase
+public unsafe class UnifiedGlamourManager : ModuleBase
 {
     #region 模块
 
@@ -28,7 +28,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     {
         Title       = Lang.Get("UnifiedGlamourManagerTitle"),
         Description = Lang.Get("UnifiedGlamourManagerDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.UIOperation,
         Author      = ["ErxCharlotte"]
     };
 
@@ -66,43 +66,68 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     protected override void Init()
     {
-        config = Config.Load(this) ?? new();
-        NormalizeConfig();
-        TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
-
-        Overlay = new(this)
+        try
         {
-            IsOpen = false
-        };
+            config = LoadConfig<Config>() ?? new Config();
+            NormalizeConfig();
+            TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
 
-        var addonLifecycle = DService.Instance().AddonLifecycle;
-        addonLifecycle.RegisterListener(AddonEvent.PostSetup, PRISM_BOX_ADDON_NAME, OnPrismBoxAddon);
-        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, PRISM_BOX_ADDON_NAME, OnPrismBoxAddon);
-        addonLifecycle.RegisterListener(AddonEvent.PostSetup, PLATE_EDITOR_ADDON_NAME, OnPlateEditorAddon);
-        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, PLATE_EDITOR_ADDON_NAME, OnPlateEditorAddon);
+            Overlay = new(this)
+            {
+                IsOpen = false
+            };
+
+            var addonLifecycle = DService.Instance().AddonLifecycle;
+            addonLifecycle.RegisterListener(AddonEvent.PostSetup, PRISM_BOX_ADDON_NAME, OnPrismBoxAddon);
+            addonLifecycle.RegisterListener(AddonEvent.PreFinalize, PRISM_BOX_ADDON_NAME, OnPrismBoxAddon);
+            addonLifecycle.RegisterListener(AddonEvent.PostSetup, PLATE_EDITOR_ADDON_NAME, OnPlateEditorAddon);
+            addonLifecycle.RegisterListener(AddonEvent.PreFinalize, PLATE_EDITOR_ADDON_NAME, OnPlateEditorAddon);
+        }
+        catch (Exception ex)
+        {
+            CleanupRuntimeResources();
+            DLog.Error("UnifiedGlamourManager init failed", ex);
+            throw;
+        }
     }
 
-    protected override void Uninit()
+    protected override void Uninit() => CleanupRuntimeResources();
+
+    private void CleanupRuntimeResources()
     {
-        CloseWindow();
-        TaskHelper?.Abort();
-        DService.Instance().AddonLifecycle.UnregisterListener(OnPrismBoxAddon, OnPlateEditorAddon);
+        SafeCleanup(CloseWindow, "close window");
+        SafeCleanup(() => TaskHelper?.Abort(), "task cleanup");
+        SafeCleanup(
+            () => DService.Instance().AddonLifecycle.UnregisterListener(OnPrismBoxAddon, OnPlateEditorAddon),
+            "addon listener cleanup");
+    }
+
+    private static void SafeCleanup(System.Action action, string name)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            DLog.Error($"UnifiedGlamourManager {name} failed during unload", ex);
+        }
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-Open")))
+        if (ImGui.Button(Lang.Get("Open")))
             OpenWindow(false);
 
         ImGui.SameLine();
 
         using (ImRaii.Disabled(isRefreshingItems))
         {
-            if (ImGui.Button(Lang.Get("UnifiedGlamourManager-Refresh")))
+            if (ImGui.Button(Lang.Get("Refresh")))
                 StartRefreshAll();
         }
 
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-LoadedStatus", items.Count, GetLoadedFavoriteCount()));
+        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-LoadedStatus", items.Count, cachedLoadedFavoriteCount));
     }
 
     protected override void OverlayPreDraw()
@@ -178,6 +203,19 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         return manager != null && manager->PrismBoxRequested && manager->PrismBoxLoaded;
     }
 
+    private static bool TryGetReadyPlateEditor(out AgentMiragePrismMiragePlate* agent)
+    {
+        agent = null;
+
+        var addon = MiragePrismMiragePlate;
+        if (addon == null || !addon->IsAddonAndNodesReady()) return false;
+
+        agent = AgentMiragePrismMiragePlate.Instance();
+        return agent != null &&
+               agent->Data != null &&
+               agent->Data->SelectedItemIndex < PlateSlotDefinitions.Length;
+    }
+
     #endregion
 
     #region 数据
@@ -190,7 +228,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     private void SaveConfig()
     {
         NormalizeConfig();
-        config.Save(this);
+        base.SaveConfig(config);
         RefreshFavoriteCountCache();
         MarkFilteredItemsDirty();
     }
@@ -198,27 +236,41 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     private void NormalizeConfig()
     {
         config.Favorites ??= [];
-        SyncFavoriteItemIDs();
+        config.Favorites = config.Favorites
+                                  .OfType<SavedItem>()
+                                  .Where(static x => x.ItemID != 0 && LuminaGetter.TryGetRow<ItemSheet>(x.ItemID, out _))
+                                  .Select(static x =>
+                                  {
+                                      var name = ToSingleLine(x.Name ?? string.Empty);
+                                      if (string.IsNullOrWhiteSpace(name) &&
+                                          LuminaGetter.TryGetRow<ItemSheet>(x.ItemID, out var itemRow) &&
+                                          TryGetItemName(itemRow, out var itemName))
+                                          name = itemName;
+
+                                      return new SavedItem
+                                      {
+                                          ItemID  = x.ItemID,
+                                          Name    = name,
+                                          AddedAt = Math.Max(0, x.AddedAt)
+                                      };
+                                  })
+                                  .GroupBy(static x => x.ItemID)
+                                  .Select(static x => x.OrderByDescending(y => y.AddedAt).First())
+                                  .OrderByDescending(static x => x.AddedAt)
+                                  .ToList();
+        favoriteItemIDs.Clear();
+        favoriteItemIDs.UnionWith(config.Favorites.Select(static x => x.ItemID));
     }
 
-    private int GetLoadedFavoriteCount() => cachedLoadedFavoriteCount;
-
     private void RefreshFavoriteCountCache() =>
-        cachedLoadedFavoriteCount = favoriteItemIDs.Count == 0 || items.Count == 0
-            ? 0
-            : items.Where(x => IsFavorite(x.ItemID)).Select(x => x.ItemID).Distinct().Count();
+        cachedLoadedFavoriteCount = items.Where(x => IsFavorite(x.ItemID)).Select(x => x.ItemID).Distinct().Count();
 
     private bool IsFavorite(uint itemID) =>
         favoriteItemIDs.Contains(itemID);
 
     private void ToggleFavorite(UnifiedItem item)
     {
-        var existing = config.Favorites.FirstOrDefault(x => x.ItemID == item.ItemID);
-        if (existing != null)
-        {
-            config.Favorites.Remove(existing);
-        }
-        else
+        if (config.Favorites.RemoveAll(x => x.ItemID == item.ItemID) == 0)
         {
             config.Favorites.Add(new()
             {
@@ -231,19 +283,10 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         SaveConfig();
     }
 
-    private void SyncFavoriteItemIDs()
-    {
-        favoriteItemIDs.Clear();
-
-        foreach (var favorite in config.Favorites)
-        {
-            if (favorite.ItemID != 0)
-                favoriteItemIDs.Add(favorite.ItemID);
-        }
-    }
-
     private void StartRefreshAll(UnifiedItem? reselectItem = null)
     {
+        var itemToReselect = reselectItem ?? selectedItem;
+
         TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
         TaskHelper.Abort();
 
@@ -254,23 +297,45 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         cabinetItemCount = 0;
         MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
 
-        TaskHelper.Enqueue(LoadPrismBoxItems, nameof(LoadPrismBoxItems));
+        TaskHelper.Enqueue(() => RunRefreshStep(LoadPrismBoxItems, nameof(LoadPrismBoxItems)), nameof(LoadPrismBoxItems));
         TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
-        TaskHelper.Enqueue(LoadCabinetItems, nameof(LoadCabinetItems));
+        TaskHelper.Enqueue(() => RunRefreshStep(LoadCabinetItems, nameof(LoadCabinetItems)), nameof(LoadCabinetItems));
         TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
         TaskHelper.Enqueue(
             () =>
             {
-                MergeItems();
-                RefreshFavoriteCountCache();
-
-                if (reselectItem != null)
-                    selectedItem = items.FirstOrDefault(x => IsSameSelectableItem(x, reselectItem));
-
-                isRefreshingItems = false;
-                MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
+                try
+                {
+                    MergeItems();
+                    RefreshFavoriteCountCache();
+                    selectedItem = itemToReselect != null
+                        ? items.FirstOrDefault(x => IsSameSelectableItem(x, itemToReselect))
+                        : null;
+                }
+                catch (Exception ex)
+                {
+                    DLog.Error("UnifiedGlamourManager refresh merge failed", ex);
+                    selectedItem = null;
+                }
+                finally
+                {
+                    isRefreshingItems = false;
+                    MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
+                }
             },
             nameof(MergeItems));
+    }
+
+    private static void RunRefreshStep(System.Action action, string stepName)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            DLog.Error($"UnifiedGlamourManager refresh step failed: {stepName}", ex);
+        }
     }
 
     private void LoadPrismBoxItems()
@@ -361,7 +426,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
         foreach (var setPart in setParts)
         {
-            if (source != ItemSource.PrismBox || manager->IsSetSlotUnlocked(prismBoxIndex, setPart.SlotIndex))
+            if (source != ItemSource.PrismBox || (manager != null && manager->IsSetSlotUnlocked(prismBoxIndex, setPart.SlotIndex)))
                 AddSetPartItem(setPart, rawItemID, prismBoxIndex, cabinetID, itemID, name, source);
         }
     }
@@ -400,7 +465,8 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
         if (!LuminaGetter.TryGetRow<ItemSheet>(itemID, out var itemRow) ||
             !TryGetItemName(itemRow, out _) ||
-            !IsEquipSlotCategoryCompatibleWithPlateSlot(itemRow.EquipSlotCategory.Value, (uint)slotIndex))
+            !LuminaGetter.TryGetRow<EquipSlotCategory>(itemRow.EquipSlotCategory.RowId, out var categoryRow) ||
+            !IsEquipSlotCategoryCompatibleWithPlateSlot(categoryRow, (uint)slotIndex))
             return;
 
         var label = GetNativeItemCategoryName(itemRow);
@@ -440,10 +506,8 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private static string GetNativeItemCategoryName(ItemSheet item)
     {
-        var categoryName = item.ItemUICategory.Value.Name.ExtractText();
-        return string.IsNullOrWhiteSpace(categoryName)
-            ? item.Name.ExtractText()
-            : categoryName;
+        var categoryName = item.ItemUICategory.ValueNullable?.Name.ExtractText();
+        return string.IsNullOrWhiteSpace(categoryName) ? item.Name.ExtractText() : categoryName;
     }
 
     private void MergeItems()
@@ -541,31 +605,28 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private void ApplySelectedItemToCurrentPlateSlot(UnifiedItem item)
     {
-        if (!item.CanUseInPlate || !IsPlateEditorReady()) return;
-
-        var agent = AgentMiragePrismMiragePlate.Instance();
-        if (agent == null || agent->Data == null) return;
+        if (!item.CanUseInPlate || !TryGetReadyPlateEditor(out var agent)) return;
 
         var selectedSlot = agent->Data->SelectedItemIndex;
-        if (filterByCurrentPlateSlot && !CanItemUseInPlateSlot(item, selectedSlot)) return;
+        if (!CanItemUseInPlateSlot(item, selectedSlot)) return;
 
         try
         {
             if (item.InPrismBox)
-                ApplyPrismBoxItem(agent, item);
+            {
+                if (TryApplyPrismBoxItem(agent, item))
+                    QueueApplyRetry(item, ItemSource.PrismBox);
+            }
             else if (item.InCabinet)
-                ApplyCabinetItem(agent, item);
+            {
+                if (TryApplyCabinetItem(agent, item))
+                    QueueApplyRetry(item, ItemSource.Cabinet);
+            }
         }
         catch (Exception ex)
         {
-            DLog.Warning($"Failed: {ex}");
+            DLog.Warning($"UnifiedGlamourManager apply failed: {ex}");
         }
-    }
-
-    private void ApplyPrismBoxItem(AgentMiragePrismMiragePlate* agent, UnifiedItem item)
-    {
-        if (TryApplyPrismBoxItem(agent, item))
-            QueueApplyRetry(item, ItemSource.PrismBox);
     }
 
     private bool TryApplyPrismBoxItem(AgentMiragePrismMiragePlate* agent, UnifiedItem item)
@@ -581,23 +642,13 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
             : item.ItemID;
         if (ItemUtil.GetBaseId(rawItemID).ItemId != expectedItemID) return false;
 
-        var itemID = item.IsSetPart
-            ? item.ItemID
-            : item.RawItemID != 0
-                ? item.RawItemID
-                : item.ItemID;
-        var stain0 = item.IsSetPart ? (byte)0 : (byte)item.Stain0ID;
-        var stain1 = item.IsSetPart ? (byte)0 : (byte)item.Stain1ID;
+        var itemID = !item.IsSetPart && item.RawItemID != 0 ? item.RawItemID : item.ItemID;
+        var stain0 = (byte)(item.IsSetPart ? 0 : item.Stain0ID);
+        var stain1 = (byte)(item.IsSetPart ? 0 : item.Stain1ID);
 
         agent->SetSelectedItemData(ItemSource.PrismBox, item.PrismBoxIndex, itemID, stain0, stain1);
         MarkPlateSelectionDirty(agent);
         return true;
-    }
-
-    private void ApplyCabinetItem(AgentMiragePrismMiragePlate* agent, UnifiedItem item)
-    {
-        if (TryApplyCabinetItem(agent, item))
-            QueueApplyRetry(item, ItemSource.Cabinet);
     }
 
     private bool TryApplyCabinetItem(AgentMiragePrismMiragePlate* agent, UnifiedItem item)
@@ -622,8 +673,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         DService.Instance().Framework.RunOnTick(
             () =>
             {
-                var retryAgent = AgentMiragePrismMiragePlate.Instance();
-                if (retryAgent == null || retryAgent->Data == null) return;
+                if (IsDisposed || !TryGetReadyPlateEditor(out var retryAgent)) return;
 
                 var retryItem = items.FirstOrDefault(x =>
                     x.ItemID == itemID &&
@@ -635,6 +685,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
                         : x.InCabinet && x.CabinetID == cabinetID));
 
                 if (retryItem == null) return;
+                if (!CanItemUseInPlateSlot(retryItem, retryAgent->Data->SelectedItemIndex)) return;
 
                 if (source == ItemSource.PrismBox)
                     TryApplyPrismBoxItem(retryAgent, retryItem);
@@ -690,8 +741,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private bool CanItemUseInCurrentPlateSlot(UnifiedItem item)
     {
-        var agent = AgentMiragePrismMiragePlate.Instance();
-        if (agent == null || agent->Data == null) return true;
+        if (!TryGetReadyPlateEditor(out var agent)) return true;
 
         var selectedSlot = agent->Data->SelectedItemIndex;
         var cacheKey = ((ulong)selectedSlot << 32) | item.EquipSlotCategoryRowID;
@@ -702,35 +752,23 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         return result;
     }
 
-    private static uint GetCurrentPlateSlotIndex()
-    {
-        var agent = AgentMiragePrismMiragePlate.Instance();
-        return agent == null || agent->Data == null
-            ? uint.MaxValue
-            : agent->Data->SelectedItemIndex;
-    }
-
     private static bool CanItemUseInPlateSlot(UnifiedItem item, uint selectedSlot)
     {
         if (!LuminaGetter.TryGetRow<EquipSlotCategory>(item.EquipSlotCategoryRowID, out var categoryRow)) return false;
-        return selectedSlot >= PlateSlotDefinitions.Length || IsEquipSlotCategoryCompatibleWithPlateSlot(categoryRow, selectedSlot);
+        return selectedSlot < PlateSlotDefinitions.Length && IsEquipSlotCategoryCompatibleWithPlateSlot(categoryRow, selectedSlot);
     }
 
-    private string GetCurrentPlateSlotNameForUI()
-    {
-        var agent = AgentMiragePrismMiragePlate.Instance();
-        return agent == null || agent->Data == null
-            ? Lang.Get("UnifiedGlamourManager-PlateNotOpen")
-            : GetPlateSlotName(agent->Data->SelectedItemIndex);
-    }
+    private string GetCurrentPlateSlotNameForUI() =>
+        TryGetReadyPlateEditor(out var a)
+            ? GetPlateSlotName(a->Data->SelectedItemIndex)
+            : Lang.Get("UnifiedGlamourManager-PlateNotOpen");
 
     private static string GetPlateSlotName(uint selectedSlot) =>
         selectedSlot < PlateSlotDefinitions.Length
-            ? Lang.Get(PlateSlotDefinitions[selectedSlot].LangKey)
-            : Lang.Get("UnifiedGlamourManager-Slot-Unknown", selectedSlot);
+            ? GetAddonText(PlateSlotDefinitions[selectedSlot].AddonTextID, Lang.Get("Unknown"))
+            : $"{Lang.Get("Unknown")} {GetSlotText()} {selectedSlot}";
 
-    private static bool IsPlateEditorReady() =>
-        MiragePrismMiragePlate->IsAddonAndNodesReady();
+    private static bool IsPlateEditorReady() => TryGetReadyPlateEditor(out _);
 
     private IEnumerable<UnifiedItem> ApplySort(IEnumerable<UnifiedItem> source) =>
         sortMode switch
@@ -757,19 +795,16 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         List<string> labels = [];
 
         if (item.InPrismBox)
-            labels.Add(Lang.Get("UnifiedGlamourManager-PrismBox"));
+            labels.Add(GetPrismBoxText());
 
         if (item.InCabinet)
-            labels.Add(Lang.Get("UnifiedGlamourManager-Cabinet"));
+            labels.Add(GetCabinetText());
 
-        if (item.IsSetPart)
-            labels.Add(Lang.Get("UnifiedGlamourManager-SetPart"));
-
-        if (item.IsSetContainer)
-            labels.Add(Lang.Get("UnifiedGlamourManager-SetContainer"));
+        if (item.IsSetPart || item.IsSetContainer)
+            labels.Add(GetSetText());
 
         return labels.Count == 0
-            ? Lang.Get("UnifiedGlamourManager-Unknown")
+            ? Lang.Get("Unknown")
             : string.Join(" / ", labels);
     }
 
@@ -815,7 +850,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
                                    .Push(ImGuiCol.HeaderActive, BUTTON_ACTIVE_COLOR)
                                    .Push(ImGuiCol.CheckMark, GOLD_COLOR);
 
-        if (ImGui.Begin($"{Lang.Get("UnifiedGlamourManager-Title")}###UnifiedGlamourManager", ref isOpen, ImGuiWindowFlags.NoScrollbar))
+        if (ImGui.Begin($"{Lang.Get("UnifiedGlamourManagerTitle")}###UnifiedGlamourManager", ref isOpen, ImGuiWindowFlags.NoScrollbar))
         {
             DrawTopBar();
             DrawMainLayout();
@@ -857,7 +892,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-ClearFavoritesConfirmHelp"));
         ImGui.Spacing();
 
-        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ConfirmClear"), new(POPUP_BUTTON_WIDTH, CONTROL_HEIGHT)))
+        if (ImGui.Button(Lang.Get("Confirm"), new(POPUP_BUTTON_WIDTH, CONTROL_HEIGHT)))
         {
             config.Favorites.Clear();
             SaveConfig();
@@ -876,23 +911,22 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         using var child = ImRaii.Child("##TopBar", new Vector2(0f, TOP_BAR_HEIGHT), true, ImGuiWindowFlags.NoScrollbar);
         if (!child) return;
 
-        ImGui.TextColored(TITLE_COLOR, Lang.Get("UnifiedGlamourManager-Title"));
-        ImGui.SameLine();
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Subtitle"));
-        ImGui.SameLine();
-        ImGui.TextColored(SOFT_ACCENT_COLOR, Lang.Get("UnifiedGlamourManager-Stat", prismBoxItemCount, cabinetItemCount, items.Count));
+        ImGui.TextColored(SOFT_ACCENT_COLOR, $"{GetPrismBoxText()} {prismBoxItemCount} / {GetCabinetText()} {cabinetItemCount} / {GetTotalText()} {items.Count}");
 
         ImGui.Spacing();
 
-        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ReadRefresh"), new(TOP_BAR_BUTTON_WIDTH, CONTROL_HEIGHT)))
+        if (ImGui.Button(Lang.Get("Refresh"), new(TOP_BAR_BUTTON_WIDTH, CONTROL_HEIGHT)))
             StartRefreshAll();
 
         ImGui.SameLine();
 
         var searchWidth = Math.Clamp(ImGui.GetContentRegionAvail().X - TOP_BAR_BUTTON_WIDTH - 60f, SEARCH_MIN_WIDTH, SEARCH_MAX_WIDTH);
         ImGui.SetNextItemWidth(searchWidth);
-        if (ImGui.InputTextWithHint("##Search", Lang.Get("UnifiedGlamourManager-SearchHint"), ref searchText, SEARCH_INPUT_MAX_LENGTH))
+        if (ImGui.InputTextWithHint("##Search", GetItemSearchHintText(), ref searchText, SEARCH_INPUT_MAX_LENGTH))
+        {
+            searchText = ToSingleLine(searchText);
             MarkFilteredItemsDirty();
+        }
 
         ImGui.SameLine();
 
@@ -901,13 +935,13 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
         ImGui.SameLine(0f, 12f);
         ImGui.AlignTextToFramePadding();
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-FavoriteCount"));
+        ImGui.TextDisabled(Lang.Get("Favorite"));
         ImGui.SameLine(0f, 4f);
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(GOLD_COLOR, GetLoadedFavoriteCount().ToString());
+        ImGui.TextColored(GOLD_COLOR, cachedLoadedFavoriteCount.ToString());
         ImGui.SameLine(0f, 10f);
 
-        var clearFavoritesText = Lang.Get("UnifiedGlamourManager-ClearFavorites");
+        var clearFavoritesText = Lang.Get("Clear");
         var clearButtonWidth = MathF.Max(TOP_BAR_CLEAR_BUTTON_WIDTH, ImGui.CalcTextSize(clearFavoritesText).X + 24f);
         using (ImRaii.Disabled(config.Favorites.Count == 0))
         {
@@ -926,9 +960,9 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         using var table = ImRaii.Table("##UnifiedMainTable", 3, tableFlags, new(0f, mainHeight));
         if (!table) return;
 
-        ImGui.TableSetupColumn(Lang.Get("UnifiedGlamourManager-FilterColumn"), ImGuiTableColumnFlags.WidthFixed, LEFT_PANEL_WIDTH);
-        ImGui.TableSetupColumn(Lang.Get("UnifiedGlamourManager-ItemListColumn"), ImGuiTableColumnFlags.WidthStretch, 1f);
-        ImGui.TableSetupColumn(Lang.Get("UnifiedGlamourManager-SelectedColumn"), ImGuiTableColumnFlags.WidthFixed, RIGHT_PANEL_WIDTH);
+        ImGui.TableSetupColumn(GetFilterText(), ImGuiTableColumnFlags.WidthFixed, LEFT_PANEL_WIDTH);
+        ImGui.TableSetupColumn(GetEquipmentSelectionText(), ImGuiTableColumnFlags.WidthStretch, 1f);
+        ImGui.TableSetupColumn(Lang.Get("Current"), ImGuiTableColumnFlags.WidthFixed, RIGHT_PANEL_WIDTH);
         ImGui.TableNextRow();
 
         ImGui.TableSetColumnIndex(0);
@@ -947,22 +981,18 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         using var child = ImRaii.Child("##FilterPanel", new Vector2(0f, 0f), true);
         if (!child) return;
 
-        SectionTitle(Lang.Get("UnifiedGlamourManager-FilterSection"));
+        SectionTitle(GetFilterText());
         DrawSourceFilter();
         DrawSortFilter();
         DrawLevelFilter();
         DrawJobFilter();
         DrawSetRelationFilter();
         DrawResetFilterButton();
-
-        SectionTitle(Lang.Get("UnifiedGlamourManager-Usage"));
-        ImGui.BulletText(Lang.Get("UnifiedGlamourManager-Usage-CabinetAndPrism"));
-        ImGui.BulletText(Lang.Get("UnifiedGlamourManager-Usage-Apply"));
     }
 
     private void DrawSourceFilter()
     {
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Source"));
+        ImGui.TextDisabled(GetSourceText());
 
         var width = ImGui.GetContentRegionAvail().X;
         var buttonSize = new Vector2((width - 6f) * 0.5f, CONTROL_HEIGHT);
@@ -972,10 +1002,10 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
             if (i % 2 == 1)
                 ImGui.SameLine();
 
-            var (filter, langKey) = SourceFilters[i];
+            var filter = SourceFilters[i];
             using (ImRaii.PushColor(ImGuiCol.Button, BUTTON_ACTIVE_COLOR, sourceFilter == filter))
             {
-                if (ImGui.Button($"{Lang.Get(langKey)}##Source{filter}", buttonSize))
+                if (ImGui.Button($"{GetSourceFilterLabel(filter)}##Source{filter}", buttonSize))
                 {
                     sourceFilter = filter;
                     MarkFilteredItemsDirty();
@@ -988,7 +1018,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private void DrawSortFilter()
     {
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Sort"));
+        ImGui.TextDisabled(GetSortText());
 
         var sortIndex = (int)sortMode;
         ImGui.SetNextItemWidth(-1f);
@@ -1003,7 +1033,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private void DrawLevelFilter()
     {
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-EquipLevel"));
+        ImGui.TextDisabled(GetItemLevelText());
         if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-EnableLevelRange"), ref enableLevelFilter))
             MarkFilteredItemsDirty();
 
@@ -1035,7 +1065,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private void DrawJobFilter()
     {
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Job"));
+        ImGui.TextDisabled(GetClassJobText());
         ImGui.SetNextItemWidth(-1f);
         if (ImGui.Combo("##JobFilter", ref selectedJobFilterIndex, JobFilterNames, JobFilterNames.Length))
             MarkFilteredItemsDirty(clearJobCache: true);
@@ -1063,7 +1093,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         ImGui.Separator();
         ImGui.Spacing();
 
-        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ResetFilter"), new(-1f, CONTROL_HEIGHT)))
+        if (ImGui.Button($"{Lang.Get("Reset")} {GetFilterText()}", new(-1f, CONTROL_HEIGHT)))
             ResetFilters();
 
         ImGui.Spacing();
@@ -1093,19 +1123,19 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         using var listPanel = ImRaii.Child("##ListPanel", new Vector2(0f, 0f), true);
         if (!listPanel) return;
 
-        ImGui.TextColored(TITLE_COLOR, Lang.Get("UnifiedGlamourManager-ItemList"));
+        ImGui.TextColored(TITLE_COLOR, GetEquipmentSelectionText());
         ImGui.SameLine();
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-ResultCount", filteredItems.Count));
+        ImGui.TextDisabled(filteredItems.Count.ToString());
         ImGui.SameLine();
         ImGui.TextColored(
             IsPlateEditorReady() ? SOFT_ACCENT_COLOR : ERROR_COLOR,
-            Lang.Get("UnifiedGlamourManager-CurrentSlotValue", GetCurrentPlateSlotNameForUI()));
+            FormatLabelValue($"{Lang.Get("Current")} {GetSlotText()}", GetCurrentPlateSlotNameForUI()));
 
         var x = ImGui.GetContentRegionAvail().X - VIEW_MODE_BUTTON_WIDTH * 2f - GRID_ICON_PADDING;
         if (x > 0f)
             ImGui.SameLine(x);
 
-        DrawViewModeButton(Lang.Get("UnifiedGlamourManager-ListView") + "##ViewList", !useGridView, () => useGridView = false);
+        DrawViewModeButton(Lang.Get("List") + "##ViewList", !useGridView, () => useGridView = false);
         ImGui.SameLine();
         DrawViewModeButton(Lang.Get("UnifiedGlamourManager-GridView") + "##ViewGrid", useGridView, () => useGridView = true);
         ImGui.Separator();
@@ -1154,19 +1184,17 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     private void MarkFilteredItemsDirty(bool clearJobCache = false, bool clearPlateSlotCache = false)
     {
         filteredItemsDirty = true;
-
-        if (clearJobCache)
-            jobFilterCache.Clear();
-
-        if (clearPlateSlotCache)
-            plateSlotFilterCache.Clear();
+        if (clearJobCache) jobFilterCache.Clear();
+        if (clearPlateSlotCache) plateSlotFilterCache.Clear();
     }
 
     private void UpdateCurrentSlotFilterCache()
     {
         if (!filterByCurrentPlateSlot) return;
 
-        var slot = GetCurrentPlateSlotIndex();
+        var slot = TryGetReadyPlateEditor(out var agent)
+            ? agent->Data->SelectedItemIndex
+            : uint.MaxValue;
         if (slot == lastFilterPlateSlot) return;
 
         lastFilterPlateSlot = slot;
@@ -1265,18 +1293,13 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     {
         using var group = ImRaii.Group();
 
-        var titleColor = selected
-            ? SELECTED_BORDER_COLOR
-            : favorite
-                ? KnownColor.White.ToVector4()
-                : item.IsSetPart
-                    ? SOFT_ACCENT_COLOR
-                    : KnownColor.White.ToVector4();
+        var titleColor = selected ? SELECTED_BORDER_COLOR :
+            favorite || !item.IsSetPart ? KnownColor.White.ToVector4() : SOFT_ACCENT_COLOR;
 
         using (ImRaii.PushColor(ImGuiCol.Text, titleColor))
             ImGui.TextUnformatted(item.Name);
 
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Level", item.LevelEquip));
+        ImGui.TextDisabled(FormatLabelValue(GetLevelText(), item.LevelEquip));
 
         if (item.IsSetContainer)
             ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-SetContainerTip"));
@@ -1333,8 +1356,8 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         var favorite = IsFavorite(item.ItemID);
         DrawItemBackground(drawList, pos, pos + new Vector2(cellSize, cellSize), selected, favorite, hovered, GRID_CELL_ROUNDING);
 
-        var iconPos = pos + new Vector2((cellSize - iconSize) * 0.5f, (cellSize - iconSize) * 0.5f);
-        ImGui.SetCursorScreenPos(iconPos);
+        var halfDiff = (cellSize - iconSize) * 0.5f;
+        ImGui.SetCursorScreenPos(pos + new Vector2(halfDiff, halfDiff));
         DrawItemIcon(item.IconID, iconSize);
 
         if (favorite)
@@ -1382,18 +1405,16 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         using var tooltip = ImRaii.Tooltip();
 
         ImGui.TextColored(TITLE_COLOR, item.Name);
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Level", item.LevelEquip));
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-SourceValue", GetSourceLabel(item)));
+        ImGui.TextDisabled(FormatLabelValue(GetLevelText(), item.LevelEquip));
+        ImGui.TextDisabled(FormatLabelValue(GetSourceText(), GetSourceLabel(item)));
 
         if (item.IsSetPart)
         {
             ImGui.Separator();
-            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-PartValue", item.SetPartLabel));
-            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-ParentSetValue", item.ParentSetName));
+            ImGui.TextDisabled(FormatPartValue(item.SetPartLabel));
+            ImGui.TextDisabled(FormatParentSetValue(item.ParentSetName));
         }
 
-        ImGui.Separator();
-        ImGui.TextColored(SOFT_ACCENT_COLOR, Lang.Get("UnifiedGlamourManager-GridTooltipHelp"));
     }
 
     private static bool IsSameSelectableItem(UnifiedItem a, UnifiedItem b) =>
@@ -1423,34 +1444,32 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         using var child = ImRaii.Child("##SelectedPanel", new Vector2(0f, 0f), true);
         if (!child) return;
 
-        SectionTitle(Lang.Get("UnifiedGlamourManager-SelectedSection"));
+        SectionTitle(Lang.Get("Current"));
 
         if (selectedItem == null)
         {
             ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSelectedItem"));
-            ImGui.Spacing();
-            RedTip(Lang.Get("UnifiedGlamourManager-ApplyHelp"));
             return;
         }
 
         var item = selectedItem;
         DrawSelectedItemHeader(item);
 
-        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-TargetSlot"));
+        ImGui.TextDisabled(GetTargetSlotText());
         ImGui.TextColored(SOFT_ACCENT_COLOR, GetCurrentPlateSlotNameForUI());
         ImGui.Spacing();
 
         if (item.IsSetPart)
         {
-            ImGui.TextColored(SOFT_ACCENT_COLOR, Lang.Get("UnifiedGlamourManager-SetPart"));
-            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-PartValue", item.SetPartLabel));
-            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-ParentSetValue", item.ParentSetName));
+            ImGui.TextColored(SOFT_ACCENT_COLOR, GetSetText());
+            ImGui.TextDisabled(FormatPartValue(item.SetPartLabel));
+            ImGui.TextDisabled(FormatParentSetValue(item.ParentSetName));
             ImGui.Spacing();
         }
 
         if (item.IsSetContainer)
         {
-            ImGui.TextColored(GOLD_COLOR, Lang.Get("UnifiedGlamourManager-SetContainer"));
+            ImGui.TextColored(GOLD_COLOR, GetSetText());
             RedTip(Lang.Get("UnifiedGlamourManager-SetContainerApplyTip"));
             ImGui.Spacing();
         }
@@ -1466,8 +1485,8 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         using (ImRaii.Group())
         {
             ImGui.TextColored(TITLE_COLOR, item.Name);
-            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Level", item.LevelEquip));
-            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-SourceValue", GetSourceLabel(item)));
+            ImGui.TextDisabled(FormatLabelValue(GetLevelText(), item.LevelEquip));
+            ImGui.TextDisabled(FormatLabelValue(GetSourceText(), GetSourceLabel(item)));
         }
 
         ImGui.Spacing();
@@ -1481,11 +1500,11 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         ImGui.Spacing();
 
         var plateReady = IsPlateEditorReady();
-        var canApply = plateReady && item.CanUseInPlate;
+        var canApply = plateReady && item.CanUseInPlate && CanItemUseInCurrentPlateSlot(item);
 
         using (ImRaii.Disabled(!canApply))
         {
-            if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ApplyToCurrentSlot"), new(-1f, CONTROL_HEIGHT)))
+            if (ImGui.Button($"{Lang.Get("Apply")} {GetTargetSlotText()}", new(-1f, CONTROL_HEIGHT)))
                 ApplySelectedItemToCurrentPlateSlot(item);
         }
 
@@ -1499,10 +1518,10 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         ImGui.Separator();
         ImGui.Spacing();
 
-        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-CopyName"), new(-1f, CONTROL_HEIGHT)))
+        if (ImGui.Button(GetCopyItemNameText(), new(-1f, CONTROL_HEIGHT)))
             ImGui.SetClipboardText(item.Name);
 
-        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-CancelSelection"), new(-1f, CONTROL_HEIGHT)))
+        if (ImGui.Button(GetClearSelectionText(), new(-1f, CONTROL_HEIGHT)))
             selectedItem = null;
     }
 
@@ -1555,7 +1574,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
         public string ParentSetName { get; set; } = string.Empty;
         public string SetPartLabel { get; set; } = string.Empty;
 
-        public bool CanUseInPlate => InPrismBox || InCabinet;
+        public bool CanUseInPlate => (InPrismBox || InCabinet) && !IsSetContainer;
     }
 
     private sealed class SavedItem
@@ -1567,7 +1586,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private readonly record struct SetPartInfo(uint ItemID, string PartLabel, int SlotIndex);
 
-    private readonly record struct PlateSlotDefinition(string LangKey, Func<EquipSlotCategory, bool> CanUse);
+    private readonly record struct PlateSlotDefinition(uint AddonTextID, Func<EquipSlotCategory, bool> CanUse);
 
     private const string PRISM_BOX_ADDON_NAME = nameof(MiragePrismPrismBox);
     private const string PLATE_EDITOR_ADDON_NAME = nameof(MiragePrismMiragePlate);
@@ -1618,12 +1637,12 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     private const int VIRTUALIZED_GRID_BUFFER_ROWS = 2;
     private const int SEARCH_INPUT_MAX_LENGTH = 128;
 
-    private static readonly (SourceFilter Filter, string LangKey)[] SourceFilters =
+    private static readonly SourceFilter[] SourceFilters =
     [
-        (SourceFilter.All, "UnifiedGlamourManager-Source-All"),
-        (SourceFilter.Favorite, "UnifiedGlamourManager-Source-Favorite"),
-        (SourceFilter.PrismBox, "UnifiedGlamourManager-Source-PrismBox"),
-        (SourceFilter.Cabinet, "UnifiedGlamourManager-Source-Cabinet")
+        SourceFilter.All,
+        SourceFilter.Favorite,
+        SourceFilter.PrismBox,
+        SourceFilter.Cabinet
     ];
 
     private static readonly uint[][] JobFilterClassJobIDs =
@@ -1659,32 +1678,25 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
 
     private static readonly PlateSlotDefinition[] PlateSlotDefinitions =
     [
-        new("UnifiedGlamourManager-Slot-MainHand", static x => x.MainHand != 0),
-        new("UnifiedGlamourManager-Slot-OffHand", static x => x.OffHand != 0 && x.MainHand == 0),
-        new("UnifiedGlamourManager-Slot-Head", static x => x.Head != 0),
-        new("UnifiedGlamourManager-Slot-Body", static x => x.Body != 0),
-        new("UnifiedGlamourManager-Slot-Hands", static x => x.Gloves != 0),
-        new("UnifiedGlamourManager-Slot-Legs", static x => x.Legs != 0),
-        new("UnifiedGlamourManager-Slot-Feet", static x => x.Feet != 0),
-        new("UnifiedGlamourManager-Slot-Earrings", static x => x.Ears != 0),
-        new("UnifiedGlamourManager-Slot-Necklace", static x => x.Neck != 0),
-        new("UnifiedGlamourManager-Slot-Bracelets", static x => x.Wrists != 0),
-        new("UnifiedGlamourManager-Slot-LeftRing", static x => x.FingerL != 0 || x.FingerR != 0),
-        new("UnifiedGlamourManager-Slot-RightRing", static x => x.FingerL != 0 || x.FingerR != 0)
+        new(11960, static x => x.MainHand != 0),
+        new(11961, static x => x.OffHand != 0 && x.MainHand == 0),
+        new(11962, static x => x.Head != 0),
+        new(11963, static x => x.Body != 0),
+        new(11964, static x => x.Gloves != 0),
+        new(11965, static x => x.Legs != 0),
+        new(11966, static x => x.Feet != 0),
+        new(11968, static x => x.Ears != 0),
+        new(11967, static x => x.Neck != 0),
+        new(11969, static x => x.Wrists != 0),
+        new(750, static x => x.FingerL != 0 || x.FingerR != 0),
+        new(749, static x => x.FingerL != 0 || x.FingerR != 0)
     ];
 
-    private static readonly string[] SortModeNames =
-    [
-        Lang.Get("UnifiedGlamourManager-Sort-FavoriteThenNameAsc"),
-        Lang.Get("UnifiedGlamourManager-Sort-NameAsc"),
-        Lang.Get("UnifiedGlamourManager-Sort-NameDesc"),
-        Lang.Get("UnifiedGlamourManager-Sort-LevelAsc"),
-        Lang.Get("UnifiedGlamourManager-Sort-LevelDesc")
-    ];
+    private static readonly string[] SortModeNames = CreateSortModeNames();
 
     private static readonly string[] SetRelationFilterNames =
     [
-        Lang.Get("UnifiedGlamourManager-SetFilter-All"),
+        Lang.Get("All"),
         Lang.Get("UnifiedGlamourManager-SetFilter-SetRelatedOnly"),
         Lang.Get("UnifiedGlamourManager-SetFilter-NonSetOnly")
     ];
@@ -1711,10 +1723,99 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     private static readonly Vector4 MUTED_BORDER_COLOR = KnownColor.DarkGray.ToVector4();
     private static readonly Vector4 STAR_OFF_COLOR = KnownColor.Gray.ToVector4();
 
+    private static string GetAddonText(uint rowID, string fallback)
+    {
+        var text = LuminaWrapper.GetAddonText(rowID);
+        return string.IsNullOrWhiteSpace(text) ? fallback : text;
+    }
+
+    private static string FormatLabelValue(string label, object value) => $"{label}: {value}";
+    private static string FormatPartValue(string value) => FormatLabelValue(GetPartText(), value);
+    private static string FormatParentSetValue(string value) => FormatLabelValue(GetParentSetText(), value);
+
+    private static string ToSingleLine(string text)
+    {
+        var carriageReturnIndex = text.IndexOf('\r');
+        var lineFeedIndex = text.IndexOf('\n');
+        var lineEndIndex = carriageReturnIndex < 0
+            ? lineFeedIndex
+            : lineFeedIndex < 0
+                ? carriageReturnIndex
+                : Math.Min(carriageReturnIndex, lineFeedIndex);
+
+        return (lineEndIndex >= 0 ? text[..lineEndIndex] : text).Trim();
+    }
+
+    private static string GetClassJobText() => GetAddonText(294, Lang.Get("Job"));
+    private static string GetLevelText() => GetAddonText(335, Lang.Get("Level"));
+    private static string GetSourceText() => GetAddonText(8191, "Source");
+    private static string GetFilterText() => GetAddonText(13125, "Filter");
+    private static string GetSortText() => GetAddonText(12170, Lang.Get("Sort"));
+    private static string GetItemLevelText() => GetAddonText(7873, "Item Level");
+    private static string GetPartText()
+    {
+        var text = NormalizeAddonLabel(GetAddonText(2155, "Part"));
+        var partIndex = text.IndexOf("部位", StringComparison.Ordinal);
+        return partIndex >= 0 ? text[partIndex..] : text;
+    }
+
+    private static string GetParentSetText()
+    {
+        var affiliationText = NormalizeAddonLabel(GetAddonText(733, string.Empty));
+        var freeCompanyText = NormalizeAddonLabel(GetAddonText(297, string.Empty));
+        var belongsToText = !string.IsNullOrEmpty(freeCompanyText) && affiliationText.EndsWith(freeCompanyText, StringComparison.Ordinal)
+            ? affiliationText[..^freeCompanyText.Length]
+            : affiliationText;
+
+        return string.IsNullOrEmpty(belongsToText)
+            ? GetSetText()
+            : $"{belongsToText}{GetSetText()}";
+    }
+
+    private static string NormalizeAddonLabel(string text) =>
+        ToSingleLine(text).Trim().TrimEnd(':', '：');
+
+    private static string GetSlotText() => GetPartText();
+    private static string GetSetText() => GetAddonText(15624, GetAddonText(756, "Set"));
+    private static string GetTargetText() => GetAddonText(1030, Lang.Get("Target"));
+    private static string GetTargetSlotText() => $"{GetTargetText()}{GetSlotText()}";
+    private static string GetTotalText() => GetAddonText(929, "Total");
+    private static string GetPrismBoxText() => GetAddonText(11910, "Glamour Dresser");
+    private static string GetCabinetText() => GetAddonText(12216, "Armoire");
+    private static string GetEquipmentSelectionText() => GetAddonText(11920, "Equipment Selection");
+    private static string GetItemSearchHintText() => ToSingleLine(GetAddonText(11933, Lang.Get("Search")));
+    private static string GetCopyItemNameText() => GetAddonText(159, $"{Lang.Get("Copy")} {Lang.Get("Name")}");
+    private static string GetClearSelectionText() => GetAddonText(102590, Lang.Get("Cancel"));
+    private static string GetSourceFilterLabel(SourceFilter filter) =>
+        filter switch
+        {
+            SourceFilter.Favorite => GetAddonText(8127, Lang.Get("Favorite")),
+            SourceFilter.PrismBox => GetPrismBoxText(),
+            SourceFilter.Cabinet  => GetCabinetText(),
+            _                     => Lang.Get("All")
+        };
+
+    private static string[] CreateSortModeNames()
+    {
+        var nameAsc = $"{Lang.Get("Name")} {Lang.Get("Ascending")}";
+        var nameDesc = $"{Lang.Get("Name")} {Lang.Get("Descending")}";
+        var levelAsc = $"{GetLevelText()} {Lang.Get("Ascending")}";
+        var levelDesc = $"{GetLevelText()} {Lang.Get("Descending")}";
+
+        return
+        [
+            $"{Lang.Get("Favorite")} / {nameAsc}",
+            nameAsc,
+            nameDesc,
+            levelAsc,
+            levelDesc
+        ];
+    }
+
     private static string[] CreateJobFilterNames()
     {
         var names = new string[JobFilterClassJobIDs.Length];
-        names[0] = Lang.Get("UnifiedGlamourManager-JobFilter-AllJobs");
+        names[0] = Lang.Get("All");
 
         for (var i = 1; i < JobFilterClassJobIDs.Length; i++)
             names[i] = string.Join(" / ", JobFilterClassJobIDs[i].Select(LuminaWrapper.GetJobName));
