@@ -1,11 +1,16 @@
 using System.Numerics;
+using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using OmenTools.Info.Game.Enums;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Classes;
+using KamiToolKit.Nodes;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -18,81 +23,43 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         Description = Lang.Get("AutoRestoreFurnitureDescription"),
         Category    = ModuleCategory.UIOperation
     };
+    
+    private AutoRestoreFurnitureAddon? addon;
 
     protected override void Init()
     {
         TaskHelper ??= new();
-        Overlay    ??= new(this);
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "HousingGoods", OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "HousingGoods", OnAddon);
-        if (HousingGoods != null)
-            OnAddon(AddonEvent.PostSetup, null);
+        addon ??= new(this)
+        {
+            InternalName          = "DRAutoRestoreFurniture",
+            Title                 = Info.Title,
+            Size                  = new(280f, 170f),
+            RememberClosePosition = false
+        };
+
+        LogMessageManager.Instance().RegPre(OnLogMessage);
+    }
+
+    protected override void Uninit()
+    {
+        addon?.Dispose();
+        addon = null;
+        
+        LogMessageManager.Instance().Unreg(OnLogMessage);
     }
     
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-    protected override void OverlayUI()
+    private void OnLogMessage(ref bool isPrevented, ref uint logMessageID, ref LogMessageQueueItem item)
     {
-        if (HousingGoods == null)
-        {
-            Overlay.IsOpen = false;
+        if (logMessageID != 3338 || !TaskHelper.IsBusy)
             return;
-        }
 
-        var pos = new Vector2(HousingGoods->GetX() - ImGui.GetWindowSize().X, HousingGoods->GetY() + 6);
-        ImGui.SetWindowPos(pos);
-
-        using (FontManager.Instance().UIFont80.Push())
-        {
-            var isOutdoor = HousingGoods->AtkValues[9].UInt != 6U;
-
-            ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoRestoreFurnitureTitle"));
-
-            ImGui.SameLine();
-            ImGui.TextUnformatted($"({Lang.Get(isOutdoor ? "Outdoors" : "Indoors")})");
-
-            ImGui.SameLine();
-            ImGui.Spacing();
-
-            ImGui.SameLine();
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, $" {Lang.Get("Stop")}"))
-                TaskHelper.Abort();
-
-            using (ImRaii.Disabled(TaskHelper.IsBusy))
-            {
-                if (ImGui.Selectable($"    {Lang.Get("AutoRestoreFurniture-PlacedToStoreRoom")}"))
-                    EnqueueRestore(isOutdoor ? 25001U : 25003U, isOutdoor ? 25001U : 25010U, !isOutdoor, 65536);
-
-                if (ImGui.Selectable($"    {Lang.Get("AutoRestoreFurniture-PlacedToInventory")}"))
-                    EnqueueRestore(isOutdoor ? 25001U : 25003U, isOutdoor ? 25001U : 25010U, !isOutdoor);
-
-                if (ImGui.Selectable($"    {Lang.Get("AutoRestoreFurniture-StoredToInventory")}"))
-                    EnqueueRestore(isOutdoor ? 27000U : 27001U, isOutdoor ? 27000U : 27008U, !isOutdoor);
-            }
-        }
+        isPrevented = true;
     }
 
-    private bool EnqueueRestore(uint startInventory, uint endInventory, bool isIndoor, int extraSlotParam = 0)
+    private bool EnqueueRestore(uint startInventory, uint endInventory, bool toStoreRoom)
     {
-        var houseManager     = HousingManager.Instance();
         var inventoryManager = InventoryManager.Instance();
-
-        if (houseManager     == null ||
-            inventoryManager == null ||
-            houseManager->GetCurrentIndoorHouseId() <= 0 &&
-            houseManager->GetCurrentPlot()          < 0)
-        {
-            TaskHelper.Abort();
-            return true;
-        }
-
-        var param1 = isIndoor
-                         ? *(long*)((nint)houseManager->IndoorTerritory  + 38560) >> 32
-                         : *(long*)((nint)houseManager->OutdoorTerritory + 38560) >> 32;
-        var param2 = isIndoor ? houseManager->IndoorTerritory->HouseId : houseManager->OutdoorTerritory->HouseId;
 
         for (var i = startInventory; i <= endInventory; i++)
         {
@@ -105,20 +72,8 @@ public unsafe class AutoRestoreFurniture : ModuleBase
                 var slot = contaniner->GetInventorySlot(d);
                 if (slot == null || slot->ItemId == 0) continue;
 
-                var inventoryTypeFinal = (int)i;
-                var slotFinal          = d;
-
-                TaskHelper.Enqueue
-                (() => ExecuteCommandManager.Instance().ExecuteCommand
-                 (
-                     ExecuteCommandFlag.RestoreFurniture,
-                     (uint)param1,
-                     (uint)param2,
-                     (uint)inventoryTypeFinal,
-                     (uint)(slotFinal + extraSlotParam)
-                 )
-                );
-                TaskHelper.Enqueue(() => EnqueueRestore(startInventory, endInventory, isIndoor, extraSlotParam));
+                TaskHelper.Enqueue(() => HousingCommand.Restore(slot->Container, slot->GetSlot(), toStoreRoom));
+                TaskHelper.Enqueue(() => EnqueueRestore(startInventory, endInventory, toStoreRoom));
                 return true;
             }
         }
@@ -127,18 +82,143 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         return true;
     }
 
-    private void OnAddon(AddonEvent type, AddonArgs args)
+    private sealed class AutoRestoreFurnitureAddon
+    (
+        AutoRestoreFurniture module
+    ) : AttachedAddon("HousingGoods")
     {
-        if (!HousingGoods->IsAddonAndNodesReady()) return;
+        private TextButtonNode? stopButton;
+        private TextButtonNode? placedToStoreRoomButton;
+        private TextButtonNode? placedToInventoryButton;
+        private TextButtonNode? storedToInventoryButton;
 
-        Overlay.IsOpen = type switch
+        protected override AttachedAddonPosition AttachPosition =>
+            AttachedAddonPosition.LeftTop;
+
+        protected override Vector2 PositionOffset =>
+            new(0f, 6f);
+
+        protected override bool CanOpenAddon =>
+            HousingGoods != null && HousingGoods->IsAddonAndNodesReady();
+
+        protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) =>
+            false;
+
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => true,
-            _                      => Overlay.IsOpen
-        };
+            if (WindowNode is WindowNode windowNode)
+                windowNode.CloseButtonNode.IsVisible = false;
+            
+            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x4,  true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A0, 0x80, true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x40, true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A3, 0x1,  true);
+            
+            var layout = new VerticalListNode
+            {
+                IsVisible   = true,
+                Position    = ContentStartPosition,
+                ItemSpacing = 4f,
+                Size        = ContentSize,
+                FitContents = true,
+            };
 
-        if (type == AddonEvent.PreFinalize)
-            TaskHelper.Abort();
+            stopButton = new()
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                Size      = new(ContentSize.X - 8f, 32f),
+                String    = Lang.Get("Stop"),
+                OnClick   = module.TaskHelper.Abort
+            };
+
+            placedToStoreRoomButton = CreateActionButton
+            (
+                Lang.Get("AutoRestoreFurniture-PlacedToStoreRoom"),
+                true,
+                false
+            );
+            placedToInventoryButton = CreateActionButton
+            (
+                Lang.Get("AutoRestoreFurniture-PlacedToInventory"),
+                false,
+                false
+            );
+            storedToInventoryButton = CreateActionButton
+            (
+                Lang.Get("AutoRestoreFurniture-StoredToInventory"),
+                false,
+                true
+            );
+
+            layout.AddNode(stopButton);
+            layout.AddNode(placedToStoreRoomButton);
+            layout.AddNode(placedToInventoryButton);
+            layout.AddNode(storedToInventoryButton);
+            
+            layout.AttachNode(this);
+
+            layout.RecalculateLayout();
+            
+            SetWindowSize(Size.X, ContentStartPosition.Y + layout.Height + 16f);
+            layout.Position = ContentStartPosition;
+            layout.Height   = layout.Height;
+        }
+
+        protected override void OnAttachedAddonUpdate(AtkUnitBase* addon, AtkUnitBase* hostAddon) =>
+            RefreshState();
+
+        protected override void OnHostAddon(AddonEvent type, AddonArgs? args)
+        {
+            if (type == AddonEvent.PreFinalize)
+                module.TaskHelper.Abort();
+        }
+
+        private TextButtonNode CreateActionButton(string label, bool toStoreRoom, bool isStoredItem)
+        {
+            var button = new TextButtonNode
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                Size      = new(ContentSize.X - 8f, 32f),
+                String    = label
+            };
+
+            button.OnClick = () =>
+            {
+                var isOutdoor = HousingManager.Instance()->OutdoorTerritory != null;
+                var startInventory = isStoredItem
+                                         ? isOutdoor ? 27000U : 27001U
+                                         : isOutdoor
+                                             ? 25001U
+                                             : 25003U;
+                var endInventory = isStoredItem
+                                       ? isOutdoor ? 27000U : 27008U
+                                       : isOutdoor
+                                           ? 25001U
+                                           : 25010U;
+
+                module.EnqueueRestore(startInventory, endInventory, toStoreRoom);
+            };
+
+            return button;
+        }
+
+        private void RefreshState()
+        {
+            var isBusy = module.TaskHelper.IsBusy;
+
+            if (placedToStoreRoomButton != null)
+                placedToStoreRoomButton.IsEnabled = !isBusy;
+
+            if (placedToInventoryButton != null)
+                placedToInventoryButton.IsEnabled = !isBusy;
+
+            if (storedToInventoryButton != null)
+                storedToInventoryButton.IsEnabled = !isBusy;
+
+            if (stopButton != null)
+                stopButton.IsEnabled = isBusy;
+        }
     }
 }
