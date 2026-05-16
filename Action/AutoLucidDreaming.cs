@@ -1,20 +1,24 @@
 using System.Collections.Frozen;
+using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
+using Action = Lumina.Excel.Sheets.Action;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-// TODO: 需要重写触发机制
 public unsafe class AutoLucidDreaming : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -27,175 +31,247 @@ public unsafe class AutoLucidDreaming : ModuleBase
     
     private Config config = null!;
 
-    private DateTime lastLucidDreamingUseTime = DateTime.MinValue;
-    private bool     isAbilityLocked;
-
     protected override void Init()
     {
-        TaskHelper   ??= new() { TimeoutMS = 30_000 };
+        TaskHelper   ??= new() { TimeoutMS = 30_000, ShowDebug = true };
         config =   Config.Load(this) ?? new();
 
-        DService.Instance().Condition.ConditionChange += OnConditionChanged;
-
-        CheckAndEnqueue();
+        UseActionManager.Instance().RegPostCharacterCompleteCast(OnCompleteCast);
+        UseActionManager.Instance().RegPostUseActionLocation(OnUseAction);
     }
-    
-    protected override void Uninit() =>
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
+
+    protected override void Uninit()
+    {
+        UseActionManager.Instance().Unreg(OnCompleteCast);
+        UseActionManager.Instance().Unreg(OnUseAction);
+    }
 
     protected override void ConfigUI()
     {
         if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref config.OnlyInDuty))
-        {
             config.Save(this);
-            CheckAndEnqueue();
-        }
 
         ImGui.SetNextItemWidth(250f * GlobalUIScale);
         if (ImGui.DragInt("##MpThresholdSlider", ref config.MpThreshold, 100f, 3000, 9000, $"{LuminaWrapper.GetAddonText(233)}: %d"))
             config.Save(this);
 
         ImGui.NewLine();
-
+        
+        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
+            config.Save(this);
+        
         if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
             config.Save(this);
     }
     
-    private void OnConditionChanged(ConditionFlag flag, bool value)
+    private void OnCompleteCast
+    (
+        bool         result,
+        IBattleChara player,
+        ActionType   type,
+        uint         actionID,
+        uint         spellID,
+        GameObjectId animationTargetID,
+        Vector3      location,
+        float        rotation,
+        short        lastUsedActionSequence,
+        int          animationVariation,
+        int          ballistaEntityID
+    )
     {
-        if (flag != ConditionFlag.InCombat) return;
+        // 施法不成功
+        // 在 PVP 区域内
+        // 应该在副本内但现在不在
+        // 非本地玩家
+        // 不在有效职业范围内
+        // 当前魔力值大于设定阈值
+        if (!result                                                      ||
+            GameState.IsInPVPArea                                        ||
+            (config.OnlyInDuty && GameState.ContentFinderCondition == 0) ||
+            player.EntityID != LocalPlayerState.EntityID                 ||
+            !ValidClassJobs.Contains(player.ClassJob.RowId)              ||
+            player.CurrentMp > config.MpThreshold)
+            return;
+        
+        // 无法获取技能信息
+        // 能力技 (假设用户网络非常烂只能单插, 已经使用能力技的情况下不要再使用)
+        if (!LuminaGetter.TryGetRow(actionID, out Action actionRow) ||
+            actionRow.Recast100ms == 0)
+            return;
+        
+        // ActionManager 为空 (怎会如此)
+        // 醒梦正在冷却
+        var manager = ActionManager.Instance();
+        if (manager == null ||
+            !manager->IsActionOffCooldown(ActionType.Action, LUCID_DREAMING_ID))
+            return;
 
-        CheckAndEnqueue();
+        var recastGroupTypeOne  = manager->GetRecastGroup((int)ActionType.Action, actionID);
+        var recastDetailTypeOne = recastGroupTypeOne == -1 ? null : manager->GetRecastGroupDetail(recastGroupTypeOne);
+        
+        var recastGroupTypeTwo  = manager->GetAdditionalRecastGroup(ActionType.Action, actionID);
+        var recastDetailTypeTwo = recastGroupTypeTwo == -1 ? null : manager->GetRecastGroupDetail(recastGroupTypeTwo);
+        
+        // 复唱判断（类型1）
+        if (recastDetailTypeOne != null)
+        {
+            // 已经可以发动下一个技能了
+            // 剩余的窗口再插一个技能已经不够了
+            if (!recastDetailTypeOne->IsActive ||
+                (recastDetailTypeOne->Total - recastDetailTypeOne->Elapsed) * 1000 < RECAST_TIME_WINDOW)
+                return;
+        }
+        else if (recastDetailTypeTwo != null)
+        {
+            // 已经可以发动下一个技能了
+            // 剩余的窗口再插一个技能已经不够了
+            if (!recastDetailTypeTwo->IsActive ||
+                (recastDetailTypeTwo->Total - recastDetailTypeTwo->Elapsed) * 1000 < RECAST_TIME_WINDOW)
+                return;
+        }
+        
+        // 已经在连点下一个技能了
+        if (manager->QueuedActionId != 0)
+        {
+            // 假设插的是其他东西, 比如食物之类的, 为了保险起见还是不要了
+            if (manager->QueuedActionType != ActionType.Action)
+                return;
+            
+            // 无法获取下一个技能信息
+            // 下一个技能是能力技
+            if (!LuminaGetter.TryGetRow(manager->QueuedActionId, out Action nextActionRow) ||
+                nextActionRow.Recast100ms == 0)
+                return;
+            
+            // 下个技能是公 CD 技能
+        }
+        
+        // 下一个技能为空
+        EnqueueUseLucidDreaming();
     }
-
-    private void CheckAndEnqueue()
+    
+    private void OnUseAction(bool result, ActionType actionType, uint actionID, ulong targetID, Vector3 location, uint extraParam, byte a7)
     {
+        // 施法不成功
+        // 在 PVP 区域内
+        // 应该在副本内但现在不在
+        // 不在有效职业范围内
+        if (!result                                                      ||
+            GameState.IsInPVPArea                                        ||
+            (config.OnlyInDuty && GameState.ContentFinderCondition == 0) ||
+            !ValidClassJobs.Contains(LocalPlayerState.ClassJob))
+            return;
+        
         TaskHelper.Abort();
-
-        if (config.OnlyInDuty && GameState.ContentFinderCondition == 0 ||
-            GameState.IsInPVPArea                                            ||
-            !DService.Instance().Condition[ConditionFlag.InCombat])
-            return;
-
-        TaskHelper.Enqueue(MainProcess);
     }
 
-    private void MainProcess()
+    private void EnqueueUseLucidDreaming()
     {
+        // 不允许同时有多个插入
         TaskHelper.Abort();
-
-        if (!UIModule.IsScreenReady() || DService.Instance().Condition.IsOccupiedInEvent)
+        
+        var manager = ActionManager.Instance();
+        if (manager == null) return;
+        
+        // 为了合法插入
+        TaskHelper.DelayNext((int)MathF.Max(ANIMATION_LOCK, manager->AnimationLock * 1000), "等待动画锁结束");
+        
+        // 我们还是得检查一次
+        TaskHelper.Enqueue(() =>
         {
-            TaskHelper.DelayNext(1000);
-            TaskHelper.Enqueue(MainProcess);
-            return;
-        }
+            // 已经在连点下一个技能了
+            if (manager->QueuedActionId != 0)
+            {
+                // 假设插的是其他东西, 比如食物之类的, 为了保险起见还是不要了
+                if (manager->QueuedActionType != ActionType.Action)
+                {
+                    TaskHelper.Abort();
+                    return;
+                }
+            
+                // 无法获取下一个技能信息
+                // 下一个技能是能力技
+                if (!LuminaGetter.TryGetRow(manager->QueuedActionId, out Action nextActionRow) ||
+                    nextActionRow.Recast100ms == 0)
+                {
+                    TaskHelper.Abort();
+                    return;
+                }
+            
+                // 下个技能是公 CD 技能 (终于等到这一刻)
+            }
+        }, "检查当前状态是否合法");
 
-        if (!DService.Instance().Condition[ConditionFlag.InCombat] ||
-            !ValidClassJobs.Contains(LocalPlayerState.ClassJob)    ||
-            !ActionManager.IsActionUnlocked(LUCID_DREAMING_ID))
-            return;
-
-        TaskHelper.Enqueue(PreventAbilityUse, "PreventAbilityUse", 5_000, weight: 1);
-        TaskHelper.Enqueue(UseLucidDreaming,  "UseLucidDreaming",  5_000, weight: 1);
-
-        TaskHelper.DelayNext(1000);
-        TaskHelper.Enqueue(MainProcess);
-    }
-
-    private bool PreventAbilityUse()
-    {
-        var timeSinceLastUse = (StandardTimeManager.Instance().Now - lastLucidDreamingUseTime).TotalMilliseconds;
-
-        var shouldLock = timeSinceLastUse < ABILITY_LOCK_TIME_MS;
-        isAbilityLocked = shouldLock;
-
-        if (shouldLock)
-        {
-            var remainingLockTime = ABILITY_LOCK_TIME_MS - (int)timeSinceLastUse;
-            TaskHelper.DelayNext(Math.Min(remainingLockTime, 100));
-        }
-
-        return true;
-    }
-
-    private bool UseLucidDreaming()
-    {
-        var localPlayer = Control.GetLocalPlayer();
-        if (localPlayer == null) return false;
-
-        var statusManager    = localPlayer->StatusManager;
-        var currentMp        = localPlayer->Mana;
-        var timeSinceLastUse = (StandardTimeManager.Instance().Now - lastLucidDreamingUseTime).TotalMilliseconds;
-
-        if (timeSinceLastUse < ABILITY_LOCK_TIME_MS || currentMp >= config.MpThreshold)
-            return true;
-
-        // 刚复活的无敌
-        if (statusManager.HasStatus(TRANSCENDENT_STATUS))
-            return true;
-
-        var actionManager = ActionManager.Instance();
-        if (actionManager->GetActionStatus(ActionType.Action, LUCID_DREAMING_ID) != 0 ||
-            statusManager.HasStatus(1204)                                             ||
-            localPlayer->Mode == CharacterModes.AnimLock                              ||
-            localPlayer->IsCasting                                                    ||
-            actionManager->AnimationLock > 0)
-            return true;
-
-        var gcdRecast = actionManager->GetRecastGroupDetail(58);
-
-        if (gcdRecast->IsActive)
-        {
-            var gcdTotal   = actionManager->GetRecastTimeForGroup(58);
-            var gcdElapsed = gcdRecast->Elapsed;
-
-            var gcdProgressPercent = gcdElapsed / gcdTotal * 100;
-            if (gcdProgressPercent is < USE_IN_GCD_WINDOW_START or > USE_IN_GCD_WINDOW_END)
-                return true;
-        }
-
-        var capturedTime = StandardTimeManager.Instance().Now;
+        // 使用醒梦
         TaskHelper.Enqueue
         (
             () =>
             {
-                if (isAbilityLocked) return false;
+                var status = UseActionManager.Instance().UseAction(ActionType.Action, LUCID_DREAMING_ID);
+                if (!status)
+                    return false;
 
-                var result = UseActionManager.Instance().UseActionLocation(ActionType.Action, LUCID_DREAMING_ID);
-
-                if (result)
+                if (Throttler.Shared.Throttle("AutoLucidDreaming-SendChat", 10_000))
                 {
-                    lastLucidDreamingUseTime = capturedTime;
-                    if (config.SendNotification && Throttler.Shared.Throttle("AutoLucidDreaming-Notification", 10_000))
-                        NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoLucidDreaming-Notification", localPlayer->Mana));
-                }
+                    using var rented  = new RentedSeStringBuilder();
+                    rented.Builder
+                          .PushColorType(32)
+                          .Append(LuminaWrapper.GetActionName(LUCID_DREAMING_ID))
+                          .PopColorType();
 
-                return result;
+                    var message = Lang.GetSe("AutoLucidDreaming-Notification", rented.Builder, LocalPlayerState.Object?.CurrentMp ?? 0);
+                    
+                    if (config.SendChat)
+                        NotifyHelper.Instance().Chat(message);
+                    if (config.SendNotification)
+                        NotifyHelper.Instance().NotificationInfo
+                        (
+                            message.ToString(),
+                            options: new()
+                            {
+                                Icon = DService.Instance().Texture.GetFromGameIcon(LuminaWrapper.GetActionIconID(LUCID_DREAMING_ID))
+                            }
+                        );
+                }
+                
+                if (config.SendChat &&
+                    Throttler.Shared.Throttle("AutoLucidDreaming-SendChat", 10_000))
+                    NotifyHelper.Instance().Chat(Lang.Get("AutoLucidDreaming-Notification", LocalPlayerState.Object?.CurrentMp ?? 0));
+
+                return true;
             },
-            $"UseAction_{LUCID_DREAMING_ID}",
-            5_000,
-            weight: 1
+            "使用醒梦"
         );
-        return true;
     }
 
     private class Config : ModuleConfig
     {
         public int  MpThreshold = 7000;
         public bool OnlyInDuty;
+        
+        public bool SendChat;
         public bool SendNotification = true;
     }
     
     #region 常量
     
-    private const int    ABILITY_LOCK_TIME_MS    = 600;
-    private const float  USE_IN_GCD_WINDOW_START = 60;
-    private const float  USE_IN_GCD_WINDOW_END   = 95;
-    private const uint   LUCID_DREAMING_ID       = 7562;
-    private const ushort TRANSCENDENT_STATUS     = 418;
+    private const int  RECAST_TIME_WINDOW = 500;
+    private const int  ANIMATION_LOCK     = 100;
+    private const uint LUCID_DREAMING_ID  = 7562;
 
-    private static readonly FrozenSet<uint> ValidClassJobs = [6, 7, 15, 19, 20, 21, 23, 24, 26, 27, 28, 33, 35, 36, 40];
-    
+    private static readonly FrozenSet<uint> ValidClassJobs =
+    [
+        6,  // 幻术师
+        24, // 白魔法师
+        26, // 秘术师
+        27, // 召唤师
+        28, // 学者
+        33, // 占星术士
+        35, // 赤魔法师
+        36, // 青魔法师
+        40, // 贤者
+        42  // 绘灵法师
+    ];
+
     #endregion
 }
