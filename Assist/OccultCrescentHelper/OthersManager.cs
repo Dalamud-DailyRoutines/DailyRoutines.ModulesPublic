@@ -361,7 +361,9 @@ public partial class OccultCrescentHelper
                               .AddText(islandID.ToString())
                               .AddUiForegroundOff()
                               .Build();
-                NotifyHelper.Instance().Chat(message);
+                
+                // TODO: 改成 ReadOnlyString
+                NotifyHelper.Instance().Chat(message.Encode());
             }
 
             if (!isJustLogin                                                       &&

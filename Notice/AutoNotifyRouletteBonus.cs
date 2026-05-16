@@ -311,7 +311,8 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
                 }
             }
 
-            NotifyHelper.Instance().Chat(chatBuilder.Build());
+            // TODO: 改成 ReadOnlyString
+            NotifyHelper.Instance().Chat(chatBuilder.Build().Encode());
         }
 
         var notificationLines = new List<string>();

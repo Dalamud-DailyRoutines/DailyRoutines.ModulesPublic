@@ -12,6 +12,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
@@ -329,13 +330,17 @@ public unsafe class QuickChatPanel : ModuleBase
         chatPanelAddon?.Close();
     }
 
-    private static void SendGameItemLink(Item item) =>
+    private static void SendGameItemLink(Item item)
+    {
+        // TODO: 改成 ReadOnlyString, 这个等 API 16
         NotifyHelper.Instance().Chat
         (
             new SeStringBuilder()
                 .AddItemLink(item.RowId, PluginConfig.Instance().ConflictKeyBinding.IsPressed())
                 .Build()
+                .Encode()
         );
+    }
 
     private class Config : ModuleConfig
     {

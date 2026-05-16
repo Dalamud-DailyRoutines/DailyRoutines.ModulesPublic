@@ -623,7 +623,8 @@ public partial class OccultCrescentHelper
                        .Add(RawPayload.LinkTerminator);
             }
 
-            NotifyHelper.Instance().Chat(message.Build());
+            // TODO: 改成 ReadOnlyString
+            NotifyHelper.Instance().Chat(message.Build().Encode());
 
             NotifyHelper.Instance().NotificationInfo($"{ceName}", $"{ce.GetNotificationTitle()}");
             NotifyHelper.Speak($"{ce.GetNotificationTitle()}");

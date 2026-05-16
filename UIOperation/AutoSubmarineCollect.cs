@@ -665,7 +665,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                               .Add(RawPayload.LinkTerminator);
             }
 
-            NotifyHelper.Instance().Chat(messageBuilder.Build());
+            // TODO: 改成 ReadOnlyString
+            NotifyHelper.Instance().Chat(messageBuilder.Build().Encode());
         }
 
         if (config.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, config.AutoCollectCount))

@@ -187,7 +187,7 @@ public unsafe class AutoCountPlayers : ModuleBase
                                       (
                                           new PlayerPayload
                                           (
-                                              playerAround.Name.TextValue,
+                                              playerAround.Name.ToString(),
                                               playerAround.ToStruct()->HomeWorld
                                           )
                                       )
@@ -198,7 +198,9 @@ public unsafe class AutoCountPlayers : ModuleBase
                                       .Append("     ")
                                       .Append(SeString.CreateMapLink(GameState.TerritoryType, GameState.Map, mapPos.X, mapPos.Y))
                                       .Build();
-                        NotifyHelper.Instance().Chat(message);
+                        
+                        // TODO: 改成 ReadOnlyString
+                        NotifyHelper.Instance().Chat(message.Encode());
                     }
 
                     if (DService.Instance().GameGUI.WorldToScreen(playerAround.Position,            out var screenPos) &&
@@ -480,7 +482,8 @@ public unsafe class AutoCountPlayers : ModuleBase
                     if (message.Payloads.Last() is NewLinePayload)
                         message.Payloads.RemoveAt(message.Payloads.Count - 1);
 
-                    NotifyHelper.Instance().Chat(builder.Build());
+                    // TODO: 改成 ReadOnlyString
+                    NotifyHelper.Instance().Chat(builder.Build().Encode());
                 }
             }
         }

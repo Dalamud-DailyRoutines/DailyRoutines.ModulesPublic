@@ -307,6 +307,7 @@ public unsafe class AutoAntiCensorship : ModuleBase
             var highlightText = new SeString(origText.Payloads);
             HighlightCensorship(ref highlightText);
 
+            // TODO: 改成 ReadOnlyString
             NotifyHelper.Instance().Chat
             (
                 new SeStringBuilder().AddUiForeground(28)
@@ -316,6 +317,7 @@ public unsafe class AutoAntiCensorship : ModuleBase
                                      .AddText("\n   ↓   \n")
                                      .Append(handleText)
                                      .Build()
+                                     .Encode()
             );
 
             textInput->SetText(handleText.EncodeWithNullTerminator());
@@ -370,6 +372,7 @@ public unsafe class AutoAntiCensorship : ModuleBase
             if (textInputComponent != null)
                 textInputComponent->SetText(handleText.EncodeWithNullTerminator());
 
+            // TODO: 改成 ReadOnlyString
             NotifyHelper.Instance().Chat
             (
                 new SeStringBuilder().AddUiForeground(32)
@@ -379,6 +382,7 @@ public unsafe class AutoAntiCensorship : ModuleBase
                                      .AddText("\n   ↓   \n")
                                      .Append(handleText)
                                      .Build()
+                                     .Encode()
             );
         }
         catch

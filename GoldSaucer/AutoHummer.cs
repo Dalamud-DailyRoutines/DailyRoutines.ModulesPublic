@@ -74,9 +74,9 @@ public class AutoHummer : ModuleBase
 
         var machineTarget = TargetManager.PreviousTarget;
         var machine =
-            machineTarget.Name.TextValue.Contains
+            machineTarget.Name.ToString().Contains
             (
-                LuminaGetter.GetRow<EObjName>(2005035)!.Value.Singular.ToString(),
+                LuminaGetter.GetRowOrDefault<EObjName>(2005035).Singular.ToString(),
                 StringComparison.OrdinalIgnoreCase
             )
                 ? (GameObject*)machineTarget.Address

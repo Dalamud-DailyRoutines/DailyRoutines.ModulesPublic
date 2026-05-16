@@ -207,7 +207,7 @@ public class MultiTargetTracker : ModuleBase
         {
             var chara = ipc.ToStruct();
             ContentID = chara->ContentId;
-            Name      = ipc.Name.TextValue;
+            Name      = ipc.Name.ToString();
             WorldName = ipc.HomeWorld.ValueNullable?.Name.ToString();
         }
 

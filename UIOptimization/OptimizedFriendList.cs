@@ -802,20 +802,19 @@ public unsafe class OptimizedFriendList : ModuleBase
                 Alignment = VerticalListAlignment.Left
             };
 
-            var groupFormatText = LuminaWrapper.GetAddonTextSeString(12925);
 
             for (var i = 0; i < 8; i++)
             {
                 var index = i;
 
-                groupFormatText.Payloads[1] = new TextPayload($"{index + 1}");
+                var groupFormatText = DService.Instance().SeStringEvaluator.EvaluateFromAddon(12925, [index + 1]);
                 var groupCheckboxNode = new CheckboxNode
                 {
                     Size      = new(80f, 20f),
                     IsVisible = true,
                     IsChecked = Instance.config.IgnoredGroup[i],
                     IsEnabled = true,
-                    String    = groupFormatText.Encode(),
+                    String    = groupFormatText,
                     OnClick = newState =>
                     {
                         Instance.config.IgnoredGroup[index] = newState;

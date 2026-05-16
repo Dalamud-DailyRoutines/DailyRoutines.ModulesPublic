@@ -212,10 +212,10 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
     
     private static readonly FrozenSet<Payload> Payloads =
     [
-        new("/Name/", LuminaWrapper.GetAddonText(6382), c => c.Name.TextValue),
+        new("/Name/", LuminaWrapper.GetAddonText(6382), c => c.Name.ToString()),
         new("/Job/", LuminaWrapper.GetAddonText(294), c => c.ClassJob.ValueNullable?.Name.ToString() ?? LuminaGetter.GetRowOrDefault<ClassJob>(0).Name.ToString()),
         new("/Level/", LuminaWrapper.GetAddonText(335), c => c.Level.ToString()),
-        new("/FCTag/", LuminaWrapper.GetAddonText(297), c => c.CompanyTag.TextValue),
+        new("/FCTag/", LuminaWrapper.GetAddonText(297), c => c.CompanyTag.ToString()),
         new
         (
             "/OnlineStatus/",
@@ -232,7 +232,7 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
             LuminaWrapper.GetAddonText(780),
             c => LuminaGetter.GetRowOrDefault<Emote>(c.ToStruct()->EmoteController.EmoteId).Name.ToString()
         ),
-        new("/TargetsTarget/", Lang.Get("TargetOfTarget"), c => c.TargetObject?.Name.TextValue ?? ""),
+        new("/TargetsTarget/", Lang.Get("TargetOfTarget"), c => c.TargetObject?.Name.ToString() ?? string.Empty),
         new("/ShieldValue/", Lang.Get("Sheild"), c => c.ShieldPercentage.ToString()),
         new("/CurrentHP/", LuminaWrapper.GetAddonText(232), c => c.CurrentHp.ToString()),
         new("/MaxHP/", Lang.Get("MaxHP"), c => c.MaxHp.ToString()),

@@ -183,8 +183,8 @@ public class AutoShopPurchase : ModuleBase
 
         public bool IsTargetValid() =>
             string.IsNullOrWhiteSpace(TargetName) ||
-            !string.IsNullOrWhiteSpace(TargetName) &&
-            (TargetManager.Target?.Name.TextValue ?? string.Empty) == TargetName;
+            (!string.IsNullOrWhiteSpace(TargetName) &&
+             (TargetManager.Target?.Name.ToString() ?? string.Empty) == TargetName);
 
         public List<Func<bool>> GetTasks()
         {
@@ -408,7 +408,7 @@ public class AutoShopPurchase : ModuleBase
             );
 
             if (!string.IsNullOrWhiteSpace(targetNameInput) && TargetManager.Target is { } target)
-                targetNameInput = target.Name.TextValue;
+                targetNameInput = target.Name.ToString();
         }
 
         private void WindowRenderPresetInfoInput()

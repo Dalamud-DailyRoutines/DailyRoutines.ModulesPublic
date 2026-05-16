@@ -196,7 +196,8 @@ public unsafe class AutoCheckItemLevel : ModuleBase
 
         ssb.Add(new NewLinePayload());
 
-        NotifyHelper.Instance().Chat(ssb.Build());
+        // TODO: 改成 ReadOnlyString
+        NotifyHelper.Instance().Chat(ssb.Build().Encode());
     }
 
     #region 常量

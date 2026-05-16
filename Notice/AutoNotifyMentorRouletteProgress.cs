@@ -137,7 +137,8 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
                            ).ToDalamudString()
                        );
 
-                NotifyHelper.Instance().Chat(builder.Build());
+                // TODO: 改成 ReadOnlyString
+                NotifyHelper.Instance().Chat(builder.Build().Encode());
                 return true;
             }
         );

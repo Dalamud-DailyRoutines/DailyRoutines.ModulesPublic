@@ -447,7 +447,7 @@ public unsafe class AutoSendMoney : ModuleBase
         public Member(ICharacter gameObject)
         {
             EntityID  = gameObject.EntityID;
-            FirstName = gameObject.Name.TextValue;
+            FirstName = gameObject.Name.ToString();
 
             var worldID = gameObject.ToBCStruct()->HomeWorld;
             World = LuminaWrapper.GetWorldName(worldID) ?? "???";

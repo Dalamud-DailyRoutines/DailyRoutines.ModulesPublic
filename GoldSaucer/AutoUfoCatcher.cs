@@ -72,9 +72,9 @@ public class AutoUfoCatcher : ModuleBase
         if (DService.Instance().Condition.IsOccupiedInEvent) return false;
 
         var machineTarget = TargetManager.PreviousTarget;
-        var machine = machineTarget.Name.TextValue.Contains
+        var machine = machineTarget.Name.ToString().Contains
                       (
-                          LuminaGetter.GetRow<EObjName>(2005036)!.Value.Singular.ToString(),
+                          LuminaGetter.GetRowOrDefault<EObjName>(2005036).Singular.ToString(),
                           StringComparison.OrdinalIgnoreCase
                       )
                           ? (GameObject*)machineTarget.Address

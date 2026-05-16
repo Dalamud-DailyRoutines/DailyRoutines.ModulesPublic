@@ -1038,7 +1038,9 @@ public class OptimizedRecipeNote : ModuleBase
                .AddUiForegroundOff()
                .AddText("]")
                .Add(RawPayload.LinkTerminator);
-        NotifyHelper.Instance().Chat(builder.Build());
+        
+        // TODO: 改成 ReadOnlyString
+        NotifyHelper.Instance().Chat(builder.Build().Encode());
     }
 
     private void PrintInstallRaphaelPluginMessage()
@@ -1058,7 +1060,9 @@ public class OptimizedRecipeNote : ModuleBase
                                            .AddText("]")
                                            .Add(RawPayload.LinkTerminator)
                                            .Build();
-        NotifyHelper.Instance().Chat(message);
+        
+        // TODO: 改成 ReadOnlyString
+        NotifyHelper.Instance().Chat(message.Encode());
     }
 
     #endregion
