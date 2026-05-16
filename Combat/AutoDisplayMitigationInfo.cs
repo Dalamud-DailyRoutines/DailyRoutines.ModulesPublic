@@ -402,13 +402,20 @@ public class AutoDisplayMitigationInfo : ModuleBase
         var snapshot = state.PartySnapshot;
         for (var i = 0; i < MathF.Min(snapshot.Length, AgentHUD.Instance()->PartyMemberCount); i++)
         {
-            ref var partyMember = ref addon->PartyMembers[i];
-            if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
-                continue;
+            try
+            {
+                ref var partyMember = ref addon->PartyMembers[i];
+                if (partyMember.HPGaugeComponent is null || !partyMember.HPGaugeComponent->OwnerNode->IsVisible())
+                    continue;
 
-            ref readonly var status = ref snapshot[i];
-            DrawMitigationNode(drawList, ref partyMember, status);
-            DrawShieldNode(drawList, ref partyMember, status);
+                ref readonly var status = ref snapshot[i];
+                DrawMitigationNode(drawList, ref partyMember, status);
+                DrawShieldNode(drawList, ref partyMember, status);
+            }
+            catch
+            {
+                // ignored
+            }
         }
     }
 
