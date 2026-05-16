@@ -79,6 +79,7 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         }
 
         TaskHelper.Abort();
+        TaskHelper.DelayNext(500);
         return true;
     }
 
