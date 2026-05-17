@@ -30,10 +30,6 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     );
     private delegate void                              DeviceDX11PostTickDelegate(Device* device);
     private          Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
-
-    private static readonly CompSig AddonNamePlateDrawSig = new("0F B7 81 ?? ?? ?? ?? 81 A1 ?? ?? ?? ?? ?? ?? ?? ?? 81 A1 ?? ?? ?? ?? ?? ?? ?? ?? 66 C1 E0 ?? 0F B7 D0 66 89 91 ?? ?? ?? ?? C1 E2 ?? 09 91 ?? ?? ?? ?? 09 91 ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 33 C0");
-    private delegate void                              AddonNamePlateDrawDelegate(AddonNamePlate* addon);
-    private          Hook<AddonNamePlateDrawDelegate>? AddonNamePlateDrawHook;
     
     private Config config = null!;
 
@@ -43,9 +39,6 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-
-        AddonNamePlateDrawHook = AddonNamePlateDrawSig.GetHook<AddonNamePlateDrawDelegate>(AddonNamePlateDrawDetour);
-        AddonNamePlateDrawHook.Enable();
         
         DeviceDX11PostTickHook = DeviceDX11PostTickSig.GetHook<DeviceDX11PostTickDelegate>(DeviceDX11PostTickDetour);
         DeviceDX11PostTickHook.Enable();
@@ -59,10 +52,22 @@ public unsafe class NoRenderWhenBackground : ModuleBase
 
     private void DeviceDX11PostTickDetour(Device* device)
     {
+        var isChanged = isNoRender;
+        
         if (GameState.IsForeground || !GameState.IsLoggedIn)
         {
             isNoRender = false;
             DeviceDX11PostTickHook.Original(device);
+
+            if (isChanged)
+            {
+                if (NamePlate != null)
+                {
+                    NamePlate->IsVisible = false;
+                    NamePlate->IsVisible = true;
+                }
+            }
+            
             return;
         }
 
@@ -72,6 +77,16 @@ public unsafe class NoRenderWhenBackground : ModuleBase
             {
                 isNoRender = false;
                 DeviceDX11PostTickHook.Original(device);
+                
+                if (isChanged)
+                {
+                    if (NamePlate != null)
+                    {
+                        NamePlate->IsVisible = false;
+                        NamePlate->IsVisible = true;
+                    }
+                }
+                
                 return;
             }
         }
@@ -91,14 +106,6 @@ public unsafe class NoRenderWhenBackground : ModuleBase
 
         if (UIModule.Instance()->ShouldLimitFps())
             Thread.Sleep(50);
-    }
-    
-    private void AddonNamePlateDrawDetour(AddonNamePlate* addon)
-    {
-        if (isNoRender)
-            return;
-
-        AddonNamePlateDrawHook.Original(addon);
     }
 
     [DllImport("user32.dll")]
