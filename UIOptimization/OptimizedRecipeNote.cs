@@ -179,6 +179,13 @@ public class OptimizedRecipeNote : ModuleBase
         }       
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-SwitchJobButton-Help"));
         
+        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton"), ref config.IsCaculateRecipeButton))
+        {
+            config.Save(this);
+            OnAddon(AddonEvent.PreFinalize, null);
+        }       
+        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton-Help"));
+        
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-QuickSynthesisMore"), ref config.IsQuickSynthesisMore))
         {
             config.Save(this);
