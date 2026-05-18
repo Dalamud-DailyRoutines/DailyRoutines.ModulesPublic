@@ -7,7 +7,6 @@ using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
@@ -34,7 +33,6 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     private Config config = null!;
 
     private long nextRenderTick;
-    private bool isNoRender;
 
     protected override void Init()
     {
@@ -52,22 +50,12 @@ public unsafe class NoRenderWhenBackground : ModuleBase
 
     private void DeviceDX11PostTickDetour(Device* device)
     {
-        var isChanged = isNoRender;
-        
         if (GameState.IsForeground || !GameState.IsLoggedIn)
         {
-            isNoRender = false;
             DeviceDX11PostTickHook.Original(device);
-
-            if (isChanged)
-            {
-                if (NamePlate != null)
-                {
-                    NamePlate->IsVisible = false;
-                    NamePlate->IsVisible = true;
-                }
-            }
             
+            if (NamePlate != null)
+                NamePlate->IsVisible = true;
             return;
         }
 
@@ -75,18 +63,10 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         {
             if (!IsIconic(Framework.Instance()->GameWindow->WindowHandle))
             {
-                isNoRender = false;
                 DeviceDX11PostTickHook.Original(device);
                 
-                if (isChanged)
-                {
-                    if (NamePlate != null)
-                    {
-                        NamePlate->IsVisible = false;
-                        NamePlate->IsVisible = true;
-                    }
-                }
-                
+                if (NamePlate != null)
+                    NamePlate->IsVisible = true;
                 return;
             }
         }
@@ -96,16 +76,15 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         if (currentTick - nextRenderTick > 0)
         {
             nextRenderTick = currentTick + 5_000;
-            isNoRender     = false;
-            
             DeviceDX11PostTickHook.Original(device);
             return;
         }
         
-        isNoRender = true;
-
         if (UIModule.Instance()->ShouldLimitFps())
             Thread.Sleep(50);
+        
+        if (NamePlate != null)
+            NamePlate->IsVisible = false;
     }
 
     [DllImport("user32.dll")]
