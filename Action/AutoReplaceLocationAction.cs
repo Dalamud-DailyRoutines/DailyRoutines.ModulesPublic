@@ -55,6 +55,8 @@ public unsafe class AutoReplaceLocationAction : ModuleBase
             (PronounModule.Delegates.ResolvePlaceholder)ParseActionCommandArgDetour
         );
         ParseActionCommandArgHook.Enable();
+        
+        _ = ZoneMapMarkers;
     }
 
     protected override void Uninit()
@@ -345,7 +347,7 @@ public unsafe class AutoReplaceLocationAction : ModuleBase
     {
         if (command != ExecuteCommandComplexFlag.PetAction || param1 != 3) return;
 
-        if (!config.EnabledPetActions.TryGetValue(3, out var isEnabled) || !isEnabled && !isNeedToReplace)
+        if (!config.EnabledPetActions.TryGetValue(3, out var isEnabled) || (!isEnabled && !isNeedToReplace))
         {
             isNeedToReplace = false;
             return;
