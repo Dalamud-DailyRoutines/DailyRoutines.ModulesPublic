@@ -12,7 +12,6 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
@@ -110,14 +109,14 @@ public unsafe class QuickChatPanel : ModuleBase
 
         using (ImRaii.PushIndent())
             DrawMessageOrder();
-        
+
         ImGui.NewLine();
 
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("QuickChatPanel-Macro"));
 
         using (ImRaii.PushIndent())
             DrawMacroOrder();
-        
+
         return;
 
         void DrawMessageOrder()
@@ -154,10 +153,9 @@ public unsafe class QuickChatPanel : ModuleBase
                     (config.SavedMessages[i], config.SavedMessages[dropMessageIndex]);
                 dropMessageIndex = -1;
                 config.Save(this);
-                chatPanelAddon?.RequestRebuild();
             }
         }
-        
+
         void DrawMacroOrder()
         {
             if (config.SavedMacros.Count == 0)
@@ -192,11 +190,10 @@ public unsafe class QuickChatPanel : ModuleBase
                     (config.SavedMacros[i], config.SavedMacros[dropMacroIndex]);
                 dropMacroIndex = -1;
                 config.Save(this);
-                chatPanelAddon?.RequestRebuild();
             }
         }
     }
-    
+
     private void OnAddon(AddonEvent type, AddonArgs? args)
     {
         switch (type)
@@ -346,6 +343,7 @@ public unsafe class QuickChatPanel : ModuleBase
     {
         public MacroDisplayMode         OverlayMacroDisplayMode = MacroDisplayMode.Buttons;
         public Vector2                  OverlayOffset           = new(0);
+        public QuickChatTab             SelectedTab             = QuickChatTab.Messages;
         public List<SavedMacro>         SavedMacros             = [];
         public List<string>             SavedMessages           = [];
         public Dictionary<uint, string> SoundEffectNotes        = [];
@@ -353,22 +351,26 @@ public unsafe class QuickChatPanel : ModuleBase
 
     private class QuickChatPanelAddon : AttachedAddon
     {
-        private readonly Dictionary<QuickChatTab, ListButtonNode> tabButtons = [];
-        private readonly LuminaSearcher<Item>                     searcher;
-        private readonly QuickChatPanel                           instance;
-        private readonly TaskHelper                               TaskHelper = new();
+        private readonly Dictionary<QuickChatTab, ListButtonNode>    tabButtons      = [];
+        private readonly Dictionary<QuickChatTab, ResNode>           tabRoots        = [];
+        private readonly Dictionary<QuickChatTab, ScrollingListNode> tabContentLists = [];
+        private readonly LuminaSearcher<Item>                        searcher;
+        private readonly QuickChatPanel                              instance;
+        private readonly TaskHelper                                  TaskHelper = new();
 
         private QuickChatTab         selectedTab;
-        private ScrollingListNode?   contentList;
         private SimpleComponentNode? contentPanel;
         private SimpleNineGridNode?  contentPanelBackground;
+        private Vector2              tabContentSize;
 
-        private string itemSearchInput  = string.Empty;
-        private bool   rebuildRequested = true;
+        private string itemSearchInput = string.Empty;
 
         public QuickChatPanelAddon(QuickChatPanel instance) : base("ChatLog")
         {
             this.instance = instance;
+            selectedTab = Enum.IsDefined(instance.config.SelectedTab)
+                              ? instance.config.SelectedTab
+                              : QuickChatTab.Messages;
             searcher = new
             (
                 LuminaGetter.Get<Item>(),
@@ -401,30 +403,21 @@ public unsafe class QuickChatPanel : ModuleBase
             Open();
         }
 
-        public void RequestRebuild() =>
-            rebuildRequested = true;
-
         protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) =>
             false;
 
         protected override void OnAttachedAddonUpdate(AtkUnitBase* addon, AtkUnitBase* hostAddon)
         {
-            if (DService.Instance().KeyState[VirtualKey.ESCAPE])
-            {
-                Close();
-                return;
-            }
+            if (DService.Instance().KeyState[VirtualKey.ESCAPE]) Close();
 
-            if (rebuildRequested)
-            {
-                rebuildRequested = false;
-                RefreshCurrentTab();
-            }
         }
 
         protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
             tabButtons.Clear();
+            tabRoots.Clear();
+            tabContentLists.Clear();
+            itemSearchInput = string.Empty;
 
             var body = new HorizontalListNode
             {
@@ -452,7 +445,8 @@ public unsafe class QuickChatPanel : ModuleBase
             nav.AddNode(CreateNavButton(QuickChatTab.Settings, Lang.Get("Settings")));
 
             var contentSize = new Vector2(ContentSize.X - nav.Width - 16f, body.Height - 16f);
-            
+            tabContentSize = contentSize;
+
             contentPanel = new SimpleComponentNode
             {
                 IsVisible = true,
@@ -474,28 +468,16 @@ public unsafe class QuickChatPanel : ModuleBase
             };
             contentPanelBackground.AttachNode(contentPanel);
 
-            contentList = new()
-            {
-                IsVisible         = true,
-                Position          = new(9f),
-                Size              = contentSize - new Vector2(8f, 12f),
-                ItemSpacing       = 5f,
-                FitWidth          = true,
-                AutoHideScrollBar = true,
-                ScrollSpeed       = 36
-            };
-            contentList.AttachNode(contentPanel);
-            
             body.AddNode(nav);
             body.AddNode(contentPanel);
 
             RefreshTabButtons();
-            
+
             body.AttachNode(this);
 
-            RefreshCurrentTab();
+            ShowTab(selectedTab);
         }
-        
+
         public override void Dispose()
         {
             TaskHelper.Dispose();
@@ -506,9 +488,11 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             if (selectedTab == tab) return;
 
-            selectedTab = tab;
+            selectedTab                 = tab;
+            instance.config.SelectedTab = tab;
+            instance.config.Save(instance);
             RefreshTabButtons();
-            RefreshCurrentTab();
+            ShowTab(tab);
         }
 
         private void RefreshTabButtons()
@@ -517,36 +501,73 @@ public unsafe class QuickChatPanel : ModuleBase
                 button.Selected = tab == selectedTab;
         }
 
-        private void RefreshCurrentTab()
+        private void EnsureTabBuilt(QuickChatTab tab)
         {
-            TaskHelper.Enqueue(() =>
+            if (tabRoots.ContainsKey(tab)) return;
+            if (contentPanel == null) return;
+
+            var tabRoot = new ResNode
             {
-                contentList.Clear();
+                IsVisible = false,
+                Size      = tabContentSize
+            };
+            tabRoot.AttachNode(contentPanel);
 
-                switch (selectedTab)
+            var contentList = new ScrollingListNode
+            {
+                IsVisible         = true,
+                Position          = new(9f),
+                Size              = tabContentSize - new Vector2(8f, 12f),
+                ItemSpacing       = 5f,
+                FitWidth          = true,
+                AutoHideScrollBar = true,
+                ScrollSpeed       = 36
+            };
+            contentList.AttachNode(tabRoot);
+
+            tabRoots[tab]        = tabRoot;
+            tabContentLists[tab] = contentList;
+
+            BuildTab(tab, contentList);
+            contentList.RecalculateLayout();
+        }
+
+        private void BuildTab(QuickChatTab tab, ScrollingListNode contentList)
+        {
+            switch (tab)
+            {
+                case QuickChatTab.Messages:
+                    BuildMessagesTab(contentList);
+                    break;
+                case QuickChatTab.Macros:
+                    BuildMacrosTab(contentList);
+                    break;
+                case QuickChatTab.SystemSounds:
+                    BuildSystemSoundsTab(contentList);
+                    break;
+                case QuickChatTab.GameItems:
+                    BuildGameItemsTab(contentList);
+                    break;
+                case QuickChatTab.SpecialIconChars:
+                    BuildSpecialIconCharsTab(contentList);
+                    break;
+                case QuickChatTab.Settings:
+                    BuildSettingsTab(contentList);
+                    break;
+            }
+        }
+
+        private void ShowTab(QuickChatTab tab)
+        {
+            TaskHelper.Enqueue
+            (() =>
                 {
-                    case QuickChatTab.Messages:
-                        BuildMessagesTab();
-                        break;
-                    case QuickChatTab.Macros:
-                        BuildMacrosTab();
-                        break;
-                    case QuickChatTab.SystemSounds:
-                        BuildSystemSoundsTab();
-                        break;
-                    case QuickChatTab.GameItems:
-                        BuildGameItemsTab();
-                        break;
-                    case QuickChatTab.SpecialIconChars:
-                        BuildSpecialIconCharsTab();
-                        break;
-                    case QuickChatTab.Settings:
-                        BuildSettingsTab();
-                        break;
-                }
+                    EnsureTabBuilt(tab);
 
-                contentList.RecalculateLayout();
-            });
+                    foreach (var (otherTab, root) in tabRoots)
+                        root.IsVisible = otherTab == tab;
+                }
+            );
         }
 
         private ListButtonNode CreateNavButton(QuickChatTab tab, string text)
@@ -567,20 +588,21 @@ public unsafe class QuickChatPanel : ModuleBase
             return button;
         }
 
-        private void BuildMessagesTab()
+        private void BuildMessagesTab(ScrollingListNode contentList)
         {
             if (instance.config.SavedMessages.Count == 0)
             {
-                AddEmptyState(Lang.Get("QuickChatPanel-SavedMessagesAmountText", 0), Lang.Get("QuickChatPanel-SendMessageHelp"));
+                AddEmptyState(contentList, Lang.Get("QuickChatPanel-SavedMessagesAmountText", 0), Lang.Get("QuickChatPanel-SendMessageHelp"));
                 return;
             }
 
             foreach (var message in instance.config.SavedMessages)
             {
-                contentList?.AddNode
+                contentList.AddNode
                 (
                     CreateTextActionRow
                     (
+                        contentList,
                         message,
                         Lang.Get("QuickChatPanel-SendMessageHelp"),
                         () => CopyText(message),
@@ -595,27 +617,27 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        private void BuildMacrosTab()
+        private void BuildMacrosTab(ScrollingListNode contentList)
         {
             if (instance.config.SavedMacros.Count == 0)
             {
-                AddEmptyState(Lang.Get("QuickChatPanel-SavedMacrosAmountText", 0), Lang.Get("QuickChatPanelTitle-DragHelp"));
+                AddEmptyState(contentList, Lang.Get("QuickChatPanel-SavedMacrosAmountText", 0), Lang.Get("QuickChatPanelTitle-DragHelp"));
                 return;
             }
 
             if (instance.config.OverlayMacroDisplayMode == MacroDisplayMode.List)
-                BuildMacroList();
+                BuildMacroList(contentList);
             else
-                BuildMacroButtonGrid();
+                BuildMacroButtonGrid(contentList);
         }
 
-        private void BuildMacroList()
+        private void BuildMacroList(ScrollingListNode contentList)
         {
             foreach (var macro in instance.config.SavedMacros)
             {
                 if (string.IsNullOrWhiteSpace(macro.Name)) continue;
 
-                contentList?.AddNode
+                contentList.AddNode
                 (
                     CreateMacroListButton
                     (
@@ -655,7 +677,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     FitTexture  = true
                 };
 
-                icon.Position = new(12f, (button.Size.Y - icon.Size.Y) / 2 - 2f);
+                icon.Position = new(12f, ((button.Size.Y - icon.Size.Y) / 2) - 2f);
                 icon.AttachNode(button);
 
                 var text = new TextNode
@@ -678,9 +700,9 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        private void BuildMacroButtonGrid()
+        private void BuildMacroButtonGrid(ScrollingListNode contentList)
         {
-            var row          = CreateCardRow();
+            var row          = CreateCardRow(contentList);
             var currentWidth = 0f;
 
             foreach (var macro in instance.config.SavedMacros)
@@ -691,8 +713,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 if (currentWidth + button.Width > contentList.ContentWidth)
                 {
-                    contentList?.AddNode(row);
-                    row          = CreateCardRow();
+                    contentList.AddNode(row);
+                    row          = CreateCardRow(contentList);
                     currentWidth = 0f;
                 }
 
@@ -701,7 +723,7 @@ public unsafe class QuickChatPanel : ModuleBase
             }
 
             if (row.Nodes.Count > 0)
-                contentList?.AddNode(row);
+                contentList.AddNode(row);
 
             return;
 
@@ -745,9 +767,9 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        private void BuildSystemSoundsTab()
+        private void BuildSystemSoundsTab(ScrollingListNode contentList)
         {
-            var row          = CreateCompactRow();
+            var row          = CreateCompactRow(contentList);
             var currentWidth = 0f;
 
             foreach (var (key, value) in instance.config.SoundEffectNotes.OrderBy(x => x.Key))
@@ -771,8 +793,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 if (currentWidth + button.Width > contentList.ContentWidth)
                 {
-                    contentList?.AddNode(row);
-                    row          = CreateCompactRow();
+                    contentList.AddNode(row);
+                    row          = CreateCompactRow(contentList);
                     currentWidth = 0f;
                 }
 
@@ -781,10 +803,10 @@ public unsafe class QuickChatPanel : ModuleBase
             }
 
             if (row.Nodes.Count > 0)
-                contentList?.AddNode(row);
+                contentList.AddNode(row);
         }
 
-        private void BuildGameItemsTab()
+        private void BuildGameItemsTab(ScrollingListNode contentList)
         {
             var listNode = new ListNode<Item, ItemListItemNode>
             {
@@ -811,9 +833,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
             searchBarNode.CurrentTextNode.FontSize =  14;
             searchBarNode.CurrentTextNode.Position += new Vector2(0, 3);
-            contentList?.AddNode(searchBarNode);
+            contentList.AddNode(searchBarNode);
 
-            contentList?.AddNode(listNode);
+            contentList.AddNode(listNode);
 
             return;
 
@@ -831,7 +853,7 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        private void BuildSpecialIconCharsTab()
+        private static void BuildSpecialIconCharsTab(ScrollingListNode contentList)
         {
             var row          = CreateGlyphRow();
             var currentWidth = 0f;
@@ -844,7 +866,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 if (currentWidth + button.Width > contentList.ContentWidth)
                 {
-                    contentList?.AddNode(row);
+                    contentList.AddNode(row);
                     row          = CreateGlyphRow();
                     currentWidth = 0f;
                 }
@@ -854,7 +876,7 @@ public unsafe class QuickChatPanel : ModuleBase
             }
 
             if (row.Nodes.Count > 0)
-                contentList?.AddNode(row);
+                contentList.AddNode(row);
 
             return;
 
@@ -887,7 +909,7 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        private void BuildSettingsTab()
+        private void BuildSettingsTab(ScrollingListNode contentList)
         {
             var contentWidth = contentList.ContentWidth;
 
@@ -1010,7 +1032,6 @@ public unsafe class QuickChatPanel : ModuleBase
                     instance.config.Save(instance);
 
                     AtkStage.Instance()->ClearFocus();
-                    RequestRebuild();
                 }
             };
             addMessageButton.LabelNode.AutoAdjustTextSize();
@@ -1048,7 +1069,6 @@ public unsafe class QuickChatPanel : ModuleBase
                     {
                         instance.config.SavedMessages.Remove(message);
                         instance.config.Save(instance);
-                        RequestRebuild();
                     }
                 };
                 button.LabelNode.AutoAdjustTextSize();
@@ -1105,7 +1125,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 instance.config.OverlayMacroDisplayMode = mode;
                 instance.config.Save(instance);
-                RequestRebuild();
             };
             macrosSection.AddNode(dropdown);
 
@@ -1184,7 +1203,7 @@ public unsafe class QuickChatPanel : ModuleBase
             );
             tree.CategoryNodes[^1].AddNode(sounds);
 
-            contentList?.AddNode(tree);
+            contentList.AddNode(tree);
             tree.RefreshLayout();
             return;
 
@@ -1276,7 +1295,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                         instance.config.SavedMacros[currentIndex] = macro;
                         instance.config.Save(instance);
-                        RequestRebuild();
                     };
                     refreshButton.LabelNode.AutoAdjustTextSize();
                     row.AddNode(refreshButton);
@@ -1295,7 +1313,6 @@ public unsafe class QuickChatPanel : ModuleBase
                         instance.config.SavedMacros.Add(macro);
 
                     instance.config.Save(instance);
-                    RequestRebuild();
                 };
                 toggleButton.LabelNode.AutoAdjustTextSize();
                 row.AddNode(toggleButton);
@@ -1308,7 +1325,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 instance.config.SoundEffectNotes[key] = value;
                 instance.config.Save(instance);
-                RequestRebuild();
             }
 
             HorizontalListNode OffsetInput(string label, int value, Action<int> updateValue)
@@ -1341,8 +1357,8 @@ public unsafe class QuickChatPanel : ModuleBase
                     IsVisible = true,
                     Size      = new(132f, 30f),
                     Position  = new(0, -4),
-                    String    = value.ToString(),
-                    
+                    String    = value.ToString()
+
                 };
                 input.CurrentTextNode.FontSize = 14;
                 input.OnFocusLost = () =>
@@ -1357,7 +1373,7 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        private void AddEmptyState(string text, string? detail = null)
+        private static void AddEmptyState(ScrollingListNode contentList, string text, string? detail = null)
         {
             var state = new VerticalListNode
             {
@@ -1395,10 +1411,10 @@ public unsafe class QuickChatPanel : ModuleBase
                 );
             }
 
-            contentList?.AddNode(state);
+            contentList.AddNode(state);
         }
 
-        private HorizontalListNode CreateCardRow() =>
+        private static HorizontalListNode CreateCardRow(ScrollingListNode contentList) =>
             new()
             {
                 IsVisible          = true,
@@ -1408,7 +1424,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 FitToContentHeight = true
             };
 
-        private HorizontalListNode CreateCompactRow() =>
+        private static HorizontalListNode CreateCompactRow(ScrollingListNode contentList) =>
             new()
             {
                 IsVisible          = true,
@@ -1418,8 +1434,9 @@ public unsafe class QuickChatPanel : ModuleBase
                 FitToContentHeight = true
             };
 
-        private TextButtonNode CreateTextActionRow
+        private static TextButtonNode CreateTextActionRow
         (
+            ScrollingListNode                        contentList,
             string                                   text,
             string                                   tooltip,
             Action                                   onClick,
