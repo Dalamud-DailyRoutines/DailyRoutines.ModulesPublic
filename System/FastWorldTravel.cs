@@ -121,10 +121,15 @@ public class FastWorldTravel : ModuleBase
         {
             case true:
                 entry ??= DService.Instance().DTRBar.Get("DailyRoutines-FastWorldTravel");
-                entry.OnClick = _ =>
+                entry.OnClick = param =>
                 {
-                    EnsureAddon();
-                    addon.Toggle();
+                    if (param.ClickType == MouseClickType.Left)
+                    {
+                        EnsureAddon();
+                        addon.Toggle();
+                    }
+                    else
+                        ChatManager.Instance().SendCommand($"/pdr worldtravel {GameState.HomeWorldData.Name}");
                 };
                 entry.Shown   = true;
                 entry.Tooltip = Lang.Get("FastWorldTravel-DtrEntryTooltip");
