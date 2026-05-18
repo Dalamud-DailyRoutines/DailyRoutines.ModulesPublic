@@ -13,7 +13,6 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -21,6 +20,7 @@ using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.ContextMenu;
 using KamiToolKit.Nodes;
+using KamiToolKit.Premade.Node.Simple;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
@@ -57,8 +57,8 @@ public class FastWorldTravel : ModuleBase
 
     protected override unsafe void Init()
     {
-        config =   Config.Load(this) ?? new();
-        TaskHelper   ??= new() { TimeoutMS = int.MaxValue, ShowDebug = true };
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = int.MaxValue, ShowDebug = true };
 
         if (GameState.IsCN)
             worldStatusMonitor = new(CheckCNDataCenterStatus);
@@ -167,9 +167,11 @@ public class FastWorldTravel : ModuleBase
                 entry.Shown = !DService.Instance().Condition.Any(InvalidConditions);
 
                 if (entry.Shown)
+                {
                     entry.Text = new SeStringBuilder().AddIcon(BitmapFontIcon.CrossWorld)
                                                       .Append($"{GameState.CurrentWorldData.Name.ToString()}")
                                                       .Build();
+                }
             }
         }
 
@@ -788,7 +790,9 @@ public class FastWorldTravel : ModuleBase
                                         .ToList();
             if (currentDCWorlds is not { Count: > 0 }) return mainLayoutContainer;
 
-            var currentDCColumn = CreateDataCenterColumn(currentDCWorlds.First().Value.DataCenter.RowId, currentDCWorlds);
+            var maxWorldCount = currentDCWorlds.Count;
+
+            var currentDCColumn = CreateDataCenterColumn(currentDCWorlds.First().Value.DataCenter.RowId, currentDCWorlds, ref maxWorldCount);
             mainLayoutContainer.AddNode(currentDCColumn);
 
             if (!GameState.IsCN)
@@ -802,32 +806,53 @@ public class FastWorldTravel : ModuleBase
                                          .ToDictionary(x => x.Key, x => x.ToList());
 
             foreach (var dataCenter in otherDataCenters)
+                maxWorldCount = Math.Max(maxWorldCount, dataCenter.Value.Count);
+
+            foreach (var dataCenter in otherDataCenters)
             {
                 mainLayoutContainer.AddDummy(25);
 
-                var otherDCColumn = CreateDataCenterColumn(dataCenter.Key, dataCenter.Value);
+                var otherDCColumn = CreateDataCenterColumn(dataCenter.Key, dataCenter.Value, ref maxWorldCount);
                 mainLayoutContainer.AddNode(otherDCColumn);
             }
 
             return mainLayoutContainer;
         }
 
-        private unsafe VerticalListNode CreateDataCenterColumn(uint dcID, List<KeyValuePair<uint, World>> worlds)
+        private unsafe SimpleComponentNode CreateDataCenterColumn(uint dcID, List<KeyValuePair<uint, World>> worlds, ref int maxWorldCount)
         {
-            var dcName = LuminaWrapper.GetDataCenterName(dcID);
+            const float COLUMN_WIDTH                = 150f;
+            const float HEADER_HEIGHT               = 30f;
+            const float SEPARATOR_WIDTH             = 118f;
+            const float SEPARATOR_HEIGHT            = 4f;
+            const float TITLE_BOTTOM_SPACING        = 8f;
+            const float BUTTON_WIDTH                = 140f;
+            const float BUTTON_HEIGHT               = 40f;
+            const float BUTTON_SPACING              = 5f;
+            const float BUTTON_PANEL_TOP_PADDING    = 16f;
+            const float BUTTON_PANEL_BOTTOM_PADDING = 16f;
 
-            var column      = new VerticalListNode { IsVisible = true };
-            var totalHeight = 0f;
+            var dcName            = LuminaWrapper.GetDataCenterName(dcID);
+            var buttonGroupHeight = (worlds.Count * BUTTON_HEIGHT) + (Math.Max(0, worlds.Count - 1) * BUTTON_SPACING);
+            var buttonPanelHeight = (maxWorldCount                  * BUTTON_HEIGHT)  +
+                                    (Math.Max(0, maxWorldCount - 1) * BUTTON_SPACING) +
+                                    BUTTON_PANEL_TOP_PADDING                          +
+                                    BUTTON_PANEL_BOTTOM_PADDING;
+            var totalHeight = HEADER_HEIGHT + SEPARATOR_HEIGHT + TITLE_BOTTOM_SPACING + buttonPanelHeight;
 
-            column.AddDummy(5f);
-            totalHeight += 5f;
+            var column = new SimpleComponentNode
+            {
+                IsVisible = true,
+                Size      = new(COLUMN_WIDTH, totalHeight)
+            };
 
             var header = new TextNode
             {
                 String        = dcName,
                 FontSize      = 20,
                 IsVisible     = true,
-                Size          = new(150f, 30f),
+                Position      = new(0, 8),
+                Size          = new(COLUMN_WIDTH, HEADER_HEIGHT),
                 AlignmentType = AlignmentType.Center,
                 TextFlags     = TextFlags.Bold
             };
@@ -835,8 +860,15 @@ public class FastWorldTravel : ModuleBase
             if (dcID != GameState.CurrentDataCenter)
                 header.ShowClickableCursor = true;
 
-            column.AddNode(header);
-            totalHeight += header.Size.Y;
+            header.AttachNode(column);
+
+            var separator = new HorizontalLineNode
+            {
+                IsVisible = true,
+                Size      = new(SEPARATOR_WIDTH, SEPARATOR_HEIGHT),
+                Position  = new((COLUMN_WIDTH - SEPARATOR_WIDTH) / 2f, header.Position.Y + HEADER_HEIGHT + 4f)
+            };
+            separator.AttachNode(column);
 
             if (dcID != GameState.CurrentDataCenter)
             {
@@ -939,8 +971,22 @@ public class FastWorldTravel : ModuleBase
                 );
             }
 
-            column.AddDummy(15f);
-            totalHeight += 15f;
+            var buttonPanel = new SimpleComponentNode
+            {
+                IsVisible = true,
+                Size      = new(COLUMN_WIDTH, buttonPanelHeight),
+                Position  = new(0f, HEADER_HEIGHT + SEPARATOR_HEIGHT + TITLE_BOTTOM_SPACING)
+            };
+            buttonPanel.AttachNode(column);
+
+            var buttonList = new VerticalListNode
+            {
+                IsVisible   = true,
+                Size        = new(BUTTON_WIDTH, buttonGroupHeight),
+                Position    = new((COLUMN_WIDTH - BUTTON_WIDTH) / 2f, (buttonPanelHeight - buttonGroupHeight) / 2f),
+                ItemSpacing = BUTTON_SPACING
+            };
+            buttonList.AttachNode(buttonPanel);
 
             foreach (var (worldID, worldData) in worlds)
             {
@@ -954,7 +1000,7 @@ public class FastWorldTravel : ModuleBase
 
                 var button = new TextButtonNode
                 {
-                    Size      = new(150f, 40f),
+                    Size      = new(BUTTON_WIDTH, BUTTON_HEIGHT),
                     IsVisible = true,
                     String    = worldNameBuilder.Build().Encode(),
                     OnClick = () =>
@@ -967,18 +1013,11 @@ public class FastWorldTravel : ModuleBase
 
                 button.LabelNode.TextOutlineColor = KnownColor.Black.ToVector4();
                 button.LabelNode.TextFlags        = TextFlags.Edge;
-                column.AddNode(button);
+                buttonList.AddNode(button);
 
                 if (GameState.IsCN)
                     WorldToButtons.Add(worldID, button);
-
-                totalHeight += button.Size.Y;
-
-                column.AddDummy(5f);
-                totalHeight += 5f;
             }
-
-            column.Size = new(150f, totalHeight);
 
             return column;
         }
@@ -1137,7 +1176,7 @@ public class FastWorldTravel : ModuleBase
             }
         }
     }
-    
+
     #region 常量
 
     private const string COMMAND = "worldtravel";
