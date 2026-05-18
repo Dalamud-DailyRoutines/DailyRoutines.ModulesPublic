@@ -123,22 +123,20 @@ public class BetterMountRoulette : ModuleBase
         if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing | ImGuiTabItemFlags.NoTooltip))
             ImGui.OpenPopup("AddNewZonePopup");
 
-        using (var popup = ImRaii.Popup("AddNewZonePopup"))
-        {
-            if (popup)
-            {
-                if (zoneSelector.DrawRadio())
-                {
-                    var newMountSet = new HashSet<uint>();
+        using var popup = ImRaii.Popup("AddNewZonePopup");
+        if (!popup) return;
 
-                    if (config.ZoneRouletteMounts.TryAdd(zoneSelector.SelectedID, newMountSet))
-                    {
-                        zoneMountListHandlers[zoneSelector.SelectedID] = new MountListHandler(masterMountsSearcher, newMountSet);
-                        config.Save(this);
-                    }
-                }
+        if (zoneSelector.DrawRadio())
+        {
+            var newMountSet = new HashSet<uint>();
+
+            if (config.ZoneRouletteMounts.TryAdd(zoneSelector.SelectedID, newMountSet))
+            {
+                zoneMountListHandlers[zoneSelector.SelectedID] = new MountListHandler(masterMountsSearcher, newMountSet);
+                config.Save(this);
             }
         }
+
     }
 
     private void DrawSearchAndMountsGrid(string tabLabel, MountListHandler handler)
@@ -156,7 +154,11 @@ public class BetterMountRoulette : ModuleBase
         using var child     = ImRaii.Child($"##MountsGrid{tabLabel}", childSize, true);
         if (!child) return;
 
-        DrawMountsGrid(handler.Searcher.SearchResult, handler);
+        var mountsToDraw = string.IsNullOrWhiteSpace(handler.SearchText)
+                               ? handler.Searcher.Data.Where(mount => handler.SelectedIDs.Contains(mount.RowId)).ToList()
+                               : handler.Searcher.SearchResult;
+
+        DrawMountsGrid(mountsToDraw, handler);
     }
 
     private void DrawMountsGrid(List<Mount> mountsToDraw, MountListHandler handler)
