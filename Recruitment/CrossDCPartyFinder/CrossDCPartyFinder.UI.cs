@@ -1,5 +1,6 @@
 using System.Numerics;
 using DailyRoutines.Extensions;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -114,7 +115,15 @@ public partial class CrossDCPartyFinder
                 using (ImRaii.PushColor(ImGuiCol.ButtonActive, KnownColor.Maroon.ToVector4()))
                 {
                     if (ImGui.Button("关闭", new Vector2(closeBtnWidth, 0)))
+                    {
                         selectedDataCenter = LocatedDataCenter;
+
+                        foreach (var x in checkboxNodes)
+                            x.Value.IsChecked = x.Key == LocatedDataCenter;
+
+                        AgentId.LookingForGroup.SendEvent(1, 17);
+                        isNeedToDisable = false;
+                    }
                 }
             }
 
@@ -162,9 +171,11 @@ public partial class CrossDCPartyFinder
         {
             using var id = ImRaii.PushId(listing.ID);
 
-            var descLength  = string.IsNullOrEmpty(listing.Description) ? 0 : listing.Description.Length;
-            var extraHeight = Math.Max(0, (descLength - 35f) / 30f) * ImGui.GetTextLineHeight();
-            var cardHeight  = (88f + extraHeight)                 * GlobalUIScale;
+            var descLineCount = 0;
+            using (FontManager.Instance().UIFont90.Push())
+                descLineCount = (int)MathF.Ceiling(ImGui.CalcTextSize(listing.Description).X / (availableWidth - (8 * ImGui.GetStyle().ItemSpacing.X)));
+
+            var cardHeight = (3 + MathF.Max(1, descLineCount)) * ImGui.GetTextLineHeightWithSpacing();
 
             using (ImRaii.PushStyle(ImGuiStyleVar.ChildRounding, 8f * GlobalUIScale))
             using (ImRaii.PushStyle(ImGuiStyleVar.ChildBorderSize, 1f * GlobalUIScale))
@@ -181,13 +192,13 @@ public partial class CrossDCPartyFinder
                 var startCursorPos = ImGui.GetCursorPos();
 
                 var accentColor = listing.MinItemLevel > 0
-                                      ? KnownColor.Gold.ToVector4()
-                                      : KnownColor.LightSkyBlue.ToVector4();
+                                      ? KnownColor.Gold.ToUInt()
+                                      : KnownColor.LightSkyBlue.ToUInt();
 
                 var winPos = ImGui.GetWindowPos();
                 var pMin   = winPos + new Vector2(1f, 4f * GlobalUIScale);
-                var pMax   = winPos + new Vector2(4f     * GlobalUIScale, cardHeight - (4f * GlobalUIScale));
-                drawList.AddRectFilled(pMin, pMax, ImGui.GetColorU32(accentColor), 2f * GlobalUIScale);
+                var pMax   = winPos + new Vector2(6f     * GlobalUIScale, cardHeight - (4f * GlobalUIScale));
+                drawList.AddRectFilled(pMin, pMax, accentColor, 2f * GlobalUIScale);
 
                 ImGui.SetCursorPos(startCursorPos + new Vector2(8f * GlobalUIScale, 4f * GlobalUIScale));
                 using (ImRaii.Group())
