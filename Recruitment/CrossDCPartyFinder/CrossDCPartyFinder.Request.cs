@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using Dalamud.Game.Gui.PartyFinder.Types;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using OmenTools.Interop.Game.Lumina;
@@ -110,15 +111,13 @@ public partial class CrossDCPartyFinder
             bag.AddRange(result.Listings);
         }
 
-        List<PartyFinderList.PartyFinderListing> FilterAndSort(IEnumerable<PartyFinderList.PartyFinderListing> source)
-        {
-            return source.Where
-                         (x => string.IsNullOrWhiteSpace(currentSeach) ||
-                               x.GetSearchString().Contains(currentSeach, StringComparison.OrdinalIgnoreCase)
-                         )
-                         .OrderByDescending(x => config.OrderByDescending ? x.TimeLeft : 1 / x.TimeLeft)
-                         .ToList();
-        }
+        unsafe List<PartyFinderList.PartyFinderListing> FilterAndSort(IEnumerable<PartyFinderList.PartyFinderListing> source) =>
+            source.Where
+                  (x => string.IsNullOrWhiteSpace(currentSeach) ||
+                        x.GetSearchString().Contains(currentSeach, StringComparison.OrdinalIgnoreCase)
+                  )
+                  .OrderByDescending(x => FlagStatusModule.Instance()->UIFlags[4] == 3 ? x.TimeLeft : 1 / x.TimeLeft)
+                  .ToList();
     }
 
     private unsafe void SendRequestDynamic()
@@ -461,7 +460,7 @@ public partial class CrossDCPartyFinder
             public uint? FilledJobID { get; set; }
 
             [JsonProperty("accepted_job_ids")]
-            public List<uint> AcceptedJobIds { get; set; }
+            public List<uint> AcceptedJobIDs { get; set; }
 
             public List<uint> JobIcons
             {
@@ -471,8 +470,9 @@ public partial class CrossDCPartyFinder
 
                     var icons = new List<uint>();
 
-                    if (FilledJobID               != null) icons.Add(62100 + FilledJobID.Value);
-                    else if (AcceptedJobIds.Count != 0)
+                    if (FilledJobID != null)
+                        icons.Add(62100 + FilledJobID.Value);
+                    else if (AcceptedJobIDs.Count != 0)
                     {
                         var role = RoleID;
 
@@ -490,8 +490,8 @@ public partial class CrossDCPartyFinder
                                 break;
                             default:
                             {
-                                foreach (var jobId in AcceptedJobIds)
-                                    icons.Add(62100 + jobId);
+                                foreach (var jobID in AcceptedJobIDs)
+                                    icons.Add(62100 + jobID);
                                 break;
                             }
                         }
