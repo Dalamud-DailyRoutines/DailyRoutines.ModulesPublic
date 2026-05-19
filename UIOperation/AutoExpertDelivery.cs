@@ -55,7 +55,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
         {
             InternalName          = "DRAutoExpertDelivery",
             Title                 = Info.Title,
-            Size                  = new(300f, 250f),
+            Size                  = new(300f, 280f),
             RememberClosePosition = true
         };
     }
@@ -222,9 +222,11 @@ public unsafe class AutoExpertDelivery : ModuleBase
     {
         public bool AutoSwitchWhenOpen = true;
 
-        public int  DefaultPage     = 2;
-        public bool SkipWhenHQ      = true;
-        public bool SkipWhenMateria = true;
+        public int  DefaultPage                    = 2;
+        public bool SkipWhenHQ                     = true;
+        public bool SkipWhenMateria                = true;
+        // 保护通过绝本图腾兑换的武器和骑士盾，避免被自动提交军票。
+        public bool SkipUltimateTotemExchangeItems = true;
     }
 
     private class DRAutoExpertDelivery
@@ -400,6 +402,27 @@ public unsafe class AutoExpertDelivery : ModuleBase
             skipMateriaSettingNode.Height = skipMateriaSettingNode.Label.FontSize * 1.5f;
 
             SettingTabLayout.AddNode(skipMateriaSettingNode);
+
+            // 绝本兑换装备保护开关，默认开启并允许用户手动关闭。
+            var skipUltimateTotemExchangeItemsNode = new CheckboxNode
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                IsChecked = instance.config.SkipUltimateTotemExchangeItems,
+                Size      = new(100, 27),
+                String    = "保护绝本兑换武器/盾牌",
+                OnClick = x =>
+                {
+                    instance.config.SkipUltimateTotemExchangeItems = x;
+                    instance.config.Save(instance);
+                }
+            };
+
+            skipUltimateTotemExchangeItemsNode.Label.Width = tabNode.Size.X - 20;
+            skipUltimateTotemExchangeItemsNode.Label.AutoAdjustTextSize();
+            skipUltimateTotemExchangeItemsNode.Height = skipUltimateTotemExchangeItemsNode.Label.FontSize * 1.5f;
+
+            SettingTabLayout.AddNode(skipUltimateTotemExchangeItemsNode);
             SettingTabLayout.AddDummy(5f);
 
             var defaultPageTitleNode = new TextNode
@@ -490,6 +513,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
             if (GetSlot() == null) return true;
             if (instance.config.SkipWhenHQ      && IsHQ()) return true;
             if (instance.config.SkipWhenMateria && HasMateria()) return true;
+            // 命中绝本图腾兑换来源的武器/盾牌时跳过提交。
+            if (instance.config.SkipUltimateTotemExchangeItems && IsUltimateTotemExchangeItem()) return true;
 
             return false;
         }
@@ -541,6 +566,9 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         public bool IsHQ() => GetSlot()->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
 
+        // 使用运行时构建的保护集合判断当前物品是否来自绝本图腾兑换。
+        public bool IsUltimateTotemExchangeItem() => UltimateTotemExchangeItemIDs.Contains(ItemID);
+
         public InventoryItem* GetSlot() => InventoryManager.Instance()->GetInventorySlot(Container, Slot);
 
         public override string ToString() => $"ExpertDeliveryItem-{ItemID}_{Container}_{Slot}_{SealReward}";
@@ -558,6 +586,47 @@ public unsafe class AutoExpertDelivery : ModuleBase
         [130] = (1441795, 1002391)
     }.ToFrozenDictionary();
 
+    // 绝本低保兑换用图腾，用作 SpecialShop 反查的成本物品。
+    private static readonly FrozenSet<uint> UltimateTotemItemIDs = new HashSet<uint>
+    {
+        21197, // 龙神图腾
+        23175, // 究极图腾
+        28633, // 机神城图腾
+        36810, // 龙诗图腾
+        38951, // 欧米茄图腾
+        44743  // 巫女图腾
+    }.ToFrozenSet();
+
+    private static FrozenSet<uint>? ultimateTotemExchangeItemIDs;
+
+    private static FrozenSet<uint> UltimateTotemExchangeItemIDs =>
+        ultimateTotemExchangeItemIDs ??= BuildUltimateTotemExchangeItemIDs();
+
+    private static FrozenSet<uint> BuildUltimateTotemExchangeItemIDs()
+    {
+        HashSet<uint> itemIDs = [];
+
+        // 从 SpecialShop 找出所有以绝本图腾为成本的武器/盾牌，避免维护完整装备 ID 表。
+        foreach (var shop in LuminaGetter.Get<SpecialShop>())
+        {
+            foreach (var entry in shop.Item)
+            {
+                if (!entry.ItemCosts.Any(x => UltimateTotemItemIDs.Contains(x.ItemCost.RowId))) continue;
+
+                foreach (var receiveItem in entry.ReceiveItems)
+                {
+                    if (receiveItem.Item.RowId == 0) continue;
+
+                    var item = receiveItem.Item.Value;
+                    if (item.FilterGroup is 1 or 2 or 3)
+                        itemIDs.Add(item.RowId);
+                }
+            }
+        }
+
+        return itemIDs.ToFrozenSet();
+    }
+
     #endregion
 
     #region IPC
@@ -570,3 +639,4 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
     #endregion
 }
+
