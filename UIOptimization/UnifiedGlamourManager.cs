@@ -29,7 +29,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         Title       = Lang.Get("UnifiedGlamourManagerTitle"),
         Description = Lang.Get("UnifiedGlamourManagerDescription"),
-        Category    = ModuleCategory.UIOperation,
+        Category    = ModuleCategory.UIOptimization,
         Author      = ["ErxCharlotte"]
     };
 
@@ -820,9 +820,6 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using (ImRaii.PushColor(ImGuiCol.Text, ERROR_COLOR))
             ImGui.TextWrapped(text);
     }
-
-    private static float GetButtonWidth(string text) =>
-        ImGui.CalcTextSize(text).X + ImGui.GetStyle().FramePadding.X * 2f;
         
     private static void DrawItemIcon(uint iconID, float size)
     {
@@ -841,9 +838,9 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private static void DrawViewModeButton(string label, bool active, System.Action onClick)
     {
-        using var color = ImRaii.PushColor(ImGuiCol.Button, BUTTON_ACCENT_COLOR, active);
+        using var color = ImRaii.PushColor(ImGuiCol.Button, BUTTON_ACTIVE_COLOR, active);
 
-        if (ImGui.Button(label, new Vector2(MathF.Max(GetButtonWidth(Lang.Get("List")), GetButtonWidth(Lang.Get("Icon"))), 0f)))
+        if (ImGui.Button(label))
             onClick();
     }
 
@@ -899,10 +896,9 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         ImGui.Spacing();
 
-        var refreshButtonWidth = GetButtonWidth(Lang.Get("Refresh"));
-        if (ImGui.Button(Lang.Get("Refresh"), new(refreshButtonWidth, 0f)))
+        if (ImGui.Button(Lang.Get("Refresh")))
             StartRefreshAll();
-
+    
         ImGui.SameLine();
 
         var searchWidth = MathF.Min(
@@ -914,7 +910,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         ImGui.SameLine();
 
-        if (ImGui.Checkbox($"{Lang.Get("Current")}{LuminaWrapper.GetAddonText(1030)}", ref filterByCurrentPlateSlot))
+        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-CurrentTargetSlot", string.Empty).TrimEnd(':', ' '), ref filterByCurrentPlateSlot))
             MarkFilteredItemsDirty(clearPlateSlotCache: true);
 
         ImGui.SameLine();
@@ -927,7 +923,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         using (ImRaii.Disabled(config.Favorites.Count == 0))
         {
-            if (ImGui.Button(Lang.Get("Clear"), new(GetButtonWidth(Lang.Get("Clear")), 0f)))
+            if (ImGui.Button(Lang.Get("Clear")))
                 requestClearFavoritesConfirm = true;
         }
     }
@@ -962,7 +958,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void DrawSidebar()
     {
-        using var child = ImRaii.Child("##FilterPanel", new Vector2(0f, 0f), true);
+        using var child = ImRaii.Child("##FilterPanel", Vector2.Zero, true);
         if (!child) return;
 
         SectionTitle(LuminaWrapper.GetAddonText(13125));
@@ -1019,7 +1015,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     private void DrawLevelFilter()
     {
         ImGui.TextDisabled(LuminaWrapper.GetAddonText(7873));
-        if (ImGui.Checkbox($"{Lang.Get("Enable")}{LuminaWrapper.GetAddonText(335)}{Lang.Get("Range")}", ref enableLevelFilter))
+        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-EnableLevelRange"), ref enableLevelFilter))
             MarkFilteredItemsDirty();
 
         using (ImRaii.Disabled(!enableLevelFilter))
@@ -1077,7 +1073,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         ImGui.Separator();
         ImGui.Spacing();
 
-        if (ImGui.Button($"{Lang.Get("Reset")} {LuminaWrapper.GetAddonText(13125)}", new(-1f, 0f)))
+        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ResetFilter")))
             ResetFilters();
 
         ImGui.Spacing();
@@ -1093,25 +1089,20 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         EnsureFilteredItems();
 
-        using var listPanel = ImRaii.Child("##ListPanel", new Vector2(0f, 0f), true);
+        using var listPanel = ImRaii.Child("##ListPanel", Vector2.Zero, true);
         if (!listPanel) return;
 
-        ImGui.TextColored(TITLE_COLOR, $"{Lang.Get("Current")}{Lang.Get("SearchResult")}");
+        ImGui.TextColored(TITLE_COLOR, Lang.Get("UnifiedGlamourManager-CurrentSearchResult"));
         ImGui.SameLine();
         ImGui.TextDisabled(filteredItems.Count.ToString());
         ImGui.SameLine();
         ImGui.TextColored(
             TryGetReadyPlateEditor(out _) ? SOFT_ACCENT_COLOR : ERROR_COLOR,
-            $"{Lang.Get("Current")}{LuminaWrapper.GetAddonText(1030)}: {GetCurrentPlateSlotNameForUI()}");
+            Lang.Get("UnifiedGlamourManager-CurrentTargetSlot", GetCurrentPlateSlotNameForUI()));
 
-        var viewButtonWidth = MathF.Max(GetButtonWidth(Lang.Get("List")), GetButtonWidth(Lang.Get("Icon")));
-        var x               = ImGui.GetContentRegionAvail().X - viewButtonWidth * 2f - ImGui.GetStyle().ItemSpacing.X;
-        if (x > 0f)
-            ImGui.SameLine(x);
-
-        DrawViewModeButton(Lang.Get("List") + "##ViewList", !useGridView, () => useGridView = false);
+        DrawViewModeButton($"{Lang.Get("List")}##ViewList", !useGridView, () => useGridView = false);
         ImGui.SameLine();
-        DrawViewModeButton(Lang.Get("Icon") + "##ViewGrid", useGridView, () => useGridView = true);
+        DrawViewModeButton($"{Lang.Get("Icon")}##ViewGrid", useGridView, () => useGridView = true);
         ImGui.Separator();
 
         if (isRefreshingItems)
@@ -1124,11 +1115,11 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         if (filteredItems.Count == 0)
         {
             ImGui.Spacing();
-            ImGui.TextDisabled($"{Lang.Get("None")}{Lang.Get("SearchResult")}");
+            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSearchResult"));
             return;
         }
 
-        using var itemList = ImRaii.Child("##UnifiedItemList", new Vector2(0f, 0f), false);
+        using var itemList = ImRaii.Child("##UnifiedItemList", Vector2.Zero, false);
         if (!itemList) return;
 
         if (useGridView)
@@ -1336,7 +1327,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     #region UI - 当前选中物品 & 弹窗
     private void DrawSelectedPanel()
     {
-        using var child = ImRaii.Child("##SelectedPanel", new Vector2(0f, 0f), true);
+        using var child = ImRaii.Child("##SelectedPanel", Vector2.Zero, true);
         if (!child) return;
 
         SectionTitle(Lang.Get("Current"));
@@ -1374,7 +1365,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void DrawSelectedItemHeader(UnifiedItem item)
     {
-        DrawItemIcon(item.IconID, ImGui.GetFrameHeight() * 2.6f);
+        DrawItemIcon(item.IconID, ImGui.GetFrameHeight());
         ImGui.SameLine();
 
         using (ImRaii.Group())
@@ -1399,24 +1390,24 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         using (ImRaii.Disabled(!canApply))
         {
-            if (ImGui.Button($"{Lang.Get("Apply")}{LuminaWrapper.GetAddonText(1030)}", new(-1f, 0f)))
+            if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ApplyToTargetSlot")))
                 ApplySelectedItemToCurrentPlateSlot(item);
         }
 
         if (!plateReady && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip($"{LuminaWrapper.GetAddonText(1030)}{LuminaWrapper.GetAddonText(4764)}");
+            ImGui.SetTooltip(Lang.Get("UnifiedGlamourManager-NoTargetSlot"));
 
         if (!plateReady)
-            RedTip($"{LuminaWrapper.GetAddonText(1030)}{LuminaWrapper.GetAddonText(4764)}");
+            RedTip(Lang.Get("UnifiedGlamourManager-NoTargetSlot"));
 
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
 
-        if (ImGui.Button(LuminaWrapper.GetAddonText(159), new(-1f, 0f)))
+        if (ImGui.Button(LuminaWrapper.GetAddonText(159)))
             ImGui.SetClipboardText(item.Name);
 
-        if (ImGui.Button(LuminaWrapper.GetAddonText(102590), new(-1f, 0f)))
+        if (ImGui.Button(LuminaWrapper.GetAddonText(102590)))
             selectedItem = null;
     }
 
@@ -1434,12 +1425,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
             ref popupOpen);
         if (!popup) return;
 
-        ImGui.TextColored(ERROR_COLOR, $"{Lang.Get("Confirm")}{Lang.Get("Clear")}{Lang.Get("Favorite")}");
+        ImGui.TextColored(ERROR_COLOR, Lang.Get("UnifiedGlamourManager-ClearFavoriteConfirm"));
         ImGui.Spacing();
 
-        var buttonWidth = MathF.Max(GetButtonWidth(Lang.Get("Confirm")), GetButtonWidth(Lang.Get("Cancel")));
-
-        if (ImGui.Button(Lang.Get("Confirm"), new(buttonWidth, 0f)))
+        if (ImGui.Button(Lang.Get("Confirm")))
         {
             config.Favorites.Clear();
             SaveConfig();
@@ -1448,7 +1437,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         ImGui.SameLine();
 
-        if (ImGui.Button(Lang.Get("Cancel"), new(buttonWidth, 0f)))
+        if (ImGui.Button(Lang.Get("Cancel")))
             ImGui.CloseCurrentPopup();
     }
 
@@ -1596,8 +1585,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     private static readonly string[] SetRelationFilterNames =
     [
         Lang.Get("All"),
-        LuminaWrapper.GetAddonText(15624),
-        $"{Lang.Get("None")}{LuminaWrapper.GetAddonText(15624)}"
+        Lang.Get("UnifiedGlamourManager-SetRelatedOnly"),
+        Lang.Get("UnifiedGlamourManager-NonSetOnly")
     ];
 
     private static readonly Vector4 TITLE_COLOR                = KnownColor.HotPink.ToVector4();
@@ -1627,10 +1616,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private static string[] CreateSortModeNames()
     {
-        var nameAsc   = $"{Lang.Get("Name")} {Lang.Get("Ascending")}";
-        var nameDesc  = $"{Lang.Get("Name")} {Lang.Get("Descending")}";
-        var levelAsc  = $"{LuminaWrapper.GetAddonText(335)} {Lang.Get("Ascending")}";
-        var levelDesc = $"{LuminaWrapper.GetAddonText(335)} {Lang.Get("Descending")}";
+        var nameAsc   = $"{Lang.Get("Name")} ({Lang.Get("Ascending")})";
+        var nameDesc  = $"{Lang.Get("Name")} ({Lang.Get("Descending")})";
+        var levelAsc  = $"{LuminaWrapper.GetAddonText(335)} ({Lang.Get("Ascending")})";
+        var levelDesc = $"{LuminaWrapper.GetAddonText(335)} ({Lang.Get("Descending")})";
 
         return
         [
