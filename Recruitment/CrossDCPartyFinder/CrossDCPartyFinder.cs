@@ -18,7 +18,11 @@ public partial class CrossDCPartyFinder : ModuleBase
     {
         Title       = "跨大区队员招募",
         Description = "为队员招募界面新增大区切换按钮, 以选择并查看由众包网站提供的其他大区的招募信息",
-        Category    = ModuleCategory.Recruitment
+        Category    = ModuleCategory.Recruitment,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/CrossDCPartyFinder/preview-1.png"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };

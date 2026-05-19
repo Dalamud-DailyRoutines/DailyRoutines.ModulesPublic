@@ -18,7 +18,7 @@ public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
         PreviewImageURL =
         [
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayDutyReadyLeftTime/preview-1.png"
-        ] // TODO: 修改仓库
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
