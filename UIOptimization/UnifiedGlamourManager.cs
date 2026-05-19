@@ -42,7 +42,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     #region 状态
 
-    private Config config = null!;
+    private Config config                       = null!;
     private string searchText                   = string.Empty;
     private SourceFilter sourceFilter           = SourceFilter.All;
     private SortMode sortMode                   = SortMode.FavoriteThenNameAsc;
@@ -52,12 +52,12 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     private int minEquipLevel = DEFAULT_MIN_EQUIP_LEVEL;
     private int maxEquipLevel = DEFAULT_MAX_EQUIP_LEVEL;
     private int selectedJobFilterIndex;
-    private readonly List<UnifiedItem> items         = [];
-    private readonly List<UnifiedItem> filteredItems = [];
-    private readonly HashSet<uint> favoriteItemIDs   = [];
+    private readonly List<UnifiedItem> items                      = [];
+    private readonly List<UnifiedItem> filteredItems              = [];
+    private readonly HashSet<uint> favoriteItemIDs                = [];
     private readonly Dictionary<ulong, bool> jobFilterCache       = [];
     private readonly Dictionary<ulong, bool> plateSlotFilterCache = [];
-    private bool useGridView                         = true;
+    private bool useGridView                                      = true;
     private int prismBoxItemCount;
     private int cabinetItemCount;
     private UnifiedItem? selectedItem;
@@ -190,8 +190,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
                                       return new SavedItem
                                       {
-                                          ItemID = x.ItemID,
-                                          Name = name,
+                                          ItemID  = x.ItemID,
+                                          Name    = name,
                                           AddedAt = Math.Max(0, x.AddedAt)
                                       };
                                   })
@@ -215,8 +215,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         {
             config.Favorites.Add(new()
             {
-                ItemID = item.ItemID,
-                Name = item.Name,
+                ItemID  = item.ItemID,
+                Name    = item.Name,
                 AddedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             });
         }
@@ -242,7 +242,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         items.Clear();
         filteredItems.Clear();
         prismBoxItemCount = 0;
-        cabinetItemCount = 0;
+        cabinetItemCount  = 0;
         MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
 
         TaskHelper.Enqueue(() => RunRefreshStep(LoadPrismBoxItems, nameof(LoadPrismBoxItems)), nameof(LoadPrismBoxItems));
@@ -292,14 +292,14 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         if (!TryGetLoadedMirageManager(out var manager)) return;
 
         var itemSheet = LuminaGetter.Get<ItemSheet>();
-        var count = 0;
+        var count     = 0;
 
         for (var i = 0U; i < PRISM_BOX_CAPACITY; i++)
         {
             var rawItemID = manager->PrismBoxItemIds[(int)i];
             if (rawItemID == 0) continue;
 
-            var itemID = ItemUtil.GetBaseId(rawItemID).ItemId;
+            var itemID  = ItemUtil.GetBaseId(rawItemID).ItemId;
             var itemRow = itemSheet.GetRowOrDefault(itemID);
             if (itemRow == null || !TryGetItemName(itemRow.Value, out var name))
                 continue;
@@ -328,12 +328,12 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         if (cabinet == null) return;
 
         var itemSheet = LuminaGetter.Get<ItemSheet>();
-        var count = 0;
+        var count     = 0;
 
         foreach (var cabinetRow in LuminaGetter.Get<CabinetSheet>())
         {
             var cabinetID = cabinetRow.RowId;
-            var itemID = cabinetRow.Item.RowId;
+            var itemID    = cabinetRow.Item.RowId;
             if (itemID == 0 || !cabinet->IsItemInCabinet(cabinetID)) continue;
 
             var itemRow = itemSheet.GetRowOrDefault(itemID);
@@ -355,8 +355,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         uint rawItemID,
         uint prismBoxIndex,
         uint cabinetID,
-        uint stain0ID = 0,
-        uint stain1ID = 0,
+        uint stain0ID          = 0,
+        uint stain1ID          = 0,
         MirageManager* manager = null)
     {
         var setParts = GetSetParts(itemID);
@@ -484,32 +484,32 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         var first = group.First();
         if (first.IsSetPart) return first;
 
-        var prism = group.FirstOrDefault(x => x.InPrismBox);
+        var prism   = group.FirstOrDefault(x => x.InPrismBox);
         var cabinet = group.FirstOrDefault(x => x.InCabinet);
 
         first.InPrismBox = prism != null;
-        first.InCabinet = cabinet != null;
+        first.InCabinet  = cabinet != null;
 
         if (prism != null)
         {
-            first.RawItemID = prism.RawItemID;
-            first.PrismBoxIndex = prism.PrismBoxIndex;
-            first.Stain0ID = prism.Stain0ID;
-            first.Stain1ID = prism.Stain1ID;
-            first.IconID = prism.IconID;
+            first.RawItemID              = prism.RawItemID;
+            first.PrismBoxIndex          = prism.PrismBoxIndex;
+            first.Stain0ID               = prism.Stain0ID;
+            first.Stain1ID               = prism.Stain1ID;
+            first.IconID                 = prism.IconID;
             first.EquipSlotCategoryRowID = prism.EquipSlotCategoryRowID;
-            first.ClassJobCategoryRowID = prism.ClassJobCategoryRowID;
-            first.LevelEquip = prism.LevelEquip;
-            first.IsSetContainer = prism.IsSetContainer;
+            first.ClassJobCategoryRowID  = prism.ClassJobCategoryRowID;
+            first.LevelEquip             = prism.LevelEquip;
+            first.IsSetContainer         = prism.IsSetContainer;
         }
 
         if (cabinet != null)
         {
-            first.CabinetID = cabinet.CabinetID;
-            first.IconID = first.IconID == 0 ? cabinet.IconID : first.IconID;
+            first.CabinetID              = cabinet.CabinetID;
+            first.IconID                 = first.IconID == 0 ? cabinet.IconID : first.IconID;
             first.EquipSlotCategoryRowID = first.EquipSlotCategoryRowID == 0 ? cabinet.EquipSlotCategoryRowID : first.EquipSlotCategoryRowID;
-            first.ClassJobCategoryRowID = first.ClassJobCategoryRowID == 0 ? cabinet.ClassJobCategoryRowID : first.ClassJobCategoryRowID;
-            first.LevelEquip = first.LevelEquip == 0 ? cabinet.LevelEquip : first.LevelEquip;
+            first.ClassJobCategoryRowID  = first.ClassJobCategoryRowID == 0 ? cabinet.ClassJobCategoryRowID : first.ClassJobCategoryRowID;
+            first.LevelEquip             = first.LevelEquip == 0 ? cabinet.LevelEquip : first.LevelEquip;
             first.IsSetContainer |= cabinet.IsSetContainer;
         }
 
@@ -527,30 +527,30 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         uint stain0ID,
         uint stain1ID,
         bool isSetContainer,
-        bool isSetPart = false,
+        bool isSetPart       = false,
         uint parentSetItemID = 0,
         string parentSetName = "",
-        string setPartLabel = "") =>
+        string setPartLabel  = "") =>
         new()
         {
-            ItemID = itemID,
-            RawItemID = rawItemID,
-            PrismBoxIndex = prismBoxIndex,
-            CabinetID = cabinetID,
-            Name = name,
-            Stain0ID = stain0ID,
-            Stain1ID = stain1ID,
+            ItemID                 = itemID,
+            RawItemID              = rawItemID,
+            PrismBoxIndex          = prismBoxIndex,
+            CabinetID              = cabinetID,
+            Name                   = name,
+            Stain0ID               = stain0ID,
+            Stain1ID               = stain1ID,
             EquipSlotCategoryRowID = row.EquipSlotCategory.RowId,
-            ClassJobCategoryRowID = row.ClassJobCategory.RowId,
-            IconID = row.Icon,
-            LevelEquip = (uint)row.LevelEquip,
-            InPrismBox = source == ItemSource.PrismBox,
-            InCabinet = source == ItemSource.Cabinet,
-            IsSetContainer = isSetContainer,
-            IsSetPart = isSetPart,
-            ParentSetItemID = parentSetItemID,
-            ParentSetName = parentSetName,
-            SetPartLabel = setPartLabel
+            ClassJobCategoryRowID  = row.ClassJobCategory.RowId,
+            IconID                 = row.Icon,
+            LevelEquip             = (uint)row.LevelEquip,
+            InPrismBox             = source == ItemSource.PrismBox,
+            InCabinet              = source == ItemSource.Cabinet,
+            IsSetContainer         = isSetContainer,
+            IsSetPart              = isSetPart,
+            ParentSetItemID        = parentSetItemID,
+            ParentSetName          = parentSetName,
+            SetPartLabel           = setPartLabel
         };
 
     #endregion
@@ -617,10 +617,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void QueueApplyRetry(UnifiedItem item, ItemSource source)
     {
-        var itemID = item.ItemID;
-        var prismBoxIndex = item.PrismBoxIndex;
-        var cabinetID = item.CabinetID;
-        var isSetPart = item.IsSetPart;
+        var itemID          = item.ItemID;
+        var prismBoxIndex   = item.PrismBoxIndex;
+        var cabinetID       = item.CabinetID;
+        var isSetPart       = item.IsSetPart;
         var parentSetItemID = item.ParentSetItemID;
 
         DService.Instance().Framework.RunOnTick(
@@ -652,7 +652,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         if (agent == null || agent->Data == null) return;
 
-        agent->Data->HasChanges = true;
+        agent->Data->HasChanges          = true;
         agent->CharaView.IsUpdatePending = true;
     }
 
@@ -686,7 +686,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         if (jobFilterCache.TryGetValue(cacheKey, out var cached)) return cached;
 
         var classJobIDs = JobFilterClassJobIDs[selectedJobFilterIndex];
-        var result = classJobIDs.Length == 0 ||
+        var result      = classJobIDs.Length == 0 ||
                      classJobIDs.Any(id => ClassJobCategory.IsClassJobInCategory(id, item.ClassJobCategoryRowID));
         jobFilterCache[cacheKey] = result;
         return result;
@@ -697,10 +697,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         if (!TryGetReadyPlateEditor(out var agent)) return true;
 
         var selectedSlot = agent->Data->SelectedItemIndex;
-        var cacheKey = ((ulong)selectedSlot << 32) | item.EquipSlotCategoryRowID;
+        var cacheKey     = ((ulong)selectedSlot << 32) | item.EquipSlotCategoryRowID;
         if (plateSlotFilterCache.TryGetValue(cacheKey, out var cached)) return cached;
 
-        var result = CanItemUseInPlateSlot(item, selectedSlot);
+        var result                     = CanItemUseInPlateSlot(item, selectedSlot);
         plateSlotFilterCache[cacheKey] = result;
         return result;
     }
@@ -792,14 +792,14 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void ResetFilters()
     {
-        sourceFilter = SourceFilter.All;
-        sortMode = SortMode.FavoriteThenNameAsc;
-        setRelationFilter = SetRelationFilter.All;
-        enableLevelFilter = false;
-        minEquipLevel = DEFAULT_MIN_EQUIP_LEVEL;
-        maxEquipLevel = DEFAULT_MAX_EQUIP_LEVEL;
-        selectedJobFilterIndex = 0;
-        searchText = string.Empty;
+        sourceFilter             = SourceFilter.All;
+        sortMode                 = SortMode.FavoriteThenNameAsc;
+        setRelationFilter        = SetRelationFilter.All;
+        enableLevelFilter        = false;
+        minEquipLevel            = DEFAULT_MIN_EQUIP_LEVEL;
+        maxEquipLevel            = DEFAULT_MAX_EQUIP_LEVEL;
+        selectedJobFilterIndex   = 0;
+        searchText               = string.Empty;
         filterByCurrentPlateSlot = true;
         MarkFilteredItemsDirty(clearJobCache: true, clearPlateSlotCache: true);
     }
@@ -978,9 +978,9 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         ImGui.TextDisabled(LuminaWrapper.GetAddonText(8191));
 
-        var width = ImGui.GetContentRegionAvail().X;
+        var width       = ImGui.GetContentRegionAvail().X;
         var buttonWidth = MathF.Max(1f, (width - ImGui.GetStyle().ItemSpacing.X) * 0.5f);
-        var buttonSize = new Vector2(buttonWidth, 0f);
+        var buttonSize  = new Vector2(buttonWidth, 0f);
 
         for (var i = 0; i < SourceFilters.Length; i++)
         {
@@ -1024,7 +1024,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         using (ImRaii.Disabled(!enableLevelFilter))
         {
-            var inputWidth = MathF.Max(1f, (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f);
+            var inputWidth  = MathF.Max(1f, (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f);
             var oldMinLevel = minEquipLevel;
             var oldMaxLevel = maxEquipLevel;
 
@@ -1105,7 +1105,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
             $"{Lang.Get("Current")}{LuminaWrapper.GetAddonText(1030)}: {GetCurrentPlateSlotNameForUI()}");
 
         var viewButtonWidth = MathF.Max(GetButtonWidth(Lang.Get("List")), GetButtonWidth(Lang.Get("Icon")));
-        var x = ImGui.GetContentRegionAvail().X - viewButtonWidth * 2f - ImGui.GetStyle().ItemSpacing.X;
+        var x               = ImGui.GetContentRegionAvail().X - viewButtonWidth * 2f - ImGui.GetStyle().ItemSpacing.X;
         if (x > 0f)
             ImGui.SameLine(x);
 
@@ -1141,12 +1141,12 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         if (filtered.Count == 0) return;
 
-        var rowHeight = MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 3f + ImGui.GetStyle().WindowPadding.Y * 2f) + ImGui.GetStyle().ItemSpacing.Y;
+        var rowHeight      = MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 3f + ImGui.GetStyle().WindowPadding.Y * 2f) + ImGui.GetStyle().ItemSpacing.Y;
         var startCursorPos = ImGui.GetCursorPos();
-        var scrollY = ImGui.GetScrollY();
-        var visibleHeight = ImGui.GetWindowHeight();
-        var firstIndex = Math.Max(0, (int)MathF.Floor(scrollY / rowHeight) - VIRTUALIZED_LIST_BUFFER_ROWS);
-        var lastIndex = Math.Min(filtered.Count - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + VIRTUALIZED_LIST_BUFFER_ROWS);
+        var scrollY        = ImGui.GetScrollY();
+        var visibleHeight  = ImGui.GetWindowHeight();
+        var firstIndex     = Math.Max(0, (int)MathF.Floor(scrollY / rowHeight) - VIRTUALIZED_LIST_BUFFER_ROWS);
+        var lastIndex      = Math.Min(filtered.Count - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + VIRTUALIZED_LIST_BUFFER_ROWS);
 
         if (firstIndex > 0)
             ImGui.Dummy(new Vector2(0f, firstIndex * rowHeight));
@@ -1154,8 +1154,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         for (var i = firstIndex; i <= lastIndex; i++)
             DrawItemCard(filtered[i]);
 
-        var drawnHeight = (lastIndex + 1) * rowHeight;
-        var totalHeight = filtered.Count * rowHeight;
+        var drawnHeight     = (lastIndex + 1) * rowHeight;
+        var totalHeight     = filtered.Count * rowHeight;
         var remainingHeight = totalHeight - drawnHeight;
         if (remainingHeight > 0f)
             ImGui.Dummy(new Vector2(0f, remainingHeight));
@@ -1166,21 +1166,21 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void DrawItemCard(UnifiedItem item)
     {
-        var favorite = IsFavorite(item.ItemID);
-        var selected = selectedItem != null && IsSameSelectableItem(selectedItem, item);
+        var favorite  = IsFavorite(item.ItemID);
+        var selected  = selectedItem != null && IsSameSelectableItem(selectedItem, item);
         var cardWidth = ImGui.GetContentRegionAvail().X;
-        var iconSize = ImGui.GetFrameHeight() * 1.6f;
+        var iconSize  = ImGui.GetFrameHeight() * 1.6f;
 
-        using var id = ImRaii.PushId($"{item.ItemID}_{item.PrismBoxIndex}_{item.IsSetPart}_{item.ParentSetItemID}");
+        using var id      = ImRaii.PushId($"{item.ItemID}_{item.PrismBoxIndex}_{item.IsSetPart}_{item.ParentSetItemID}");
         using var childBg = ImRaii.PushColor(ImGuiCol.ChildBg, NORMAL_CARD_COLOR);
-        using var border = ImRaii.PushColor(ImGuiCol.Border, GetCardBorderColor(selected, favorite));
-        using var child = ImRaii.Child("##ItemCard", new Vector2(cardWidth, MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 3f + ImGui.GetStyle().WindowPadding.Y * 2f)), true, ImGuiWindowFlags.NoScrollbar);
+        using var border  = ImRaii.PushColor(ImGuiCol.Border, GetCardBorderColor(selected, favorite));
+        using var child   = ImRaii.Child("##ItemCard", new Vector2(cardWidth, MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 3f + ImGui.GetStyle().WindowPadding.Y * 2f)), true, ImGuiWindowFlags.NoScrollbar);
         if (!child) return;
 
-        var hovered = ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
+        var hovered  = ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
         var drawList = ImGui.GetWindowDrawList();
-        var min = ImGui.GetWindowPos();
-        var max = min + ImGui.GetWindowSize();
+        var min      = ImGui.GetWindowPos();
+        var max      = min + ImGui.GetWindowSize();
         DrawItemBackground(drawList, min, max, selected, favorite, hovered);
 
         ImGui.SetCursorPos(ImGui.GetStyle().WindowPadding);
@@ -1227,24 +1227,24 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         if (filtered.Count == 0) return;
 
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var minCellSize = ImGui.GetFrameHeight() * 1.8f;
-        var maxCellSize = ImGui.GetFrameHeight() * 2.3f;
+        var spacing        = ImGui.GetStyle().ItemSpacing.X;
+        var minCellSize    = ImGui.GetFrameHeight() * 1.8f;
+        var maxCellSize    = ImGui.GetFrameHeight() * 2.3f;
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        var columns = Math.Max(1, (int)MathF.Floor((availableWidth + spacing) / (minCellSize + spacing)));
-        var cellSize = MathF.Floor((availableWidth - spacing * (columns - 1)) / columns);
-        cellSize = Math.Clamp(cellSize, minCellSize, maxCellSize);
+        var columns        = Math.Max(1, (int)MathF.Floor((availableWidth + spacing) / (minCellSize + spacing)));
+        var cellSize       = MathF.Floor((availableWidth - spacing * (columns - 1)) / columns);
+        cellSize           = Math.Clamp(cellSize, minCellSize, maxCellSize);
 
-        var iconSize = MathF.Max(ImGui.GetFrameHeight() * 1.3f, cellSize - ImGui.GetStyle().FramePadding.X * 2f);
-        var start = ImGui.GetCursorScreenPos();
-        var drawList = ImGui.GetWindowDrawList();
-        var rows = (filtered.Count + columns - 1) / columns;
-        var rowHeight = cellSize + spacing;
-        var totalHeight = rows * rowHeight;
-        var scrollY = ImGui.GetScrollY();
-        var visibleHeight = ImGui.GetWindowHeight();
+        var iconSize        = MathF.Max(ImGui.GetFrameHeight() * 1.3f, cellSize - ImGui.GetStyle().FramePadding.X * 2f);
+        var start           = ImGui.GetCursorScreenPos();
+        var drawList        = ImGui.GetWindowDrawList();
+        var rows            = (filtered.Count + columns - 1) / columns;
+        var rowHeight       = cellSize + spacing;
+        var totalHeight     = rows * rowHeight;
+        var scrollY         = ImGui.GetScrollY();
+        var visibleHeight   = ImGui.GetWindowHeight();
         var firstVisibleRow = Math.Max(0, (int)MathF.Floor(scrollY / rowHeight) - VIRTUALIZED_GRID_BUFFER_ROWS);
-        var lastVisibleRow = Math.Min(rows - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + VIRTUALIZED_GRID_BUFFER_ROWS);
+        var lastVisibleRow  = Math.Min(rows - 1, (int)MathF.Ceiling((scrollY + visibleHeight) / rowHeight) + VIRTUALIZED_GRID_BUFFER_ROWS);
 
         ImGui.Dummy(new Vector2(0f, totalHeight));
 
@@ -1257,7 +1257,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
                     continue;
 
                 var item = filtered[index];
-                var pos = new Vector2(start.X + col * (cellSize + spacing), start.Y + row * rowHeight);
+                var pos  = new Vector2(start.X + col * (cellSize + spacing), start.Y + row * rowHeight);
                 ImGui.SetCursorScreenPos(pos);
                 DrawGridCell(item, index, pos, cellSize, iconSize, drawList);
             }
@@ -1272,7 +1272,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         ImGui.InvisibleButton("##GridCell", new Vector2(cellSize, cellSize));
 
-        var hovered = ImGui.IsItemHovered();
+        var hovered  = ImGui.IsItemHovered();
         var selected = selectedItem != null && IsSameSelectableItem(selectedItem, item);
         var favorite = IsFavorite(item.ItemID);
         DrawItemBackground(drawList, pos, pos + new Vector2(cellSize, cellSize), selected, favorite, hovered);
@@ -1395,7 +1395,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         ImGui.Spacing();
 
         var plateReady = TryGetReadyPlateEditor(out _);
-        var canApply = plateReady && item.CanUseInPlate && CanItemUseInCurrentPlateSlot(item);
+        var canApply   = plateReady && item.CanUseInPlate && CanItemUseInCurrentPlateSlot(item);
 
         using (ImRaii.Disabled(!canApply))
         {
@@ -1428,7 +1428,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
             requestClearFavoritesConfirm = false;
         }
 
-        var popupOpen = true;
+        var popupOpen   = true;
         using var popup = ImRaii.PopupModal(
             $"{Lang.Get("Clear")}###ClearFavoritesConfirm",
             ref popupOpen);
@@ -1499,7 +1499,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         public bool IsSetPart { get; set; }
         public uint ParentSetItemID { get; set; }
         public string ParentSetName { get; set; } = string.Empty;
-        public string SetPartLabel { get; set; } = string.Empty;
+        public string SetPartLabel { get; set; }  = string.Empty;
 
         public bool CanUseInPlate => (InPrismBox || InCabinet) && !IsSetContainer;
     }
@@ -1519,10 +1519,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     #region 常量
 
-    private const string PLATE_EDITOR_ADDON_NAME = nameof(MiragePrismMiragePlate);
+    private const string PLATE_EDITOR_ADDON_NAME            = nameof(MiragePrismMiragePlate);
     private const uint MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW    = 0;
-    private const string FAVORITE_ICON_ON        = "★";
-    private const string FAVORITE_ICON_OFF       = "☆";
+    private const string FAVORITE_ICON_ON                   = "★";
+    private const string FAVORITE_ICON_OFF                  = "☆";
 
     private const int TASK_TIMEOUT_MS            = 30_000;
     private const int REFRESH_STEP_DELAY_MS      = 1;
@@ -1645,7 +1645,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     private static string[] CreateJobFilterNames()
     {
         var names = new string[JobFilterClassJobIDs.Length];
-        names[0] = Lang.Get("All");
+        names[0]  = Lang.Get("All");
 
         for (var i = 1; i < JobFilterClassJobIDs.Length; i++)
             names[i] = string.Join(" / ", JobFilterClassJobIDs[i].Select(LuminaWrapper.GetJobName));
