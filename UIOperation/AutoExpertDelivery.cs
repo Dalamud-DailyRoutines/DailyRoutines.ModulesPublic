@@ -58,6 +58,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
             Size                  = new(300f, 280f),
             RememberClosePosition = true
         };
+
+        _ = UltimateTotemExchangeItemIDs;
     }
 
     private bool EnqueueDelivery()
@@ -220,8 +222,6 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public bool AutoSwitchWhenOpen = true;
-
         public int  DefaultPage                    = 2;
         public bool SkipWhenHQ                     = true;
         public bool SkipWhenMateria                = true;
@@ -242,7 +242,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         protected override void OnHostAddon(AddonEvent type, AddonArgs? args)
         {
-            if (type != AddonEvent.PostSetup || GrandCompanySupplyList == null || !instance.config.AutoSwitchWhenOpen) return;
+            if (type != AddonEvent.PostSetup || GrandCompanySupplyList == null) return;
 
             GrandCompanySupplyList->Callback(0, instance.config.DefaultPage);
         }
@@ -297,14 +297,15 @@ public unsafe class AutoExpertDelivery : ModuleBase
             ControlTabLayout = new()
             {
                 IsVisible = true,
-                Position  = tabContentPosition + new Vector2(0, 5)
+                Position  = tabContentPosition + new Vector2(0, 5),
+                ItemSpacing = 4f
             };
 
             var startNode = new TextButtonNode
             {
                 IsVisible = true,
                 IsEnabled = true,
-                Size      = new(tabNode.Size.X - 10, 38),
+                Size      = new(tabNode.Size.X - 10, 42),
                 String    = Lang.Get("Start"),
                 OnClick = () =>
                 {
@@ -317,7 +318,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             {
                 IsVisible = true,
                 IsEnabled = true,
-                Size      = new(tabNode.Size.X - 10, 38),
+                Size      = new(tabNode.Size.X - 10, 42),
                 String    = Lang.Get("Stop"),
                 OnClick = () =>
                 {
@@ -330,7 +331,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             {
                 IsVisible = true,
                 IsEnabled = true,
-                Size      = new(tabNode.Size.X - 10, 38),
+                Size      = new(tabNode.Size.X - 10, 42),
                 String    = LuminaWrapper.GetAddonText(3280),
                 OnClick = () =>
                 {
@@ -343,7 +344,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             {
                 IsVisible = true,
                 IsEnabled = true,
-                Size      = new(tabNode.Size.X - 5, 38),
+                Size      = new(tabNode.Size.X - 5, 42),
                 String    = $"{LuminaWrapper.GetAddonText(3280)} [{Lang.Get("Exchange")}]",
                 OnClick = () =>
                 {
