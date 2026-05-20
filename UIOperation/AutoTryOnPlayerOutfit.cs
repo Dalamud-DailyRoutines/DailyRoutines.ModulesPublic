@@ -20,6 +20,8 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         Author      = ["ErxCharlotte"]
     };
 
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+
     private TextButtonNode? tryOnButtonNode;
 
     // 5是腰带，13 是职业水晶
