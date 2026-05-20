@@ -3,6 +3,8 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
@@ -32,20 +34,32 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     
     private Config config = null!;
 
+    private bool isOnNoRender;
     private long nextRenderTick;
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
         
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "NamePlate", OnAddon);
+        
         DeviceDX11PostTickHook = DeviceDX11PostTickSig.GetHook<DeviceDX11PostTickDelegate>(DeviceDX11PostTickDetour);
         DeviceDX11PostTickHook.Enable();
     }
+
+    protected override void Uninit() =>
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void ConfigUI()
     {
         if (ImGui.Checkbox(Lang.Get("NoRenderWhenBackground-OnlyProhibitedInIconic", LuminaWrapper.GetAddonText(4024)), ref config.OnlyProhibitedInIconic))
             config.Save(this);
+    }
+    
+    private void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        if (!isOnNoRender) return;
+        args.PreventOriginal();
     }
 
     private void DeviceDX11PostTickDetour(Device* device)
@@ -64,12 +78,13 @@ public unsafe class NoRenderWhenBackground : ModuleBase
             if (!IsIconic(Framework.Instance()->GameWindow->WindowHandle))
             {
                 DeviceDX11PostTickHook.Original(device);
-                
-                if (NamePlate != null)
-                    NamePlate->IsVisible = true;
+
+                isOnNoRender = false;
                 return;
             }
         }
+        
+        isOnNoRender = true;
 
         // 每过 5 秒必定渲染一帧, 防止渲染管线堆积
         var currentTick = Environment.TickCount64;
@@ -82,9 +97,6 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         
         if (UIModule.Instance()->ShouldLimitFps())
             Thread.Sleep(50);
-        
-        if (NamePlate != null)
-            NamePlate->IsVisible = false;
     }
 
     [DllImport("user32.dll")]
