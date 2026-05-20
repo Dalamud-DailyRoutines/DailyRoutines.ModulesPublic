@@ -52,12 +52,17 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
                 var designButtonNode = CharacterInspect->GetNodeById(6);
                 if (designButtonNode == null) return;
 
-                tryOnButtonNode ??= new()
+                if (tryOnButtonNode == null)
                 {
-                    IsVisible = true,
-                    Size      = new(designButtonNode->Width, designButtonNode->Height),
-                    Position  = new(designButtonNode->X, designButtonNode->Y + designButtonNode->Height)
-                };
+                    designButtonNode->SetHeight(24);
+                    
+                    tryOnButtonNode = new()
+                    {
+                        Size      = new(designButtonNode->Width, designButtonNode->Height),
+                        Position  = new(designButtonNode->X, designButtonNode->Y + designButtonNode->Height + 4)
+                    };
+                    tryOnButtonNode.AttachNode(CharacterInspect->RootNode);
+                }
 
                 if (Throttler.Shared.Throttle("AutoTryOnPlayerOutfit-PostDraw"))
                 {
