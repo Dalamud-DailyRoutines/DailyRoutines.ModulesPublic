@@ -1,4 +1,4 @@
-using System.Collections.Frozen;
+﻿using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.KamiToolKit.Addons;
@@ -55,7 +55,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
         {
             InternalName          = "DRAutoExpertDelivery",
             Title                 = Info.Title,
-            Size                  = new(300f, 250f),
+            Size                  = new(300f, 280f),
             RememberClosePosition = true
         };
     }
@@ -222,9 +222,10 @@ public unsafe class AutoExpertDelivery : ModuleBase
     {
         public bool AutoSwitchWhenOpen = true;
 
-        public int  DefaultPage     = 2;
-        public bool SkipWhenHQ      = true;
-        public bool SkipWhenMateria = true;
+        public int  DefaultPage                    = 2;
+        public bool SkipWhenHQ                     = true;
+        public bool SkipWhenMateria                = true;
+        public bool SkipUltimateTotemExchangeItems = true;
     }
 
     private class DRAutoExpertDelivery
@@ -400,6 +401,26 @@ public unsafe class AutoExpertDelivery : ModuleBase
             skipMateriaSettingNode.Height = skipMateriaSettingNode.Label.FontSize * 1.5f;
 
             SettingTabLayout.AddNode(skipMateriaSettingNode);
+
+            var skipUltimateTotemExchangeItemsNode = new CheckboxNode
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                IsChecked = instance.config.SkipUltimateTotemExchangeItems,
+                Size      = new(100, 27),
+                String    = Lang.Get("AutoExpertDelivery-SkipUltimateWeapons"),
+                OnClick = x =>
+                {
+                    instance.config.SkipUltimateTotemExchangeItems = x;
+                    instance.config.Save(instance);
+                }
+            };
+
+            skipUltimateTotemExchangeItemsNode.Label.Width = tabNode.Size.X - 20;
+            skipUltimateTotemExchangeItemsNode.Label.AutoAdjustTextSize();
+            skipUltimateTotemExchangeItemsNode.Height = skipUltimateTotemExchangeItemsNode.Label.FontSize * 1.5f;
+
+            SettingTabLayout.AddNode(skipUltimateTotemExchangeItemsNode);
             SettingTabLayout.AddDummy(5f);
 
             var defaultPageTitleNode = new TextNode
@@ -490,6 +511,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             if (GetSlot() == null) return true;
             if (instance.config.SkipWhenHQ      && IsHQ()) return true;
             if (instance.config.SkipWhenMateria && HasMateria()) return true;
+            if (instance.config.SkipUltimateTotemExchangeItems && IsUltimateTotemExchangeItem()) return true;
 
             return false;
         }
@@ -541,6 +563,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         public bool IsHQ() => GetSlot()->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
 
+        public bool IsUltimateTotemExchangeItem() => UltimateTotemExchangeItemIDs.Contains(ItemID);
+
         public InventoryItem* GetSlot() => InventoryManager.Instance()->GetInventorySlot(Container, Slot);
 
         public override string ToString() => $"ExpertDeliveryItem-{ItemID}_{Container}_{Slot}_{SealReward}";
@@ -558,6 +582,45 @@ public unsafe class AutoExpertDelivery : ModuleBase
         [130] = (1441795, 1002391)
     }.ToFrozenDictionary();
 
+    private static readonly FrozenSet<uint> UltimateTotemItemIDs = new HashSet<uint>
+    {
+        21197, // 龙神图腾
+        23175, // 究极图腾
+        28633, // 机神城图腾
+        36810, // 龙诗图腾
+        38951, // 欧米茄图腾
+        44743  // 巫女图腾
+    }.ToFrozenSet();
+
+    private static FrozenSet<uint> UltimateTotemExchangeItemIDs
+    {
+        get
+        {
+            if (field != null) return field;
+
+            HashSet<uint> itemIDs = [];
+
+            foreach (var shop in LuminaGetter.Get<SpecialShop>())
+            {
+                foreach (var entry in shop.Item)
+                {
+                    if (!entry.ItemCosts.Any(x => UltimateTotemItemIDs.Contains(x.ItemCost.RowId))) continue;
+
+                    foreach (var receiveItem in entry.ReceiveItems)
+                    {
+                        if (receiveItem.Item.RowId == 0) continue;
+
+                        var item = receiveItem.Item.Value;
+                        if (item.FilterGroup is 1 or 2 or 3)
+                            itemIDs.Add(item.RowId);
+                    }
+                }
+            }
+
+            return field = itemIDs.ToFrozenSet();
+        }
+    }
+
     #endregion
 
     #region IPC
@@ -570,3 +633,4 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
     #endregion
 }
+
