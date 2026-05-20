@@ -67,9 +67,7 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         if (GameState.IsForeground || !GameState.IsLoggedIn)
         {
             DeviceDX11PostTickHook.Original(device);
-            
-            if (NamePlate != null)
-                NamePlate->IsVisible = true;
+            isOnNoRender = false;
             return;
         }
 
