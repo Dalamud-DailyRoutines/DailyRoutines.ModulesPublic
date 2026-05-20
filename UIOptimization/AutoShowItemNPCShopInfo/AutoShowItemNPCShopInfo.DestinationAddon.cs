@@ -97,7 +97,8 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             var itemInfoRow = new ResNode
             {
-                Size = new(headerNode.Width, 40)
+                Size        = new(headerNode.Width, 40),
+                ItemTooltip = SourceInfo.CostItemID
             };
             headerNode.AddNode(itemInfoRow);
 
@@ -259,9 +260,10 @@ public unsafe partial class AutoShowItemNPCShopInfo
         {
             var exchangeTargetItem = LuminaGetter.GetRowOrDefault<Item>(exchangeItem.ItemID);
 
-            slot.ItemIcon.IconId   = LuminaWrapper.GetItemIconID(exchangeItem.ItemID);
-            slot.ItemName.String   = exchangeItem.GetItemName();
-            slot.ItemName.FontSize = 16;
+            slot.ItemTooltipOverlay.ItemTooltip = exchangeItem.ItemID;
+            slot.ItemIcon.IconId               = LuminaWrapper.GetItemIconID(exchangeItem.ItemID);
+            slot.ItemName.String               = exchangeItem.GetItemName();
+            slot.ItemName.FontSize             = 16;
             slot.ItemName.AutoAdjustTextSize();
 
             slot.MarketButton.IsVisible = exchangeTargetItem.ItemSearchCategory.RowId > 0;
@@ -295,11 +297,12 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 if (i < costInfos.Count)
                 {
                     var costInfo = costInfos[i];
-                    slot.CostIcons[i].IconId      = LuminaWrapper.GetItemIconID(costInfo.ItemID);
-                    slot.CostIcons[i].TextTooltip = LuminaWrapper.GetItemName(costInfo.ItemID);
-                    slot.CostIcons[i].IsVisible   = true;
-                    slot.CostTexts[i].String      = costInfo.ToString();
-                    slot.CostTexts[i].IsVisible   = true;
+
+                    slot.CostTooltipOverlay.ItemTooltip = costInfo.ItemID;
+                    slot.CostIcons[i].IconId            = LuminaWrapper.GetItemIconID(costInfo.ItemID);
+                    slot.CostIcons[i].IsVisible         = true;
+                    slot.CostTexts[i].String            = costInfo.ToString();
+                    slot.CostTexts[i].IsVisible         = true;
                 }
                 else
                 {
@@ -418,6 +421,13 @@ public unsafe partial class AutoShowItemNPCShopInfo
             };
             slot.MarketButton.AttachNode(slot.Content);
 
+            slot.ItemTooltipOverlay = new ResNode
+            {
+                Size     = new(contentWidth, 36),
+                Position = new(0, 0)
+            };
+            slot.ItemTooltipOverlay.AttachNode(slot.Content);
+
             slot.DescriptionNode = new TextNode
             {
                 TextFlags        = TextFlags.AutoAdjustNodeSize,
@@ -435,6 +445,13 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 IsVisible = false
             };
             slot.Content.AddNode(slot.CostRow);
+
+            slot.CostTooltipOverlay = new ResNode
+            {
+                Size     = new(contentWidth, 24),
+                Position = new(0, 0)
+            };
+            slot.CostTooltipOverlay.AttachNode(slot.CostRow);
 
             slot.CostIcons = new IconImageNode[MAX_COSTS];
             slot.CostTexts = new TextNode[MAX_COSTS];
@@ -585,22 +602,24 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
         private class SectionSlot
         {
-            public ResNode                   Container        = null!;
-            public SimpleNineGridNode        Background       = null!;
-            public VerticalListNode          Content          = null!;
-            public HorizontalListNode        ItemHeader       = null!;
-            public IconImageNode             ItemIcon         = null!;
-            public TextNode                  ItemName         = null!;
-            public IconButtonNode            MarketButton     = null!;
-            public TextNode                  DescriptionNode  = null!;
-            public ResNode                   CostRow          = null!;
-            public IconImageNode[]           CostIcons        = null!;
-            public TextNode[]                CostTexts        = null!;
-            public NPCRowSlot[]              NPCRows          = null!;
-            public HorizontalListNode        NPCPaginationBar = null!;
-            public TextButtonNode            NPCPrevButton    = null!;
-            public TextNode                  NPCPageIndicator = null!;
-            public TextButtonNode            NPCNextButton    = null!;
+            public ResNode                   Container           = null!;
+            public SimpleNineGridNode        Background          = null!;
+            public VerticalListNode          Content             = null!;
+            public HorizontalListNode        ItemHeader          = null!;
+            public IconImageNode             ItemIcon            = null!;
+            public TextNode                  ItemName            = null!;
+            public IconButtonNode            MarketButton        = null!;
+            public ResNode                   ItemTooltipOverlay  = null!;
+            public TextNode                  DescriptionNode     = null!;
+            public ResNode                   CostRow             = null!;
+            public ResNode                   CostTooltipOverlay  = null!;
+            public IconImageNode[]           CostIcons           = null!;
+            public TextNode[]                CostTexts           = null!;
+            public NPCRowSlot[]              NPCRows             = null!;
+            public HorizontalListNode        NPCPaginationBar    = null!;
+            public TextButtonNode            NPCPrevButton       = null!;
+            public TextNode                  NPCPageIndicator    = null!;
+            public TextButtonNode            NPCNextButton       = null!;
             public int                       NPCCurrentPage;
             public List<ExchangeItemNPCInfo> SortedNPCInfos = [];
         }
