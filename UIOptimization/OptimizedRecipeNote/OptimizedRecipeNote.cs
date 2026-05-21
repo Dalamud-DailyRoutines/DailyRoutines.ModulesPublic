@@ -10,7 +10,6 @@ using DailyRoutines.Internal;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
@@ -18,8 +17,6 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit;
-using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using KamiToolKit.Premade.Node.Simple;
 using KamiToolKit.Timelines;
@@ -34,12 +31,10 @@ using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
-using OmenTools.Threading.TaskHelper;
-using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
 
-namespace DailyRoutines.ModulesPublic;
+namespace DailyRoutines.ModulesPublic.OptimizedRecipeNote;
 
-public class OptimizedRecipeNote : ModuleBase
+public partial class OptimizedRecipeNote : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -52,10 +47,13 @@ public class OptimizedRecipeNote : ModuleBase
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig SimpleCraftGetAmountUpperLimitSig = new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
-    private delegate        int     SimpleCraftGetAmountUpperLimitDelegate(nint agent, bool eventCase);
-    private                 Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
-    
+
+    private delegate int SimpleCraftGetAmountUpperLimitDelegate(nint agent, bool eventCase);
+
+    private Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
+
     private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
+
     // ja → nop
     private readonly MemoryPatch simpleCraftAmountJudgePatch =
         new(SimpleCraftAmountJudgeSig.Get(), [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]);
@@ -64,16 +62,18 @@ public class OptimizedRecipeNote : ModuleBase
     (
         "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? BA ?? ?? ?? ?? 49 8B F0 48 8B E9 E8 ?? ?? ?? ?? 48 8D 4E ?? 48 8B D8 E8 ?? ?? ?? ?? 48 8B D0 48 8B CB E8 ?? ?? ?? ?? 48 8D 4E"
     );
+
     private unsafe delegate AtkValue* RecipeNotePraticeSettingSetupDelegate
     (
         AtkEventListener* listener,
         AtkValue*         returnValue,
         AtkValue*         values
     );
+
     private Hook<RecipeNotePraticeSettingSetupDelegate>? RecipeNotePraticeSettingSetupHook;
-    
+
     private Config config = null!;
-    
+
     private readonly Dictionary<uint, CaculationResult> caculationResults = [];
 
     private TextButtonNode?    caculateRecipeButton;
@@ -101,7 +101,7 @@ public class OptimizedRecipeNote : ModuleBase
 
         config = Config.Load(this) ?? new();
 
-        SimpleCraftGetAmountUpperLimitHook = 
+        SimpleCraftGetAmountUpperLimitHook =
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
         RecipeNotePraticeSettingSetupHook =
@@ -112,10 +112,10 @@ public class OptimizedRecipeNote : ModuleBase
             simpleCraftAmountJudgePatch.Enable();
             SimpleCraftGetAmountUpperLimitHook.Enable();
         }
-        
+
         if (config.IsMorePraticeQuality)
             RecipeNotePraticeSettingSetupHook.Enable();
-        
+
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,           "RecipeNote", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "RecipeNote", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "RecipeNote", OnAddon);
@@ -135,6 +135,7 @@ public class OptimizedRecipeNote : ModuleBase
             LinkPayloadManager.Instance().Unreg(x.CopyLinkPayload.CommandId);
             LinkPayloadManager.Instance().Unreg(x.PreviewLinkPayload.CommandId);
         }
+
         caculationResults.Clear();
 
         if (installRaphaelLinkPayload != null)
@@ -148,62 +149,70 @@ public class OptimizedRecipeNote : ModuleBase
         {
             config.Save(this);
             OnAddon(AddonEvent.PreFinalize, null);
-        }       
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-SearchClearButton-Help"));
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons"), ref config.IsCategoryButtons))
         {
             config.Save(this);
             OnAddon(AddonEvent.PreFinalize, null);
-        }       
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons-Help"));
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-DisplayOthersButtons"), ref config.IsDisplayOthersButtons))
         {
             config.Save(this);
             OnAddon(AddonEvent.PreFinalize, null);
-        }       
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-DisplayOthersButtons-Help"));
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-MaterialSourceButtons"), ref config.IsMaterialSourceButtons))
         {
             config.Save(this);
             OnAddon(AddonEvent.PreFinalize, null);
-        }       
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MaterialSourceButtons-Help"));
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-SwitchJobButton"), ref config.IsSwitchJobButton))
         {
             config.Save(this);
             OnAddon(AddonEvent.PreFinalize, null);
-        }       
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-SwitchJobButton-Help"));
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton"), ref config.IsCaculateRecipeButton))
         {
             config.Save(this);
             OnAddon(AddonEvent.PreFinalize, null);
-        }       
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton-Help"));
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-QuickSynthesisMore"), ref config.IsQuickSynthesisMore))
         {
             config.Save(this);
-            
+
             simpleCraftAmountJudgePatch.Set(config.IsQuickSynthesisMore);
             SimpleCraftGetAmountUpperLimitHook.Toggle(config.IsQuickSynthesisMore);
         }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-QuickSynthesisMore-Help"));
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality"), ref config.IsMorePraticeQuality))
         {
             config.Save(this);
-            
+
             RecipeNotePraticeSettingSetupHook.Toggle(config.IsMorePraticeQuality);
         }
+
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
     }
-    
+
     public static unsafe int SimpleCraftGetAmountUpperLimitDetour(nint agentRecipeNote, bool isHQ)
     {
         var selectedRecipe = RecipeNote.Instance()->RecipeList->SelectedRecipe;
@@ -230,15 +239,15 @@ public class OptimizedRecipeNote : ModuleBase
 
         return maxPortion;
     }
-    
+
     private unsafe AtkValue* RecipeNotePraticeSettingSetupDetour(AtkEventListener* listener, AtkValue* returnValue, AtkValue* values)
     {
         // 初始品质
         values[1].SetUInt(values[1].UInt * 2);
-        
+
         // 当前品质
         values[0].SetUInt(values[1].UInt);
-        
+
         // 初始品质文字
         values[2].SetManagedString(DService.Instance().SeStringEvaluator.EvaluateFromAddon(14222, [values[1].UInt]));
 
@@ -259,7 +268,7 @@ public class OptimizedRecipeNote : ModuleBase
                 RemoveDisplayOthersButtons();
 
                 RemoveClearSearchButton();
-                
+
                 RemoveCategoryButtons();
 
                 break;
@@ -279,22 +288,22 @@ public class OptimizedRecipeNote : ModuleBase
 
             case AddonEvent.PostDraw:
                 if (!RecipeNoteAddon->IsAddonAndNodesReady()) return;
-                
+
                 // 求解配方按钮
                 CreateCaculateRecipeButton();
-                
+
                 // 切换职业按钮
                 CreateSwitchJobButton();
-                
+
                 // 材料来源按钮
                 CreateMaterialSourceButtons();
-                
+
                 // 显示其余按钮
                 CreateDisplayOthersButtons();
-                
+
                 // 清除搜索按钮
                 CreateClearSearchButton();
-                
+
                 // 分类按钮
                 CreateCategoryButtons();
 
@@ -308,19 +317,19 @@ public class OptimizedRecipeNote : ModuleBase
         void UpdateRecipeAddonButtons()
         {
             if (RecipeNoteAddon == null) return;
-        
+
             UpdateCaculateRecipeButton();
-        
+
             UpdateSwitchJobButton();
 
             UpdateClearSearchButton();
-        
+
             UpdateDisplayOthersButtons();
-        
+
             UpdateMaterialSourceButtons();
         }
     }
-    
+
     #region 原生界面元素插入
 
     // 清除搜索按钮
@@ -328,7 +337,7 @@ public class OptimizedRecipeNote : ModuleBase
     {
         if (!config.IsSearchClearButton || clearSearchButton != null)
             return;
-        
+
         clearSearchButton = new()
         {
             IsVisible          = true,
@@ -355,7 +364,7 @@ public class OptimizedRecipeNote : ModuleBase
     {
         if (!config.IsSearchClearButton || clearSearchButton == null)
             return;
-        
+
         clearSearchButton.IsVisible = AgentRecipeNote.Instance()->RecipeSearchOpen && lastRecipeID != 0;
     }
 
@@ -364,14 +373,14 @@ public class OptimizedRecipeNote : ModuleBase
         clearSearchButton?.Dispose();
         clearSearchButton = null;
     }
-    
+
     // 切换分类按钮
     private unsafe void CreateCategoryButtons()
     {
         if (!config.IsCategoryButtons ||
-            levelRecipeButton   != null &&
-            specialRecipeButton != null &&
-            masterRecipeButton  != null)
+            (levelRecipeButton   != null &&
+             specialRecipeButton != null &&
+             masterRecipeButton  != null))
             return;
 
         if (levelRecipeButton == null)
@@ -464,13 +473,13 @@ public class OptimizedRecipeNote : ModuleBase
         masterRecipeButton?.Dispose();
         masterRecipeButton = null;
     }
-    
+
     // 显示其余配方按钮
     private unsafe void CreateDisplayOthersButtons()
     {
         if (!config.IsDisplayOthersButtons ||
-            displayOthersButton     != null &&
-            displayOthersJobsLayout != null)
+            (displayOthersButton     != null &&
+             displayOthersJobsLayout != null))
             return;
 
         if (displayOthersButton == null)
@@ -485,7 +494,7 @@ public class OptimizedRecipeNote : ModuleBase
                 {
                     if (!TryGetCurrentRecipe(out _, out var recipe))
                         return;
-                    
+
                     if (!SameItemRecipes.TryGetValue(recipe.ItemResult.RowId, out _))
                         return;
 
@@ -577,6 +586,7 @@ public class OptimizedRecipeNote : ModuleBase
         displayOthersJobsLayout.IsVisible = true;
 
         var allCraftTypes = allRecipes.ToDictionary(x => x.CraftType.RowId, x => x.RowId);
+
         for (var i = 0U; i < 8; i++)
         {
             var node = displayOthersJobButtons[(int)i];
@@ -607,20 +617,20 @@ public class OptimizedRecipeNote : ModuleBase
     {
         displayOthersButton?.Dispose();
         displayOthersButton = null;
-        
+
         displayOthersJobButtons.Clear();
 
         displayOthersJobsLayout?.Dispose(); // 把子节点都一并清除掉了
         displayOthersJobsLayout = null;
     }
-    
+
     // 材料来源
     private unsafe void CreateMaterialSourceButtons()
     {
         if (!config.IsMaterialSourceButtons ||
             materialSourceButtons.Count != 0)
             return;
-        
+
         for (var i = 0U; i < 6; i++)
         {
             var componentNode = RecipeNoteAddon->GetComponentNodeById(89 + i);
@@ -675,11 +685,12 @@ public class OptimizedRecipeNote : ModuleBase
         if (!config.IsMaterialSourceButtons ||
             materialSourceButtons.Count != 6)
             return;
-        
+
         if (!TryGetCurrentRecipe(out _, out var recipe))
             return;
-        
+
         var maxIngredientAmount = 0;
+
         for (var i = 0; i < recipe.Ingredient.Count; i++)
         {
             if (recipe.Ingredient[i] is not { IsValid: true, RowId: > 100 }) continue;
@@ -688,7 +699,7 @@ public class OptimizedRecipeNote : ModuleBase
         }
 
         var appendOffset = maxIngredientAmount >= 10 ? 30 : 10;
-        var resNode0 = RecipeNoteAddon->GetNodeById(95);
+        var resNode0     = RecipeNoteAddon->GetNodeById(95);
         if (resNode0 != null)
             resNode0->SetXFloat(46 + appendOffset);
 
@@ -745,7 +756,7 @@ public class OptimizedRecipeNote : ModuleBase
             }
         }
     }
-    
+
     private unsafe void RemoveMaterialSourceButtons()
     {
         foreach (var x in materialSourceButtons)
@@ -767,20 +778,20 @@ public class OptimizedRecipeNote : ModuleBase
                 resNode2->SetXFloat(0);
         }
     }
-    
+
     // 切换职业
     private unsafe void CreateSwitchJobButton()
     {
         if (!config.IsSwitchJobButton ||
             switchJobButton != null)
             return;
-        
+
         switchJobButton = new()
         {
             Position = new(228, 522),
             Size     = new(140, 36),
             String   = Lang.Get("OptimizedRecipeNote-Button-SwitchJob"),
-            OnClick  = () =>
+            OnClick = () =>
             {
                 if (!TryGetCurrentRecipe(out var recipeID, out var recipe))
                     return;
@@ -818,12 +829,13 @@ public class OptimizedRecipeNote : ModuleBase
         }
 
         var startCraftButton = RecipeNoteAddon->GetComponentButtonById(104);
+
         if (recipe.CraftType.RowId != LocalPlayerState.ClassJob - 8)
         {
             switchJobButton.IsVisible = true;
             if (startCraftButton != null)
                 startCraftButton->OwnerNode->ToggleVisibility(false);
-            
+
             switchJobButton.TextTooltip = LuminaWrapper.GetJobName(8 + recipe.CraftType.RowId);
 
             for (var i = 102U; i < 105; i++)
@@ -847,13 +859,13 @@ public class OptimizedRecipeNote : ModuleBase
             }
         }
     }
-    
+
     private void RemoveSwitchJobButton()
     {
         switchJobButton?.Dispose();
         switchJobButton = null;
     }
-    
+
     // 求解配方
     private unsafe void CreateCaculateRecipeButton()
     {
@@ -867,7 +879,7 @@ public class OptimizedRecipeNote : ModuleBase
             Size     = new(140, 32),
             String   = Lang.Get("OptimizedRecipeNote-Button-CaculateRecipe")
         };
-        
+
         caculateRecipeButton.OnClick = () =>
         {
             if (!DService.Instance().PI.IsPluginEnabled(RaphaelIPC.INTERNAL_NAME))
@@ -875,7 +887,7 @@ public class OptimizedRecipeNote : ModuleBase
                 PrintInstallRaphaelPluginMessage();
                 return;
             }
-            
+
             if (!TryGetCurrentRecipe(out var recipeID, out var recipe))
                 return;
 
@@ -897,7 +909,7 @@ public class OptimizedRecipeNote : ModuleBase
                     TimeoutSeconds    = 90
                 }
             );
-            
+
             caculateRecipeButton.IsEnabled = false;
             TaskHelper.Enqueue
             (
@@ -954,7 +966,7 @@ public class OptimizedRecipeNote : ModuleBase
             caculateRecipeButton.IsVisible = false;
             return;
         }
-        
+
         caculateRecipeButton.IsVisible = true;
     }
 
@@ -1045,7 +1057,7 @@ public class OptimizedRecipeNote : ModuleBase
                .AddUiForegroundOff()
                .AddText("]")
                .Add(RawPayload.LinkTerminator);
-        
+
         // TODO: 改成 ReadOnlyString
         NotifyHelper.Instance().Chat(builder.Build().Encode());
     }
@@ -1067,21 +1079,21 @@ public class OptimizedRecipeNote : ModuleBase
                                            .AddText("]")
                                            .Add(RawPayload.LinkTerminator)
                                            .Build();
-        
+
         // TODO: 改成 ReadOnlyString
         NotifyHelper.Instance().Chat(message.Encode());
     }
 
     #endregion
-    
-    
+
+
     #region 工具
 
     private static unsafe bool TryGetCurrentRecipe(out uint recipeID, out Recipe recipe)
     {
         recipeID = 0;
         recipe   = default;
-        
+
         var recipeList = UIState.Instance()->RecipeNote.RecipeList;
         if (recipeList == null) return false;
 
@@ -1091,7 +1103,7 @@ public class OptimizedRecipeNote : ModuleBase
         if (!LuminaGetter.TryGetRow(data->RecipeId, out Recipe recipeRow) ||
             recipeRow.ItemResult.Value is not { RowId: > 0 })
             return false;
-        
+
         recipeID = data->RecipeId;
         recipe   = recipeRow;
         return true;
@@ -1106,303 +1118,6 @@ public class OptimizedRecipeNote : ModuleBase
             : recipe.RecipeLevelTable.Value;
 
     #endregion
-
-    private class AddonActionsPreview
-    (
-        TaskHelper       taskHelper,
-        CaculationResult result
-    ) : NativeAddon
-    {
-        private static Task?                OpenAddonTask;
-        public static  AddonActionsPreview? Addon  { get; set; }
-        public         CaculationResult     Result { get; private set; } = result;
-        public         List<DragDropNode>   Nodes  { get; set; }         = [];
-
-        public WeakReference<TaskHelper> TaskHelper { get; private set; } = new(taskHelper);
-
-        public TextButtonNode ExecuteButton { get; private set; }
-
-        public static void OpenWithActions(TaskHelper taskHelper, CaculationResult result)
-        {
-            if (OpenAddonTask != null) return;
-
-            var isAddonExisted = Addon?.IsOpen ?? false;
-
-            if (Addon != null)
-            {
-                Addon.Dispose();
-                Addon = null;
-            }
-
-            OpenAddonTask = DService.Instance().Framework.RunOnTick
-            (
-                () =>
-                {
-                    var rowCount = MathF.Ceiling(result.Actions.Count / 10f);
-                    Addon ??= new(taskHelper, result)
-                    {
-                        InternalName = "DRRecipeNoteActionsPreview",
-                        Title        = $"{Lang.Get("OptimizedRecipeNote-AddonTitle")}",
-                        Subtitle     = $"{Lang.Get("OptimizedRecipeNote-Message-StepsInfo", result.Actions.Count, result.Actions.Count * 3)}",
-                        Size         = new(500f, 160f + 50f * (rowCount - 1))
-                    };
-                    Addon.Open();
-                },
-                TimeSpan.FromMilliseconds(isAddonExisted ? 500 : 0)
-            ).ContinueWith(_ => OpenAddonTask = null);
-        }
-
-        protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
-        {
-            if (Result.Actions.Count == 0) return;
-
-            var statsRow = new HorizontalListNode
-            {
-                IsVisible = true,
-                Position  = new(12, 40),
-                Size      = new(0, 44)
-            };
-
-            var jobTextNode = new TextNode
-            {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String = new SeStringBuilder()
-                         .AddText($"{LuminaWrapper.GetAddonText(294)}: ")
-                         .AddIcon(Result.GetJob().ToBitmapFontIcon())
-                         .AddText(Result.GetJob().Name.ToString())
-                         .Build()
-                         .Encode()
-            };
-            jobTextNode.Size =  jobTextNode.GetTextDrawSize($"{jobTextNode.String}123");
-            statsRow.Width   += jobTextNode.Width;
-            statsRow.AddNode(jobTextNode);
-            
-            statsRow.Width += 12;
-            statsRow.AddDummy(12);
-
-            var craftmanshipTextNode = new TextNode
-            {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String    = $"{LuminaWrapper.GetAddonText(3261)}: {Result.Craftmanship}"
-            };
-            statsRow.Width += craftmanshipTextNode.Width;
-            statsRow.AddNode(craftmanshipTextNode);
-
-            statsRow.Width += 12;
-            statsRow.AddDummy(12);
-
-            var controlTextNode = new TextNode
-            {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String    = $"{LuminaWrapper.GetAddonText(3262)}: {Result.Control}"
-            };
-            statsRow.Width += controlTextNode.Width;
-            statsRow.AddNode(controlTextNode);
-
-            statsRow.Width += 12;
-            statsRow.AddDummy(12);
-
-            var craftPointTextNode = new TextNode
-            {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String    = $"{LuminaWrapper.GetAddonText(3223)}: {Result.CraftPoint}"
-            };
-            statsRow.Width += craftPointTextNode.Width;
-            statsRow.AddNode(craftPointTextNode);
-
-            statsRow.AttachNode(this);
-
-            var operationRow = new HorizontalFlexNode
-            {
-                IsVisible = true,
-                Position  = new(8, 65),
-                Size      = new(0, 44)
-            };
-
-            ExecuteButton = new TextButtonNode
-            {
-                IsVisible = true,
-                Size      = new(100, 24),
-                String    = Lang.Get("Execute"),
-                OnClick = () =>
-                {
-                    if (Synthesis == null) return;
-                    if (Result.Actions is not { Count: > 0 } actions) return;
-                    if (!TaskHelper.TryGetTarget(out var taskHelper)) return;
-
-                    for (var index = 0; index < actions.Count; index++)
-                    {
-                        var x = actions[index];
-                        var i = index;
-                        taskHelper.Enqueue
-                        (() =>
-                            {
-                                if (DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction]) return true;
-
-                                ChatManager.Instance().SendMessage($"/ac {LuminaWrapper.GetActionName(x)}");
-                                return false;
-                            }
-                        );
-                        taskHelper.Enqueue(() => Nodes[i].Alpha = 0.2f);
-                        taskHelper.Enqueue(() => !DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction]);
-                    }
-                }
-            };
-            operationRow.Width += ExecuteButton.Width;
-            operationRow.AddNode(ExecuteButton);
-
-            operationRow.Width += 4;
-            operationRow.AddDummy(4);
-
-            var macroButtonCount = (int)Math.Ceiling(Result.Actions.Count / 15.0);
-
-            for (var i = 0; i < macroButtonCount; i++)
-            {
-                var macroIndex = i;
-                var copyMacroButton = new TextButtonNode
-                {
-                    IsVisible = true,
-                    Size      = new(120, 24),
-                    String    = Lang.Get("OptimizedRecipeNote-Button-CopyMacro", macroIndex + 1),
-                    OnClick = () =>
-                    {
-                        var startIndex      = macroIndex * 15;
-                        var endIndex        = Math.Min(startIndex                           + 15, Result.Actions.Count);
-                        var actionsForMacro = Result.Actions.Skip(startIndex).Take(endIndex - startIndex);
-
-                        var builder = new StringBuilder();
-                        foreach (var action in actionsForMacro)
-                            builder.AppendLine($"/ac {LuminaWrapper.GetActionName(action)} <wait.3>");
-                        ImGui.SetClipboardText(builder.ToString());
-
-                        NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}");
-                    }
-                };
-                operationRow.Width += copyMacroButton.Width;
-                operationRow.AddNode(copyMacroButton);
-
-                operationRow.Width += 4;
-                operationRow.AddDummy(4);
-            }
-
-            operationRow.AttachNode(this);
-
-            var container = new VerticalListNode
-            {
-                IsVisible = true,
-                Position  = new(12, 97),
-                Size      = new(44)
-            };
-
-            var currentRow = new HorizontalFlexNode
-            {
-                IsVisible = true,
-                Size      = new(0, 44)
-            };
-
-            var itemsInCurrentRow = 0;
-
-            for (var index = 0; index < Result.Actions.Count; index++)
-            {
-                var actionID = Result.Actions[index];
-                var iconID   = LuminaWrapper.GetActionIconID(actionID);
-                if (iconID == 0) continue;
-
-                if (itemsInCurrentRow >= 10)
-                {
-                    container.AddNode(currentRow);
-                    container.AddDummy(4f);
-
-                    currentRow = new HorizontalFlexNode
-                    {
-                        IsVisible = true,
-                        Size      = new(0, 44)
-                    };
-                    itemsInCurrentRow = 0;
-                }
-
-                var dragDropNode = new DragDropNode
-                {
-                    Size         = new(44f),
-                    IsVisible    = true,
-                    IconId       = iconID,
-                    AcceptedType = DragDropType.Nothing,
-                    IsDraggable  = true,
-                    IsClickable  = true,
-                    Payload = new()
-                    {
-                        Type = actionID > 10_0000 ? DragDropType.CraftingAction : DragDropType.Action,
-                        Int2 = (int)actionID
-                    },
-                    OnRollOver = node =>
-                    {
-                        var tooltipArgs = new AtkTooltipManager.AtkTooltipArgs();
-
-                        tooltipArgs.ActionArgs.Flags = 1;
-                        tooltipArgs.ActionArgs.Kind  = actionID > 10_0000 ? DetailKind.CraftingAction : DetailKind.Action;
-                        tooltipArgs.ActionArgs.Id    = (int)actionID;
-
-                        AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Action, addon->Id, node, &tooltipArgs);
-                    },
-                    OnRollOut = node => node.HideTooltip()
-                };
-                dragDropNode.OnClicked = _ =>
-                {
-                    if (DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction] ||
-                        TaskHelper.TryGetTarget(out var taskHelper) && taskHelper.IsBusy)
-                        return;
-
-                    if (Synthesis != null)
-                        dragDropNode.Alpha = 0.2f;
-                    ChatManager.Instance().SendMessage($"/ac {LuminaWrapper.GetActionName(actionID)}");
-                };
-                Nodes.Add(dragDropNode);
-
-                var actionIndexNode = new TextNode
-                {
-                    IsVisible        = true,
-                    Position         = new(-4),
-                    String           = $"{index + 1}",
-                    FontType         = FontType.MiedingerMed,
-                    TextFlags        = TextFlags.Edge | TextFlags.Emboss,
-                    TextColor        = ColorHelper.GetColor(50),
-                    TextOutlineColor = ColorHelper.GetColor(28),
-                };
-                actionIndexNode.AttachNode(dragDropNode);
-
-                currentRow.AddNode(dragDropNode);
-                currentRow.AddDummy(4);
-                currentRow.Width += dragDropNode.Size.X + 4;
-
-                itemsInCurrentRow++;
-            }
-
-            if (itemsInCurrentRow > 0)
-                container.AddNode(currentRow);
-
-            container.AttachNode(this);
-        }
-
-        protected override unsafe void OnUpdate(AtkUnitBase* addon)
-        {
-            if (DService.Instance().KeyState[VirtualKey.ESCAPE])
-            {
-                Close();
-
-                if (SystemMenu != null)
-                    SystemMenu->Close(true);
-
-                return;
-            }
-
-            if (ExecuteButton != null && TaskHelper.TryGetTarget(out var taskHelper))
-                ExecuteButton.IsEnabled = Synthesis != null && !taskHelper.IsBusy;
-        }
-    }
 
     private record CaculationResult
     (
@@ -1426,36 +1141,36 @@ public class OptimizedRecipeNote : ModuleBase
     {
         // 搜索清除
         public bool IsSearchClearButton = true;
-        
+
         // 分类
         public bool IsCategoryButtons = true;
-        
+
         // 显示其余配方
         public bool IsDisplayOthersButtons = true;
 
         // 材料来源
         public bool IsMaterialSourceButtons = true;
-        
+
         // 切换职业
         public bool IsSwitchJobButton = true;
-        
+
         // 求解配方
         public bool IsCaculateRecipeButton = true;
-        
+
         // 突破简易制作上限
         public bool IsQuickSynthesisMore = true;
-        
+
         // 突破制作练习初期品质上限
         public bool IsMorePraticeQuality = true;
     }
-    
+
     #region IPC
 
     [IPCSubscriber("DailyRoutines.Modules.AutoShowItemNPCShopInfo.OpenByItemID")]
     private static IPCSubscriber<uint, bool> OpenShopListByItemIDIPC;
 
     #endregion
-    
+
     #region 常量
 
     private static readonly FrozenDictionary<uint, List<Recipe>> SameItemRecipes =
