@@ -446,7 +446,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         items.Add(CreateUnifiedItem(
             setPart.ItemID,
             rawItemID,
-            $"{partName} ({parentName} / {setPart.PartLabel})",
+            partName,
             partRow,
             source,
             prismBoxIndex,
@@ -836,14 +836,6 @@ public unsafe class UnifiedGlamourManager : ModuleBase
             ImGui.Dummy(new Vector2(size, size));
     }
 
-    private static void DrawViewModeButton(string label, bool active, System.Action onClick)
-    {
-        using var color = ImRaii.PushColor(ImGuiCol.Button, BUTTON_ACTIVE_COLOR, active);
-
-        if (ImGui.Button(label))
-            onClick();
-    }
-
     private static void DrawItemBackground(
         ImDrawListPtr drawList,
         Vector2 min,
@@ -890,9 +882,17 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using var child = ImRaii.Child("##TopBar", new Vector2(0f, ImGui.GetTextLineHeightWithSpacing() + ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().WindowPadding.Y * 2f), true, ImGuiWindowFlags.NoScrollbar);
         if (!child) return;
 
-        ImGui.TextColored(
-            SOFT_ACCENT_COLOR,
-            $"{LuminaWrapper.GetAddonText(11910)} {prismBoxItemCount} / {LuminaWrapper.GetAddonText(12216)} {cabinetItemCount} / {LuminaWrapper.GetAddonText(929)} {StoredItemCount}");
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(11910)}: {prismBoxItemCount} / {LuminaWrapper.GetAddonText(12216)}: {cabinetItemCount} / {LuminaWrapper.GetAddonText(929)}: {StoredItemCount} /");
+        ImGui.SameLine();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(GOLD_COLOR, $"{Lang.Get("Favorite")}: {cachedLoadedFavoriteCount.ToString()}");
+        ImGui.SameLine();
+        using (ImRaii.Disabled(config.Favorites.Count == 0))
+        {
+            if (ImGui.Button(Lang.Get("Clear")))
+                requestClearFavoritesConfirm = true;
+        }
 
         ImGui.Spacing();
 
@@ -910,22 +910,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         ImGui.SameLine();
 
-        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-CurrentTargetSlot", string.Empty).TrimEnd(':', ' '), ref filterByCurrentPlateSlot))
+        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-CurrentTargetSlotOnly", string.Empty).TrimEnd(':', ' '), ref filterByCurrentPlateSlot))
             MarkFilteredItemsDirty(clearPlateSlotCache: true);
-
-        ImGui.SameLine();
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextDisabled(Lang.Get("Favorite"));
-        ImGui.SameLine();
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(GOLD_COLOR, cachedLoadedFavoriteCount.ToString());
-        ImGui.SameLine();
-
-        using (ImRaii.Disabled(config.Favorites.Count == 0))
-        {
-            if (ImGui.Button(Lang.Get("Clear")))
-                requestClearFavoritesConfirm = true;
-        }
     }
 
     private void DrawMainLayout()
@@ -934,15 +920,15 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         if (contentSize.X <= 0f || contentSize.Y <= 0f) return;
 
         var tableFlags = ImGuiTableFlags.BordersInnerV |
-                        ImGuiTableFlags.SizingStretchProp |
-                        ImGuiTableFlags.NoSavedSettings;
+                         ImGuiTableFlags.SizingStretchProp |
+                         ImGuiTableFlags.Resizable;
 
         using var table = ImRaii.Table("##UnifiedMainTable", 3, tableFlags, contentSize);
         if (!table) return;
 
-        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(13125), ImGuiTableColumnFlags.WidthStretch, 0.5f);
-        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(11920), ImGuiTableColumnFlags.WidthStretch, 1.4f);
-        ImGui.TableSetupColumn(Lang.Get("Current"), ImGuiTableColumnFlags.WidthStretch, 0.5f);
+        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(14370), ImGuiTableColumnFlags.WidthStretch, 0.5f);
+        ImGui.TableSetupColumn(Lang.Get("UnifiedGlamourManager-FilteredResult"), ImGuiTableColumnFlags.WidthStretch, 1.2f);
+        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(2154), ImGuiTableColumnFlags.WidthStretch, 0.7f);
 
         ImGui.TableNextRow();
 
@@ -961,7 +947,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using var child = ImRaii.Child("##FilterPanel", Vector2.Zero, true);
         if (!child) return;
 
-        SectionTitle(LuminaWrapper.GetAddonText(13125));
+        SectionTitle(LuminaWrapper.GetAddonText(14370));
         DrawSourceFilter();
         DrawSortFilter();
         DrawLevelFilter();
@@ -972,7 +958,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private void DrawSourceFilter()
     {
-        ImGui.TextDisabled(LuminaWrapper.GetAddonText(8191));
+        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-GlamourSource"));
 
         var width       = ImGui.GetContentRegionAvail().X;
         var buttonWidth = MathF.Max(1f, (width - ImGui.GetStyle().ItemSpacing.X) * 0.5f);
@@ -1057,9 +1043,10 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         ImGui.TextDisabled(LuminaWrapper.GetAddonText(15624));
 
-        var setIndex = Math.Clamp((int)setRelationFilter, 0, SetRelationFilterNames.Length - 1);
+        var names    = CreateSetRelationFilterNames();
+        var setIndex = Math.Clamp((int)setRelationFilter, 0, names.Length - 1);
         ImGui.SetNextItemWidth(-1f);
-        if (ImGui.Combo("##SetRelationFilter", ref setIndex, SetRelationFilterNames, SetRelationFilterNames.Length))
+        if (ImGui.Combo("##SetRelationFilter", ref setIndex, names, names.Length))
         {
             setRelationFilter = (SetRelationFilter)setIndex;
             MarkFilteredItemsDirty();
@@ -1073,12 +1060,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         ImGui.Separator();
         ImGui.Spacing();
 
-        if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ResetFilter")))
+        if (ImGui.Button(LuminaWrapper.GetAddonText(329), new Vector2(-1f, 0f)))
             ResetFilters();
-
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
     }
 
     #endregion
@@ -1092,29 +1075,53 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using var listPanel = ImRaii.Child("##ListPanel", Vector2.Zero, true);
         if (!listPanel) return;
 
-        ImGui.TextColored(TITLE_COLOR, Lang.Get("UnifiedGlamourManager-CurrentSearchResult"));
-        ImGui.SameLine();
-        ImGui.TextDisabled(filteredItems.Count.ToString());
-        ImGui.SameLine();
-        ImGui.TextColored(
-            TryGetReadyPlateEditor(out _) ? SOFT_ACCENT_COLOR : ERROR_COLOR,
-            Lang.Get("UnifiedGlamourManager-CurrentTargetSlot", GetCurrentPlateSlotNameForUI()));
+        ImGui.TextColored(TITLE_COLOR, Lang.Get("UnifiedGlamourManager-FilteredResult"));
 
-        DrawViewModeButton($"{Lang.Get("List")}##ViewList", !useGridView, () => useGridView = false);
-        ImGui.SameLine();
-        DrawViewModeButton($"{Lang.Get("Icon")}##ViewGrid", useGridView, () => useGridView = true);
         ImGui.Separator();
+
+        var tabSize = new Vector2(
+            (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f,
+            ImGui.GetFrameHeight());
+
+        foreach (var (label, gridView) in new[]
+        {
+            (Lang.Get("List"), false),
+            (Lang.Get("Icon"), true)
+        })
+        {
+            var active = useGridView == gridView;
+            var pos = ImGui.GetCursorScreenPos();
+
+            if (ImGui.InvisibleButton($"##ViewMode{gridView}", tabSize))
+                useGridView = gridView;
+
+            ImGui.GetWindowDrawList().AddText(
+                pos + new Vector2((tabSize.X - ImGui.CalcTextSize(label).X) * 0.5f, (tabSize.Y - ImGui.CalcTextSize(label).Y) * 0.5f),
+                ImGui.GetColorU32(active ? BUTTON_ACTIVE_COLOR : ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]),
+                label);
+
+            if (active)
+                ImGui.GetWindowDrawList().AddLine(
+                    pos + new Vector2(tabSize.X * 0.25f, tabSize.Y - 1f),
+                    pos + new Vector2(tabSize.X * 0.75f, tabSize.Y - 1f),
+                    ImGui.GetColorU32(BUTTON_ACTIVE_COLOR),
+                    2f);
+
+            if (!gridView)
+                ImGui.SameLine();
+        }
+        
+        ImGui.Separator();
+        ImGui.Spacing();
 
         if (isRefreshingItems)
         {
-            ImGui.Spacing();
             ImGui.TextDisabled(Lang.Get("Loading"));
             return;
         }
 
         if (filteredItems.Count == 0)
         {
-            ImGui.Spacing();
             ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSearchResult"));
             return;
         }
@@ -1132,7 +1139,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     {
         if (filtered.Count == 0) return;
 
-        var rowHeight      = MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 3f + ImGui.GetStyle().WindowPadding.Y * 2f) + ImGui.GetStyle().ItemSpacing.Y;
+        var rowHeight      = MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 2f + ImGui.GetStyle().WindowPadding.Y * 2f) + ImGui.GetStyle().ItemSpacing.Y;
         var startCursorPos = ImGui.GetCursorPos();
         var scrollY        = ImGui.GetScrollY();
         var visibleHeight  = ImGui.GetWindowHeight();
@@ -1165,7 +1172,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using var id      = ImRaii.PushId($"{item.ItemID}_{item.PrismBoxIndex}_{item.IsSetPart}_{item.ParentSetItemID}");
         using var childBg = ImRaii.PushColor(ImGuiCol.ChildBg, NORMAL_CARD_COLOR);
         using var border  = ImRaii.PushColor(ImGuiCol.Border, GetCardBorderColor(selected, favorite));
-        using var child   = ImRaii.Child("##ItemCard", new Vector2(cardWidth, MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 3f + ImGui.GetStyle().WindowPadding.Y * 2f)), true, ImGuiWindowFlags.NoScrollbar);
+        using var child   = ImRaii.Child("##ItemCard", new Vector2(cardWidth, MathF.Max(ImGui.GetFrameHeight() * 1.6f + ImGui.GetStyle().WindowPadding.Y * 2f, ImGui.GetTextLineHeightWithSpacing() * 2f + ImGui.GetStyle().WindowPadding.Y * 2f)), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         if (!child) return;
 
         var hovered  = ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
@@ -1208,10 +1215,16 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using (ImRaii.PushColor(ImGuiCol.Text, titleColor))
             ImGui.TextUnformatted(item.Name);
 
-        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(335)}: {item.LevelEquip}");
-
-        if (item.IsSetContainer)
-            ImGui.TextDisabled(LuminaWrapper.GetAddonText(15624));
+        //加上了当前衣服的染色情况
+        LuminaGetter.TryGetRow<Stain>(item.Stain0ID, out var stain0);
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15970)}: {stain0.Name.ExtractText()}");
+        ImGui.SameLine();
+        ImGui.TextColored(new Vector4(stain0.Color.ToVector4().Z, stain0.Color.ToVector4().Y, stain0.Color.ToVector4().X, 1f), "■");
+        ImGui.SameLine();
+        LuminaGetter.TryGetRow<Stain>(item.Stain1ID, out var stain1);
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15971)}: {stain1.Name.ExtractText()}");
+        ImGui.SameLine();
+        ImGui.TextColored(new Vector4(stain1.Color.ToVector4().Z, stain1.Color.ToVector4().Y, stain1.Color.ToVector4().X, 1f), "■");
     }
 
     private void DrawItemGrid(IReadOnlyList<UnifiedItem> filtered)
@@ -1304,15 +1317,21 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using var tooltip = ImRaii.Tooltip();
 
         ImGui.TextColored(TITLE_COLOR, item.Name);
-        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(335)}: {item.LevelEquip}");
-        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(8191)}: {GetSourceLabel(item)}");
 
-        if (item.IsSetPart)
-        {
-            ImGui.Separator();
-            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(2155)} {item.SetPartLabel}");
-            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15624)} {item.ParentSetName}");
-        }
+        //加上了当前衣服的染色情况
+        LuminaGetter.TryGetRow<Stain>(item.Stain0ID, out var stain0);
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15970)}: {stain0.Name.ExtractText()}");
+        ImGui.SameLine();
+        ImGui.TextColored(new Vector4(stain0.Color.ToVector4().Z, stain0.Color.ToVector4().Y, stain0.Color.ToVector4().X, 1f), "■");
+
+        LuminaGetter.TryGetRow<Stain>(item.Stain1ID, out var stain1);
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15971)}: {stain1.Name.ExtractText()}");
+        ImGui.SameLine();
+        ImGui.TextColored(new Vector4(stain1.Color.ToVector4().Z, stain1.Color.ToVector4().Y, stain1.Color.ToVector4().X, 1f), "■");
+
+        ImGui.Separator();
+        //增加一个网格的收藏提示
+        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-RightClickFavoriteHint"));
 
     }
 
@@ -1330,7 +1349,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         using var child = ImRaii.Child("##SelectedPanel", Vector2.Zero, true);
         if (!child) return;
 
-        SectionTitle(Lang.Get("Current"));
+        SectionTitle(LuminaWrapper.GetAddonText(2154));
 
         if (selectedItem == null)
         {
@@ -1341,26 +1360,45 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         var item = selectedItem;
         DrawSelectedItemHeader(item);
 
-        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(1030)}{LuminaWrapper.GetAddonText(2155)}");
-        ImGui.TextColored(SOFT_ACCENT_COLOR, GetCurrentPlateSlotNameForUI());
+        ImGui.TextColored(SOFT_ACCENT_COLOR, $"{Lang.Get("UnifiedGlamourManager-GlamourTargetSlot")}: ");
+        if (LuminaGetter.TryGetRow<EquipSlotCategory>(item.EquipSlotCategoryRowID, out var category))
+        {
+            var availableSlots = PlateSlotDefinitions
+                .Where(x => x.CanUse(category))
+                .Select(x => LuminaWrapper.GetAddonText(x.AddonTextID))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToArray();
+
+            ImGui.TextDisabled(availableSlots.Length > 0
+                ? string.Join(" / ", availableSlots)
+                : Lang.Get("Unknown"));
+        }
+
         ImGui.Spacing();
 
         if (item.IsSetPart)
         {
-            ImGui.TextColored(SOFT_ACCENT_COLOR, LuminaWrapper.GetAddonText(15624));
-            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(2155)} {item.SetPartLabel}");
-            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15624)} {item.ParentSetName}");
+            ImGui.TextColored(SOFT_ACCENT_COLOR, $"{LuminaWrapper.GetAddonText(15624)}: ");
+            ImGui.TextDisabled(item.ParentSetName);
             ImGui.Spacing();
         }
 
         if (item.IsSetContainer)
         {
-            ImGui.TextColored(GOLD_COLOR, LuminaWrapper.GetAddonText(15624));
-            RedTip($"{LuminaWrapper.GetAddonText(15624)}{LuminaWrapper.GetAddonText(4764)}");
+            RedTip(LuminaWrapper.GetAddonText(15624));
             ImGui.Spacing();
         }
 
-        DrawSelectedActions(item);
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        //原来的SelectAction()
+        if (ImGui.Button(LuminaWrapper.GetAddonText(159), new Vector2(-1f, 0f)))
+            ImGui.SetClipboardText(item.Name);
+
+        if (ImGui.Button(LuminaWrapper.GetAddonText(102590), new Vector2(-1f, 0f)))
+            selectedItem = null;
     }
 
     private void DrawSelectedItemHeader(UnifiedItem item)
@@ -1370,45 +1408,25 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         using (ImRaii.Group())
         {
-            ImGui.TextColored(TITLE_COLOR, item.Name);
+            ImGui.TextColored(SOFT_ACCENT_COLOR, item.Name);
             ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(335)}: {item.LevelEquip}");
-            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(8191)}: {GetSourceLabel(item)}");
+            ImGui.TextDisabled($"{Lang.Get("UnifiedGlamourManager-GlamourSource")}: {GetSourceLabel(item)}");
+
+            //加上了当前衣服的染色情况
+            LuminaGetter.TryGetRow<Stain>(item.Stain0ID, out var stain0);
+            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15970)}: {stain0.Name.ExtractText()}");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(stain0.Color.ToVector4().Z, stain0.Color.ToVector4().Y, stain0.Color.ToVector4().X, 1f), "■");
+
+            LuminaGetter.TryGetRow<Stain>(item.Stain1ID, out var stain1);
+            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(15971)}: {stain1.Name.ExtractText()}");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(stain1.Color.ToVector4().Z, stain1.Color.ToVector4().Y, stain1.Color.ToVector4().X, 1f), "■");
         }
 
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
-    }
-
-    private void DrawSelectedActions(UnifiedItem item)
-    {
-        ImGui.Separator();
-        ImGui.Spacing();
-
-        var plateReady = TryGetReadyPlateEditor(out _);
-        var canApply   = plateReady && item.CanUseInPlate && CanItemUseInCurrentPlateSlot(item);
-
-        using (ImRaii.Disabled(!canApply))
-        {
-            if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ApplyToTargetSlot")))
-                ApplySelectedItemToCurrentPlateSlot(item);
-        }
-
-        if (!plateReady && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(Lang.Get("UnifiedGlamourManager-NoTargetSlot"));
-
-        if (!plateReady)
-            RedTip(Lang.Get("UnifiedGlamourManager-NoTargetSlot"));
-
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
-
-        if (ImGui.Button(LuminaWrapper.GetAddonText(159)))
-            ImGui.SetClipboardText(item.Name);
-
-        if (ImGui.Button(LuminaWrapper.GetAddonText(102590)))
-            selectedItem = null;
     }
 
     private void DrawConfirmPopups()
@@ -1582,7 +1600,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
     private static readonly string[] SortModeNames = CreateSortModeNames();
 
-    private static readonly string[] SetRelationFilterNames =
+    private static string[] CreateSetRelationFilterNames() =>
     [
         Lang.Get("All"),
         Lang.Get("UnifiedGlamourManager-SetRelatedOnly"),
