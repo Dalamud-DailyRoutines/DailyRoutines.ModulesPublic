@@ -1,8 +1,10 @@
-﻿using System.Text;
+using System.Text;
+using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Enums;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Classes;
@@ -28,7 +30,13 @@ public partial class OptimizedRecipeNote
 
         public WeakReference<TaskHelper> TaskHelper { get; private set; } = new(taskHelper);
 
-        public TextButtonNode ExecuteButton { get; private set; }
+        public TextButtonNode   CraftOnceButton     { get; private set; }
+        public TextButtonNode   CraftMultipleButton { get; private set; }
+        public NumericInputNode CraftCountInput     { get; private set; }
+        public TextNode         CraftProgressText   { get; private set; }
+
+        private int currentCraftRound;
+        private int totalCraftRounds;
 
         public static void OpenWithActions(TaskHelper taskHelper, CaculationResult result)
         {
@@ -52,7 +60,7 @@ public partial class OptimizedRecipeNote
                         InternalName = "DRRecipeNoteActionsPreview",
                         Title        = $"{Lang.Get("OptimizedRecipeNote-AddonTitle")}",
                         Subtitle     = $"{Lang.Get("OptimizedRecipeNote-Message-StepsInfo", result.Actions.Count, result.Actions.Count * 3)}",
-                        Size         = new(500f, 160f + (50f                                                                           * (rowCount - 1)))
+                        Size         = new(500f, 192f + (50f                                                                           * (rowCount - 1)))
                     };
                     Addon.Open();
                 },
@@ -64,6 +72,7 @@ public partial class OptimizedRecipeNote
         {
             if (Result.Actions.Count == 0) return;
 
+            // Row 1: 职业 + 三维数据
             var statsRow = new HorizontalListNode
             {
                 IsVisible = true,
@@ -124,47 +133,13 @@ public partial class OptimizedRecipeNote
 
             statsRow.AttachNode(this);
 
-            var operationRow = new HorizontalFlexNode
+            // Row 2: 复制宏按钮
+            var macroRow = new HorizontalFlexNode
             {
                 IsVisible = true,
                 Position  = new(8, 65),
-                Size      = new(0, 44)
+                Size      = new(0, 28)
             };
-
-            ExecuteButton = new TextButtonNode
-            {
-                IsVisible = true,
-                Size      = new(100, 24),
-                String    = Lang.Get("Execute"),
-                OnClick = () =>
-                {
-                    if (Synthesis == null) return;
-                    if (Result.Actions is not { Count: > 0 } actions) return;
-                    if (!TaskHelper.TryGetTarget(out var taskHelper)) return;
-
-                    for (var index = 0; index < actions.Count; index++)
-                    {
-                        var x = actions[index];
-                        var i = index;
-                        taskHelper.Enqueue
-                        (() =>
-                            {
-                                if (DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction]) return true;
-
-                                ChatManager.Instance().SendMessage($"/ac {LuminaWrapper.GetActionName(x)}");
-                                return false;
-                            }
-                        );
-                        taskHelper.Enqueue(() => Nodes[i].Alpha = 0.2f);
-                        taskHelper.Enqueue(() => !DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction]);
-                    }
-                }
-            };
-            operationRow.Width += ExecuteButton.Width;
-            operationRow.AddNode(ExecuteButton);
-
-            operationRow.Width += 4;
-            operationRow.AddDummy(4);
 
             var macroButtonCount = (int)Math.Ceiling(Result.Actions.Count / 15.0);
 
@@ -190,19 +165,132 @@ public partial class OptimizedRecipeNote
                         NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}");
                     }
                 };
-                operationRow.Width += copyMacroButton.Width;
-                operationRow.AddNode(copyMacroButton);
+                macroRow.Width += copyMacroButton.Width;
+                macroRow.AddNode(copyMacroButton);
 
-                operationRow.Width += 4;
-                operationRow.AddDummy(4);
+                macroRow.Width += 4;
+                macroRow.AddDummy(4);
             }
 
-            operationRow.AttachNode(this);
+            macroRow.AttachNode(this);
 
+            // Row 3: 制作按钮行
+            var craftRow = new HorizontalListNode
+            {
+                IsVisible = true,
+                Position  = new(8, 93),
+                Size      = new(120, 28)
+            };
+
+            CraftOnceButton = new TextButtonNode
+            {
+                IsVisible = true,
+                Size      = new(120, 28),
+                String    = Lang.Get("Execute"),
+                OnClick   = () =>
+                {
+                    if (!TaskHelper.TryGetTarget(out var th)) return;
+                    if (Result.Actions is not { Count: > 0 } actions) return;
+
+                    EnqueueActionSequence(th, actions);
+                }
+            };
+            craftRow.AddNode(CraftOnceButton);
+
+            craftRow.AddDummy(16);
+
+            CraftCountInput = new NumericInputNode
+            {
+                IsVisible = true,
+                Size      = new(120, 28),
+                Position  = new(0, -2),
+                Min       = 0,
+                Max       = 0,
+                Step      = 1,
+                Value     = 0,
+                OnValueUpdate =  _ =>
+                {
+                    CraftMultipleButton.String    = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", CraftCountInput.Value);
+                    CraftMultipleButton.IsEnabled = CraftCountInput.Value > 0;
+                }
+            };
+            craftRow.AddNode(CraftCountInput);
+
+            craftRow.AddDummy(2);
+
+            CraftMultipleButton = new TextButtonNode
+            {
+                IsVisible = true,
+                Size      = new(120, 28),
+                String    = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", 0),
+                IsEnabled = false,
+                OnClick   = () =>
+                {
+                    if (!TaskHelper.TryGetTarget(out var th)) return;
+                    if (Result.Actions is not { Count: > 0 } actions) return;
+                    if (CraftCountInput is not { Value: > 0 }) return;
+
+                    var totalCount = CraftCountInput.Value;
+                    currentCraftRound = 0;
+                    totalCraftRounds  = totalCount;
+
+                    CraftProgressText.IsVisible = true;
+                    CraftProgressText.String    = $"{currentCraftRound}/{totalCraftRounds}";
+
+                    LogMessageManager.Instance().RegPost(OnCraftLogMessage);
+
+                    for (var round = 0; round < totalCount; round++)
+                    {
+                        var currentRound = round;
+
+                        th.Enqueue
+                        (() =>
+                            {
+                                currentCraftRound        = currentRound + 1;
+                                CraftProgressText.String = $"{currentCraftRound}/{totalCraftRounds}";
+
+                                RecipeNoteAddon->Callback(8);
+                                return true;
+                            }
+                        );
+
+                        th.Enqueue(() => Synthesis != null);
+
+                        th.DelayNext(500);
+
+                        EnqueueActionSequence(th, actions);
+
+                        th.Enqueue(() => Synthesis == null);
+
+                        th.Enqueue(() => DService.Instance().Condition[ConditionFlag.PreparingToCraft]);
+
+                        th.DelayNext(300);
+                    }
+
+                    th.Enqueue(() => OnCraftingLoopFinished(totalCount));
+                }
+            };
+            craftRow.AddNode(CraftMultipleButton);
+            
+            craftRow.AddDummy(4f);
+            
+            // 制作进度文本 (平时隐藏)
+            CraftProgressText = new TextNode
+            {
+                IsVisible = false,
+                TextFlags = TextFlags.AutoAdjustNodeSize,
+                TextColor = ColorHelper.GetColor(3),
+                FontSize  = 14,
+            };
+            craftRow.AddNode(CraftProgressText);
+            
+            craftRow.AttachNode(this);
+
+            // Row 4: 技能序列
             var container = new VerticalListNode
             {
                 IsVisible = true,
-                Position  = new(12, 97),
+                Position  = new(12, 125),
                 Size      = new(44)
             };
 
@@ -261,7 +349,7 @@ public partial class OptimizedRecipeNote
                 dragDropNode.OnClicked = _ =>
                 {
                     if (DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction] ||
-                        (TaskHelper.TryGetTarget(out var taskHelper) && taskHelper.IsBusy))
+                        (TaskHelper.TryGetTarget(out var th) && th.IsBusy))
                         return;
 
                     if (Synthesis != null)
@@ -307,8 +395,74 @@ public partial class OptimizedRecipeNote
                 return;
             }
 
-            if (ExecuteButton != null && TaskHelper.TryGetTarget(out var taskHelper))
-                ExecuteButton.IsEnabled = Synthesis != null && !taskHelper.IsBusy;
+            if (!TaskHelper.TryGetTarget(out var th)) return;
+
+            CraftOnceButton.IsEnabled     = Synthesis != null                 && !th.IsBusy;
+            CraftMultipleButton.IsEnabled = CraftCountInput is { Value: > 0 } && Synthesis == null && !th.IsBusy;
+
+            // 制作时不更新
+            if (Synthesis == null)
+            {
+                if (TryGetCurrentRecipe(out var recipe, out _) && Result.RecipeID == recipe)
+                    CraftCountInput.Max = SimpleCraftGetAmountUpperLimitDetour(nint.Zero, false);
+                else
+                    CraftCountInput.Max = 0;
+            }
+        }
+
+        private void EnqueueActionSequence(TaskHelper th, List<uint> actions)
+        {
+            for (var index = 0; index < actions.Count; index++)
+            {
+                var x = actions[index];
+                var i = index;
+                th.Enqueue
+                (() =>
+                    {
+                        if (DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction]) return true;
+
+                        ChatManager.Instance().SendMessage($"/ac {LuminaWrapper.GetActionName(x)}");
+                        return false;
+                    }
+                );
+                th.Enqueue(() => Nodes[i].Alpha = 0.2f);
+                th.Enqueue(() => !DService.Instance().Condition[ConditionFlag.ExecutingCraftingAction]);
+            }
+        }
+
+        private void OnCraftLogMessage(uint logMessageID, LogMessageQueueItem item)
+        {
+            if (!CraftFailedLogMessages.Contains(logMessageID)) return;
+            OnCraftingLoopFinished(0, true);
+        }
+
+        private void OnCraftingLoopFinished(int completedCount, bool isCraftFailed = false)
+        {
+            LogMessageManager.Instance().Unreg(OnCraftLogMessage);
+            if (TaskHelper.TryGetTarget(out var th))
+                th.Abort();
+
+            CraftProgressText.IsVisible = false;
+            currentCraftRound           = 0;
+            totalCraftRounds            = 0;
+
+            var message = isCraftFailed ? Lang.Get("OptimizedRecipeNote-Message-CraftFailed") : Lang.Get("OptimizedRecipeNote-Message-CraftComplete", completedCount);
+            if (isCraftFailed)
+            {
+                NotifyHelper.Instance().ChatError(message);
+                NotifyHelper.SystemWarning();
+                NotifyHelper.Instance().NotificationError(message);
+            }
+            else
+            {
+                NotifyHelper.Instance().Chat(message);
+                NotifyHelper.SystemInformation();
+                NotifyHelper.Instance().NotificationSuccess(message);
+            }
+            NotifyHelper.Speak(message);
+            
+            foreach (var node in Nodes)
+                node.Alpha = 1;
         }
     }
 }

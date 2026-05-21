@@ -27,12 +27,9 @@ using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Dalamud.Helpers;
-using OmenTools.Info.Game.Data;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Enums;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game;
-using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
@@ -1267,6 +1264,29 @@ public partial class OptimizedRecipeNote : ModuleBase
                     .ToFrozenDictionary(x => x.Key, x => x.DistinctBy(d => d.CraftType.RowId).ToList());
 
     private const int MAX_QUICK_SYNTHESIS_COUNT = 255;
+
+    private static readonly FrozenSet<uint> CraftFailedLogMessages =
+    [
+        1131, // <if(gnum7,<sheet(ObjStr,gnum7,0)>,gstr2)>处于异常状态，无法进行制作作业。
+        1133,
+        1134,
+        1135,
+        1136,
+        1137,
+        1138,
+        1139,
+        1140,
+        1141,
+        1142,
+        1143,
+        1144,
+        1145,
+        1146,
+        1147,
+        1148,
+        1149,
+        1160
+    ];
 
     #endregion
 }
