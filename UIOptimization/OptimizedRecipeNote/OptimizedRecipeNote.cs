@@ -9,6 +9,8 @@ using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Agent;
+using Dalamud.Game.Agent.AgentArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -25,12 +27,16 @@ using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Dalamud.Helpers;
+using OmenTools.Info.Game.Data;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Enums;
+using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
+using AgentId = Dalamud.Game.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic.OptimizedRecipeNote;
 
@@ -95,6 +101,10 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private uint lastRecipeID;
 
+    private int  pendingQuickSynthRemaining;
+    private bool pendingUseHQIngredient;
+    private bool pendingAllNQResult;
+
     protected override unsafe void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 15_000 };
@@ -111,6 +121,8 @@ public partial class OptimizedRecipeNote : ModuleBase
         {
             simpleCraftAmountJudgePatch.Enable();
             SimpleCraftGetAmountUpperLimitHook.Enable();
+            DService.Instance().AgentLifecycle.RegisterListener(AgentEvent.PreReceiveEvent, AgentId.RecipeNote, OnAgentRecipeNote);
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "SynthesisSimple", OnSynthesisSimple);
         }
 
         if (config.IsMorePraticeQuality)
@@ -125,6 +137,8 @@ public partial class OptimizedRecipeNote : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnSynthesisSimple);
+        DService.Instance().AgentLifecycle.UnregisterListener(OnAgentRecipeNote);
         OnAddon(AddonEvent.PreFinalize, null);
 
         AddonActionsPreview.Addon?.Dispose();
@@ -211,6 +225,11 @@ public partial class OptimizedRecipeNote : ModuleBase
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
+        
+        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish"), ref config.IsSwitchJobButton))
+            config.Save(this);
+
+        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish-Help"));
     }
 
     public static unsafe int SimpleCraftGetAmountUpperLimitDetour(nint agentRecipeNote, bool isHQ)
@@ -218,7 +237,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         var selectedRecipe = RecipeNote.Instance()->RecipeList->SelectedRecipe;
         if (selectedRecipe == null) return 0;
 
-        var maxPortion = 255;
+        var maxPortion = 9999;
 
         foreach (var ingredient in selectedRecipe->Ingredients)
         {
@@ -233,7 +252,6 @@ public partial class OptimizedRecipeNote : ModuleBase
             var portion = itemCount / ingredient.Amount;
             if (portion == 0) return 0;
 
-            portion    = (int)MathF.Min(255,     portion);
             maxPortion = (int)MathF.Min(portion, maxPortion);
         }
 
@@ -1085,8 +1103,73 @@ public partial class OptimizedRecipeNote : ModuleBase
     }
 
     #endregion
+    
+    #region 简易制作分批
+    
+    private unsafe void OnAgentRecipeNote(AgentEvent type, AgentArgs args)
+    {
+        if (pendingQuickSynthRemaining != 0) return;
+        
+        var formatted = args as AgentReceiveEventArgs;
+        if (formatted.EventKind != 1) return;
+            
+        var atkValues = (AtkValue*)formatted.AtkValues;
+        if (atkValues == null) return;
 
+        var count = atkValues[0].Int;
+        if (count <= MAX_QUICK_SYNTHESIS_COUNT) return;
 
+        pendingQuickSynthRemaining = count - MAX_QUICK_SYNTHESIS_COUNT;
+        pendingUseHQIngredient     = atkValues[1].Bool;
+        pendingAllNQResult         = atkValues[2].Bool; // 顺序不确定，不过颠倒了也没事
+
+        atkValues[0].SetInt(MAX_QUICK_SYNTHESIS_COUNT);
+
+        var message = Lang.Get("OptimizedRecipeNote-Message-QuickSynthBatch", MathF.Ceiling((float)count / MAX_QUICK_SYNTHESIS_COUNT));
+        NotifyHelper.Instance().Chat(message);
+    }
+
+    private unsafe void OnSynthesisSimple(AddonEvent type, AddonArgs args)
+    {
+        if (SynthesisSimple == null) return;
+
+        var button = SynthesisSimple->GetComponentButtonById(22);
+        if (button == null) return;
+
+        var currentCount = SynthesisSimple->AtkValues[3].UInt;
+        var maxCount     = SynthesisSimple->AtkValues[4].UInt;
+        if (currentCount != maxCount) return;
+        
+        if (pendingQuickSynthRemaining == 0)
+        {
+            pendingQuickSynthRemaining = 0;
+            pendingUseHQIngredient     = false;
+            pendingAllNQResult         = false;
+
+            if (config.IsNotifyQuickSynthesisFinish)
+            {
+                var message = Lang.Get("OptimizedRecipeNote-Message-QuickSynthFinish");
+                NotifyHelper.Instance().Chat(message);
+                NotifyHelper.Instance().NotificationInfo(message);
+                NotifyHelper.SystemInformation();
+                NotifyHelper.Speak(message);
+            }
+            
+            return;
+        }
+        
+        var batchSize = Math.Min(pendingQuickSynthRemaining, MAX_QUICK_SYNTHESIS_COUNT);
+        pendingQuickSynthRemaining -= batchSize;
+
+        TaskHelper.Enqueue(() => button->Click());
+        TaskHelper.Enqueue(() => !SynthesisSimple->IsAddonAndNodesReady() && RecipeNoteAddon->IsAddonAndNodesReady());
+        TaskHelper.Enqueue(() => AgentId.RecipeNote.SendEvent(0, 9));
+        TaskHelper.Enqueue(() => SynthesisSimpleDialog->IsAddonAndNodesReady());
+        TaskHelper.Enqueue(() => AgentId.RecipeNote.SendEvent(1, batchSize, pendingUseHQIngredient, pendingAllNQResult));
+    }
+
+    #endregion
+    
     #region 工具
 
     private static unsafe bool TryGetCurrentRecipe(out uint recipeID, out Recipe recipe)
@@ -1162,6 +1245,9 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         // 突破制作练习初期品质上限
         public bool IsMorePraticeQuality = true;
+        
+        // 简易制作完成提醒
+        public bool IsNotifyQuickSynthesisFinish = true;
     }
 
     #region IPC
@@ -1179,6 +1265,8 @@ public partial class OptimizedRecipeNote : ModuleBase
                     .DistinctBy(x => x.Key)
                     .Where(x => x.Key > 0 && x.Count() > 1)
                     .ToFrozenDictionary(x => x.Key, x => x.DistinctBy(d => d.CraftType.RowId).ToList());
+
+    private const int MAX_QUICK_SYNTHESIS_COUNT = 255;
 
     #endregion
 }
