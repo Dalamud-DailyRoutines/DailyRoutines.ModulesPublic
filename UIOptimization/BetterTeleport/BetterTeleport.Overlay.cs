@@ -28,7 +28,8 @@ public unsafe partial class BetterTeleport
 
     protected override void OverlayUI()
     {
-        hoveredAetheryte = null;
+        if (!hasUsedArrowKeys)
+            hoveredAetheryte = null;
 
         var isWindowAppearing = ImGui.IsWindowAppearing();
         if (isWindowAppearing)
@@ -187,12 +188,16 @@ public unsafe partial class BetterTeleport
             {
                 selectedIndex = (selectedIndex + 1) % visibleItems.Count;
                 hasUsedArrowKeys = true;
+                if (visibleItems[selectedIndex].Record != null)
+                    hoveredAetheryte = visibleItems[selectedIndex].Record;
             }
 
             if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
             {
                 selectedIndex = (selectedIndex - 1 + visibleItems.Count) % visibleItems.Count;
                 hasUsedArrowKeys = true;
+                if (visibleItems[selectedIndex].Record != null)
+                    hoveredAetheryte = visibleItems[selectedIndex].Record;
             }
 
             if (ImGui.IsKeyPressed(ImGuiKey.Enter))
@@ -365,7 +370,7 @@ public unsafe partial class BetterTeleport
             }
             lastMousePos = currentMousePos;
 
-            if (item.Record != null)
+            if (!hasUsedArrowKeys && item.Record != null)
                 hoveredAetheryte = item.Record;
         }
 
