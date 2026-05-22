@@ -87,15 +87,22 @@ public unsafe partial class BetterTeleport
         }
         else
         {
-            var matches = records.Values
+            List<AetheryteRecord> matches;
+
+            if (recordMatcher != null)
+                matches = recordMatcher.Search(searchWord, limit: int.MaxValue).ToList();
+            else
+            {
+                matches = records.Values
                                  .SelectMany(x => x)
                                  .Concat(houseRecords)
                                  .Where
-                                 (x => x.ToString().Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
+                                 (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
                                        (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
                                         remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
                                  )
                                  .ToList();
+            }
 
             var searchCount = Math.Min(8, matches.Count);
 
@@ -124,7 +131,7 @@ public unsafe partial class BetterTeleport
             AtkStage.Instance()->ClearFocus();
 
             shouldFocusSearchBar = false;
-            
+
             if (isMoving)
             {
                 ChatManager.Instance().SendCommand("/automove on");
@@ -245,9 +252,7 @@ public unsafe partial class BetterTeleport
         ImGui.PopID();
 
         if (isHovered && !isSearchingInputting)
-        {
             selectedIndex = index;
-        }
 
         var drawList = ImGui.GetWindowDrawList();
 

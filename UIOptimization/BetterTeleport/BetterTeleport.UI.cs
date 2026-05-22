@@ -10,12 +10,15 @@ using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.MapRenderer;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using OmenTools.Utils.FuzzyMatcher;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.BetterTeleport;
 
 public unsafe partial class BetterTeleport
 {
+    private FuzzyMatcher<AetheryteRecord>? recordMatcher;
+    
     private List<AetheryteRecord> favorites = [];
 
     private bool shouldFocusSearchBar;
@@ -34,6 +37,26 @@ public unsafe partial class BetterTeleport
         EnableDefaultMarkers = true,
         DefaultMarkerFilter  = marker => marker.DataType is not (3 or 4)
     };
+    
+    private FuzzyMatcher<AetheryteRecord> CreateRecordMatcher() =>
+        new
+        (
+            AllRecords,
+            x =>
+            {
+                var keys = new List<(IEnumerable<string?>, FuzzySearchWeight)>();
+
+                if (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) && !string.IsNullOrWhiteSpace(remark))
+                    keys.Add(([remark], FuzzySearchWeight.Title));
+
+                keys.Add(([x.Name], FuzzySearchWeight.Name));
+
+                var zoneName = x.GetZone().ExtractPlaceName();
+                keys.Add(([x.RegionName, zoneName], FuzzySearchWeight.Default));
+
+                return keys;
+            }
+        );
 
     private void SetupMapRenderer(AetheryteRecord aetheryte, bool isPinned)
     {
@@ -474,7 +497,11 @@ public unsafe partial class BetterTeleport
         }
 
         if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             config.Save(this);
+            recordMatcher?.Dispose();
+            recordMatcher = CreateRecordMatcher();
+        }
 
         ImGui.Separator();
         ImGui.Spacing();

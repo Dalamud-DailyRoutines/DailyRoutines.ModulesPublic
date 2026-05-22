@@ -58,10 +58,11 @@ public unsafe partial class BetterTeleport
         }
 
         List<string> availableTabs = [];
-        if (favorites.Count > 0) 
+        if (favorites.Count > 0)
             availableTabs.Add("Favorite");
-        
+
         var agentLobby = AgentLobby.Instance();
+
         if (agentLobby != null)
         {
             foreach (var name in records.Keys)
@@ -158,17 +159,25 @@ public unsafe partial class BetterTeleport
 
         if (ImGui.InputTextWithHint(searchBarID, Lang.Get("PleaseSearch"), ref fullSearchWord, 128))
         {
-            fullSearchResult = !string.IsNullOrWhiteSpace(fullSearchWord)
-                                   ? records.Values
-                                            .SelectMany(x => x)
-                                            .Where
-                                            (x => x.ToString()
-                                                   .Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                  (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
-                                                   remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
-                                            )
-                                            .ToList()
-                                   : [];
+            if (string.IsNullOrWhiteSpace(fullSearchWord))
+                fullSearchResult = [];
+            else
+            {
+                if (recordMatcher != null)
+                    fullSearchResult = recordMatcher.Search(fullSearchWord, limit: int.MaxValue).ToList();
+                else
+                {
+                    fullSearchResult = records.Values
+                                              .SelectMany(x => x)
+                                              .Where
+                                              (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
+                                                    (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                                     remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
+                                              )
+                                              .ToList();
+                }
+            }
+
             selectedIndex = 0;
         }
 

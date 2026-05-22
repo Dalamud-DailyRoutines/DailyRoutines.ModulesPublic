@@ -7,7 +7,6 @@ using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using DailyRoutines.Verification;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -110,6 +109,9 @@ public unsafe partial class BetterTeleport : ModuleBase
             ManagerHost.Current.RemoveWindow(fullWindow);
             fullWindow = null;
         }
+
+        recordMatcher?.Dispose();
+        recordMatcher = null;
     }
 
     protected override void ConfigUI()
@@ -120,16 +122,17 @@ public unsafe partial class BetterTeleport : ModuleBase
         ImGui.TextWrapped($"{COMMAND} {Lang.Get("BetterTeleport-CommandHelp")}");
 
         ImGui.NewLine();
-        
+
         ImGui.SetNextItemWidth(150f * GlobalUIScale);
         var defaultPage = (int)config.DefaultPage;
-        var options = new[] { Lang.Get("BetterTeleport-PageSearch"), Lang.Get("BetterTeleport-PageFull") };
+        var options     = new[] { Lang.Get("BetterTeleport-PageSearch"), Lang.Get("BetterTeleport-PageFull") };
+
         if (ImGui.Combo($"{Lang.Get("BetterTeleport-DefaultPage")}##BetterTeleportDefaultPage", ref defaultPage, options, options.Length))
         {
             config.DefaultPage = (PageType)defaultPage;
             config.Save(this);
         }
-        
+
         if (ImGui.Checkbox(Lang.Get("BetterTeleport-HideAethernetInParty"), ref config.HideAethernetInParty))
             config.Save(this);
     }
@@ -174,11 +177,11 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         NotifyHelper.Instance().NotificationInfo(Lang.Get("BetterTeleport-Notification", aetheryte.Name));
 
-        searchWord = string.Empty;
+        searchWord       = string.Empty;
         pinnedAetheryte  = null;
         hoveredAetheryte = null;
         Overlay.IsOpen   = false;
-        
+
         AddToRecentTeleports(aetheryte);
 
         switch (aetheryte.Group)
@@ -353,9 +356,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         config.RecentTeleports.RemoveAll(x => x.AetheryteID == aetheryte.RowID && x.SubIndex == aetheryte.SubIndex);
         config.RecentTeleports.Insert(0, new RecentRecord { AetheryteID = aetheryte.RowID, SubIndex = aetheryte.SubIndex });
         if (config.RecentTeleports.Count > 20)
-        {
             config.RecentTeleports.RemoveRange(20, config.RecentTeleports.Count - 20);
-        }
         config.Save(this);
         RefreshDefaultOverlayItems();
     }
@@ -366,7 +367,7 @@ public unsafe partial class BetterTeleport : ModuleBase
     #region 配置
 
     private static string GetConfigKey(AetheryteRecord record) => $"{record.RowID}_{record.SubIndex}";
-    
+
     private static string GetConfigKey(uint rowID, byte subIndex) => $"{rowID}_{subIndex}";
 
     private void MigrateConfig()
@@ -375,6 +376,7 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         // 迁移 Remarks
         var oldRemarksKeys = config.Remarks.Keys.Where(k => !k.Contains('_')).ToList();
+
         if (oldRemarksKeys.Count > 0)
         {
             foreach (var oldKey in oldRemarksKeys)
@@ -385,13 +387,16 @@ public unsafe partial class BetterTeleport : ModuleBase
                     var newKey = GetConfigKey(rowID, 0);
                     config.Remarks[newKey] = val;
                 }
+
                 config.Remarks.Remove(oldKey);
             }
+
             migrated = true;
         }
 
         // 迁移 Positions
         var oldPositionsKeys = config.Positions.Keys.Where(k => !k.Contains('_')).ToList();
+
         if (oldPositionsKeys.Count > 0)
         {
             foreach (var oldKey in oldPositionsKeys)
@@ -402,15 +407,15 @@ public unsafe partial class BetterTeleport : ModuleBase
                     var newKey = GetConfigKey(rowID, 0);
                     config.Positions[newKey] = val;
                 }
+
                 config.Positions.Remove(oldKey);
             }
+
             migrated = true;
         }
 
         if (migrated)
-        {
             config.Save(this);
-        }
     }
 
     public class RecentRecord
@@ -418,7 +423,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         public uint AetheryteID { get; set; }
         public byte SubIndex    { get; set; }
     }
-    
+
     private enum PageType
     {
         Search,
@@ -442,7 +447,6 @@ public unsafe partial class BetterTeleport : ModuleBase
     private const string COMMAND = "/pdrtelepo";
 
     private const ulong INVALID_HOUSE_ID = 0xFFFFFFFFFFFFFFFF;
-
 
 
     private static Dictionary<uint, string> TicketUsageTypes

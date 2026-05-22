@@ -6,6 +6,7 @@ using FFXIVClientStructs.FFXIV.Client.System.Input;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using OmenTools.Utils.FuzzyMatcher;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.BetterTeleport;
@@ -105,6 +106,9 @@ public unsafe partial class BetterTeleport
                         record.Update();
 
                     RefreshDefaultOverlayItems();
+
+                    recordMatcher?.Dispose();
+                    recordMatcher = CreateRecordMatcher();
                 }
                 finally
                 {
@@ -128,29 +132,28 @@ public unsafe partial class BetterTeleport
             return;
         }
 
-        var result = records.Values
+        AetheryteRecord? result;
+        if (recordMatcher != null)
+        {
+            result = recordMatcher.Search(args, limit: int.MaxValue)
+                                  .OrderByDescending(x => x.IsAetheryte)
+                                  .ThenBy(x => x.Name.Length)
+                                  .FirstOrDefault();
+        }
+        else
+        {
+            result = records.Values
                             .SelectMany(x => x)
                             .Concat(houseRecords)
                             .Where
-                            (x =>
-                                {
-                                    var name = string.Empty;
-
-                                    try
-                                    {
-                                        name = x.ToString();
-                                    }
-                                    catch
-                                    {
-                                        // ignored
-                                    }
-
-                                    return name.Contains(args, StringComparison.OrdinalIgnoreCase);
-                                }
+                            (x => x.Name.Contains(args, StringComparison.OrdinalIgnoreCase) ||
+                                  (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                   remark.Contains(args, StringComparison.OrdinalIgnoreCase))
                             )
                             .OrderByDescending(x => x.IsAetheryte)
                             .ThenBy(x => x.Name.Length)
                             .FirstOrDefault();
+        }
 
         if (result == null) return;
 
