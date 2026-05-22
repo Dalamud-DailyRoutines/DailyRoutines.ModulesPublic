@@ -80,7 +80,7 @@ resharper_new_line_before_finally = true
 resharper_place_accessorholder_attribute_on_same_line = false
 resharper_place_expr_method_on_single_line = false
 resharper_place_field_attribute_on_same_line = false
-resharper_place_simple_embedded_statement_on_same_line = true
+resharper_place_simple_embedded_statement_on_same_line = false
 resharper_show_autodetect_configure_formatting_tip = false
 resharper_use_indent_from_vs = false
 
