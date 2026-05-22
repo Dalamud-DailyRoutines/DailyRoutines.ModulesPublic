@@ -43,7 +43,7 @@ public unsafe class BetterTeleport : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-    
+
     private static uint TicketUsageType
     {
         get => DService.Instance().GameConfig.UiConfig.GetUInt("TelepoTicketUseType");
@@ -58,13 +58,13 @@ public unsafe class BetterTeleport : ModuleBase
 
     private IEnumerable<AetheryteRecord> AllRecords =>
         records.Values.SelectMany(x => x).Concat(houseRecords);
-    
+
     private Config config = null!;
-    
+
     // Icon ID - Record
     private readonly Dictionary<string, List<AetheryteRecord>> records      = [];
     private readonly List<AetheryteRecord>                     houseRecords = [];
-    
+
     private bool isRefreshing;
 
     private string                searchWord   = string.Empty;
@@ -72,8 +72,8 @@ public unsafe class BetterTeleport : ModuleBase
     private List<AetheryteRecord> favorites    = [];
     private bool                  isNeedToLoseFocusSearchBar;
 
-    private readonly Dictionary<uint, float> hoverProgress = [];
-    private          float                   hoverStartTime;
+    private readonly Dictionary<(uint RowID, byte SubIndex), float> hoverProgress = [];
+    private          float                                          hoverStartTime;
 
     private AetheryteRecord? hoveredAetheryte;
     private AetheryteRecord? lastHoveredAetheryte;
@@ -101,7 +101,7 @@ public unsafe class BetterTeleport : ModuleBase
 
         UseActionManager.Instance().RegPreUseAction(OnPostUseAction);
     }
-    
+
     protected override void Uninit()
     {
         UseActionManager.Instance().Unreg(OnPostUseAction);
@@ -140,7 +140,6 @@ public unsafe class BetterTeleport : ModuleBase
 
         var isSearchEmpty = string.IsNullOrWhiteSpace(searchWord);
 
-
         var searchBarID = "###Search";
 
         if (isNeedToLoseFocusSearchBar)
@@ -159,8 +158,8 @@ public unsafe class BetterTeleport : ModuleBase
                                         .Where
                                         (x => x.ToString()
                                                .Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
-                                              config.Remarks.TryGetValue(x.RowID, out var remark) &&
-                                              remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase)
+                                              (config.Remarks.TryGetValue(x.RowID, out var remark) &&
+                                               remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
                                         )
                                         .ToList()
                                : [];
@@ -272,7 +271,7 @@ public unsafe class BetterTeleport : ModuleBase
 
                                 ImGui.GetWindowDrawList().AddRectFilled(cursor, cursor + new Vector2(width, height), headerBgColor, 4f);
 
-                                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ImGui.GetStyle().ItemSpacing.X * 2);
+                                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (ImGui.GetStyle().ItemSpacing.X * 2));
                                 ImGui.AlignTextToFramePadding();
                                 ImGui.TextColored(ImGui.GetColorU32(ImGuiCol.Text).ToVector4(), headerName);
 
@@ -343,7 +342,7 @@ public unsafe class BetterTeleport : ModuleBase
         var width      = ImGui.GetContentRegionAvail().X;
         var lineHeight = ImGui.GetTextLineHeight();
         var padding    = ImGui.GetStyle().ItemSpacing.X;
-        var itemHeight = lineHeight * 2.2f + padding;
+        var itemHeight = (lineHeight * 2.2f) + padding;
 
         if (ImGui.InvisibleButton("##ItemBtn", new Vector2(width, itemHeight)))
             HandleTeleport(aetheryte);
@@ -413,17 +412,18 @@ public unsafe class BetterTeleport : ModuleBase
             }
         }
 
-        hoverProgress.TryAdd(aetheryte.RowID, 0f);
+        var key = (aetheryte.RowID, aetheryte.SubIndex);
+        hoverProgress.TryAdd(key, 0f);
 
         var targetProgress  = isHovered ? 1f : 0f;
         var speed           = ImGui.GetIO().DeltaTime * 12f;
-        var currentProgress = hoverProgress[aetheryte.RowID];
+        var currentProgress = hoverProgress[key];
 
         if (Math.Abs(currentProgress - targetProgress) > 0.001f)
         {
-            currentProgress                += (targetProgress - currentProgress) * Math.Min(speed, 1.0f);
-            currentProgress                =  Math.Clamp(currentProgress, 0f, 1f);
-            hoverProgress[aetheryte.RowID] =  currentProgress;
+            currentProgress    += (targetProgress - currentProgress) * Math.Min(speed, 1.0f);
+            currentProgress    =  Math.Clamp(currentProgress, 0f, 1f);
+            hoverProgress[key] =  currentProgress;
         }
 
         var animOffset      = currentProgress * 8.0f;
@@ -439,8 +439,8 @@ public unsafe class BetterTeleport : ModuleBase
             bgCol = activeColor;
         else if (currentProgress > 0.01f)
         {
-            var alpha = (uint)(currentProgress * (baseColor >> 24 & 0xFF));
-            bgCol = baseColor & 0x00FFFFFF | alpha << 24;
+            var alpha = (uint)(currentProgress * ((baseColor >> 24) & 0xFF));
+            bgCol = (baseColor & 0x00FFFFFF) | (alpha << 24);
         }
 
         if (bgCol != 0)
@@ -450,8 +450,8 @@ public unsafe class BetterTeleport : ModuleBase
                 startPos,
                 startPos + new Vector2(width, itemHeight),
                 bgCol,
-                bgCol & 0x00FFFFFF | ((uint)((bgCol >> 24) * 0.5f) & 0xFF) << 24,
-                bgCol & 0x00FFFFFF | ((uint)((bgCol >> 24) * 0.5f) & 0xFF) << 24,
+                (bgCol & 0x00FFFFFF) | (((uint)((bgCol >> 24) * 0.5f) & 0xFF) << 24),
+                (bgCol & 0x00FFFFFF) | (((uint)((bgCol >> 24) * 0.5f) & 0xFF) << 24),
                 bgCol
             );
         }
@@ -470,11 +470,11 @@ public unsafe class BetterTeleport : ModuleBase
                     break;
             }
 
-            var centerY = startPos.Y + itemHeight / 2;
+            var centerY = startPos.Y + (itemHeight / 2);
             drawList.AddRectFilled
             (
-                startPos with { Y = centerY - indicatorHeight / 2 },
-                new Vector2(startPos.X + 3f, centerY + indicatorHeight / 2),
+                startPos with { Y = centerY - (indicatorHeight / 2) },
+                new Vector2(startPos.X + 3f, centerY + (indicatorHeight / 2)),
                 indicatorColor,
                 1.5f
             );
@@ -495,7 +495,7 @@ public unsafe class BetterTeleport : ModuleBase
 
         if (iconStr != null)
         {
-            var iconY = startPos.Y + (itemHeight - lineHeight) / 2;
+            var iconY = startPos.Y + ((itemHeight - lineHeight) / 2);
             ImGui.SetCursorScreenPos(new Vector2(contentStartX, iconY));
             ImGuiHelpers.SeStringWrapped(iconStr.Encode());
         }
@@ -507,14 +507,14 @@ public unsafe class BetterTeleport : ModuleBase
 
         using (FontManager.Instance().UIFont80.Push())
         {
-            var subY = titleY + lineHeight + 2f * GlobalUIScale;
+            var subY = titleY + lineHeight + (2f * GlobalUIScale);
             drawList.AddText(new Vector2(contentStartX, subY), ImGui.GetColorU32(ImGuiCol.TextDisabled), aetheryte.GetZone().ExtractPlaceName());
         }
 
         var costText    = $"{cost}";
         var costStrFull = $"{costText}\uE049";
         var costSize    = ImGui.CalcTextSize(costStrFull);
-        var costPos     = new Vector2(startPos.X + width - costSize.X - padding * 2 - animOffset, startPos.Y + (itemHeight - costSize.Y) / 2);
+        var costPos     = new Vector2(startPos.X + width - costSize.X - (padding * 2) - animOffset, startPos.Y + ((itemHeight - costSize.Y) / 2));
 
         drawList.AddText(costPos, ImGui.GetColorU32(ImGuiCol.Text), costStrFull);
 
@@ -613,7 +613,7 @@ public unsafe class BetterTeleport : ModuleBase
         var hint     = isPinned ? Lang.Get("BetterTeleport-MapHint-Zoom") : Lang.Get("BetterTeleport-MapHint-Pin");
         var hintSize = ImGui.CalcTextSize(hint);
         if (imageSize.X > hintSize.X)
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (imageSize.X - hintSize.X) / 2);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((imageSize.X - hintSize.X) / 2));
         ImGui.TextDisabled(hint);
 
         var orig = ImGui.GetCursorScreenPos();
@@ -746,15 +746,15 @@ public unsafe class BetterTeleport : ModuleBase
             var time     = (float)ImGui.GetTime();
             var animTime = time - hoverStartTime;
 
-            var pulse = (float)Math.Sin(time * 10f) * 0.2f + 1.0f;
+            var pulse = ((float)Math.Sin(time * 10f) * 0.2f) + 1.0f;
 
-            var pingRadius = animTime          * 100f % 60f;
-            var pingAlpha  = 1.0f - pingRadius / 60f;
+            var pingRadius = animTime * 100f % 60f;
+            var pingAlpha  = 1.0f - (pingRadius / 60f);
 
             if (pingRadius > 0 && pingAlpha > 0)
             {
                 var pingColor = ImGui.GetColorU32(ImGuiCol.CheckMark);
-                pingColor = pingColor & 0x00FFFFFF | (uint)(pingAlpha * 255) << 24;
+                pingColor = (pingColor & 0x00FFFFFF) | ((uint)(pingAlpha * 255) << 24);
                 drawList.AddCircle(centerPos, pingRadius, pingColor, 32, 2f);
             }
 
@@ -785,7 +785,7 @@ public unsafe class BetterTeleport : ModuleBase
             var text     = config.Remarks.TryGetValue(aetheryte.RowID, out var remark) ? remark : aetheryte.Name;
             var textSize = ImGui.CalcTextSize(text);
             var padding  = ScaledVector2(2f, 3f);
-            var textPos  = centerPos - new Vector2(textSize.X / 2, 20f * GlobalUIScale + textSize.Y);
+            var textPos  = centerPos - new Vector2(textSize.X / 2, (20f * GlobalUIScale) + textSize.Y);
 
             var minPos = orig             + padding;
             var maxPos = orig + imageSize - padding - textSize;
@@ -905,7 +905,7 @@ public unsafe class BetterTeleport : ModuleBase
                     TaskHelper.Enqueue
                     (() =>
                         {
-                            if (MovementManager.Instance().IsManagerBusy                ||
+                            if (MovementManager.Instance().IsManagerBusy     ||
                                 DService.Instance().Condition.IsBetweenAreas ||
                                 !UIModule.IsScreenReady()                    ||
                                 DService.Instance().Condition.Any(ConditionFlag.Mounted))
@@ -940,7 +940,7 @@ public unsafe class BetterTeleport : ModuleBase
                 TaskHelper.Enqueue
                 (() =>
                     {
-                        if (MovementManager.Instance().IsManagerBusy                ||
+                        if (MovementManager.Instance().IsManagerBusy     ||
                             DService.Instance().Condition.IsBetweenAreas ||
                             !UIModule.IsScreenReady()                    ||
                             DService.Instance().Condition.Any(ConditionFlag.Mounted))
@@ -958,7 +958,7 @@ public unsafe class BetterTeleport : ModuleBase
         var aetheryteInThisZone = MovementManager.GetNearestAetheryte(Control.GetLocalPlayer()->Position, GameState.TerritoryType);
 
         // 获取不到水晶 / 不属于同一组水晶 / 附近没有能交互到的水晶 → 直接传
-        if (!isSameZone && aetheryte.Group == 0          ||
+        if ((!isSameZone && aetheryte.Group == 0)        ||
             aetheryteInThisZone       == null            ||
             aetheryteInThisZone.Group != aetheryte.Group ||
             !EventFramework.Instance()->TryGetNearestEventID
@@ -990,7 +990,7 @@ public unsafe class BetterTeleport : ModuleBase
                 TaskHelper.Enqueue
                 (() =>
                     {
-                        if (MovementManager.Instance().IsManagerBusy                ||
+                        if (MovementManager.Instance().IsManagerBusy     ||
                             DService.Instance().Condition.IsBetweenAreas ||
                             !UIModule.IsScreenReady()                    ||
                             DService.Instance().Condition.Any(ConditionFlag.Mounted))
@@ -1161,18 +1161,18 @@ public unsafe class BetterTeleport : ModuleBase
 
     private static bool IsWithPermission() =>
         !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
-    
+
     #region Data
 
     private void RefreshFavoritesInfo()
     {
         if (config.Favorites.Count == 0) return;
         favorites = config.Favorites
-                                .Select(x => AllRecords.FirstOrDefault(d => d.RowID == x))
-                                .Where(x => x != null)
-                                .OfType<AetheryteRecord>()
-                                .OrderBy(x => x.RowID)
-                                .ToList();
+                          .Select(x => AllRecords.FirstOrDefault(d => d.RowID == x))
+                          .Where(x => x != null)
+                          .OfType<AetheryteRecord>()
+                          .OrderBy(x => x.RowID)
+                          .ToList();
     }
 
     private void RefreshHouseInfo()
@@ -1260,7 +1260,7 @@ public unsafe class BetterTeleport : ModuleBase
         public Dictionary<uint, Vector3> Positions            = [];
         public Dictionary<uint, string>  Remarks              = [];
     }
-    
+
     #region 常量
 
     private const string COMMAND = "/pdrtelepo";
@@ -1277,15 +1277,16 @@ public unsafe class BetterTeleport : ModuleBase
         {
             if (field != null)
                 return field;
-            
+
             field = [];
+
             for (var i = 0U; i < 5; i++)
             {
                 var addonOffset       = i + 8523U;
                 var optionDescription = LuminaWrapper.GetAddonText(addonOffset);
                 field[i] = optionDescription;
             }
-            
+
             return field;
         }
     }
