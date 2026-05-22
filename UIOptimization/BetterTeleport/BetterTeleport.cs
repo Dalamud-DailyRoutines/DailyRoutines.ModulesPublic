@@ -316,7 +316,10 @@ public unsafe partial class BetterTeleport : ModuleBase
     private static bool IsWithPermission() =>
         !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
 
+    #region 配置
+
     private static string GetConfigKey(AetheryteRecord record) => $"{record.RowID}_{record.SubIndex}";
+    
     private static string GetConfigKey(uint rowID, byte subIndex) => $"{rowID}_{subIndex}";
 
     private void MigrateConfig()
@@ -331,7 +334,7 @@ public unsafe partial class BetterTeleport : ModuleBase
             {
                 if (uint.TryParse(oldKey, out var rowID))
                 {
-                    var val = config.Remarks[oldKey];
+                    var val    = config.Remarks[oldKey];
                     var newKey = GetConfigKey(rowID, 0);
                     config.Remarks[newKey] = val;
                 }
@@ -348,7 +351,7 @@ public unsafe partial class BetterTeleport : ModuleBase
             {
                 if (uint.TryParse(oldKey, out var rowID))
                 {
-                    var val = config.Positions[oldKey];
+                    var val    = config.Positions[oldKey];
                     var newKey = GetConfigKey(rowID, 0);
                     config.Positions[newKey] = val;
                 }
@@ -365,12 +368,13 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public HashSet<uint>             Favorites            = [];
-        public bool                      HideAethernetInParty = true;
-        public float                     MapZoom              = 1f;
+        public HashSet<uint>               Favorites            = [];
+        public bool                        HideAethernetInParty = true;
         public Dictionary<string, Vector3> Positions            = [];
         public Dictionary<string, string>  Remarks              = [];
     }
+
+    #endregion
 
     #region 常量
 

@@ -16,13 +16,6 @@ namespace DailyRoutines.ModulesPublic.BetterTeleport;
 
 public unsafe partial class BetterTeleport
 {
-    private const uint GIL_ITEM_ID             = 1;
-    private const uint TELEPORT_TICKET_ITEM_ID = 7569;
-
-    private static readonly SeString HomeChar     = new SeStringBuilder().AddIcon(BitmapFontIcon.OrangeDiamond).Build();
-    private static readonly SeString FreeChar     = new SeStringBuilder().AddIcon(BitmapFontIcon.GoldStar).Build();
-    private static readonly SeString FavoriteChar = new SeStringBuilder().AddIcon(BitmapFontIcon.SilverStar).Build();
-
     private AetheryteRecord? hoveredAetheryte;
     private AetheryteRecord? pinnedAetheryte;
 
@@ -31,9 +24,10 @@ public unsafe partial class BetterTeleport
 
     private readonly ImGuiMapRenderer mapRenderer = new()
     {
-        MinZoom   = 0.2f,
-        MaxZoom   = 4.0f,
-        LerpSpeed = 15.0f,
+        MinZoom              = 0.2f,
+        MaxZoom              = 4.0f,
+        LerpSpeed            = 15.0f,
+        EnableDefaultMarkers = true
     };
 
     private void SetupMapRenderer(AetheryteRecord aetheryte, bool isPinned)
@@ -43,10 +37,9 @@ public unsafe partial class BetterTeleport
         mapRenderer.Pannable         = isPinned;
         mapRenderer.EnableResizeGrip = isPinned;
 
-        // 同步外部配置的缩放级别
-        if (!isPinned) 
+        if (!isPinned)
             mapRenderer.ResetView();
-        else if (mapRenderer.CustomViewportSize == Vector2.Zero) 
+        else if (mapRenderer.CustomViewportSize == Vector2.Zero)
             mapRenderer.CustomViewportSize = new(450f * GlobalUIScale);
 
         mapRenderer.ClearMarkers();
@@ -69,7 +62,7 @@ public unsafe partial class BetterTeleport
                 IconID      = isAetheryte ? 60453U : 60430U,
                 Name        = record.Name,
                 Color       = 0xCCFFFFFF,
-                Size        = new Vector2(18f * (isPinned ? 1f : config.MapZoom), 18f * (isPinned ? 1f : config.MapZoom)),
+                Size        = ScaledVector2(28f),
                 ShowLabel   = false,
                 TooltipText = record.Name,
                 OnClick = m =>
@@ -96,7 +89,7 @@ public unsafe partial class BetterTeleport
             IconID      = aetheryte.IsAetheryte ? 60453U : 60430U,
             Name        = aetheryte.Name,
             Color       = 0xFFFFFFFF,
-            Size        = new Vector2(24f * (isPinned ? 1f : config.MapZoom), 24f * (isPinned ? 1f : config.MapZoom)),
+            Size        = ScaledVector2(32f),
             PulseEffect = true,
             PulseColor  = ImGui.GetColorU32(ImGuiCol.CheckMark),
             Label       = displayName,
@@ -122,7 +115,7 @@ public unsafe partial class BetterTeleport
                 ID          = "ContextMenuTargetFlag",
                 Position    = contextMenuTargetPos,
                 IconID      = 60561U,
-                Size        = new Vector2(24f * (isPinned ? 1f : config.MapZoom), 24f * (isPinned ? 1f : config.MapZoom)),
+                Size        = ScaledVector2(32f),
                 ShowLabel   = false,
                 ShowTooltip = false
             };
@@ -180,10 +173,7 @@ public unsafe partial class BetterTeleport
             }
         }
 
-        if (hoveredAetheryte == null)
-        {
-            return;
-        }
+        if (hoveredAetheryte == null) return;
 
         if (pinnedAetheryte != null && hoveredAetheryte.RowID == pinnedAetheryte.RowID)
             return;
@@ -198,7 +188,7 @@ public unsafe partial class BetterTeleport
             if (warp.Handle != nint.Zero)
             {
                 var widthScale = Math.Min(1f, warp.Width / 2048f);
-                var imageSize  = ScaledVector2(384f      * widthScale * config.MapZoom);
+                var imageSize  = ScaledVector2(384f      * widthScale);
 
                 ImGuiOm.ScaledDummy(0f, 2f);
                 var hint     = Lang.Get("BetterTeleport-MapHint-Pin");
@@ -231,7 +221,7 @@ public unsafe partial class BetterTeleport
                             return false;
 
                         MovementManager.Instance().TPGround();
-                        if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition[ConditionFlag.Jumping]) 
+                        if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition[ConditionFlag.Jumping])
                             return false;
 
                         return true;
@@ -697,4 +687,15 @@ public unsafe partial class BetterTeleport
 
         ImGui.SetCursorScreenPos(startPos + new Vector2(0, itemHeight + (index.HasValue ? 2f : 3f)));
     }
+
+    #region 常量
+
+    private const uint GIL_ITEM_ID             = 1;
+    private const uint TELEPORT_TICKET_ITEM_ID = 7569;
+
+    private static readonly SeString HomeChar     = new SeStringBuilder().AddIcon(BitmapFontIcon.OrangeDiamond).Build();
+    private static readonly SeString FreeChar     = new SeStringBuilder().AddIcon(BitmapFontIcon.GoldStar).Build();
+    private static readonly SeString FavoriteChar = new SeStringBuilder().AddIcon(BitmapFontIcon.SilverStar).Build();
+
+    #endregion
 }
