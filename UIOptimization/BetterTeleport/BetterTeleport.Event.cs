@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Manager;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -101,6 +101,8 @@ public unsafe partial class BetterTeleport
 
                     foreach (var record in AllRecords)
                         record.Update();
+
+                    RefreshDefaultOverlayItems();
                 }
                 finally
                 {

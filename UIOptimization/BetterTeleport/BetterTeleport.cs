@@ -141,10 +141,11 @@ public unsafe partial class BetterTeleport : ModuleBase
         NotifyHelper.Instance().NotificationInfo(Lang.Get("BetterTeleport-Notification", aetheryte.Name));
 
         searchWord = string.Empty;
-        searchResult.Clear();
         pinnedAetheryte  = null;
         hoveredAetheryte = null;
         Overlay.IsOpen   = false;
+        
+        AddToRecentTeleports(aetheryte);
 
         switch (aetheryte.Group)
         {
@@ -313,6 +314,18 @@ public unsafe partial class BetterTeleport : ModuleBase
         }
     }
 
+    private void AddToRecentTeleports(AetheryteRecord aetheryte)
+    {
+        config.RecentTeleports.RemoveAll(x => x.AetheryteID == aetheryte.RowID && x.SubIndex == aetheryte.SubIndex);
+        config.RecentTeleports.Insert(0, new RecentRecord { AetheryteID = aetheryte.RowID, SubIndex = aetheryte.SubIndex });
+        if (config.RecentTeleports.Count > 20)
+        {
+            config.RecentTeleports.RemoveRange(20, config.RecentTeleports.Count - 20);
+        }
+        config.Save(this);
+        RefreshDefaultOverlayItems();
+    }
+
     private static bool IsWithPermission() =>
         !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
 
@@ -366,12 +379,19 @@ public unsafe partial class BetterTeleport : ModuleBase
         }
     }
 
+    public class RecentRecord
+    {
+        public uint AetheryteID { get; set; }
+        public byte SubIndex    { get; set; }
+    }
+
     private class Config : ModuleConfig
     {
         public HashSet<uint>               Favorites            = [];
         public bool                        HideAethernetInParty = true;
         public Dictionary<string, Vector3> Positions            = [];
         public Dictionary<string, string>  Remarks              = [];
+        public List<RecentRecord>          RecentTeleports      = [];
     }
 
     #endregion

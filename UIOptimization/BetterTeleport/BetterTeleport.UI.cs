@@ -16,6 +16,8 @@ namespace DailyRoutines.ModulesPublic.BetterTeleport;
 
 public unsafe partial class BetterTeleport
 {
+    private List<AetheryteRecord> favorites = [];
+    
     private AetheryteRecord? hoveredAetheryte;
     private AetheryteRecord? pinnedAetheryte;
 
@@ -398,7 +400,7 @@ public unsafe partial class BetterTeleport
         return curX;
     }
 
-    private static void DrawAetheryteStateIcon
+    private void DrawAetheryteStateIcon
     (
         AetheryteRecord aetheryte,
         float           curX,
@@ -419,11 +421,15 @@ public unsafe partial class BetterTeleport
             case AetheryteRecordState.Favorite:
                 iconStr = FavoriteChar;
                 break;
+            default:
+                if (config.Favorites.Contains(aetheryte.RowID))
+                    iconStr = FavoriteChar;
+                break;
         }
 
         if (iconStr != null)
         {
-            ImGui.SetCursorScreenPos(new Vector2(curX, titleY - (2f * GlobalUIScale)));
+            ImGui.SetCursorScreenPos(new(curX, titleY));
             ImGuiHelpers.SeStringWrapped(iconStr.Encode());
         }
     }
@@ -445,6 +451,7 @@ public unsafe partial class BetterTeleport
 
             RefreshFavoritesInfo();
             config.Save(this);
+            RefreshDefaultOverlayItems();
         }
 
         ImGui.Separator();

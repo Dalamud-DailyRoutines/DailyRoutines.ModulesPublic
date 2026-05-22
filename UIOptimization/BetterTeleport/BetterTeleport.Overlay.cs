@@ -11,15 +11,15 @@ namespace DailyRoutines.ModulesPublic.BetterTeleport;
 
 public unsafe partial class BetterTeleport
 {
-    private string                searchWord   = string.Empty;
-    private List<AetheryteRecord> searchResult = [];
-    private List<AetheryteRecord> favorites    = [];
+    private string searchWord = string.Empty;
 
-    private          int                   selectedIndex;
-    private          bool                  shouldFocusSearchBar;
-    private          bool                  hasUsedArrowKeys;
-    private          Vector2               lastMousePos;
-    private readonly List<OverlayListItem> visibleItems = [];
+    private int     selectedIndex;
+    private bool    shouldFocusSearchBar;
+    private bool    hasUsedArrowKeys;
+    private Vector2 lastMousePos;
+    
+    private readonly List<OverlayListItem> visibleItems        = [];
+    private readonly List<OverlayListItem> defaultOverlayItems = [];
 
     protected override void OverlayUI()
     {
@@ -59,91 +59,7 @@ public unsafe partial class BetterTeleport
 
         if (isSearchEmpty)
         {
-            var specialSeen  = new HashSet<(uint, byte)>();
-            var specialItems = new List<AetheryteRecord>();
-
-            // 1. 返回点 (最多1个)
-            var home = AllRecords.FirstOrDefault(x => x.State == AetheryteRecordState.Home);
-
-            if (home != null)
-            {
-                if (specialSeen.Add((home.RowID, home.SubIndex)))
-                    specialItems.Add(home);
-            }
-
-            // 2. 免费点 (最多2个，去重)
-            var freePoints     = AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
-            var freeCountAdded = 0;
-
-            foreach (var free in freePoints)
-            {
-                if (freeCountAdded >= 2) break;
-
-                if (specialSeen.Add((free.RowID, free.SubIndex)))
-                {
-                    specialItems.Add(free);
-                    freeCountAdded++;
-                }
-            }
-
-            // 3. 收藏点 (最多3个，去重)
-            var officialFavs  = AllRecords.Where(x => x.State == AetheryteRecordState.Favorite).ToList();
-            var favCountAdded = 0;
-
-            foreach (var fav in officialFavs)
-            {
-                if (favCountAdded >= 3) break;
-
-                if (specialSeen.Add((fav.RowID, fav.SubIndex)))
-                {
-                    specialItems.Add(fav);
-                    favCountAdded++;
-                }
-            }
-
-            var specialCount = specialItems.Count;
-            var recentLimit  = 8 - specialCount;
-
-            var recentRecords = GetRecentRecords();
-            var recentItems   = new List<AetheryteRecord>();
-            var recentSeen    = new HashSet<(uint, byte)>();
-
-            foreach (var r in recentRecords)
-            {
-                if (recentItems.Count >= recentLimit) break;
-                if (!specialSeen.Contains((r.RowID, r.SubIndex)) && recentSeen.Add((r.RowID, r.SubIndex)))
-                    recentItems.Add(r);
-            }
-
-            foreach (var r in recentItems)
-            {
-                visibleItems.Add
-                (
-                    new OverlayListItem
-                    {
-                        Record              = r,
-                        IsShowMore          = false,
-                        DrawSeparatorBefore = false,
-                        Name                = r.Name
-                    }
-                );
-            }
-
-            for (var i = 0; i < specialItems.Count; i++)
-            {
-                var r       = specialItems[i];
-                var drawSep = i == 0 && recentItems.Count > 0;
-                visibleItems.Add
-                (
-                    new OverlayListItem
-                    {
-                        Record              = r,
-                        IsShowMore          = false,
-                        DrawSeparatorBefore = drawSep,
-                        Name                = r.Name
-                    }
-                );
-            }
+            visibleItems.AddRange(defaultOverlayItems);
 
             visibleItems.Add
             (
@@ -267,8 +183,7 @@ public unsafe partial class BetterTeleport
 
     protected override void OverlayOnClose() =>
         config.Save(this);
-
-
+    
     private void DrawSearchItem(int index, OverlayListItem item, bool isSelected)
     {
         if (item.DrawSeparatorBefore)
@@ -356,20 +271,161 @@ public unsafe partial class BetterTeleport
             HandleTeleport(item.Record);
     }
 
-    private List<AetheryteRecord> GetRecentRecords()
+    private List<AetheryteRecord> GetCombinedRecentRecords()
     {
         var result = new List<AetheryteRecord>();
+        var seen   = new HashSet<(uint, byte)>();
+
+        foreach (var rec in config.RecentTeleports)
+        {
+            if (seen.Add((rec.AetheryteID, rec.SubIndex)))
+            {
+                var found = AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteID && x.SubIndex == rec.SubIndex);
+                if (found != null)
+                {
+                    result.Add(found);
+                }
+            }
+        }
 
         var module = TeleportHistoryModule.Instance();
-
-        foreach (var rec in module->History)
+        if (module != null)
         {
-            var found = AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
-            if (found != null)
-                result.Add(found);
+            foreach (var rec in module->History)
+            {
+                if (seen.Add((rec.AetheryteId, rec.SubIndex)))
+                {
+                    var found = AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
+                    if (found != null)
+                    {
+                        result.Add(found);
+                    }
+                }
+            }
         }
 
         return result;
+    }
+
+    private List<AetheryteRecord> GetSortedSpecialRecords(List<AetheryteRecord> combinedHistory)
+    {
+        var specialSeen  = new HashSet<(uint, byte)>();
+        var specialItems = new List<AetheryteRecord>();
+
+        foreach (var fav in favorites)
+        {
+            if (specialSeen.Add((fav.RowID, fav.SubIndex)))
+            {
+                specialItems.Add(fav);
+            }
+        }
+
+        var home = AllRecords.FirstOrDefault(x => x.State == AetheryteRecordState.Home);
+        if (home != null)
+        {
+            if (specialSeen.Add((home.RowID, home.SubIndex)))
+            {
+                specialItems.Add(home);
+            }
+        }
+
+        var freePoints     = AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
+        var freeCountAdded = 0;
+        foreach (var free in freePoints)
+        {
+            if (freeCountAdded >= 2) break;
+            if (specialSeen.Add((free.RowID, free.SubIndex)))
+            {
+                specialItems.Add(free);
+                freeCountAdded++;
+            }
+        }
+
+        var officialFavs  = AllRecords.Where(x => x.State == AetheryteRecordState.Favorite).ToList();
+        var favCountAdded = 0;
+        foreach (var fav in officialFavs)
+        {
+            if (favCountAdded >= 3) break;
+            if (specialSeen.Add((fav.RowID, fav.SubIndex)))
+            {
+                specialItems.Add(fav);
+                favCountAdded++;
+            }
+        }
+
+        var historyIndices = combinedHistory
+            .Select((record, index) => new { record, index })
+            .ToDictionary(x => (x.record.RowID, x.record.SubIndex), x => x.index);
+
+        return specialItems.OrderBy(x => historyIndices.GetValueOrDefault((x.RowID, x.SubIndex), int.MaxValue)).ToList();
+    }
+
+    public void RefreshDefaultOverlayItems()
+    {
+        defaultOverlayItems.Clear();
+
+        var combinedHistory      = GetCombinedRecentRecords();
+        var sortedSpecialRecords = GetSortedSpecialRecords(combinedHistory);
+
+        var recentList  = new List<AetheryteRecord>();
+        var specialList = new List<AetheryteRecord>();
+        var usedSeen    = new HashSet<(uint, byte)>();
+
+        var recentLimit = 2;
+        foreach (var r in combinedHistory)
+        {
+            if (recentList.Count >= recentLimit) break;
+            if (usedSeen.Add((r.RowID, r.SubIndex)))
+            {
+                recentList.Add(r);
+            }
+        }
+
+        var specialLimit = 6;
+        foreach (var r in sortedSpecialRecords)
+        {
+            if (specialList.Count >= specialLimit) break;
+            if (usedSeen.Add((r.RowID, r.SubIndex)))
+            {
+                specialList.Add(r);
+            }
+        }
+
+        if (recentList.Count + specialList.Count < 8)
+        {
+            foreach (var r in combinedHistory)
+            {
+                if (recentList.Count + specialList.Count >= 8) break;
+                if (usedSeen.Add((r.RowID, r.SubIndex)))
+                {
+                    recentList.Add(r);
+                }
+            }
+        }
+
+        foreach (var r in recentList)
+        {
+            defaultOverlayItems.Add(new OverlayListItem
+            {
+                Record              = r,
+                IsShowMore          = false,
+                DrawSeparatorBefore = false,
+                Name                = r.Name
+            });
+        }
+
+        for (var i = 0; i < specialList.Count; i++)
+        {
+            var r       = specialList[i];
+            var drawSep = i == 0 && recentList.Count > 0;
+            defaultOverlayItems.Add(new OverlayListItem
+            {
+                Record              = r,
+                IsShowMore          = false,
+                DrawSeparatorBefore = drawSep,
+                Name                = r.Name
+            });
+        }
     }
 
     private struct OverlayListItem
