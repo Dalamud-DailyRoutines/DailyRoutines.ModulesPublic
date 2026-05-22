@@ -14,7 +14,6 @@ public unsafe partial class BetterTeleport
     private string searchWord = string.Empty;
 
     private int     selectedIndex;
-    private bool    shouldFocusSearchBar;
     private bool    hasUsedArrowKeys;
     private Vector2 lastMousePos;
     private bool    isSearchingInputting;

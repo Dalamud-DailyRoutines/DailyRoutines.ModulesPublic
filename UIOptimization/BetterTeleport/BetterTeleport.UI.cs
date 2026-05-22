@@ -18,6 +18,8 @@ public unsafe partial class BetterTeleport
 {
     private List<AetheryteRecord> favorites = [];
 
+    private bool shouldFocusSearchBar;
+    
     private AetheryteRecord? hoveredAetheryte;
     private AetheryteRecord? pinnedAetheryte;
 
@@ -502,8 +504,9 @@ public unsafe partial class BetterTeleport
     private void DrawAetheryteItem
     (
         AetheryteRecord aetheryte,
-        int?            index      = null,
-        bool            isSelected = false
+        int?            index           = null,
+        bool            isSelected      = false,
+        bool            drawHotkeyBadge = true
     )
     {
         if (config.HideAethernetInParty && !aetheryte.IsAetheryte && DService.Instance().PartyList.Length > 1)
@@ -624,7 +627,7 @@ public unsafe partial class BetterTeleport
 
         var rightEndX = startPos.X + width - padding - 6f - animOffset;
 
-        if (index.HasValue)
+        if (index.HasValue && drawHotkeyBadge)
         {
             string? hotkeyLabel = null;
             if (index.Value is >= 0 and < 8)

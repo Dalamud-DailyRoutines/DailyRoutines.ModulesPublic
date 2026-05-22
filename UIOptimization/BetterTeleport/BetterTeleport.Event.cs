@@ -164,7 +164,7 @@ public unsafe partial class BetterTeleport
     
     private void OnPreInputIDPressed(ref bool? overrideResult, ref InputId id)
     {
-        if (!Overlay.IsOpen)
+        if (!Overlay.IsOpen && !fullWindow.IsOpen)
             return;
 
         // Enter 键
@@ -173,7 +173,6 @@ public unsafe partial class BetterTeleport
             shouldFocusSearchBar = true;
             overrideResult       = false;
         }
-
     }
 
     private void OnLogin() =>
