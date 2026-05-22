@@ -6,6 +6,7 @@ using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.BetterTeleport;
 
@@ -123,6 +124,12 @@ public unsafe partial class BetterTeleport
             AtkStage.Instance()->ClearFocus();
 
             shouldFocusSearchBar = false;
+            
+            if (isMoving)
+            {
+                ChatManager.Instance().SendCommand("/automove on");
+                isMoving = false;
+            }
         }
 
         var isSearchChanged = ImGui.InputTextWithHint("###BetterTeleportQuickSearch", Lang.Get("PleaseSearch"), ref searchWord, 128);
@@ -162,7 +169,7 @@ public unsafe partial class BetterTeleport
                     hoveredAetheryte = visibleItems[selectedIndex].Record;
             }
 
-            if (ImGui.IsKeyPressed(ImGuiKey.Enter))
+            if (ImGui.IsKeyPressed(ImGuiKey.Enter) && !isWindowAppearing)
             {
                 if (hasUsedArrowKeys)
                     TriggerListItem(visibleItems[selectedIndex]);

@@ -37,13 +37,8 @@ public unsafe partial class BetterTeleport
 
         UIGlobals.PlaySoundEffect(23);
 
-        if (fullWindow.IsOpen)
-        {
-            fullWindow.IsOpen = false;
-            return;
-        }
-        
-        Overlay.IsOpen ^= true;
+        isMoving = LocalPlayerState.Instance().IsMoving;
+        ToggleDefaultPage();
     }
 
     private void OnZoneChanged(uint zone)
@@ -129,7 +124,7 @@ public unsafe partial class BetterTeleport
 
         if (string.IsNullOrWhiteSpace(args))
         {
-            Overlay.IsOpen ^= true;
+            ToggleDefaultPage();
             return;
         }
 

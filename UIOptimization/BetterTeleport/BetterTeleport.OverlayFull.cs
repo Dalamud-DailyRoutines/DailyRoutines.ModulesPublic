@@ -5,6 +5,7 @@ using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.BetterTeleport;
 
@@ -20,11 +21,14 @@ public unsafe partial class BetterTeleport
     private List<AetheryteRecord> fullSearchResult = [];
     private string                activeTabName    = string.Empty;
     private string?               tabToSelect;
-    private bool                  shouldFocusFullSearchBar;
     private bool                  shouldScrollToSelected;
+    private bool                  isJustOpened;
 
     public void DrawFullWindowUI()
     {
+        var isWindowAppearing = ImGui.IsWindowAppearing() || isJustOpened;
+        isJustOpened = false;
+
         var currentMousePos = ImGui.GetMousePos();
         if (hasUsedArrowKeys && currentMousePos != lastMousePos)
             hasUsedArrowKeys = false;
@@ -34,16 +38,17 @@ public unsafe partial class BetterTeleport
 
         var isSearchEmpty = string.IsNullOrWhiteSpace(fullSearchWord);
 
-        var defaultTab = favorites.Count > 0 ? "Favorite" : (records.Keys.FirstOrDefault() ?? "Setting");
+        var defaultTab = favorites.Count > 0 ? "Favorite" : records.Keys.FirstOrDefault() ?? "Setting";
+
         if (string.IsNullOrEmpty(activeTabName))
         {
-            activeTabName            = defaultTab;
-            tabToSelect              = activeTabName;
-            shouldFocusFullSearchBar = true;
-            selectedIndex            = 0;
-            hasUsedArrowKeys         = false;
+            activeTabName        = defaultTab;
+            tabToSelect          = activeTabName;
+            shouldFocusSearchBar = true;
+            selectedIndex        = 0;
+            hasUsedArrowKeys     = false;
         }
-        
+
         if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
             pinnedAetheryte == null                                       &&
             !ImGui.IsPopupOpen("AetheryteContextPopup"))
@@ -53,14 +58,20 @@ public unsafe partial class BetterTeleport
         }
 
         List<string> availableTabs = [];
-        if (favorites.Count > 0) availableTabs.Add("Favorite");
+        if (favorites.Count > 0) 
+            availableTabs.Add("Favorite");
+        
         var agentLobby = AgentLobby.Instance();
         if (agentLobby != null)
+        {
             foreach (var name in records.Keys)
                 availableTabs.Add(name);
+        }
+
         availableTabs.Add("Setting");
 
-        if (!availableTabs.Contains(activeTabName)) activeTabName = availableTabs.FirstOrDefault() ?? "Setting";
+        if (!availableTabs.Contains(activeTabName))
+            activeTabName = availableTabs.FirstOrDefault() ?? "Setting";
 
         // 左右方向键切换 Tab
         if (isSearchEmpty && availableTabs.Count > 1)
@@ -68,6 +79,7 @@ public unsafe partial class BetterTeleport
             if (ImGui.IsKeyPressed(ImGuiKey.LeftArrow))
             {
                 var curIdx = availableTabs.IndexOf(activeTabName);
+
                 if (curIdx >= 0)
                 {
                     var nextIdx = (curIdx - 1 + availableTabs.Count) % availableTabs.Count;
@@ -82,6 +94,7 @@ public unsafe partial class BetterTeleport
             else if (ImGui.IsKeyPressed(ImGuiKey.RightArrow))
             {
                 var curIdx = availableTabs.IndexOf(activeTabName);
+
                 if (curIdx >= 0)
                 {
                     var nextIdx = (curIdx + 1) % availableTabs.Count;
@@ -99,9 +112,9 @@ public unsafe partial class BetterTeleport
         // 构建当前可选的记录列表
         List<AetheryteRecord> currentSelectableRecords = [];
 
-        if (!isSearchEmpty) 
+        if (!isSearchEmpty)
             currentSelectableRecords.AddRange(fullSearchResult);
-        else if (activeTabName == "Favorite") 
+        else if (activeTabName == "Favorite")
             currentSelectableRecords.AddRange(favorites);
         else if (records.TryGetValue(activeTabName, out var aetherytes))
         {
@@ -126,14 +139,6 @@ public unsafe partial class BetterTeleport
             isNeedToLoseFocusSearchBar = false;
         }
 
-        if (shouldFocusFullSearchBar)
-        {
-            ImGui.SetWindowFocus();
-            ImGui.SetKeyboardFocusHere();
-            AtkStage.Instance()->ClearFocus();
-            shouldFocusFullSearchBar = false;
-        }
-        
         if (shouldFocusSearchBar)
         {
             ImGui.SetWindowFocus();
@@ -141,9 +146,16 @@ public unsafe partial class BetterTeleport
             AtkStage.Instance()->ClearFocus();
 
             shouldFocusSearchBar = false;
+
+            if (isMoving)
+            {
+                ChatManager.Instance().SendCommand("/automove on");
+                isMoving = false;
+            }
         }
-        
+
         ImGui.SetNextItemWidth(isSearchEmpty ? -1f : -ImGui.GetFrameHeight() - ImGui.GetStyle().ItemSpacing.X);
+
         if (ImGui.InputTextWithHint(searchBarID, Lang.Get("PleaseSearch"), ref fullSearchWord, 128))
         {
             fullSearchResult = !string.IsNullOrWhiteSpace(fullSearchWord)
@@ -183,23 +195,25 @@ public unsafe partial class BetterTeleport
 
             if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
             {
-                selectedIndex    = (selectedIndex + 1) % currentSelectableRecords.Count;
-                hasUsedArrowKeys = true;
-                hoveredAetheryte = currentSelectableRecords[selectedIndex];
+                selectedIndex          = (selectedIndex + 1) % currentSelectableRecords.Count;
+                hasUsedArrowKeys       = true;
+                hoveredAetheryte       = currentSelectableRecords[selectedIndex];
                 shouldScrollToSelected = true;
             }
 
             if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
             {
-                selectedIndex    = (selectedIndex - 1 + currentSelectableRecords.Count) % currentSelectableRecords.Count;
-                hasUsedArrowKeys = true;
-                hoveredAetheryte = currentSelectableRecords[selectedIndex];
+                selectedIndex          = (selectedIndex - 1 + currentSelectableRecords.Count) % currentSelectableRecords.Count;
+                hasUsedArrowKeys       = true;
+                hoveredAetheryte       = currentSelectableRecords[selectedIndex];
                 shouldScrollToSelected = true;
             }
 
-            if (ImGui.IsKeyPressed(ImGuiKey.Enter))
+            if (ImGui.IsKeyPressed(ImGuiKey.Enter) && !isWindowAppearing)
+            {
                 if (hasUsedArrowKeys || isSearchBarFocused)
                     HandleTeleport(currentSelectableRecords[selectedIndex]);
+            }
         }
 
         ImGui.Spacing();
@@ -213,9 +227,11 @@ public unsafe partial class BetterTeleport
                 if (fullSearchResult.Count != 0)
                 {
                     var list = fullSearchResult.ToList();
+
                     for (var i = 0; i < list.Count; i++)
                     {
                         DrawAetheryteItem(list[i], i, selectedIndex == i, false);
+
                         if (selectedIndex == i && shouldScrollToSelected)
                         {
                             ImGui.SetScrollHereY();
@@ -250,9 +266,11 @@ public unsafe partial class BetterTeleport
                         if (child)
                         {
                             var list = favorites.ToList();
+
                             for (var i = 0; i < list.Count; i++)
                             {
                                 DrawAetheryteItem(list[i], i, selectedIndex == i, false);
+
                                 if (selectedIndex == i && shouldScrollToSelected)
                                 {
                                     ImGui.SetScrollHereY();
@@ -331,18 +349,21 @@ public unsafe partial class BetterTeleport
                             }
 
                             DrawAetheryteItem(aetheryte, visibleIndex, selectedIndex == visibleIndex, false);
+
                             if (selectedIndex == visibleIndex && shouldScrollToSelected)
                             {
                                 ImGui.SetScrollHereY();
                                 shouldScrollToSelected = false;
                             }
+
                             visibleIndex++;
                         }
                     }
                 }
 
-                var settingTabFlags                           = ImGuiTabItemFlags.None;
-                if (tabToSelect == "Setting") settingTabFlags |= ImGuiTabItemFlags.SetSelected;
+                var settingTabFlags = ImGuiTabItemFlags.None;
+                if (tabToSelect == "Setting")
+                    settingTabFlags |= ImGuiTabItemFlags.SetSelected;
 
                 using (var settingTab = ImRaii.TabItem(FontAwesomeIcon.Cog.ToIconString(), settingTabFlags))
                 {
@@ -373,6 +394,21 @@ public unsafe partial class BetterTeleport
 
                         if (ImGui.Checkbox(Lang.Get("BetterTeleport-HideAethernetInParty"), ref config.HideAethernetInParty))
                             config.Save(this);
+
+                        var defaultPage = (int)config.DefaultPage;
+                        var options     = new[] { Lang.Get("BetterTeleport-PageSearch"), Lang.Get("BetterTeleport-PageFull") };
+
+                        if (ImGui.Combo
+                            (
+                                $"{Lang.Get("BetterTeleport-DefaultPage")}###BetterTeleportDefaultPageComboFull",
+                                ref defaultPage,
+                                options,
+                                options.Length
+                            ))
+                        {
+                            config.DefaultPage = (PageType)defaultPage;
+                            config.Save(this);
+                        }
                     }
                     else
                         ImGuiOm.TooltipHover(LuminaWrapper.GetAddonText(8516));
@@ -394,18 +430,19 @@ public unsafe partial class BetterTeleport
     {
         public override void OnOpen()
         {
-            module.fullSearchWord   = string.Empty;
-            module.fullSearchResult = [];
-            module.selectedIndex    = 0;
-            module.hasUsedArrowKeys = true;
-            module.hoveredAetheryte = null;
-            module.pinnedAetheryte  = null;
-            module.activeTabName    = module.favorites.Count > 0 ? "Favorite" : module.records.Keys.FirstOrDefault() ?? "Setting";
-            module.tabToSelect      = module.activeTabName;
-            module.shouldFocusFullSearchBar = true;
-            module.shouldScrollToSelected   = false;
+            module.fullSearchWord         = string.Empty;
+            module.fullSearchResult       = [];
+            module.selectedIndex          = 0;
+            module.hasUsedArrowKeys       = true;
+            module.hoveredAetheryte       = null;
+            module.pinnedAetheryte        = null;
+            module.activeTabName          = module.favorites.Count > 0 ? "Favorite" : module.records.Keys.FirstOrDefault() ?? "Setting";
+            module.tabToSelect            = module.activeTabName;
+            module.shouldFocusSearchBar   = true;
+            module.shouldScrollToSelected = false;
+            module.isJustOpened           = true;
 
-            module.lastMousePos               = ImGui.GetMousePos();
+            module.lastMousePos = ImGui.GetMousePos();
         }
 
         public override void Draw() =>

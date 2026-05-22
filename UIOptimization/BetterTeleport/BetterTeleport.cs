@@ -57,6 +57,7 @@ public unsafe partial class BetterTeleport : ModuleBase
     private readonly List<AetheryteRecord>                     houseRecords = [];
 
     private bool isRefreshing;
+    private bool isMoving;
 
     protected override void Init()
     {
@@ -117,6 +118,36 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         ImGui.SameLine();
         ImGui.TextWrapped($"{COMMAND} {Lang.Get("BetterTeleport-CommandHelp")}");
+
+        ImGui.NewLine();
+        
+        ImGui.SetNextItemWidth(150f * GlobalUIScale);
+        var defaultPage = (int)config.DefaultPage;
+        var options = new[] { Lang.Get("BetterTeleport-PageSearch"), Lang.Get("BetterTeleport-PageFull") };
+        if (ImGui.Combo($"{Lang.Get("BetterTeleport-DefaultPage")}##BetterTeleportDefaultPage", ref defaultPage, options, options.Length))
+        {
+            config.DefaultPage = (PageType)defaultPage;
+            config.Save(this);
+        }
+        
+        if (ImGui.Checkbox(Lang.Get("BetterTeleport-HideAethernetInParty"), ref config.HideAethernetInParty))
+            config.Save(this);
+    }
+
+    private void ToggleDefaultPage()
+    {
+        if (Overlay.IsOpen || fullWindow.IsOpen)
+        {
+            Overlay.IsOpen    = false;
+            fullWindow.IsOpen = false;
+        }
+        else
+        {
+            if (config.DefaultPage == PageType.Search)
+                Overlay.IsOpen = true;
+            else
+                fullWindow.IsOpen = true;
+        }
     }
 
     private void HandleTeleport(AetheryteRecord aetheryte)
@@ -387,9 +418,16 @@ public unsafe partial class BetterTeleport : ModuleBase
         public uint AetheryteID { get; set; }
         public byte SubIndex    { get; set; }
     }
+    
+    private enum PageType
+    {
+        Search,
+        Full
+    }
 
     private class Config : ModuleConfig
     {
+        public PageType                    DefaultPage          = PageType.Search;
         public HashSet<uint>               Favorites            = [];
         public bool                        HideAethernetInParty = true;
         public Dictionary<string, Vector3> Positions            = [];
