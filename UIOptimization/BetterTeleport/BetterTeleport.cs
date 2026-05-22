@@ -87,10 +87,14 @@ public unsafe partial class BetterTeleport : ModuleBase
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterTeleport-CommandHelp") });
 
         UseActionManager.Instance().RegPreUseAction(OnPostUseAction);
+
+        InputIDManager.Instance().RegPostPressed(OnPostInputIDPressed);
     }
 
     protected override void Uninit()
     {
+        InputIDManager.Instance().UnregPostPressed(OnPostInputIDPressed);
+
         UseActionManager.Instance().Unreg(OnPostUseAction);
         CommandManager.Instance().RemoveCommand(COMMAND);
 

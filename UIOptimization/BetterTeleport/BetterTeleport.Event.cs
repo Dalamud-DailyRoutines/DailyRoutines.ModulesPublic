@@ -1,7 +1,10 @@
 ﻿using DailyRoutines.Manager;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.System.Input;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -149,5 +152,16 @@ public unsafe partial class BetterTeleport
         if (result == null) return;
 
         HandleTeleport(result);
+    }
+    
+    private void OnPostInputIDPressed(bool result, InputId id)
+    {
+        if (!Overlay.IsOpen        ||
+            id != InputId.CMD_CHAT ||
+            !result)
+            return;
+
+        AtkStage.Instance()->ClearFocus();
+        shouldFocusSearchBar = true;
     }
 }

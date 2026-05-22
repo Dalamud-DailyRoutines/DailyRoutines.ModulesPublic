@@ -24,6 +24,8 @@ public unsafe partial class BetterTeleport
     private readonly Dictionary<(uint RowID, byte SubIndex), float> hoverProgress = [];
     private          float                                          hoverStartTime;
 
+    private bool isNeedToLoseFocusSearchBar;
+    
     private AetheryteRecord? hoveredAetheryte;
     private AetheryteRecord? lastHoveredAetheryte;
     private AetheryteRecord? pinnedAetheryte;

@@ -6,7 +6,9 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -17,27 +19,25 @@ public unsafe partial class BetterTeleport
     private string                searchWord   = string.Empty;
     private List<AetheryteRecord> searchResult = [];
     private List<AetheryteRecord> favorites    = [];
-    private bool                  isNeedToLoseFocusSearchBar;
 
     private          int                   selectedIndex;
-    private          bool                  isJustOpened = true;
-    private          bool                  lastOverlayIsOpen;
+    private          bool                  shouldFocusSearchBar;
     private readonly List<OverlayListItem> visibleItems = [];
 
     protected override void OverlayUI()
     {
         hoveredAetheryte = null;
 
-        if (Overlay.IsOpen && !lastOverlayIsOpen)
+        var isWindowAppearing = ImGui.IsWindowAppearing();
+        if (isWindowAppearing)
         {
-            isJustOpened  = true;
-            searchWord    = string.Empty;
-            selectedIndex = 0;
+            searchWord           = string.Empty;
+            selectedIndex        = 0;
+            shouldFocusSearchBar = true;
         }
 
-        lastOverlayIsOpen = Overlay.IsOpen;
-
-        if (DService.Instance().KeyState[VirtualKey.ESCAPE])
+        var keyState = DService.Instance().KeyState;
+        if (keyState[VirtualKey.ESCAPE])
         {
             Overlay.IsOpen = false;
             if (SystemMenu != null)
@@ -52,7 +52,7 @@ public unsafe partial class BetterTeleport
             var specialSeen  = new HashSet<(uint, byte)>();
             var specialItems = new List<AetheryteRecord>();
 
-            // 1. 家点 (最多1个)
+            // 1. 返回点 (最多1个)
             var home = AllRecords.FirstOrDefault(x => x.State == AetheryteRecordState.Home);
 
             if (home != null)
@@ -113,7 +113,15 @@ public unsafe partial class BetterTeleport
                 visibleItems.Add(new OverlayListItem { Record = r, IsShowMore = false, DrawSeparatorBefore = drawSep, Name = r.Name });
             }
 
-            visibleItems.Add(new OverlayListItem { IsShowMore = true, DrawSeparatorBefore = false, Name = Lang.Get("BetterTeleport-ShowMore") });
+            visibleItems.Add
+            (
+                new OverlayListItem
+                {
+                    IsShowMore = true, 
+                    DrawSeparatorBefore = false, 
+                    Name = Lang.Get("BetterTeleport-ShowMore")
+                }
+            );
         }
         else
         {
@@ -138,18 +146,25 @@ public unsafe partial class BetterTeleport
             visibleItems.Add(new OverlayListItem { IsShowMore = true, Name = Lang.Get("BetterTeleport-ShowMore") });
         }
 
-        if (selectedIndex < 0) selectedIndex                                             = 0;
-        if (visibleItems.Count > 0 && selectedIndex >= visibleItems.Count) selectedIndex = visibleItems.Count - 1;
+        if (selectedIndex < 0)
+            selectedIndex = 0;
+        if (visibleItems.Count > 0 && selectedIndex >= visibleItems.Count) 
+            selectedIndex = visibleItems.Count - 1;
 
         ImGui.SetNextItemWidth(-1f);
 
-        if (isJustOpened)
+        if (shouldFocusSearchBar)
         {
+            ImGui.SetWindowFocus();
             ImGui.SetKeyboardFocusHere();
-            isJustOpened = false;
+            AtkStage.Instance()->ClearFocus();
+            
+            shouldFocusSearchBar = false;
         }
 
         ImGui.InputTextWithHint("###BetterTeleportQuickSearch", Lang.Get("PleaseSearch"), ref searchWord, 128);
+
+        var isSearchBarFocused = ImGui.IsItemFocused();
 
         ImGui.Spacing();
 
@@ -157,11 +172,19 @@ public unsafe partial class BetterTeleport
 
         if (Overlay.IsOpen && visibleItems.Count > 0)
         {
-            if (ImGui.IsKeyPressed(ImGuiKey.DownArrow)) selectedIndex = (selectedIndex + 1) % visibleItems.Count;
+            if (ImGui.IsKeyPressed(ImGuiKey.DownArrow)) 
+                selectedIndex = (selectedIndex + 1) % visibleItems.Count;
 
-            if (ImGui.IsKeyPressed(ImGuiKey.UpArrow)) selectedIndex = (selectedIndex - 1 + visibleItems.Count) % visibleItems.Count;
+            if (ImGui.IsKeyPressed(ImGuiKey.UpArrow)) 
+                selectedIndex = (selectedIndex - 1 + visibleItems.Count) % visibleItems.Count;
 
-            if (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter)) TriggerListItem(visibleItems[selectedIndex]);
+            if (ImGui.IsKeyPressed(ImGuiKey.Enter))
+            {
+                if (isSearchBarFocused)
+                    TriggerListItem(visibleItems[selectedIndex]);
+                else
+                    shouldFocusSearchBar = true;
+            }
 
             var io = ImGui.GetIO();
 
