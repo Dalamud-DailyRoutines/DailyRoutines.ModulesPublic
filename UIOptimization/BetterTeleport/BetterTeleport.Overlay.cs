@@ -22,6 +22,8 @@ public unsafe partial class BetterTeleport
 
     private          int                   selectedIndex;
     private          bool                  shouldFocusSearchBar;
+    private          bool                  hasUsedArrowKeys;
+    private          Vector2               lastMousePos;
     private readonly List<OverlayListItem> visibleItems = [];
 
     protected override void OverlayUI()
@@ -34,6 +36,14 @@ public unsafe partial class BetterTeleport
             searchWord           = string.Empty;
             selectedIndex        = 0;
             shouldFocusSearchBar = true;
+            hasUsedArrowKeys     = false;
+            lastMousePos         = ImGui.GetMousePos();
+        }
+
+        if (!ImGui.IsWindowFocused())
+        {
+            Overlay.IsOpen = false;
+            return;
         }
 
         var keyState = DService.Instance().KeyState;
@@ -168,19 +178,28 @@ public unsafe partial class BetterTeleport
 
         ImGui.Spacing();
 
-        for (var i = 0; i < visibleItems.Count; i++) DrawSearchItem(i, visibleItems[i], selectedIndex == i);
+        for (var i = 0; i < visibleItems.Count; i++) 
+            DrawSearchItem(i, visibleItems[i], selectedIndex == i);
 
         if (Overlay.IsOpen && visibleItems.Count > 0)
         {
-            if (ImGui.IsKeyPressed(ImGuiKey.DownArrow)) 
+            if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
+            {
                 selectedIndex = (selectedIndex + 1) % visibleItems.Count;
+                hasUsedArrowKeys = true;
+            }
 
-            if (ImGui.IsKeyPressed(ImGuiKey.UpArrow)) 
+            if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
+            {
                 selectedIndex = (selectedIndex - 1 + visibleItems.Count) % visibleItems.Count;
+                hasUsedArrowKeys = true;
+            }
 
             if (ImGui.IsKeyPressed(ImGuiKey.Enter))
             {
-                if (isSearchBarFocused)
+                if (hasUsedArrowKeys)
+                    TriggerListItem(visibleItems[selectedIndex]);
+                else if (isSearchBarFocused)
                     TriggerListItem(visibleItems[selectedIndex]);
                 else
                     shouldFocusSearchBar = true;
@@ -324,14 +343,30 @@ public unsafe partial class BetterTeleport
         var itemHeight = (lineHeight * 2.2f) + padding;
 
         ImGui.PushID($"item_{index}");
-        if (ImGui.InvisibleButton("##ItemBtn", new Vector2(width, itemHeight))) TriggerListItem(item);
+        if (ImGui.InvisibleButton("##ItemBtn", new Vector2(width, itemHeight)))
+        {
+            hasUsedArrowKeys = false;
+            TriggerListItem(item);
+        }
         var isHovered = ImGui.IsItemHovered();
         ImGui.PopID();
 
         if (isHovered)
         {
-            selectedIndex = index;
-            if (item.Record != null) hoveredAetheryte = item.Record;
+            var currentMousePos = ImGui.GetMousePos();
+            if (!hasUsedArrowKeys)
+            {
+                selectedIndex = index;
+            }
+            else if (currentMousePos != lastMousePos)
+            {
+                hasUsedArrowKeys = false;
+                selectedIndex = index;
+            }
+            lastMousePos = currentMousePos;
+
+            if (item.Record != null)
+                hoveredAetheryte = item.Record;
         }
 
         var drawList = ImGui.GetWindowDrawList();
