@@ -36,6 +36,13 @@ public unsafe partial class BetterTeleport
             return;
 
         UIGlobals.PlaySoundEffect(23);
+
+        if (fullWindow.IsOpen)
+        {
+            fullWindow.IsOpen = false;
+            return;
+        }
+        
         Overlay.IsOpen ^= true;
     }
 

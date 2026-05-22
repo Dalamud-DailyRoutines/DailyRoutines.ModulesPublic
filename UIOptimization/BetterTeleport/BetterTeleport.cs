@@ -74,7 +74,8 @@ public unsafe partial class BetterTeleport : ModuleBase
             MaximumSize = new Vector2(400f * GlobalUIScale, -1)
         };
 
-        fullWindow = new BetterTeleportFullWindow(this);
+        fullWindow       =  new BetterTeleportFullWindow(this);
+        fullWindow.Flags |= ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
         ManagerHost.Current.AddWindow(fullWindow);
 
         TaskHelper ??= new() { TimeoutMS = 60_000 };
@@ -123,6 +124,8 @@ public unsafe partial class BetterTeleport : ModuleBase
         if (GameState.ContentFinderCondition != 0) return;
 
         TaskHelper.Abort();
+        Overlay.IsOpen    = false;
+        fullWindow.IsOpen = false;
 
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return;

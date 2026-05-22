@@ -176,7 +176,7 @@ public unsafe partial class BetterTeleport
             }
         }
 
-        if (hoveredAetheryte == null) return;
+        if (hoveredAetheryte == null || ImGui.IsPopupOpen("AetheryteContextPopup")) return;
 
         if (pinnedAetheryte != null && hoveredAetheryte.RowID == pinnedAetheryte.RowID)
             return;
@@ -497,7 +497,6 @@ public unsafe partial class BetterTeleport
                 config.Save(this);
             }
         }
-
     }
 
     private void DrawAetheryteItem

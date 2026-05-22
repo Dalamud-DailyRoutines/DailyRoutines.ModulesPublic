@@ -47,7 +47,9 @@ public unsafe partial class BetterTeleport
             lastMousePosForInput = ImGui.GetMousePos();
         }
 
-        if (!ImGui.IsWindowFocused() && pinnedAetheryte == null)
+        if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            pinnedAetheryte == null                                       &&
+            !ImGui.IsPopupOpen("AetheryteContextPopup"))
         {
             Overlay.IsOpen = false;
             return;
@@ -324,13 +326,18 @@ public unsafe partial class BetterTeleport
         var specialItems = new List<AetheryteRecord>();
 
         foreach (var fav in favorites)
+        {
             if (specialSeen.Add((fav.RowID, fav.SubIndex)))
                 specialItems.Add(fav);
+        }
 
         var home = AllRecords.FirstOrDefault(x => x.State == AetheryteRecordState.Home);
+
         if (home != null)
+        {
             if (specialSeen.Add((home.RowID, home.SubIndex)))
                 specialItems.Add(home);
+        }
 
         var freePoints     = AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
         var freeCountAdded = 0;
