@@ -4,11 +4,10 @@ using DailyRoutines.Internal;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
-using OmenTools.Interop.Game.Helpers;
+using OmenTools.ImGuiOm.Widgets.MapRenderer;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -25,12 +24,122 @@ public unsafe partial class BetterTeleport
     private static readonly SeString FavoriteChar = new SeStringBuilder().AddIcon(BitmapFontIcon.SilverStar).Build();
 
     private AetheryteRecord? hoveredAetheryte;
-    private AetheryteRecord? lastHoveredAetheryte;
     private AetheryteRecord? pinnedAetheryte;
-    private float            hoverStartTime;
 
     private Vector3 contextMenuTargetPos;
     private uint    contextMenuTargetZone;
+
+    private readonly ImGuiMapRenderer mapRenderer = new()
+    {
+        MinZoom   = 0.2f,
+        MaxZoom   = 4.0f,
+        LerpSpeed = 15.0f,
+    };
+
+    private void SetupMapRenderer(AetheryteRecord aetheryte, bool isPinned)
+    {
+        mapRenderer.SetMap(aetheryte.MapID);
+        mapRenderer.Zoomable         = isPinned;
+        mapRenderer.Pannable         = isPinned;
+        mapRenderer.EnableResizeGrip = isPinned;
+
+        // 同步外部配置的缩放级别
+        if (!isPinned) 
+            mapRenderer.ResetView();
+        else if (mapRenderer.CustomViewportSize == Vector2.Zero) 
+            mapRenderer.CustomViewportSize = new(450f * GlobalUIScale);
+
+        mapRenderer.ClearMarkers();
+
+        var mapID    = aetheryte.GetMap().RowId;
+        var siblings = AllRecords.Where(x => x.GetMap().RowId == mapID).ToList();
+
+        // 1. 绘制其他水晶 Marker
+        foreach (var record in siblings)
+        {
+            if (record.RowID == aetheryte.RowID) continue;
+
+            var recordPos   = config.Positions.TryGetValue(GetConfigKey(record), out var redirected) ? redirected : record.Position;
+            var isAetheryte = record.IsAetheryte;
+
+            var marker = new ImGuiMapMarker
+            {
+                ID          = GetConfigKey(record),
+                Position    = recordPos,
+                IconID      = isAetheryte ? 60453U : 60430U,
+                Name        = record.Name,
+                Color       = 0xCCFFFFFF,
+                Size        = new Vector2(18f * (isPinned ? 1f : config.MapZoom), 18f * (isPinned ? 1f : config.MapZoom)),
+                ShowLabel   = false,
+                TooltipText = record.Name,
+                OnClick = m =>
+                {
+                    if (isPinned)
+                    {
+                        HandleTeleport(record);
+                        pinnedAetheryte = null;
+                        config.Save(this);
+                    }
+                }
+            };
+            mapRenderer.AddMarker(marker);
+        }
+
+        // 2. 绘制当前主水晶 Marker (带高亮脉冲、Label)
+        var targetPos   = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var redirectedPos) ? redirectedPos : aetheryte.Position;
+        var displayName = config.Remarks.TryGetValue(GetConfigKey(aetheryte), out var remark) ? remark : aetheryte.Name;
+
+        var mainMarker = new ImGuiMapMarker
+        {
+            ID          = GetConfigKey(aetheryte),
+            Position    = targetPos,
+            IconID      = aetheryte.IsAetheryte ? 60453U : 60430U,
+            Name        = aetheryte.Name,
+            Color       = 0xFFFFFFFF,
+            Size        = new Vector2(24f * (isPinned ? 1f : config.MapZoom), 24f * (isPinned ? 1f : config.MapZoom)),
+            PulseEffect = true,
+            PulseColor  = ImGui.GetColorU32(ImGuiCol.CheckMark),
+            Label       = displayName,
+            ShowLabel   = true,
+            LabelColor  = KnownColor.LightSkyBlue.ToVector4().ToUInt(),
+            OnClick = m =>
+            {
+                if (isPinned)
+                {
+                    HandleTeleport(aetheryte);
+                    pinnedAetheryte = null;
+                    config.Save(this);
+                }
+            }
+        };
+        mapRenderer.AddMarker(mainMarker);
+
+        // 3. 处理红旗 Marker (如果右键菜单打开了)
+        if (ImGui.IsPopupOpen("BetterTeleport_Map_ContextMenu"))
+        {
+            var flagMarker = new ImGuiMapMarker
+            {
+                ID          = "ContextMenuTargetFlag",
+                Position    = contextMenuTargetPos,
+                IconID      = 60561U,
+                Size        = new Vector2(24f * (isPinned ? 1f : config.MapZoom), 24f * (isPinned ? 1f : config.MapZoom)),
+                ShowLabel   = false,
+                ShowTooltip = false
+            };
+            mapRenderer.AddMarker(flagMarker);
+        }
+
+        // 4. 处理右键空白处，寻找最近水晶并弹出菜单
+        mapRenderer.OnMapClicked = (_, clickedWorldPos, _, button) =>
+        {
+            if (isPinned && button == ImGuiMouseButton.Right)
+            {
+                contextMenuTargetZone = aetheryte.ZoneID;
+                contextMenuTargetPos  = clickedWorldPos;
+                ImGui.OpenPopup("BetterTeleport_Map_ContextMenu");
+            }
+        };
+    }
 
     private void DrawHoveredTooltip()
     {
@@ -39,7 +148,7 @@ public unsafe partial class BetterTeleport
 
         if (pinnedAetheryte != null)
         {
-            ImGui.SetNextWindowBgAlpha(0.8f);
+            ImGui.SetNextWindowBgAlpha(0.85f);
 
             if (ImGui.Begin
                 (
@@ -49,7 +158,17 @@ public unsafe partial class BetterTeleport
                     ImGuiWindowFlags.NoSavedSettings
                 ))
             {
-                DrawAetheryteMap(DService.Instance().Texture.GetFromGame(pinnedAetheryte.GetMap().GetTexturePath()), pinnedAetheryte, true);
+                var hint     = Lang.Get("BetterTeleport-MapHint-Zoom");
+                var hintSize = ImGui.CalcTextSize(hint);
+                var size     = mapRenderer.CustomViewportSize.X > 50f ? mapRenderer.CustomViewportSize : new Vector2(400f * GlobalUIScale, 400f * GlobalUIScale);
+
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((size.X - hintSize.X) / 2));
+                ImGui.TextDisabled(hint);
+
+                SetupMapRenderer(pinnedAetheryte, true);
+                mapRenderer.Draw(size);
+
+                DrawMapContextMenu();
 
                 if (!ImGui.IsWindowFocused() && !ImGui.IsPopupOpen("BetterTeleport_Map_ContextMenu"))
                 {
@@ -63,239 +182,77 @@ public unsafe partial class BetterTeleport
 
         if (hoveredAetheryte == null)
         {
-            lastHoveredAetheryte = null;
             return;
         }
 
         if (pinnedAetheryte != null && hoveredAetheryte.RowID == pinnedAetheryte.RowID)
             return;
 
-        if (lastHoveredAetheryte != hoveredAetheryte)
-        {
-            lastHoveredAetheryte = hoveredAetheryte;
-            hoverStartTime       = (float)ImGui.GetTime();
-        }
-
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero))
         using (ImRaii.PushColor(ImGuiCol.PopupBg, ImGui.GetColorU32(ImGuiCol.WindowBg)))
         using (ImRaii.Tooltip())
-            DrawAetheryteMap(DService.Instance().Texture.GetFromGame(hoveredAetheryte.GetMap().GetTexturePath()), hoveredAetheryte, false);
+        {
+            var tex  = DService.Instance().Texture.GetFromGame(hoveredAetheryte.GetMap().GetTexturePath());
+            var warp = tex.GetWrapOrEmpty();
+
+            if (warp.Handle != nint.Zero)
+            {
+                var widthScale = Math.Min(1f, warp.Width / 2048f);
+                var imageSize  = ScaledVector2(384f      * widthScale * config.MapZoom);
+
+                ImGuiOm.ScaledDummy(0f, 2f);
+                var hint     = Lang.Get("BetterTeleport-MapHint-Pin");
+                var hintSize = ImGui.CalcTextSize(hint);
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((imageSize.X - hintSize.X) / 2));
+                ImGui.TextDisabled(hint);
+
+                SetupMapRenderer(hoveredAetheryte, false);
+                mapRenderer.Draw(imageSize);
+            }
+        }
     }
 
-    private void DrawAetheryteMap
-    (
-        ISharedImmediateTexture tex,
-        AetheryteRecord         aetheryte,
-        bool                    isPinned
-    )
+    private void DrawMapContextMenu()
     {
-        var drawList = ImGui.GetWindowDrawList();
-        var warp     = tex.GetWrapOrEmpty();
-        if (warp.Handle == nint.Zero || warp.Width < 64 || warp.Height < 64) return;
+        using var popup = ImRaii.Popup("BetterTeleport_Map_ContextMenu");
+        if (!popup) return;
 
-        if (pinnedAetheryte != null && ImGui.IsWindowHovered() && ImGui.GetIO().MouseWheel != 0)
+        if (ImGui.MenuItem(Lang.Get("BetterTeleport-TeleportToThisPosition")))
         {
-            config.MapZoom += ImGui.GetIO().MouseWheel * 0.1f;
-            config.MapZoom =  Math.Clamp(config.MapZoom, 0.2f, 4.0f);
-        }
+            TaskHelper.Abort();
 
-        var widthScale = Math.Min(1f, warp.Width / 2048f);
-        var imageSize  = ScaledVector2(384f      * widthScale * config.MapZoom);
-        var scale      = imageSize.X / 2048f;
-
-        if (scale <= 0.001f) return;
-
-        if (!isPinned)
-            ImGuiOm.ScaledDummy(0f, 2f);
-
-        var hint     = isPinned ? Lang.Get("BetterTeleport-MapHint-Zoom") : Lang.Get("BetterTeleport-MapHint-Pin");
-        var hintSize = ImGui.CalcTextSize(hint);
-        if (imageSize.X > hintSize.X)
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((imageSize.X - hintSize.X) / 2));
-        ImGui.TextDisabled(hint);
-
-        var orig = ImGui.GetCursorScreenPos();
-
-        ImGui.Image(warp.Handle, imageSize);
-
-        if (isPinned &&
-            ImGui.IsItemClicked(ImGuiMouseButton.Right))
-        {
-            var mousePos   = ImGui.GetMousePos();
-            var relPos     = mousePos - orig;
-            var texturePos = relPos / scale;
-            var worldPos   = PositionHelper.TextureToWorld(texturePos, aetheryte.GetMap());
-
-            var nearest = AllRecords.Where(x => x.GetZone().RowId == aetheryte.GetZone().RowId)
-                                    .MinBy(x => Vector2.DistanceSquared(new(x.Position.X, x.Position.Z), worldPos));
-
-            if (nearest != null)
+            if (GameState.TerritoryType != contextMenuTargetZone || IsWithPermission())
             {
-                contextMenuTargetZone = nearest.ZoneID;
-                contextMenuTargetPos  = worldPos.ToVector3(nearest.Position.Y);
-                ImGui.OpenPopup("BetterTeleport_Map_ContextMenu");
-            }
-        }
-
-        using (var popup = ImRaii.Popup("BetterTeleport_Map_ContextMenu"))
-        {
-            if (popup)
-            {
-                if (ImGui.MenuItem(Lang.Get("BetterTeleport-TeleportToThisPosition")))
-                {
-                    if (GameState.TerritoryType != contextMenuTargetZone || IsWithPermission())
+                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(contextMenuTargetZone, contextMenuTargetPos));
+                TaskHelper.Enqueue
+                (() =>
                     {
-                        TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(contextMenuTargetZone, contextMenuTargetPos));
-                        TaskHelper.Enqueue
-                        (() =>
-                            {
-                                if (MovementManager.Instance().IsManagerBusy || DService.Instance().ObjectTable.LocalPlayer == null)
-                                    return false;
+                        if (MovementManager.Instance().IsManagerBusy || DService.Instance().ObjectTable.LocalPlayer == null)
+                            return false;
 
-                                MovementManager.Instance().TPGround();
-                                if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition[ConditionFlag.Jumping]) return false;
+                        MovementManager.Instance().TPGround();
+                        if (DService.Instance().Condition.IsBetweenAreas || DService.Instance().Condition[ConditionFlag.Jumping]) 
+                            return false;
 
-                                return true;
-                            }
-                        );
+                        return true;
                     }
-                    else
+                );
+            }
+            else
+            {
+                TaskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(contextMenuTargetPos, contextMenuTargetZone));
+                TaskHelper.Enqueue(() => DService.Instance().Condition.IsBetweenAreas && DService.Instance().ObjectTable.LocalPlayer != null);
+                TaskHelper.Enqueue
+                (() =>
                     {
-                        TaskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(contextMenuTargetPos, contextMenuTargetZone));
-                        TaskHelper.Enqueue(() => DService.Instance().Condition.IsBetweenAreas && DService.Instance().ObjectTable.LocalPlayer != null);
-                        TaskHelper.Enqueue
-                        (() =>
-                            {
-                                if (!DService.Instance().Condition.IsBetweenAreas) return true;
-                                MovementManager.Instance().TPSmart_InZone(contextMenuTargetPos, false);
-                                return false;
-                            }
-                        );
+                        if (!DService.Instance().Condition.IsBetweenAreas) return true;
+                        MovementManager.Instance().TPSmart_InZone(contextMenuTargetPos, false);
+                        return false;
                     }
-
-                    ImGui.CloseCurrentPopup();
-                }
-            }
-        }
-
-        if (ImGui.IsPopupOpen("BetterTeleport_Map_ContextMenu"))
-        {
-            var texFlag = DService.Instance().Texture.GetFromGameIcon(new(60561)).GetWrapOrEmpty();
-
-            if (texFlag.Handle != nint.Zero)
-            {
-                var flagPos       = PositionHelper.WorldToTexture(contextMenuTargetPos, aetheryte.GetMap()) * scale;
-                var flagCenterPos = orig + flagPos;
-                var flagSize      = ScaledVector2(24f * config.MapZoom);
-                var flagHalfSize  = flagSize / 2;
-
-                drawList.AddImage(texFlag.Handle, flagCenterPos - flagHalfSize, flagCenterPos + flagHalfSize);
-            }
-        }
-
-        drawList.AddRect(orig, orig + imageSize, ImGui.GetColorU32(ImGuiCol.Border), 0f, ImDrawFlags.None, 2f);
-
-        var mapID    = aetheryte.GetMap().RowId;
-        var siblings = AllRecords.Where(x => x.GetMap().RowId == mapID).ToList();
-
-        var texAetheryte = DService.Instance().Texture.GetFromGameIcon(new(60453)).GetWrapOrEmpty();
-        var texAethernet = DService.Instance().Texture.GetFromGameIcon(new(60430)).GetWrapOrEmpty();
-
-        var sizeNormal = ScaledVector2(18f * config.MapZoom);
-        var sizeTarget = ScaledVector2(24f * config.MapZoom);
-
-        foreach (var record in siblings)
-        {
-            if (record.RowID == aetheryte.RowID) continue;
-
-            var recordPos = config.Positions.TryGetValue(GetConfigKey(record), out var redirected) ? redirected : record.Position;
-            var pos       = PositionHelper.WorldToTexture(recordPos, record.GetMap()) * scale;
-            var centerPos = orig + pos;
-
-            var texture  = record.IsAetheryte ? texAetheryte : texAethernet;
-            var halfSize = sizeNormal / 2;
-
-            drawList.AddImage(texture.Handle, centerPos - halfSize, centerPos + halfSize, Vector2.Zero, Vector2.One, 0xCCFFFFFF);
-
-            if (isPinned)
-            {
-                var min = centerPos - halfSize;
-                var max = centerPos + halfSize;
-
-                if (ImGui.IsMouseHoveringRect(min, max))
-                {
-                    ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-                    ImGui.SetTooltip(record.Name);
-
-                    if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                    {
-                        HandleTeleport(record);
-                        pinnedAetheryte = null;
-                    }
-                }
-            }
-        }
-
-        {
-            var recordPos = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var redirected) ? redirected : aetheryte.Position;
-            var pos       = PositionHelper.WorldToTexture(recordPos, aetheryte.GetMap()) * scale;
-            var centerPos = orig + pos;
-
-            var time     = (float)ImGui.GetTime();
-            var animTime = time - hoverStartTime;
-
-            var pulse = ((float)Math.Sin(time * 10f) * 0.2f) + 1.0f;
-
-            var pingRadius = animTime * 100f % 60f;
-            var pingAlpha  = 1.0f - (pingRadius / 60f);
-
-            if (pingRadius > 0 && pingAlpha > 0)
-            {
-                var pingColor = ImGui.GetColorU32(ImGuiCol.CheckMark);
-                pingColor = (pingColor & 0x00FFFFFF) | ((uint)(pingAlpha * 255) << 24);
-                drawList.AddCircle(centerPos, pingRadius, pingColor, 32, 2f);
+                );
             }
 
-            drawList.AddCircleFilled(centerPos, 8f * pulse * GlobalUIScale, ImGui.GetColorU32(ImGuiCol.CheckMark, 0.5f));
-
-            var texture  = aetheryte.IsAetheryte ? texAetheryte : texAethernet;
-            var halfSize = sizeTarget / 2;
-            drawList.AddImage(texture.Handle, centerPos - halfSize, centerPos + halfSize);
-
-            if (isPinned)
-            {
-                var min = centerPos - halfSize;
-                var max = centerPos + halfSize;
-
-                if (ImGui.IsMouseHoveringRect(min, max))
-                {
-                    ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-                    ImGui.SetTooltip(aetheryte.Name);
-
-                    if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                    {
-                        HandleTeleport(aetheryte);
-                        pinnedAetheryte = null;
-                    }
-                }
-            }
-
-            var text     = config.Remarks.TryGetValue(GetConfigKey(aetheryte), out var remark) ? remark : aetheryte.Name;
-            var textSize = ImGui.CalcTextSize(text);
-            var padding  = ScaledVector2(2f, 3f);
-            var textPos  = centerPos - new Vector2(textSize.X / 2, (20f * GlobalUIScale) + textSize.Y);
-
-            var minPos = orig             + padding;
-            var maxPos = orig + imageSize - padding - textSize;
-
-            if (minPos.X < maxPos.X)
-                textPos.X = Math.Clamp(textPos.X, minPos.X, maxPos.X);
-
-            if (minPos.Y < maxPos.Y)
-                textPos.Y = Math.Clamp(textPos.Y, minPos.Y, maxPos.Y);
-
-            drawList.AddRectFilled(textPos - padding, textPos + textSize + padding, 0x80000000, 4f);
-            drawList.AddText(textPos, KnownColor.LightSkyBlue.ToVector4().ToUInt(), text);
+            ImGui.CloseCurrentPopup();
         }
     }
 

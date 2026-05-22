@@ -35,6 +35,8 @@ public unsafe partial class BetterTeleport
             selectedIndex        = 0;
             shouldFocusSearchBar = true;
             hasUsedArrowKeys     = false;
+            hoveredAetheryte     = null;
+            pinnedAetheryte      = null;
             lastMousePos         = ImGui.GetMousePos();
         }
 
