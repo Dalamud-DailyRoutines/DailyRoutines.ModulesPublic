@@ -6,7 +6,7 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using OmenTools.Interop.Game.Helpers;
+using OmenTools.ImGuiOm.Widgets.MapRenderer;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.Interop.Game.Models.Native;
@@ -33,6 +33,14 @@ public partial class OccultCrescentHelper
         private Vector3 originalPosition;
 
         private List<TreasureHuntPoint> currentRoute = [];
+
+        private readonly ImGuiMapRenderer routeMapRenderer = new()
+        {
+            Zoomable             = false,
+            Pannable             = false,
+            EnableResizeGrip     = false,
+            EnableDefaultMarkers = true
+        };
 
         public override void Init()
         {
@@ -384,9 +392,8 @@ public partial class OccultCrescentHelper
         // 绘制寻宝路线地图
         private void DrawTreasureRouteMap()
         {
-            if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
-
-            var map = GameState.MapData;
+            var mapID = GameState.Map;
+            if (mapID == 0) return;
 
             var displaySize = ScaledVector2(400);
 
@@ -395,35 +402,45 @@ public partial class OccultCrescentHelper
 
             if (ImGui.Begin("###AutoTreasureHuntMap", WINDOW_FLAGS))
             {
-                var drawList   = ImGui.GetWindowDrawList();
-                var contentPos = ImGui.GetCursorScreenPos();
+                routeMapRenderer.SetMap(mapID);
 
-                ImGui.Image(DService.Instance().Texture.GetFromGame(map.GetTexturePath()).GetWrapOrEmpty().Handle, displaySize);
-
-                if (currentRoute.Count > 0)
+                routeMapRenderer.OnCustomMapDraw = (r, drawList) =>
                 {
+                    if (currentRoute.Count <= 1) return;
+
                     for (var i = 0; i < currentRoute.Count - 1; i++)
                     {
-                        var currentPoint = PositionHelper.WorldToTexture(currentRoute[i].Position,     map);
-                        var nextPoint    = PositionHelper.WorldToTexture(currentRoute[i + 1].Position, map);
+                        var currentScreenPos = r.WorldToScreen(currentRoute[i].Position);
+                        var nextScreenPos    = r.WorldToScreen(currentRoute[i + 1].Position);
 
-                        var currentScreenPos = contentPos + currentPoint * displaySize / 2048f;
-                        var nextScreenPos    = contentPos + nextPoint    * displaySize / 2048f;
-
-                        drawList.AddLine(currentScreenPos, nextScreenPos, LineColorBlue, 2.0f);
+                        drawList.AddLine(currentScreenPos, nextScreenPos, LineColorBlue, 2f);
                     }
-                }
+                };
 
-                foreach (var point in currentRoute)
+                routeMapRenderer.OnCustomForegroundDraw = (r, drawList) =>
                 {
-                    var texturePos = PositionHelper.WorldToTexture(point.Position, map);
-                    var screenPos  = contentPos + texturePos * displaySize / 2048f;
-                    drawList.AddCircleFilled(screenPos, 4.0f, DotColor);
+                    if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
+
+                    var playerScreenPos = r.WorldToScreen(localPlayer.Position);
+                    drawList.AddCircleFilled(playerScreenPos, 6f, PlayerColor);
+                };
+
+                routeMapRenderer.ClearMarkers();
+
+                for (var i = 0; i < currentRoute.Count; i++)
+                {
+                    routeMapRenderer.AddMarker(new()
+                    {
+                        ID          = $"TreasureRoute_{i}",
+                        Position    = currentRoute[i].Position,
+                        Color       = DotColor,
+                        Size        = new(8f),
+                        ShowLabel   = false,
+                        ShowTooltip = false
+                    });
                 }
 
-                var playerTexturePos = PositionHelper.WorldToTexture(localPlayer.Position, map);
-                var playerScreenPos  = contentPos + playerTexturePos * displaySize / 2048f;
-                drawList.AddCircleFilled(playerScreenPos, 6.0f, PlayerColor);
+                routeMapRenderer.Draw(displaySize);
             }
 
             ImGui.End();
@@ -591,7 +608,7 @@ public partial class OccultCrescentHelper
                             return null;
                     }
 
-                    return new(type, gameObject.EntityID, gameObject.Name.ToString(), gameObject.Position);
+                    return new(type, gameObject.EntityID, gameObject.Name, gameObject.Position);
                 }
                 catch
                 {
