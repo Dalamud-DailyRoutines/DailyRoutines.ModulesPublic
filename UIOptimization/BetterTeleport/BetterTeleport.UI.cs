@@ -17,7 +17,7 @@ namespace DailyRoutines.ModulesPublic.BetterTeleport;
 public unsafe partial class BetterTeleport
 {
     private List<AetheryteRecord> favorites = [];
-    
+
     private AetheryteRecord? hoveredAetheryte;
     private AetheryteRecord? pinnedAetheryte;
 
@@ -669,7 +669,7 @@ public unsafe partial class BetterTeleport
         }
 #endif
 
-        if (isHovered)
+        if (isHovered && !isSearchingInputting)
         {
             if (index.HasValue)
             {
@@ -685,7 +685,7 @@ public unsafe partial class BetterTeleport
                 lastMousePos = currentMousePos;
             }
 
-            if (!ImGui.IsPopupOpen("AetheryteContextPopup"))
+            if (!hasUsedArrowKeys && !ImGui.IsPopupOpen("AetheryteContextPopup"))
             {
                 hoveredAetheryte = aetheryte;
                 if (!index.HasValue)

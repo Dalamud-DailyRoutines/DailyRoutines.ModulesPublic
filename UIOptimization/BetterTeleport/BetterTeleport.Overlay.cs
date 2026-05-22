@@ -17,12 +17,18 @@ public unsafe partial class BetterTeleport
     private bool    shouldFocusSearchBar;
     private bool    hasUsedArrowKeys;
     private Vector2 lastMousePos;
-    
+    private bool    isSearchingInputting;
+    private Vector2 lastMousePosForInput;
+
     private readonly List<OverlayListItem> visibleItems        = [];
     private readonly List<OverlayListItem> defaultOverlayItems = [];
 
     protected override void OverlayUI()
     {
+        var currentMousePos                                                                       = ImGui.GetMousePos();
+        if (isSearchingInputting && currentMousePos != lastMousePosForInput) isSearchingInputting = false;
+        lastMousePosForInput = currentMousePos;
+
         if (!hasUsedArrowKeys)
             hoveredAetheryte = null;
 
@@ -37,6 +43,8 @@ public unsafe partial class BetterTeleport
             hoveredAetheryte     = null;
             pinnedAetheryte      = null;
             lastMousePos         = ImGui.GetMousePos();
+            isSearchingInputting = false;
+            lastMousePosForInput = ImGui.GetMousePos();
         }
 
         if (!ImGui.IsWindowFocused() && pinnedAetheryte == null)
@@ -92,6 +100,8 @@ public unsafe partial class BetterTeleport
             }
 
             visibleItems.Add(new OverlayListItem { IsShowMore = true, Name = Lang.Get("BetterTeleport-ShowMore") });
+
+            if (matches.Count == 1) hoveredAetheryte = matches[0];
         }
 
         if (selectedIndex < 0)
@@ -110,7 +120,13 @@ public unsafe partial class BetterTeleport
             shouldFocusSearchBar = false;
         }
 
-        ImGui.InputTextWithHint("###BetterTeleportQuickSearch", Lang.Get("PleaseSearch"), ref searchWord, 128);
+        var isSearchChanged = ImGui.InputTextWithHint("###BetterTeleportQuickSearch", Lang.Get("PleaseSearch"), ref searchWord, 128);
+
+        if (isSearchChanged)
+        {
+            isSearchingInputting = true;
+            hoveredAetheryte     = null;
+        }
 
         var isSearchBarFocused = ImGui.IsItemFocused();
 
@@ -183,7 +199,7 @@ public unsafe partial class BetterTeleport
 
     protected override void OverlayOnClose() =>
         config.Save(this);
-    
+
     private void DrawSearchItem(int index, OverlayListItem item, bool isSelected)
     {
         if (item.DrawSeparatorBefore)
@@ -216,7 +232,7 @@ public unsafe partial class BetterTeleport
         var isHovered = ImGui.IsItemHovered();
         ImGui.PopID();
 
-        if (isHovered)
+        if (isHovered && !isSearchingInputting)
         {
             var currentMousePos = ImGui.GetMousePos();
 
@@ -281,14 +297,12 @@ public unsafe partial class BetterTeleport
             if (seen.Add((rec.AetheryteID, rec.SubIndex)))
             {
                 var found = AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteID && x.SubIndex == rec.SubIndex);
-                if (found != null)
-                {
-                    result.Add(found);
-                }
+                if (found != null) result.Add(found);
             }
         }
 
         var module = TeleportHistoryModule.Instance();
+
         if (module != null)
         {
             foreach (var rec in module->History)
@@ -296,10 +310,7 @@ public unsafe partial class BetterTeleport
                 if (seen.Add((rec.AetheryteId, rec.SubIndex)))
                 {
                     var found = AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
-                    if (found != null)
-                    {
-                        result.Add(found);
-                    }
+                    if (found != null) result.Add(found);
                 }
             }
         }
@@ -313,27 +324,21 @@ public unsafe partial class BetterTeleport
         var specialItems = new List<AetheryteRecord>();
 
         foreach (var fav in favorites)
-        {
             if (specialSeen.Add((fav.RowID, fav.SubIndex)))
-            {
                 specialItems.Add(fav);
-            }
-        }
 
         var home = AllRecords.FirstOrDefault(x => x.State == AetheryteRecordState.Home);
         if (home != null)
-        {
             if (specialSeen.Add((home.RowID, home.SubIndex)))
-            {
                 specialItems.Add(home);
-            }
-        }
 
         var freePoints     = AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
         var freeCountAdded = 0;
+
         foreach (var free in freePoints)
         {
             if (freeCountAdded >= 2) break;
+
             if (specialSeen.Add((free.RowID, free.SubIndex)))
             {
                 specialItems.Add(free);
@@ -343,9 +348,11 @@ public unsafe partial class BetterTeleport
 
         var officialFavs  = AllRecords.Where(x => x.State == AetheryteRecordState.Favorite).ToList();
         var favCountAdded = 0;
+
         foreach (var fav in officialFavs)
         {
             if (favCountAdded >= 3) break;
+
             if (specialSeen.Add((fav.RowID, fav.SubIndex)))
             {
                 specialItems.Add(fav);
@@ -354,8 +361,8 @@ public unsafe partial class BetterTeleport
         }
 
         var historyIndices = combinedHistory
-            .Select((record, index) => new { record, index })
-            .ToDictionary(x => (x.record.RowID, x.record.SubIndex), x => x.index);
+                             .Select((record, index) => new { record, index })
+                             .ToDictionary(x => (x.record.RowID, x.record.SubIndex), x => x.index);
 
         return specialItems.OrderBy(x => historyIndices.GetValueOrDefault((x.RowID, x.SubIndex), int.MaxValue)).ToList();
     }
@@ -372,23 +379,19 @@ public unsafe partial class BetterTeleport
         var usedSeen    = new HashSet<(uint, byte)>();
 
         var recentLimit = 2;
+
         foreach (var r in combinedHistory)
         {
             if (recentList.Count >= recentLimit) break;
-            if (usedSeen.Add((r.RowID, r.SubIndex)))
-            {
-                recentList.Add(r);
-            }
+            if (usedSeen.Add((r.RowID, r.SubIndex))) recentList.Add(r);
         }
 
         var specialLimit = 6;
+
         foreach (var r in sortedSpecialRecords)
         {
             if (specialList.Count >= specialLimit) break;
-            if (usedSeen.Add((r.RowID, r.SubIndex)))
-            {
-                specialList.Add(r);
-            }
+            if (usedSeen.Add((r.RowID, r.SubIndex))) specialList.Add(r);
         }
 
         if (recentList.Count + specialList.Count < 8)
@@ -396,35 +399,38 @@ public unsafe partial class BetterTeleport
             foreach (var r in combinedHistory)
             {
                 if (recentList.Count + specialList.Count >= 8) break;
-                if (usedSeen.Add((r.RowID, r.SubIndex)))
-                {
-                    recentList.Add(r);
-                }
+                if (usedSeen.Add((r.RowID, r.SubIndex))) recentList.Add(r);
             }
         }
 
         foreach (var r in recentList)
         {
-            defaultOverlayItems.Add(new OverlayListItem
-            {
-                Record              = r,
-                IsShowMore          = false,
-                DrawSeparatorBefore = false,
-                Name                = r.Name
-            });
+            defaultOverlayItems.Add
+            (
+                new OverlayListItem
+                {
+                    Record              = r,
+                    IsShowMore          = false,
+                    DrawSeparatorBefore = false,
+                    Name                = r.Name
+                }
+            );
         }
 
         for (var i = 0; i < specialList.Count; i++)
         {
             var r       = specialList[i];
             var drawSep = i == 0 && recentList.Count > 0;
-            defaultOverlayItems.Add(new OverlayListItem
-            {
-                Record              = r,
-                IsShowMore          = false,
-                DrawSeparatorBefore = drawSep,
-                Name                = r.Name
-            });
+            defaultOverlayItems.Add
+            (
+                new OverlayListItem
+                {
+                    Record              = r,
+                    IsShowMore          = false,
+                    DrawSeparatorBefore = drawSep,
+                    Name                = r.Name
+                }
+            );
         }
     }
 
