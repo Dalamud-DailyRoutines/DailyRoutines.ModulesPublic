@@ -1,16 +1,11 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Interface.Utility;
-using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
-using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.BetterTeleport;
@@ -144,7 +139,7 @@ public unsafe partial class BetterTeleport
                                  .Concat(houseRecords)
                                  .Where
                                  (x => x.ToString().Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
-                                       (config.Remarks.TryGetValue(x.RowID, out var remark) &&
+                                       (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
                                         remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
                                  )
                                  .ToList();
@@ -242,7 +237,7 @@ public unsafe partial class BetterTeleport
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
-        DrawBottomStatusBar();
+        DrawBottomToolbar();
 
         DrawHoveredTooltip();
     }
@@ -250,95 +245,6 @@ public unsafe partial class BetterTeleport
     protected override void OverlayOnClose() =>
         config.Save(this);
 
-    private static void DrawBottomStatusBar()
-    {
-        var drawList = ImGui.GetWindowDrawList();
-        var startPos = ImGui.GetCursorScreenPos();
-        var height   = 24f * GlobalUIScale;
-
-        long gil        = 0;
-        var  tickets    = 0;
-        var  invManager = InventoryManager.Instance();
-
-        if (invManager != null)
-        {
-            gil     = invManager->GetGil();
-            tickets = invManager->GetInventoryItemCount(21069);
-        }
-
-        var curX = startPos.X + (2f * GlobalUIScale);
-        var curY = startPos.Y + (2f * GlobalUIScale);
-
-        var pillBgCol     = ImGui.GetColorU32(ImGuiCol.FrameBg);
-        var pillBorderCol = ImGui.GetColorU32(ImGuiCol.Border);
-        var paddingX      = 8f  * GlobalUIScale;
-        var pillHeight    = 20f * GlobalUIScale;
-
-        // 1. 绘制金币 Pill
-        var   gilText      = gil.ToChineseString();
-        var   gilUnit      = LuminaWrapper.GetItemName(GIL_ITEM_ID);
-        var   gilTextWidth = ImGui.CalcTextSize(gilText).X;
-        float gilUnitWidth;
-        using (FontManager.Instance().UIFont60.Push())
-            gilUnitWidth = ImGui.CalcTextSize(gilUnit).X;
-
-        var gilIcon      = DService.Instance().Texture.GetFromGameIcon(LuminaWrapper.GetItemIconID(GIL_ITEM_ID)).GetWrapOrEmpty();
-        var gilPillWidth = (paddingX * 2) + (20f * GlobalUIScale) + gilTextWidth + (4f * GlobalUIScale) + gilUnitWidth;
-
-        var gilPillPos = new Vector2(curX, curY);
-        drawList.AddRectFilled(gilPillPos, gilPillPos + new Vector2(gilPillWidth, pillHeight), pillBgCol, 4f     * GlobalUIScale);
-        drawList.AddRect(gilPillPos, gilPillPos       + new Vector2(gilPillWidth, pillHeight), pillBorderCol, 4f * GlobalUIScale);
-
-        var gilDrawX    = curX + paddingX;
-        var iconSize    = 14f                                      * GlobalUIScale;
-        var iconOffsetY = (pillHeight - iconSize)                  / 2f;
-        var textOffsetY = (pillHeight - ImGui.GetTextLineHeight()) / 2f;
-
-        drawList.AddImage(gilIcon.Handle, new(gilDrawX, curY + iconOffsetY), new(gilDrawX + iconSize, curY + iconOffsetY + iconSize));
-        gilDrawX += iconSize + (4f * GlobalUIScale);
-
-        drawList.AddText(new Vector2(gilDrawX, curY + textOffsetY), ImGui.GetColorU32(ImGuiCol.Text), gilText);
-        gilDrawX += gilTextWidth + (4f * GlobalUIScale);
-
-        using (FontManager.Instance().UIFont60.Push())
-        {
-            var unitTextHeight = ImGui.GetTextLineHeight();
-            drawList.AddText
-                (new Vector2(gilDrawX, curY + ((pillHeight - unitTextHeight) / 2f) + (1f * GlobalUIScale)), ImGui.GetColorU32(ImGuiCol.TextDisabled), gilUnit);
-        }
-
-        curX += gilPillWidth + (8f * GlobalUIScale);
-
-        // 2. 绘制使用券 Pill
-        var   ticketText      = tickets.ToChineseString();
-        var   ticketUnit      = LuminaWrapper.GetItemName(TELEPORT_TICKET_ITEM_ID);
-        var   ticketTextWidth = ImGui.CalcTextSize(ticketText).X;
-        float ticketUnitWidth;
-        using (FontManager.Instance().UIFont60.Push()) ticketUnitWidth = ImGui.CalcTextSize(ticketUnit).X;
-
-        var ticketIcon      = DService.Instance().Texture.GetFromGameIcon(LuminaWrapper.GetItemIconID(TELEPORT_TICKET_ITEM_ID)).GetWrapOrEmpty();
-        var ticketPillWidth = (paddingX * 2) + (20f * GlobalUIScale) + ticketTextWidth + (4f * GlobalUIScale) + ticketUnitWidth;
-
-        var ticketPillPos = new Vector2(curX, curY);
-        drawList.AddRectFilled(ticketPillPos, ticketPillPos + new Vector2(ticketPillWidth, pillHeight), pillBgCol, 4f     * GlobalUIScale);
-        drawList.AddRect(ticketPillPos, ticketPillPos       + new Vector2(ticketPillWidth, pillHeight), pillBorderCol, 4f * GlobalUIScale);
-
-        var ticketDrawX = curX + paddingX;
-        drawList.AddImage(ticketIcon.Handle, new Vector2(ticketDrawX, curY + iconOffsetY), new Vector2(ticketDrawX + iconSize, curY + iconOffsetY + iconSize));
-        ticketDrawX += iconSize + (4f * GlobalUIScale);
-
-        drawList.AddText(new Vector2(ticketDrawX, curY + textOffsetY), ImGui.GetColorU32(ImGuiCol.Text), ticketText);
-        ticketDrawX += ticketTextWidth + (4f * GlobalUIScale);
-
-        using (FontManager.Instance().UIFont60.Push())
-        {
-            var unitTextHeight = ImGui.GetTextLineHeight();
-            drawList.AddText
-                (new Vector2(ticketDrawX, curY + ((pillHeight - unitTextHeight) / 2f) + (1f * GlobalUIScale)), ImGui.GetColorU32(ImGuiCol.TextDisabled), ticketUnit);
-        }
-
-        ImGui.SetCursorScreenPos(startPos + new Vector2(0, height + (4f * GlobalUIScale)));
-    }
 
     private void DrawSearchItem(int index, OverlayListItem item, bool isSelected)
     {
@@ -348,6 +254,13 @@ public unsafe partial class BetterTeleport
             ImGui.Spacing();
         }
 
+        if (item is { IsShowMore: false, Record: not null })
+        {
+            DrawAetheryteItem(item.Record, index, isSelected);
+            return;
+        }
+
+        // 处理 ShowMore 项的绘制
         var startPos   = ImGui.GetCursorScreenPos();
         var width      = ImGui.GetContentRegionAvail().X;
         var lineHeight = ImGui.GetTextLineHeight();
@@ -377,9 +290,6 @@ public unsafe partial class BetterTeleport
             }
 
             lastMousePos = currentMousePos;
-
-            if (!hasUsedArrowKeys && item.Record != null)
-                hoveredAetheryte = item.Record;
         }
 
         var drawList = ImGui.GetWindowDrawList();
@@ -391,103 +301,23 @@ public unsafe partial class BetterTeleport
         }
 
         var contentStartX = startPos.X + padding + 6f;
-
-        if (item is { IsShowMore: false, Record: not null })
-        {
-            var iconSize = 24f * GlobalUIScale;
-            var iconY    = startPos.Y + ((itemHeight - iconSize) / 2);
-
-            var iconID = (uint)(LuminaGetter.GetRow<GeneralAction>(7)?.Icon ?? 60752);
-            if (item.Record.Group == 255)
-                iconID = 60752;
-            else if (item.Record.IsAetheryte)
-                iconID = 60453;
-            else
-                iconID = 60430;
-
-            var texWrap = DService.Instance().Texture.GetFromGameIcon(new(iconID)).GetWrapOrEmpty();
-            if (texWrap.Handle != nint.Zero)
-                drawList.AddImage(texWrap.Handle, new Vector2(contentStartX, iconY), new Vector2(contentStartX + iconSize, iconY + iconSize));
-
-            contentStartX += iconSize + padding + 4f;
-        }
-
-        var nameText = item.Name;
-        var titleY = item.IsShowMore
-                         ? startPos.Y + ((itemHeight - ImGui.GetTextLineHeight()) / 2f)
-                         : startPos.Y + 4f;
+        var nameText      = item.Name;
+        var titleY        = startPos.Y + ((itemHeight - ImGui.GetTextLineHeight()) / 2f);
         drawList.AddText(new Vector2(contentStartX, titleY), ImGui.GetColorU32(ImGuiCol.Text), nameText);
 
-        SeString? iconStr = null;
-
-        if (item is { IsShowMore: false, Record: not null })
-        {
-            switch (item.Record.State)
-            {
-                case AetheryteRecordState.Home:
-                    iconStr = HomeChar;
-                    break;
-                case AetheryteRecordState.Free:
-                case AetheryteRecordState.FreePS:
-                    iconStr = FreeChar;
-                    break;
-                case AetheryteRecordState.Favorite:
-                    iconStr = FavoriteChar;
-                    break;
-            }
-        }
-
-        if (iconStr != null)
-        {
-            var nameWidth    = ImGui.CalcTextSize(nameText).X;
-            var extraPadding = 8f * GlobalUIScale;
-            ImGui.SetCursorScreenPos(new Vector2(contentStartX + nameWidth + extraPadding, titleY - (2f * GlobalUIScale)));
-            ImGuiHelpers.SeStringWrapped(iconStr.Encode());
-        }
-
-        if (item is { IsShowMore: false, Record: not null })
-        {
-            using (FontManager.Instance().UIFont80.Push())
-            {
-                var subY    = titleY + lineHeight + (2f * GlobalUIScale);
-                var subText = item.Record.GetZone().ExtractPlaceName();
-                drawList.AddText(new Vector2(contentStartX, subY), ImGui.GetColorU32(ImGuiCol.TextDisabled), subText);
-            }
-        }
-
         var rightEndX = startPos.X + width - padding - 6f;
+        var hotkeyLabel = "Ctrl+9";
 
-        string? hotkeyLabel = null;
-        if (index is >= 0 and < 8)
-            hotkeyLabel = $"Ctrl+{index + 1}";
-        else if (item.IsShowMore || index == 8)
-            hotkeyLabel = "Ctrl+9";
+        var badgeSize   = ImGui.CalcTextSize(hotkeyLabel);
+        var badgeWidth  = badgeSize.X + 8f;
+        var badgeHeight = badgeSize.Y + 4f;
+        var badgePos    = new Vector2(rightEndX - badgeWidth, startPos.Y + ((itemHeight - badgeHeight) / 2));
 
-        if (hotkeyLabel != null)
-        {
-            var badgeSize   = ImGui.CalcTextSize(hotkeyLabel);
-            var badgeWidth  = badgeSize.X + 8f;
-            var badgeHeight = badgeSize.Y + 4f;
-            var badgePos    = new Vector2(rightEndX - badgeWidth, startPos.Y + ((itemHeight - badgeHeight) / 2));
+        var badgeBgCol = ImGui.GetColorU32(ImGuiCol.FrameBg);
+        drawList.AddRectFilled(badgePos, badgePos + new Vector2(badgeWidth, badgeHeight), badgeBgCol, 4f);
+        drawList.AddRect(badgePos, badgePos       + new Vector2(badgeWidth, badgeHeight), ImGui.GetColorU32(ImGuiCol.Border), 4f);
 
-            var badgeBgCol = ImGui.GetColorU32(ImGuiCol.FrameBg);
-            drawList.AddRectFilled(badgePos, badgePos + new Vector2(badgeWidth, badgeHeight), badgeBgCol, 4f);
-            drawList.AddRect(badgePos, badgePos       + new Vector2(badgeWidth, badgeHeight), ImGui.GetColorU32(ImGuiCol.Border), 4f);
-
-            drawList.AddText(badgePos + new Vector2(4f, 2f), ImGui.GetColorU32(ImGuiCol.TextDisabled), hotkeyLabel);
-
-            rightEndX -= badgeWidth + padding;
-        }
-
-        if (item is { IsShowMore: false, Record: not null })
-        {
-            var cost     = item.Record.Cost;
-            var costText = $"{cost}\uE049";
-            var costSize = ImGui.CalcTextSize(costText);
-            var costPos  = new Vector2(rightEndX - costSize.X, startPos.Y + ((itemHeight - costSize.Y) / 2));
-
-            drawList.AddText(costPos, ImGui.GetColorU32(ImGuiCol.Text), costText);
-        }
+        drawList.AddText(badgePos + new Vector2(4f, 2f), ImGui.GetColorU32(ImGuiCol.TextDisabled), hotkeyLabel);
 
         ImGui.SetCursorScreenPos(startPos + new Vector2(0, itemHeight + 2f));
     }

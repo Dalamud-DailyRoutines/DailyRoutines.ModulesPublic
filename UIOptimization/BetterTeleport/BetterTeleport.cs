@@ -80,6 +80,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         TaskHelper ??= new() { TimeoutMS = 60_000 };
 
         config = Config.Load(this) ?? new();
+        MigrateConfig();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
@@ -126,7 +127,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return;
 
-        var hasRedirect  = config.Positions.TryGetValue(aetheryte.RowID, out var redirected);
+        var hasRedirect  = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var redirected);
         var aetherytePos = hasRedirect ? redirected : aetheryte.Position;
 
         var isSameZone = aetheryte.ZoneID == GameState.TerritoryType;
@@ -315,13 +316,60 @@ public unsafe partial class BetterTeleport : ModuleBase
     private static bool IsWithPermission() =>
         !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
 
+    private static string GetConfigKey(AetheryteRecord record) => $"{record.RowID}_{record.SubIndex}";
+    private static string GetConfigKey(uint rowID, byte subIndex) => $"{rowID}_{subIndex}";
+
+    private void MigrateConfig()
+    {
+        var migrated = false;
+
+        // 迁移 Remarks
+        var oldRemarksKeys = config.Remarks.Keys.Where(k => !k.Contains('_')).ToList();
+        if (oldRemarksKeys.Count > 0)
+        {
+            foreach (var oldKey in oldRemarksKeys)
+            {
+                if (uint.TryParse(oldKey, out var rowID))
+                {
+                    var val = config.Remarks[oldKey];
+                    var newKey = GetConfigKey(rowID, 0);
+                    config.Remarks[newKey] = val;
+                }
+                config.Remarks.Remove(oldKey);
+            }
+            migrated = true;
+        }
+
+        // 迁移 Positions
+        var oldPositionsKeys = config.Positions.Keys.Where(k => !k.Contains('_')).ToList();
+        if (oldPositionsKeys.Count > 0)
+        {
+            foreach (var oldKey in oldPositionsKeys)
+            {
+                if (uint.TryParse(oldKey, out var rowID))
+                {
+                    var val = config.Positions[oldKey];
+                    var newKey = GetConfigKey(rowID, 0);
+                    config.Positions[newKey] = val;
+                }
+                config.Positions.Remove(oldKey);
+            }
+            migrated = true;
+        }
+
+        if (migrated)
+        {
+            config.Save(this);
+        }
+    }
+
     private class Config : ModuleConfig
     {
         public HashSet<uint>             Favorites            = [];
         public bool                      HideAethernetInParty = true;
         public float                     MapZoom              = 1f;
-        public Dictionary<uint, Vector3> Positions            = [];
-        public Dictionary<uint, string>  Remarks              = [];
+        public Dictionary<string, Vector3> Positions            = [];
+        public Dictionary<string, string>  Remarks              = [];
     }
 
     #region 常量
@@ -330,12 +378,7 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     private const ulong INVALID_HOUSE_ID = 0xFFFFFFFFFFFFFFFF;
 
-    private const uint GIL_ITEM_ID             = 1;
-    private const uint TELEPORT_TICKET_ITEM_ID = 7569;
 
-    private static readonly SeString HomeChar     = new SeStringBuilder().AddIcon(BitmapFontIcon.OrangeDiamond).Build();
-    private static readonly SeString FreeChar     = new SeStringBuilder().AddIcon(BitmapFontIcon.GoldStar).Build();
-    private static readonly SeString FavoriteChar = new SeStringBuilder().AddIcon(BitmapFontIcon.SilverStar).Build();
 
     private static Dictionary<uint, string> TicketUsageTypes
     {
