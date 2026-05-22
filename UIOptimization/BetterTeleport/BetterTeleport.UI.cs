@@ -27,7 +27,8 @@ public unsafe partial class BetterTeleport
         MinZoom              = 0.2f,
         MaxZoom              = 4.0f,
         LerpSpeed            = 15.0f,
-        EnableDefaultMarkers = true
+        EnableDefaultMarkers = true,
+        DefaultMarkerFilter  = marker => marker.DataType is not (3 or 4)
     };
 
     private void SetupMapRenderer(AetheryteRecord aetheryte, bool isPinned)
