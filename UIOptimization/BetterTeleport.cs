@@ -483,10 +483,16 @@ public unsafe class BetterTeleport : ModuleBase
 
         switch (aetheryte.State)
         {
-            case AetheryteRecordState.Home: iconStr = HomeChar; break;
+            case AetheryteRecordState.Home:
+                iconStr = HomeChar;
+                break;
             case AetheryteRecordState.Free:
-            case AetheryteRecordState.FreePS: iconStr = FreeChar; break;
-            case AetheryteRecordState.Favorite: iconStr = FavoriteChar; break;
+            case AetheryteRecordState.FreePS:
+                iconStr = FreeChar;
+                break;
+            case AetheryteRecordState.Favorite:
+                iconStr = FavoriteChar;
+                break;
         }
 
         var contentStartX = startPos.X + padding + animOffset;
