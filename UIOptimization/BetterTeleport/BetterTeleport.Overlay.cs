@@ -1,5 +1,7 @@
 ﻿using System.Numerics;
+using System.Runtime.InteropServices;
 using DailyRoutines.Extensions;
+using DailyRoutines.Internal;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text.SeStringHandling;
@@ -8,7 +10,6 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
-using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -32,6 +33,7 @@ public unsafe partial class BetterTeleport
             hoveredAetheryte = null;
 
         var isWindowAppearing = ImGui.IsWindowAppearing();
+
         if (isWindowAppearing)
         {
             searchWord           = string.Empty;
@@ -41,13 +43,14 @@ public unsafe partial class BetterTeleport
             lastMousePos         = ImGui.GetMousePos();
         }
 
-        if (!ImGui.IsWindowFocused())
+        if (!ImGui.IsWindowFocused() && pinnedAetheryte == null)
         {
             Overlay.IsOpen = false;
             return;
         }
 
         var keyState = DService.Instance().KeyState;
+
         if (keyState[VirtualKey.ESCAPE])
         {
             Overlay.IsOpen = false;
@@ -128,9 +131,9 @@ public unsafe partial class BetterTeleport
             (
                 new OverlayListItem
                 {
-                    IsShowMore = true, 
-                    DrawSeparatorBefore = false, 
-                    Name = Lang.Get("BetterTeleport-ShowMore")
+                    IsShowMore          = true,
+                    DrawSeparatorBefore = false,
+                    Name                = Lang.Get("BetterTeleport-ShowMore")
                 }
             );
         }
@@ -159,7 +162,7 @@ public unsafe partial class BetterTeleport
 
         if (selectedIndex < 0)
             selectedIndex = 0;
-        if (visibleItems.Count > 0 && selectedIndex >= visibleItems.Count) 
+        if (visibleItems.Count > 0 && selectedIndex >= visibleItems.Count)
             selectedIndex = visibleItems.Count - 1;
 
         ImGui.SetNextItemWidth(-1f);
@@ -169,7 +172,7 @@ public unsafe partial class BetterTeleport
             ImGui.SetWindowFocus();
             ImGui.SetKeyboardFocusHere();
             AtkStage.Instance()->ClearFocus();
-            
+
             shouldFocusSearchBar = false;
         }
 
@@ -179,14 +182,18 @@ public unsafe partial class BetterTeleport
 
         ImGui.Spacing();
 
-        for (var i = 0; i < visibleItems.Count; i++) 
+        for (var i = 0; i < visibleItems.Count; i++)
             DrawSearchItem(i, visibleItems[i], selectedIndex == i);
+
+        var conflictKey = PluginConfig.Instance().ConflictKeyBinding.Keyboard;
+        if ((GetAsyncKeyState((int)conflictKey) & 0x8000) != 0 && hoveredAetheryte != null)
+            pinnedAetheryte = hoveredAetheryte;
 
         if (Overlay.IsOpen && visibleItems.Count > 0)
         {
             if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
             {
-                selectedIndex = (selectedIndex + 1) % visibleItems.Count;
+                selectedIndex    = (selectedIndex + 1) % visibleItems.Count;
                 hasUsedArrowKeys = true;
                 if (visibleItems[selectedIndex].Record != null)
                     hoveredAetheryte = visibleItems[selectedIndex].Record;
@@ -194,7 +201,7 @@ public unsafe partial class BetterTeleport
 
             if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
             {
-                selectedIndex = (selectedIndex - 1 + visibleItems.Count) % visibleItems.Count;
+                selectedIndex    = (selectedIndex - 1 + visibleItems.Count) % visibleItems.Count;
                 hasUsedArrowKeys = true;
                 if (visibleItems[selectedIndex].Record != null)
                     hoveredAetheryte = visibleItems[selectedIndex].Record;
@@ -348,26 +355,27 @@ public unsafe partial class BetterTeleport
         var itemHeight = (lineHeight * 2.2f) + padding;
 
         ImGui.PushID($"item_{index}");
+
         if (ImGui.InvisibleButton("##ItemBtn", new Vector2(width, itemHeight)))
         {
             hasUsedArrowKeys = false;
             TriggerListItem(item);
         }
+
         var isHovered = ImGui.IsItemHovered();
         ImGui.PopID();
 
         if (isHovered)
         {
             var currentMousePos = ImGui.GetMousePos();
-            if (!hasUsedArrowKeys)
-            {
-                selectedIndex = index;
-            }
+
+            if (!hasUsedArrowKeys) selectedIndex = index;
             else if (currentMousePos != lastMousePos)
             {
                 hasUsedArrowKeys = false;
-                selectedIndex = index;
+                selectedIndex    = index;
             }
+
             lastMousePos = currentMousePos;
 
             if (!hasUsedArrowKeys && item.Record != null)
@@ -518,4 +526,7 @@ public unsafe partial class BetterTeleport
         public bool             DrawSeparatorBefore;
         public string           Name;
     }
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
 }
