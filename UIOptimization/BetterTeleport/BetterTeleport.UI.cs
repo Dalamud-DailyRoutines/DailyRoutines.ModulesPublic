@@ -531,7 +531,7 @@ public unsafe partial class BetterTeleport
             HandleTeleport(aetheryte);
         }
 
-        var isHovered = ImGui.IsItemHovered();
+        var isHovered = ImGui.IsItemHovered() && !hasUsedArrowKeys;
         var isActive  = ImGui.IsItemActive();
 
         // 统一右键菜单
@@ -674,20 +674,9 @@ public unsafe partial class BetterTeleport
         if (isHovered && !isSearchingInputting)
         {
             if (index.HasValue)
-            {
-                var currentMousePos = ImGui.GetMousePos();
+                selectedIndex = index.Value;
 
-                if (!hasUsedArrowKeys) selectedIndex = index.Value;
-                else if (currentMousePos != lastMousePos)
-                {
-                    hasUsedArrowKeys = false;
-                    selectedIndex    = index.Value;
-                }
-
-                lastMousePos = currentMousePos;
-            }
-
-            if (!hasUsedArrowKeys && !ImGui.IsPopupOpen("AetheryteContextPopup"))
+            if (!ImGui.IsPopupOpen("AetheryteContextPopup"))
             {
                 hoveredAetheryte = aetheryte;
                 if (!index.HasValue)

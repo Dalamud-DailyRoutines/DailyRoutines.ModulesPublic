@@ -25,6 +25,11 @@ public unsafe partial class BetterTeleport
 
     public void DrawFullWindowUI()
     {
+        var currentMousePos = ImGui.GetMousePos();
+        if (hasUsedArrowKeys && currentMousePos != lastMousePos)
+            hasUsedArrowKeys = false;
+        lastMousePos = currentMousePos;
+
         hoveredAetheryte = null;
 
         var isSearchEmpty = string.IsNullOrWhiteSpace(fullSearchWord);
@@ -392,13 +397,15 @@ public unsafe partial class BetterTeleport
             module.fullSearchWord   = string.Empty;
             module.fullSearchResult = [];
             module.selectedIndex    = 0;
-            module.hasUsedArrowKeys = false;
+            module.hasUsedArrowKeys = true;
             module.hoveredAetheryte = null;
             module.pinnedAetheryte  = null;
             module.activeTabName    = module.favorites.Count > 0 ? "Favorite" : module.records.Keys.FirstOrDefault() ?? "Setting";
             module.tabToSelect      = module.activeTabName;
             module.shouldFocusFullSearchBar = true;
             module.shouldScrollToSelected   = false;
+
+            module.lastMousePos               = ImGui.GetMousePos();
         }
 
         public override void Draw() =>

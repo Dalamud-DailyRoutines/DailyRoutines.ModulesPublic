@@ -28,6 +28,10 @@ public unsafe partial class BetterTeleport
         if (isSearchingInputting && currentMousePos != lastMousePosForInput) isSearchingInputting = false;
         lastMousePosForInput = currentMousePos;
 
+        if (hasUsedArrowKeys && currentMousePos != lastMousePos)
+            hasUsedArrowKeys = false;
+        lastMousePos = currentMousePos;
+
         if (!hasUsedArrowKeys)
             hoveredAetheryte = null;
 
@@ -38,7 +42,7 @@ public unsafe partial class BetterTeleport
             searchWord           = string.Empty;
             selectedIndex        = 0;
             shouldFocusSearchBar = true;
-            hasUsedArrowKeys     = false;
+            hasUsedArrowKeys     = true;
             hoveredAetheryte     = null;
             pinnedAetheryte      = null;
             lastMousePos         = ImGui.GetMousePos();
@@ -230,21 +234,12 @@ public unsafe partial class BetterTeleport
             TriggerListItem(item);
         }
 
-        var isHovered = ImGui.IsItemHovered();
+        var isHovered = ImGui.IsItemHovered() && !hasUsedArrowKeys;
         ImGui.PopID();
 
         if (isHovered && !isSearchingInputting)
         {
-            var currentMousePos = ImGui.GetMousePos();
-
-            if (!hasUsedArrowKeys) selectedIndex = index;
-            else if (currentMousePos != lastMousePos)
-            {
-                hasUsedArrowKeys = false;
-                selectedIndex    = index;
-            }
-
-            lastMousePos = currentMousePos;
+            selectedIndex = index;
         }
 
         var drawList = ImGui.GetWindowDrawList();
