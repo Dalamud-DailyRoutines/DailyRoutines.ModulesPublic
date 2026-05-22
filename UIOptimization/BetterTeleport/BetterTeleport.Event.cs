@@ -1,10 +1,9 @@
 ﻿using DailyRoutines.Manager;
+using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -154,14 +153,20 @@ public unsafe partial class BetterTeleport
         HandleTeleport(result);
     }
     
-    private void OnPostInputIDPressed(bool result, InputId id)
+    private void OnPreInputIDPressed(ref bool? overrideResult, ref InputId id)
     {
-        if (!Overlay.IsOpen        ||
-            id != InputId.CMD_CHAT ||
-            !result)
+        if (!Overlay.IsOpen)
             return;
 
-        AtkStage.Instance()->ClearFocus();
-        shouldFocusSearchBar = true;
+        // Enter 键
+        if (id == InputId.CMD_CHAT && DService.Instance().KeyState[VirtualKey.RETURN])
+        {
+            shouldFocusSearchBar = true;
+            overrideResult       = false;
+        }
+
     }
+
+    private void OnLogin() =>
+        OnZoneChanged(0);
 }

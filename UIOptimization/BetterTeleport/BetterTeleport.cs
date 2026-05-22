@@ -70,8 +70,8 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         Overlay.SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(420f * GlobalUIScale, -1),
-            MaximumSize = new Vector2(420f * GlobalUIScale, -1)
+            MinimumSize = new Vector2(400f * GlobalUIScale, -1),
+            MaximumSize = new Vector2(400f * GlobalUIScale, -1)
         };
 
         fullWindow = new BetterTeleportFullWindow(this);
@@ -83,22 +83,24 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
+        GameState.Instance().Login += OnLogin;
 
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterTeleport-CommandHelp") });
 
         UseActionManager.Instance().RegPreUseAction(OnPostUseAction);
 
-        InputIDManager.Instance().RegPostPressed(OnPostInputIDPressed);
+        InputIDManager.Instance().RegPrePressed(OnPreInputIDPressed);
     }
 
     protected override void Uninit()
     {
-        InputIDManager.Instance().UnregPostPressed(OnPostInputIDPressed);
+        InputIDManager.Instance().UnregPrePressed(OnPreInputIDPressed);
 
         UseActionManager.Instance().Unreg(OnPostUseAction);
         CommandManager.Instance().RemoveCommand(COMMAND);
 
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        GameState.Instance().Login                       -= OnLogin;
 
         if (fullWindow != null)
         {
