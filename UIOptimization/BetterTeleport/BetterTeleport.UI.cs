@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
@@ -9,13 +6,11 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
-
+using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using Lumina.Excel.Sheets;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.BetterTeleport;
@@ -87,7 +82,12 @@ public unsafe partial class BetterTeleport
             DrawAetheryteMap(DService.Instance().Texture.GetFromGame(hoveredAetheryte.GetMap().GetTexturePath()), hoveredAetheryte, false);
     }
 
-    private void DrawAetheryteMap(ISharedImmediateTexture tex, AetheryteRecord aetheryte, bool isPinned)
+    private void DrawAetheryteMap
+    (
+        ISharedImmediateTexture tex,
+        AetheryteRecord         aetheryte,
+        bool                    isPinned
+    )
     {
         var drawList = ImGui.GetWindowDrawList();
         var warp     = tex.GetWrapOrEmpty();
@@ -389,7 +389,15 @@ public unsafe partial class BetterTeleport
         ImGui.SetCursorScreenPos(startPos + new Vector2(0, height + (4f * GlobalUIScale)));
     }
 
-    private static float DrawAetheryteIcon(ImDrawListPtr drawList, AetheryteRecord aetheryte, Vector2 startPos, float itemHeight, float padding, float animOffset)
+    private static float DrawAetheryteIcon
+    (
+        ImDrawListPtr   drawList,
+        AetheryteRecord aetheryte,
+        Vector2         startPos,
+        float           itemHeight,
+        float           padding,
+        float           animOffset
+    )
     {
         var iconID = (uint)(LuminaGetter.GetRow<GeneralAction>(7)?.Icon ?? 60752);
         if (aetheryte.Group == 255)
@@ -399,7 +407,7 @@ public unsafe partial class BetterTeleport
         else
             iconID = 60430;
 
-        var texWrap = DService.Instance().Texture.GetFromGameIcon(new(iconID)).GetWrapOrEmpty();
+        var texWrap       = DService.Instance().Texture.GetFromGameIcon(new(iconID)).GetWrapOrEmpty();
         var contentStartX = startPos.X + padding + 6f + animOffset;
         var iconSize      = 24f * GlobalUIScale;
         var iconY         = startPos.Y + ((itemHeight - iconSize) / 2f);
@@ -410,22 +418,30 @@ public unsafe partial class BetterTeleport
         return contentStartX + iconSize + padding + 4f;
     }
 
-    private float DrawAetheryteIndicators(ImDrawListPtr drawList, AetheryteRecord aetheryte, float startX, float titleY)
+    private float DrawAetheryteIndicators
+    (
+        ImDrawListPtr   drawList,
+        AetheryteRecord aetheryte,
+        float           startX,
+        float           titleY
+    )
     {
-        var curX = startX;
+        var curX      = startX;
         var hasRemark = config.Remarks.ContainsKey(GetConfigKey(aetheryte));
+
         if (hasRemark)
         {
-            var remarkIcon = FontAwesomeIcon.Edit.ToIconString();
+            var remarkIcon     = FontAwesomeIcon.Edit.ToIconString();
             var remarkIconSize = ImGui.CalcTextSize(remarkIcon);
             drawList.AddText(new Vector2(curX, titleY), ImGui.GetColorU32(ImGuiCol.TextDisabled), remarkIcon);
-            curX += remarkIconSize.X + 6f * GlobalUIScale;
+            curX += remarkIconSize.X + (6f * GlobalUIScale);
         }
 
         var hasCustomPos = config.Positions.ContainsKey(GetConfigKey(aetheryte));
+
         if (hasCustomPos)
         {
-            var posIcon = FontAwesomeIcon.MapPin.ToIconString();
+            var posIcon     = FontAwesomeIcon.MapPin.ToIconString();
             var posIconSize = ImGui.CalcTextSize(posIcon);
             drawList.AddText(new Vector2(curX, titleY), ImGui.GetColorU32(KnownColor.Orange.ToVector4().ToUInt()), posIcon);
             curX += posIconSize.X + (6f * GlobalUIScale);
@@ -434,7 +450,12 @@ public unsafe partial class BetterTeleport
         return curX;
     }
 
-    private static void DrawAetheryteStateIcon(AetheryteRecord aetheryte, float curX, float titleY)
+    private static void DrawAetheryteStateIcon
+    (
+        AetheryteRecord aetheryte,
+        float           curX,
+        float           titleY
+    )
     {
         SeString? iconStr = null;
 
@@ -461,72 +482,75 @@ public unsafe partial class BetterTeleport
 
     private void DrawAetheryteContextMenu(AetheryteRecord aetheryte)
     {
-        using (var context = ImRaii.ContextPopupItem("AetheryteContextPopup"))
+        using var context = ImRaii.ContextPopupItem("AetheryteContextPopup");
+        if (!context) return;
+
+        ImGui.TextUnformatted($"{aetheryte.Name}");
+
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        if (ImGui.MenuItem(Lang.Get("Favorite"), string.Empty, config.Favorites.Contains(aetheryte.RowID)))
         {
-            if (context)
+            if (!config.Favorites.Add(aetheryte.RowID))
+                config.Favorites.Remove(aetheryte.RowID);
+
+            RefreshFavoritesInfo();
+            config.Save(this);
+        }
+
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        ImGui.TextUnformatted(Lang.Get("Note"));
+
+        var hasRemark = config.Remarks.TryGetValue(GetConfigKey(aetheryte), out var remark);
+        var input     = hasRemark ? remark : string.Empty;
+        ImGui.SetNextItemWidth(Math.Max(150f * GlobalUIScale, ImGui.CalcTextSize(aetheryte.Name).X));
+
+        if (ImGui.InputText("###Note", ref input, 128))
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                config.Remarks.Remove(GetConfigKey(aetheryte));
+            else
+                config.Remarks[GetConfigKey(aetheryte)] = input;
+        }
+
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            config.Save(this);
+
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        ImGui.TextUnformatted(Lang.Get("Position"));
+
+        var hasPosition = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var position);
+        using (FontManager.Instance().UIFont60.Push())
+            ImGui.TextUnformatted($"{(hasPosition ? position : aetheryte.Position):F1}");
+
+        if (ImGui.MenuItem(Lang.Get("BetterTeleport-RedirectedToCurrentPos")))
+        {
+            config.Positions[GetConfigKey(aetheryte)] = Control.GetLocalPlayer()->Position;
+            config.Save(this);
+        }
+
+        using (ImRaii.Disabled(!config.Positions.ContainsKey(GetConfigKey(aetheryte))))
+        {
+            if (ImGui.MenuItem($"{Lang.Get("Clear")}###DeleteRedirected"))
             {
-                ImGui.TextUnformatted($"{aetheryte.Name}");
-
-                ImGui.Separator();
-                ImGui.Spacing();
-
-                if (ImGui.MenuItem(Lang.Get("Favorite"), string.Empty, config.Favorites.Contains(aetheryte.RowID)))
-                {
-                    if (!config.Favorites.Add(aetheryte.RowID))
-                        config.Favorites.Remove(aetheryte.RowID);
-
-                    RefreshFavoritesInfo();
-                    config.Save(this);
-                }
-
-                ImGui.Separator();
-                ImGui.Spacing();
-
-                ImGui.TextUnformatted(Lang.Get("Note"));
-
-                var hasRemark = config.Remarks.TryGetValue(GetConfigKey(aetheryte), out var remark);
-                var input = hasRemark ? remark : string.Empty;
-                ImGui.SetNextItemWidth(Math.Max(150f * GlobalUIScale, ImGui.CalcTextSize(aetheryte.Name).X));
-
-                if (ImGui.InputText("###Note", ref input, 128))
-                {
-                    if (string.IsNullOrWhiteSpace(input))
-                        config.Remarks.Remove(GetConfigKey(aetheryte));
-                    else
-                        config.Remarks[GetConfigKey(aetheryte)] = input;
-                }
-
-                if (ImGui.IsItemDeactivatedAfterEdit())
-                    config.Save(this);
-
-                ImGui.Separator();
-                ImGui.Spacing();
-
-                ImGui.TextUnformatted(Lang.Get("Position"));
-
-                var hasPosition = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var position);
-                using (FontManager.Instance().UIFont60.Push())
-                    ImGui.TextUnformatted($"{(hasPosition ? position : aetheryte.Position):F1}");
-
-                if (ImGui.MenuItem(Lang.Get("BetterTeleport-RedirectedToCurrentPos")))
-                {
-                    config.Positions[GetConfigKey(aetheryte)] = Control.GetLocalPlayer()->Position;
-                    config.Save(this);
-                }
-
-                using (ImRaii.Disabled(!config.Positions.ContainsKey(GetConfigKey(aetheryte))))
-                {
-                    if (ImGui.MenuItem($"{Lang.Get("Clear")}###DeleteRedirected"))
-                    {
-                        config.Positions.Remove(GetConfigKey(aetheryte));
-                        config.Save(this);
-                    }
-                }
+                config.Positions.Remove(GetConfigKey(aetheryte));
+                config.Save(this);
             }
         }
+
     }
 
-    private void DrawAetheryteItem(AetheryteRecord aetheryte, int? index = null, bool isSelected = false)
+    private void DrawAetheryteItem
+    (
+        AetheryteRecord aetheryte,
+        int?            index      = null,
+        bool            isSelected = false
+    )
     {
         if (config.HideAethernetInParty && !aetheryte.IsAetheryte && DService.Instance().PartyList.Length > 1)
             return;
@@ -549,6 +573,7 @@ public unsafe partial class BetterTeleport
                 hasUsedArrowKeys = false;
             HandleTeleport(aetheryte);
         }
+
         var isHovered = ImGui.IsItemHovered();
         var isActive  = ImGui.IsItemActive();
 
@@ -559,7 +584,7 @@ public unsafe partial class BetterTeleport
         var key = (aetheryte.RowID, aetheryte.SubIndex);
         hoverProgress.TryAdd(key, 0f);
 
-        var targetProgress  = (isHovered || isSelected) ? 1f : 0f;
+        var targetProgress  = isHovered || isSelected ? 1f : 0f;
         var speed           = ImGui.GetIO().DeltaTime * 12f;
         var currentProgress = hoverProgress[key];
 
@@ -632,7 +657,7 @@ public unsafe partial class BetterTeleport
         drawList.AddText(new Vector2(contentStartX, titleY), ImGui.GetColorU32(ImGuiCol.Text), displayName);
 
         var nameWidth = ImGui.CalcTextSize(displayName).X;
-        var curX      = contentStartX + nameWidth + 8f * GlobalUIScale;
+        var curX      = contentStartX + nameWidth + (8f * GlobalUIScale);
 
         curX = DrawAetheryteIndicators(drawList, aetheryte, curX, titleY);
         DrawAetheryteStateIcon(aetheryte, curX, titleY);
@@ -716,4 +741,3 @@ public unsafe partial class BetterTeleport
         ImGui.SetCursorScreenPos(startPos + new Vector2(0, itemHeight + (index.HasValue ? 2f : 3f)));
     }
 }
-
