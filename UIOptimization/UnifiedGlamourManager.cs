@@ -883,18 +883,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         if (!child) return;
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(11910)}: {prismBoxItemCount} / {LuminaWrapper.GetAddonText(12216)}: {cabinetItemCount} / {LuminaWrapper.GetAddonText(929)}: {StoredItemCount} /");
-        ImGui.SameLine();
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(GOLD_COLOR, $"{Lang.Get("Favorite")}: {cachedLoadedFavoriteCount.ToString()}");
-        ImGui.SameLine();
-        using (ImRaii.Disabled(config.Favorites.Count == 0))
-        {
-            if (ImGui.Button(Lang.Get("Clear")))
-                requestClearFavoritesConfirm = true;
-        }
-
-        ImGui.Spacing();
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(11910)}: {prismBoxItemCount} / {LuminaWrapper.GetAddonText(12216)}: {cabinetItemCount} / {LuminaWrapper.GetAddonText(929)}: {StoredItemCount}");
 
         if (ImGui.Button(Lang.Get("Refresh")))
             StartRefreshAll();
@@ -1114,25 +1103,35 @@ public unsafe class UnifiedGlamourManager : ModuleBase
         ImGui.Separator();
         ImGui.Spacing();
 
-        if (isRefreshingItems)
+        var showFavoriteFooter = sourceFilter == SourceFilter.Favorite;
+        var footerHeight       = showFavoriteFooter ? ImGui.GetFrameHeightWithSpacing() + ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y: 0f;
+
+        using (var itemList = ImRaii.Child(
+                "##UnifiedItemList",
+                showFavoriteFooter ? new Vector2(0f, -footerHeight) : Vector2.Zero,
+                false))
         {
-            ImGui.TextDisabled(Lang.Get("Loading"));
-            return;
+            if (isRefreshingItems)
+                ImGui.TextDisabled(Lang.Get("Loading"));
+            else if (filteredItems.Count == 0)
+                ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSearchResult"));
+            else if (useGridView)
+                DrawItemGrid(filteredItems);
+            else
+                DrawItemCardsVirtualized(filteredItems);
         }
 
-        if (filteredItems.Count == 0)
+        if (showFavoriteFooter)
         {
-            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSearchResult"));
-            return;
+            ImGui.Separator();
+            ImGui.TextColored(GOLD_COLOR, $"{Lang.Get("UnifiedGlamourManager-FilteredFavoriteCount")}: {filteredItems.Select(static x => x.ItemID).Distinct().Count()}");
+
+            using (ImRaii.Disabled(filteredItems.Count == 0))
+            {
+                if (ImGui.Button(Lang.Get("UnifiedGlamourManager-ClearFavorites"), new Vector2(-1f, 0f)))
+                    requestClearFavoritesConfirm = true;
+            }
         }
-
-        using var itemList = ImRaii.Child("##UnifiedItemList", Vector2.Zero, false);
-        if (!itemList) return;
-
-        if (useGridView)
-            DrawItemGrid(filteredItems);
-        else
-            DrawItemCardsVirtualized(filteredItems);
     }
 
     private void DrawItemCardsVirtualized(IReadOnlyList<UnifiedItem> filtered)
@@ -1448,7 +1447,8 @@ public unsafe class UnifiedGlamourManager : ModuleBase
 
         if (ImGui.Button(Lang.Get("Confirm")))
         {
-            config.Favorites.Clear();
+            var ids = filteredItems.Select(static x => x.ItemID).ToHashSet();
+            config.Favorites.RemoveAll(x => ids.Contains(x.ItemID));
             SaveConfig();
             ImGui.CloseCurrentPopup();
         }
@@ -1626,7 +1626,7 @@ public unsafe class UnifiedGlamourManager : ModuleBase
     private static string GetSourceFilterLabel(SourceFilter filter) =>
         filter switch
         {
-            SourceFilter.Favorite => LuminaWrapper.GetAddonText(8127),
+            SourceFilter.Favorite => Lang.Get("UnifiedGlamourManager-MyFavorites"),
             SourceFilter.PrismBox => LuminaWrapper.GetAddonText(11910),
             SourceFilter.Cabinet  => LuminaWrapper.GetAddonText(12216),
             _                     => Lang.Get("All")
