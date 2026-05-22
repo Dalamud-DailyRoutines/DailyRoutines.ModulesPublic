@@ -6,7 +6,6 @@ using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.BetterTeleport;
 
@@ -73,7 +72,7 @@ public unsafe partial class BetterTeleport
             }
 
             // 2. 免费点 (最多2个，去重)
-            var freePoints     = AllRecords.Where(x => x.State == AetheryteRecordState.Free || x.State == AetheryteRecordState.FreePS).ToList();
+            var freePoints     = AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
             var freeCountAdded = 0;
 
             foreach (var free in freePoints)
@@ -112,16 +111,38 @@ public unsafe partial class BetterTeleport
             foreach (var r in recentRecords)
             {
                 if (recentItems.Count >= recentLimit) break;
-                if (!specialSeen.Contains((r.RowID, r.SubIndex)) && recentSeen.Add((r.RowID, r.SubIndex))) recentItems.Add(r);
+                if (!specialSeen.Contains((r.RowID, r.SubIndex)) && recentSeen.Add((r.RowID, r.SubIndex)))
+                    recentItems.Add(r);
             }
 
-            foreach (var r in recentItems) visibleItems.Add(new OverlayListItem { Record = r, IsShowMore = false, DrawSeparatorBefore = false, Name = r.Name });
+            foreach (var r in recentItems)
+            {
+                visibleItems.Add
+                (
+                    new OverlayListItem
+                    {
+                        Record              = r,
+                        IsShowMore          = false,
+                        DrawSeparatorBefore = false,
+                        Name                = r.Name
+                    }
+                );
+            }
 
             for (var i = 0; i < specialItems.Count; i++)
             {
                 var r       = specialItems[i];
                 var drawSep = i == 0 && recentItems.Count > 0;
-                visibleItems.Add(new OverlayListItem { Record = r, IsShowMore = false, DrawSeparatorBefore = drawSep, Name = r.Name });
+                visibleItems.Add
+                (
+                    new OverlayListItem
+                    {
+                        Record              = r,
+                        IsShowMore          = false,
+                        DrawSeparatorBefore = drawSep,
+                        Name                = r.Name
+                    }
+                );
             }
 
             visibleItems.Add
@@ -307,7 +328,7 @@ public unsafe partial class BetterTeleport
         var titleY        = startPos.Y + ((itemHeight - ImGui.GetTextLineHeight()) / 2f);
         drawList.AddText(new Vector2(contentStartX, titleY), ImGui.GetColorU32(ImGuiCol.Text), nameText);
 
-        var rightEndX = startPos.X + width - padding - 6f;
+        var rightEndX   = startPos.X + width - padding - 6f;
         var hotkeyLabel = "Ctrl+9";
 
         var badgeSize   = ImGui.CalcTextSize(hotkeyLabel);
