@@ -113,30 +113,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         recordMatcher?.Dispose();
         recordMatcher = null;
     }
-
-    protected override void ConfigUI()
-    {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
-
-        ImGui.SameLine();
-        ImGui.TextWrapped($"{COMMAND} {Lang.Get("BetterTeleport-CommandHelp")}");
-
-        ImGui.NewLine();
-
-        ImGui.SetNextItemWidth(150f * GlobalUIScale);
-        var defaultPage = (int)config.DefaultPage;
-        var options     = new[] { Lang.Get("BetterTeleport-PageSearch"), Lang.Get("BetterTeleport-PageFull") };
-
-        if (ImGui.Combo($"{Lang.Get("BetterTeleport-DefaultPage")}##BetterTeleportDefaultPage", ref defaultPage, options, options.Length))
-        {
-            config.DefaultPage = (PageType)defaultPage;
-            config.Save(this);
-        }
-
-        if (ImGui.Checkbox(Lang.Get("BetterTeleport-HideAethernetInParty"), ref config.HideAethernetInParty))
-            config.Save(this);
-    }
-
+    
     private void ToggleDefaultPage()
     {
         if (Overlay.IsOpen || fullWindow.IsOpen)

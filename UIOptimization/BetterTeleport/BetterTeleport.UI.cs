@@ -38,6 +38,18 @@ public unsafe partial class BetterTeleport
         DefaultMarkerFilter  = marker => marker.DataType is not (3 or 4)
     };
     
+    protected override void ConfigUI()
+    {
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
+
+        ImGui.SameLine();
+        ImGui.TextWrapped($"{COMMAND} {Lang.Get("BetterTeleport-CommandHelp")}");
+
+        ImGui.NewLine();
+
+        DrawGeneralSettings(150f * GlobalUIScale);
+    }
+    
     private FuzzyMatcher<AetheryteRecord> CreateRecordMatcher() =>
         new
         (
@@ -686,18 +698,6 @@ public unsafe partial class BetterTeleport
 
         drawList.AddText(costPos, ImGui.GetColorU32(ImGuiCol.Text), costStrFull);
 
-#if DEBUG
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Right) && !index.HasValue)
-        {
-            var localPos = Control.GetLocalPlayer()->Position;
-            ImGui.SetClipboardText
-            (
-                $"// {aetheryte.Name}\n" +
-                $"[{aetheryte.RowID}] = new({localPos.X:F2}f, {localPos.Y + 0.1f:F2}f, {localPos.Z:F2}f),"
-            );
-        }
-#endif
-
         if (isHovered && !isSearchingInputting)
         {
             if (index.HasValue)
@@ -712,6 +712,29 @@ public unsafe partial class BetterTeleport
         }
 
         ImGui.SetCursorScreenPos(startPos + new Vector2(0, itemHeight + (index.HasValue ? 2f : 3f)));
+    }
+
+    private void DrawGeneralSettings(float width = -1f)
+    {
+        var defaultPage = (int)config.DefaultPage;
+        var options     = new[] { Lang.Get("BetterTeleport-PageSearch"), Lang.Get("BetterTeleport-PageFull") };
+
+        if (width > 0)
+            ImGui.SetNextItemWidth(width);
+        if (ImGui.Combo
+            (
+                $"{Lang.Get("BetterTeleport-DefaultPage")}###BetterTeleportDefaultPageCombo",
+                ref defaultPage,
+                options,
+                options.Length
+            ))
+        {
+            config.DefaultPage = (PageType)defaultPage;
+            config.Save(this);
+        }
+
+        if (ImGui.Checkbox(Lang.Get("BetterTeleport-HideAethernetInParty"), ref config.HideAethernetInParty))
+            config.Save(this);
     }
 
     #region 常量

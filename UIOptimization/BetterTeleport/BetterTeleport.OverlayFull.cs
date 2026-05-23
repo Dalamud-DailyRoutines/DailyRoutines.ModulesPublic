@@ -401,23 +401,7 @@ public unsafe partial class BetterTeleport
                         if (ImGui.InputUInt("###GilInputFull", ref gilSetting))
                             TicketUsageGilSetting = gilSetting;
 
-                        if (ImGui.Checkbox(Lang.Get("BetterTeleport-HideAethernetInParty"), ref config.HideAethernetInParty))
-                            config.Save(this);
-
-                        var defaultPage = (int)config.DefaultPage;
-                        var options     = new[] { Lang.Get("BetterTeleport-PageSearch"), Lang.Get("BetterTeleport-PageFull") };
-
-                        if (ImGui.Combo
-                            (
-                                $"{Lang.Get("BetterTeleport-DefaultPage")}###BetterTeleportDefaultPageComboFull",
-                                ref defaultPage,
-                                options,
-                                options.Length
-                            ))
-                        {
-                            config.DefaultPage = (PageType)defaultPage;
-                            config.Save(this);
-                        }
+                        DrawGeneralSettings();
                     }
                     else
                         ImGuiOm.TooltipHover(LuminaWrapper.GetAddonText(8516));
