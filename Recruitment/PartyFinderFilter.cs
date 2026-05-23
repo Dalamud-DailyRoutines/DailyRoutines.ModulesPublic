@@ -7,6 +7,8 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Gui.PartyFinder.Types;
 using Dalamud.Interface.Components;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -24,7 +26,7 @@ public class PartyFinderFilter : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
+
     private Config config = null!;
 
     private int  batchIndex;
@@ -36,8 +38,9 @@ public class PartyFinderFilter : ModuleBase
 
     protected override unsafe void Init()
     {
-        config =   Config.Load(this) ?? new();
-        Overlay      ??= new(this);
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new();
+        Overlay    ??= new(this);
 
         DService.Instance().PartyFinder.ReceiveListing += OnReceiveListing;
 
@@ -47,31 +50,98 @@ public class PartyFinderFilter : ModuleBase
             OnAddon(AddonEvent.PostSetup, null);
     }
 
-    protected override void ConfigUI()
+    protected override unsafe void ConfigUI()
+    {
+        using var tabBar = ImRaii.TabBar("PartyFinderFilterTabs");
+        if (!tabBar) return;
+
+        // 一般
+        using (var tab = ImRaii.TabItem(Lang.Get("General")))
+        {
+            if (tab)
+                DrawGeneralSettings();
+        }
+
+        // 高难度任务
+        using (var tab = ImRaii.TabItem(LuminaWrapper.GetAddonText(10822)))
+        {
+            if (tab)
+                DrawHighEndSettings();
+        }
+
+        // 招募描述
+        using (var tab = ImRaii.TabItem(Lang.Get("PartyFinderFilter-Category-Description")))
+        {
+            if (tab)
+                DrawRegexFilterSettings();
+        }
+
+        // 条件设定
+        if (ImGui.TabItemButton(LuminaWrapper.GetAddonText(11070)))
+        {
+            if (LFGFilterSettings != null)
+                LFGFilterSettings->Close(true);
+            else
+                AgentId.LookingForGroup.SendEvent(1, 25);
+        }
+
+        // 搜索
+        if (ImGui.TabItemButton(Lang.Get("Search")))
+        {
+            if (LookingForGroupSearch != null)
+                LookingForGroupSearch->Close(true);
+            else
+                AgentId.LookingForGroup.SendEvent(1, 15);
+        }
+        
+        // 按角色名搜索
+        if (ImGui.TabItemButton(Lang.Get("PartyFinderFilter-Category-SearchByName")))
+        {
+            if (LookingForGroupNameSearch != null)
+                LookingForGroupNameSearch->Close(true);
+            else
+            {
+                AgentId.LookingForGroup.SendEvent(1, 19);
+                AgentId.LookingForGroup.SendEvent(10, 16);
+            }
+        }
+    }
+
+    private unsafe void DrawGeneralSettings()
     {
         if (ImGui.Checkbox(Lang.Get("PartyFinderFilter-FilterDuplicate"), ref config.FilterSameDescription))
             config.Save(this);
 
-        ImGui.Spacing();
+        ImGui.NewLine();
 
-        DrawHighEndSettings();
+        // 升序
+        if (ImGui.RadioButton(LuminaWrapper.GetAddonText(10127), FlagStatusModule.Instance()->UIFlags[4] == 1))
+            AgentId.LookingForGroup.SendEvent(1, 24, 0, 0);
 
-        ImGui.Spacing();
+        // 降序
+        if (ImGui.RadioButton(LuminaWrapper.GetAddonText(10128), FlagStatusModule.Instance()->UIFlags[4] == 3))
+            AgentId.LookingForGroup.SendEvent(1, 24, 1, 0);
 
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("PartyFinderFilter-DescriptionRegexFilter"));
+        ImGui.NewLine();
 
-        ImGui.Spacing();
+        var displayBlacklisted = FlagStatusModule.Instance()->UIFlags[12] == 1;
+        var displayLocked      = FlagStatusModule.Instance()->UIFlags[7]  == 0;
 
-        DrawRegexFilterSettings();
+        using (ImRaii.Disabled(TaskHelper.IsBusy))
+        {
+            // 显示黑名单玩家所开的招募
+            if (ImGui.Checkbox(LuminaWrapper.GetAddonText(11124), ref displayBlacklisted))
+                RefreshDisplaySettings(displayBlacklisted, displayLocked);
+
+            // 在队员招募中显示未开放任务
+            if (ImGui.Checkbox(LuminaWrapper.GetAddonText(11128), ref displayLocked))
+                RefreshDisplaySettings(displayBlacklisted, displayLocked);
+        }
     }
 
     private void DrawHighEndSettings()
     {
         using var group = ImRaii.Group();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("PartyFinderFilter-HighEndFilter"));
-
-        using var indent = ImRaii.PushIndent();
 
         if (ImGui.Checkbox(Lang.Get("PartyFinderFilter-HighEndFilterSameJob"), ref config.HighEndFilterSameJob))
             config.Save(this);
@@ -132,13 +202,14 @@ public class PartyFinderFilter : ModuleBase
 
     private void DrawRegexFilterSettings()
     {
-        using var indent = ImRaii.PushIndent();
-
-        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Plus, Lang.Get("PartyFinderFilter-AddPreset")))
-            config.BlackList.Add(new(true, string.Empty));
-
-        ImGui.SameLine();
         DrawWorkModeSettings();
+
+        if (ImGuiComponents.IconButtonWithText
+            (
+                FontAwesomeIcon.Plus,
+                $"{Lang.Get("PartyFinderFilter-AddPreset")} ({Lang.Get("Regex")})"
+            ))
+            config.BlackList.Add(new(true, string.Empty));
 
         var index = 0;
 
@@ -190,11 +261,26 @@ public class PartyFinderFilter : ModuleBase
         return true;
     }
 
+    private static unsafe void RefreshDisplaySettings(bool displayBlacklisted, bool displayLocked)
+    {
+        var flag0 = displayBlacklisted ? 0 : 0x20000;
+        var flag1 = displayLocked ? 0 : 0x10000;
+
+        var targetValue0 = displayBlacklisted ? 1 : 0;
+        var targetValue1 = displayLocked ? 0 : 1;
+
+        if (FlagStatusModule.Instance()->UIFlags[12] == targetValue0 &&
+            FlagStatusModule.Instance()->UIFlags[7]  == targetValue1)
+            return;
+
+        AgentId.LookingForGroup.SendEvent(13, 0, 10, flag0 + flag1);
+    }
+
     private void HandleRegexUpdate(int index, bool key, string value)
     {
         try
         {
-            _                             = new Regex(value);
+            _                       = new Regex(value);
             config.BlackList[index] = new(key, value);
             config.Save(this);
         }
@@ -243,11 +329,11 @@ public class PartyFinderFilter : ModuleBase
             return true;
 
         var isMatch = config.BlackList
-                                  .Where(i => i.Key)
-                                  .Any
-                                  (item => Regex.IsMatch(listing.Name.ToString(), item.Value) ||
-                                           Regex.IsMatch(description,             item.Value)
-                                  );
+                            .Where(i => i.Key)
+                            .Any
+                            (item => Regex.IsMatch(listing.Name.ToString(), item.Value) ||
+                                     Regex.IsMatch(description,             item.Value)
+                            );
 
         return config.IsWhiteList ? isMatch : !isMatch;
     }
