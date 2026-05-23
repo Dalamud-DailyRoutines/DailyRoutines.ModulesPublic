@@ -735,6 +735,12 @@ public unsafe partial class BetterTeleport
 
         if (ImGui.Checkbox(Lang.Get("BetterTeleport-HideAethernetInParty"), ref config.HideAethernetInParty))
             config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("BetterTeleport-FocusSearchOnOpen"), ref config.FocusSearchOnOpen))
+            config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("BetterTeleport-CloseOnLoseFocus"), ref config.CloseOnLoseFocus))
+            config.Save(this);
     }
 
     #region 常量

@@ -49,7 +49,8 @@ public unsafe partial class BetterTeleport
             hasUsedArrowKeys     = false;
         }
 
-        if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+        if (config.CloseOnLoseFocus                                       &&
+            !ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
             pinnedAetheryte == null                                       &&
             !ImGui.IsPopupOpen("AetheryteContextPopup"))
         {
@@ -431,7 +432,7 @@ public unsafe partial class BetterTeleport
             module.pinnedAetheryte        = null;
             module.activeTabName          = module.favorites.Count > 0 ? "Favorite" : module.records.Keys.FirstOrDefault() ?? "Setting";
             module.tabToSelect            = module.activeTabName;
-            module.shouldFocusSearchBar   = true;
+            module.shouldFocusSearchBar   = module.config.FocusSearchOnOpen;
             module.shouldScrollToSelected = false;
             module.isJustOpened           = true;
 

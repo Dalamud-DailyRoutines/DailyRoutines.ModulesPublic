@@ -25,8 +25,9 @@ public unsafe partial class BetterTeleport
 
     protected override void OverlayUI()
     {
-        var currentMousePos                                                                       = ImGui.GetMousePos();
-        if (isSearchingInputting && currentMousePos != lastMousePosForInput) isSearchingInputting = false;
+        var currentMousePos = ImGui.GetMousePos();
+        if (isSearchingInputting && currentMousePos != lastMousePosForInput)
+            isSearchingInputting = false;
         lastMousePosForInput = currentMousePos;
 
         if (hasUsedArrowKeys && currentMousePos != lastMousePos)
@@ -40,9 +41,10 @@ public unsafe partial class BetterTeleport
 
         if (isWindowAppearing)
         {
-            searchWord           = string.Empty;
-            selectedIndex        = 0;
-            shouldFocusSearchBar = true;
+            searchWord    = string.Empty;
+            selectedIndex = 0;
+            if (config.FocusSearchOnOpen)
+                shouldFocusSearchBar = true;
             hasUsedArrowKeys     = true;
             hoveredAetheryte     = null;
             pinnedAetheryte      = null;
@@ -51,7 +53,8 @@ public unsafe partial class BetterTeleport
             lastMousePosForInput = ImGui.GetMousePos();
         }
 
-        if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+        if (config.CloseOnLoseFocus                                       &&
+            !ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
             pinnedAetheryte == null                                       &&
             !ImGui.IsPopupOpen("AetheryteContextPopup"))
         {

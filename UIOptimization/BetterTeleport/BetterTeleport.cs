@@ -410,6 +410,8 @@ public unsafe partial class BetterTeleport : ModuleBase
     private class Config : ModuleConfig
     {
         public PageType                    DefaultPage          = PageType.Search;
+        public bool                        FocusSearchOnOpen    = true;
+        public bool                        CloseOnLoseFocus     = true;
         public HashSet<uint>               Favorites            = [];
         public bool                        HideAethernetInParty = true;
         public Dictionary<string, Vector3> Positions            = [];
