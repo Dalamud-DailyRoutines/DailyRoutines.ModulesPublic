@@ -8,6 +8,8 @@ namespace DailyRoutines.ModulesPublic.CrossDCPartyFinder;
 
 public partial class CrossDCPartyFinder
 {
+    private readonly Dictionary<string, float> cardHeights = new();
+
     protected override unsafe void OverlayUI()
     {
         var addon = LookingForGroup;
@@ -15,10 +17,15 @@ public partial class CrossDCPartyFinder
         if (addon == null)
         {
             Overlay.IsOpen = false;
+            cardHeights.Clear();
             return;
         }
 
-        if (selectedDataCenter == LocatedDataCenter) return;
+        if (selectedDataCenter == LocatedDataCenter)
+        {
+            cardHeights.Clear();
+            return;
+        }
 
         var nodeInfo0  = addon->GetNodeById(38)->GetNodeState();
         var nodeInfo1  = addon->GetNodeById(31)->GetNodeState();
@@ -162,23 +169,31 @@ public partial class CrossDCPartyFinder
 
         pageItems.ForEach(x => Task.Run(async () => await x.RequestAsync(), cancelSource.Token).ConfigureAwait(false));
 
-        var jobIconSize      = new Vector2(ImGui.GetTextLineHeight() * 1.15f);
-        var categoryIconSize = new Vector2(ImGui.GetTextLineHeight() * 1.25f);
-        var availableWidth   = ImGui.GetContentRegionAvail().X;
-        var cardSpacing      = 6f * GlobalUIScale;
+        var jobIconSize       = new Vector2(ImGui.GetTextLineHeight() * 1.15f);
+        var categoryIconSize  = new Vector2(ImGui.GetTextLineHeight() * 1.25f);
+        var availableWidth    = ImGui.GetContentRegionAvail().X;
+        var cardSpacing       = 6f   * GlobalUIScale;
+        var rightContentWidth = 230f * GlobalUIScale;
 
         foreach (var listing in pageItems)
         {
             using var id = ImRaii.PushId(listing.ID);
 
-            var descLineCount = 0;
-            using (FontManager.Instance().UIFont90.Push())
-                descLineCount = (int)MathF.Ceiling(ImGui.CalcTextSize(listing.Description).X / (availableWidth - (8 * ImGui.GetStyle().ItemSpacing.X)));
+            var isDescEmpty = string.IsNullOrEmpty(listing.Description);
+            var displayDesc = isDescEmpty ? $"({LuminaWrapper.GetAddonText(11100)})" : listing.Description;
 
-            var cardHeight = (3 + MathF.Max(1, descLineCount)) * ImGui.GetTextLineHeightWithSpacing();
+            if (!cardHeights.TryGetValue(listing.ID, out var cardHeight))
+            {
+                var descLineCount = 0;
+                using (FontManager.Instance().UIFont90.Push())
+                    descLineCount = (int)MathF.Ceiling(ImGui.CalcTextSize(listing.Description).X / (availableWidth - (8 * ImGui.GetStyle().ItemSpacing.X)));
+
+                cardHeight = (3 + MathF.Max(1, descLineCount)) * ImGui.GetTextLineHeightWithSpacing();
+            }
 
             using (ImRaii.PushStyle(ImGuiStyleVar.ChildRounding, 8f * GlobalUIScale))
             using (ImRaii.PushStyle(ImGuiStyleVar.ChildBorderSize, 1f * GlobalUIScale))
+            using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(8f * GlobalUIScale, 6f * GlobalUIScale)))
             using (ImRaii.PushColor(ImGuiCol.Border, KnownColor.DarkSlateBlue.ToVector4()))
             using (ImRaii.Child
                    (
@@ -200,7 +215,10 @@ public partial class CrossDCPartyFinder
                 var pMax   = winPos + new Vector2(6f     * GlobalUIScale, cardHeight - (4f * GlobalUIScale));
                 drawList.AddRectFilled(pMin, pMax, accentColor, 2f * GlobalUIScale);
 
+                var leftY  = 0f;
+                var rightY = 0f;
                 ImGui.SetCursorPos(startCursorPos + new Vector2(8f * GlobalUIScale, 4f * GlobalUIScale));
+
                 using (ImRaii.Group())
                 {
                     var dutyName = string.IsNullOrEmpty(listing.Duty) ? LuminaWrapper.GetAddonText(7) : listing.Duty;
@@ -229,7 +247,7 @@ public partial class CrossDCPartyFinder
                         ImGui.SameLine(0, 8f * GlobalUIScale);
                         var ilvlTextHeight = ImGui.GetTextLineHeight();
                         ImGui.SetCursorPosY(titleStartY + ((titleLineHeight - ilvlTextHeight) / 2f));
-                        using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.Gold.ToVector4())) 
+                        using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.Gold.ToVector4()))
                             ImGui.TextUnformatted($"[装等 {listing.MinItemLevel}]");
                     }
 
@@ -258,19 +276,25 @@ public partial class CrossDCPartyFinder
                     ImGuiOm.TooltipHover($"{listing.PlayerName}@{listing.HomeWorldName}");
                     ImGuiOm.ClickToCopyAndNotify($"{listing.PlayerName}@{listing.HomeWorldName}");
 
-                    var isDescEmpty = string.IsNullOrEmpty(listing.Description);
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (10f * GlobalUIScale));
                     var descStartPos = ImGui.GetCursorPos();
 
                     using (FontManager.Instance().UIFont90.Push())
                     using (ImRaii.PushColor(ImGuiCol.Text, isDescEmpty ? KnownColor.DarkGray.ToVector4() : KnownColor.LightGray.ToVector4()))
-                        ImGui.TextWrapped(isDescEmpty ? $"({LuminaWrapper.GetAddonText(11100)})" : $"{listing.Description}");
-                    
+                    {
+                        ImGui.PushTextWrapPos(availableWidth - rightContentWidth - (8f * GlobalUIScale));
+                        ImGui.TextUnformatted(displayDesc);
+                        ImGui.PopTextWrapPos();
+                    }
+
+                    var descSize = ImGui.GetItemRectSize();
+                    leftY = descStartPos.Y + descSize.Y;
+
                     if (!isDescEmpty)
                     {
                         ImGui.SameLine();
                         ImGui.SetCursorPos(descStartPos);
-                        ImGui.InvisibleButton($"Description##{listing.ID}", ImGui.GetContentRegionAvail());
+                        ImGui.InvisibleButton($"Description##{listing.ID}", descSize);
 
                         if (ImGui.IsItemHovered())
                             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
@@ -280,7 +304,6 @@ public partial class CrossDCPartyFinder
                     }
                 }
 
-                var rightContentWidth = 230f * GlobalUIScale;
                 ImGui.SameLine();
                 ImGui.SetCursorPosX(availableWidth - rightContentWidth - (8f * GlobalUIScale));
 
@@ -327,7 +350,7 @@ public partial class CrossDCPartyFinder
                             using (FontManager.Instance().UIFont90.Push())
                             {
                                 const string NO_SLOTS_TEXT = "不设职业限制";
-                                var          extraSpace  = rightContentWidth - ImGui.CalcTextSize(NO_SLOTS_TEXT).X;
+                                var          extraSpace    = rightContentWidth - ImGui.CalcTextSize(NO_SLOTS_TEXT).X;
                                 if (extraSpace > 0)
                                     ImGui.SetCursorPosX(ImGui.GetCursorPosX() + extraSpace);
 
@@ -377,11 +400,14 @@ public partial class CrossDCPartyFinder
 
                         ImGui.SameLine(0, capsuleSpacing);
                         DrawCapsuleBadge(drawList, timeText, timeSize, padX, padY, KnownColor.SaddleBrown.ToVector4(), KnownColor.Orange.ToVector4());
-                        
+
                         ImGui.SameLine(0, capsuleSpacing);
                         DrawCapsuleBadge(drawList, worldText, worldSize, padX, padY, KnownColor.DarkSlateBlue.ToVector4(), KnownColor.LightPink.ToVector4());
                     }
+                    rightY = ImGui.GetCursorPosY();
                 }
+
+                cardHeights[listing.ID] = Math.Max(leftY, rightY) + (7f * GlobalUIScale);
             }
 
             ImGui.Dummy(new Vector2(0, cardSpacing));
