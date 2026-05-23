@@ -27,13 +27,13 @@ public unsafe class AutoGlamourDresser : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
+
     private Config config = null!;
 
     protected override void Init()
     {
-        TaskHelper   ??= new() { TimeoutMS = 5_000 };
-        config =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 5_000 };
+        config     =   Config.Load(this) ?? new();
 
         LogMessageManager.Instance().RegPost(OnReceiveLogMessage);
 
@@ -49,7 +49,7 @@ public unsafe class AutoGlamourDresser : ModuleBase
         if (MiragePrismPrismSetConvertC->IsAddonAndNodesReady())
             OnAddonMiragePrismPrismSetConvertC(AddonEvent.PostSetup, null);
     }
-    
+
     protected override void Uninit()
     {
         LogMessageManager.Instance().Unreg(OnReceiveLogMessage);
@@ -64,7 +64,7 @@ public unsafe class AutoGlamourDresser : ModuleBase
             config.Save(this);
 
         ImGui.NewLine();
-        
+
         ImGui.TextUnformatted(Lang.Get("Operation"));
 
         using (ImRaii.PushIndent())
@@ -97,12 +97,12 @@ public unsafe class AutoGlamourDresser : ModuleBase
         using (ImRaii.Disabled(!TaskHelper.IsBusy))
         {
             ImGui.Spacing();
-            
+
             if (ImGui.Button(Lang.Get("Stop")))
                 TaskHelper.Abort();
         }
     }
-    
+
     private void OnMiragePrismPrismBox(AddonEvent type, AddonArgs? args)
     {
         if (!config.AutoSwitchJobCategory) return;
@@ -162,10 +162,41 @@ public unsafe class AutoGlamourDresser : ModuleBase
         return itemIndexesToRestore;
     }
 
-    private static List<uint> FilterArmoireItems(List<PrismBoxItemInfo> items) =>
-        items.Where(item => ArmoireAvailableItems.Contains(item.ItemID))
-             .Select(item => item.Index)
-             .ToList();
+    private List<uint> FilterArmoireItems(List<PrismBoxItemInfo> items)
+    {
+        Dictionary<uint, PrismBoxItemInfo> itemsByID    = [];
+        Dictionary<uint, PrismBoxItemInfo> itemsByIndex = [];
+
+        foreach (var item in items)
+        {
+            itemsByID.TryAdd(item.ItemID, item);
+            itemsByIndex[item.Index] = item;
+        }
+
+        List<uint>    itemIndexesToRestore = [];
+        HashSet<uint> seenItemIndexes      = [];
+
+        foreach (var (_, itemIndexes) in GetRestorableItemSets(itemsByID, false))
+        {
+            if (!itemIndexes.Any(itemIndex => ArmoireAvailableItems.Contains(itemsByIndex[itemIndex].ItemID)))
+                continue;
+
+            foreach (var itemIndex in itemIndexes)
+            {
+                if (!seenItemIndexes.Add(itemIndex)) continue;
+                itemIndexesToRestore.Add(itemIndex);
+            }
+        }
+
+        foreach (var item in items)
+        {
+            if (!ArmoireAvailableItems.Contains(item.ItemID)) continue;
+            if (!seenItemIndexes.Add(item.Index)) continue;
+            itemIndexesToRestore.Add(item.Index);
+        }
+
+        return itemIndexesToRestore;
+    }
 
     private void StartAttireItems()
     {
@@ -184,16 +215,7 @@ public unsafe class AutoGlamourDresser : ModuleBase
         foreach (var item in items)
             itemsByID.TryAdd(item.ItemID, item);
 
-        Dictionary<MirageItemSet, List<uint>> validItemSets = [];
-
-        foreach (var mirageItemSet in MirageItemSets)
-        {
-            if (!mirageItemSet.TryGetRestorableIndexes(itemsByID, config.OnlyRemoveSetItemsWhenComplete, config.SkipItemsWithStain, out var itemIndexes))
-                continue;
-
-            validItemSets[mirageItemSet] = itemIndexes;
-        }
-
+        var validItemSets = GetRestorableItemSets(itemsByID, config.OnlyRemoveSetItemsWhenComplete);
         if (validItemSets.Count == 0) return;
 
         foreach (var (mirageItemSet, itemIndexes) in validItemSets)
@@ -206,6 +228,25 @@ public unsafe class AutoGlamourDresser : ModuleBase
         }
 
         TaskHelper.Enqueue(RestoreItemsFromPrismBox);
+    }
+
+    private Dictionary<MirageItemSet, List<uint>> GetRestorableItemSets
+    (
+        IReadOnlyDictionary<uint, PrismBoxItemInfo> itemsByID,
+        bool                                        onlyRemoveWhenComplete
+    )
+    {
+        Dictionary<MirageItemSet, List<uint>> validItemSets = [];
+
+        foreach (var mirageItemSet in MirageItemSets)
+        {
+            if (!mirageItemSet.TryGetRestorableIndexes(itemsByID, onlyRemoveWhenComplete, config.SkipItemsWithStain, out var itemIndexes))
+                continue;
+
+            validItemSets[mirageItemSet] = itemIndexes;
+        }
+
+        return validItemSets;
     }
 
     private void OnReceiveLogMessage(uint logMessageID, LogMessageQueueItem values)
@@ -237,11 +278,11 @@ public unsafe class AutoGlamourDresser : ModuleBase
 
         for (var i = 0; i < slotCount; i++)
         {
-            var inventoryType = MiragePrismPrismSetConvert->AtkValues[25 + i * 7].UInt;
+            var inventoryType = MiragePrismPrismSetConvert->AtkValues[25 + (i * 7)].UInt;
             if (inventoryType != 9999) continue;
 
-            var unkParam0 = MiragePrismPrismSetConvert->AtkValues[26 + i * 7].UInt;
-            var unkParam1 = MiragePrismPrismSetConvert->AtkValues[27 + i * 7].UInt;
+            var unkParam0 = MiragePrismPrismSetConvert->AtkValues[26 + (i * 7)].UInt;
+            var unkParam1 = MiragePrismPrismSetConvert->AtkValues[27 + (i * 7)].UInt;
             if (unkParam0 == unkParam1 && unkParam1 == 0) continue;
 
             slotsToFill.Add(i);
@@ -341,9 +382,9 @@ public unsafe class AutoGlamourDresser : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public bool AutoSwitchJobCategory  = true;
+        public bool AutoSwitchJobCategory          = true;
         public bool OnlyRemoveSetItemsWhenComplete = true;
-        public bool SkipItemsWithStain     = true;
+        public bool SkipItemsWithStain             = true;
     }
 
     private readonly record struct PrismBoxItemInfo
@@ -382,12 +423,12 @@ public unsafe class AutoGlamourDresser : ModuleBase
 
             List<uint> setItemsID =
             [
-                row.Body.RowId, 
-                row.Bracelets.RowId, 
-                row.Earrings.RowId, 
-                row.Feet.RowId, 
+                row.Body.RowId,
+                row.Bracelets.RowId,
+                row.Earrings.RowId,
+                row.Feet.RowId,
                 row.Hands.RowId,
-                row.Head.RowId, 
+                row.Head.RowId,
                 row.Legs.RowId,
                 row.Necklace.RowId,
                 row.Ring.RowId,
@@ -438,7 +479,7 @@ public unsafe class AutoGlamourDresser : ModuleBase
             return itemIndexes.Count > 0 && (!onlyRemoveWhenComplete || itemIndexes.Count == SetItems.Count);
         }
     }
-    
+
     #region 常量
 
     private static readonly FrozenSet<uint> ArmoireAvailableItems =
