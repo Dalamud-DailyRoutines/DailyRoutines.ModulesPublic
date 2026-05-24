@@ -205,7 +205,7 @@ public unsafe partial class UnifiedGlamourManager
     private void DrawLevelFilter()
     {
         ImGui.TextDisabled(LuminaWrapper.GetAddonText(7873));
-        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-EnableLevelRange"), ref enableLevelFilter))
+        if (ImGui.Checkbox(Lang.Get("Enable"), ref enableLevelFilter))
             MarkFilteredItemsDirty();
 
         using (ImRaii.Disabled(!enableLevelFilter))
