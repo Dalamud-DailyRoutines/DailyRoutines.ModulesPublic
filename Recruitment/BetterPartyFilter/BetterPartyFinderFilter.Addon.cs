@@ -15,7 +15,7 @@ using KamiToolKit.Premade.Node;
 using KamiToolKit.Premade.Node.Simple;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic;
+namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
 
 public partial class BetterPartyFinderFilter
 {

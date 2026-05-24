@@ -11,7 +11,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic;
+namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
 
 public partial class BetterPartyFinderFilter : ModuleBase
 {
