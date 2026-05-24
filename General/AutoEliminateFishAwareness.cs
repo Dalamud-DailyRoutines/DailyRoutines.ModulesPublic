@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -10,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
+using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
@@ -73,6 +75,10 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
 
         ImGui.NewLine();
 
+        if (ImGui.Checkbox(Lang.Get("AutoEliminateFishAwareness-AutoCast"), ref config.AutoCast))
+            config.Save(this);
+        ImGuiOm.HelpMarker(Lang.Get("AutoEliminateFishAwareness-AutoCastHelp"));
+        
         if (ImGui.Checkbox(Lang.Get("AutoEliminateFishAwareness-LogoutWhenGlobalWarning"), ref config.LogoutWhenGlobalWarning))
             config.Save(this);
     }
@@ -126,8 +132,11 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
                 else
                     return;
 
-                TaskHelper.Enqueue(() => ActionManager.Instance()->GetActionStatus(ActionType.Action, 289) == 0, "等待技能抛竿可用");
-                
+                if (config.AutoCast)
+                    TaskHelper.Enqueue(EnterFishing, "进入钓鱼状态");
+                else
+                    TaskHelper.Enqueue(() => ActionManager.Instance()->GetActionStatus(ActionType.Action, 289) == 0, "等待技能抛竿可用");
+
                 TaskHelper.Enqueue
                 (
                     () =>
@@ -161,8 +170,18 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
         return true;
     }
 
+    private static bool EnterFishing()
+    {
+        if (!Throttler.Shared.Throttle("AutoEliminateFishAwareness-EnterFishing")) return false;
+        if (DService.Instance().ObjectTable.LocalPlayer == null || DService.Instance().Condition.IsBetweenAreas || !UIModule.IsScreenReady()) return false;
+
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.Fishing);
+        return DService.Instance().Condition[ConditionFlag.Fishing];
+    }
+
     private class Config : ModuleConfig
     {
+        public bool          AutoCast       = true;
         public HashSet<uint> BlacklistZones = [];
         public string        ExtraCommands  = string.Empty;
 
@@ -172,6 +191,13 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
     #region 常量
 
     private const uint TARGET_CONTENT = 195;
+
+    private static readonly FrozenSet<string> ValidChatMessages = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        LuminaWrapper.GetLogMessageText(3516),
+        LuminaWrapper.GetLogMessageText(5517),
+        LuminaWrapper.GetLogMessageText(5518)
+    }.ToFrozenSet();
 
     #endregion
 }
