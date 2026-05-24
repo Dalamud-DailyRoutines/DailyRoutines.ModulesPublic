@@ -24,7 +24,7 @@ public partial class BetterPartyFinderFilter : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
+
     private static uint NotifyNewRecruitment
     {
         get => DService.Instance().GameConfig.UiConfig.GetUInt("PartyFinderNewArrivalDisp");
@@ -54,7 +54,7 @@ public partial class BetterPartyFinderFilter : ModuleBase
             Size                  = new(400f, 220f),
             RememberClosePosition = false
         };
-        
+
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroup", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroup", OnAddon);
     }
@@ -66,7 +66,7 @@ public partial class BetterPartyFinderFilter : ModuleBase
 
         addon?.Dispose();
         addon = null;
-        
+
         OnAddon(AddonEvent.PreFinalize, null);
     }
 
@@ -268,9 +268,11 @@ public partial class BetterPartyFinderFilter : ModuleBase
             return count < maxCount && hasSlot;
         }
     }
-    
+
     private class Config : ModuleConfig
     {
+        public override string PreviousModuleName => "PartyFinderFilter";
+
         public List<KeyValuePair<bool, string>> BlackList = [];
 
         // T2, 血奶1, 盾奶1, 近2, 远1, 法2

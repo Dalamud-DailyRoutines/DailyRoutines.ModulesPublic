@@ -19,8 +19,8 @@ namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
 
 public partial class BetterPartyFinderFilter
 {
-    private TextButtonNode?         buttonNode;
-    private bool                    isNeedToOpenAddon;
+    private TextButtonNode?               buttonNode;
+    private bool                          isNeedToOpenAddon;
     private BetterPartyFinderFilterAddon? addon;
 
     private unsafe void OnAddon(AddonEvent type, AddonArgs args)
@@ -111,18 +111,18 @@ public partial class BetterPartyFinderFilter
         private CheckboxNode     notifyCheckbox           = null!;
         private NumericInputNode notifyIntervalInput      = null!;
         private CheckboxNode     noNotifyWhenZeroCheckbox = null!;
-        
-        private CheckboxNode       autoModeCheckbox      = null!;
-        private CheckboxNode       manualModeCheckbox    = null!;
-        private HorizontalListNode modeRow               = null!;
-        private VerticalListNode   numLayout             = null!;
 
-        private CheckboxNode       blacklistCheckbox = null!;
-        private CheckboxNode       whitelistCheckbox = null!;
-        private VerticalListNode   listContainer     = null!;
-        private TextButtonNode     prevPageBtn       = null!;
-        private TextButtonNode     nextPageBtn       = null!;
-        private TextNode           pageLabel         = null!;
+        private CheckboxNode       autoModeCheckbox   = null!;
+        private CheckboxNode       manualModeCheckbox = null!;
+        private HorizontalListNode modeRow            = null!;
+        private VerticalListNode   numLayout          = null!;
+
+        private CheckboxNode     blacklistCheckbox = null!;
+        private CheckboxNode     whitelistCheckbox = null!;
+        private VerticalListNode listContainer     = null!;
+        private TextButtonNode   prevPageBtn       = null!;
+        private TextButtonNode   nextPageBtn       = null!;
+        private TextNode         pageLabel         = null!;
 
         private int currentPageIndex;
         private int currentActiveTab;
@@ -150,6 +150,7 @@ public partial class BetterPartyFinderFilter
                 noNotifyWhenZeroCheckbox.IsChecked = FlagStatusModule.Instance()->UIFlags[6] == 1;
 
                 var isNotifyEnabled = notifyCheckbox.IsChecked;
+
                 if (notifyLayout.IsVisible != isNotifyEnabled)
                 {
                     notifyLayout.IsVisible = isNotifyEnabled;
@@ -186,8 +187,8 @@ public partial class BetterPartyFinderFilter
                 IsVisible = true
             };
 
-            tabBar1.AddTab(Lang.Get("General"),                                () => SwitchTab(0));
-            tabBar1.AddTab(LuminaWrapper.GetAddonText(10822),                  () => SwitchTab(1));
+            tabBar1.AddTab(Lang.Get("General"),                                      () => SwitchTab(0));
+            tabBar1.AddTab(LuminaWrapper.GetAddonText(10822),                        () => SwitchTab(1));
             tabBar1.AddTab(Lang.Get("BetterPartyFinderFilter-Category-Description"), () => SwitchTab(2));
 
             tabBar1.AttachNode(this);
@@ -200,11 +201,28 @@ public partial class BetterPartyFinderFilter
                 IsVisible = true
             };
 
-            tabBar2.AddTab(LuminaWrapper.GetAddonText(11070),                   () => OnActionTabClicked(3));
-            tabBar2.AddTab(Lang.Get("Search"),                                  () => OnActionTabClicked(4));
+            tabBar2.AddTab(LuminaWrapper.GetAddonText(11070),                         () => OnActionTabClicked(3));
+            tabBar2.AddTab(Lang.Get("Search"),                                        () => OnActionTabClicked(4));
             tabBar2.AddTab(Lang.Get("BetterPartyFinderFilter-Category-SearchByName"), () => OnActionTabClicked(5));
 
             tabBar2.AttachNode(this);
+
+            UpdateTabButtons(tabBar1);
+            UpdateTabButtons(tabBar2);
+
+            return;
+
+            void UpdateTabButtons(TabBarNode tab)
+            {
+                if (RadioButtonsField.GetValue(tab) is not List<TabBarRadioButtonNode> buttons)
+                    return;
+
+                foreach (var btn in buttons)
+                {
+                    btn.TextTooltip         =  btn.String;
+                    btn.LabelNode.TextFlags |= TextFlags.Ellipsis;
+                }
+            }
         }
 
         private void SetupGeneralPanel()
@@ -219,7 +237,7 @@ public partial class BetterPartyFinderFilter
                 FitWidth         = true,
                 Size             = ContentSize
             };
-            
+
             var displayLabel = new LabelTextNode
             {
                 String    = LuminaWrapper.GetAddonText(11127),
@@ -318,7 +336,7 @@ public partial class BetterPartyFinderFilter
                 }
             };
             displayLayout.AddNode(lockedCheckbox);
-            
+
             generalPanel.AddNode(displayLayout);
 
             var notifyLabel = new LabelTextNode
@@ -326,7 +344,7 @@ public partial class BetterPartyFinderFilter
                 String    = LuminaWrapper.GetAddonText(11116),
                 TextColor = ColorHelper.GetColor(2)
             };
-            
+
             generalPanel.AddDummy(16f);
             generalPanel.AddNode(notifyLabel);
 
@@ -337,7 +355,7 @@ public partial class BetterPartyFinderFilter
                 FitWidth         = true,
                 FirstItemSpacing = 8f
             };
-            
+
             notifyCheckbox = new CheckboxNode
             {
                 Size      = new(280f, 24f),
@@ -346,7 +364,7 @@ public partial class BetterPartyFinderFilter
                 OnClick = isChecked =>
                 {
                     RefreshDisplaySettings(notifyRecruitment: isChecked);
-                    
+
                     var enabled = NotifyNewRecruitment == 1;
                     notifyLayout.IsVisible = enabled;
 
@@ -360,7 +378,7 @@ public partial class BetterPartyFinderFilter
             {
                 Position    = new(20, 0),
                 FitContents = true,
-                IsVisible   = NotifyNewRecruitment == 1,
+                IsVisible   = NotifyNewRecruitment == 1
             };
 
             var notifyIntervalLabel = new LabelTextNode
@@ -373,11 +391,11 @@ public partial class BetterPartyFinderFilter
 
             notifyIntervalInput = new NumericInputNode
             {
-                Size     = new(220f, 24f),
-                Position = new(20, 0),
-                Min      = 1,
-                Max      = 10,
-                Value    = (int)FlagStatusModule.Instance()->UIFlags[5],
+                Size          = new(220f, 24f),
+                Position      = new(20, 0),
+                Min           = 1,
+                Max           = 10,
+                Value         = (int)FlagStatusModule.Instance()->UIFlags[5],
                 OnValueUpdate = val => RefreshDisplaySettings(notifyInterval: (uint)val)
             };
 
@@ -389,15 +407,12 @@ public partial class BetterPartyFinderFilter
                 Size      = new(260f, 24f),
                 IsVisible = true,
                 String    = LuminaWrapper.GetAddonText(11118),
-                OnClick = isChecked =>
-                {
-                    RefreshDisplaySettings(noNotifyWhenZero: isChecked);
-                }
+                OnClick   = isChecked => { RefreshDisplaySettings(noNotifyWhenZero: isChecked); }
             };
-            
+
             notifyLayout.AddDummy(12f);
             notifyLayout.AddNode(noNotifyWhenZeroCheckbox);
-            
+
             notifyLabelLayout.AddNode(notifyLayout);
 
             var notifyInfoLabel = new LabelTextNode
@@ -411,7 +426,7 @@ public partial class BetterPartyFinderFilter
             notifyLabelLayout.AddDummy(12f);
             notifyLabelLayout.AddNode(notifyInfoLabel);
             notifyLabelLayout.AddDummy(12f);
-            
+
             generalPanel.AddNode(notifyLabelLayout);
 
             generalPanel.AttachNode(this);
@@ -675,7 +690,7 @@ public partial class BetterPartyFinderFilter
             {
                 IsVisible = true,
                 Size      = new(280f, 24f),
-                Position  = new(16, 0),
+                Position  = new(16, 0)
             };
             workModeRow.AddNode(blacklistCheckbox);
             workModeRow.AddDummy(10f);
