@@ -13,12 +13,12 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class PartyFinderFilter : ModuleBase
+public partial class BetterPartyFinderFilter : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("PartyFinderFilterTitle"),
-        Description = Lang.Get("PartyFinderFilterDescription"),
+        Title       = Lang.Get("BetterPartyFinderFilterTitle"),
+        Description = Lang.Get("BetterPartyFinderFilterDescription"),
         Category    = ModuleCategory.Recruitment,
         Author      = ["status102"]
     };
@@ -49,7 +49,7 @@ public partial class PartyFinderFilter : ModuleBase
 
         addon ??= new(this)
         {
-            InternalName          = "DRPartyFinderFilter",
+            InternalName          = "DRBetterPartyFinderFilter",
             Title                 = Info.Title,
             Size                  = new(400f, 220f),
             RememberClosePosition = false
@@ -116,7 +116,7 @@ public partial class PartyFinderFilter : ModuleBase
         }
         catch (ArgumentException)
         {
-            NotifyHelper.Instance().NotificationWarning(Lang.Get("PartyFinderFilter-RegexError"));
+            NotifyHelper.Instance().NotificationWarning(Lang.Get("BetterPartyFinderFilter-RegexError"));
             config = Config.Load(this) ?? new();
         }
     }

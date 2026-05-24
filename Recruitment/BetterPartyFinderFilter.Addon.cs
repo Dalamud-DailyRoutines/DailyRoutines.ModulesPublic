@@ -17,11 +17,11 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class PartyFinderFilter
+public partial class BetterPartyFinderFilter
 {
     private TextButtonNode?         buttonNode;
     private bool                    isNeedToOpenAddon;
-    private PartyFinderFilterAddon? addon;
+    private BetterPartyFinderFilterAddon? addon;
 
     private unsafe void OnAddon(AddonEvent type, AddonArgs args)
     {
@@ -66,9 +66,9 @@ public partial class PartyFinderFilter
         }
     }
 
-    private unsafe class PartyFinderFilterAddon
+    private unsafe class BetterPartyFinderFilterAddon
     (
-        PartyFinderFilter module
+        BetterPartyFinderFilter module
     ) : AttachedAddon("LookingForGroup")
     {
         private class RegexRow
@@ -177,7 +177,7 @@ public partial class PartyFinderFilter
 
             tabBar1.AddTab(Lang.Get("General"),                                () => SwitchTab(0));
             tabBar1.AddTab(LuminaWrapper.GetAddonText(10822),                  () => SwitchTab(1));
-            tabBar1.AddTab(Lang.Get("PartyFinderFilter-Category-Description"), () => SwitchTab(2));
+            tabBar1.AddTab(Lang.Get("BetterPartyFinderFilter-Category-Description"), () => SwitchTab(2));
 
             tabBar1.AttachNode(this);
 
@@ -191,7 +191,7 @@ public partial class PartyFinderFilter
 
             tabBar2.AddTab(LuminaWrapper.GetAddonText(11070),                   () => OnActionTabClicked(3));
             tabBar2.AddTab(Lang.Get("Search"),                                  () => OnActionTabClicked(4));
-            tabBar2.AddTab(Lang.Get("PartyFinderFilter-Category-SearchByName"), () => OnActionTabClicked(5));
+            tabBar2.AddTab(Lang.Get("BetterPartyFinderFilter-Category-SearchByName"), () => OnActionTabClicked(5));
 
             tabBar2.AttachNode(this);
 
@@ -226,7 +226,7 @@ public partial class PartyFinderFilter
                 Size      = new(280f, 24f),
                 IsVisible = true,
                 IsChecked = module.config.FilterSameDescription,
-                String    = Lang.Get("PartyFinderFilter-FilterDuplicate"),
+                String    = Lang.Get("BetterPartyFinderFilter-FilterDuplicate"),
                 OnClick = isChecked =>
                 {
                     module.config.FilterSameDescription = isChecked;
@@ -417,7 +417,7 @@ public partial class PartyFinderFilter
                 Size      = new(280f, 24f),
                 IsVisible = true,
                 IsChecked = module.config.HighEndFilterSameJob,
-                String    = Lang.Get("PartyFinderFilter-HighEndFilter-SameJob"),
+                String    = Lang.Get("BetterPartyFinderFilter-HighEndFilter-SameJob"),
                 OnClick = isChecked =>
                 {
                     module.config.HighEndFilterSameJob = isChecked;
@@ -431,8 +431,8 @@ public partial class PartyFinderFilter
                 Size        = new(280f, 24f),
                 IsVisible   = true,
                 IsChecked   = module.config.HighEndFilterRoleCount,
-                String      = Lang.Get("PartyFinderFilter-HighEndFilter-RoleCount"),
-                TextTooltip = Lang.Get("PartyFinderFilter-HighEndFilter-RoleCount-Help"),
+                String      = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount"),
+                TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-Help"),
                 OnClick = isChecked =>
                 {
                     module.config.HighEndFilterRoleCount = isChecked;
@@ -455,7 +455,7 @@ public partial class PartyFinderFilter
                 IsVisible   = module.config.HighEndFilterRoleCount,
                 IsChecked   = !module.manualMode,
                 String      = Lang.Get("AutoMode"),
-                TextTooltip = Lang.Get("PartyFinderFilter-HighEndFilter-RoleCount-AutoMode-Help"),
+                TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-AutoMode-Help"),
                 OnClick = isChecked =>
                 {
                     if (isChecked)
@@ -474,7 +474,7 @@ public partial class PartyFinderFilter
                 IsVisible   = module.config.HighEndFilterRoleCount,
                 IsChecked   = module.manualMode,
                 String      = Lang.Get("ManualMode"),
-                TextTooltip = Lang.Get("PartyFinderFilter-HighEndFilter-RoleCount-ManualMode-Help"),
+                TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-ManualMode-Help"),
                 OnClick = isChecked =>
                 {
                     if (isChecked)
@@ -617,7 +617,7 @@ public partial class PartyFinderFilter
                 IsVisible   = true,
                 IsChecked   = !module.config.IsWhiteList,
                 String      = Lang.Get("Blacklist"),
-                TextTooltip = Lang.Get("PartyFinderFilter-Description-Blacklist-Help"),
+                TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Blacklist-Help"),
                 OnClick = isChecked =>
                 {
                     if (isChecked)
@@ -637,7 +637,7 @@ public partial class PartyFinderFilter
                 IsVisible   = true,
                 IsChecked   = module.config.IsWhiteList,
                 String      = Lang.Get("Whitelist"),
-                TextTooltip = Lang.Get("PartyFinderFilter-Description-Whitelist-Help"),
+                TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Whitelist-Help"),
                 OnClick = isChecked =>
                 {
                     if (isChecked)
@@ -907,7 +907,7 @@ public partial class PartyFinderFilter
                     tabBar1.SelectTab(LuminaWrapper.GetAddonText(10822));
                     break;
                 case 2:
-                    tabBar1.SelectTab(Lang.Get("PartyFinderFilter-Category-Description"));
+                    tabBar1.SelectTab(Lang.Get("BetterPartyFinderFilter-Category-Description"));
                     break;
             }
 
