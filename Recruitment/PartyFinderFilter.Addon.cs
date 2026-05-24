@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Reflection;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.KamiToolKit.Addons;
@@ -76,6 +76,16 @@ public partial class PartyFinderFilter
         PartyFinderFilter module
     ) : AttachedAddon("LookingForGroup")
     {
+        private class RegexRow
+        {
+            public HorizontalListNode Row          { get; set; } = null!;
+            public CheckboxNode       Checkbox     { get; set; } = null!;
+            public TextInputNode      TextInput    { get; set; } = null!;
+            public TextButtonNode     DeleteButton { get; set; } = null!;
+        }
+
+        private readonly List<RegexRow> regexRows = [];
+
         private TabBarNode tabBar1 = null!;
         private TabBarNode tabBar2 = null!;
 
@@ -99,7 +109,7 @@ public partial class PartyFinderFilter
         private VerticalListNode descriptionPanel = null!;
 
         private CheckboxNode ascCheckbox         = null!;
-        private CheckboxNode desCheckbox  = null!;
+        private CheckboxNode desCheckbox         = null!;
         private CheckboxNode blacklistedCheckbox = null!;
         private CheckboxNode lockedCheckbox      = null!;
 
@@ -121,7 +131,7 @@ public partial class PartyFinderFilter
 
         protected override AttachedAddonPosition AttachPosition =>
             AttachedAddonPosition.LeftTop;
-        
+
         protected override bool CanOpenAddon => module.isNeedToOpenAddon;
 
         protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) =>
@@ -318,13 +328,13 @@ public partial class PartyFinderFilter
                 FitContents = true,
                 FitWidth    = true
             };
-            
+
             autoModeCheckbox = new CheckboxNode
             {
-                Size      = new(135f, 24f),
-                IsVisible = module.config.HighEndFilterRoleCount,
-                IsChecked = !module.manualMode,
-                String    = Lang.Get("AutoMode"),
+                Size        = new(135f, 24f),
+                IsVisible   = module.config.HighEndFilterRoleCount,
+                IsChecked   = !module.manualMode,
+                String      = Lang.Get("AutoMode"),
                 TextTooltip = Lang.Get("PartyFinderFilter-HighEndFilter-RoleCount-AutoMode-Help"),
                 OnClick = isChecked =>
                 {
@@ -340,10 +350,10 @@ public partial class PartyFinderFilter
 
             manualModeCheckbox = new CheckboxNode
             {
-                Size      = new(135f, 24f),
-                IsVisible = module.config.HighEndFilterRoleCount,
-                IsChecked = module.manualMode,
-                String    = Lang.Get("ManualMode"),
+                Size        = new(135f, 24f),
+                IsVisible   = module.config.HighEndFilterRoleCount,
+                IsChecked   = module.manualMode,
+                String      = Lang.Get("ManualMode"),
                 TextTooltip = Lang.Get("PartyFinderFilter-HighEndFilter-RoleCount-ManualMode-Help"),
                 OnClick = isChecked =>
                 {
@@ -366,9 +376,9 @@ public partial class PartyFinderFilter
             modeRow.AddNode(autoModeCheckbox);
             modeRow.AddDummy(10f);
             modeRow.AddNode(manualModeCheckbox);
-            
+
             filterRoleCountContent.AddNode(modeRow);
-            
+
             numLayout = new VerticalListNode
             {
                 IsVisible   = module.config.HighEndFilterRoleCount,
@@ -456,12 +466,12 @@ public partial class PartyFinderFilter
                     }
                 )
             );
-            
+
             filterRoleCountContent.AddDummy(4f);
             filterRoleCountContent.AddNode(numLayout);
-            
+
             highEndPanel.AddNode(filterRoleCountContent);
-            
+
             highEndPanel.AttachNode(this);
 
             // 4. 招募描述面板 (Description)
@@ -483,10 +493,10 @@ public partial class PartyFinderFilter
 
             blacklistCheckbox = new CheckboxNode
             {
-                Size      = new(135f, 24f),
-                IsVisible = true,
-                IsChecked = !module.config.IsWhiteList,
-                String    = Lang.Get("Blacklist"),
+                Size        = new(135f, 24f),
+                IsVisible   = true,
+                IsChecked   = !module.config.IsWhiteList,
+                String      = Lang.Get("Blacklist"),
                 TextTooltip = Lang.Get("PartyFinderFilter-Description-Blacklist-Help"),
                 OnClick = isChecked =>
                 {
@@ -503,10 +513,10 @@ public partial class PartyFinderFilter
 
             whitelistCheckbox = new CheckboxNode
             {
-                Size      = new(135f, 24f),
-                IsVisible = true,
-                IsChecked = module.config.IsWhiteList,
-                String    = Lang.Get("Whitelist"),
+                Size        = new(135f, 24f),
+                IsVisible   = true,
+                IsChecked   = module.config.IsWhiteList,
+                String      = Lang.Get("Whitelist"),
                 TextTooltip = Lang.Get("PartyFinderFilter-Description-Whitelist-Help"),
                 OnClick = isChecked =>
                 {
@@ -523,15 +533,14 @@ public partial class PartyFinderFilter
 
             var workModeRow = new HorizontalListNode
             {
-                IsVisible   = true,
-                Size        = new(280f, 24f),
-                Position    = new(16, 0),
-                TextTooltip = Lang.Get("PartyFinderFilter-WorkModeHelp")
+                IsVisible = true,
+                Size      = new(280f, 24f),
+                Position  = new(16, 0),
             };
             workModeRow.AddNode(blacklistCheckbox);
             workModeRow.AddDummy(10f);
             workModeRow.AddNode(whitelistCheckbox);
-            
+
             descriptionPanel.AddNode(workModeRow);
 
             var addPresetBtn = new TextButtonNode
@@ -559,6 +568,54 @@ public partial class PartyFinderFilter
                 Size        = ContentSize
             };
             descriptionPanel.AddNode(listContainer);
+
+            for (var i = 0; i < 10; i++)
+            {
+                var row = new HorizontalListNode
+                {
+                    IsVisible = false,
+                    Size      = new(280f, 32f)
+                };
+
+                var checkbox = new CheckboxNode
+                {
+                    Size      = new(28f, 28),
+                    IsVisible = true,
+                    String    = string.Empty
+                };
+
+                var textInput = new TextInputNode
+                {
+                    Size              = new(290f, 32),
+                    PlaceholderString = Lang.Get("Regex")
+                };
+
+                var deleteBtn = new TextButtonNode
+                {
+                    Size     = new(42f, 28f),
+                    Position = new(0, 3),
+                    String   = Lang.Get("Delete")
+                };
+
+                row.AddNode(checkbox);
+                row.AddDummy(4f);
+                row.AddNode(textInput);
+                row.AddDummy(4f);
+                row.AddNode(deleteBtn);
+
+                listContainer.AddNode(row);
+
+                regexRows.Add
+                (
+                    new()
+                    {
+                        Row          = row,
+                        Checkbox     = checkbox,
+                        TextInput    = textInput,
+                        DeleteButton = deleteBtn
+                    }
+                );
+            }
 
             pagingLayout = new HorizontalFlexNode
             {
@@ -679,7 +736,7 @@ public partial class PartyFinderFilter
                 _ => null
             };
             ArgumentNullException.ThrowIfNull((object?)icon);
-            
+
             row.AddNode(icon);
             row.AddDummy(10f);
 
@@ -698,7 +755,7 @@ public partial class PartyFinderFilter
                 Value         = initialVal,
                 OnValueUpdate = onValueUpdate
             };
-            
+
             row.AddNode(label);
             row.AddDummy(10f);
             row.AddNode(numInput);
@@ -800,8 +857,6 @@ public partial class PartyFinderFilter
 
         private void RebuildRegexList()
         {
-            listContainer.Clear();
-
             var totalItems = module.config.BlackList.Count;
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalItems / 10.0));
 
@@ -812,44 +867,30 @@ public partial class PartyFinderFilter
 
             var items = module.config.BlackList.Skip(currentPageIndex * 10).Take(10).ToList();
 
-            for (var i = 0; i < items.Count; i++)
+            for (var i = 0; i < 10; i++)
             {
-                var localItem   = items[i];
-                var globalIndex = (currentPageIndex * 10) + i;
+                var regexRow = regexRows[i];
 
-                var row = new HorizontalListNode
+                if (i < items.Count)
                 {
-                    IsVisible = true,
-                    Size      = new(280f, 32f)
-                };
+                    var localItem   = items[i];
+                    var globalIndex = (currentPageIndex * 10) + i;
 
-                var checkbox = new CheckboxNode
-                {
-                    Size      = new(28f, 28),
-                    IsVisible = true,
-                    IsChecked = localItem.Key,
-                    String    = string.Empty,
-                    OnClick = isChecked =>
+                    regexRow.Row.IsVisible      = true;
+                    regexRow.Checkbox.IsChecked = localItem.Key;
+                    regexRow.Checkbox.OnClick = isChecked =>
                     {
                         module.config.BlackList[globalIndex] = new(isChecked, localItem.Value);
                         module.config.Save(module);
-                    }
-                };
+                    };
 
-                var textInput = new TextInputNode
-                {
-                    Size              = new(290f, 32),
-                    String            = localItem.Value,
-                    PlaceholderString = Lang.Get("Regex"),
-                    OnInputComplete   = text => { module.HandleRegexUpdate(globalIndex, module.config.BlackList[globalIndex].Key, text.ToString()); }
-                };
+                    regexRow.TextInput.String = localItem.Value;
+                    regexRow.TextInput.OnInputComplete = text =>
+                    {
+                        module.HandleRegexUpdate(globalIndex, module.config.BlackList[globalIndex].Key, text.ToString());
+                    };
 
-                var deleteBtn = new TextButtonNode
-                {
-                    Size     = new(38f, 28f),
-                    Position = new(0, 3),
-                    String   = Lang.Get("Delete"),
-                    OnClick = () =>
+                    regexRow.DeleteButton.OnClick = () =>
                     {
                         module.config.BlackList.RemoveAt(globalIndex);
                         module.config.Save(module);
@@ -857,16 +898,10 @@ public partial class PartyFinderFilter
                         if (currentPageIndex >= newTotalPages)
                             currentPageIndex = newTotalPages - 1;
                         RebuildRegexList();
-                    }
-                };
-
-                row.AddNode(checkbox);
-                row.AddDummy(4f);
-                row.AddNode(textInput);
-                row.AddDummy(4f);
-                row.AddNode(deleteBtn);
-
-                listContainer.AddNode(row);
+                    };
+                }
+                else
+                    regexRow.Row.IsVisible = false;
             }
 
             prevPageBtn.IsEnabled = currentPageIndex > 0;
