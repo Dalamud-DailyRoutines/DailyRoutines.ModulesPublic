@@ -167,6 +167,17 @@ public partial class BetterPartyFinderFilter
             if (WindowNode is WindowNode windowNode)
                 windowNode.CloseButtonNode.IsVisible = false;
 
+            SetupTabBars();
+            SetupGeneralPanel();
+            SetupHighEndPanel();
+            SetupDescriptionPanel();
+
+            SwitchTab(0);
+            module.TaskHelper.Enqueue(() => ClearTabBarSelection(tabBar2));
+        }
+
+        private void SetupTabBars()
+        {
             // 1. TabBar1
             tabBar1 = new TabBarNode
             {
@@ -194,8 +205,11 @@ public partial class BetterPartyFinderFilter
             tabBar2.AddTab(Lang.Get("BetterPartyFinderFilter-Category-SearchByName"), () => OnActionTabClicked(5));
 
             tabBar2.AttachNode(this);
+        }
 
-            // 2. 一般面板 (General)
+        private void SetupGeneralPanel()
+        {
+            // 一般面板 (General)
             generalPanel = new VerticalListNode
             {
                 IsVisible        = true,
@@ -401,8 +415,11 @@ public partial class BetterPartyFinderFilter
             generalPanel.AddNode(notifyLabelLayout);
 
             generalPanel.AttachNode(this);
+        }
 
-            // 3. 高难度面板 (High-End)
+        private void SetupHighEndPanel()
+        {
+            // 高难度面板 (High-End)
             highEndPanel = new VerticalListNode
             {
                 IsVisible   = false,
@@ -593,8 +610,11 @@ public partial class BetterPartyFinderFilter
             highEndPanel.AddNode(filterRoleCountLayout);
 
             highEndPanel.AttachNode(this);
+        }
 
-            // 4. 招募描述面板 (Description)
+        private void SetupDescriptionPanel()
+        {
+            // 招募描述面板 (Description)
             descriptionPanel = new VerticalListNode
             {
                 IsVisible        = false,
@@ -790,9 +810,6 @@ public partial class BetterPartyFinderFilter
             descriptionPanel.AddNode(pagingLayout);
 
             descriptionPanel.AttachNode(this);
-
-            SwitchTab(0);
-            module.TaskHelper.Enqueue(() => ClearTabBarSelection(tabBar2));
         }
 
         private static HorizontalListNode CreateRoleCountNumericInput(uint addonTextID, int initialVal, Action<int> onValueUpdate)
