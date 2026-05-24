@@ -8,6 +8,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Premade.Node;
@@ -31,9 +32,9 @@ public partial class PartyFinderFilter
 
                 buttonNode = new()
                 {
-                    Size     = new(116, 32),
+                    Size     = new(154, 32),
                     String   = Lang.Get("Filter"),
-                    Position = new(774, 72),
+                    Position = new(736, 72),
                     OnClick = () =>
                     {
                         isNeedToOpenAddon ^= true;
@@ -50,12 +51,6 @@ public partial class PartyFinderFilter
                     var button = LookingForGroup->GetNodeById(i);
                     if (button == null)
                         continue;
-
-                    if (i == 26)
-                    {
-                        button->SetPositionFloat(736, 72);
-                        continue;
-                    }
 
                     button->ToggleVisibility(false);
                 }
@@ -108,16 +103,23 @@ public partial class PartyFinderFilter
         private VerticalListNode highEndPanel     = null!;
         private VerticalListNode descriptionPanel = null!;
 
-        private CheckboxNode ascCheckbox         = null!;
-        private CheckboxNode desCheckbox         = null!;
-        private CheckboxNode blacklistedCheckbox = null!;
-        private CheckboxNode lockedCheckbox      = null!;
+        private CheckboxNode     ascCheckbox              = null!;
+        private CheckboxNode     desCheckbox              = null!;
+        private CheckboxNode     blacklistedCheckbox      = null!;
+        private CheckboxNode     lockedCheckbox           = null!;
+        private VerticalListNode notifyLabelLayout        = null!;
+        private VerticalListNode notifyLayout             = null!;
+        private CheckboxNode     notifyCheckbox           = null!;
+        private NumericInputNode notifyIntervalInput      = null!;
+        private CheckboxNode     noNotifyWhenZeroCheckbox = null!;
+        
+        private VerticalListNode   filterRoleCountLayout = null!;
+        private CheckboxNode       autoModeCheckbox      = null!;
+        private CheckboxNode       manualModeCheckbox    = null!;
+        private HorizontalListNode modeRow               = null!;
+        private VerticalListNode   numLayout             = null!;
 
-        private CheckboxNode       autoModeCheckbox   = null!;
-        private CheckboxNode       manualModeCheckbox = null!;
-        private HorizontalListNode modeRow            = null!;
-        private VerticalListNode   numLayout          = null!;
-
+        private LabelTextNode      modeLabel         = null!;
         private CheckboxNode       blacklistCheckbox = null!;
         private CheckboxNode       whitelistCheckbox = null!;
         private VerticalListNode   listContainer     = null!;
@@ -143,10 +145,21 @@ public partial class PartyFinderFilter
 
             if (generalPanel.IsVisible)
             {
-                ascCheckbox.IsChecked         = FlagStatusModule.Instance()->UIFlags[4]  == 1;
-                desCheckbox.IsChecked         = FlagStatusModule.Instance()->UIFlags[4]  == 3;
-                blacklistedCheckbox.IsChecked = FlagStatusModule.Instance()->UIFlags[12] == 1;
-                lockedCheckbox.IsChecked      = FlagStatusModule.Instance()->UIFlags[7]  == 0;
+                ascCheckbox.IsChecked              = FlagStatusModule.Instance()->UIFlags[4]  == 1;
+                desCheckbox.IsChecked              = FlagStatusModule.Instance()->UIFlags[4]  == 3;
+                blacklistedCheckbox.IsChecked      = FlagStatusModule.Instance()->UIFlags[12] == 1;
+                lockedCheckbox.IsChecked           = FlagStatusModule.Instance()->UIFlags[7]  == 0;
+                notifyCheckbox.IsChecked           = NotifyNewRecruitment                     == 1;
+                notifyIntervalInput.Value          = (int)FlagStatusModule.Instance()->UIFlags[5];
+                noNotifyWhenZeroCheckbox.IsChecked = FlagStatusModule.Instance()->UIFlags[6] == 1;
+
+                var isNotifyEnabled = notifyCheckbox.IsChecked;
+                if (notifyLayout.IsVisible != isNotifyEnabled)
+                {
+                    notifyLayout.IsVisible = isNotifyEnabled;
+                    notifyLayout.RecalculateLayout();
+                    RecalculatePanel(generalPanel);
+                }
             }
         }
 
@@ -189,11 +202,27 @@ public partial class PartyFinderFilter
             // 2. 一般面板 (General)
             generalPanel = new VerticalListNode
             {
-                IsVisible   = true,
-                ItemSpacing = 4f,
+                IsVisible        = true,
+                ItemSpacing      = 8f,
+                FirstItemSpacing = 16f,
+                FitContents      = true,
+                FitWidth         = true,
+                Size             = ContentSize
+            };
+            
+            var displayLabel = new LabelTextNode
+            {
+                String    = LuminaWrapper.GetAddonText(11127),
+                TextColor = ColorHelper.GetColor(2)
+            };
+            generalPanel.AddNode(displayLabel);
+            generalPanel.AddDummy();
+
+            var displayLayout = new VerticalListNode
+            {
                 FitContents = true,
                 FitWidth    = true,
-                Size        = ContentSize
+                Position    = new(20, 0)
             };
 
             var filterSameDescCheckbox = new CheckboxNode
@@ -208,7 +237,7 @@ public partial class PartyFinderFilter
                     module.config.Save(module);
                 }
             };
-            generalPanel.AddNode(filterSameDescCheckbox);
+            displayLayout.AddNode(filterSameDescCheckbox);
 
             var orderRow = new HorizontalListNode
             {
@@ -252,7 +281,7 @@ public partial class PartyFinderFilter
                 }
             };
             orderRow.AddNode(desCheckbox);
-            generalPanel.AddNode(orderRow);
+            displayLayout.AddNode(orderRow);
 
             blacklistedCheckbox = new CheckboxNode
             {
@@ -265,7 +294,7 @@ public partial class PartyFinderFilter
                     RefreshDisplaySettings(isChecked, currentLocked);
                 }
             };
-            generalPanel.AddNode(blacklistedCheckbox);
+            displayLayout.AddNode(blacklistedCheckbox);
 
             lockedCheckbox = new CheckboxNode
             {
@@ -278,7 +307,102 @@ public partial class PartyFinderFilter
                     RefreshDisplaySettings(currentBlacklisted, isChecked);
                 }
             };
-            generalPanel.AddNode(lockedCheckbox);
+            displayLayout.AddNode(lockedCheckbox);
+            
+            generalPanel.AddNode(displayLayout);
+
+            var notifyLabel = new LabelTextNode
+            {
+                String    = LuminaWrapper.GetAddonText(11116),
+                TextColor = ColorHelper.GetColor(2)
+            };
+            
+            generalPanel.AddDummy(16f);
+            generalPanel.AddNode(notifyLabel);
+
+            notifyLabelLayout = new VerticalListNode
+            {
+                Position         = new(20, 0),
+                FitContents      = true,
+                FitWidth         = true,
+                FirstItemSpacing = 8f
+            };
+            
+            notifyCheckbox = new CheckboxNode
+            {
+                Size      = new(280f, 24f),
+                IsVisible = true,
+                String    = LuminaWrapper.GetAddonText(11119),
+                OnClick = isChecked =>
+                {
+                    RefreshDisplaySettings(notifyRecruitment: isChecked);
+                    
+                    var enabled = NotifyNewRecruitment == 1;
+                    notifyLayout.IsVisible = enabled;
+
+                    notifyLayout.RecalculateLayout();
+                    RecalculatePanel(generalPanel);
+                }
+            };
+            notifyLabelLayout.AddNode(notifyCheckbox);
+
+            notifyLayout = new VerticalListNode
+            {
+                Position    = new(20, 0),
+                FitContents = true,
+                IsVisible   = NotifyNewRecruitment == 1,
+            };
+
+            var notifyIntervalLabel = new LabelTextNode
+            {
+                String    = LuminaWrapper.GetAddonText(11117),
+                Size      = new(198f, 20f),
+                Position  = new(0, 3),
+                TextColor = ColorHelper.GetColor(31)
+            };
+
+            notifyIntervalInput = new NumericInputNode
+            {
+                Size     = new(220f, 24f),
+                Position = new(20, 0),
+                Min      = 1,
+                Max      = 10,
+                Value    = (int)FlagStatusModule.Instance()->UIFlags[5],
+                OnValueUpdate = val => RefreshDisplaySettings(notifyInterval: (uint)val)
+            };
+
+            notifyLayout.AddNode(notifyIntervalLabel);
+            notifyLayout.AddNode(notifyIntervalInput);
+
+            noNotifyWhenZeroCheckbox = new CheckboxNode
+            {
+                Size      = new(260f, 24f),
+                IsVisible = true,
+                String    = LuminaWrapper.GetAddonText(11118),
+                OnClick = isChecked =>
+                {
+                    RefreshDisplaySettings(noNotifyWhenZero: isChecked);
+                }
+            };
+            
+            notifyLayout.AddDummy(12f);
+            notifyLayout.AddNode(noNotifyWhenZeroCheckbox);
+            
+            notifyLabelLayout.AddNode(notifyLayout);
+
+            var notifyInfoLabel = new LabelTextNode
+            {
+                TextFlags = TextFlags.AutoAdjustNodeSize,
+                String    = LuminaWrapper.GetAddonText(11171),
+                Position  = new(0, 3),
+                TextColor = ColorHelper.GetColor(3),
+                FontSize  = 12
+            };
+            notifyLabelLayout.AddDummy(12f);
+            notifyLabelLayout.AddNode(notifyInfoLabel);
+            notifyLabelLayout.AddDummy(12f);
+            
+            generalPanel.AddNode(notifyLabelLayout);
 
             generalPanel.AttachNode(this);
 
@@ -322,7 +446,7 @@ public partial class PartyFinderFilter
             };
             highEndPanel.AddNode(highEndFilterRoleCountCheckbox);
 
-            var filterRoleCountContent = new VerticalListNode
+            filterRoleCountLayout = new VerticalListNode
             {
                 Position    = new(20, 0),
                 FitContents = true,
@@ -377,7 +501,7 @@ public partial class PartyFinderFilter
             modeRow.AddDummy(10f);
             modeRow.AddNode(manualModeCheckbox);
 
-            filterRoleCountContent.AddNode(modeRow);
+            filterRoleCountLayout.AddNode(modeRow);
 
             numLayout = new VerticalListNode
             {
@@ -467,10 +591,10 @@ public partial class PartyFinderFilter
                 )
             );
 
-            filterRoleCountContent.AddDummy(4f);
-            filterRoleCountContent.AddNode(numLayout);
+            filterRoleCountLayout.AddDummy(4f);
+            filterRoleCountLayout.AddNode(numLayout);
 
-            highEndPanel.AddNode(filterRoleCountContent);
+            highEndPanel.AddNode(filterRoleCountLayout);
 
             highEndPanel.AttachNode(this);
 
@@ -485,7 +609,7 @@ public partial class PartyFinderFilter
                 Size             = ContentSize
             };
 
-            var modeLabel = new LabelTextNode
+            modeLabel = new LabelTextNode
             {
                 String = Lang.Get("Mode")
             };
@@ -926,12 +1050,18 @@ public partial class PartyFinderFilter
                 tabBar2.Width    = ContentSize.X;
             }
 
-            if (currentActiveTab == 0 && generalPanel != null)
-                RecalculatePanel(generalPanel);
-            else if (currentActiveTab == 1 && highEndPanel != null)
-                RecalculatePanel(highEndPanel);
-            else if (currentActiveTab == 2 && descriptionPanel != null)
-                RecalculatePanel(descriptionPanel);
+            switch (currentActiveTab)
+            {
+                case 0 when generalPanel != null:
+                    RecalculatePanel(generalPanel);
+                    break;
+                case 1 when highEndPanel != null:
+                    RecalculatePanel(highEndPanel);
+                    break;
+                case 2 when descriptionPanel != null:
+                    RecalculatePanel(descriptionPanel);
+                    break;
+            }
         }
     }
 }

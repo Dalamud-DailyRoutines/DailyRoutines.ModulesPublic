@@ -24,6 +24,12 @@ public partial class PartyFinderFilter : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    
+    private static uint NotifyNewRecruitment
+    {
+        get => DService.Instance().GameConfig.UiConfig.GetUInt("PartyFinderNewArrivalDisp");
+        set => DService.Instance().GameConfig.UiConfig.Set("PartyFinderNewArrivalDisp", value);
+    }
 
     private Config config = null!;
 
@@ -64,19 +70,40 @@ public partial class PartyFinderFilter : ModuleBase
         OnAddon(AddonEvent.PreFinalize, null);
     }
 
-    private static unsafe void RefreshDisplaySettings(bool displayBlacklisted, bool displayLocked)
+    private static unsafe void RefreshDisplaySettings
+    (
+        bool? displayBlacklisted = null,
+        bool? displayLocked      = null,
+        bool? notifyRecruitment  = null,
+        uint? notifyInterval     = null,
+        bool? noNotifyWhenZero   = null
+    )
     {
-        var flag0 = displayBlacklisted ? 0 : 0x20000;
-        var flag1 = displayLocked ? 0 : 0x10000;
+        displayBlacklisted ??= FlagStatusModule.Instance()->UIFlags[12] == 1;
+        displayLocked      ??= FlagStatusModule.Instance()->UIFlags[7]  == 0;
+        notifyInterval     ??= FlagStatusModule.Instance()->UIFlags[5];
+        noNotifyWhenZero   ??= FlagStatusModule.Instance()->UIFlags[6] == 1;
+        notifyRecruitment  ??= NotifyNewRecruitment                    == 1;
 
-        var targetValue0 = displayBlacklisted ? 1 : 0;
-        var targetValue1 = displayLocked ? 0 : 1;
+        var flag0 = displayBlacklisted.Value ? 0 : 0x20000;
+        var flag1 = displayLocked.Value ? 0 : 0x10000;
+        var flag2 = noNotifyWhenZero.Value ? 0x10000 : 0;
+        var flag3 = notifyRecruitment.Value ? 0x1 : 0;
 
-        if (FlagStatusModule.Instance()->UIFlags[12] == targetValue0 &&
-            FlagStatusModule.Instance()->UIFlags[7]  == targetValue1)
+        var targetValue0 = displayBlacklisted.Value ? 1 : 0;
+        var targetValue1 = displayLocked.Value ? 0 : 1;
+        var targetValue2 = noNotifyWhenZero.Value ? 1 : 0;
+        var targetValue3 = notifyRecruitment.Value ? 1 : 0;
+
+        if (FlagStatusModule.Instance()->UIFlags[12] == targetValue0         &&
+            FlagStatusModule.Instance()->UIFlags[7]  == targetValue1         &&
+            FlagStatusModule.Instance()->UIFlags[5]  == notifyInterval.Value &&
+            FlagStatusModule.Instance()->UIFlags[6]  == targetValue2         &&
+            NotifyNewRecruitment                     == targetValue3)
             return;
 
-        AgentId.LookingForGroup.SendEvent(13, 0, 10, flag0 + flag1);
+        AgentId.LookingForGroup.SendEvent(13, 0, (uint)(flag2 + notifyInterval.Value), (uint)(flag0 + flag1 + flag3));
+        NotifyNewRecruitment = (uint)targetValue3;
     }
 
     private void HandleRegexUpdate(int index, bool key, string value)
