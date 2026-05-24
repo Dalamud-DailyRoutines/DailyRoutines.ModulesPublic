@@ -107,23 +107,19 @@ public partial class PartyFinderFilter
         private CheckboxNode     desCheckbox              = null!;
         private CheckboxNode     blacklistedCheckbox      = null!;
         private CheckboxNode     lockedCheckbox           = null!;
-        private VerticalListNode notifyLabelLayout        = null!;
         private VerticalListNode notifyLayout             = null!;
         private CheckboxNode     notifyCheckbox           = null!;
         private NumericInputNode notifyIntervalInput      = null!;
         private CheckboxNode     noNotifyWhenZeroCheckbox = null!;
         
-        private VerticalListNode   filterRoleCountLayout = null!;
         private CheckboxNode       autoModeCheckbox      = null!;
         private CheckboxNode       manualModeCheckbox    = null!;
         private HorizontalListNode modeRow               = null!;
         private VerticalListNode   numLayout             = null!;
 
-        private LabelTextNode      modeLabel         = null!;
         private CheckboxNode       blacklistCheckbox = null!;
         private CheckboxNode       whitelistCheckbox = null!;
         private VerticalListNode   listContainer     = null!;
-        private HorizontalFlexNode pagingLayout      = null!;
         private TextButtonNode     prevPageBtn       = null!;
         private TextButtonNode     nextPageBtn       = null!;
         private TextNode           pageLabel         = null!;
@@ -320,7 +316,7 @@ public partial class PartyFinderFilter
             generalPanel.AddDummy(16f);
             generalPanel.AddNode(notifyLabel);
 
-            notifyLabelLayout = new VerticalListNode
+            var notifyLabelLayout = new VerticalListNode
             {
                 Position         = new(20, 0),
                 FitContents      = true,
@@ -446,7 +442,7 @@ public partial class PartyFinderFilter
             };
             highEndPanel.AddNode(highEndFilterRoleCountCheckbox);
 
-            filterRoleCountLayout = new VerticalListNode
+            var filterRoleCountLayout = new VerticalListNode
             {
                 Position    = new(20, 0),
                 FitContents = true,
@@ -609,7 +605,7 @@ public partial class PartyFinderFilter
                 Size             = ContentSize
             };
 
-            modeLabel = new LabelTextNode
+            var modeLabel = new LabelTextNode
             {
                 String = Lang.Get("Mode")
             };
@@ -741,7 +737,7 @@ public partial class PartyFinderFilter
                 );
             }
 
-            pagingLayout = new HorizontalFlexNode
+            var pagingLayout = new HorizontalFlexNode
             {
                 IsVisible      = true,
                 Size           = ContentSize with { Y = 28f },
