@@ -4,9 +4,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Gui.PartyFinder.Types;
-using Dalamud.Interface.Components;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
@@ -15,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class PartyFinderFilter : ModuleBase
+public partial class PartyFinderFilter : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -36,229 +34,34 @@ public class PartyFinderFilter : ModuleBase
 
     private readonly HashSet<(ushort, string)> descriptionSet = [];
 
-    protected override unsafe void Init()
+    protected override void Init()
     {
         config     =   Config.Load(this) ?? new();
         TaskHelper ??= new();
-        Overlay    ??= new(this);
 
         DService.Instance().PartyFinder.ReceiveListing += OnReceiveListing;
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "LookingForGroup", OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroup", OnAddon);
-        if (LookingForGroup->IsAddonAndNodesReady())
-            OnAddon(AddonEvent.PostSetup, null);
-    }
-
-    protected override unsafe void ConfigUI()
-    {
-        using var tabBar = ImRaii.TabBar("PartyFinderFilterTabs");
-        if (!tabBar) return;
-
-        // 一般
-        using (var tab = ImRaii.TabItem(Lang.Get("General")))
+        addon ??= new(this)
         {
-            if (tab)
-                DrawGeneralSettings();
-        }
-
-        // 高难度任务
-        using (var tab = ImRaii.TabItem(LuminaWrapper.GetAddonText(10822)))
-        {
-            if (tab)
-                DrawHighEndSettings();
-        }
-
-        // 招募描述
-        using (var tab = ImRaii.TabItem(Lang.Get("PartyFinderFilter-Category-Description")))
-        {
-            if (tab)
-                DrawRegexFilterSettings();
-        }
-
-        // 条件设定
-        if (ImGui.TabItemButton(LuminaWrapper.GetAddonText(11070)))
-        {
-            if (LFGFilterSettings != null)
-                LFGFilterSettings->Close(true);
-            else
-                AgentId.LookingForGroup.SendEvent(1, 25);
-        }
-
-        // 搜索
-        if (ImGui.TabItemButton(Lang.Get("Search")))
-        {
-            if (LookingForGroupSearch != null)
-                LookingForGroupSearch->Close(true);
-            else
-                AgentId.LookingForGroup.SendEvent(1, 15);
-        }
+            InternalName          = "DRPartyFinderFilter",
+            Title                 = Info.Title,
+            Size                  = new(400f, 220f),
+            RememberClosePosition = false
+        };
         
-        // 按角色名搜索
-        if (ImGui.TabItemButton(Lang.Get("PartyFinderFilter-Category-SearchByName")))
-        {
-            if (LookingForGroupNameSearch != null)
-                LookingForGroupNameSearch->Close(true);
-            else
-            {
-                AgentId.LookingForGroup.SendEvent(1, 19);
-                AgentId.LookingForGroup.SendEvent(10, 16);
-            }
-        }
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroup", OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroup", OnAddon);
     }
 
-    private unsafe void DrawGeneralSettings()
+    protected override void Uninit()
     {
-        if (ImGui.Checkbox(Lang.Get("PartyFinderFilter-FilterDuplicate"), ref config.FilterSameDescription))
-            config.Save(this);
+        DService.Instance().PartyFinder.ReceiveListing -= OnReceiveListing;
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
-        ImGui.NewLine();
-
-        // 升序
-        if (ImGui.RadioButton(LuminaWrapper.GetAddonText(10127), FlagStatusModule.Instance()->UIFlags[4] == 1))
-            AgentId.LookingForGroup.SendEvent(1, 24, 0, 0);
-
-        // 降序
-        if (ImGui.RadioButton(LuminaWrapper.GetAddonText(10128), FlagStatusModule.Instance()->UIFlags[4] == 3))
-            AgentId.LookingForGroup.SendEvent(1, 24, 1, 0);
-
-        ImGui.NewLine();
-
-        var displayBlacklisted = FlagStatusModule.Instance()->UIFlags[12] == 1;
-        var displayLocked      = FlagStatusModule.Instance()->UIFlags[7]  == 0;
-
-        using (ImRaii.Disabled(TaskHelper.IsBusy))
-        {
-            // 显示黑名单玩家所开的招募
-            if (ImGui.Checkbox(LuminaWrapper.GetAddonText(11124), ref displayBlacklisted))
-                RefreshDisplaySettings(displayBlacklisted, displayLocked);
-
-            // 在队员招募中显示未开放任务
-            if (ImGui.Checkbox(LuminaWrapper.GetAddonText(11128), ref displayLocked))
-                RefreshDisplaySettings(displayBlacklisted, displayLocked);
-        }
-    }
-
-    private void DrawHighEndSettings()
-    {
-        using var group = ImRaii.Group();
-
-        if (ImGui.Checkbox(Lang.Get("PartyFinderFilter-HighEndFilterSameJob"), ref config.HighEndFilterSameJob))
-            config.Save(this);
-
-        if (ImGui.Checkbox($"{Lang.Get("PartyFinderFilter-HighEndFilterRoleCount")}", ref config.HighEndFilterRoleCount))
-            config.Save(this);
-        ImGuiOm.HelpMarker(Lang.Get("PartyFinderFilter-HighEndFilterRoleCountHelp"), 20f * GlobalUIScale);
-
-        ImGui.SameLine();
-        ImGuiComponents.ToggleButton("###IsHighEndRoleCountFilterManualMode", ref manualMode);
-
-        ImGui.SameLine();
-        ImGui.TextUnformatted(Lang.Get(manualMode ? "ManualMode" : "AutoMode"));
-
-        if (!config.HighEndFilterRoleCount)
-            return;
-
-        var changed = false;
-
-        using var pushIndent = ImRaii.PushIndent();
-        using var itemWidth  = ImRaii.ItemWidth(50f * GlobalUIScale);
-
-        using (ImRaii.Group())
-        {
-            ImGui.InputInt($"{LuminaWrapper.GetAddonText(1082)}", ref config.FilterJobTypeCountData.Tank);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                changed = true;
-
-            ImGui.InputInt($"{LuminaWrapper.GetAddonText(11300)}", ref config.FilterJobTypeCountData.PureHealer);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                changed = true;
-
-            ImGui.InputInt($"{LuminaWrapper.GetAddonText(11301)}", ref config.FilterJobTypeCountData.ShieldHealer);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                changed = true;
-        }
-
-        ImGui.SameLine();
-
-        using (ImRaii.Group())
-        {
-            ImGui.InputInt($"{LuminaWrapper.GetAddonText(1084)}", ref config.FilterJobTypeCountData.Melee);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                changed = true;
-
-            ImGui.InputInt($"{LuminaWrapper.GetAddonText(1085)}", ref config.FilterJobTypeCountData.PhysicalRanged);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                changed = true;
-
-            ImGui.InputInt($"{LuminaWrapper.GetAddonText(1086)}", ref config.FilterJobTypeCountData.MagicalRanged);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                changed = true;
-        }
-
-        if (changed)
-            config.Save(this);
-    }
-
-    private void DrawRegexFilterSettings()
-    {
-        DrawWorkModeSettings();
-
-        if (ImGuiComponents.IconButtonWithText
-            (
-                FontAwesomeIcon.Plus,
-                $"{Lang.Get("PartyFinderFilter-AddPreset")} ({Lang.Get("Regex")})"
-            ))
-            config.BlackList.Add(new(true, string.Empty));
-
-        var index = 0;
-
-        foreach (var item in config.BlackList.ToList())
-        {
-            var enableState = item.Key;
-
-            if (ImGui.Checkbox($"##available{index}", ref enableState))
-            {
-                config.BlackList[index] = new(enableState, item.Value);
-                config.Save(this);
-            }
-
-            ImGui.SameLine();
-            if (DrawRegexFilterItemText(index, item))
-                index++;
-        }
-    }
-
-    private void DrawWorkModeSettings()
-    {
-        using var group = ImRaii.Group();
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("WorkMode")}:");
-
-        ImGui.SameLine();
-        if (ImGuiComponents.ToggleButton("ModeToggle", ref config.IsWhiteList))
-            config.Save(this);
-
-        ImGui.SameLine();
-        ImGui.TextUnformatted(config.IsWhiteList ? Lang.Get("Whitelist") : Lang.Get("Blacklist"));
-
-        ImGui.SameLine();
-        ImGuiOm.HelpMarker(Lang.Get("PartyFinderFilter-WorkModeHelp"), 20f * GlobalUIScale);
-    }
-
-    private bool DrawRegexFilterItemText(int index, KeyValuePair<bool, string> item)
-    {
-        var value = item.Value;
-        ImGui.InputText($"##{index}", ref value, 500);
-
-        if (ImGui.IsItemDeactivatedAfterEdit())
-            HandleRegexUpdate(index, item.Key, value);
-
-        ImGui.SameLine();
-        if (ImGuiOm.ButtonIcon($"##Delete{index}", FontAwesomeIcon.Trash))
-            config.BlackList.RemoveAt(index);
-        return true;
+        addon?.Dispose();
+        addon = null;
+        
+        OnAddon(AddonEvent.PreFinalize, null);
     }
 
     private static unsafe void RefreshDisplaySettings(bool displayBlacklisted, bool displayLocked)
@@ -438,16 +241,7 @@ public class PartyFinderFilter : ModuleBase
             return count < maxCount && hasSlot;
         }
     }
-
-    private void OnAddon(AddonEvent type, AddonArgs? args) =>
-        ToggleOverlayConfig(type == AddonEvent.PostSetup);
-
-    protected override void Uninit()
-    {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        DService.Instance().PartyFinder.ReceiveListing -= OnReceiveListing;
-    }
-
+    
     private class Config : ModuleConfig
     {
         public List<KeyValuePair<bool, string>> BlackList = [];
