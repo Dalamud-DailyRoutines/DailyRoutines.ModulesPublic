@@ -20,7 +20,13 @@ public partial class BetterPartyFinderFilter : ModuleBase
         Title       = Lang.Get("BetterPartyFinderFilterTitle"),
         Description = Lang.Get("BetterPartyFinderFilterDescription"),
         Category    = ModuleCategory.Recruitment,
-        Author      = ["status102"]
+        Author      = ["status102"],
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterPartyFinderFilter/preview-1.png",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterPartyFinderFilter/preview-2.png",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterPartyFinderFilter/preview-3.png"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
