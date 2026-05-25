@@ -1,7 +1,10 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Fates;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.Game.Network;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
@@ -26,62 +29,59 @@ public unsafe class AutoFateStart : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+
+    protected override void Init() =>
+        FrameworkManager.Instance().Reg(OnUpdate, throttleMS: 2_000);
     
-    private static readonly CompSig HandleSpawnNPCPacketSig = new
-    (
-        "48 89 5C 24 ?? 57 48 81 EC ?? ?? ?? ?? 48 8B DA 8B F9 E8 ?? ?? ?? ?? 3C ?? 75 ?? E8 ?? ?? ?? ?? 3C ?? 75 ?? 80 BB ?? ?? ?? ?? ?? 75 ?? 8B 05 ?? ?? ?? ?? 39 43 ?? 0F 85 ?? ?? ?? ?? 0F B6 53 ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B6 53 ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 44 24 ?? C7 44 24 ?? ?? ?? ?? ?? BA ?? ?? ?? ?? 66 90 48 8D 80 ?? ?? ?? ?? 0F 10 03 0F 10 4B ?? 48 8D 9B ?? ?? ?? ?? 0F 11 40 ?? 0F 10 43 ?? 0F 11 48 ?? 0F 10 4B ?? 0F 11 40 ?? 0F 10 43 ?? 0F 11 48 ?? 0F 10 4B ?? 0F 11 40 ?? 0F 10 43 ?? 0F 11 48 ?? 0F 10 4B ?? 0F 11 40 ?? 0F 11 48 ?? 48 83 EA ?? 75 ?? 0F 10 03"
-    );
-    private delegate void HandleSpawnNPCPacketDelegate(uint targetID, SpawnNpcPacket* packet);
-    private Hook<HandleSpawnNPCPacketDelegate>? HandleSpawnNPCPacketHook;
-
-    protected override void Init()
-    {
-        HandleSpawnNPCPacketHook ??= HandleSpawnNPCPacketSig.GetHook<HandleSpawnNPCPacketDelegate>(HandleSpawnNPCPacketDetour);
-
-        DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
-        OnZoneChanged(0);
-    }
-
     protected override void Uninit() =>
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        FrameworkManager.Instance().Unreg(OnUpdate);
 
-    private void OnZoneChanged(uint u)
+    private static void OnUpdate(IFramework framework)
     {
-        HandleSpawnNPCPacketHook.Disable();
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.Overworld ||
+            GameState.IsInPVPArea                                            ||
+            LocalPlayerState.ClassJobData.DohDolJobIndex != -1               ||
+            DService.Instance().Condition[ConditionFlag.InCombat]            ||
+            FateManager.Instance()->CurrentFate != null)
+            return;
+        
+        List<IFate> fatesInPre = [];
+        foreach (var fate in DService.Instance().Fate)
+        {
+            if (fate.State != FateState.Preparing) continue;
+            fatesInPre.Add(fate);
+        }
+        
+        if (fatesInPre.Count == 0) return;
 
-        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.Overworld || GameState.IsInPVPArea)
+        var isAnyWithinRadius = false;
+        foreach (var fate in fatesInPre)
+        {
+            if (LocalPlayerState.DistanceTo2DSquared(fate.Position.ToVector2()) > 100 * 100)
+                continue;
+
+            isAnyWithinRadius = true;
+            break;
+        }
+        
+        if (!isAnyWithinRadius)
             return;
 
-        HandleSpawnNPCPacketHook.Enable();
-    }
-
-    private void HandleSpawnNPCPacketDetour(uint targetID, SpawnNpcPacket* packet)
-    {
-        HandleSpawnNPCPacketHook.Original(targetID, packet);
-
-        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.Overworld || GameState.IsInPVPArea)
+        foreach (var charaPtr in CharacterManager.Instance()->BattleCharas)
         {
-            HandleSpawnNPCPacketHook.Disable();
+            if (charaPtr                        == null || 
+                charaPtr.Value                  == null ||
+                charaPtr.Value->NamePlateIconId != 60093)
+                continue;
+            
+            if (!LuminaGetter.TryGetRow(charaPtr.Value->FateId, out Fate row))
+                continue;
+            
+            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.FateStart, row.RowId, charaPtr.Value->EntityId);
+            if (Throttler.Shared.Throttle($"AutoFateStart-Fate-{row.RowId}", 60_000))
+                NotifyHelper.Instance().Chat(Lang.Get("AutoFateStart-StartNotice", row.Name));
+            
             return;
         }
-
-        if (LocalPlayerState.ClassJobData.DohDolJobIndex != -1)
-            return;
-
-        if (packet->Common.NameId <= 0 || packet->Common.BaseId <= 0 || packet->Common.ObjectKind != ObjectKind.BattleNpc)
-            return;
-
-        if (LuminaGetter.GetRow<Fate>(packet->Common.FateId) is not { ClassJobLevel: > 0, Name.IsEmpty: false } row)
-            return;
-
-        if (FateManager.Instance()->GetCurrentFateId() == packet->Common.FateId)
-            return;
-
-        if (DService.Instance().Fate.FirstOrDefault(x => x.FateId == packet->Common.FateId) is not { State: FateState.Preparing })
-            return;
-
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.FateStart, row.RowId, targetID);
-        if (Throttler.Shared.Throttle($"AutoFateStart-Fate-{row.RowId}", 60_000))
-            NotifyHelper.Instance().Chat(Lang.Get("AutoFateStart-StartNotice", row.Name));
     }
 }
