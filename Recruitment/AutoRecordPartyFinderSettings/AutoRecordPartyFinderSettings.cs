@@ -11,6 +11,7 @@ using Lumina.Text.ReadOnly;
 
 namespace DailyRoutines.ModulesPublic.AutoRecordPartyFinderSettings;
 
+// TODO: 可以加个备注, 以后的 KPI
 public unsafe partial class AutoRecordPartyFinderSettings : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
