@@ -267,6 +267,7 @@ public partial class BetterPartyFinderFilter
             };
             displayLayout.AddNode(filterSameDescCheckbox);
 
+            // TODO: 改成使用 DropDownList
             var orderRow = new HorizontalListNode
             {
                 IsVisible = true,
