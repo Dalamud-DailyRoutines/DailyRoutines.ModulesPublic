@@ -206,7 +206,14 @@ public unsafe partial class AutoRecordPartyFinderSettings
             pagingLayout.AddNode(nextPageBtn);
 
             mainLayout.AddNode(actionHeader);
-            mainLayout.AddDummy(4f);
+            mainLayout.AddNode
+            (
+                new HorizontalLineNode
+                {
+                    Size     = ContentSize with { Y = 4 },
+                    Position = new(0, -4)
+                }
+            );
             mainLayout.AddNode(presetListContainer);
             mainLayout.AddDummy();
             mainLayout.AddNode(pagingLayout);
