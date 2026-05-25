@@ -19,8 +19,8 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
 
     protected override void Init()
     {
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreSetup, AddonNames, OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  AddonNames, OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreShow, AddonNames, OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, AddonNames, OnAddon);
     }
 
     protected override void Uninit() =>
@@ -31,11 +31,7 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
 
-        addon->RootNode->ToggleVisibility(false);
-        addon->Close(true);
-        
-        if (type == AddonEvent.PreDraw)
-            args.PreventOriginal();
+        args.PreventOriginal();
     }
     
     #region 常量
