@@ -159,7 +159,7 @@ public partial class AutoReplyChatBot
         (如有)
         """;
     
-    private const int MAX_TOOL_ROUNDS = 5;
+    private const int MAX_TOOL_ROUNDS = 8;
     
     private const string HTTP_CLIENT_NAME = "AutoReplyChatBot-Default";
 
@@ -172,14 +172,10 @@ public partial class AutoReplyChatBot
     private static readonly FrozenDictionary<string, ChatTool> ToolRegistry = new Dictionary<string, ChatTool>
     {
         [ReadPastMessagesTool.TOOL_NAME]  = new ReadPastMessagesTool(),
-        [SendMessageTool.TOOL_NAME]       = new SendMessageTool(),
-        [GetPlayerInfoTool.ToolName]      = new GetPlayerInfoTool(),
-        [GetCurrentLocationTool.ToolName] = new GetCurrentLocationTool(),
-        [GetGameTimeTool.ToolName]        = new GetGameTimeTool(),
-        [GetPlayerStatusTool.ToolName]    = new GetPlayerStatusTool(),
-        [GetItemQuantityTool.ToolName]    = new GetItemQuantityTool(),
-        [GetClassLevelTool.ToolName]      = new GetClassLevelTool(),
-        [GetPartyInfoTool.ToolName]       = new GetPartyInfoTool()
+        [ExdSchemaTool.TOOL_NAME]         = new ExdSchemaTool(),
+        [ExdQueryTool.TOOL_NAME]          = new ExdQueryTool(),
+        [GetGameStateTool.TOOL_NAME]      = new GetGameStateTool(),
+        [ExecuteCommandTool.TOOL_NAME]    = new ExecuteCommandTool()
     }.ToFrozenDictionary();
 
     private static readonly FrozenDictionary<XivChatType, string> ChatTypeToCommand = new Dictionary<XivChatType, string>
