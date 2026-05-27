@@ -33,18 +33,12 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
     {
         AtkTextNodeSetTextHook.Original(node, text);
 
-        if (node == null || !text.HasValue) return;
-
-        // NamePlate
-        if ((byte)node->TextFlags == 152 && node->AlignmentFontType == 7)
-            return;
+        if (node == null) return;
 
         var flag = node->TextFlags;
-
-        if (flag.HasFlag((TextFlags)(1 << 12)))
-        {
-            flag            &= ~(TextFlags)(1 << 12);
-            node->TextFlags =  flag;
-        }
+        if (!flag.IsSet(TextFlags.FixedFontResolution)) return;
+        
+        flag            &= ~TextFlags.FixedFontResolution;
+        node->TextFlags =  flag;
     }
 }
