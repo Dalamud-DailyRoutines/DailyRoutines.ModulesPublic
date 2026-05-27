@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text;
 using DailyRoutines.Extensions;
 using OmenTools.Dalamud;
 using OmenTools.OmenService;
@@ -106,9 +107,9 @@ public partial class AutoReplyChatBot
         ImGui.Spacing();
 
         var chatHeight = 300f * GlobalUIScale;
-        var chatWidth  = ImGui.GetContentRegionAvail().X - 4 * ImGui.GetStyle().ItemSpacing.X;
+        var chatWidth  = ImGui.GetContentRegionAvail().X - (4 * ImGui.GetStyle().ItemSpacing.X);
 
-        using (var child = ImRaii.Child("##ChatMessages", new(chatWidth, chatHeight - 60f * GlobalUIScale), true))
+        using (var child = ImRaii.Child("##ChatMessages", new(chatWidth, chatHeight - (60f * GlobalUIScale)), true))
         {
             var isAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 2f;
 
@@ -123,10 +124,10 @@ public partial class AutoReplyChatBot
                     var isUser  = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase);
 
                     var textSize     = ImGui.CalcTextSize(message.Text) + new Vector2(2 * ImGui.GetStyle().ItemSpacing.X, 4 * ImGui.GetStyle().ItemSpacing.Y);
-                    var messageWidth = Math.Min(textSize.X + 20f                        * GlobalUIScale, chatWidth * 0.75f);
+                    var messageWidth = Math.Min(textSize.X + (20f * GlobalUIScale), chatWidth * 0.75f);
 
                     if (isUser)
-                        ImGui.SetCursorPosX(chatWidth - messageWidth - 16f * GlobalUIScale);
+                        ImGui.SetCursorPosX(chatWidth - messageWidth - (16f * GlobalUIScale));
                     else
                         ImGui.SetCursorPosX(8f * GlobalUIScale);
 
@@ -188,11 +189,11 @@ public partial class AutoReplyChatBot
                 }
             }
 
-            if (isAtBottom)
+            if (isAtBottom || currentWindow.IsProcessing)
                 ImGui.SetScrollHereY(1f);
         }
 
-        ImGui.SetNextItemWidth(chatWidth - ImGui.CalcTextSize(Lang.Get("Send")).X - 4 * ImGui.GetStyle().ItemSpacing.X);
+        ImGui.SetNextItemWidth(chatWidth - ImGui.CalcTextSize(Lang.Get("Send")).X - (4 * ImGui.GetStyle().ItemSpacing.X));
         ImGui.InputText("##MessageInput", ref currentWindow.InputText, 512, ImGuiInputTextFlags.EnterReturnsTrue);
 
         ImGui.SameLine();
@@ -206,39 +207,95 @@ public partial class AutoReplyChatBot
             currentWindow.InputText    = string.Empty;
             currentWindow.IsProcessing = true;
 
-            var helper = GetSession(historyKey).TaskHelper;
-            helper.Abort();
-            helper.DelayNext(1000, "等待 1 秒收集更多消息");
-            helper.Enqueue(() => IsCooldownReady(historyKey));
-            helper.EnqueueAsync
-            (async ct =>
+            AppendHistory(historyKey, "user", text, currentWindow.Role);
+
+            var placeholder = new ChatMessage("assistant", string.Empty, config.Model);
+            config.Histories.GetOrAdd(historyKey, _ => []).Add(placeholder);
+            RequestSaveConfig();
+
+            _ = StreamReplyAsync(currentWindow, historyKey, text, placeholder);
+        }
+    }
+
+    private async Task StreamReplyAsync(ChatWindow window, string historyKey, string userText, ChatMessage placeholder)
+    {
+        try
+        {
+            const int MAX_WAIT_MS = 15_000;
+            var       waited      = 0;
+
+            while (!IsCooldownReady(historyKey) && waited < MAX_WAIT_MS)
+            {
+                await Task.Delay(500).ConfigureAwait(false);
+                waited += 500;
+            }
+
+            if (!IsCooldownReady(historyKey)) return;
+
+            SetCooldown(historyKey);
+
+            var cfg = config;
+            placeholder.Name = cfg.Model;
+
+            if (cfg.EnableFilter && !string.IsNullOrWhiteSpace(cfg.FilterModel))
+            {
+                using var filterCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                var       result    = await FilterMessageAsync(cfg, userText, filterCts.Token).ConfigureAwait(false);
+
+                if (result == null)
                 {
-                    SetCooldown(historyKey);
-
-                    AppendHistory(historyKey, "user", text, currentWindow.Role);
-                    var reply = string.Empty;
-
-                    try
-                    {
-                        reply = await GenerateReplyAsync(config, historyKey, ct) ?? string.Empty;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        currentWindow.IsProcessing = false;
-                        return;
-                    }
-                    catch (Exception ex)
-                    {
-                        NotifyHelper.Instance().NotificationError(Lang.Get("AutoReplyChatBot-ErrorTitle"));
-                        DLog.Error($"{Lang.Get("AutoReplyChatBot-ErrorTitle")}:", ex);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(reply))
-                        AppendHistory(historyKey, "assistant", reply);
-
-                    currentWindow.IsProcessing = false;
+                    placeholder.Text = string.Empty;
+                    return;
                 }
-            );
+
+                if (result != userText && cfg.Histories.TryGetValue(historyKey, out var originalList))
+                {
+                    for (var i = originalList.Count - 1; i >= 0; i--)
+                        if (originalList[i].Role == "user")
+                        {
+                            originalList[i] = new ChatMessage(originalList[i].Role, result, originalList[i].Timestamp, originalList[i].Name);
+                            break;
+                        }
+                }
+            }
+
+            using var cts      = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            var       fullText = new StringBuilder();
+
+            await foreach (var chunk in GenerateReplyStreamAsync(cfg, historyKey, cts.Token).ConfigureAwait(false))
+            {
+                fullText.Append(chunk);
+                placeholder.Text      = fullText.ToString();
+                placeholder.Timestamp = GameState.ServerTimeUnix;
+            }
+
+            var finalText = fullText.ToString();
+
+            if (string.IsNullOrWhiteSpace(finalText) || finalText.StartsWith("[ATTACK", StringComparison.Ordinal))
+                placeholder.Text = string.Empty;
+            else
+                RequestSaveConfig();
+        }
+        catch (OperationCanceledException)
+        {
+            placeholder.Text = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            placeholder.Text = Lang.Get("AutoReplyChatBot-ErrorTitle");
+            NotifyHelper.Instance().NotificationError(Lang.Get("AutoReplyChatBot-ErrorTitle"));
+            DLog.Error($"{Lang.Get("AutoReplyChatBot-ErrorTitle")}:", ex);
+        }
+        finally
+        {
+            try
+            {
+                window.IsProcessing = false;
+            }
+            catch
+            {
+                // ignored
+            }
         }
     }
 }

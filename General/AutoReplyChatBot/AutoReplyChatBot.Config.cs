@@ -16,7 +16,7 @@ public partial class AutoReplyChatBot
 
         // 聊天上下文限制配置
         public bool EnableContextLimit;
-        public bool EnableFilter = true;
+        public bool EnableFilter    = true;
 
         // 游戏上下文配置
         public bool EnableGameContext = true;

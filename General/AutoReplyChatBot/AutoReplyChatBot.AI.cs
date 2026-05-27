@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Dalamud.Game.Text;
 using Dalamud.Utility;
@@ -165,6 +166,88 @@ public partial class AutoReplyChatBot
         return final.StartsWith("[ATTACK", StringComparison.Ordinal) ? string.Empty : final;
     }
 
+    private async IAsyncEnumerable<string> GenerateReplyStreamAsync(Config cfg, string historyKey, [EnumeratorCancellation] CancellationToken ct)
+    {
+        UpdateGameContextInWorldBook();
+
+        if (cfg.APIKey.IsNullOrWhitespace() || cfg.BaseURL.IsNullOrWhitespace() || cfg.Model.IsNullOrWhitespace())
+            yield break;
+
+        var hist = cfg.Histories.TryGetValue(historyKey, out var list) ? list.ToList() : [];
+        if (hist.Count == 0)
+            yield break;
+
+        var userMessage = hist.LastOrDefault(x => x.Role == "user").Text;
+        if (string.IsNullOrWhiteSpace(userMessage)) yield break;
+
+        var url = Backends[cfg.Provider].BuildURL(cfg.BaseURL);
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.APIKey);
+
+        if (cfg.SelectedPromptIndex < 0 || cfg.SelectedPromptIndex >= cfg.SystemPrompts.Count)
+            cfg.SelectedPromptIndex = 0;
+        var currentPrompt = cfg.SystemPrompts[cfg.SelectedPromptIndex];
+        var sys = string.IsNullOrWhiteSpace(currentPrompt.Content)
+                      ? DEFAULT_SYSTEM_PROMPT
+                      : currentPrompt.Content;
+
+        var worldBookContext = string.Empty;
+
+        if (cfg is { EnableWorldBook: true, WorldBookEntry.Count: > 0 })
+        {
+            var lastUserMessage = hist.LastOrDefault(x => x.Role == "user").Text;
+
+            if (!string.IsNullOrWhiteSpace(lastUserMessage))
+            {
+                var relevantEntries = WorldBookManager.FindRelevantEntries(this, lastUserMessage, cfg.WorldBookEntry);
+                worldBookContext = WorldBookManager.BuildWorldBookContext(relevantEntries, cfg.MaxWorldBookContext);
+            }
+        }
+
+        var messages = new List<object>
+        {
+            new { role = "system", content = sys }
+        };
+
+        if (!string.IsNullOrWhiteSpace(worldBookContext))
+            messages.Add(new { role = "system", content = worldBookContext });
+
+        var messagesToSend = hist;
+
+        if (cfg is { EnableContextLimit: true, MaxContextMessages: > 0 })
+        {
+            var totalMessagesToTake = Math.Min(cfg.MaxContextMessages * 2, hist.Count);
+            messagesToSend = hist.Skip(Math.Max(0, hist.Count - totalMessagesToTake)).ToList();
+        }
+
+        foreach (var message in messagesToSend)
+            messages.Add(new { role = message.Role, content = message.Text });
+
+        var body = Backends[cfg.Provider].BuildStreamRequestBody(messages, cfg.Model, cfg.MaxTokens, cfg.Temperature);
+
+        var json = JsonConvert.SerializeObject(body);
+        req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var resp = await HTTPClientHelper.Instance().Get(HTTP_CLIENT_NAME)
+                                               .SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        resp.EnsureSuccessStatusCode();
+
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var       reader = new StreamReader(stream, Encoding.UTF8);
+
+        var backend = Backends[cfg.Provider];
+
+        while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            var chunk = backend.ParseStreamChunk(line);
+            if (chunk != null)
+                yield return chunk;
+        }
+    }
+
     private static async Task<string?> FilterMessageAsync(Config cfg, string userMessage, CancellationToken ct)
     {
         if (cfg.APIKey.IsNullOrWhitespace() || cfg.BaseURL.IsNullOrWhitespace() || cfg.FilterModel.IsNullOrWhitespace())
@@ -231,6 +314,10 @@ public partial class AutoReplyChatBot
         ///     - 如果失败（没有 content 字段或结构不符），返回 <c>null</c>。
         /// </returns>
         string? ParseContent(JObject jsonObject);
+
+        Dictionary<string, object> BuildStreamRequestBody(List<object> messages, string model, int maxTokens, float temperature);
+
+        string? ParseStreamChunk(string chunk);
     }
 
     private class OpenAIBackend : IChatBackend
@@ -253,6 +340,31 @@ public partial class AutoReplyChatBot
         {
             var msg = jsonObject["choices"] is JArray { Count: > 0 } choices ? choices[0]["message"] : null;
             return msg?["content"]?.Value<string>();
+        }
+
+        public Dictionary<string, object> BuildStreamRequestBody(List<object> messages, string model, int maxTokens, float temperature)
+        {
+            var body = BuildRequestBody(messages, model, maxTokens, temperature);
+            body["stream"] = true;
+            return body;
+        }
+
+        public string? ParseStreamChunk(string chunk)
+        {
+            if (!chunk.StartsWith("data: ", StringComparison.Ordinal)) return null;
+            var json = chunk[6..];
+            if (json == "[DONE]") return null;
+
+            try
+            {
+                var jObj  = JObject.Parse(json);
+                var delta = jObj["choices"]?[0]?["delta"]?["content"];
+                return delta?.Value<string>();
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 
@@ -282,13 +394,34 @@ public partial class AutoReplyChatBot
             var messageToken = jsonObject["message"];
             return messageToken?["content"]?.Value<string>();
         }
+
+        public Dictionary<string, object> BuildStreamRequestBody(List<object> messages, string model, int maxTokens, float temperature)
+        {
+            var body = BuildRequestBody(messages, model, maxTokens, temperature);
+            body["stream"] = true;
+            return body;
+        }
+
+        public string? ParseStreamChunk(string chunk)
+        {
+            try
+            {
+                var jObj    = JObject.Parse(chunk);
+                var content = jObj["message"]?["content"]?.Value<string>();
+                return string.IsNullOrEmpty(content) ? null : content;
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
-    
+
     #region 常量
-    
+
     private const string HTTP_CLIENT_NAME = "AutoReplyChatBot-Default";
 
-    private static readonly FrozenDictionary<APIProvider, IChatBackend> Backends = new Dictionary<APIProvider, IChatBackend>()
+    private static readonly FrozenDictionary<APIProvider, IChatBackend> Backends = new Dictionary<APIProvider, IChatBackend>
     {
         [APIProvider.OpenAI] = new OpenAIBackend(),
         [APIProvider.Ollama] = new OllamaBackend()
@@ -318,6 +451,6 @@ public partial class AutoReplyChatBot
         [XivChatType.Yell]            = "/yell",
         [XivChatType.Shout]           = "/shout"
     }.ToFrozenDictionary();
-    
+
     #endregion
 }

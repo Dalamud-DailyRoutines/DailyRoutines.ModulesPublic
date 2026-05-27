@@ -8,7 +8,6 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-// TODO: 支持现代化 AI, 比如流式传输等等
 public partial class AutoReplyChatBot : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
