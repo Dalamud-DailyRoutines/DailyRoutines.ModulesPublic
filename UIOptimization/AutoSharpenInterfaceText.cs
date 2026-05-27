@@ -32,13 +32,18 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
     private void AtkTextNodeSetTextDetour(AtkTextNode* node, CStringPointer text)
     {
         AtkTextNodeSetTextHook.Original(node, text);
-
         if (node == null) return;
 
         var flag = node->TextFlags;
-        if (!flag.IsSet(TextFlags.FixedFontResolution)) return;
+        if (!flag.IsSet(FLAG_TO_REMOVE)) return;
         
-        flag            &= ~TextFlags.FixedFontResolution;
+        flag            &= ~FLAG_TO_REMOVE;
         node->TextFlags =  flag;
     }
+
+    #region 常量
+
+    private const TextFlags FLAG_TO_REMOVE = (TextFlags)(1 << 12);
+
+    #endregion
 }
