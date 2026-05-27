@@ -33,12 +33,8 @@ public unsafe class InstantLogout : ModuleBase
     private Hook<AgentHUD.Delegates.HandleMainCommandOperation>? HandleMainCommandOperationHook;
 
     private Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
-
-    // TODO: FFCS
-    private static readonly CompSig ExitGameSig = new
-        ("40 53 48 83 EC ?? 48 8B D9 BA ?? ?? ?? ?? 48 81 C1 ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 78 ?? ?? 74 ?? 83 78 ?? ?? 74");
-    private delegate void ExitGameDelegate(Framework* framework);
-    private Hook<ExitGameDelegate>? ExitGameHook;
+    
+    private Hook<Framework.Delegates.ExitFromWindow>? ExitFromWindowHook;
 
     protected override void Init()
     {
@@ -61,8 +57,13 @@ public unsafe class InstantLogout : ModuleBase
         
         DService.Instance().AgentLifecycle.RegisterListener(AgentEvent.PreReceiveEvent, Dalamud.Game.Agent.AgentId.Lobby, OnAgentLobby);
 
-        ExitGameHook = ExitGameSig.GetHook<ExitGameDelegate>(ExitGameDetour);
-        ExitGameHook.Enable();
+        ExitFromWindowHook = DService.Instance().Hook.HookFromMemberFunction
+        (
+            typeof(Framework.MemberFunctionPointers),
+            "ExitFromWindow",
+            (Framework.Delegates.ExitFromWindow)ExitFromWindowDetour
+        );
+        ExitFromWindowHook.Enable();
 
         ChatManager.Instance().RegPreExecuteCommandInner(OnPreExecuteCommandInner);
     }
@@ -90,7 +91,7 @@ public unsafe class InstantLogout : ModuleBase
     }
 
     // 从窗口标题栏退出
-    private void ExitGameDetour(Framework* framework) =>
+    private void ExitFromWindowDetour(Framework* framework) =>
         Shutdown(TaskHelper);
     
     // 从标题界面退出游戏
