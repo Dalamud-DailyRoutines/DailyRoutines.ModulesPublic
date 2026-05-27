@@ -630,6 +630,8 @@ public partial class BetterPartyFinderFilter
 
         private void SetupDescriptionPanel()
         {
+            regexRows.Clear();
+
             // 招募描述面板 (Description)
             descriptionPanel = new VerticalListNode
             {
