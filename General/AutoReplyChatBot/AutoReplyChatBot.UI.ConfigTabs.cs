@@ -535,7 +535,7 @@ public partial class AutoReplyChatBot
             return;
         }
 
-        using var child = ImRaii.Child("##ToolsList", new(promptW, 0), false, ImGuiWindowFlags.AlwaysVerticalScrollbar);
+        using var child = ImRaii.Child("##ToolsList", new(promptW, 0), false, ImGuiWindowFlags.NoScrollbar);
         if (!child) return;
 
         var counter = 0;
