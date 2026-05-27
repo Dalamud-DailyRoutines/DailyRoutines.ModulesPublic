@@ -1,5 +1,6 @@
-using System.Numerics;
+﻿using System.Numerics;
 using Dalamud.Game.Text;
+using Newtonsoft.Json.Linq;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -43,23 +44,34 @@ public partial class AutoReplyChatBot
 
         ImGui.NewLine();
 
-        if (ImGui.Checkbox(Lang.Get("AutoReplyChatBot-EnableContextLimit"), ref config.EnableContextLimit))
+        ImGui.SetNextItemWidth(fieldW);
+        if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxContextTokens"), ref config.MaxContextTokens, 4096, 1_000_000))
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-EnableContextLimit-Help"));
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-MaxContextTokens-Help"));
 
-        using (ImRaii.Disabled(!config.EnableContextLimit))
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("250K"))
         {
-            ImGui.SetNextItemWidth(fieldW);
-            if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxContextMessages"), ref config.MaxContextMessages, 1, 50))
-                RequestSaveConfig();
+            config.MaxContextTokens = 250_000;
+            RequestSaveConfig();
         }
 
-        ImGui.NewLine();
+        ImGui.SameLine();
 
-        ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxHistory"), ref config.MaxHistory, 1, 50))
+        if (ImGui.SmallButton("500K"))
+        {
+            config.MaxContextTokens = 500_000;
             RequestSaveConfig();
-        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-MaxHistory-Help"));
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("1M"))
+        {
+            config.MaxContextTokens = 1_000_000;
+            RequestSaveConfig();
+        }
 
         ImGui.NewLine();
 
@@ -136,6 +148,100 @@ public partial class AutoReplyChatBot
             ImGui.InputTextMultiline("##FilterSystemPrompt", ref config.FilterPrompt, 4096, new(promptW, promptH));
             if (ImGui.IsItemDeactivatedAfterEdit())
                 RequestSaveConfig();
+        }
+
+        ImGui.NewLine();
+        ImGui.Separator();
+        ImGui.NewLine();
+
+        // ── Hard Guard ──
+        if (ImGui.Checkbox(Lang.Get("AutoReplyChatBot-HardGuardEnabled"), ref config.HardGuardEnabled))
+            RequestSaveConfig();
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-HardGuardEnabled-Help"));
+
+        using (ImRaii.Disabled(!config.HardGuardEnabled))
+        {
+            ImGui.SetNextItemWidth(fieldW);
+            if (ImGui.SliderInt($"{Lang.Get("AutoReplyChatBot-MaxMessageLength")}##HardGuard", ref config.MaxMessageLength, 50, 2000))
+                RequestSaveConfig();
+            ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-MaxMessageLength-Help"));
+
+            ImGui.TextUnformatted(Lang.Get("AutoReplyChatBot-AttackBehavior"));
+
+            using (ImRaii.PushIndent())
+            {
+                var isDefend = config.AttackBehavior == AttackAction.Defend;
+
+                if (ImGui.RadioButton($"{Lang.Get("AutoReplyChatBot-AttackDefend")}##AtkBehave", isDefend))
+                {
+                    config.AttackBehavior = AttackAction.Defend;
+                    RequestSaveConfig();
+                }
+
+                ImGui.SameLine();
+
+                var isSilent = config.AttackBehavior == AttackAction.Silent;
+
+                if (ImGui.RadioButton($"{Lang.Get("AutoReplyChatBot-AttackSilent")}##AtkBehave", isSilent))
+                {
+                    config.AttackBehavior = AttackAction.Silent;
+                    RequestSaveConfig();
+                }
+            }
+
+            ImGui.NewLine();
+
+            ImGui.TextUnformatted(Lang.Get("AutoReplyChatBot-HardGuardKeywords"));
+
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton($"{Lang.Get("Reset")}##ResetKeywords"))
+            {
+                config.HardGuardKeywords = [..HardGuardDefaultKeywords];
+                RequestSaveConfig();
+            }
+
+            using var child = ImRaii.Child("##KeywordList", new(promptW, 120f * GlobalUIScale), true);
+
+            if (child)
+            {
+                var kwToRemove = -1;
+
+                for (var i = 0; i < config.HardGuardKeywords.Count; i++)
+                {
+                    var kw = config.HardGuardKeywords.ElementAt(i);
+
+                    ImGui.PushID($"kw_{i}");
+                    ImGui.AlignTextToFramePadding();
+                    ImGui.TextUnformatted(kw);
+
+                    ImGui.SameLine(promptW - (20f * GlobalUIScale));
+                    if (ImGui.SmallButton("X"))
+                        kwToRemove = i;
+
+                    ImGui.PopID();
+                }
+
+                if (kwToRemove >= 0)
+                {
+                    config.HardGuardKeywords.Remove(config.HardGuardKeywords.ElementAt(kwToRemove));
+                    RequestSaveConfig();
+                }
+            }
+
+            ImGui.NewLine();
+
+            var newKw = string.Empty;
+
+            if (ImGui.InputTextWithHint("##NewKeyword", Lang.Get("AutoReplyChatBot-AddKeyword"), ref newKw, 64, ImGuiInputTextFlags.EnterReturnsTrue))
+            {
+                if (!string.IsNullOrWhiteSpace(newKw))
+                {
+                    config.HardGuardKeywords.Add(newKw.Trim());
+                    newKw = string.Empty;
+                    RequestSaveConfig();
+                }
+            }
         }
     }
 
@@ -267,8 +373,6 @@ public partial class AutoReplyChatBot
 
         foreach (var entry in config.WorldBookEntry)
         {
-            if (entry.Key == "GameContext") continue;
-
             counter++;
 
             using var id = ImRaii.PushId($"WorldBookEntry_{counter}");
@@ -325,7 +429,7 @@ public partial class AutoReplyChatBot
 
     private void DrawHistoryTab(float fieldW, float promptW, float promptH)
     {
-        var keys = config.Histories.Keys.ToArray();
+        var keys = conversationStore!.GetKeys().ToArray();
 
         var noneLabel   = Lang.Get("None");
         var displayKeys = new List<string>(keys.Length + 1) { string.Empty };
@@ -363,8 +467,7 @@ public partial class AutoReplyChatBot
             if (config.HistoryKeyIndex > 0)
             {
                 var currentKey = displayKeys[config.HistoryKeyIndex];
-                config.Histories.Remove(currentKey);
-                RequestSaveConfig();
+                conversationStore!.DeleteConversation(currentKey);
             }
         }
 
@@ -372,7 +475,7 @@ public partial class AutoReplyChatBot
             return;
 
         var currentKey2 = displayKeys[config.HistoryKeyIndex];
-        var entries     = config.Histories.TryGetValue(currentKey2, out var list) ? list.ToList() : [];
+        var entries     = conversationStore!.GetTurns(currentKey2);
 
         using (ImRaii.Child("##HistoryViewer", new(promptW, promptH), true))
         {
@@ -402,7 +505,9 @@ public partial class AutoReplyChatBot
                             {
                                 try
                                 {
-                                    config.Histories[currentKey2].RemoveAt(i);
+                                    var delConv = conversationStore!.GetOrLoad(currentKey2);
+                                    if (i < delConv.RecentTurns.Count)
+                                        delConv.RecentTurns.RemoveAt(i);
                                     break;
                                 }
                                 catch
@@ -422,27 +527,45 @@ public partial class AutoReplyChatBot
         }
     }
 
-    private void DrawGameContextTab()
+    private static void DrawToolsTab(float promptW)
     {
-        if (ImGui.Checkbox(Lang.Get("AutoReplyChatBot-EnableGameContext"), ref config.EnableGameContext))
-            RequestSaveConfig();
-        ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-EnableGameContext-Help"));
-
-        using (ImRaii.Disabled(!config.EnableGameContext))
-        using (ImRaii.PushIndent())
+        if (ToolRegistry.Count == 0)
         {
-            foreach (var contextType in Enum.GetValues<GameContextType>())
+            ImGui.TextUnformatted(Lang.Get("None"));
+            return;
+        }
+
+        using var child = ImRaii.Child("##ToolsList", new(promptW, 0), false, ImGuiWindowFlags.AlwaysVerticalScrollbar);
+        if (!child) return;
+
+        var counter = 0;
+
+        foreach (var tool in ToolRegistry.Values)
+        {
+            using var id = ImRaii.PushId($"Tool_{counter++}");
+
+            using (ImRaii.PushColor(ImGuiCol.Header, KnownColor.DarkSlateBlue.ToVector4()))
             {
-                using var id = ImRaii.PushId($"AutoReplyChatBot-GameContext-{contextType}");
-
-                var enabled = config.GameContextSettings.GetValueOrDefault(contextType, true);
-                var label   = GameContextLocMap.GetValueOrDefault(contextType, contextType.ToString());
-
-                if (ImGui.Checkbox($"{label}##{contextType}", ref enabled))
+                if (ImGui.CollapsingHeader(tool.Name))
                 {
-                    config.GameContextSettings[contextType] = enabled;
-                    RequestSaveConfig();
-                    UpdateGameContextInWorldBook();
+                    using (ImRaii.PushIndent())
+                    {
+                        ImGui.TextWrapped(tool.Description);
+
+                        if (tool.Parameters is { HasValues: true })
+                        {
+                            ImGui.Spacing();
+                            ImGui.TextDisabled("Parameters:");
+
+                            if (tool.Parameters["properties"] is JObject props)
+                            {
+                                foreach (var prop in props)
+                                    ImGui.BulletText($"{prop.Key}: {prop.Value?["description"]?.Value<string>() ?? prop.Value?.Value<string>() ?? "-"}");
+                            }
+                        }
+
+                        ImGui.Spacing();
+                    }
                 }
             }
         }

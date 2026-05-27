@@ -1,3 +1,4 @@
+﻿using System.Collections.Frozen;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -9,8 +10,6 @@ public partial class AutoReplyChatBot
     private void AppendHistory(string key, string role, string text, string name = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
-
-        var list = config.Histories.GetOrAdd(key, _ => []);
 
         var displayName = name;
 
@@ -24,16 +23,14 @@ public partial class AutoReplyChatBot
                 displayName = role;
         }
 
-        list.Add(new ChatMessage(role, text, displayName));
-        // 不再删除历史记录，全部保留
-        RequestSaveConfig();
+        conversationStore!.AppendTurn(key, new ChatMessage(role, text, displayName));
     }
 
     private bool IsCooldownReady(string key) =>
-        GetSession(key).IsCooldownReady(config.CooldownSeconds);
+        rateLimiter!.CanProceed(key, config.CooldownSeconds);
 
-    private static void SetCooldown(string key) =>
-        GetSession(key).SetCooldown();
+    private void SetCooldown(string key) =>
+        rateLimiter!.MarkUsed(key);
 
     private static (string Name, ushort WorldID, string? WorldName) ExtractNameWorld(SeString sender)
     {

@@ -4,28 +4,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoReplyChatBot
 {
-    private void UpdateGameContextInWorldBook()
-    {
-        if (config is not { EnableGameContext: true }) return;
-
-        var contextParts = new List<string>();
-
-        foreach (var contextType in Enum.GetValues<GameContextType>())
-        {
-            if (config.GameContextSettings.TryGetValue(contextType, out var enabled) && enabled)
-            {
-                var value = GameContextValueMap[contextType]();
-                contextParts.Add($"{contextType}:{value}");
-            }
-        }
-
-        var context = string.Join(", ", contextParts);
-        config.WorldBookEntry["GameContext"] = context;
-    }
-
     private static class WorldBookManager
     {
-        public static List<KeyValuePair<string, string>> FindRelevantEntries(AutoReplyChatBot module, string userMessage, Dictionary<string, string> entries)
+        public static List<KeyValuePair<string, string>> FindRelevantEntries(
+            string userMessage, Dictionary<string, string> entries)
         {
             if (string.IsNullOrWhiteSpace(userMessage) || entries is not { Count: > 0 })
                 return [];
@@ -37,14 +19,8 @@ public partial class AutoReplyChatBot
 
             var scored = new List<(int Score, KeyValuePair<string, string> Entry)>(entries.Count);
 
-            if (module.config is { EnableGameContext: true }             &&
-                entries.TryGetValue("GameContext", out var gameContext) &&
-                !string.IsNullOrWhiteSpace(gameContext))
-                scored.Add((int.MaxValue, new KeyValuePair<string, string>("GameContext", gameContext)));
-
             foreach (var entry in entries)
             {
-                if (entry.Key == "GameContext") continue;
                 if (string.IsNullOrWhiteSpace(entry.Key)) continue;
                 if (string.IsNullOrWhiteSpace(entry.Value)) continue;
 

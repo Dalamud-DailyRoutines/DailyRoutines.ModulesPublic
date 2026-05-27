@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -20,7 +21,11 @@ public partial class AutoReplyChatBot : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private Config config = null!;
+    
+    private RateLimiter?  rateLimiter;
+    private ChatPipeline? pipeline;
+    
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> activePipelines = new(StringComparer.OrdinalIgnoreCase);
 
     protected override void Init()
     {
@@ -32,11 +37,13 @@ public partial class AutoReplyChatBot : ModuleBase
             config.SelectedPromptIndex = 0;
         }
 
-        foreach (var contextType in Enum.GetValues<GameContextType>())
-            config.GameContextSettings.TryAdd(contextType, true);
-
         config.SystemPrompts = config.SystemPrompts.DistinctBy(x => x.Name).ToList();
-        config.Save(this);
+
+        rateLimiter       = new RateLimiter();
+        conversationStore = new ConversationStore(ConfigDirectoryPath);
+        pipeline          = new ChatPipeline(this);
+
+        _ = conversationStore.PruneAsync();
 
         DService.Instance().Chat.ChatMessage += OnChat;
     }
@@ -44,9 +51,27 @@ public partial class AutoReplyChatBot : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().Chat.ChatMessage -= OnChat;
+
+        foreach (var (_, cts) in activePipelines)
+        {
+            try
+            {
+                cts.Cancel();
+            }
+            catch
+            {
+                /* ignored */
+            }
+
+            cts.Dispose();
+        }
+
+        activePipelines.Clear();
+        conversationStore?.Dispose();
+        rateLimiter?.Dispose();
+
         FlushSaveConfig();
         DisposeSaveConfigScheduler();
-        DisposeAllSessions();
     }
 
     private void OnChat(IHandleableChatMessage message)
@@ -61,13 +86,26 @@ public partial class AutoReplyChatBot : ModuleBase
         var userText = message.Message.TextValue;
         if (string.IsNullOrWhiteSpace(userText)) return;
 
-        var historyKey = $"{playerName}@{worldName}";
-        AppendHistory(historyKey, "user", userText);
+        var target = $"{playerName}@{worldName}";
 
-        var helper = GetSession(historyKey).TaskHelper;
-        helper.Abort();
-        helper.DelayNext(1000, "等待 1 秒收集更多消息");
-        helper.Enqueue(() => IsCooldownReady(historyKey));
-        helper.EnqueueAsync(ct => GenerateAndReplyAsync(playerName, worldName, message.LogKind, ct));
+        var newCts = new CancellationTokenSource();
+        var oldCts = activePipelines.GetOrAdd(target, newCts);
+
+        if (oldCts != newCts)
+        {
+            try
+            {
+                oldCts.Cancel();
+            }
+            catch
+            {
+                /* ignored */
+            }
+
+            oldCts.Dispose();
+            activePipelines[target] = newCts;
+        }
+
+        _ = pipeline!.ExecuteAsync(playerName, worldID, worldName, message.LogKind, userText, newCts.Token);
     }
 }
