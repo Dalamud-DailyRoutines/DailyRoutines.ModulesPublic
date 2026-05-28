@@ -41,9 +41,7 @@ public partial class AutoReplyChatBot
         ImGui.SetNextItemWidth(fieldW);
         if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-CooldownSeconds"), ref config.CooldownSeconds, 0, 120))
             RequestSaveConfig();
-
-        ImGui.NewLine();
-
+        
         ImGui.SetNextItemWidth(fieldW);
         if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxContextTokens"), ref config.MaxContextTokens, 4096, 1_000_000))
             RequestSaveConfig();
@@ -72,16 +70,12 @@ public partial class AutoReplyChatBot
             config.MaxContextTokens = 1_000_000;
             RequestSaveConfig();
         }
-
-        ImGui.NewLine();
-
+        
         ImGui.SetNextItemWidth(fieldW);
         if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxTokens"), ref config.MaxTokens, 256, 8192))
             RequestSaveConfig();
         ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-MaxTokens-Help"));
-
-        ImGui.NewLine();
-
+        
         ImGui.SetNextItemWidth(fieldW);
         if (ImGui.SliderFloat(Lang.Get("AutoReplyChatBot-Temperature"), ref config.Temperature, 0.0f, 2.0f))
             RequestSaveConfig();
