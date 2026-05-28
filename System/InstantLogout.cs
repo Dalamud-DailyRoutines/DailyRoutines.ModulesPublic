@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Agent;
 using Dalamud.Game.Agent.AgentArgTypes;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Application.Network;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -11,7 +12,6 @@ using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
@@ -35,10 +35,19 @@ public unsafe class InstantLogout : ModuleBase
     private Hook<AgentShowDelegate>? AgentCloseMessageShowHook;
     
     private Hook<Framework.Delegates.ExitFromWindow>? ExitFromWindowHook;
+    
+    private Hook<LogoutCallbackInterface.Delegates.OnLogout>? OnLogoutHook;
 
     protected override void Init()
     {
-        TaskHelper ??= new();
+        TaskHelper = new();
+        
+        OnLogoutHook = AgentLobby.Instance()->LogoutCallbackInterface.VirtualTable->HookVFuncFromName
+        (
+            "OnLogout",
+            (LogoutCallbackInterface.Delegates.OnLogout)OnLogoutDetour
+        );
+        OnLogoutHook.Enable();
 
         HandleMainCommandOperationHook = DService.Instance().Hook.HookFromMemberFunction
         (
@@ -88,6 +97,17 @@ public unsafe class InstantLogout : ModuleBase
             if (ImGui.Button(Lang.Get("InstantLogout-Shutdown")))
                 Shutdown(TaskHelper);
         }
+    }
+    
+    private void OnLogoutDetour(LogoutCallbackInterface* thisPtr, LogoutCallbackInterface.LogoutParams* logoutParams)
+    {
+        if (TaskHelper.IsBusy)
+        {
+            logoutParams->Type = 0;
+            logoutParams->Code = 10000;
+        }
+        
+        OnLogoutHook.Original(thisPtr, logoutParams);
     }
 
     // 从窗口标题栏退出
@@ -152,12 +172,15 @@ public unsafe class InstantLogout : ModuleBase
     
     #region 实际操作
 
-    private static void Logout(TaskHelper _) =>
-        ContentsFinderHelper.RequestDutyNormal(167, ContentsFinderHelper.DefaultOption);
+    private static void Logout(TaskHelper taskHelper)
+    {
+        taskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(167, ContentsFinderHelper.DefaultOption));
+        taskHelper.Enqueue(() => !GameState.IsLoggedIn);
+    }
 
     private static void Shutdown(TaskHelper taskHelper)
     {
-        taskHelper.Enqueue(() => Logout(taskHelper));
+        Logout(taskHelper);
         taskHelper.Enqueue
         (() =>
             {
