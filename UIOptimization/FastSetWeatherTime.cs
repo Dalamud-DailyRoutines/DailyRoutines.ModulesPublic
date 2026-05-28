@@ -202,11 +202,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
                     openButton.AttachNode(NaviMap->RootNode);
                 }
 
-                var weatherRow = LuminaGetter.GetRowOrDefault<Weather>(GetDisplayWeather());
-                var showWeatherID = ModuleManager.Instance().GetModule<AutoDisplayIDInfomation>()?.ShowWeatherEnabled ?? false;
-                openButton.TextTooltip = showWeatherID
-                    ? $"{weatherRow.Name} [{weatherRow.RowId}]"
-                    : weatherRow.Name;
+                openButton.TextTooltip = LuminaGetter.GetRowOrDefault<Weather>(GetDisplayWeather()).Name;
                 break;
         }
     }

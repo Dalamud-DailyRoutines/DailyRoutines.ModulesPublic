@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -18,6 +17,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
@@ -37,26 +37,14 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     };
 
     private Config config = null!;
-
-    internal bool ShowWeatherEnabled => config.ShowWeatherID;
-
     private IDtrBarEntry? zoneInfoEntry;
 
-    private static readonly CompSig ShowTooltipSig = new("E8 ?? ?? ?? ?? 49 63 47 ?? BB");
+    private static readonly CompSig AtkTextNodeSetTextSig = new("48 85 C9 0F 84 ?? ?? ?? ?? 4C 8B DC 53 56");
 
-    private delegate void ShowTooltipDelegate
-    (
-        AtkTooltipManager*                manager,
-        AtkTooltipType                    type,
-        ushort                            parentID,
-        AtkResNode*                       targetNode,
-        AtkTooltipManager.AtkTooltipArgs* tooltipArgs,
-        void*                             unkDelegate,
-        byte                              unk7,
-        byte                              unk8
-    );
+    private delegate void AtkTextNodeSetTextDelegate(AtkTextNode* node, CStringPointer text);
 
-    private Hook<ShowTooltipDelegate>? showTooltipHook;
+    private Hook<AtkTextNodeSetTextDelegate>? setTextHook;
+    private AtkResNode* tooltipRoot;
 
     protected override void Init()
     {
@@ -77,8 +65,9 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         UpdateDTRInfo();
 
-        showTooltipHook ??= ShowTooltipSig.GetHook<ShowTooltipDelegate>(ShowTooltipDetour);
-        showTooltipHook.Enable();
+        tooltipRoot = AddonHelper.GetByName("Tooltip")->RootNode;
+        setTextHook ??= AtkTextNodeSetTextSig.GetHook<AtkTextNodeSetTextDelegate>(SetTextDetour);
+        setTextHook.Enable();
     }
 
     protected override void Uninit()
@@ -93,9 +82,6 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         TooltipManager.Instance().Unreg(OnActionTooltip);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-        showTooltipHook?.Dispose();
-        showTooltipHook = null;
     }
 
     protected override void ConfigUI()
@@ -276,117 +262,102 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
             zoneInfoEntry.Shown = false;
     }
 
-    private void ShowTooltipDetour
-    (
-        AtkTooltipManager*                manager,
-        AtkTooltipType                    type,
-        ushort                            parentID,
-        AtkResNode*                       targetNode,
-        AtkTooltipManager.AtkTooltipArgs* args,
-        void*                             unkDelegate,
-        byte                              unk7,
-        byte                              unk8
-    )
+    private static AtkResNode* GetAncestorRoot(AtkResNode* node)
     {
-        if (config.ShowStatusID)
+        while (node != null && node->ParentNode != null)
+            node = node->ParentNode;
+        return node;
+    }
+
+    private void SetTextDetour(AtkTextNode* node, CStringPointer text)
+    {
+        if (!config.ShowStatusID && !config.ShowWeatherID)
         {
-            try { ModifyStatusTooltip(targetNode, args); }
-            catch { /* ignored */ }
+            setTextHook!.Original(node, text);
+            return;
+        }
+
+        if (tooltipRoot == null || GetAncestorRoot((AtkResNode*)node) != tooltipRoot)
+        {
+            setTextHook!.Original(node, text);
+            return;
+        }
+
+        var currentText = MemoryHelper.ReadSeStringNullTerminated((nint)text.Value);
+        var textValue   = currentText.TextValue;
+
+        if (textValue.Contains('[') && textValue.Contains(']'))
+        {
+            setTextHook!.Original(node, text);
+            return;
+        }
+
+        if (config.ShowStatusID && TryAppendStatusID(textValue, out var newStatusText))
+        {
+            var bytes = newStatusText.EncodeWithNullTerminator();
+            var ptr   = (byte*)Marshal.AllocHGlobal(bytes.Length);
+            for (var i = 0; i < bytes.Length; i++) ptr[i] = bytes[i];
+            setTextHook!.Original(node, new CStringPointer(ptr));
+            return;
         }
 
         if (config.ShowWeatherID)
         {
-            try { ModifyWeatherTooltip(parentID, targetNode, args); }
-            catch { /* ignored */ }
+            var weatherID = WeatherManager.Instance()->WeatherId;
+            if (LuminaGetter.TryGetRow<Weather>(weatherID, out var weather) &&
+                textValue.Equals(weather.Name.ToString(), StringComparison.OrdinalIgnoreCase) &&
+                !textValue.Contains($"[{weatherID}]"))
+            {
+                var finalText = new SeStringBuilder().Append($"{weather.Name} [{weatherID}]").Build();
+                var bytes     = finalText.EncodeWithNullTerminator();
+                var ptr       = (byte*)Marshal.AllocHGlobal(bytes.Length);
+                for (var i = 0; i < bytes.Length; i++) ptr[i] = bytes[i];
+                setTextHook!.Original(node, new CStringPointer(ptr));
+                return;
+            }
         }
 
-        showTooltipHook?.Original(manager, type, parentID, targetNode, args, unkDelegate, unk7, unk8);
+        setTextHook!.Original(node, text);
     }
 
-    private void ModifyStatusTooltip(AtkResNode* targetNode, AtkTooltipManager.AtkTooltipArgs* args)
+    private bool TryAppendStatusID(string textValue, out SeString result)
     {
-        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer || targetNode == null) return;
+        result = default!;
+        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
 
-        var imageNode = targetNode->GetAsAtkImageNode();
-        if (imageNode == null) return;
-
-        var iconID = imageNode->PartsList->Parts[imageNode->PartId].UldAsset->AtkTexture.Resource->IconId;
-        if (iconID is < 210000 or > 230000) return;
-
-        var map = new Dictionary<uint, uint>();
-
-        if (TargetManager.Target is { } target && target.Address != localPlayer.Address)
-            AddStatuses(ref target.ToBCStruct()->StatusManager);
-        if (TargetManager.FocusTarget is { } focus)
-            AddStatuses(ref focus.ToBCStruct()->StatusManager);
-        foreach (var member in AgentHUD.Instance()->PartyMembers.ToArray().Where(m => m.Index != 0))
-        {
-            if (member.Object != null)
-                AddStatuses(ref member.Object->StatusManager);
-        }
-        AddStatuses(ref localPlayer.ToBCStruct()->StatusManager);
-
-        if (!map.TryGetValue(iconID, out var statusID) || statusID == 0) return;
-
-        var currentText = MemoryHelper.ReadSeStringNullTerminated((nint)args->TextArgs.Text.Value);
-
-        if (currentText.TextValue.Contains($"[{statusID}]")) return;
-
-        SeString finalText;
-        try
-        {
-            var regex = new Regex(@"^(.*?)(?=\uff08|（|\n|$)");
-            finalText = new SeStringBuilder().Append(regex.Replace(currentText.TextValue,
-                match => match.Groups[1].Value + $"  [{statusID}]")).Build();
-        }
-        catch
-        {
-            finalText = currentText;
-        }
-
-        var bytes = finalText.EncodeWithNullTerminator();
-        var ptr   = (byte*)Marshal.AllocHGlobal(bytes.Length);
-        for (var i = 0; i < bytes.Length; i++)
-            ptr[i] = bytes[i];
-        args->TextArgs.Text = ptr;
-
-        return;
-
+        var nameMap = new Dictionary<string, (uint ID, string Desc)>(StringComparer.OrdinalIgnoreCase);
         void AddStatuses(ref StatusManager sm)
         {
             foreach (var s in sm.Status)
             {
                 if (s.StatusId == 0) continue;
                 if (!LuminaGetter.TryGetRow<RowStatus>(s.StatusId, out var row)) continue;
-                map.TryAdd(row.Icon, row.RowId);
-                for (var i = 1; i <= s.Param; i++)
-                    map.TryAdd((uint)(row.Icon + i), row.RowId);
+                nameMap.TryAdd(row.Name.ToString(), (row.RowId, row.Description.ToString()));
             }
         }
-    }
+        AddStatuses(ref localPlayer.ToBCStruct()->StatusManager);
+        if (TargetManager.Target is { } target && target.Address != localPlayer.Address)
+            AddStatuses(ref target.ToBCStruct()->StatusManager);
+        if (TargetManager.FocusTarget is { } focus)
+            AddStatuses(ref focus.ToBCStruct()->StatusManager);
+        foreach (var member in AgentHUD.Instance()->PartyMembers.ToArray().Where(m => m.Index != 0))
+        {
+            if (member.Object != null) AddStatuses(ref member.Object->StatusManager);
+        }
 
-    private void ModifyWeatherTooltip(ushort parentID, AtkResNode* targetNode, AtkTooltipManager.AtkTooltipArgs* args)
-    {
-        if (targetNode == null || NaviMap == null || parentID != NaviMap->Id) return;
+        foreach (var (name, (statusID, desc)) in nameMap)
+        {
+            if (!textValue.StartsWith(name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (textValue.Contains($"[{statusID}]")) continue;
 
-        var compNode = targetNode->ParentNode->GetAsAtkComponentNode();
-        if (compNode == null) return;
+            var nameEnd = textValue.IndexOfAny(['\uff08', '（', '\r', '\n']);
+            var firstLine = nameEnd > 0 ? textValue[..nameEnd] : textValue;
+            var rest      = nameEnd > 0 ? textValue[nameEnd..] : string.Empty;
+            result = new SeStringBuilder().Append(firstLine).Append($"  [{statusID}]").Append(rest).Build();
+            return true;
+        }
 
-        var imageNode = compNode->Component->UldManager.SearchNodeById(3)->GetAsAtkImageNode();
-        if (imageNode == null) return;
-
-        var iconID    = imageNode->PartsList->Parts[imageNode->PartId].UldAsset->AtkTexture.Resource->IconId;
-        var weatherID = WeatherManager.Instance()->WeatherId;
-
-        if (!LuminaGetter.TryGetRow<Weather>(weatherID, out var weather)) return;
-        if (weather.Icon != iconID) return;
-
-        var finalText = new SeStringBuilder().Append($"{weather.Name} [{weatherID}]").Build();
-        var bytes     = finalText.EncodeWithNullTerminator();
-        var ptr       = (byte*)Marshal.AllocHGlobal(bytes.Length);
-        for (var i = 0; i < bytes.Length; i++)
-            ptr[i] = bytes[i];
-        args->TextArgs.Text = ptr;
+        return false;
     }
 
     private class Config : ModuleConfig
