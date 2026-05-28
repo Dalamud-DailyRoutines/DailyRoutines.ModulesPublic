@@ -62,8 +62,16 @@ public unsafe class AutoMaterialize : ModuleBase
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        lableNode?.Dispose();
+        lableNode = null;
 
+        startButtonNode?.Dispose();
+        startButtonNode = null;
+
+        stopButtonNode?.Dispose();
+        stopButtonNode = null;
+        
         DService.Instance().AddonLifecycle.UnregisterListener(OnDialogAddon);
     }
 
@@ -205,16 +213,11 @@ public unsafe class AutoMaterialize : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                lableNode?.Dispose();
-                lableNode = null;
-
-                startButtonNode?.Dispose();
+                lableNode       = null;
                 startButtonNode = null;
+                stopButtonNode  = null;
 
-                stopButtonNode?.Dispose();
-                stopButtonNode = null;
-
-                TaskHelper?.Abort();
+                TaskHelper.Abort();
                 break;
         }
     }

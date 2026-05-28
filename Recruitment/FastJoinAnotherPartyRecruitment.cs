@@ -45,7 +45,9 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon, OnAddonYesno);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        button?.Dispose();
+        button = null;
     }
 
     private void OnAddonYesno(AddonEvent type, AddonArgs args)
@@ -67,7 +69,6 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
                 break;
 
             case AddonEvent.PreFinalize:
-                button?.Dispose();
                 button = null;
                 break;
         }

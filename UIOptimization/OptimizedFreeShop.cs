@@ -66,7 +66,8 @@ public unsafe class OptimizedFreeShop : ModuleBase
     {
         DService.Instance().AgentLifecycle.UnregisterListener(OnAgent);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        clickYesnoHelper?.Abort();
 
         addon?.Dispose();
         addon = null;

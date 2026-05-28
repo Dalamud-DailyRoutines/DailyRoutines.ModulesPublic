@@ -76,7 +76,9 @@ public unsafe class QuickChatPanel : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        sendButton?.Dispose();
+        sendButton = null;
 
         chatPanelAddon?.Dispose();
         chatPanelAddon = null;
@@ -259,7 +261,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                sendButton?.Dispose();
                 sendButton = null;
                 break;
         }

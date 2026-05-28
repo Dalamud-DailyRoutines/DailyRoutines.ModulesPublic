@@ -73,7 +73,10 @@ public partial class BetterPartyFinderFilter : ModuleBase
         addon?.Dispose();
         addon = null;
 
-        OnAddon(AddonEvent.PreFinalize, null);
+        buttonNode?.Dispose();
+        buttonNode = null;
+
+        isNeedToOpenAddon = false;
     }
 
     private static unsafe void RefreshDisplaySettings

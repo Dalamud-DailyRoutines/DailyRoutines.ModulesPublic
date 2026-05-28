@@ -66,10 +66,6 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_TargetInfoCastBar", OnAddonTargetInfoCastBar);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,         "_TargetInfoCastBar", OnAddonTargetInfoCastBar);
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_TargetInfoCastBar", OnAddonTargetInfoCastBar);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_TargetInfoCastBar", OnAddonTargetInfoCastBar);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,         "_TargetInfoCastBar", OnAddonTargetInfoCastBar);
-
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_TargetInfoBuffDebuff", OnAddonTargetInfoBuffDebuff);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_TargetInfoBuffDebuff", OnAddonTargetInfoBuffDebuff);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,         "_TargetInfoBuffDebuff", OnAddonTargetInfoBuffDebuff);
@@ -82,22 +78,32 @@ public unsafe class OptimizedTargetInfo : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonTargetInfo);
-        OnAddonTargetInfo(AddonEvent.PreFinalize, null);
-
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonTargetInfoSplitTarget);
-        OnAddonTargetInfoSplitTarget(AddonEvent.PreFinalize, null);
-
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonFocusTargetInfo);
-        OnAddonFocusTargetInfo(AddonEvent.PreFinalize, null);
-
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonTargetInfoCastBar);
-        OnAddonTargetInfoCastBar(AddonEvent.PreFinalize, null);
-
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonTargetInfoBuffDebuff);
-        OnAddonTargetInfoBuffDebuff(AddonEvent.PreFinalize, null);
-
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonCastBarEnemy);
-        OnAddonCastBarEnemy(AddonEvent.PreFinalize, null);
+        
+        targetHPTextNode?.Dispose();
+        targetHPTextNode = null;
+
+        targetCastBarTextNode?.Dispose();
+        targetCastBarTextNode = null;
+
+        mainTargetSplitHPTextNode?.Dispose();
+        mainTargetSplitHPTextNode = null;
+        
+        focusTargetHPTextNode?.Dispose();
+        focusTargetHPTextNode = null;
+
+        focusTargetCastBarTextNode?.Dispose();
+        focusTargetCastBarTextNode = null;
+
+        clearFocusButtonNode?.Dispose();
+        clearFocusButtonNode = null;
+        
+        targetSplitCastBarTextNode?.Dispose();
+        targetSplitCastBarTextNode = null;
     }
 
     protected override void ConfigUI()
@@ -241,7 +247,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
                 if (!config.StatusIsEnabled)
                 {
-                    OnAddonTargetInfoCastBar(AddonEvent.PreFinalize, null);
+                    targetSplitCastBarTextNode?.Dispose();
+                    targetSplitCastBarTextNode = null;
                     OnAddonTargetInfoBuffDebuff(AddonEvent.PreFinalize, null);
                 }
             }
@@ -260,7 +267,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                 {
                     config.Save(this);
 
-                    OnAddonTargetInfoCastBar(AddonEvent.PreFinalize, null);
+                    targetSplitCastBarTextNode?.Dispose();
+                    targetSplitCastBarTextNode = null;
                     OnAddonTargetInfoBuffDebuff(AddonEvent.PreFinalize, null);
                 }
             }
@@ -519,7 +527,6 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                clearFocusButtonNode?.Dispose();
                 clearFocusButtonNode = null;
                 break;
 
@@ -729,7 +736,6 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                textNode?.Dispose();
                 textNode = null;
                 break;
 
@@ -843,7 +849,6 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                textNode?.Dispose();
                 textNode = null;
                 break;
 

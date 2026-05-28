@@ -35,7 +35,9 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        searchBarNode?.Dispose();
+        searchBarNode = null;
     }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
@@ -43,7 +45,6 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                searchBarNode?.Dispose();
                 searchBarNode = null;
                 break;
             case AddonEvent.PostDraw:

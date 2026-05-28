@@ -1,7 +1,6 @@
 using System.Numerics;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
@@ -50,7 +49,18 @@ public unsafe class AutoSellCards : ModuleBase
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        layoutNode?.Dispose();
+        layoutNode = null;
+
+        startButton?.Dispose();
+        startButton = null;
+
+        stopButton?.Dispose();
+        stopButton = null;
+
+        titleNode?.Dispose();
+        titleNode = null;
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonDialog);
     }
@@ -144,18 +154,11 @@ public unsafe class AutoSellCards : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                layoutNode?.Dispose();
-                layoutNode = null;
-
-                startButton?.Dispose();
+                layoutNode  = null;
                 startButton = null;
-
-                stopButton?.Dispose();
-                stopButton = null;
-
-                titleNode?.Dispose();
-                titleNode = null;
-
+                stopButton  = null;
+                titleNode   = null;
+                
                 TaskHelper?.Abort();
                 break;
         }

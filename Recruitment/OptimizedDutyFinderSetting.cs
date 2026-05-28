@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -45,7 +44,16 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        foreach (var (buttonNode, imageNode) in nodes.Values)
+        {
+            buttonNode?.Dispose();
+            imageNode?.Dispose();
+        }
+        nodes.Clear();
+
+        layoutNode?.Dispose();
+        layoutNode = null;
     }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
@@ -53,15 +61,7 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                foreach (var (buttonNode, imageNode) in nodes.Values)
-                {
-                    buttonNode?.Dispose();
-                    imageNode?.Dispose();
-                }
-
                 nodes.Clear();
-
-                layoutNode?.Dispose();
                 layoutNode = null;
                 break;
             case AddonEvent.PostRefresh:

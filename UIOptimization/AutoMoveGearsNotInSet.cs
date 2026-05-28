@@ -37,7 +37,9 @@ public class AutoMoveGearsNotInSet : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        button?.Dispose();
+        button = null;
 
         CommandManager.Instance().RemoveSubCommand(COMMAND);
     }
@@ -92,7 +94,6 @@ public class AutoMoveGearsNotInSet : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                button?.Dispose();
                 button = null;
                 break;
         }

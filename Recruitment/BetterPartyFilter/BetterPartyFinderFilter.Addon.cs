@@ -58,9 +58,7 @@ public partial class BetterPartyFinderFilter
                 break;
 
             case AddonEvent.PreFinalize:
-                buttonNode?.Dispose();
                 buttonNode = null;
-
                 isNeedToOpenAddon = false;
                 break;
         }

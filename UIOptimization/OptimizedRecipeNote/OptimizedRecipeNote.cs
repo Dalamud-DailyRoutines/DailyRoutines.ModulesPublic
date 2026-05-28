@@ -136,7 +136,8 @@ public partial class OptimizedRecipeNote : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
         DService.Instance().AddonLifecycle.UnregisterListener(OnSynthesisSimple);
         DService.Instance().AgentLifecycle.UnregisterListener(OnAgentRecipeNote);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        RemoveAllNodes();
 
         AddonActionsPreview.Addon?.Dispose();
         AddonActionsPreview.Addon = null;
@@ -159,7 +160,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-SearchClearButton"), ref config.IsSearchClearButton))
         {
             config.Save(this);
-            OnAddon(AddonEvent.PreFinalize, null);
+            RemoveAllNodes();
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-SearchClearButton-Help"));
@@ -167,7 +168,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons"), ref config.IsCategoryButtons))
         {
             config.Save(this);
-            OnAddon(AddonEvent.PreFinalize, null);
+            RemoveAllNodes();
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons-Help"));
@@ -175,7 +176,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-DisplayOthersButtons"), ref config.IsDisplayOthersButtons))
         {
             config.Save(this);
-            OnAddon(AddonEvent.PreFinalize, null);
+            RemoveAllNodes();
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-DisplayOthersButtons-Help"));
@@ -183,7 +184,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-MaterialSourceButtons"), ref config.IsMaterialSourceButtons))
         {
             config.Save(this);
-            OnAddon(AddonEvent.PreFinalize, null);
+            RemoveAllNodes();
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MaterialSourceButtons-Help"));
@@ -191,7 +192,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-SwitchJobButton"), ref config.IsSwitchJobButton))
         {
             config.Save(this);
-            OnAddon(AddonEvent.PreFinalize, null);
+            RemoveAllNodes();
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-SwitchJobButton-Help"));
@@ -199,7 +200,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton"), ref config.IsCaculateRecipeButton))
         {
             config.Save(this);
-            OnAddon(AddonEvent.PreFinalize, null);
+            RemoveAllNodes();
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton-Help"));
@@ -274,18 +275,17 @@ public partial class OptimizedRecipeNote : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                RemoveCaculateRecipeButton();
-
-                RemoveSwitchJobButton();
-
-                RemoveMaterialSourceButtons();
-
-                RemoveDisplayOthersButtons();
-
-                RemoveClearSearchButton();
-
-                RemoveCategoryButtons();
-
+                caculateRecipeButton    = null;
+                switchJobButton         = null;
+                displayOthersButton     = null;
+                displayOthersJobsLayout = null;
+                clearSearchButton       = null;
+                levelRecipeButton       = null;
+                specialRecipeButton     = null;
+                masterRecipeButton      = null;
+                
+                materialSourceButtons.Clear();
+                displayOthersJobButtons.Clear();
                 break;
 
             case AddonEvent.PostSetup:
@@ -347,6 +347,57 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     #region 原生界面元素插入
 
+    private unsafe void RemoveAllNodes()
+    {
+        caculateRecipeButton?.Dispose();
+        caculateRecipeButton = null;
+        
+        clearSearchButton?.Dispose();
+        clearSearchButton = null;
+        
+        levelRecipeButton?.Dispose();
+        levelRecipeButton = null;
+
+        specialRecipeButton?.Dispose();
+        specialRecipeButton = null;
+
+        masterRecipeButton?.Dispose();
+        masterRecipeButton = null;
+        
+        displayOthersButton?.Dispose();
+        displayOthersButton = null;
+
+        displayOthersJobButtons.Clear();
+
+        displayOthersJobsLayout?.Dispose(); // 把子节点都一并清除掉了
+        displayOthersJobsLayout = null;
+        
+        foreach (var x in materialSourceButtons)
+            x.Dispose();
+        materialSourceButtons.Clear();
+
+        if (RecipeNoteAddon != null)
+        {
+            var resNode0 = RecipeNoteAddon->GetNodeById(95);
+            if (resNode0 != null)
+                resNode0->SetXFloat(46);
+
+            var resNode1 = RecipeNoteAddon->GetNodeById(88);
+            if (resNode1 != null)
+                resNode1->SetXFloat(0);
+
+            var resNode2 = RecipeNoteAddon->GetNodeById(84);
+            if (resNode2 != null)
+                resNode2->SetXFloat(0);
+        }
+        
+        switchJobButton?.Dispose();
+        switchJobButton = null;
+        
+        caculateRecipeButton?.Dispose();
+        caculateRecipeButton = null;
+    }
+
     // 清除搜索按钮
     private unsafe void CreateClearSearchButton()
     {
@@ -381,12 +432,6 @@ public partial class OptimizedRecipeNote : ModuleBase
             return;
 
         clearSearchButton.IsVisible = AgentRecipeNote.Instance()->RecipeSearchOpen && lastRecipeID != 0;
-    }
-
-    private void RemoveClearSearchButton()
-    {
-        clearSearchButton?.Dispose();
-        clearSearchButton = null;
     }
 
     // 切换分类按钮
@@ -475,18 +520,6 @@ public partial class OptimizedRecipeNote : ModuleBase
             masterRecipeButton.BackgroundNode.IsVisible = false;
             masterRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(32));
         }
-    }
-
-    private void RemoveCategoryButtons()
-    {
-        levelRecipeButton?.Dispose();
-        levelRecipeButton = null;
-
-        specialRecipeButton?.Dispose();
-        specialRecipeButton = null;
-
-        masterRecipeButton?.Dispose();
-        masterRecipeButton = null;
     }
 
     // 显示其余配方按钮
@@ -628,17 +661,6 @@ public partial class OptimizedRecipeNote : ModuleBase
         }
     }
 
-    private void RemoveDisplayOthersButtons()
-    {
-        displayOthersButton?.Dispose();
-        displayOthersButton = null;
-
-        displayOthersJobButtons.Clear();
-
-        displayOthersJobsLayout?.Dispose(); // 把子节点都一并清除掉了
-        displayOthersJobsLayout = null;
-    }
-
     // 材料来源
     private unsafe void CreateMaterialSourceButtons()
     {
@@ -772,28 +794,6 @@ public partial class OptimizedRecipeNote : ModuleBase
         }
     }
 
-    private unsafe void RemoveMaterialSourceButtons()
-    {
-        foreach (var x in materialSourceButtons)
-            x.Dispose();
-        materialSourceButtons.Clear();
-
-        if (RecipeNoteAddon != null)
-        {
-            var resNode0 = RecipeNoteAddon->GetNodeById(95);
-            if (resNode0 != null)
-                resNode0->SetXFloat(46);
-
-            var resNode1 = RecipeNoteAddon->GetNodeById(88);
-            if (resNode1 != null)
-                resNode1->SetXFloat(0);
-
-            var resNode2 = RecipeNoteAddon->GetNodeById(84);
-            if (resNode2 != null)
-                resNode2->SetXFloat(0);
-        }
-    }
-
     // 切换职业
     private unsafe void CreateSwitchJobButton()
     {
@@ -873,12 +873,6 @@ public partial class OptimizedRecipeNote : ModuleBase
                     buttonNode->SetEnabledState(true);
             }
         }
-    }
-
-    private void RemoveSwitchJobButton()
-    {
-        switchJobButton?.Dispose();
-        switchJobButton = null;
     }
 
     // 求解配方
@@ -983,12 +977,6 @@ public partial class OptimizedRecipeNote : ModuleBase
         }
 
         caculateRecipeButton.IsVisible = true;
-    }
-
-    private void RemoveCaculateRecipeButton()
-    {
-        caculateRecipeButton?.Dispose();
-        caculateRecipeButton = null;
     }
 
     #endregion
