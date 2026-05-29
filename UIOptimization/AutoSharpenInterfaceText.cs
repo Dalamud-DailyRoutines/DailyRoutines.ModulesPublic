@@ -28,9 +28,6 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
 
     protected override void Init()
     {
-        if (UIHighScaleMode == 0)
-            return;
-        
         AtkTextNodeSetTextHook = AtkTextNodeSetTextSig.GetHook<AtkTextNodeSetTextDelegate>(AtkTextNodeSetTextDetour);
         AtkTextNodeSetTextHook.Enable();
     }
@@ -39,7 +36,8 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
     {
         AtkTextNodeSetTextHook.Original(node, text);
         
-        if (node == null) return;
+        // 100% 缩放
+        if (UIHighScaleMode == 0) return;
 
         var flag = node->TextFlags;
         if (!flag.IsSet(FLAG_TO_REMOVE)) return;
