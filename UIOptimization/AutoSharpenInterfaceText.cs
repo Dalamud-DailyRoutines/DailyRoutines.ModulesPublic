@@ -23,15 +23,22 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
     private delegate        void                             AtkTextNodeSetTextDelegate(AtkTextNode* node, CStringPointer text);
     private                 Hook<AtkTextNodeSetTextDelegate> AtkTextNodeSetTextHook;
 
+    private static uint UIHighScaleMode => 
+        DService.Instance().GameConfig.System.GetUInt("UiHighScale");
+
     protected override void Init()
     {
-        AtkTextNodeSetTextHook ??= AtkTextNodeSetTextSig.GetHook<AtkTextNodeSetTextDelegate>(AtkTextNodeSetTextDetour);
+        if (UIHighScaleMode == 0)
+            return;
+        
+        AtkTextNodeSetTextHook = AtkTextNodeSetTextSig.GetHook<AtkTextNodeSetTextDelegate>(AtkTextNodeSetTextDetour);
         AtkTextNodeSetTextHook.Enable();
     }
 
     private void AtkTextNodeSetTextDetour(AtkTextNode* node, CStringPointer text)
     {
         AtkTextNodeSetTextHook.Original(node, text);
+        
         if (node == null) return;
 
         var flag = node->TextFlags;
