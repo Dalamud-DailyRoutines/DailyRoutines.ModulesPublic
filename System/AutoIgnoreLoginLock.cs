@@ -1,14 +1,9 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Config;
 using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
@@ -42,7 +37,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private uint     originalSystemSoundValue;
     private bool     isSystemSoundMuted;
     private DateTime systemSoundMuteUntil = DateTime.MinValue;
-    private string   loginQueueErrorText  = string.Empty;
 
     private readonly MemoryPatch loginFallbackPatch = new
     (
@@ -66,17 +60,12 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         Timer1Hook.Enable();
         
         loginFallbackPatch.Enable();
-
-        loginQueueErrorText = LoadLoginQueueErrorText();
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "SelectOk", OnAddon);
     }
 
     protected override void Uninit()
     {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
         RestoreSystemSound();
         FrameworkManager.Instance().Unreg(OnUpdate);
-        loginQueueErrorText = string.Empty;
     }
 
     private void AgentLobbyUpdateDetour(AgentLobby* agent, uint deltaTime)
@@ -84,6 +73,9 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         agent->TemporaryLocked = false;
         AgentLobbyUpdateHook.Original(agent, deltaTime);
         agent->TemporaryLocked = false;
+
+        if (IsLoginQueueing(agent))
+            ExtendSystemSoundMute();
     }
     
     private byte Timer0Detour(void* timer, int intervalSecond, int retryCount) =>
@@ -92,27 +84,8 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private byte Timer1Detour(void* timer, int intervalSecond, int retryCount) =>
         Timer1Hook.Original(timer, 1, retryCount);
 
-    private void OnAddon(AddonEvent _, AddonArgs args)
-    {
-        if (!Throttler.Shared.Throttle("AutoIgnoreLoginLock-OnAddonDraw", 250))
-            return;
-
-        if (IsLoginQueueErrorDialog((AtkUnitBase*)args.Addon.Address))
-            ExtendSystemSoundMute();
-    }
-
-    private bool IsLoginQueueErrorDialog(AtkUnitBase* selectOk)
-    {
-        if (selectOk == null || CharaSelect == null) return false;
-
-        if (!selectOk->IsAddonAndNodesReady()) return false;
-
-        var addon      = (AddonSelectOk*)selectOk;
-        var promptText = addon->PromptText;
-        if (promptText == null) return false;
-
-        return IsPromptMatched(promptText->NodeText.ToString(), loginQueueErrorText);
-    }
+    private bool IsLoginQueueing(AgentLobby* agent) =>
+        agent != null && CharaSelect != null && agent->QueuePosition > 0;
 
     private void ExtendSystemSoundMute()
     {
@@ -164,50 +137,8 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         }
     }
 
-    private static string LoadLoginQueueErrorText()
-    {
-        try
-        {
-            // Error 13206 的后续行包含动态排队人数, 这里只取首个稳定提示行。
-            return LuminaGetter.TryGetRow<Error>(LOGIN_QUEUE_ERROR_ROW_ID, out var row)
-                       ? GetFirstNonEmptyLine(row.Unknown0.ToString())
-                       : string.Empty;
-        }
-        catch (Exception ex)
-        {
-            DLog.Warning("加载登录排队错误文本失败", ex);
-            return string.Empty;
-        }
-    }
-
-    private static string GetFirstNonEmptyLine(string text)
-    {
-        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
-        {
-            var trimmed = line.Trim();
-            if (!string.IsNullOrWhiteSpace(trimmed))
-                return trimmed;
-        }
-
-        return string.Empty;
-    }
-
-    private static bool IsPromptMatched(string text, string prompt)
-    {
-        var normalizedText   = NormalizePromptText(text);
-        var normalizedPrompt = NormalizePromptText(prompt);
-
-        return !string.IsNullOrWhiteSpace(normalizedText)   &&
-               !string.IsNullOrWhiteSpace(normalizedPrompt) &&
-               normalizedText.Contains(normalizedPrompt, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string NormalizePromptText(string text) =>
-        text.Replace("\r", string.Empty).Replace("\n", string.Empty).Trim();
-
     #region 常量
 
-    private const uint LOGIN_QUEUE_ERROR_ROW_ID = 13206;
     private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromSeconds(3);
 
     #endregion
