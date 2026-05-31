@@ -1,14 +1,20 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Config;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
+using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -36,6 +42,8 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private uint     originalSystemSoundValue;
     private bool     isSystemSoundMuted;
     private DateTime systemSoundMuteUntil = DateTime.MinValue;
+    private string   loginQueueErrorText  = string.Empty;
+    private bool     isFilterRestored;
 
     private readonly MemoryPatch loginFallbackPatch = new
     (
@@ -59,12 +67,20 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         Timer1Hook.Enable();
         
         loginFallbackPatch.Enable();
+
+        loginQueueErrorText = LoadLoginQueueErrorText();
+
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "SelectOk",    OnSelectOk);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "SelectYesno", OnSelectYesno);
     }
 
     protected override void Uninit()
     {
+        DService.Instance().AddonLifecycle.UnregisterListener(OnSelectOk);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnSelectYesno);
         RestoreSystemSound();
-        FrameworkManager.Instance().Unreg(OnUpdate);
+        loginQueueErrorText = string.Empty;
+        isFilterRestored    = false;
     }
 
     private void AgentLobbyUpdateDetour(AgentLobby* agent, uint deltaTime)
@@ -72,9 +88,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         agent->TemporaryLocked = false;
         AgentLobbyUpdateHook.Original(agent, deltaTime);
         agent->TemporaryLocked = false;
-
-        if (IsLoginQueueing(agent))
-            ExtendSystemSoundMute();
     }
     
     private byte Timer0Detour(void* timer, int intervalSecond, int retryCount) =>
@@ -83,8 +96,46 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private byte Timer1Detour(void* timer, int intervalSecond, int retryCount) =>
         Timer1Hook.Original(timer, 1, retryCount);
 
-    private bool IsLoginQueueing(AgentLobby* agent) =>
-        agent != null && CharaSelect != null && agent->QueuePosition > 0;
+    private void OnSelectOk(AddonEvent _, AddonArgs args)
+    {
+        var addon = (AtkUnitBase*)args.Addon.Address;
+
+        if (!IsLoginQueueErrorDialog(addon))
+            return;
+
+        if (!isFilterRestored)
+            addon->EnableFilter = false;
+
+        if (!Throttler.Shared.Throttle("AutoIgnoreLoginLock-OnSelectOkDraw", 250))
+            return;
+
+        isFilterRestored = false;
+        ExtendSystemSoundMute();
+    }
+
+    private void OnSelectYesno(AddonEvent _, AddonArgs args)
+    {
+        if (!isSystemSoundMuted) return;
+
+        var selectOk = DService.Instance().GameGUI.GetAddonByName("SelectOk").Address;
+        if (selectOk == nint.Zero) return;
+
+        ((AtkUnitBase*)selectOk)->EnableFilter = true;
+        isFilterRestored = true;
+    }
+
+    private bool IsLoginQueueErrorDialog(AtkUnitBase* selectOk)
+    {
+        if (selectOk == null || CharaSelect == null) return false;
+
+        if (!selectOk->IsAddonAndNodesReady()) return false;
+
+        var addon      = (AddonSelectOk*)selectOk;
+        var promptText = addon->PromptText;
+        if (promptText == null) return false;
+
+        return IsPromptMatched(promptText->NodeText.ToString(), loginQueueErrorText);
+    }
 
     private void ExtendSystemSoundMute()
     {
@@ -130,15 +181,57 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         }
         finally
         {
-            FrameworkManager.Instance().Unreg(OnUpdate);
             isSystemSoundMuted   = false;
             systemSoundMuteUntil = DateTime.MinValue;
+
+            FrameworkManager.Instance().Unreg(OnUpdate);
         }
     }
 
+    private static string LoadLoginQueueErrorText()
+    {
+        try
+        {
+            return LuminaGetter.TryGetRow<Error>(LOGIN_QUEUE_ERROR_ROW_ID, out var row)
+                       ? GetFirstNonEmptyLine(row.Unknown0.ToString())
+                       : string.Empty;
+        }
+        catch (Exception ex)
+        {
+            DLog.Warning("加载登录排队错误文本失败", ex);
+            return string.Empty;
+        }
+    }
+
+    private static string GetFirstNonEmptyLine(string text)
+    {
+        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed))
+                return trimmed;
+        }
+
+        return string.Empty;
+    }
+
+    private static bool IsPromptMatched(string text, string prompt)
+    {
+        var normalizedText   = NormalizePromptText(text);
+        var normalizedPrompt = NormalizePromptText(prompt);
+
+        return !string.IsNullOrWhiteSpace(normalizedText)   &&
+               !string.IsNullOrWhiteSpace(normalizedPrompt) &&
+               normalizedText.Contains(normalizedPrompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizePromptText(string text) =>
+        text.Replace("\r", string.Empty).Replace("\n", string.Empty).Trim();
+
     #region 常量
 
-    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromSeconds(3);
+    private const uint LOGIN_QUEUE_ERROR_ROW_ID = 13206;
+    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromSeconds(1.5);
 
     #endregion
 }
