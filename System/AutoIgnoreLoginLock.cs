@@ -117,6 +117,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     {
         if (!isSystemSoundMuted) return;
 
+        // 手动取消排队会经过 SelectYesno, 需要在这里恢复 SelectOk 的 EnableFilter，否则游戏会跳过遮罩清理。
         var selectOk = DService.Instance().GameGUI.GetAddonByName("SelectOk").Address;
         if (selectOk == nint.Zero) return;
 
