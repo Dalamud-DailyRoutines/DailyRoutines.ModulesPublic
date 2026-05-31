@@ -1,6 +1,7 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Config;
@@ -49,6 +50,8 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         ]
     );
 
+    private Config config = null!;
+
     private uint     originalSystemSoundValue;
     private bool     isSystemSoundMuted;
     private DateTime systemSoundMuteUntil = DateTime.MinValue;
@@ -57,6 +60,9 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     protected override void Init()
     {
+        config = Config.Load(this) ?? new();
+        TryRestorePendingSystemSound();
+
         AgentLobbyUpdateHook = AgentLobby.Instance()->VirtualTable->HookVFuncFromName("Update", (AgentLobby.Delegates.Update)AgentLobbyUpdateDetour);
         AgentLobbyUpdateHook.Enable();
         
@@ -138,6 +144,26 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         return IsPromptMatched(promptText->NodeText.ToString(), loginQueueErrorText);
     }
 
+    private void TryRestorePendingSystemSound()
+    {
+        if (!config.HasPendingSystemSoundRestore) return;
+
+        try
+        {
+            if (!DService.Instance().GameConfig.TryGet(SystemConfigOption.SoundSystem, out uint currentValue))
+                return;
+
+            if (currentValue == 0)
+                DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, config.OriginalSystemSoundValue);
+
+            ClearPendingSystemSoundRestore();
+        }
+        catch (Exception ex)
+        {
+            DLog.Warning("恢复上次异常退出前的系统音失败", ex);
+        }
+    }
+
     private void ExtendSystemSoundMute()
     {
         systemSoundMuteUntil = StandardTimeManager.Instance().Now + SystemSoundMuteDuration;
@@ -149,8 +175,11 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
             if (!DService.Instance().GameConfig.TryGet(SystemConfigOption.SoundSystem, out originalSystemSoundValue))
                 return;
 
-            DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, 0u);
+            if (!TrySavePendingSystemSoundRestore(originalSystemSoundValue))
+                return;
+
             isSystemSoundMuted = true;
+            DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, 0u);
             FrameworkManager.Instance().Reg(OnUpdate, SYSTEM_SOUND_RESTORE_CHECK_INTERVAL_MS);
         }
         catch (Exception ex)
@@ -172,9 +201,11 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     {
         if (!isSystemSoundMuted) return;
 
+        var isRestored = false;
         try
         {
             DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, originalSystemSoundValue);
+            isRestored = true;
         }
         catch (Exception ex)
         {
@@ -186,6 +217,46 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
             systemSoundMuteUntil = DateTime.MinValue;
 
             FrameworkManager.Instance().Unreg(OnUpdate);
+
+            if (isRestored)
+                ClearPendingSystemSoundRestore();
+        }
+    }
+
+    private bool TrySavePendingSystemSoundRestore(uint originalValue)
+    {
+        config.HasPendingSystemSoundRestore = true;
+        config.OriginalSystemSoundValue     = originalValue;
+
+        try
+        {
+            config.Save(this);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            config.HasPendingSystemSoundRestore = false;
+            config.OriginalSystemSoundValue     = 0;
+
+            DLog.Warning("保存系统音恢复状态失败", ex);
+            return false;
+        }
+    }
+
+    private void ClearPendingSystemSoundRestore()
+    {
+        if (!config.HasPendingSystemSoundRestore) return;
+
+        config.HasPendingSystemSoundRestore = false;
+        config.OriginalSystemSoundValue     = 0;
+
+        try
+        {
+            config.Save(this);
+        }
+        catch (Exception ex)
+        {
+            DLog.Warning("清理系统音恢复状态失败", ex);
         }
     }
 
@@ -228,6 +299,12 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     private static string NormalizePromptText(string text) =>
         text.Replace("\r", string.Empty).Replace("\n", string.Empty).Trim();
+
+    private class Config : ModuleConfig
+    {
+        public bool HasPendingSystemSoundRestore;
+        public uint OriginalSystemSoundValue;
+    }
 
     #region 常量
 
