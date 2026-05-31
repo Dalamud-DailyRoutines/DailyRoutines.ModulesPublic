@@ -39,12 +39,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private static readonly CompSig             Timer1Sig = new("40 53 57 48 83 EC ?? 48 8B F9 41 8B D8");
     private                 Hook<TimerDelegate> Timer1Hook;
 
-    private uint     originalSystemSoundValue;
-    private bool     isSystemSoundMuted;
-    private DateTime systemSoundMuteUntil = DateTime.MinValue;
-    private string   loginQueueErrorText  = string.Empty;
-    private bool     isFilterRestored;
-
     private readonly MemoryPatch loginFallbackPatch = new
     (
         "48 81 BE ?? ?? ?? ?? ?? ?? ?? ?? 76",
@@ -54,6 +48,12 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
             0x76, 0x16                                // JBE rel8
         ]
     );
+
+    private uint     originalSystemSoundValue;
+    private bool     isSystemSoundMuted;
+    private DateTime systemSoundMuteUntil = DateTime.MinValue;
+    private string   loginQueueErrorText  = string.Empty;
+    private bool     isSelectOkFilterRestored;
 
     protected override void Init()
     {
@@ -79,8 +79,8 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnSelectOk);
         DService.Instance().AddonLifecycle.UnregisterListener(OnSelectYesno);
         RestoreSystemSound();
-        loginQueueErrorText = string.Empty;
-        isFilterRestored    = false;
+        loginQueueErrorText         = string.Empty;
+        isSelectOkFilterRestored    = false;
     }
 
     private void AgentLobbyUpdateDetour(AgentLobby* agent, uint deltaTime)
@@ -103,13 +103,13 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         if (!IsLoginQueueErrorDialog(addon))
             return;
 
-        if (!isFilterRestored)
+        if (!isSelectOkFilterRestored)
             addon->EnableFilter = false;
 
         if (!Throttler.Shared.Throttle("AutoIgnoreLoginLock-OnSelectOkDraw", SYSTEM_SOUND_MUTE_THROTTLE_MS))
             return;
 
-        isFilterRestored = false;
+        isSelectOkFilterRestored = false;
         ExtendSystemSoundMute();
     }
 
@@ -122,7 +122,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         if (selectOk == nint.Zero) return;
 
         ((AtkUnitBase*)selectOk)->EnableFilter = true;
-        isFilterRestored = true;
+        isSelectOkFilterRestored = true;
     }
 
     private bool IsLoginQueueErrorDialog(AtkUnitBase* selectOk)
@@ -231,9 +231,10 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     #region 常量
 
-    private const uint LOGIN_QUEUE_ERROR_ROW_ID = 13206;
-    private const int  SYSTEM_SOUND_MUTE_THROTTLE_MS = 1_000;
+    private const uint LOGIN_QUEUE_ERROR_ROW_ID               = 13206;
+    private const int  SYSTEM_SOUND_MUTE_THROTTLE_MS          = 1_000;
     private const int  SYSTEM_SOUND_RESTORE_CHECK_INTERVAL_MS = 500;
+
     private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1_200);
 
     #endregion
