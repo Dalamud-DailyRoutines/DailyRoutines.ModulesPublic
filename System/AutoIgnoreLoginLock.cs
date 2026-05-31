@@ -232,7 +232,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     #region 常量
 
     private const uint LOGIN_QUEUE_ERROR_ROW_ID = 13206;
-    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromSeconds(1.5);
+    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromSeconds(0.5);
 
     #endregion
 }
