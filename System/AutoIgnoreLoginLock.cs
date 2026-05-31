@@ -106,7 +106,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         if (!isFilterRestored)
             addon->EnableFilter = false;
 
-        if (!Throttler.Shared.Throttle("AutoIgnoreLoginLock-OnSelectOkDraw", 250))
+        if (!Throttler.Shared.Throttle("AutoIgnoreLoginLock-OnSelectOkDraw", SYSTEM_SOUND_MUTE_THROTTLE_MS))
             return;
 
         isFilterRestored = false;
@@ -151,7 +151,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
             DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, 0u);
             isSystemSoundMuted = true;
-            FrameworkManager.Instance().Reg(OnUpdate, 250);
+            FrameworkManager.Instance().Reg(OnUpdate, SYSTEM_SOUND_RESTORE_CHECK_INTERVAL_MS);
         }
         catch (Exception ex)
         {
@@ -232,7 +232,9 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     #region 常量
 
     private const uint LOGIN_QUEUE_ERROR_ROW_ID = 13206;
-    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromSeconds(0.5);
+    private const int  SYSTEM_SOUND_MUTE_THROTTLE_MS = 1_000;
+    private const int  SYSTEM_SOUND_RESTORE_CHECK_INTERVAL_MS = 500;
+    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1_200);
 
     #endregion
 }
