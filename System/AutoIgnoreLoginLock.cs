@@ -9,7 +9,6 @@ using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
