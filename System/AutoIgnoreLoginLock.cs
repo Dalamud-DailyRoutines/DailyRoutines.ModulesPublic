@@ -6,16 +6,14 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Config;
 using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -55,7 +53,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private uint     originalSystemSoundValue;
     private bool     isSystemSoundMuted;
     private DateTime systemSoundMuteUntil = DateTime.MinValue;
-    private string   loginQueueErrorText  = string.Empty;
+    private byte     lobbyUpdateStage;
     private bool     isSelectOkFilterRestored;
 
     protected override void Init()
@@ -74,8 +72,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         
         loginFallbackPatch.Enable();
 
-        loginQueueErrorText = LoadLoginQueueErrorText();
-
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "SelectOk",    OnSelectOk);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "SelectYesno", OnSelectYesno);
     }
@@ -85,14 +81,16 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnSelectOk);
         DService.Instance().AddonLifecycle.UnregisterListener(OnSelectYesno);
         RestoreSystemSound();
-        loginQueueErrorText         = string.Empty;
-        isSelectOkFilterRestored    = false;
+        isSelectOkFilterRestored = false;
     }
 
     private void AgentLobbyUpdateDetour(AgentLobby* agent, uint deltaTime)
     {
         agent->TemporaryLocked = false;
         AgentLobbyUpdateHook.Original(agent, deltaTime);
+        lobbyUpdateStage = agent->LobbyUpdateStage;
+        if (lobbyUpdateStage != LOGIN_QUEUE_LOBBY_UPDATE_STAGE)
+            isSelectOkFilterRestored = false;
         agent->TemporaryLocked = false;
     }
     
@@ -104,44 +102,24 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     private void OnSelectOk(AddonEvent _, AddonArgs args)
     {
+        if (lobbyUpdateStage != LOGIN_QUEUE_LOBBY_UPDATE_STAGE) return;
+
         var addon = (AtkUnitBase*)args.Addon.Address;
-
-        if (!IsLoginQueueErrorDialog(addon))
-            return;
-
         if (!isSelectOkFilterRestored)
             addon->EnableFilter = false;
 
-        if (!Throttler.Shared.Throttle("AutoIgnoreLoginLock-OnSelectOkDraw", SYSTEM_SOUND_MUTE_THROTTLE_MS))
-            return;
-
-        isSelectOkFilterRestored = false;
         ExtendSystemSoundMute();
     }
 
     private void OnSelectYesno(AddonEvent _, AddonArgs args)
     {
-        if (!isSystemSoundMuted) return;
+        if (lobbyUpdateStage != LOGIN_QUEUE_LOBBY_UPDATE_STAGE) return;
 
-        // 手动取消排队会经过 SelectYesno, 需要在这里恢复 SelectOk 的 EnableFilter，否则游戏会跳过遮罩清理。
-        var selectOk = DService.Instance().GameGUI.GetAddonByName("SelectOk").Address;
-        if (selectOk == nint.Zero) return;
+        // 手动取消排队会经过 SelectYesno，需要在这里恢复 SelectOk 的 EnableFilter，否则游戏会跳过遮罩清理。
+        if (!AddonHelper.TryGetByName("SelectOk", out var selectOk)) return;
 
-        ((AtkUnitBase*)selectOk)->EnableFilter = true;
+        selectOk->EnableFilter = true;
         isSelectOkFilterRestored = true;
-    }
-
-    private bool IsLoginQueueErrorDialog(AtkUnitBase* selectOk)
-    {
-        if (selectOk == null || CharaSelect == null) return false;
-
-        if (!selectOk->IsAddonAndNodesReady()) return false;
-
-        var addon      = (AddonSelectOk*)selectOk;
-        var promptText = addon->PromptText;
-        if (promptText == null) return false;
-
-        return IsPromptMatched(promptText->NodeText.ToString(), loginQueueErrorText);
     }
 
     private void TryRestorePendingSystemSound()
@@ -260,46 +238,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         }
     }
 
-    private static string LoadLoginQueueErrorText()
-    {
-        try
-        {
-            return LuminaGetter.TryGetRow<Error>(LOGIN_QUEUE_ERROR_ROW_ID, out var row)
-                       ? GetFirstNonEmptyLine(row.Unknown0.ToString())
-                       : string.Empty;
-        }
-        catch (Exception ex)
-        {
-            DLog.Warning("加载登录排队错误文本失败", ex);
-            return string.Empty;
-        }
-    }
-
-    private static string GetFirstNonEmptyLine(string text)
-    {
-        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
-        {
-            var trimmed = line.Trim();
-            if (!string.IsNullOrWhiteSpace(trimmed))
-                return trimmed;
-        }
-
-        return string.Empty;
-    }
-
-    private static bool IsPromptMatched(string text, string prompt)
-    {
-        var normalizedText   = NormalizePromptText(text);
-        var normalizedPrompt = NormalizePromptText(prompt);
-
-        return !string.IsNullOrWhiteSpace(normalizedText)   &&
-               !string.IsNullOrWhiteSpace(normalizedPrompt) &&
-               normalizedText.Contains(normalizedPrompt, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string NormalizePromptText(string text) =>
-        text.Replace("\r", string.Empty).Replace("\n", string.Empty).Trim();
-
     private class Config : ModuleConfig
     {
         public bool HasPendingSystemSoundRestore;
@@ -308,11 +246,10 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     #region 常量
 
-    private const uint LOGIN_QUEUE_ERROR_ROW_ID               = 13206;
-    private const int  SYSTEM_SOUND_MUTE_THROTTLE_MS          = 1_000;
+    private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE         = 31;
     private const int  SYSTEM_SOUND_RESTORE_CHECK_INTERVAL_MS = 500;
 
-    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1_200);
+    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1000);
 
     #endregion
 }
