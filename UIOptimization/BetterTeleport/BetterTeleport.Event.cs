@@ -134,12 +134,7 @@ public unsafe partial class BetterTeleport
 
         AetheryteRecord? result;
         if (recordMatcher != null)
-        {
-            result = recordMatcher.Search(args, limit: int.MaxValue)
-                                  .OrderByDescending(x => x.IsAetheryte)
-                                  .ThenBy(x => x.Name.Length)
-                                  .FirstOrDefault();
-        }
+            result = recordMatcher.Search(args, CompareCommandResult, int.MaxValue).FirstOrDefault();
         else
         {
             result = records.Values
@@ -158,6 +153,16 @@ public unsafe partial class BetterTeleport
         if (result == null) return;
 
         HandleTeleport(result);
+        
+        return;
+
+        static int CompareCommandResult(AetheryteRecord a, AetheryteRecord b)
+        {
+            var byAetheryte = b.IsAetheryte.CompareTo(a.IsAetheryte);
+            if (byAetheryte != 0) return byAetheryte;
+
+            return a.Name.Length.CompareTo(b.Name.Length);
+        }
     }
     
     private void OnPreInputIDPressed(ref bool? overrideResult, ref InputId id)
