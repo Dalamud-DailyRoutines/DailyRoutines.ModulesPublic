@@ -148,7 +148,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     #region 常量
 
     private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE     = 31;
-    private const int  LOGIN_QUEUE_SOUND_FILTER_STICKY_MS = 1_000;
+    private const int  LOGIN_QUEUE_SOUND_FILTER_STICKY_MS = 1_500;
 
     #endregion
 }
