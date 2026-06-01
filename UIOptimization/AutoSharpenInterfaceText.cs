@@ -37,7 +37,7 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
         AtkTextNodeSetTextHook.Original(node, text);
         
         // 100% 缩放
-        if (UIHighScaleMode == 0) return;
+        if (node == null || UIHighScaleMode == 0) return;
 
         var flag = node->TextFlags;
         if (!flag.IsSet(FLAG_TO_REMOVE)) return;
