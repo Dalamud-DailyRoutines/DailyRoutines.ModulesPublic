@@ -1,18 +1,16 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Config;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Sound;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Dalamud;
+using InteropGenerator.Runtime;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -37,6 +35,19 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private static readonly CompSig             Timer1Sig = new("40 53 57 48 83 EC ?? 48 8B F9 41 8B D8");
     private                 Hook<TimerDelegate> Timer1Hook;
 
+    private static readonly CompSig                       PlaySystemSoundSig = new("E8 ?? ?? ?? ?? 48 0F BE 46 ?? 41 B1");
+    private delegate        SoundData*                    PlaySystemSoundDelegate
+    (
+        SoundManager*       soundManager,
+        CStringPointer      path,
+        float               volume,
+        uint                soundNumber,
+        uint                fadeInDuration,
+        bool                autoRelease,
+        SoundVolumeCategory volumeCategory
+    );
+    private                 Hook<PlaySystemSoundDelegate> PlaySystemSoundHook;
+
     private readonly MemoryPatch loginFallbackPatch = new
     (
         "48 81 BE ?? ?? ?? ?? ?? ?? ?? ?? 76",
@@ -47,26 +58,22 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         ]
     );
 
-    private Config config = null!;
-
-    private bool     isSystemSoundMuted;
-    private DateTime systemSoundMuteUntil = DateTime.MinValue;
     private byte     lobbyUpdateStage;
+    private long     systemSoundFilterUntil;
     private bool     isSelectOkFilterRestored;
 
     protected override void Init()
     {
-        config = Config.Load(this) ?? new();
-        TryRestorePendingSystemSound();
-
         AgentLobbyUpdateHook = AgentLobby.Instance()->VirtualTable->HookVFuncFromName("Update", (AgentLobby.Delegates.Update)AgentLobbyUpdateDetour);
         AgentLobbyUpdateHook.Enable();
         
-        Timer0Hook = Timer0Sig.GetHook<TimerDelegate>(Timer0Detour);
-        Timer1Hook = Timer1Sig.GetHook<TimerDelegate>(Timer1Detour);
+        Timer0Hook          = Timer0Sig.GetHook<TimerDelegate>(Timer0Detour);
+        Timer1Hook          = Timer1Sig.GetHook<TimerDelegate>(Timer1Detour);
+        PlaySystemSoundHook = PlaySystemSoundSig.GetHook<PlaySystemSoundDelegate>(PlaySystemSoundDetour);
         
         Timer0Hook.Enable();
         Timer1Hook.Enable();
+        PlaySystemSoundHook.Enable();
         
         loginFallbackPatch.Enable();
 
@@ -78,7 +85,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnSelectOk);
         DService.Instance().AddonLifecycle.UnregisterListener(OnSelectYesno);
-        RestoreSystemSound();
         isSelectOkFilterRestored = false;
     }
 
@@ -86,14 +92,14 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     {
         agent->TemporaryLocked = false;
         AgentLobbyUpdateHook.Original(agent, deltaTime);
+
         lobbyUpdateStage = agent->LobbyUpdateStage;
 
         var isLoginQueueStage = lobbyUpdateStage == LOGIN_QUEUE_LOBBY_UPDATE_STAGE;
-        if (!isLoginQueueStage)
+        if (isLoginQueueStage)
+            systemSoundFilterUntil = Environment.TickCount64 + LOGIN_QUEUE_SOUND_FILTER_STICKY_MS;
+        else
             isSelectOkFilterRestored = false;
-
-        if (isSystemSoundMuted && StandardTimeManager.Instance().Now >= systemSoundMuteUntil)
-            RestoreSystemSound();
 
         agent->TemporaryLocked = false;
     }
@@ -104,6 +110,23 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     private byte Timer1Detour(void* timer, int intervalSecond, int retryCount) =>
         Timer1Hook.Original(timer, 1, retryCount);
 
+    private SoundData* PlaySystemSoundDetour
+    (
+        SoundManager*       soundManager,
+        CStringPointer      path,
+        float               volume,
+        uint                soundNumber,
+        uint                fadeInDuration,
+        bool                autoRelease,
+        SoundVolumeCategory volumeCategory
+    )
+    {
+        if (Environment.TickCount64 < systemSoundFilterUntil)
+            return null;
+
+        return PlaySystemSoundHook.Original(soundManager, path, volume, soundNumber, fadeInDuration, autoRelease, volumeCategory);
+    }
+
     private void OnSelectOk(AddonEvent _, AddonArgs args)
     {
         if (lobbyUpdateStage != LOGIN_QUEUE_LOBBY_UPDATE_STAGE) return;
@@ -111,8 +134,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (!isSelectOkFilterRestored)
             addon->EnableFilter = false;
-
-        ExtendSystemSoundMute();
     }
 
     private void OnSelectYesno(AddonEvent _, AddonArgs args)
@@ -124,101 +145,10 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         isSelectOkFilterRestored = true;
     }
 
-    private void TryRestorePendingSystemSound()
-    {
-        if (!config.HasPendingSystemSoundRestore) return;
-
-        try
-        {
-            if (!DService.Instance().GameConfig.TryGet(SystemConfigOption.SoundSystem, out uint currentValue))
-                return;
-
-            if (currentValue == 0)
-                DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, config.OriginalSystemSoundValue);
-
-            config.HasPendingSystemSoundRestore = false;
-            config.OriginalSystemSoundValue     = 0;
-            config.Save(this);
-        }
-        catch (Exception ex)
-        {
-            DLog.Warning("恢复上次异常退出前的系统音失败", ex);
-        }
-    }
-
-    private void ExtendSystemSoundMute()
-    {
-        systemSoundMuteUntil = StandardTimeManager.Instance().Now + SystemSoundMuteDuration;
-
-        if (isSystemSoundMuted) return;
-
-        try
-        {
-            if (!DService.Instance().GameConfig.TryGet(SystemConfigOption.SoundSystem, out uint originalSystemSoundValue))
-                return;
-
-            config.HasPendingSystemSoundRestore = true;
-            config.OriginalSystemSoundValue     = originalSystemSoundValue;
-            config.Save(this);
-
-            isSystemSoundMuted = true;
-            DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, 0u);
-        }
-        catch (Exception ex)
-        {
-            if (isSystemSoundMuted)
-                RestoreSystemSound();
-            else
-            {
-                config.HasPendingSystemSoundRestore = false;
-                config.OriginalSystemSoundValue     = 0;
-                config.Save(this);
-            }
-
-            DLog.Warning("临时关闭系统音失败", ex);
-        }
-    }
-
-    private void RestoreSystemSound()
-    {
-        if (!isSystemSoundMuted) return;
-
-        try
-        {
-            DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, config.OriginalSystemSoundValue);
-        }
-        catch (Exception ex)
-        {
-            DLog.Warning("恢复系统音失败", ex);
-            return;
-        }
-
-        isSystemSoundMuted   = false;
-        systemSoundMuteUntil = DateTime.MinValue;
-
-        try
-        {
-            config.HasPendingSystemSoundRestore = false;
-            config.OriginalSystemSoundValue     = 0;
-            config.Save(this);
-        }
-        catch (Exception ex)
-        {
-            DLog.Warning("清理系统音恢复状态失败", ex);
-        }
-    }
-
-    private class Config : ModuleConfig
-    {
-        public bool HasPendingSystemSoundRestore;
-        public uint OriginalSystemSoundValue;
-    }
-
     #region 常量
 
-    private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE        = 31;
-
-    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1500);
+    private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE     = 31;
+    private const int  LOGIN_QUEUE_SOUND_FILTER_STICKY_MS = 1_000;
 
     #endregion
 }
