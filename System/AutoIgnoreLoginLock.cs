@@ -9,7 +9,6 @@ using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Dalamud;
-using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
@@ -116,10 +115,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         if (lobbyUpdateStage != LOGIN_QUEUE_LOBBY_UPDATE_STAGE) return;
 
         // 手动取消排队会经过 SelectYesno，需要在这里恢复 SelectOk 的 EnableFilter，否则游戏会跳过遮罩清理。
-        var selectOk = SelectOK;
-        if (selectOk == null) return;
-
-        selectOk->EnableFilter = true;
+        SelectOK->EnableFilter = true;
         isSelectOkFilterRestored = true;
     }
 
