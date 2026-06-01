@@ -49,7 +49,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     private Config config = null!;
 
-    private uint     originalSystemSoundValue;
     private bool     isSystemSoundMuted;
     private DateTime systemSoundMuteUntil = DateTime.MinValue;
     private byte     lobbyUpdateStage;
@@ -93,7 +92,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         if (!isLoginQueueStage)
             isSelectOkFilterRestored = false;
 
-        if (isSystemSoundMuted && 
+        if (isSystemSoundMuted &&
             (!isLoginQueueStage || StandardTimeManager.Instance().Now >= systemSoundMuteUntil))
             RestoreSystemSound();
 
@@ -138,7 +137,9 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
             if (currentValue == 0)
                 DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, config.OriginalSystemSoundValue);
 
-            ClearPendingSystemSoundRestore();
+            config.HasPendingSystemSoundRestore = false;
+            config.OriginalSystemSoundValue     = 0;
+            config.Save(this);
         }
         catch (Exception ex)
         {
@@ -154,11 +155,12 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
         try
         {
-            if (!DService.Instance().GameConfig.TryGet(SystemConfigOption.SoundSystem, out originalSystemSoundValue))
+            if (!DService.Instance().GameConfig.TryGet(SystemConfigOption.SoundSystem, out uint originalSystemSoundValue))
                 return;
 
-            if (!TrySavePendingSystemSoundRestore(originalSystemSoundValue))
-                return;
+            config.HasPendingSystemSoundRestore = true;
+            config.OriginalSystemSoundValue     = originalSystemSoundValue;
+            config.Save(this);
 
             isSystemSoundMuted = true;
             DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, 0u);
@@ -167,6 +169,12 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         {
             if (isSystemSoundMuted)
                 RestoreSystemSound();
+            else
+            {
+                config.HasPendingSystemSoundRestore = false;
+                config.OriginalSystemSoundValue     = 0;
+                config.Save(this);
+            }
 
             DLog.Warning("临时关闭系统音失败", ex);
         }
@@ -176,55 +184,23 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     {
         if (!isSystemSoundMuted) return;
 
-        var isRestored = false;
         try
         {
-            DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, originalSystemSoundValue);
-            isRestored = true;
+            DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, config.OriginalSystemSoundValue);
         }
         catch (Exception ex)
         {
             DLog.Warning("恢复系统音失败", ex);
+            return;
         }
-        finally
-        {
-            isSystemSoundMuted   = false;
-            systemSoundMuteUntil = DateTime.MinValue;
 
-            if (isRestored)
-                ClearPendingSystemSoundRestore();
-        }
-    }
-
-    private bool TrySavePendingSystemSoundRestore(uint originalValue)
-    {
-        config.HasPendingSystemSoundRestore = true;
-        config.OriginalSystemSoundValue     = originalValue;
+        isSystemSoundMuted   = false;
+        systemSoundMuteUntil = DateTime.MinValue;
 
         try
-        {
-            config.Save(this);
-            return true;
-        }
-        catch (Exception ex)
         {
             config.HasPendingSystemSoundRestore = false;
             config.OriginalSystemSoundValue     = 0;
-
-            DLog.Warning("保存系统音恢复状态失败", ex);
-            return false;
-        }
-    }
-
-    private void ClearPendingSystemSoundRestore()
-    {
-        if (!config.HasPendingSystemSoundRestore) return;
-
-        config.HasPendingSystemSoundRestore = false;
-        config.OriginalSystemSoundValue     = 0;
-
-        try
-        {
             config.Save(this);
         }
         catch (Exception ex)
@@ -241,7 +217,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     #region 常量
 
-    private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE         = 31;
+    private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE        = 31;
 
     private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1000);
 
