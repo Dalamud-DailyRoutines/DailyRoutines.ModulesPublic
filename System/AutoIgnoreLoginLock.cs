@@ -92,8 +92,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         if (!isLoginQueueStage)
             isSelectOkFilterRestored = false;
 
-        if (isSystemSoundMuted &&
-            (!isLoginQueueStage || StandardTimeManager.Instance().Now >= systemSoundMuteUntil))
+        if (isSystemSoundMuted && StandardTimeManager.Instance().Now >= systemSoundMuteUntil)
             RestoreSystemSound();
 
         agent->TemporaryLocked = false;
@@ -219,7 +218,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE        = 31;
 
-    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1000);
+    private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1500);
 
     #endregion
 }
