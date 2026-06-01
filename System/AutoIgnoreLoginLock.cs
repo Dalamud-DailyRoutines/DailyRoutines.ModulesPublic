@@ -88,8 +88,15 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         agent->TemporaryLocked = false;
         AgentLobbyUpdateHook.Original(agent, deltaTime);
         lobbyUpdateStage = agent->LobbyUpdateStage;
-        if (lobbyUpdateStage != LOGIN_QUEUE_LOBBY_UPDATE_STAGE)
+
+        var isLoginQueueStage = lobbyUpdateStage == LOGIN_QUEUE_LOBBY_UPDATE_STAGE;
+        if (!isLoginQueueStage)
             isSelectOkFilterRestored = false;
+
+        if (isSystemSoundMuted && 
+            (!isLoginQueueStage || StandardTimeManager.Instance().Now >= systemSoundMuteUntil))
+            RestoreSystemSound();
+
         agent->TemporaryLocked = false;
     }
     
@@ -155,7 +162,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
             isSystemSoundMuted = true;
             DService.Instance().GameConfig.Set(SystemConfigOption.SoundSystem, 0u);
-            FrameworkManager.Instance().Reg(OnUpdate, SYSTEM_SOUND_RESTORE_CHECK_INTERVAL_MS);
         }
         catch (Exception ex)
         {
@@ -164,12 +170,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
             DLog.Warning("临时关闭系统音失败", ex);
         }
-    }
-
-    private void OnUpdate(IFramework _)
-    {
-        if (isSystemSoundMuted && StandardTimeManager.Instance().Now >= systemSoundMuteUntil)
-            RestoreSystemSound();
     }
 
     private void RestoreSystemSound()
@@ -190,8 +190,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         {
             isSystemSoundMuted   = false;
             systemSoundMuteUntil = DateTime.MinValue;
-
-            FrameworkManager.Instance().Unreg(OnUpdate);
 
             if (isRestored)
                 ClearPendingSystemSoundRestore();
@@ -244,7 +242,6 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
     #region 常量
 
     private const byte LOGIN_QUEUE_LOBBY_UPDATE_STAGE         = 31;
-    private const int  SYSTEM_SOUND_RESTORE_CHECK_INTERVAL_MS = 500;
 
     private static readonly TimeSpan SystemSoundMuteDuration = TimeSpan.FromMilliseconds(1000);
 
