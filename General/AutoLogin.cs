@@ -256,8 +256,11 @@ public unsafe class AutoLogin : ModuleBase
         }
     }
 
-    private void OnLogin() =>
+    private void OnLogin()
+    {
         TaskHelper.Abort();
+        ResetStates();
+    }
 
     private void OnCommand(string command, string args)
     {
@@ -335,10 +338,19 @@ public unsafe class AutoLogin : ModuleBase
 
     private void SelectCharacterDefault()
     {
-        if (config.LoginInfos.Count == 0) return;
-
-        var loginInfo = config.LoginInfos[0];
         defaultLoginIndex = 0;
+        TryNextDefaultLogin();
+    }
+
+    private void TryNextDefaultLogin()
+    {
+        if (defaultLoginIndex < 0 || defaultLoginIndex >= config.LoginInfos.Count)
+        {
+            defaultLoginIndex = -1;
+            return;
+        }
+
+        var loginInfo = config.LoginInfos[defaultLoginIndex++];
         TaskHelper.Enqueue
         (
             () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
@@ -365,8 +377,31 @@ public unsafe class AutoLogin : ModuleBase
             return true;
         }
 
+        if (manualWorldID == 0 &&
+            manualCharaIndex == -1 &&
+            defaultLoginIndex >= 0 &&
+            !HasCharacterAtIndex(charaIndex))
+        {
+            TryNextDefaultLogin();
+            return true;
+        }
+
         AgentLobbyEvent.SelectCharacterByIndex((uint)charaIndex);
         return true;
+    }
+
+    private static bool HasCharacterAtIndex(int charaIndex)
+    {
+        var agent = AgentLobby.Instance();
+        if (agent == null) return false;
+
+        var entries = agent->LobbyData.CharaSelectEntries;
+        if (entries.Count <= charaIndex) return false;
+
+        var entryPtr = entries[charaIndex];
+        return entryPtr != null &&
+               entryPtr.Value != null &&
+               entryPtr.Value->LoginFlags == CharaSelectCharacterEntryLoginFlags.None;
     }
 
     private bool SelectWorld(ushort worldID)
@@ -384,16 +419,7 @@ public unsafe class AutoLogin : ModuleBase
             // 没找到
             TaskHelper.Abort();
 
-            if (defaultLoginIndex != -1 && defaultLoginIndex < config.LoginInfos.Count)
-            {
-                var loginInfo = config.LoginInfos[defaultLoginIndex];
-                defaultLoginIndex++;
-                TaskHelper.Enqueue
-                (
-                    () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
-                    $"SelectCharaDefault_{loginInfo.WorldID}_{loginInfo.CharaIndex}"
-                );
-            }
+            TryNextDefaultLogin();
         }
 
         return true;
