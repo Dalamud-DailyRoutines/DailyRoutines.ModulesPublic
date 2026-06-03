@@ -193,16 +193,19 @@ public unsafe class AutoMateriaRetrive : ModuleBase
         );
     }
 
-    private void Retrive(InventoryType type, short slot)
-    {
-        const uint EVENT_ID = 0x390001;
+    private void Retrive(InventoryType type, short slot) =>
         RetriveMateriaHook.Original(EventFramework.Instance(), EVENT_ID, type, slot, 0);
-    }
 
     private void RetriveMateriaDetour(EventFramework* framework, EventId eventID, InventoryType inventoryType, short inventorySlot, int extraParam)
     {
         RetriveMateriaHook.Original(framework, eventID, inventoryType, inventorySlot, extraParam);
-        if (eventID == 0x390001 && !TaskHelper.IsBusy)
+        if (eventID == EVENT_ID && !TaskHelper.IsBusy)
             EnqueueRetriveTask(inventoryType, inventorySlot);
     }
+
+    #region 常量
+
+    private const uint EVENT_ID = 0x390001;
+
+    #endregion
 }
