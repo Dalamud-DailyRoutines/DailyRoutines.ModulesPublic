@@ -2,7 +2,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
@@ -42,8 +41,8 @@ public unsafe class AutoLogin : ModuleBase
 
     protected override void Init()
     {
-        config =   Config.Load(this) ?? new();
-        TaskHelper   ??= new() { TimeoutMS = 180_000, ShowDebug = true };
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new() { TimeoutMS = 180_000, ShowDebug = true };
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "_TitleMenu", OnTitleMenu);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,  "Dialogue",   OnDialogue);
@@ -52,7 +51,7 @@ public unsafe class AutoLogin : ModuleBase
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoLogin-CommandHelp") });
         DService.Instance().ClientState.Login += OnLogin;
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.Login -= OnLogin;
@@ -300,10 +299,10 @@ public unsafe class AutoLogin : ModuleBase
 
     private void OnTitleMenu(AddonEvent eventType, AddonArgs? args)
     {
-        if (config.LoginInfos.Count <= 0                      ||
-            config.Mode == BehaviourMode.Once && hasLoginOnce ||
-            TaskHelper.AbortByConflictKey(this)                     ||
-            LobbyDKT->IsAddonAndNodesReady()                        ||
+        if (config.LoginInfos.Count <= 0                        ||
+            (config.Mode == BehaviourMode.Once && hasLoginOnce) ||
+            TaskHelper.AbortByConflictKey(this)                 ||
+            LobbyDKT->IsAddonAndNodesReady()                    ||
             DService.Instance().ClientState.IsLoggedIn)
             return;
 
@@ -377,9 +376,9 @@ public unsafe class AutoLogin : ModuleBase
             return true;
         }
 
-        if (manualWorldID == 0 &&
-            manualCharaIndex == -1 &&
-            defaultLoginIndex >= 0 &&
+        if (manualWorldID     == 0  &&
+            manualCharaIndex  == -1 &&
+            defaultLoginIndex >= 0  &&
             !HasCharacterAtIndex(charaIndex))
         {
             TryNextDefaultLogin();
@@ -399,8 +398,8 @@ public unsafe class AutoLogin : ModuleBase
         if (entries.Count <= charaIndex) return false;
 
         var entryPtr = entries[charaIndex];
-        return entryPtr != null &&
-               entryPtr.Value != null &&
+        return entryPtr                   != null &&
+               entryPtr.Value             != null &&
                entryPtr.Value->LoginFlags == CharaSelectCharacterEntryLoginFlags.None;
     }
 
@@ -435,9 +434,9 @@ public unsafe class AutoLogin : ModuleBase
 
     private void Swap(int index1, int index2)
     {
-        if (index1 < 0                             ||
+        if (index1 < 0                       ||
             index1 > config.LoginInfos.Count ||
-            index2 < 0                             ||
+            index2 < 0                       ||
             index2 > config.LoginInfos.Count) return;
 
         (config.LoginInfos[index1], config.LoginInfos[index2]) =
@@ -447,7 +446,7 @@ public unsafe class AutoLogin : ModuleBase
         TaskHelper.DelayNext(500);
         TaskHelper.Enqueue(() => config.Save(this));
     }
-    
+
     private class Config : ModuleConfig
     {
         public List<LoginInfo> LoginInfos = [];
@@ -492,7 +491,7 @@ public unsafe class AutoLogin : ModuleBase
         Once,
         Repeat
     }
-    
+
     #region 常量
 
     private const string COMMAND = "/pdrlogin";
