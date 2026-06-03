@@ -4,8 +4,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
@@ -32,35 +30,31 @@ public unsafe class AutoAntiCensorship : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
-    
+
     private static readonly CompSig GetFilteredUtf8StringSig = new("48 89 74 24 ?? 57 48 83 EC ?? 48 83 79 ?? ?? 48 8B FA 48 8B F1 0F 84 ?? ?? ?? ?? 48 89 5C 24");
-    private delegate        void GetFilteredUtf8StringDelegate(nint vulgarInstance, Utf8String* str);
-    private                 GetFilteredUtf8StringDelegate? GetFilteredUtf8String;
+    private delegate void GetFilteredUtf8StringDelegate(nint vulgarInstance, Utf8String* str);
+    private GetFilteredUtf8StringDelegate? GetFilteredUtf8String;
 
     private static readonly CompSig VulgarInstanceOffsetBaseSig = new("48 8B 81 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B D3");
     private                 nint    VulgarInstanceOffset;
 
     private static readonly CompSig PartyFinderOriginalMessageOffsetBaseSig = new("48 8D 99 ?? ?? ?? ?? 48 8B F9 48 8B CB E8 ?? ?? ?? ?? 48 8B 0D");
     private                 nint    PartyFinderOriginalMessageOffset;
-
-    private static readonly CompSig                 Utf8StringCopySig = new("E8 ?? ?? ?? ?? 48 8D 4C 24 ?? E8 ?? ?? ?? ?? 48 85 ED 74");
-    private delegate        nint                    Utf8StringCopyDelegate(Utf8String* target, Utf8String* source);
-    private                 Utf8StringCopyDelegate? Utf8StringCopy;
-
+    
     private static readonly CompSig LocalMessageDisplaySig = new("40 53 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 8B 0D");
-    private delegate        nint    LocalMessageDisplayDelegate(nint a1, Utf8String* source);
-    private                 Hook<LocalMessageDisplayDelegate>? LocalMessageDisplayHook;
+    private delegate Utf8String* LocalMessageDisplayDelegate(nint a1, Utf8String* source);
+    private Hook<LocalMessageDisplayDelegate>? LocalMessageDisplayHook;
 
     private static readonly CompSig PartyFinderMessageDisplaySig = new("48 89 5C 24 ?? 57 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B F9 48 8B CB E8");
-    private delegate        nint                                     PartyFinderMessageDisplayDelegate(nint a1, Utf8String* source);
+    private delegate        Utf8String* PartyFinderMessageDisplayDelegate(nint a1, Utf8String* source);
     private                 Hook<PartyFinderMessageDisplayDelegate>? PartyFinderMessageDisplayHook;
 
     private static readonly CompSig LookingForGroupConditionReceiveEventSig = new
     (
         "E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 45 8B C2 48 8B D6 48 8B CB E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 45 8B C2 48 8B D6 48 8B CB E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 48 8B CE"
     );
-    private delegate byte                                                LookingForGroupConditionReceiveEventDelegate(nint a1, AtkValue* a2);
-    private          Hook<LookingForGroupConditionReceiveEventDelegate>? LookingForGroupConditionReceiveEventHook;
+    private delegate byte LookingForGroupConditionReceiveEventDelegate(nint a1, AtkValue* a2);
+    private Hook<LookingForGroupConditionReceiveEventDelegate>? LookingForGroupConditionReceiveEventHook;
 
     private static readonly CompSig TextInputReceiveEventSig =
         new("4C 8B DC 55 53 57 41 54 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B 9D");
@@ -91,7 +85,6 @@ public unsafe class AutoAntiCensorship : ModuleBase
         DLog.Debug($"[{nameof(AutoAntiCensorship)}] 招募信息原始字符串偏移量: {PartyFinderOriginalMessageOffset}");
 
         GetFilteredUtf8String ??= GetFilteredUtf8StringSig.GetDelegate<GetFilteredUtf8StringDelegate>();
-        Utf8StringCopy        ??= Utf8StringCopySig.GetDelegate<Utf8StringCopyDelegate>();
 
         LocalMessageDisplayHook ??= LocalMessageDisplaySig.GetHook<LocalMessageDisplayDelegate>(LocalMessageDisplayDetour);
         LocalMessageDisplayHook.Enable();
@@ -269,6 +262,8 @@ public unsafe class AutoAntiCensorship : ModuleBase
         }
     }
 
+    #region 事件
+
     // 聊天消息编辑
     private void TextInputReceiveEventDetour
     (
@@ -292,35 +287,41 @@ public unsafe class AutoAntiCensorship : ModuleBase
             if (addon == null)
                 addon = RaptureAtkUnitManager.Instance()->GetAddonByNode((AtkResNode*)textInput->OwnerNode);
 
-            if (addon->NameString != "ChatLog") return;
-
-            var origText = SeString.Parse(textInput->EvaluatedString);
-            if (origText == null)
+            if (addon == null || addon->NameString != "ChatLog")
                 return;
 
-            var handleText = new SeString(origText.Payloads);
+            var origText = new ReadOnlySeString(textInput->EvaluatedString);
+            if (origText.IsEmpty)
+                return;
+
+            var handleText = new ReadOnlySeString(origText.AsSpan());
             BypassCensorship(ref handleText);
 
-            if (handleText.TextValue == origText.TextValue)
+            if (handleText.ToString() == origText.ToString())
                 return;
 
-            var highlightText = new SeString(origText.Payloads);
+            var highlightText = new ReadOnlySeString(origText.AsSpan());
             HighlightCensorship(ref highlightText);
 
-            // TODO: 改成 ReadOnlyString
+            using var rented  = new RentedSeStringBuilder();
+            var       builder = rented.Builder;
+
             NotifyHelper.Instance().Chat
             (
-                new SeStringBuilder().AddUiForeground(28)
-                                     .AddText("[自动反屏蔽词]\n")
-                                     .AddUiForegroundOff()
-                                     .Append(highlightText)
-                                     .AddText("\n   ↓   \n")
-                                     .Append(handleText)
-                                     .Build()
-                                     .Encode()
+                builder
+                    .PushColorType(28)
+                    .Append("[自动反屏蔽词]")
+                    .PopColorType()
+                    .AppendNewLine()
+                    .Append(highlightText)
+                    .AppendNewLine()
+                    .Append("   ↓   ")
+                    .AppendNewLine()
+                    .Append(handleText)
+                    .ToReadOnlySeString()
             );
 
-            textInput->SetText(handleText.EncodeWithNullTerminator());
+            textInput->SetText(handleText);
         }
     }
 
@@ -329,13 +330,11 @@ public unsafe class AutoAntiCensorship : ModuleBase
     {
         if (!config.HandleCensoredText) return;
 
-        var seString = message.ToDalamudString();
         // 信息为空或者为指令
-        if (string.IsNullOrWhiteSpace(seString.TextValue))
+        if (string.IsNullOrWhiteSpace(message.ToString()))
             return;
 
-        BypassCensorship(ref seString);
-        message = new ReadOnlySeString(seString.Encode());
+        BypassCensorship(ref message);
     }
 
     // 编辑招募
@@ -353,36 +352,41 @@ public unsafe class AutoAntiCensorship : ModuleBase
             if (managedString.Value == null)
                 return InvokeOriginal();
 
-            var origText = SeString.Parse(managedString.Value);
-            if (origText == null || string.IsNullOrWhiteSpace(origText.TextValue))
+            var origText = managedString.AsReadOnlySeString();
+            if (origText.IsEmpty || string.IsNullOrWhiteSpace(origText.ToString()))
                 return InvokeOriginal();
 
-            var handleText = new SeString(origText.Payloads);
+            var handleText = new ReadOnlySeString(origText.AsSpan());
             BypassCensorship(ref handleText);
 
-            if (handleText.TextValue == origText.TextValue)
+            if (handleText.ToString() == origText.ToString())
                 return InvokeOriginal();
 
-            var highlightText = new SeString(origText.Payloads);
+            var highlightText = new ReadOnlySeString(origText.AsSpan());
             HighlightCensorship(ref highlightText);
 
-            values[1].SetManagedString(handleText.EncodeWithNullTerminator());
+            values[1].SetManagedString(handleText);
 
             var textInputComponent = (AtkComponentTextInput*)LookingForGroupCondition->GetComponentByNodeId(22);
             if (textInputComponent != null)
-                textInputComponent->SetText(handleText.EncodeWithNullTerminator());
+                textInputComponent->SetText(handleText);
 
-            // TODO: 改成 ReadOnlyString
+            using var rented  = new RentedSeStringBuilder();
+            var       builder = rented.Builder;
+
             NotifyHelper.Instance().Chat
             (
-                new SeStringBuilder().AddUiForeground(32)
-                                     .AddText("[自动反屏蔽词]\n")
-                                     .AddUiForegroundOff()
-                                     .Append(highlightText)
-                                     .AddText("\n   ↓   \n")
-                                     .Append(handleText)
-                                     .Build()
-                                     .Encode()
+                builder
+                    .PushColorType(28)
+                    .Append("[自动反屏蔽词]")
+                    .PopColorType()
+                    .AppendNewLine()
+                    .Append(highlightText)
+                    .AppendNewLine()
+                    .Append("   ↓   ")
+                    .AppendNewLine()
+                    .Append(handleText)
+                    .ToReadOnlySeString()
             );
         }
         catch
@@ -399,69 +403,67 @@ public unsafe class AutoAntiCensorship : ModuleBase
     }
 
     // 聊天信息显示
-    private nint LocalMessageDisplayDetour(nint a1, Utf8String* source)
+    private Utf8String* LocalMessageDisplayDetour(nint a1, Utf8String* source)
     {
         if (!config.DisplayCensoredText)
             return LocalMessageDisplayHook.Original(a1, source);
 
-        var seString = SeString.Parse(source->AsSpan());
+        var seString = source->StringPtr.AsReadOnlySeString();
         HighlightCensorship(ref seString);
 
-        source->SetString(seString.EncodeWithNullTerminator());
-        return Utf8StringCopy((Utf8String*)(a1 + 1096), source);
+        source->SetString(seString);
+        var target = (Utf8String*)(a1 + 1096);
+        target->Copy(source);
+        return target;
     }
 
     // 招募信息显示
-    private nint PartyFinderMessageDisplayDetour(nint a1, Utf8String* source)
+    private Utf8String* PartyFinderMessageDisplayDetour(nint a1, Utf8String* source)
     {
         if (!config.DisplayCensoredText)
             return PartyFinderMessageDisplayHook.Original(a1, source);
 
-        var seString = SeString.Parse(source->AsSpan());
+        var seString = source->StringPtr.AsReadOnlySeString();
         HighlightCensorship(ref seString);
 
-        source->SetString(seString.EncodeWithNullTerminator());
-        return Utf8StringCopy((Utf8String*)(a1 + PartyFinderOriginalMessageOffset), source);
+        source->SetString(seString);
+        var target = (Utf8String*)(a1 + PartyFinderOriginalMessageOffset);
+        target->Copy(source);
+        return target;
     }
 
-    private void BypassCensorship(ref SeString text)
+    #endregion
+
+    private void BypassCensorship(ref ReadOnlySeString seString)
     {
-        if (string.IsNullOrWhiteSpace(text.TextValue) ||
-            text.TextValue.StartsWith('/'))
+        if (string.IsNullOrWhiteSpace(seString.ToString()) ||
+            seString.ToString().StartsWith('/'))
             return;
 
-        var builder = new SeStringBuilder();
+        using var rented  = new RentedSeStringBuilder();
+        var       builder = rented.Builder;
 
-        foreach (var payload in text.Payloads)
+        foreach (var payload in seString)
         {
             // 不处理非文本
-            if (payload is not TextPayload textPayload)
+            if (payload.Type != ReadOnlySePayloadType.Text)
             {
-                builder.Add(payload);
+                builder.Append(payload);
                 continue;
             }
 
-            BypassCensorship(ref textPayload);
-            builder.Add(textPayload);
+            var payloadText = payload.ToString();
+            if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim()))
+                continue;
+
+            var bypassed = BypassCensorship(payloadText);
+            builder.Append(bypassed);
         }
 
-        var handledText = builder.Build();
-        text = new SeString(handledText.Payloads);
+        seString = builder.ToReadOnlySeString();
     }
 
-    private void BypassCensorship(ref TextPayload payload)
-    {
-        // 非国服或只有星号
-        if (!GameState.IsCN ||
-            string.IsNullOrEmpty(payload.Text?.Replace('*', ' ').Trim() ?? string.Empty))
-            return;
-
-        var bypassed = BypassCensorship(payload.Text);
-        if (bypassed != payload.Text)
-            payload = new TextPayload(bypassed);
-    }
-
-    public string BypassCensorship(string originalText)
+    private string BypassCensorship(string originalText)
     {
         if (string.IsNullOrEmpty(originalText)) return originalText;
 
@@ -616,31 +618,38 @@ public unsafe class AutoAntiCensorship : ModuleBase
         }
     }
 
-    private void HighlightCensorship(ref SeString text)
+    private void HighlightCensorship(ref ReadOnlySeString seString)
     {
-        if (string.IsNullOrWhiteSpace(text.TextValue) ||
-            text.TextValue.StartsWith('/'))
+        var text = seString.ToString();
+
+        if (string.IsNullOrWhiteSpace(text) ||
+            text.StartsWith('/'))
             return;
 
-        var builder = new SeStringBuilder();
+        using var rented  = new RentedSeStringBuilder();
+        var       builder = rented.Builder;
 
-        foreach (var payload in text.Payloads)
+        foreach (var payload in seString)
         {
             // 不处理非文本
-            if (payload is not TextPayload textPayload)
+            if (payload.Type != ReadOnlySePayloadType.Text)
             {
-                builder.Add(payload);
+                builder.Append(payload);
                 continue;
             }
 
-            builder.Append(HighlightCensorship(textPayload.Text));
+            var payloadText = payload.ToString();
+            if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim()))
+                continue;
+
+            var highlighted = HighlightCensorship(payloadText);
+            builder.Append(highlighted);
         }
 
-        var handledText = builder.Build();
-        text = new SeString(handledText.Payloads);
+        seString = builder.ToReadOnlySeString();
     }
 
-    public SeString HighlightCensorship(string originalText)
+    private ReadOnlySeString HighlightCensorship(string originalText)
     {
         if (config.HighlightColor < 0)
             return originalText;
@@ -652,7 +661,8 @@ public unsafe class AutoAntiCensorship : ModuleBase
         // 如果没有被屏蔽的内容，直接返回原文
         if (filtered == originalText) return originalText;
 
-        var result = new SeStringBuilder();
+        using var rented  = new RentedSeStringBuilder();
+        var       builder = rented.Builder;
 
         var insideTag      = false;
         var insideCensored = false;
@@ -665,7 +675,7 @@ public unsafe class AutoAntiCensorship : ModuleBase
 
             if (insideTag)
             {
-                result.Append(originalText[i].ToString());
+                builder.Append(originalText[i].ToString());
                 if (originalText[i] == '>')
                     insideTag = false;
                 continue;
@@ -677,7 +687,7 @@ public unsafe class AutoAntiCensorship : ModuleBase
                 // 屏蔽词开始, 添加染色
                 if (!insideCensored)
                 {
-                    result.Add(new UIForegroundPayload((ushort)config.HighlightColor));
+                    builder.PushColorType((ushort)config.HighlightColor);
                     insideCensored = true;
                 }
             }
@@ -686,19 +696,19 @@ public unsafe class AutoAntiCensorship : ModuleBase
                 // 屏蔽词结束, 结束染色
                 if (insideCensored)
                 {
-                    result.Add(UIForegroundPayload.UIForegroundOff);
+                    builder.PopColorType();
                     insideCensored = false;
                 }
             }
 
-            result.Append(originalText[i].ToString());
+            builder.Append(originalText[i].ToString());
         }
 
         // 字符串结束了仍然在屏蔽词里, 结束染色
         if (insideCensored)
-            result.Add(UIForegroundPayload.UIForegroundOff);
+            builder.PopColorType();
 
-        return result.Build();
+        return builder.ToReadOnlySeString();
     }
 
     private string GetFilteredString(string str)
@@ -719,9 +729,9 @@ public unsafe class AutoAntiCensorship : ModuleBase
         var result = text;
 
         var sortedReplacements = config.CustomReplacements
-                                             .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
-                                             .Where(kvp => ValidateCustomReplacement(kvp.Value)) // 只使用有效的替换词
-                                             .OrderByDescending(kvp => kvp.Key.Length);
+                                       .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
+                                       .Where(kvp => ValidateCustomReplacement(kvp.Value)) // 只使用有效的替换词
+                                       .OrderByDescending(kvp => kvp.Key.Length);
 
         foreach (var (originalWord, replacement) in sortedReplacements)
         {
