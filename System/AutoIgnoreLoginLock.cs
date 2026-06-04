@@ -56,7 +56,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         ]
     );
 
-    // 对应排队提示（Error 13206）的 SelectOk：将创建参数中的 filter 标记从 01 改为 00
+    // 对应登录错误提示的 SelectOk（Error 13206 或 Error 13214）：将创建参数中的 filter 标记从 01 改为 00
     private readonly MemoryPatch queueSelectOkNoFilterPatch = new
     (
         "01 4C 8B CE 44 88 64 24 40 4C 8B C3 44 88 64 24 38 48 8B D0 C7 44 24 30 0A 00 00 00 48 8B CF 66 44 89 64 24 28 48 C7 44 24 20 1E 00 00 00 E8 ?? ?? ?? ?? 4C 8B BC 24",
