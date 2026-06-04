@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Text;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -8,10 +9,12 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Hooking;
 using Dalamud.Memory;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
@@ -20,7 +23,6 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using RowStatus = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -37,6 +39,10 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private Config config = null!;
     private IDtrBarEntry? zoneInfoEntry;
 
+    private static readonly CompSig StatusDescSig = new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
+    private delegate nint StatusDescDelegate(nint ctx, Utf8String* output, uint statusID, uint param);
+    private Hook<StatusDescDelegate>? statusDescHook;
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -50,7 +56,10 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ItemDetail",            OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_TargetInfo",           OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_TargetInfoMainTarget", OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "Tooltip",               OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_NaviMap",              OnAddon);
+
+        statusDescHook ??= StatusDescSig.GetHook<StatusDescDelegate>(StatusDescDetour);
+        statusDescHook.Enable();
 
         DService.Instance().ClientState.MapIdChanged     += OnMapChanged;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
@@ -170,55 +179,46 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
                     AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->SetValueAndUpdate(0, $"{name}  [{id}]");
                 break;
 
-            case "Tooltip":
-                if (!config.ShowStatusID && !config.ShowWeatherID) return;
+            case "_NaviMap":
+                if (!config.ShowWeatherID) break;
+                if (!NaviMap->IsAddonAndNodesReady()) break;
+                if (AtkStage.Instance()->TooltipManager.ParentAddonId != NaviMap->Id) break;
 
-                var addon = AddonHelper.GetByName("Tooltip");
-                if (addon == null || addon->RootNode == null || addon->RootNode->ChildNode == null) return;
+                var tooltip = AddonHelper.GetByName("Tooltip");
+                if (tooltip == null || tooltip->RootNode == null || tooltip->RootNode->ChildNode == null) break;
 
-                var textNode = addon->GetTextNodeById(2);
-                if (textNode == null || textNode->AtkResNode.Type != NodeType.Text) return;
+                var tn = tooltip->GetTextNodeById(2);
+                if (tn == null || tn->AtkResNode.Type != NodeType.Text) break;
 
-                var textValue = MemoryHelper.ReadSeStringNullTerminated((nint)textNode->NodeText.StringPtr.Value).TextValue;
-                if (string.IsNullOrEmpty(textValue)) return;
-                if (textValue.Contains('[') && textValue.Contains(']')) return;
+                var tv = MemoryHelper.ReadSeStringNullTerminated((nint)tn->NodeText.StringPtr.Value).TextValue;
+                if (string.IsNullOrEmpty(tv)) break;
+                if (tv.Contains('[') && tv.Contains(']')) break;
 
-                SeString? newText = null;
+                var wid = WeatherManager.Instance()->WeatherId;
+                if (!LuminaGetter.TryGetRow<Weather>(wid, out var w)) break;
+                if (!tv.Equals(w.Name.ToString(), StringComparison.OrdinalIgnoreCase)) break;
 
-                if (config.ShowStatusID && TryAppendStatusID(textValue, out var newStatusText))
-                    newText = newStatusText;
-                else if (config.ShowWeatherID)
+                var seStr = new SeStringBuilder().Append($"{w.Name} [{wid}]").Build();
+                tn->SetText(seStr.EncodeWithNullTerminator());
+
+                ushort tw = 0, th = 0;
+                fixed (byte* p = seStr.EncodeWithNullTerminator())
+                    tn->GetTextDrawSize(&tw, &th, p);
+
+                var nw = (ushort)(tw + 16);
+                var nh = (ushort)(th + 10);
+                tn->AtkResNode.SetWidth(nw);
+                tn->AtkResNode.SetHeight(nh);
+
+                var bg = tooltip->GetNodeById(1);
+                if (bg != null)
                 {
-                    var weatherID = WeatherManager.Instance()->WeatherId;
-                    if (LuminaGetter.TryGetRow<Weather>(weatherID, out var weather) &&
-                        textValue.Equals(weather.Name.ToString(), StringComparison.OrdinalIgnoreCase))
-                        newText = new SeStringBuilder().Append($"{weather.Name} [{weatherID}]").Build();
+                    bg->SetWidth(nw);
+                    bg->SetHeight(nh);
                 }
-
-                if (newText == null) return;
-
-                textNode->SetText(newText.EncodeWithNullTerminator());
-
-                ushort textW = 0, textH = 0;
-                fixed (byte* ptr = newText.EncodeWithNullTerminator())
-                    textNode->GetTextDrawSize(&textW, &textH, ptr);
-
-                var newWidth  = (ushort)(textW + 16);
-                var newHeight = (ushort)(textH + 10);
-
-                textNode->AtkResNode.SetWidth(newWidth);
-                textNode->AtkResNode.SetHeight(newHeight);
-
-                var bgNode = addon->GetNodeById(1);
-                if (bgNode != null)
-                {
-                    bgNode->SetWidth(newWidth);
-                    bgNode->SetHeight(newHeight);
-                }
-
-                addon->RootNode->SetWidth(newWidth);
-                addon->RootNode->SetHeight(newHeight);
-                addon->SetSize(newWidth, newHeight);
+                tooltip->RootNode->SetWidth(nw);
+                tooltip->RootNode->SetHeight(nh);
+                tooltip->SetSize(nw, nh);
                 break;
         }
     }
@@ -280,6 +280,35 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         );
     }
 
+    private nint StatusDescDetour(nint ctx, Utf8String* output, uint statusID, uint param)
+    {
+        var ret = statusDescHook!.Original(ctx, output, statusID, param);
+
+        if (!config.ShowStatusID || statusID == 0 || statusID == 0xFFFFFFFF || ret == 0)
+            return ret;
+
+        var originalText = ReadUtf8(ret);
+        if (originalText.Length == 0)
+            return ret;
+
+        var newlineIndex = originalText.IndexOf('\n');
+        string modifiedText;
+
+        if (newlineIndex < 0)
+            modifiedText = $"{originalText} [{statusID}]";
+        else
+            modifiedText = $"{originalText[..newlineIndex]} [{statusID}]{originalText[newlineIndex..]}";
+
+        if (output != null && *(byte**)output != null)
+        {
+            var bytes = Encoding.UTF8.GetBytes(modifiedText + '\0');
+            fixed (byte* p = bytes)
+                *(byte**)output = p;
+        }
+
+        return ret;
+    }
+
     private void UpdateDTRInfo()
     {
         if (config.ShowZoneInfo)
@@ -301,73 +330,20 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
             zoneInfoEntry.Shown = false;
     }
 
-    private bool TryAppendStatusID(string textValue, out SeString result)
+    private static string ReadUtf8(nint ptr)
     {
-        result = default!;
-        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
+        if (ptr == 0) return string.Empty;
 
-        var nameMap = new Dictionary<string, List<(uint ID, string Desc)>>(StringComparer.OrdinalIgnoreCase);
-        void AddStatuses(ref StatusManager sm)
+        try
         {
-            foreach (var s in sm.Status)
-            {
-                if (s.StatusId == 0) continue;
-                if (!LuminaGetter.TryGetRow<RowStatus>(s.StatusId, out var row)) continue;
-                var name = row.Name.ToString();
-                if (!nameMap.TryGetValue(name, out var list))
-                    nameMap[name] = list = [];
-                list.Add((row.RowId, row.Description.ToString()));
-            }
+            var span  = MemoryHelper.ReadRaw(ptr, 256);
+            var len   = span.IndexOf((byte)0);
+            return len <= 0 ? string.Empty : Encoding.UTF8.GetString(span[..len]);
         }
-        AddStatuses(ref localPlayer.ToBCStruct()->StatusManager);
-        if (TargetManager.Target is { } target && target.Address != localPlayer.Address)
-            AddStatuses(ref target.ToBCStruct()->StatusManager);
-        if (TargetManager.FocusTarget is { } focus)
-            AddStatuses(ref focus.ToBCStruct()->StatusManager);
-        foreach (var member in AgentHUD.Instance()->PartyMembers.ToArray().Where(m => m.Index != 0))
+        catch
         {
-            if (member.Object != null) AddStatuses(ref member.Object->StatusManager);
+            return string.Empty;
         }
-
-        foreach (var (name, entries) in nameMap)
-        {
-            if (!textValue.StartsWith(name, StringComparison.OrdinalIgnoreCase)) continue;
-
-            List<uint> candidateIDs;
-            if (entries.Select(e => e.Desc).Distinct().Count() > 1)
-            {
-                var normalizedText = textValue.Replace("\r", "").Replace("\n", "").Replace("<br>", "");
-                candidateIDs = entries
-                    .Where(e =>
-                    {
-                        var normalizedDesc = e.Desc.Replace("\r", "").Replace("\n", "").Replace("<br>", "");
-                        return normalizedText.Contains(normalizedDesc, StringComparison.OrdinalIgnoreCase);
-                    })
-                    .Select(e => e.ID)
-                    .ToList();
-                if (candidateIDs.Count == 0)
-                    candidateIDs = entries.Select(e => e.ID).ToList();
-            }
-            else
-                candidateIDs = entries.Select(e => e.ID).ToList();
-
-            var newIDs = candidateIDs.Where(id => !textValue.Contains($"[{id}]")).ToList();
-            if (newIDs.Count == 0) return false;
-
-            var nameEnd   = textValue.IndexOfAny(['\uff08', '（', '\r', '\n']);
-            var firstLine = nameEnd > 0 ? textValue[..nameEnd] : textValue;
-            var rest      = nameEnd > 0 ? textValue[nameEnd..] : string.Empty;
-
-            var sb = new SeStringBuilder().Append(firstLine);
-            foreach (var id in newIDs)
-                sb.Append($"  [{id}]");
-            sb.Append(rest);
-
-            result = sb.Build();
-            return true;
-        }
-
-        return false;
     }
 
     private class Config : ModuleConfig
