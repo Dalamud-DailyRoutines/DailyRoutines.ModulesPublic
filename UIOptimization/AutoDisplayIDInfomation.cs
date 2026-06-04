@@ -1,5 +1,3 @@
-using System.Linq;
-using System.Text;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -8,21 +6,19 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Gui.Dtr;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
-using Dalamud.Memory;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using FFXIVClientStructs.Interop;
+using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
-using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -39,9 +35,12 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private Config config = null!;
     private IDtrBarEntry? zoneInfoEntry;
 
-    private static readonly CompSig StatusDescSig = new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
-    private delegate nint StatusDescDelegate(nint ctx, Utf8String* output, uint statusID, uint param);
-    private Hook<StatusDescDelegate>? statusDescHook;
+    private static readonly CompSig                             GetStatusTooltipTextSig = new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
+    private delegate        CStringPointer                      GetStatusTooltipTextDelegate(AgentHUD* agent, Utf8String* output, uint statusID, uint param);
+    private                 Hook<GetStatusTooltipTextDelegate>? GetStatusTooltipTextHook;
+
+    private AtkEventWrapper? naviMapMouseOverEvent;
+    private AtkEventWrapper? naviMapMouseOutEvent;
 
     protected override void Init()
     {
@@ -52,21 +51,21 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         TooltipManager.Instance().RegItem(OnItemTooltip);
         TooltipManager.Instance().RegAction(OnActionTooltip);
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ActionDetail",          OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ItemDetail",            OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_TargetInfo",           OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_TargetInfoMainTarget", OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_NaviMap",              OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "_TargetInfo",           OnAddonTarget);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "_TargetInfoMainTarget", OnAddonTarget);
 
-        statusDescHook ??= StatusDescSig.GetHook<StatusDescDelegate>(StatusDescDetour);
-        statusDescHook.Enable();
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_NaviMap", OnAddonNaviMap);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_NaviMap", OnAddonNaviMap);
+
+        GetStatusTooltipTextHook ??= GetStatusTooltipTextSig.GetHook<GetStatusTooltipTextDelegate>(GetStatusTooltipTextDetour);
+        GetStatusTooltipTextHook.Enable();
 
         DService.Instance().ClientState.MapIdChanged     += OnMapChanged;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
 
         UpdateDTRInfo();
     }
-
+    
     protected override void Uninit()
     {
         DService.Instance().ClientState.MapIdChanged     -= OnMapChanged;
@@ -78,9 +77,10 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         TooltipManager.Instance().Unreg(OnItemTooltip);
         TooltipManager.Instance().Unreg(OnActionTooltip);
 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonTarget, OnAddonNaviMap);
+        OnAddonNaviMap(AddonEvent.PreFinalize, null);
     }
-
+    
     protected override void ConfigUI()
     {
         if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(520)} ID", ref config.ShowItemID))
@@ -147,80 +147,79 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
     private void OnZoneChanged(uint u) =>
         UpdateDTRInfo();
-
-    private void OnAddon(AddonEvent type, AddonArgs args)
+    
+    private void OnAddonNaviMap(AddonEvent type, AddonArgs args)
     {
-        if (!Throttler.Shared.Throttle("AutoDisplayIDInfomation-OnAddon", 50)) return;
-
-        switch (args.AddonName)
+        switch (type)
         {
-            case "_TargetInfoMainTarget" or "_TargetInfo":
-                if (TargetManager.Target is not { } target) return;
-
-                var id = target.DataID;
-                if (id == 0) return;
-
-                var name = AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->StringArray->ExtractText();
-                var show = target.ObjectKind switch
-                {
-                    ObjectKind.BattleNpc => config.ShowTargetIDBattleNPC,
-                    ObjectKind.EventNpc  => config.ShowTargetIDEventNPC,
-                    ObjectKind.Companion => config.ShowTargetIDCompanion,
-                    _                    => config.ShowTargetIDOthers
-                };
-
-                if (!show || !config.ShowTargetID)
-                {
-                    AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->SetValueAndUpdate(0, name.Replace($"  [{id}]", string.Empty));
-                    return;
-                }
-
-                if (!name.Contains($"[{id}]"))
-                    AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->SetValueAndUpdate(0, $"{name}  [{id}]");
+            case AddonEvent.PreFinalize:
+                naviMapMouseOverEvent?.Dispose();
+                naviMapMouseOverEvent = null;
+                
+                naviMapMouseOutEvent?.Dispose();
+                naviMapMouseOutEvent = null;
                 break;
+            
+            case AddonEvent.PostDraw:
+                if (NaviMap == null) return;
+                if (naviMapMouseOutEvent != null && naviMapMouseOverEvent != null) return;
 
-            case "_NaviMap":
-                if (!config.ShowWeatherID) break;
-                if (!NaviMap->IsAddonAndNodesReady()) break;
-                if (AtkStage.Instance()->TooltipManager.ParentAddonId != NaviMap->Id) break;
+                var component = NaviMap->GetComponentByNodeId(14);
+                if (component == null) return;
 
-                var tooltip = AddonHelper.GetByName("Tooltip");
-                if (tooltip == null || tooltip->RootNode == null || tooltip->RootNode->ChildNode == null) break;
+                var collisionNode = component->UldManager.SearchNodeById(5);
+                if (collisionNode == null) return;
 
-                var tn = tooltip->GetTextNodeById(2);
-                if (tn == null || tn->AtkResNode.Type != NodeType.Text) break;
+                collisionNode->ClearEvents();
+                
+                naviMapMouseOverEvent = new AtkEventWrapper
+                ((_, addon, _, _) =>
+                    {
+                        var id = WeatherManager.Instance()->WeatherId;
+                        if (!LuminaGetter.TryGetRow<Weather>(id, out var weather)) return;
 
-                var tv = MemoryHelper.ReadSeStringNullTerminated((nint)tn->NodeText.StringPtr.Value).TextValue;
-                if (string.IsNullOrEmpty(tv)) break;
-                if (tv.Contains('[') && tv.Contains(']')) break;
+                        using var stringBuilder = new RentedSeStringBuilder();
+                        using var stringBuffer  = new RentedAtkValues(1);
+                        stringBuffer[0].SetManagedString(stringBuilder.Builder.Append($"{weather.Name} [{weather.RowId}]").GetViewAsSpan());
 
-                var wid = WeatherManager.Instance()->WeatherId;
-                if (!LuminaGetter.TryGetRow<Weather>(wid, out var w)) break;
-                if (!tv.Equals(w.Name.ToString(), StringComparison.OrdinalIgnoreCase)) break;
+                        var tooltipArgs = new AtkTooltipManager.AtkTooltipArgs();
+                        tooltipArgs.TextArgs.AtkArrayType = 0;
+                        tooltipArgs.TextArgs.Text         = stringBuffer[0].String;
 
-                var seStr = new SeStringBuilder().Append($"{w.Name} [{wid}]").Build();
-                tn->SetText(seStr.EncodeWithNullTerminator());
-
-                ushort tw = 0, th = 0;
-                fixed (byte* p = seStr.EncodeWithNullTerminator())
-                    tn->GetTextDrawSize(&tw, &th, p);
-
-                var nw = (ushort)(tw + 16);
-                var nh = (ushort)(th + 10);
-                tn->AtkResNode.SetWidth(nw);
-                tn->AtkResNode.SetHeight(nh);
-
-                var bg = tooltip->GetNodeById(1);
-                if (bg != null)
-                {
-                    bg->SetWidth(nw);
-                    bg->SetHeight(nh);
-                }
-                tooltip->RootNode->SetWidth(nw);
-                tooltip->RootNode->SetHeight(nh);
-                tooltip->SetSize(nw, nh);
+                        AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Text, addon->Id, collisionNode, &tooltipArgs);
+                    }
+                );
+                naviMapMouseOverEvent.Add(NaviMap, collisionNode, AtkEventType.MouseOver);
+                
+                naviMapMouseOutEvent = new AtkEventWrapper((_, addon, _, _) => AtkStage.Instance()->TooltipManager.HideTooltip(addon->Id));
+                naviMapMouseOutEvent.Add(NaviMap, collisionNode, AtkEventType.MouseOut);
                 break;
         }
+    }
+
+    private void OnAddonTarget(AddonEvent type, AddonArgs args)
+    {
+        if (!config.ShowTargetID) return;
+        
+        if (TargetManager.Target is not { } target) return;
+
+        var id = target.DataID;
+        if (id == 0) return;
+
+        var show = target.ObjectKind switch
+        {
+            ObjectKind.BattleNpc => config.ShowTargetIDBattleNPC,
+            ObjectKind.EventNpc  => config.ShowTargetIDEventNPC,
+            ObjectKind.Companion => config.ShowTargetIDCompanion,
+            _                    => config.ShowTargetIDOthers
+        };
+        if (!show) return;
+        
+        var stringArray = AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2);
+        if (stringArray == null) return;
+        
+        using var utf8String = new Utf8String($"{target.Name} [{target.DataID}]");
+        stringArray->SetValue(0, $"{target.Name} [{target.DataID}]");
     }
 
     private void OnItemTooltip(ItemKind itemKind, uint itemID, ref List<TooltipItemModification> modifications)
@@ -280,33 +279,23 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         );
     }
 
-    private nint StatusDescDetour(nint ctx, Utf8String* output, uint statusID, uint param)
+    private CStringPointer GetStatusTooltipTextDetour(AgentHUD* agent, Utf8String* output, uint statusID, uint param)
     {
-        var ret = statusDescHook!.Original(ctx, output, statusID, param);
+        var orig = GetStatusTooltipTextHook.Original(agent, output, statusID, param);
 
-        if (!config.ShowStatusID || statusID == 0 || statusID == 0xFFFFFFFF || ret == 0)
-            return ret;
+        if (!config.ShowStatusID || statusID == 0 || statusID == 0xFFFFFFFF || !orig.HasValue)
+            return orig;
 
-        var originalText = ReadUtf8(ret);
+        var originalText = orig.ToString();
         if (originalText.Length == 0)
-            return ret;
+            return orig;
 
         var newlineIndex = originalText.IndexOf('\n');
-        string modifiedText;
+        var modifiedText = newlineIndex < 0 ? $"{originalText} [{statusID}]" : $"{originalText[..newlineIndex]} [{statusID}]{originalText[newlineIndex..]}";
 
-        if (newlineIndex < 0)
-            modifiedText = $"{originalText} [{statusID}]";
-        else
-            modifiedText = $"{originalText[..newlineIndex]} [{statusID}]{originalText[newlineIndex..]}";
-
-        if (output != null && *(byte**)output != null)
-        {
-            var bytes = Encoding.UTF8.GetBytes(modifiedText + '\0');
-            fixed (byte* p = bytes)
-                *(byte**)output = p;
-        }
-
-        return ret;
+        using var utf8String = new Utf8String(modifiedText);
+        output->Copy(&utf8String);
+        return output->StringPtr;
     }
 
     private void UpdateDTRInfo()
@@ -328,22 +317,6 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         }
         else
             zoneInfoEntry.Shown = false;
-    }
-
-    private static string ReadUtf8(nint ptr)
-    {
-        if (ptr == 0) return string.Empty;
-
-        try
-        {
-            var span  = MemoryHelper.ReadRaw(ptr, 256);
-            var len   = span.IndexOf((byte)0);
-            return len <= 0 ? string.Empty : Encoding.UTF8.GetString(span[..len]);
-        }
-        catch
-        {
-            return string.Empty;
-        }
     }
 
     private class Config : ModuleConfig
