@@ -54,7 +54,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "_TargetInfo",           OnAddonTarget);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "_TargetInfoMainTarget", OnAddonTarget);
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_NaviMap", OnAddonNaviMap);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "_NaviMap", OnAddonNaviMap);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "_NaviMap", OnAddonNaviMap);
 
         GetStatusTooltipTextHook ??= GetStatusTooltipTextSig.GetHook<GetStatusTooltipTextDelegate>(GetStatusTooltipTextDetour);
