@@ -49,6 +49,7 @@ public unsafe class FieldEntryCommand : ModuleBase
             ["ardorum"] = (EnqueueArdorum, 2),
             ["phaenna"] = (EnqueuePhaenna, 3),
             ["oizys"]   = (EnqueueOizys, 4),
+            ["auxesia"] = (EnqueueAuxesia, 5),
             ["ocs"]     = (EnqueueOccultCrescent, 1018)
         }.ToFrozenDictionary();
     }
@@ -200,16 +201,24 @@ public unsafe class FieldEntryCommand : ModuleBase
                         return true;
                     }
                 );
-
+                
+                TaskHelper.Enqueue(() => LocalPlayerState.Object != null);
+                
                 TaskHelper.Enqueue
                 (() =>
                     {
-                        if (DService.Instance().ObjectTable.LocalPlayer is null) return false;
+                        if (!DService.Instance().Condition[ConditionFlag.Mounted])
+                            return true;
 
-                        new EventStartPackt(LocalPlayerState.EntityID, 721694).Send();
-                        return true;
+                        if (!Throttler.Shared.Throttle("FieldEntryCommand.Dismount"))
+                            return false;
+
+                        MovementManager.Instance().Dismount();
+                        return false;
                     }
                 );
+
+                TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 721694).Send());
 
                 // 第一次
                 TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(0));
@@ -388,14 +397,21 @@ public unsafe class FieldEntryCommand : ModuleBase
         );
     }
 
+    // 憧憬湾
     private void EnqueueArdorum() =>
         EnqueueCosmic(1237);
 
+    // 法恩娜
     private void EnqueuePhaenna() =>
         EnqueueCosmic(1291);
 
+    // 俄匊斯
     private void EnqueueOizys() =>
         EnqueueCosmic(1310);
+    
+    // 奥克塞西亚
+    private void EnqueueAuxesia() =>
+        EnqueueCosmic(1319);
 
     private void EnqueueCosmic(uint targetZone)
     {
@@ -431,6 +447,19 @@ public unsafe class FieldEntryCommand : ModuleBase
                 );
 
                 TaskHelper.Enqueue(() => redirectTargetZoneInMoon = targetZone);
+                TaskHelper.Enqueue
+                (() =>
+                    {
+                        if (!DService.Instance().Condition[ConditionFlag.Mounted])
+                            return true;
+
+                        if (!Throttler.Shared.Throttle("FieldEntryCommand.Dismount"))
+                            return false;
+
+                        MovementManager.Instance().Dismount();
+                        return false;
+                    }
+                );
                 TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 327855).Send());
                 TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(3));
             }
@@ -498,7 +527,7 @@ public unsafe class FieldEntryCommand : ModuleBase
 
     private const string COMMAND = "/pdrfe";
     
-    private static readonly FrozenDictionary<uint, string> ContentToPlaceName = new Dictionary<uint, string>()
+    private static readonly FrozenDictionary<uint, string> ContentToPlaceName = new Dictionary<uint, string>
     {
         // 开拓无人岛
         [1] = LuminaWrapper.GetPlaceName(2566),
@@ -507,7 +536,9 @@ public unsafe class FieldEntryCommand : ModuleBase
         // 法恩娜
         [3] = LuminaWrapper.GetPlaceName(5301),
         // 俄匊斯
-        [4] = LuminaWrapper.GetPlaceName(5406)
+        [4] = LuminaWrapper.GetPlaceName(5406),
+        // 奥克塞西亚
+        [5] = LuminaWrapper.GetPlaceName(5551),
     }.ToFrozenDictionary();
 
     private static readonly Vector3 GangosDefaultPosition        = new(-33f, 0.15f, -41f);
