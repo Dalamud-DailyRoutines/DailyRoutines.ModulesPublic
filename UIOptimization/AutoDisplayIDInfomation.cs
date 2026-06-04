@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Text;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -6,11 +8,19 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Gui.Dtr;
+using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Hooking;
+using Dalamud.Memory;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Enums;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
@@ -25,14 +35,18 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         Category    = ModuleCategory.UIOptimization,
         Author      = ["Middo"]
     };
-    
+
     private Config config = null!;
     private IDtrBarEntry? zoneInfoEntry;
+
+    private static readonly CompSig StatusDescSig = new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
+    private delegate nint StatusDescDelegate(nint ctx, Utf8String* output, uint statusID, uint param);
+    private Hook<StatusDescDelegate>? statusDescHook;
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-        
+
         zoneInfoEntry ??= DService.Instance().DTRBar.Get("AutoDisplayIDInfomation-ZoneInfo");
 
         TooltipManager.Instance().RegItem(OnItemTooltip);
@@ -42,10 +56,14 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "ItemDetail",            OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_TargetInfo",           OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_TargetInfoMainTarget", OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw,  "_NaviMap",              OnAddon);
+
+        statusDescHook ??= StatusDescSig.GetHook<StatusDescDelegate>(StatusDescDetour);
+        statusDescHook.Enable();
 
         DService.Instance().ClientState.MapIdChanged     += OnMapChanged;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
-        
+
         UpdateDTRInfo();
     }
 
@@ -110,6 +128,16 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         ImGui.NewLine();
 
+        if (ImGui.Checkbox($"{Lang.Get("Status")} ID", ref config.ShowStatusID))
+            config.Save(this);
+
+        ImGui.NewLine();
+
+        if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(8555)} ID", ref config.ShowWeatherID))
+            config.Save(this);
+
+        ImGui.NewLine();
+
         if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(870)}", ref config.ShowZoneInfo))
             config.Save(this);
     }
@@ -149,6 +177,48 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
                 if (!name.Contains($"[{id}]"))
                     AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2)->SetValueAndUpdate(0, $"{name}  [{id}]");
+                break;
+
+            case "_NaviMap":
+                if (!config.ShowWeatherID) break;
+                if (!NaviMap->IsAddonAndNodesReady()) break;
+                if (AtkStage.Instance()->TooltipManager.ParentAddonId != NaviMap->Id) break;
+
+                var tooltip = AddonHelper.GetByName("Tooltip");
+                if (tooltip == null || tooltip->RootNode == null || tooltip->RootNode->ChildNode == null) break;
+
+                var tn = tooltip->GetTextNodeById(2);
+                if (tn == null || tn->AtkResNode.Type != NodeType.Text) break;
+
+                var tv = MemoryHelper.ReadSeStringNullTerminated((nint)tn->NodeText.StringPtr.Value).TextValue;
+                if (string.IsNullOrEmpty(tv)) break;
+                if (tv.Contains('[') && tv.Contains(']')) break;
+
+                var wid = WeatherManager.Instance()->WeatherId;
+                if (!LuminaGetter.TryGetRow<Weather>(wid, out var w)) break;
+                if (!tv.Equals(w.Name.ToString(), StringComparison.OrdinalIgnoreCase)) break;
+
+                var seStr = new SeStringBuilder().Append($"{w.Name} [{wid}]").Build();
+                tn->SetText(seStr.EncodeWithNullTerminator());
+
+                ushort tw = 0, th = 0;
+                fixed (byte* p = seStr.EncodeWithNullTerminator())
+                    tn->GetTextDrawSize(&tw, &th, p);
+
+                var nw = (ushort)(tw + 16);
+                var nh = (ushort)(th + 10);
+                tn->AtkResNode.SetWidth(nw);
+                tn->AtkResNode.SetHeight(nh);
+
+                var bg = tooltip->GetNodeById(1);
+                if (bg != null)
+                {
+                    bg->SetWidth(nw);
+                    bg->SetHeight(nh);
+                }
+                tooltip->RootNode->SetWidth(nw);
+                tooltip->RootNode->SetHeight(nh);
+                tooltip->SetSize(nw, nh);
                 break;
         }
     }
@@ -210,6 +280,35 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         );
     }
 
+    private nint StatusDescDetour(nint ctx, Utf8String* output, uint statusID, uint param)
+    {
+        var ret = statusDescHook!.Original(ctx, output, statusID, param);
+
+        if (!config.ShowStatusID || statusID == 0 || statusID == 0xFFFFFFFF || ret == 0)
+            return ret;
+
+        var originalText = ReadUtf8(ret);
+        if (originalText.Length == 0)
+            return ret;
+
+        var newlineIndex = originalText.IndexOf('\n');
+        string modifiedText;
+
+        if (newlineIndex < 0)
+            modifiedText = $"{originalText} [{statusID}]";
+        else
+            modifiedText = $"{originalText[..newlineIndex]} [{statusID}]{originalText[newlineIndex..]}";
+
+        if (output != null && *(byte**)output != null)
+        {
+            var bytes = Encoding.UTF8.GetBytes(modifiedText + '\0');
+            fixed (byte* p = bytes)
+                *(byte**)output = p;
+        }
+
+        return ret;
+    }
+
     private void UpdateDTRInfo()
     {
         if (config.ShowZoneInfo)
@@ -231,18 +330,36 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
             zoneInfoEntry.Shown = false;
     }
 
+    private static string ReadUtf8(nint ptr)
+    {
+        if (ptr == 0) return string.Empty;
+
+        try
+        {
+            var span  = MemoryHelper.ReadRaw(ptr, 256);
+            var len   = span.IndexOf((byte)0);
+            return len <= 0 ? string.Empty : Encoding.UTF8.GetString(span[..len]);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
     private class Config : ModuleConfig
     {
         public bool ShowActionID         = true;
         public bool ShowActionIDOriginal = true;
         public bool ShowActionIDResolved = true;
         public bool ShowItemID           = true;
-        
+
         public bool ShowTargetID          = true;
         public bool ShowTargetIDBattleNPC = true;
         public bool ShowTargetIDCompanion = true;
         public bool ShowTargetIDEventNPC  = true;
         public bool ShowTargetIDOthers    = true;
+        public bool ShowStatusID          = true;
+        public bool ShowWeatherID         = true;
         public bool ShowZoneInfo          = true;
     }
 }
