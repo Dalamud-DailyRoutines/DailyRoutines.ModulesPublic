@@ -287,7 +287,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
             return orig;
 
         var originalText = orig.ToString();
-        if (originalText.Length == 0)
+        if (string.IsNullOrEmpty(originalText))
             return orig;
 
         var newlineIndex = originalText.IndexOf('\n');
