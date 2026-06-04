@@ -406,9 +406,11 @@ public unsafe class AutoAntiCensorship : ModuleBase
                 continue;
             }
 
-            var payloadText = payload.ToString();
+            // payload.ToString() 返回宏字符串格式（\< 代替 <），会导致反斜杠累积
+            // 需通过原始字节构造临时 ReadOnlySeString 来获取无转义的原始文本
+            var payloadText = new ReadOnlySeString(payload.AsSpan().Body).ToString();
             if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim())) continue;
-
+            
             builder.Append(BypassCensorship(payloadText));
         }
 
@@ -561,7 +563,8 @@ public unsafe class AutoAntiCensorship : ModuleBase
                 continue;
             }
 
-            var payloadText = payload.ToString();
+            // payload.ToString() 返回宏字符串格式（\< 代替 <），会导致反斜杠累积
+            var payloadText = new ReadOnlySeString(payload.AsSpan().Body).ToString();
             if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim())) continue;
 
             builder.Append(HighlightCensorship(payloadText));
