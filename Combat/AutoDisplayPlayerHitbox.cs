@@ -32,7 +32,7 @@ public unsafe class AutoDisplayPlayerHitbox : ModuleBase
         config = Config.Load(this) ?? new();
 
         controller ??= new();
-        controller.CreateNode(() => new PlayerDotImageNode(config));
+        controller.AddNode(new PlayerDotImageNode(config));
     }
 
     protected override void Uninit()

@@ -34,7 +34,9 @@ public unsafe class AdventurerPlateThroughInspect : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        openButton?.Dispose();
+        openButton = null;
     }
 
     private void OnAddon(AddonEvent type, AddonArgs? args)
@@ -61,7 +63,6 @@ public unsafe class AdventurerPlateThroughInspect : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                openButton?.Dispose();
                 openButton = null;
                 break;
         }

@@ -39,7 +39,18 @@ public unsafe class RealPositionInNaviMap : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        positionButton?.Dispose();
+        positionButton = null;
+
+        if (NaviMap != null)
+        {
+            var origTextNode = NaviMap->GetTextNodeById(6);
+            if (origTextNode != null)
+                origTextNode->ToggleVisibility(true);
+        }
+
+        lastX = lastY = 0;
     }
 
     protected override void ConfigUI()
@@ -57,18 +68,9 @@ public unsafe class RealPositionInNaviMap : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                positionButton?.Dispose();
                 positionButton = null;
-
-                if (NaviMap != null)
-                {
-                    var origTextNode = NaviMap->GetTextNodeById(6);
-                    if (origTextNode != null)
-                        origTextNode->ToggleVisibility(true);
-                }
-
+                
                 lastX = lastY = 0;
-
                 break;
 
             case AddonEvent.PostRequestedUpdate:

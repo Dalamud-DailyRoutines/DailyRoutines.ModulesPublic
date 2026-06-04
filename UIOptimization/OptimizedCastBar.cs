@@ -47,7 +47,12 @@ public unsafe class OptimizedCastBar : ModuleBase
         DService.Instance().Condition.ConditionChange -= OnConditionChanged;
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        slideMarkerZoneNode?.Dispose();
+        slideMarkerZoneNode = null;
+
+        slideMarkerLineNode?.Dispose();
+        slideMarkerLineNode = null;
     }
 
     protected override void ConfigUI()
@@ -250,7 +255,13 @@ public unsafe class OptimizedCastBar : ModuleBase
     {
         if (!ValidFlags.Contains(flag)) return;
 
-        OnAddon(AddonEvent.PreFinalize, null);
+        slideMarkerZoneNode?.Dispose();
+        slideMarkerZoneNode = null;
+
+        slideMarkerLineNode?.Dispose();
+        slideMarkerLineNode = null;
+
+        UpdateOriginalAddonNodes();
     }
 
     private void OnAddon(AddonEvent type, AddonArgs args)
@@ -258,10 +269,7 @@ public unsafe class OptimizedCastBar : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                slideMarkerZoneNode?.Dispose();
                 slideMarkerZoneNode = null;
-
-                slideMarkerLineNode?.Dispose();
                 slideMarkerLineNode = null;
 
                 UpdateOriginalAddonNodes();

@@ -452,29 +452,14 @@ public class FastWorldTravel : ModuleBase
         TaskHelper.EnqueueAsync(() => ModuleManager.Instance().UnloadAsync(ModuleManager.Instance().GetModuleByName("AutoLogin")), "禁用自动登录");
 
         TaskHelper.DelayNext(500, "等待 500 毫秒");
+        
         TaskHelper.Enqueue(() => ChatManager.Instance().SendCommand("/logout"), "登出游戏");
-
-        TaskHelper.Enqueue(() => Dialogue->IsAddonAndNodesReady(), "等待界面出现");
-
+        
         TaskHelper.DelayNext(500, "等待 500 毫秒");
 
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (TitleMenu->IsAddonAndNodesReady()) return true;
-                if (!Dialogue->IsAddonAndNodesReady()) return false;
-
-                var buttonNode = Dialogue->GetComponentButtonById(4);
-                if (buttonNode == null) return false;
-
-                buttonNode->Click();
-                return true;
-            },
-            "点击确认键"
-        );
-
         TaskHelper.Enqueue(() => TitleMenu->IsAddonAndNodesReady(), "等待标题界面");
+        
+        TaskHelper.DelayNext(2000, "等待 2 秒");
     }
 
     private async Task EnqueueDCTravelRequest(Travel[] data)

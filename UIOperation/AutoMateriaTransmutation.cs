@@ -44,7 +44,9 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        operateButtonNode?.Dispose();
+        operateButtonNode = null;
     }
 
     protected override void ConfigUI()
@@ -200,7 +202,6 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                operateButtonNode?.Dispose();
                 operateButtonNode = null;
                 break;
         }

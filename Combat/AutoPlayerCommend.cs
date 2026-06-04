@@ -34,7 +34,8 @@ public unsafe class AutoPlayerCommend : ModuleBase
         set => DService.Instance().GameConfig.UiConfig.Set("MipDispType", value);
     }
 
-    private          Config                       config = null!;
+    private Config config = null!;
+    
     private readonly AssignPlayerCommendationMenu menuItem;
     private readonly ContentSelectCombo           contentSelectCombo = new("Content");
 

@@ -41,6 +41,12 @@ public partial class AutoReplyChatBot
                 DrawWorldBookTab(fieldW, promptW);
         }
 
+        using (var toolsTab = ImRaii.TabItem(Lang.Get("AutoReplyChatBot-Tools")))
+        {
+            if (toolsTab)
+                DrawToolsTab(promptW);
+        }
+
         using (var testChatTab = ImRaii.TabItem(Lang.Get("AutoReplyChatBot-TestChat")))
         {
             if (testChatTab)
@@ -51,12 +57,6 @@ public partial class AutoReplyChatBot
         {
             if (historyTab)
                 DrawHistoryTab(fieldW, promptW, promptH);
-        }
-
-        using (var gameContextTab = ImRaii.TabItem(Lang.Get("AutoReplyChatBot-GameContext")))
-        {
-            if (gameContextTab)
-                DrawGameContextTab();
         }
     }
 }

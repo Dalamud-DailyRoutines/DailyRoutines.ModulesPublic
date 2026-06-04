@@ -58,7 +58,12 @@ public class OptimizedLetter : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSelectYesNo);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonLetterAddress);
-        OnAddonLetterAddress(AddonEvent.PreFinalize, null);
+        
+        textInputButton?.Dispose();
+        textInputButton = null;
+
+        listNode?.Dispose();
+        listNode = null;
 
         addon?.Dispose();
         addon = null;
@@ -75,11 +80,8 @@ public class OptimizedLetter : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                textInputButton?.Dispose();
                 textInputButton = null;
-
-                listNode?.Dispose();
-                listNode = null;
+                listNode        = null;
                 break;
 
             case AddonEvent.PostDraw:

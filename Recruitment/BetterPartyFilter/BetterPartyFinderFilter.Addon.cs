@@ -58,9 +58,7 @@ public partial class BetterPartyFinderFilter
                 break;
 
             case AddonEvent.PreFinalize:
-                buttonNode?.Dispose();
                 buttonNode = null;
-
                 isNeedToOpenAddon = false;
                 break;
         }
@@ -630,6 +628,8 @@ public partial class BetterPartyFinderFilter
 
         private void SetupDescriptionPanel()
         {
+            regexRows.Clear();
+
             // 招募描述面板 (Description)
             descriptionPanel = new VerticalListNode
             {

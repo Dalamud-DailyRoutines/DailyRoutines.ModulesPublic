@@ -14,6 +14,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -22,6 +23,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
+using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
@@ -57,7 +59,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
     private string searchString = string.Empty;
 
-    private readonly List<nint>        utf8Strings = [];
     private readonly List<IDisposable> infoTokens  = [];
 
     public OptimizedFriendList() =>
@@ -96,7 +97,16 @@ public unsafe class OptimizedFriendList : ModuleBase
         DService.Instance().ContextMenu.OnMenuOpened -= OnContextMenu;
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        searchInputNode?.Dispose();
+        searchInputNode = null;
+
+        searchSettingButtonNode?.Dispose();
+        searchSettingButtonNode = null;
+
+        foreach (var x in infoTokens)
+            x.Dispose();
+        infoTokens.Clear();
 
         remarkEditAddon?.Dispose();
         remarkEditAddon = null;
@@ -108,12 +118,10 @@ public unsafe class OptimizedFriendList : ModuleBase
             InfoProxyFriendList.Instance()->RequestData();
     }
 
-    private void ReplaceAtkString(int index, Utf8String* newString)
+    private void ReplaceAtkString(int index, ReadOnlySeString str)
     {
-        if (newString == null) return;
-
-        utf8Strings.Add((nint)newString);
-        AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->StringArray[index] = newString->StringPtr;
+        using var utf8String = new Utf8String(str);
+        AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->SetValue(index, utf8String.StringPtr);
     }
 
     private void ApplyDisplayModification(TaskHelper? taskHelper)
@@ -129,8 +137,7 @@ public unsafe class OptimizedFriendList : ModuleBase
         {
             var data = info->CharDataSpan[i];
 
-            var existedName = SeString.Parse(AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->StringArray[0 + 5 * i].Value).TextValue;
-
+            var existedName = AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->StringArray[0 + (5 * i)].ToString();
             if (existedName == LuminaWrapper.GetAddonText(964))
             {
                 isAnyUpdate = true;
@@ -143,18 +150,17 @@ public unsafe class OptimizedFriendList : ModuleBase
             {
                 isAnyUpdate = true;
 
-                var nicknameBuilder = new SeStringBuilder();
-                nicknameBuilder.AddUiForeground($"{configInfo.Nickname}", 37);
-
-                var nicknameString = Utf8String.FromSequence(nicknameBuilder.Build().EncodeWithNullTerminator());
-
+                using var nicknameBuilder = new RentedSeStringBuilder();
+                nicknameBuilder.Builder
+                               .PushColorType(37)
+                               .Append($"{configInfo.Nickname}")
+                               .PopColorType();
+                
                 // 名字
-                ReplaceAtkString(0 + 5 * i, nicknameString);
+                ReplaceAtkString(0 + (5 * i), nicknameBuilder.Builder.ToReadOnlySeString());
             }
 
-            var ptr           = AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->StringArray[3 + 5 * i];
-            var existedRemark = SeString.Parse(ptr.Value).TextValue;
-
+            var existedRemark = AtkStage.Instance()->GetStringArrayData(StringArrayType.FriendList)->StringArray[3 + (5 * i)].ToString();
             if (!string.IsNullOrWhiteSpace(configInfo.Remark))
             {
                 var remarkText = $"{LuminaWrapper.GetAddonText(13294).TrimEnd(':')}: {configInfo.Remark}" +
@@ -164,11 +170,9 @@ public unsafe class OptimizedFriendList : ModuleBase
 
                 if (remarkText == existedRemark) continue;
                 isAnyUpdate = true;
-
-                var remarkString = Utf8String.FromString(remarkText);
-
+                
                 // 在线状态
-                ReplaceAtkString(3 + 5 * i, remarkString);
+                ReplaceAtkString(3 + (5 * i), remarkText);
             }
         }
 
@@ -303,22 +307,23 @@ public unsafe class OptimizedFriendList : ModuleBase
 
                 if (FriendList == null) return;
 
-                var nameBuilder = new SeStringBuilder();
-                nameBuilder.AddUiForeground($"{playerInfo.Name}", 32);
+                using var nameBuilder = new RentedSeStringBuilder();
+                nameBuilder.Builder
+                           .PushColorType(32)
+                           .Append(playerInfo.Name)
+                           .PopColorType();
+                
+                ReplaceAtkString(0 + (5 * index), nameBuilder.Builder.ToReadOnlySeString());
 
-                var nameString = Utf8String.FromSequence(nameBuilder.Build().EncodeWithNullTerminator());
-                ReplaceAtkString(0 + 5 * index, nameString);
+                using var worldBuilder = new RentedSeStringBuilder();
+                worldBuilder.Builder
+                            .Append(LuminaWrapper.GetWorldName(playerInfo.WorldID))
+                            .AppendIcon((uint)BitmapFontIcon.CrossWorld)
+                            .Append(LuminaWrapper.GetWorldDCName(playerInfo.WorldID));
+                
+                ReplaceAtkString(1 + (5 * index), worldBuilder.Builder.ToReadOnlySeString());
 
-                var worldBuilder = new SeStringBuilder();
-                worldBuilder.AddText($"{LuminaWrapper.GetWorldName(playerInfo.WorldID)}");
-                worldBuilder.AddIcon(BitmapFontIcon.CrossWorld);
-                worldBuilder.AddText($"{LuminaWrapper.GetWorldDCName(playerInfo.WorldID)}");
-
-                var worldString = Utf8String.FromSequence(worldBuilder.Build().EncodeWithNullTerminator());
-                ReplaceAtkString(1 + 5 * index, worldString);
-
-                var onlineStatusString = Utf8String.FromString(LuminaWrapper.GetAddonText(1351));
-                ReplaceAtkString(3 + 5 * index, onlineStatusString);
+                ReplaceAtkString(3 + (5 * index), LuminaWrapper.GetAddonText(1351));
 
                 onNameResolved?.Invoke(playerInfo.Name);
 
@@ -352,7 +357,6 @@ public unsafe class OptimizedFriendList : ModuleBase
                 {
                     searchInputNode ??= new()
                     {
-                        IsVisible     = true,
                         Position      = new(10f, 425f),
                         Size          = new(200.0f, 35f),
                         MaxCharacters = 20,
@@ -379,7 +383,6 @@ public unsafe class OptimizedFriendList : ModuleBase
                     {
                         Position    = new(215f, 430f),
                         Size        = new(25f, 25f),
-                        IsVisible   = true,
                         IsChecked   = config.SearchName,
                         IsEnabled   = true,
                         TexturePath = "ui/uld/CircleButtons_hr1.tex",
@@ -438,30 +441,16 @@ public unsafe class OptimizedFriendList : ModuleBase
 
                 ApplyDisplayModification(TaskHelper);
                 break;
+            
             case AddonEvent.PreRequestedUpdate:
                 ApplySearchFilter(searchString, TaskHelper);
                 ApplyDisplayModification(TaskHelper);
                 break;
+            
             case AddonEvent.PreFinalize:
-                searchInputNode?.Dispose();
                 searchInputNode = null;
-
-                searchSettingButtonNode?.Dispose();
                 searchSettingButtonNode = null;
-
-                infoTokens.ForEach(static x => x.Dispose());
                 infoTokens.Clear();
-
-                utf8Strings.ForEach
-                (x =>
-                    {
-                        var ptr = (Utf8String*)x;
-                        if (ptr == null) return;
-
-                        ptr->Dtor(true);
-                    }
-                );
-                utf8Strings.Clear();
                 break;
         }
     }
@@ -470,8 +459,9 @@ public unsafe class OptimizedFriendList : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public bool[]                                  IgnoredGroup = new bool[8];
-        public ConcurrentDictionary<ulong, PlayerInfo> PlayerInfos  = [];
+        public ConcurrentDictionary<ulong, PlayerInfo> PlayerInfos = [];
+
+        public bool[] IgnoredGroup = new bool[8];
 
         public bool SearchName     = true;
         public bool SearchNickname = true;
@@ -512,17 +502,17 @@ public unsafe class OptimizedFriendList : ModuleBase
             var existedNickname = Instance.config.PlayerInfos.GetValueOrDefault(ContentID, new()).Nickname;
             var existedRemark   = Instance.config.PlayerInfos.GetValueOrDefault(ContentID, new()).Remark;
 
+            using var rented = new RentedSeStringBuilder();
+            rented.Builder
+                  .Append(Name)
+                  .AppendIcon((uint)BitmapFontIcon.CrossWorld)
+                  .Append(WorldName);
+
             playerNameNode = new()
             {
-                IsVisible = true,
-                Position  = new(10, 36),
-                Size      = new(100, 48),
-                String = new SeStringBuilder()
-                         .Append(Name)
-                         .AddIcon(BitmapFontIcon.CrossWorld)
-                         .Append(WorldName)
-                         .Build()
-                         .Encode(),
+                Position      = new(10, 36),
+                Size          = new(100, 48),
+                String        = rented.Builder.ToReadOnlySeString(),
                 FontSize      = 24,
                 AlignmentType = AlignmentType.Left,
                 TextFlags     = TextFlags.Bold
@@ -531,7 +521,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
             nicknameNode = new()
             {
-                IsVisible     = true,
                 Position      = new(10, 80),
                 Size          = new(100, 28),
                 String        = $"{LuminaWrapper.GetAddonText(15207)}",
@@ -543,7 +532,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
             nicknameInputNode = new()
             {
-                IsVisible     = true,
                 Position      = new(10, 108),
                 Size          = new(440, 28),
                 MaxCharacters = 64,
@@ -555,7 +543,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
             remarkNode = new()
             {
-                IsVisible     = true,
                 Position      = new(10, 140),
                 Size          = new(100, 28),
                 String        = $"{LuminaWrapper.GetAddonText(13294).TrimEnd(':')}",
@@ -568,7 +555,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
             remarkInputNode = new()
             {
-                IsVisible     = true,
                 Position      = new(10, 168),
                 MaxCharacters = 1024,
                 MaxLines      = 5,
@@ -585,7 +571,6 @@ public unsafe class OptimizedFriendList : ModuleBase
             {
                 Position  = new(10, 264),
                 Size      = new(140, 28),
-                IsVisible = true,
                 String    = Lang.Get("Confirm"),
                 OnClick = () =>
                 {
@@ -608,7 +593,6 @@ public unsafe class OptimizedFriendList : ModuleBase
             {
                 Position  = new(160, 264),
                 Size      = new(140, 28),
-                IsVisible = true,
                 String    = Lang.Get("Clear"),
                 OnClick = () =>
                 {
@@ -625,7 +609,6 @@ public unsafe class OptimizedFriendList : ModuleBase
             {
                 Position  = new(310, 264),
                 Size      = new(140, 28),
-                IsVisible = true,
                 String    = Lang.Get("OptimizedFriendList-ObtainUsedNames"),
                 OnClick = () =>
                 {
@@ -716,7 +699,6 @@ public unsafe class OptimizedFriendList : ModuleBase
         {
             var searchTypeTitleNode = new TextNode
             {
-                IsVisible = true,
                 String    = Lang.Get("OptimizedFriendList-SearchType"),
                 FontSize  = 16,
                 TextFlags = TextFlags.AutoAdjustNodeSize,
@@ -726,7 +708,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
             var searchTypeLayoutNode = new VerticalListNode
             {
-                IsVisible = true,
                 Position  = new(20f, searchTypeTitleNode.Position.Y + 28f),
                 Alignment = VerticalListAlignment.Left
             };
@@ -734,7 +715,6 @@ public unsafe class OptimizedFriendList : ModuleBase
             var nameCheckboxNode = new CheckboxNode
             {
                 Size      = new(80f, 20f),
-                IsVisible = true,
                 IsChecked = Instance.config.SearchName,
                 IsEnabled = true,
                 String    = Lang.Get("Name"),
@@ -751,7 +731,6 @@ public unsafe class OptimizedFriendList : ModuleBase
             var nicknameCheckboxNode = new CheckboxNode
             {
                 Size      = new(80f, 20f),
-                IsVisible = true,
                 IsChecked = Instance.config.SearchNickname,
                 IsEnabled = true,
                 String    = LuminaWrapper.GetAddonText(15207),
@@ -768,7 +747,6 @@ public unsafe class OptimizedFriendList : ModuleBase
             var remarkCheckboxNode = new CheckboxNode
             {
                 Size      = new(80f, 20f),
-                IsVisible = true,
                 IsChecked = Instance.config.SearchRemark,
                 IsEnabled = true,
                 String    = LuminaWrapper.GetAddonText(13294).TrimEnd(':'),
@@ -787,7 +765,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
             var searchGroupIgnoreTitleNode = new TextNode
             {
-                IsVisible = true,
                 String    = Lang.Get("OptimizedFriendList-SearchIgnoreGroup"),
                 FontSize  = 16,
                 TextFlags = TextFlags.AutoAdjustNodeSize,
@@ -797,7 +774,6 @@ public unsafe class OptimizedFriendList : ModuleBase
 
             var searchGroupIgnoreLayoutNode = new VerticalListNode
             {
-                IsVisible = true,
                 Position  = new(20f, searchGroupIgnoreTitleNode.Position.Y + 28f),
                 Alignment = VerticalListAlignment.Left
             };
@@ -811,7 +787,6 @@ public unsafe class OptimizedFriendList : ModuleBase
                 var groupCheckboxNode = new CheckboxNode
                 {
                     Size      = new(80f, 20f),
-                    IsVisible = true,
                     IsChecked = Instance.config.IgnoredGroup[i],
                     IsEnabled = true,
                     String    = groupFormatText,

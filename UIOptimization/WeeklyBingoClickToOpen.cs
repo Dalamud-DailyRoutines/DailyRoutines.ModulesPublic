@@ -44,25 +44,30 @@ public class WeeklyBingoClickToOpen : ModuleBase
 
     private unsafe void OnAddon(AddonEvent type, AddonArgs? args)
     {
-        foreach (var index in Enumerable.Range(0, 16))
+        switch (type)
         {
-            if (eventHandles[index] is { } handle)
-            {
-                DService.Instance().AddonEvent.RemoveEvent(handle);
-                eventHandles[index] = null;
-            }
-        }
+            case AddonEvent.PreFinalize:
+                foreach (var index in Enumerable.Range(0, 16))
+                {
+                    if (eventHandles[index] is { } handle)
+                    {
+                        DService.Instance().AddonEvent.RemoveEvent(handle);
+                        eventHandles[index] = null;
+                    }
+                }
+                break;
+            
+            case AddonEvent.PostSetup:
+                var addon = (AddonWeeklyBingo*)WeeklyBingo;
+                if (addon == null) return;
 
-        if (type != AddonEvent.PostSetup) return;
-
-        var addon = (AddonWeeklyBingo*)WeeklyBingo;
-        if (addon == null) return;
-
-        foreach (var index in Enumerable.Range(0, 16))
-        {
-            var dutySlot = addon->DutySlotList[index];
-            var handle   = DService.Instance().AddonEvent.AddEvent((nint)addon, (nint)dutySlot.DutyButton->OwnerNode, AddonEventType.ButtonClick, OnDutySlotClick);
-            eventHandles[index] = handle;
+                foreach (var index in Enumerable.Range(0, 16))
+                {
+                    var dutySlot = addon->DutySlotList[index];
+                    var handle   = DService.Instance().AddonEvent.AddEvent((nint)addon, (nint)dutySlot.DutyButton->OwnerNode, AddonEventType.ButtonClick, OnDutySlotClick);
+                    eventHandles[index] = handle;
+                }
+                break;
         }
     }
 

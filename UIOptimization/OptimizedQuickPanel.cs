@@ -33,8 +33,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private delegate void ToggleUIDelegate(UIModule* module, UiFlags flags, bool enable, bool unknown = true);
-    private Hook<ToggleUIDelegate>? ToggleUIHook;
+    private Hook<UIModule.Delegates.ToggleUi>? ToggleUIHook;
 
     private Hook<AgentShowDelegate>? AgentQuickPanelShowHook;
 
@@ -57,7 +56,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         );
         AgentQuickPanelShowHook.Enable();
 
-        ToggleUIHook = DService.Instance().Hook.HookFromAddress<ToggleUIDelegate>
+        ToggleUIHook = DService.Instance().Hook.HookFromAddress<UIModule.Delegates.ToggleUi>
         (
             UIModule.Instance()->VirtualTable->GetVFuncByName("ToggleUi"),
             ToggleUIDetour
@@ -74,7 +73,9 @@ public unsafe class OptimizedQuickPanel : ModuleBase
     {
         ChatManager.Instance().Unreg(OnPreExecuteCommandInner);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        lockCheckBoxNode?.Dispose();
+        lockCheckBoxNode = null;
     }
 
     protected override void ConfigUI()
@@ -99,11 +100,8 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                lockCheckBoxNode?.Dispose();
                 lockCheckBoxNode = null;
-
-                if (config != null)
-                    config.Save(this);
+                config.Save(this);
                 break;
 
             case AddonEvent.PostDraw:

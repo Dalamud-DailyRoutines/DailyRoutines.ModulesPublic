@@ -105,7 +105,16 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSelectYesno);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSelectString);
-        OnAddonSelectString(AddonEvent.PreFinalize, null);
+        
+        itemListLayout?.Dispose();
+        itemListLayout = null;
+
+        autoCollectNode?.Dispose();
+        autoCollectNode = null;
+
+        foreach (var x in itemRenderers)
+            x.Dispose();
+        itemRenderers.Clear();
 
         FrameworkManager.Instance().Unreg(OnUpdate);
         GameState.Instance().Login -= OnLogin;
@@ -353,13 +362,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                itemListLayout?.Dispose();
-                itemListLayout = null;
-
-                autoCollectNode?.Dispose();
+                itemListLayout  = null;
                 autoCollectNode = null;
-
-                itemRenderers.ForEach(x => x?.Dispose());
                 itemRenderers.Clear();
                 break;
             case AddonEvent.PostDraw:

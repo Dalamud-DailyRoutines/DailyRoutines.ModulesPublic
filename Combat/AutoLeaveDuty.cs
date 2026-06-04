@@ -5,10 +5,8 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
-using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
-using OmenTools.Info.Game.Enums;
-using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -25,6 +23,7 @@ public class AutoLeaveDuty : ModuleBase
     private Config config = null!;
 
     private readonly ContentSelectCombo contentSelectCombo = new("Blacklist");
+    private readonly ContentSelectCombo immediateLeaveCombo = new("ImmediateLeave");
 
     protected override void Init()
     {
@@ -32,6 +31,7 @@ public class AutoLeaveDuty : ModuleBase
         TaskHelper ??= new();
 
         contentSelectCombo.SelectedIDs = config.BlacklistContent;
+        immediateLeaveCombo.SelectedIDs = config.ImmediateLeaveContent;
 
         LogMessageManager.Instance().RegPre(OnPreReceiveLogmessage);
 
@@ -49,33 +49,51 @@ public class AutoLeaveDuty : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-ForceToLeave")}###ForceToLeave", ref config.ForceToLeave))
-            config.Save(this);
-
-        ImGui.SetNextItemWidth(100f * GlobalUIScale);
+        using var itemWidth = ImRaii.ItemWidth(250f * GlobalUIScale);
+        
+        // 延迟
         if (ImGui.InputInt($"{Lang.Get("Delay")} (ms)###DelayInput", ref config.Delay))
             config.Delay = Math.Max(0, config.Delay);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
+        
+        // 不退高难
+        if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties")}###NoLeaveHighEndDuties", ref config.NoLeaveHighEndDuties))
+            config.Save(this);
+        ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties-Help"));
+        
+        // 强制退本
+        if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-ForceToLeave")}###ForceToLeave", ref config.ForceToLeave))
+            config.Save(this);
 
         ImGui.NewLine();
 
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoLeaveDuty-BlacklistContents")}");
-
-        using (ImRaii.PushIndent())
+        // 黑名单副本
         {
-            ImGui.SetNextItemWidth(250f * GlobalUIScale);
-
             if (contentSelectCombo.DrawCheckbox())
             {
                 config.BlacklistContent = contentSelectCombo.SelectedIDs;
                 config.Save(this);
             }
 
-            if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties")}###NoLeaveHighEndDuties", ref config.NoLeaveHighEndDuties))
+            ImGui.SameLine();
+            ImGui.TextUnformatted(Lang.Get("AutoLeaveDuty-BlacklistContents"));
+
+            ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-BlacklistContents-Help"));
+        }
+        
+        // 立刻退出
+        {
+            if (immediateLeaveCombo.DrawCheckbox())
+            {
+                config.ImmediateLeaveContent = immediateLeaveCombo.SelectedIDs;
                 config.Save(this);
-            ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-NoLeaveHighEndDutiesHelp"));
+            }
+            
+            ImGui.SameLine();
+            ImGui.TextUnformatted(Lang.Get("AutoLeaveDuty-ImmediateLeaveContents"));
+            
+            ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-ImmediateLeaveContents-Help"));
         }
     }
 
@@ -83,6 +101,12 @@ public class AutoLeaveDuty : ModuleBase
     {
         if (config.BlacklistContent.Contains(GameState.ContentFinderCondition))
             return;
+
+        if (config.ImmediateLeaveContent.Contains(GameState.ContentFinderCondition))
+        {
+            TaskHelper.Enqueue(() => DutyCommand.Leave(DutyCommand.LeaveDutyKind.Inactive));
+            return;
+        }
 
         if (config.NoLeaveHighEndDuties &&
             args.ContentFinderCondition.Value.HighEndDuty)
@@ -94,10 +118,10 @@ public class AutoLeaveDuty : ModuleBase
         if (!config.ForceToLeave)
         {
             TaskHelper.Enqueue(() => !DService.Instance().Condition[ConditionFlag.InCombat]);
-            TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty));
+            TaskHelper.Enqueue(() => DutyCommand.Leave());
         }
         else
-            TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty, 1U));
+            TaskHelper.Enqueue(() => DutyCommand.Leave(DutyCommand.LeaveDutyKind.Inactive));
     }
 
     private void OnZoneChanged(uint u) =>
@@ -113,6 +137,7 @@ public class AutoLeaveDuty : ModuleBase
     private class Config : ModuleConfig
     {
         public HashSet<uint> BlacklistContent = [];
+        public HashSet<uint> ImmediateLeaveContent = [];
         public int           Delay;
         public bool          ForceToLeave;
 

@@ -111,7 +111,9 @@ public unsafe class FastSetWeatherTime : ModuleBase
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        openButton?.Dispose();
+        openButton = null;
 
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
@@ -180,7 +182,6 @@ public unsafe class FastSetWeatherTime : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                openButton?.Dispose();
                 openButton = null;
                 break;
 

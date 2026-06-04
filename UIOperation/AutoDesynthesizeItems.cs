@@ -44,7 +44,14 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonList);
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
-        OnAddonList(AddonEvent.PreFinalize, null);
+        checkboxNode?.Dispose();
+        checkboxNode = null;
+
+        buttonNode?.Dispose();
+        buttonNode = null;
+
+        layoutNode?.Dispose();
+        layoutNode = null;
     }
     
     private void OnAddonList(AddonEvent type, AddonArgs? args)
@@ -107,14 +114,9 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
                 break;
 
             case AddonEvent.PreFinalize:
-                checkboxNode?.Dispose();
                 checkboxNode = null;
-
-                buttonNode?.Dispose();
-                buttonNode = null;
-
-                layoutNode?.Dispose();
-                layoutNode = null;
+                buttonNode   = null;
+                layoutNode   = null;
 
                 TaskHelper?.Abort();
                 break;

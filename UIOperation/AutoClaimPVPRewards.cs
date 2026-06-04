@@ -37,7 +37,9 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+        
+        claimAllEvent?.Dispose();
+        claimAllEvent = null;
     }
 
     private void OnAddon(AddonEvent type, AddonArgs? args)
@@ -91,8 +93,8 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
                 closeButton->SetEnabledState(!TaskHelper.IsBusy);
 
                 break;
+            
             case AddonEvent.PreFinalize:
-                claimAllEvent?.Dispose();
                 claimAllEvent = null;
                 break;
         }

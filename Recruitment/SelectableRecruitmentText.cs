@@ -17,12 +17,15 @@ public unsafe class SelectableRecruitmentText : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = Lang.Get("SelectableRecruitmentTextTitle"),
-        Description     = Lang.Get("SelectableRecruitmentTextDescription"),
-        Category        = ModuleCategory.Recruitment,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/SelectableRecruitmentText-UI.png"] // TODO: 调整仓库
+        Title       = Lang.Get("SelectableRecruitmentTextTitle"),
+        Description = Lang.Get("SelectableRecruitmentTextDescription"),
+        Category    = ModuleCategory.Recruitment,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/SelectableRecruitmentText/preview-1.png"
+        ]
     };
-    
+
     private TextMultiLineInputNode? recruitmentTextNode;
 
     protected override void Init()
@@ -30,11 +33,13 @@ public unsafe class SelectableRecruitmentText : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "LookingForGroupDetail", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-        OnAddon(AddonEvent.PreFinalize, null);
+
+        recruitmentTextNode?.Dispose();
+        recruitmentTextNode = null;
     }
 
     private void OnAddon(AddonEvent type, AddonArgs? args)
@@ -42,9 +47,7 @@ public unsafe class SelectableRecruitmentText : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                recruitmentTextNode?.Dispose();
                 recruitmentTextNode = null;
-
                 break;
 
             case AddonEvent.PostDraw:
@@ -76,8 +79,8 @@ public unsafe class SelectableRecruitmentText : ModuleBase
 
                     if (recruitmentTextNode is { IsFocused: false, String.IsEmpty: true })
                     {
-                        var seString = new ReadOnlySeStringSpan(agent->LastViewedListing.Comment).PraseAutoTranslate().ToDalamudString();
-                        recruitmentTextNode.String = seString.Encode();
+                        var seString = new ReadOnlySeStringSpan(agent->LastViewedListing.Comment).PraseAutoTranslate();
+                        recruitmentTextNode.String = seString;
                     }
 
                     if (recruitmentTextNode is { IsVisible: false, String.IsEmpty: false })

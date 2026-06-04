@@ -110,7 +110,15 @@ public partial class OccultCrescentHelper
 
             DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
             DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-            OnAddon(AddonEvent.PreFinalize, null);
+
+            settingButton?.Dispose();
+            settingButton = null;
+
+            mapButton?.Dispose();
+            mapButton = null;
+
+            supportJobChangeButton?.Dispose();
+            supportJobChangeButton = null;
 
             othersTaskHelper?.Abort();
             othersTaskHelper?.Dispose();
@@ -151,7 +159,16 @@ public partial class OccultCrescentHelper
                 MainModule.config.Save(MainModule);
 
                 if (!MainModule.config.IsEnabledModifyInfoHUD)
-                    OnAddon(AddonEvent.PreFinalize, null);
+                {
+                    settingButton?.Dispose();
+                    settingButton = null;
+
+                    mapButton?.Dispose();
+                    mapButton = null;
+
+                    supportJobChangeButton?.Dispose();
+                    supportJobChangeButton = null;
+                }
             }
 
             if (MainModule.config.IsEnabledModifyInfoHUD)
@@ -499,13 +516,8 @@ public partial class OccultCrescentHelper
 
                     break;
                 case AddonEvent.PreFinalize:
-                    settingButton?.Dispose();
                     settingButton = null;
-
-                    mapButton?.Dispose();
                     mapButton = null;
-
-                    supportJobChangeButton?.Dispose();
                     supportJobChangeButton = null;
                     break;
             }

@@ -38,7 +38,9 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
     protected override void Uninit()
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonList);
-        OnAddonList(AddonEvent.PreFinalize, null);
+
+        tryOnButtonNode?.Dispose();
+        tryOnButtonNode = null;
     }
 
     private void OnAddonList(AddonEvent type, AddonArgs? args)
@@ -80,7 +82,6 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                tryOnButtonNode?.Dispose();
                 tryOnButtonNode = null;
 
                 TaskHelper?.Abort();
