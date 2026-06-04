@@ -421,10 +421,43 @@ public unsafe class AutoAntiCensorship : ModuleBase
     {
         if (string.IsNullOrEmpty(originalText)) return originalText;
 
-        var result = ApplyCustomReplacements(originalText);
+        var text = ApplyCustomReplacements(originalText);
+
+        // GetFilteredUtf8String 遇到 < 后停止检测后续内容的屏蔽,
+        // 导致 <...> 之后的屏蔽词没有 * 标记
+        var builder = new StringBuilder();
+        var segmentStart = 0;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '<') continue;
+
+            if (segmentStart < i)
+                builder.Append(ProcessCensoredSegment(text[segmentStart..i]));
+
+            var tagEnd = text.IndexOf('>', i + 1);
+            if (tagEnd == -1)
+            {
+                segmentStart = i;
+                break;
+            }
+
+            builder.Append(text[i..(tagEnd + 1)]);
+            i = tagEnd;
+            segmentStart = i + 1;
+        }
+
+        if (segmentStart < text.Length)
+            builder.Append(ProcessCensoredSegment(text[segmentStart..]));
+
+        return builder.Length > 0 ? builder.ToString() : ProcessCensoredSegment(text);
+    }
+
+    private string ProcessCensoredSegment(string text)
+    {
+        var result = text;
         var filtered = GetFilteredString(result);
 
-        // 记录已处理过的文本, 防止无限循环
         var processedTexts = new HashSet<string>();
 
         while (filtered != result && processedTexts.Add(result))
@@ -434,23 +467,10 @@ public unsafe class AutoAntiCensorship : ModuleBase
             var filteredRunes = filtered.EnumerateRunes().ToList();
 
             var (i, j) = (0, 0);
-            var insideTag = false;
 
             while (i < resultRunes.Count)
             {
                 var resultRune = resultRunes[i];
-
-                if (resultRune.Value == '<') insideTag = true;
-
-                if (insideTag)
-                {
-                    newResult.Append(resultRune.ToString());
-                    if (j < filteredRunes.Count && filteredRunes[j] == resultRune) j++;
-                    if (resultRune.Value == '>') insideTag = false;
-                    i++;
-                    continue;
-                }
-
                 Rune? filteredRune = j < filteredRunes.Count ? filteredRunes[j] : null;
 
                 if (filteredRune.HasValue && filteredRune.Value == resultRune)
