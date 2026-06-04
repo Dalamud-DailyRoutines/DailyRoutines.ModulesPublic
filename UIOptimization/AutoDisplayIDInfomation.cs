@@ -32,12 +32,12 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         Author      = ["Middo"]
     };
 
-    private Config config = null!;
-    private IDtrBarEntry? zoneInfoEntry;
-
     private static readonly CompSig                             GetStatusTooltipTextSig = new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
     private delegate        CStringPointer                      GetStatusTooltipTextDelegate(AgentHUD* agent, Utf8String* output, uint statusID, uint param);
     private                 Hook<GetStatusTooltipTextDelegate>? GetStatusTooltipTextHook;
+    
+    private Config        config = null!;
+    private IDtrBarEntry? zoneInfoEntry;
 
     private AtkEventWrapper? naviMapMouseOverEvent;
     private AtkEventWrapper? naviMapMouseOutEvent;
@@ -65,7 +65,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         UpdateDTRInfo();
     }
-    
+
     protected override void Uninit()
     {
         DService.Instance().ClientState.MapIdChanged     -= OnMapChanged;
@@ -80,7 +80,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddonTarget, OnAddonNaviMap);
         OnAddonNaviMap(AddonEvent.PreFinalize, null);
     }
-    
+
     protected override void ConfigUI()
     {
         if (ImGui.Checkbox($"{LuminaWrapper.GetAddonText(520)} ID", ref config.ShowItemID))
@@ -147,7 +147,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
     private void OnZoneChanged(uint u) =>
         UpdateDTRInfo();
-    
+
     private void OnAddonNaviMap(AddonEvent type, AddonArgs args)
     {
         switch (type)
@@ -155,11 +155,11 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
             case AddonEvent.PreFinalize:
                 naviMapMouseOverEvent?.Dispose();
                 naviMapMouseOverEvent = null;
-                
+
                 naviMapMouseOutEvent?.Dispose();
                 naviMapMouseOutEvent = null;
                 break;
-            
+
             case AddonEvent.PostDraw:
                 if (NaviMap == null) return;
                 if (naviMapMouseOutEvent != null && naviMapMouseOverEvent != null) return;
@@ -171,8 +171,8 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
                 if (collisionNode == null) return;
 
                 collisionNode->ClearEvents();
-                
-                naviMapMouseOverEvent = new AtkEventWrapper
+
+                naviMapMouseOverEvent = new
                 ((_, addon, _, _) =>
                     {
                         var id = WeatherManager.Instance()->WeatherId;
@@ -190,8 +190,8 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
                     }
                 );
                 naviMapMouseOverEvent.Add(NaviMap, collisionNode, AtkEventType.MouseOver);
-                
-                naviMapMouseOutEvent = new AtkEventWrapper((_, addon, _, _) => AtkStage.Instance()->TooltipManager.HideTooltip(addon->Id));
+
+                naviMapMouseOutEvent = new((_, addon, _, _) => AtkStage.Instance()->TooltipManager.HideTooltip(addon->Id));
                 naviMapMouseOutEvent.Add(NaviMap, collisionNode, AtkEventType.MouseOut);
                 break;
         }
@@ -200,7 +200,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     private void OnAddonTarget(AddonEvent type, AddonArgs args)
     {
         if (!config.ShowTargetID) return;
-        
+
         if (TargetManager.Target is not { } target) return;
 
         var id = target.DataID;
@@ -214,10 +214,10 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
             _                    => config.ShowTargetIDOthers
         };
         if (!show) return;
-        
+
         var stringArray = AtkStage.Instance()->GetStringArrayData(StringArrayType.Hud2);
         if (stringArray == null) return;
-        
+
         using var utf8String = new Utf8String($"{target.Name} [{target.DataID}]");
         stringArray->SetValue(0, $"{target.Name} [{target.DataID}]");
     }
@@ -250,8 +250,8 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     {
         if (!config.ShowActionID) return;
 
-        using var builder = new RentedSeStringBuilder();
-        var originalActionID = AgentActionDetail.Instance()->OriginalId;
+        using var builder          = new RentedSeStringBuilder();
+        var       originalActionID = AgentActionDetail.Instance()->OriginalId;
         var id = config is { ShowActionIDResolved: true, ShowActionIDOriginal: false }
                      ? actionID
                      : originalActionID;
