@@ -77,7 +77,7 @@ public unsafe class AutoFateStart : ModuleBase
             if (!LuminaGetter.TryGetRow(charaPtr.Value->FateId, out Fate row))
                 continue;
             
-            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.FateStart, row.RowId, charaPtr.Value->EntityId);
+            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StartFate, row.RowId, charaPtr.Value->EntityId);
             if (Throttler.Shared.Throttle($"AutoFateStart-Fate-{row.RowId}", 60_000))
                 NotifyHelper.Instance().Chat(Lang.Get("AutoFateStart-StartNotice", row.Name));
             

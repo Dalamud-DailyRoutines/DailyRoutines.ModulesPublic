@@ -34,7 +34,7 @@ public unsafe class GlamourPlateApplyCommand : ModuleBase
 
         if (!mirageManager->GlamourPlatesLoaded)
         {
-            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestGlamourPlates);
+            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestGlamourPlate);
             DService.Instance().Framework.RunOnTick(() => ApplyGlamourPlate(index), TimeSpan.FromMilliseconds(500));
             return;
         }

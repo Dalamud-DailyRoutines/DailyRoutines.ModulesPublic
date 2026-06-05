@@ -126,7 +126,7 @@ public class AutoFateSync : ModuleBase
 
     private unsafe void ExecuteFateLevelSync(ushort fateID)
     {
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.FateLevelSync, fateID, 1);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SyncToFateLevel, fateID, 1);
 
         TaskHelper.Abort();
 

@@ -94,7 +94,7 @@ public class AutoStoreToCabinet : ModuleBase
                             foreach (var item in list)
                             {
                                 ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StoreToCabinet, item);
-                                ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.InventoryRefresh);
+                                ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RefreshInventory);
                                 await Task.Delay(100).ConfigureAwait(false);
                             }
                         }

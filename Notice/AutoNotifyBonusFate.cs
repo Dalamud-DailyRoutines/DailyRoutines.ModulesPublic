@@ -75,7 +75,7 @@ public class AutoNotifyBonusFate : ModuleBase
 
     private void OnPostExecuteCommand(ExecuteCommandFlag command, uint param1, uint param2, uint param3, uint param4)
     {
-        if (command != ExecuteCommandFlag.FateLoad) return;
+        if (command != ExecuteCommandFlag.LoadFate) return;
 
         TaskHelper.Abort();
         TaskHelper.DelayNext(200);

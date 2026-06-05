@@ -332,7 +332,7 @@ public partial class OccultCrescentHelper
 
         private void OnPostReceivedCommand(ExecuteCommandFlag command, uint param1, uint param2, uint param3, uint param4)
         {
-            if (command                        != ExecuteCommandFlag.FateLoad ||
+            if (command                        != ExecuteCommandFlag.LoadFate ||
                 GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
                 return;
 

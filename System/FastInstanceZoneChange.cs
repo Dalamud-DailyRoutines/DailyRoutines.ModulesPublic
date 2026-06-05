@@ -321,7 +321,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
                 if (DService.Instance().Condition[ConditionFlag.BetweenAreas])
                 {
-                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.TerritoryTransport);
+                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StartTerritoryTransport);
                     return false;
                 }
 

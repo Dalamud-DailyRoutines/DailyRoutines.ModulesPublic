@@ -216,7 +216,7 @@ public unsafe class AutoRepair : ModuleBase
     {
         if (!ValidRepairFlags.Contains(command)) return;
 
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.InventoryRefresh);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RefreshInventory);
     }
 
     #endregion

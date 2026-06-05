@@ -99,7 +99,7 @@ public class FasterTerritoryTransport : ModuleBase
         if (flag != ConditionFlag.BetweenAreas) return;
 
         if (!config.OnlyLocal && !DService.Instance().ClientState.IsPvPExcludingDen && transportThrottler.Check("Block"))
-            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.TerritoryTransport);
+            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StartTerritoryTransport);
 
         if (!value)
             transportThrottler.Clear();
@@ -146,8 +146,8 @@ public class FasterTerritoryTransport : ModuleBase
         ExecuteCommandFlag.Teleport,
         ExecuteCommandFlag.TeleportToFriendHouse,
         ExecuteCommandFlag.AcceptTeleportOffer,
-        ExecuteCommandFlag.InstantReturn,
-        ExecuteCommandFlag.ReturnIfNotLalafell
+        ExecuteCommandFlag.ReturnIfNotLalafell,
+        ExecuteCommandFlag.ReturnToSafePointIfNotLalafell
     ];
 
     private static readonly FrozenSet<uint> BlockedFlags =

@@ -121,7 +121,7 @@ public unsafe class AutoJoinExitDuty : ModuleBase
     {
         if (GameMain.Instance()->CurrentContentFinderConditionId != targetContent) return false;
 
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.TerritoryTransportFinish);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.FinishTerritoryTransport);
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty);
         return true;
     }

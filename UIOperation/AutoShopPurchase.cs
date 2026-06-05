@@ -720,7 +720,7 @@ public class AutoShopPurchase : ModuleBase
             );
 
             TaskHelper.DelayNext(1_000, "防止卡住", 1);
-            TaskHelper.Enqueue(() => OnReceiveCommand(ExecuteCommandFlag.InventoryRefresh, 0, 0, 0, 0));
+            TaskHelper.Enqueue(() => OnReceiveCommand(ExecuteCommandFlag.RefreshInventory, 0, 0, 0, 0));
         }
 
         private unsafe void OnAddonYesno(AddonEvent type, AddonArgs args)
@@ -733,7 +733,7 @@ public class AutoShopPurchase : ModuleBase
 
         private void OnReceiveCommand(ExecuteCommandFlag command, uint param1, uint param2, uint param3, uint param4)
         {
-            if (!IsWaitingRefresh || command != ExecuteCommandFlag.InventoryRefresh) return;
+            if (!IsWaitingRefresh || command != ExecuteCommandFlag.RefreshInventory) return;
 
             IsWaitingRefresh = false;
             TaskHelper.RemoveQueue(1);
