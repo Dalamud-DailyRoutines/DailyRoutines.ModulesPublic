@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Info.Models;
 using DailyRoutines.Common.Module.Abstractions;
@@ -11,7 +12,6 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using Dalamud.Interface.Utility;
-using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
@@ -34,9 +34,9 @@ public unsafe class AutoCountPlayers : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private delegate void                                InfoProxy24EndRequestDelegate(InfoProxy24* instance);
-    private          Hook<InfoProxy24EndRequestDelegate> InfoProxy24EndRequestHook;
+
+    private delegate void InfoProxy24EndRequestDelegate(InfoProxy24* instance);
+    private Hook<InfoProxy24EndRequestDelegate> InfoProxy24EndRequestHook;
 
     private Config        config = null!;
     private IDtrBarEntry? entry;
@@ -50,10 +50,10 @@ public unsafe class AutoCountPlayers : ModuleBase
     {
         config = Config.Load(this) ?? new();
 
-        entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoCountPlayers");
-        entry.Shown   =   true;
-        entry.Text    =   $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: 0";
-        entry.OnClick =  _ =>
+        entry       ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoCountPlayers");
+        entry.Shown =   true;
+        entry.Text  =   $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: 0";
+        entry.OnClick = _ =>
         {
             EnsureOverlay();
             Overlay.IsOpen ^= true;
@@ -83,7 +83,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-        WindowManager.Instance().PostDraw                       -= OnDraw;
+        WindowManager.Instance().PostDraw                   -= OnDraw;
         PlayersManager.Instance().ReceivePlayersAround      -= OnReceivePlayers;
         PlayersManager.Instance().ReceivePlayersTargetingMe -= OnPlayersTargetingMeUpdate;
 
@@ -94,7 +94,7 @@ public unsafe class AutoCountPlayers : ModuleBase
             (
                 new()
                 {
-                    Name        = info.Player.Name.ToString(),
+                    Name        = info.Player.Name,
                     HomeWorldID = info.Player.HomeWorld.RowId,
                     JobID       = info.Player.ClassJob.RowId,
                     StartTime   = info.TargetingStartTime,
@@ -177,7 +177,7 @@ public unsafe class AutoCountPlayers : ModuleBase
                 {
                     using var id = ImRaii.PushId($"{playerAround.GameObjectID}");
 
-                    if (!string.IsNullOrWhiteSpace(searchInput) && !playerAround.Name.ToString().Contains(searchInput)) continue;
+                    if (!string.IsNullOrWhiteSpace(searchInput) && !playerAround.Name.Contains(searchInput)) continue;
 
                     if (ImGuiOm.ButtonIcon("定位", FontAwesomeIcon.Flag, Lang.Get("Locate")))
                     {
@@ -187,7 +187,7 @@ public unsafe class AutoCountPlayers : ModuleBase
                                       (
                                           new PlayerPayload
                                           (
-                                              playerAround.Name.ToString(),
+                                              playerAround.Name,
                                               playerAround.ToStruct()->HomeWorld
                                           )
                                       )
@@ -198,7 +198,7 @@ public unsafe class AutoCountPlayers : ModuleBase
                                       .Append("     ")
                                       .Append(SeString.CreateMapLink(GameState.TerritoryType, GameState.Map, mapPos.X, mapPos.Y))
                                       .Build();
-                        
+
                         // TODO: 改成 ReadOnlyString
                         NotifyHelper.Instance().Chat(message.Encode());
                     }
@@ -210,9 +210,14 @@ public unsafe class AutoCountPlayers : ModuleBase
                             DrawLine(localScreenPos, screenPos, playerAround);
                     }
 
+                    if (DService.Instance().Texture.TryGetFromGameIcon(playerAround.ClassJob.Value.GetIcon(), out var texture))
+                    {
+                        ImGui.SameLine();
+                        ImGui.Image(texture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
+                    }
 
                     ImGui.SameLine();
-                    ImGui.TextUnformatted($"{playerAround.Name} ({playerAround.ClassJob.Value.Name})");
+                    ImGuiOm.RenderPlayerInfo(playerAround.Name, playerAround.HomeWorld.Value.Name.ToString());
                 }
             }
         }
@@ -225,16 +230,14 @@ public unsafe class AutoCountPlayers : ModuleBase
                 {
                     ImGui.TextDisabled($"{record.StartTime:MM/dd HH:mm:ss}");
 
-                    ImGui.SameLine();
-                    var jobIcon = jobIcons.GetOrAdd
-                    (
-                        record.JobID,
-                        _ => new SeStringBuilder().AddIcon(record.JobID.ToLuminaRowRef<ClassJob>().Value.ToBitmapFontIcon()).Encode()
-                    );
-                    ImGuiHelpers.SeStringWrapped(jobIcon);
+                    if (DService.Instance().Texture.TryGetFromGameIcon(LuminaGetter.GetRowOrDefault<ClassJob>(record.JobID).GetIcon(), out var texture))
+                    {
+                        ImGui.SameLine();
+                        ImGui.Image(texture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
+                    }
 
                     ImGui.SameLine();
-                    ImGui.TextUnformatted($"{record.Name}@{LuminaWrapper.GetWorldName(record.HomeWorldID)}");
+                    ImGuiOm.RenderPlayerInfo(record.Name, LuminaWrapper.GetWorldName(record.HomeWorldID));
 
                     ImGui.SameLine();
                     ImGui.TextColored(KnownColor.Orange.ToVector4(), $"[{record.Duration:mm\\:ss}]");
@@ -265,7 +268,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
                 if (ImGui.Begin($"AutoCountPlayers-{localPlayer->EntityId}", WINDOW_FLAGS))
                 {
-                    ImGui.SetWindowPos(nodeState.Center - ImGui.GetWindowSize() * 0.75f);
+                    ImGui.SetWindowPos(nodeState.Center - (ImGui.GetWindowSize() * 0.75f));
 
                     using (FontManager.Instance().UIFont140.Push())
                     using (ImRaii.Group())
@@ -273,8 +276,9 @@ public unsafe class AutoCountPlayers : ModuleBase
                         ImGuiHelpers.SeStringWrapped(new SeStringBuilder().AddIcon(BitmapFontIcon.Warning).Encode());
 
                         ImGui.SameLine();
-                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 1.2f * GlobalUIScale);
-                        ImGuiOm.TextOutlined(KnownColor.Orange.ToVector4(), $"{PlayersManager.Instance().PlayersTargetingMe.Count}", KnownColor.SaddleBrown.ToVector4());
+                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() - (1.2f * GlobalUIScale));
+                        ImGuiOm.TextOutlined
+                            (KnownColor.Orange.ToVector4(), $"{PlayersManager.Instance().PlayersTargetingMe.Count}", KnownColor.SaddleBrown.ToVector4());
 
                         if (GameState.ContentFinderCondition == 0)
                         {
@@ -312,7 +316,7 @@ public unsafe class AutoCountPlayers : ModuleBase
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
+        if (!ContentMemberListValidZones.Contains(GameState.TerritoryIntendedUse) ||
             AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentMemberList)->IsAgentActive())
             return;
 
@@ -321,7 +325,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
     private static void OnUpdate(IFramework framework)
     {
-        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
+        if (!ContentMemberListValidZones.Contains(GameState.TerritoryIntendedUse) ||
             AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentMemberList)->IsAgentActive())
         {
             FrameworkManager.Instance().Unreg(OnUpdate);
@@ -338,8 +342,8 @@ public unsafe class AutoCountPlayers : ModuleBase
     {
         if (entry == null) return;
 
-        // 新月岛
-        if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
+        // 特殊场景探索
+        if (ContentMemberListValidZones.Contains(GameState.TerritoryIntendedUse))
             entry.Shown = true;
         else
             entry.Shown = !DService.Instance().Condition[ConditionFlag.InCombat] || GameState.IsInPVPArea;
@@ -354,8 +358,8 @@ public unsafe class AutoCountPlayers : ModuleBase
         entry.Text = $"{Lang.Get("AutoCountPlayers-PlayersAroundCount")}: {PlayersManager.Instance().PlayersAroundCount}" +
                      (PlayersManager.Instance().PlayersTargetingMe.Count == 0 ? string.Empty : $" ({PlayersManager.Instance().PlayersTargetingMe.Count})");
 
-        // 新月岛
-        if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
+        // 特殊场景探索
+        if (ContentMemberListValidZones.Contains(GameState.TerritoryIntendedUse))
         {
             entry.Text.Append
             (
@@ -381,10 +385,12 @@ public unsafe class AutoCountPlayers : ModuleBase
 
             PlayersManager.Instance().PlayersTargetingMe.ForEach
             (info =>
-                 tooltip.AddText($"{info.Player.Name} (")
-                        .AddIcon(info.Player.ClassJob.Value.ToBitmapFontIcon())
-                        .AddText($"{info.Player.ClassJob.Value.Name.ToString()})")
-                        .Add(NewLinePayload.Payload)
+                 tooltip
+                     .AddIcon(info.Player.ClassJob.Value.ToBitmapFontIcon())
+                     .AddText($"{info.Player.Name}")
+                     .AddIcon(BitmapFontIcon.CrossWorld)
+                     .AddText($"{info.Player.HomeWorld.Value.Name}")
+                     .Add(NewLinePayload.Payload)
             );
         }
 
@@ -394,10 +400,12 @@ public unsafe class AutoCountPlayers : ModuleBase
                .Add(NewLinePayload.Payload);
 
         characters.ForEach
-        (info => tooltip.AddText($"{info.Name} (")
-                        .AddIcon(info.ClassJob.Value.ToBitmapFontIcon())
-                        .AddText($"{info.ClassJob.Value.Name.ToString()})")
-                        .Add(NewLinePayload.Payload)
+        (info => tooltip
+                 .AddIcon(info.ClassJob.Value.ToBitmapFontIcon())
+                 .AddText($"{info.Name}")
+                 .AddIcon(BitmapFontIcon.CrossWorld)
+                 .AddText($"{info.HomeWorld.Value.Name}")
+                 .Add(NewLinePayload.Payload)
         );
 
         var message = tooltip.Build();
@@ -422,7 +430,7 @@ public unsafe class AutoCountPlayers : ModuleBase
                 (
                     new()
                     {
-                        Name        = info.Player.Name.ToString(),
+                        Name        = info.Player.Name,
                         HomeWorldID = info.Player.HomeWorld.RowId,
                         JobID       = info.Player.ClassJob.RowId,
                         StartTime   = info.TargetingStartTime,
@@ -471,7 +479,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
                     foreach (var info in targetingPlayersInfo)
                     {
-                        builder.Add(new PlayerPayload(info.Player.Name.ToString(), info.Player.HomeWorld.RowId))
+                        builder.Add(new PlayerPayload(info.Player.Name, info.Player.HomeWorld.RowId))
                                .Append(" (")
                                .AddIcon(info.Player.ClassJob.Value.ToBitmapFontIcon())
                                .Append($" {info.Player.ClassJob.Value.Name})");
@@ -532,13 +540,13 @@ public unsafe class AutoCountPlayers : ModuleBase
     private void EnsureOverlay()
     {
         if (Overlay != null) return;
-        
+
         Overlay            =  new(this);
         Overlay.Flags      &= ~ImGuiWindowFlags.NoTitleBar;
         Overlay.Flags      &= ~ImGuiWindowFlags.AlwaysAutoResize;
         Overlay.WindowName =  $"{Lang.Get("AutoCountPlayers-PlayersAroundInfo")}###AutoCountPlayers-Overlay";
     }
-    
+
     private class Config : ModuleConfig
     {
         public bool DisplayLineWhenTargetingMe = true;
@@ -562,7 +570,7 @@ public unsafe class AutoCountPlayers : ModuleBase
         public DateTime StartTime   { get; set; }
         public TimeSpan Duration    { get; set; }
     }
-    
+
     #region 常量
 
     private const ImGuiWindowFlags WINDOW_FLAGS =
@@ -579,10 +587,17 @@ public unsafe class AutoCountPlayers : ModuleBase
         ImGuiWindowFlags.NoScrollWithMouse     |
         ImGuiWindowFlags.NoInputs              |
         ImGuiWindowFlags.NoSavedSettings;
-    
+
     private static readonly uint LineColorBlue = KnownColor.LightSkyBlue.ToUInt();
     private static readonly uint LineColorRed  = KnownColor.Red.ToUInt();
     private static readonly uint DotColor      = KnownColor.RoyalBlue.ToUInt();
+
+    private static readonly FrozenSet<TerritoryIntendedUse> ContentMemberListValidZones =
+    [
+        TerritoryIntendedUse.OccultCrescent,
+        TerritoryIntendedUse.Bozja,
+        TerritoryIntendedUse.Eureka
+    ];
 
     #endregion
 }
