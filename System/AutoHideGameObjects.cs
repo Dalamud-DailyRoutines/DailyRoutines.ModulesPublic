@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
+using System.Numerics;
 using BattleNpcSubKind = Dalamud.Game.ClientState.Objects.Enums.BattleNpcSubKind;
 using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
@@ -19,7 +20,6 @@ public unsafe class AutoHideGameObjects : ModuleBase
     private const int   TARGETING_ME_PLAYER_KEEP_MS    = 60_000;
     private const int   RECENT_TARGET_PLAYER_KEEP_MS   = 30_000;
     private const byte  RECRUITING_ONLINE_STATUS_ID    = 26;  // 队员招募中
-
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("AutoHideGameObjectsTitle"),
@@ -32,6 +32,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
     private                 Hook<UpdateObjectArraysDelegate> UpdateObjectArraysHook;
 
     private Config config = null!;
+    private bool showKeepRuleDebug;
 
     private readonly Dictionary<nint, HiddenObjectRecord> processedObjects          = [];
     private readonly Dictionary<ulong, long>              targetingMePlayers        = [];
@@ -124,6 +125,12 @@ public unsafe class AutoHideGameObjects : ModuleBase
                     changed |= Checkbox("AutoHideGameObjects-KeepPlayersTargetingMe",
                                         ref defaultConfig.KeepPlayersTargetingMe,
                                         "AutoHideGameObjects-KeepPlayersTargetingMeHelp");
+
+                    // 调试开关默认关闭；开启后只影响配置界面的调试展示，不参与隐藏逻辑判断
+                    ImGui.Checkbox("Debug###AutoHideGameObjectsShowKeepRuleDebug", ref showKeepRuleDebug);
+
+                    if (showKeepRuleDebug)
+                        DrawKeepRuleDebugUI();
                 }
             }
 
@@ -142,6 +149,102 @@ public unsafe class AutoHideGameObjects : ModuleBase
 
         if (changed)
             SaveConfigAndRefresh();
+    }
+
+    // 调试面板
+    private void DrawKeepRuleDebugUI()
+    {
+        ImGui.TextUnformatted
+        (
+            $"processedObjects={processedObjects.Count}, " +
+            $"objectsHiddenThisScan={objectsHiddenThisScan.Count}, " +
+            $"nearbyKeptPlayers={nearbyKeptPlayers.Count}, " +
+            $"recentTargetPlayers={recentTargetPlayers.Count}, " +
+            $"targetingMePlayers={targetingMePlayers.Count}"
+        );
+
+        var tableSize = new Vector2(-1f, ImGui.GetTextLineHeightWithSpacing() * 12f);
+        using var table = ImRaii.Table
+        (
+            "###AutoHideGameObjectsKeepRuleDebugTable",
+            6,
+            ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
+            tableSize
+        );
+
+        if (!table)
+            return;
+
+        ImGui.TableSetupColumn("Rule",     ImGuiTableColumnFlags.WidthFixed,   120f);
+        ImGui.TableSetupColumn("Player",   ImGuiTableColumnFlags.WidthStretch, 1f);
+        ImGui.TableSetupColumn("PlayerID", ImGuiTableColumnFlags.WidthFixed,   150f);
+        ImGui.TableSetupColumn("Remain",   ImGuiTableColumnFlags.WidthFixed,   70f);
+        ImGui.TableSetupColumn("Distance", ImGuiTableColumnFlags.WidthFixed,   70f);
+        ImGui.TableSetupColumn("TargetID", ImGuiTableColumnFlags.WidthFixed,   150f);
+        ImGui.TableHeadersRow();
+
+        var now = Environment.TickCount64;
+
+        foreach (var (playerID, expireTime) in recentTargetPlayers.OrderBy(x => x.Value))
+            DrawKeepRuleDebugRow("Target/Focus", playerID, expireTime, now);
+
+        foreach (var (playerID, expireTime) in targetingMePlayers.OrderBy(x => x.Value))
+            DrawKeepRuleDebugRow("Targeting me", playerID, expireTime, now);
+
+        foreach (var playerID in nearbyKeptPlayers.Order())
+            DrawKeepRuleDebugRow("Nearby", playerID, null, now);
+
+        if (config.DefaultConfig.KeepRecruitingPlayers)
+            DrawRecruitingPlayersDebugRows();
+    }
+
+    private void DrawRecruitingPlayersDebugRows()
+    {
+        var manager = GameObjectManager.Instance();
+        if (manager == null)
+            return;
+
+        for (var index = 0; index < manager->Objects.IndexSorted.Length; index++)
+        {
+            if (index > 200)
+                break;
+
+            var gameObject = manager->Objects.IndexSorted[index].Value;
+            if (!IsPlayerObject(gameObject, (uint)index))
+                continue;
+
+            var player = (BattleChara*)gameObject;
+            if (player->OnlineStatus != RECRUITING_ONLINE_STATUS_ID)
+                continue;
+
+            var playerID = GetPlayerTrackingID(player);
+            if (playerID != 0)
+                DrawKeepRuleDebugRow("Recruiting", playerID, null, Environment.TickCount64);
+        }
+    }
+
+    private static void DrawKeepRuleDebugRow(string rule, ulong playerID, long? expireTime, long now)
+    {
+        TryFindPlayerByTrackingID(playerID, out var player);
+
+        ImGui.TableNextRow();
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(rule);
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugPlayerName(player));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(playerID.ToString());
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugRemainTimeText(expireTime, now));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugDistanceText(player));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugTargetIDText(player));
     }
 
     private void* UpdateObjectArraysDetour(GameObjectManager* objectManager)
@@ -453,6 +556,68 @@ public unsafe class AutoHideGameObjects : ModuleBase
 
     private static ulong GetLocalPlayerGameObjectID() =>
         LocalPlayerState.Object?.GameObjectID ?? 0;
+
+    private static bool TryFindPlayerByTrackingID(ulong playerID, out BattleChara* player)
+    {
+        player = null;
+
+        var manager = GameObjectManager.Instance();
+        if (manager == null || playerID == 0)
+            return false;
+
+        for (var index = 0; index < manager->Objects.IndexSorted.Length; index++)
+        {
+            if (index > 200)
+                break;
+
+            var gameObject = manager->Objects.IndexSorted[index].Value;
+            if (!IsPlayerObject(gameObject, (uint)index))
+                continue;
+
+            var currentPlayer = (BattleChara*)gameObject;
+            if (GetPlayerTrackingID(currentPlayer) != playerID)
+                continue;
+
+            player = currentPlayer;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string GetDebugPlayerName(BattleChara* player) =>
+        player == null || string.IsNullOrWhiteSpace(((GameObject*)player)->NameString)
+            ? "(not in object table)"
+            : ((GameObject*)player)->NameString;
+
+    private static string GetDebugRemainTimeText(long? expireTime, long now)
+    {
+        if (expireTime == null)
+            return "-";
+
+        var remainMs = Math.Max(0, expireTime.Value - now);
+        return $"{remainMs / 1000f:F1}s";
+    }
+
+    private static string GetDebugDistanceText(BattleChara* player) =>
+        player == null
+            ? "-"
+            : $"{LocalPlayerState.DistanceTo3D(player->Position):F1}m";
+
+    private static string GetDebugTargetIDText(BattleChara* player)
+    {
+        if (player == null)
+            return "-";
+
+        var targetID      = (ulong)player->GetTargetId();
+        var localPlayerID = GetLocalPlayerGameObjectID();
+        if (targetID == 0 || targetID == 0xE0000000)
+            return "No target";
+
+        return localPlayerID != 0 && targetID == localPlayerID
+                   ? $"{targetID} (me)"
+                   : targetID.ToString();
+    }
 
     private static bool IsPlayerObject(GameObject* gameObject, uint index) =>
         gameObject             != null &&
