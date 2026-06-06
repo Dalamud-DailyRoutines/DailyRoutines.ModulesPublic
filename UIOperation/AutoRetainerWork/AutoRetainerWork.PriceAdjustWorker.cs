@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Numerics;
 using System.Reflection;
 using DailyRoutines.Extensions;
@@ -18,7 +17,6 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
-using OmenTools.Info.Algorithms;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -79,7 +77,7 @@ public unsafe partial class AutoRetainerWork
                 (MoveToRetainerMarketDelegate)MoveToRetainerMarketDetour
             );
             MoveToRetainerMarketHook.Enable();
-            
+
             taskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
 
             DService.Instance().MarketBoard.HistoryReceived   += OnHistoryReceived;
@@ -257,14 +255,14 @@ public unsafe partial class AutoRetainerWork
 
             public static void UpdateCache<T>
             (
-                AutoRetainerWork  module,
-                PriceCache        cache,
-                uint              itemID,
-                IEnumerable<T>    listings,
-                Func<T, bool>     isHQSelector,
-                Func<T, bool>     onMannequinSelector,
-                Func<T, uint>     priceSelector,
-                Func<T, ulong>    retainerSelector = null
+                AutoRetainerWork module,
+                PriceCache       cache,
+                uint             itemID,
+                IEnumerable<T>   listings,
+                Func<T, bool>    isHQSelector,
+                Func<T, bool>    onMannequinSelector,
+                Func<T, uint>    priceSelector,
+                Func<T, ulong>   retainerSelector = null
             )
             {
                 var filteredListings = listings
@@ -362,7 +360,7 @@ public unsafe partial class AutoRetainerWork
                        price != 0;
             }
 
-            public static (DateTime Current, DateTime History) GetCacheTimes() => 
+            public static (DateTime Current, DateTime History) GetCacheTimes() =>
                 (CurrentPriceCache.LastUpdateTime, HistoryPriceCache.LastUpdateTime);
 
             public static void ClearCache(bool clearCurrent = true, bool clearHistory = true)
@@ -607,7 +605,7 @@ public unsafe partial class AutoRetainerWork
                 ImGui.TextUnformatted(itemName);
 
             ImGui.SameLine();
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 6f * GlobalUIScale);
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (6f * GlobalUIScale));
             ImGui.TextUnformatted(selectedItemConfig.IsHQ ? $"({Lang.Get("HQ")})" : string.Empty);
 
             ImGui.Separator();
@@ -615,7 +613,7 @@ public unsafe partial class AutoRetainerWork
             // 改价逻辑配置
             using (ImRaii.Group())
             {
-                foreach (AdjustBehavior behavior in Enum.GetValues<AdjustBehavior>())
+                foreach (var behavior in Enum.GetValues<AdjustBehavior>())
                 {
                     if (ImGui.RadioButton(behavior.ToString(), behavior == selectedItemConfig.AdjustBehavior))
                     {
@@ -852,7 +850,7 @@ public unsafe partial class AutoRetainerWork
                 {
                     if (popup)
                     {
-                        foreach (AbortBehavior behavior in Enum.GetValues<AbortBehavior>())
+                        foreach (var behavior in Enum.GetValues<AbortBehavior>())
                         {
                             if (ImGui.Selectable(behavior.ToString(), behavior == logic.Value))
                             {
@@ -1419,7 +1417,7 @@ public unsafe partial class AutoRetainerWork
                 ImGui.TextUnformatted($"{listing.Quantity}");
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{(listing.UnitPrice * listing.Quantity + listing.TotalTax).ToChineseString()}");
+                ImGui.TextUnformatted($"{((listing.UnitPrice * listing.Quantity) + listing.TotalTax).ToChineseString()}");
             }
         }
 
@@ -2190,7 +2188,7 @@ public unsafe partial class AutoRetainerWork
                           AdjustBehavior.百分比 => Math.Max
                           (
                               0,
-                              marketPrice * (1 - config.AdjustValues[AdjustBehavior.百分比] / 100)
+                              marketPrice * (1 - (config.AdjustValues[AdjustBehavior.百分比] / 100))
                           ),
                           _ => marketPrice
                       });
