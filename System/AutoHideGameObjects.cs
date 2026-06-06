@@ -2,6 +2,10 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Chat;
+using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -19,6 +23,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
     private const float NEARBY_PLAYER_RANGE_HYSTERESIS = 1.5f;
     private const int   TARGETING_ME_PLAYER_KEEP_MS    = 60_000;
     private const int   RECENT_TARGET_PLAYER_KEEP_MS   = 30_000;
+    private const int   RECENT_CHAT_PLAYER_KEEP_MS     = 300_000;
     private const byte  RECRUITING_ONLINE_STATUS_ID    = 26;  // 队员招募中
     public override ModuleInfo Info { get; } = new()
     {
@@ -34,9 +39,11 @@ public unsafe class AutoHideGameObjects : ModuleBase
     private Config config = null!;
     private bool showKeepRuleDebug;
 
+    private readonly Lock                                 recentChatPlayersLock     = new();
     private readonly Dictionary<nint, HiddenObjectRecord> processedObjects          = [];
     private readonly Dictionary<ulong, long>              targetingMePlayers        = [];
     private readonly Dictionary<ulong, long>              recentTargetPlayers       = [];
+    private readonly Dictionary<string, long>             recentChatPlayers         = [];
     private readonly HashSet<ulong>                       nearbyKeptPlayers         = [];
     private readonly HashSet<nint>                        objectsHiddenThisScan     = [];
     private readonly HashSet<ulong>                       nearbyPlayersSeenThisScan = [];
@@ -47,12 +54,14 @@ public unsafe class AutoHideGameObjects : ModuleBase
     {
         TaskHelper ??= new() { TimeoutMS = 30_000 };
         config = Config.Load(this) ?? new();
+        MigrateConfig();
 
         UpdateObjectArraysHook ??= UpdateObjectArraysSig.GetHook<UpdateObjectArraysDelegate>(UpdateObjectArraysDetour);
         UpdateObjectArraysHook.Enable();
 
         UpdateAllObjects(GameObjectManager.Instance());
 
+        DService.Instance().Chat.ChatMessage += OnChatMessage;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         FrameworkManager.Instance().Reg(OnUpdate, 1_000);
     }
@@ -60,6 +69,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
     protected override void Uninit()
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
+        DService.Instance().Chat.ChatMessage -= OnChatMessage;
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
         ResetAllObjects();
@@ -126,7 +136,10 @@ public unsafe class AutoHideGameObjects : ModuleBase
                                         ref defaultConfig.KeepPlayersTargetingMe,
                                         "AutoHideGameObjects-KeepPlayersTargetingMeHelp");
 
-                    // 调试开关默认关闭；开启后只影响配置界面的调试展示，不参与隐藏逻辑判断
+                    changed |= Checkbox("AutoHideGameObjects-KeepRecentChatPlayers",
+                                        ref defaultConfig.KeepRecentChatPlayers,
+                                        "AutoHideGameObjects-KeepRecentChatPlayersHelp");
+
                     ImGui.Checkbox("Debug###AutoHideGameObjectsShowKeepRuleDebug", ref showKeepRuleDebug);
 
                     if (showKeepRuleDebug)
@@ -141,6 +154,14 @@ public unsafe class AutoHideGameObjects : ModuleBase
             changed |= Checkbox("AutoHideGameObjects-HidePet",
                                 ref defaultConfig.HidePet,
                                 "AutoHideGameObjects-HidePetHelp");
+
+            changed |= Checkbox("AutoHideGameObjects-HideCompanion",
+                                ref defaultConfig.HideCompanion,
+                                "AutoHideGameObjects-HideCompanionHelp");
+
+            changed |= Checkbox("AutoHideGameObjects-HideOrnament",
+                                ref defaultConfig.HideOrnament,
+                                "AutoHideGameObjects-HideOrnamentHelp");
 
             changed |= Checkbox("AutoHideGameObjects-HideChocobo",
                                 ref defaultConfig.HideChocobo,
@@ -160,7 +181,8 @@ public unsafe class AutoHideGameObjects : ModuleBase
             $"objectsHiddenThisScan={objectsHiddenThisScan.Count}, " +
             $"nearbyKeptPlayers={nearbyKeptPlayers.Count}, " +
             $"recentTargetPlayers={recentTargetPlayers.Count}, " +
-            $"targetingMePlayers={targetingMePlayers.Count}"
+            $"targetingMePlayers={targetingMePlayers.Count}, " +
+            $"recentChatPlayers={GetRecentChatPlayerCount()}"
         );
 
         var tableSize = new Vector2(-1f, ImGui.GetTextLineHeightWithSpacing() * 12f);
@@ -194,8 +216,35 @@ public unsafe class AutoHideGameObjects : ModuleBase
         foreach (var playerID in nearbyKeptPlayers.Order())
             DrawKeepRuleDebugRow("Nearby", playerID, null, now);
 
+        foreach (var (playerName, expireTime) in GetRecentChatPlayerSnapshot().OrderBy(x => x.Value))
+            DrawRecentChatPlayerDebugRow(playerName, expireTime, now);
+
         if (config.DefaultConfig.KeepRecruitingPlayers)
             DrawRecruitingPlayersDebugRows();
+    }
+
+    private static void DrawRecentChatPlayerDebugRow(string playerName, long expireTime, long now)
+    {
+        TryFindPlayerByName(playerName, out var player);
+
+        ImGui.TableNextRow();
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted("Recent chat");
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugPlayerName(player, playerName));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(player != null ? GetPlayerTrackingID(player).ToString() : "-");
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugRemainTimeText(expireTime, now));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugDistanceText(player));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(GetDebugTargetIDText(player));
     }
 
     private void DrawRecruitingPlayersDebugRows()
@@ -252,6 +301,53 @@ public unsafe class AutoHideGameObjects : ModuleBase
         var orig = UpdateObjectArraysHook.Original(objectManager);
         UpdateAllObjects(objectManager);
         return orig;
+    }
+
+    private void MigrateConfig()
+    {
+        if (config.SplitCompanionOrnamentConfig)
+            return;
+
+        config.DefaultConfig.HideCompanion = config.DefaultConfig.HidePet;
+        config.DefaultConfig.HideOrnament  = config.DefaultConfig.HidePet;
+        config.SplitCompanionOrnamentConfig = true;
+        config.Save(this);
+    }
+
+    private void OnChatMessage(IHandleableChatMessage message)
+    {
+        if (!config.DefaultConfig.KeepRecentChatPlayers || !IsPlayerChatOrEmote(message.LogKind))
+            return;
+
+        var playerNames = GetPlayerNamesFromChatMessage(message);
+        if (playerNames.Count == 0)
+            return;
+
+        var expireTime = Environment.TickCount64 + RECENT_CHAT_PLAYER_KEEP_MS;
+        lock (recentChatPlayersLock)
+        {
+            foreach (var playerName in playerNames)
+                recentChatPlayers[playerName] = expireTime;
+        }
+    }
+
+    private static HashSet<string> GetPlayerNamesFromChatMessage(IHandleableChatMessage message)
+    {
+        var playerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        AddPlayerPayloadNames(playerNames, message.Sender);
+        AddPlayerPayloadNames(playerNames, message.Message);
+
+        // 有些频道/表情文本不一定带 PlayerPayload；兜底从当前对象表里按完整角色名反查。
+        AddMentionedVisiblePlayerNames(playerNames, $"{message.Sender.TextValue}\n{message.Message.TextValue}");
+
+        return playerNames;
+    }
+
+    private static void AddPlayerPayloadNames(HashSet<string> playerNames, SeString text)
+    {
+        foreach (var payload in text.Payloads.OfType<PlayerPayload>())
+            AddRecentChatPlayerName(playerNames, payload.PlayerName);
     }
 
     private void UpdateAllObjects(GameObjectManager* manager)
@@ -351,7 +447,12 @@ public unsafe class AutoHideGameObjects : ModuleBase
     }
 
     private static bool HasActiveFilter(FilterConfig config) =>
-        config.HidePlayer || config.HidePet || config.HideChocobo || config.HideUnimportantENPC;
+        config.HidePlayer ||
+        config.HidePet ||
+        config.HideCompanion ||
+        config.HideOrnament ||
+        config.HideChocobo ||
+        config.HideUnimportantENPC;
 
     private bool ShouldFilter(FilterConfig config, GameObject* gameObject, uint index, bool isProcessed)
     {
@@ -369,10 +470,17 @@ public unsafe class AutoHideGameObjects : ModuleBase
             !ShouldKeepPlayerVisible(config, (BattleChara*)gameObject))
             return true;
 
-        // 宠物
-        if (config.HidePet                             &&
-            IsOddObjectSlot(index)                     &&
-            gameObject->ObjectKind != ObjectKind.Mount &&
+        // 非战斗宠物
+        if (config.HideCompanion                         &&
+            IsOddObjectSlot(index)                       &&
+            gameObject->ObjectKind == ObjectKind.Companion &&
+            gameObject->OwnerId    != LocalPlayerState.EntityID)
+            return true;
+
+        // 时尚配饰
+        if (config.HideOrnament                         &&
+            IsOddObjectSlot(index)                      &&
+            gameObject->ObjectKind == ObjectKind.Ornament &&
             gameObject->OwnerId    != LocalPlayerState.EntityID)
             return true;
 
@@ -445,6 +553,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
                IsTargetOrFocusPlayerKept(config, player)             ||
                IsTargetingMePlayerKept(config, player)               ||
                IsRecruitingPlayer(config, player)                    ||
+               IsRecentChatPlayerKept(config, player)                ||
                IsNearbyPlayerKept(config, player);
     }
 
@@ -510,6 +619,28 @@ public unsafe class AutoHideGameObjects : ModuleBase
     private static bool IsRecruitingPlayer(FilterConfig config, BattleChara* player) =>
         config.KeepRecruitingPlayers && player != null && player->OnlineStatus == RECRUITING_ONLINE_STATUS_ID;
 
+    private bool IsRecentChatPlayerKept(FilterConfig config, BattleChara* player)
+    {
+        if (!config.KeepRecentChatPlayers || player == null)
+            return false;
+
+        var playerName = NormalizePlayerName(((GameObject*)player)->NameString);
+        if (string.IsNullOrWhiteSpace(playerName))
+            return false;
+
+        lock (recentChatPlayersLock)
+        {
+            if (!recentChatPlayers.TryGetValue(playerName, out var expireTime))
+                return false;
+
+            if (expireTime > Environment.TickCount64)
+                return true;
+
+            recentChatPlayers.Remove(playerName);
+            return false;
+        }
+    }
+
     private bool IsNearbyPlayerKept(FilterConfig config, BattleChara* player)
     {
         if (!config.KeepNearbyPlayers || player == null)
@@ -557,6 +688,89 @@ public unsafe class AutoHideGameObjects : ModuleBase
     private static ulong GetLocalPlayerGameObjectID() =>
         LocalPlayerState.Object?.GameObjectID ?? 0;
 
+    private static bool IsPlayerChatOrEmote(XivChatType chatType) =>
+        chatType is XivChatType.Say             or
+                    XivChatType.Yell            or
+                    XivChatType.Shout           or
+                    XivChatType.TellIncoming    or
+                    XivChatType.Party           or
+                    XivChatType.CrossParty      or
+                    XivChatType.Alliance        or
+                    XivChatType.FreeCompany     or
+                    XivChatType.PvPTeam         or
+                    XivChatType.NoviceNetwork   or
+                    XivChatType.CrossLinkShell1 or
+                    XivChatType.CrossLinkShell2 or
+                    XivChatType.CrossLinkShell3 or
+                    XivChatType.CrossLinkShell4 or
+                    XivChatType.CrossLinkShell5 or
+                    XivChatType.CrossLinkShell6 or
+                    XivChatType.CrossLinkShell7 or
+                    XivChatType.CrossLinkShell8 or
+                    XivChatType.Ls1             or
+                    XivChatType.Ls2             or
+                    XivChatType.Ls3             or
+                    XivChatType.Ls4             or
+                    XivChatType.Ls5             or
+                    XivChatType.Ls6             or
+                    XivChatType.Ls7             or
+                    XivChatType.Ls8             ||
+        chatType.ToString().Contains("Emote", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizePlayerName(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+            return string.Empty;
+
+        return string.Join(' ', playerName.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static void AddRecentChatPlayerName(HashSet<string> playerNames, string playerName)
+    {
+        var normalizedName = NormalizePlayerName(playerName);
+        if (!string.IsNullOrWhiteSpace(normalizedName))
+            playerNames.Add(normalizedName);
+    }
+
+    private static void AddMentionedVisiblePlayerNames(HashSet<string> playerNames, string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        var manager = GameObjectManager.Instance();
+        if (manager == null)
+            return;
+
+        for (var index = 0; index < manager->Objects.IndexSorted.Length; index++)
+        {
+            if (index > 200)
+                break;
+
+            var gameObject = manager->Objects.IndexSorted[index].Value;
+            if (!IsPlayerObject(gameObject, (uint)index))
+                continue;
+
+            var playerName = NormalizePlayerName(gameObject->NameString);
+            if (string.IsNullOrWhiteSpace(playerName) ||
+                !text.Contains(playerName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            playerNames.Add(playerName);
+        }
+    }
+
+    private int GetRecentChatPlayerCount()
+    {
+        lock (recentChatPlayersLock)
+            return recentChatPlayers.Count;
+    }
+
+    private KeyValuePair<string, long>[] GetRecentChatPlayerSnapshot()
+    {
+        lock (recentChatPlayersLock)
+            return recentChatPlayers.ToArray();
+    }
+
     private static bool TryFindPlayerByTrackingID(ulong playerID, out BattleChara* player)
     {
         player = null;
@@ -585,10 +799,53 @@ public unsafe class AutoHideGameObjects : ModuleBase
         return false;
     }
 
+    private static bool TryFindPlayerByName(string playerName, out BattleChara* player)
+    {
+        player = null;
+
+        var normalizedName = NormalizePlayerName(playerName);
+        var manager = GameObjectManager.Instance();
+        if (manager == null || string.IsNullOrWhiteSpace(normalizedName))
+            return false;
+
+        for (var index = 0; index < manager->Objects.IndexSorted.Length; index++)
+        {
+            if (index > 200)
+                break;
+
+            var gameObject = manager->Objects.IndexSorted[index].Value;
+            if (!IsPlayerObject(gameObject, (uint)index))
+                continue;
+
+            var currentPlayer = (BattleChara*)gameObject;
+            var currentPlayerName = NormalizePlayerName(((GameObject*)currentPlayer)->NameString);
+            if (!PlayerNameEquals(normalizedName, currentPlayerName))
+                continue;
+
+            player = currentPlayer;
+            return true;
+        }
+
+        return false;
+    }
+
     private static string GetDebugPlayerName(BattleChara* player) =>
         player == null || string.IsNullOrWhiteSpace(((GameObject*)player)->NameString)
             ? "(not in object table)"
             : ((GameObject*)player)->NameString;
+
+    private static string GetDebugPlayerName(BattleChara* player, string fallbackName) =>
+        player == null || string.IsNullOrWhiteSpace(((GameObject*)player)->NameString)
+            ? $"{fallbackName} (not in object table)"
+            : ((GameObject*)player)->NameString;
+
+    private static bool PlayerNameEquals(string candidateName, string objectName)
+    {
+        if (string.IsNullOrWhiteSpace(candidateName) || string.IsNullOrWhiteSpace(objectName))
+            return false;
+
+        return candidateName.Equals(objectName, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string GetDebugRemainTimeText(long? expireTime, long now)
     {
@@ -772,6 +1029,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
         nearbyKeptPlayers.Clear();
         targetingMePlayers.Clear();
         recentTargetPlayers.Clear();
+        ClearRecentChatPlayers();
     }
 
     // 尽量把所有本模块隐藏过的对象恢复显示，然后忘记所有运行期状态
@@ -823,6 +1081,7 @@ public unsafe class AutoHideGameObjects : ModuleBase
 
         PruneExpiredPlayerRecords(targetingMePlayers);
         PruneExpiredPlayerRecords(recentTargetPlayers);
+        PruneExpiredRecentChatPlayers();
 
         // 主要是小区域更新不及时；新增的动态保留规则开启时才需要持续刷新。
         if (!NeedsContinuousRefresh() && zoneUpdateCount > 3) return;
@@ -840,7 +1099,8 @@ public unsafe class AutoHideGameObjects : ModuleBase
                (filterConfig.KeepRecruitingPlayers     ||
                 filterConfig.KeepNearbyPlayers         ||
                 filterConfig.KeepTargetAndFocusPlayers ||
-                filterConfig.KeepPlayersTargetingMe);
+                filterConfig.KeepPlayersTargetingMe    ||
+                filterConfig.KeepRecentChatPlayers);
     }
 
     private static void PruneExpiredPlayerRecords(Dictionary<ulong, long> playerRecords)
@@ -853,9 +1113,31 @@ public unsafe class AutoHideGameObjects : ModuleBase
             playerRecords.Remove(playerID);
     }
 
+    private void PruneExpiredRecentChatPlayers()
+    {
+        lock (recentChatPlayersLock)
+        {
+            if (recentChatPlayers.Count == 0)
+                return;
+
+            var now = Environment.TickCount64;
+            foreach (var playerName in recentChatPlayers.Where(x => x.Value <= now).Select(x => x.Key).ToArray())
+                recentChatPlayers.Remove(playerName);
+        }
+    }
+
+    private void ClearRecentChatPlayers()
+    {
+        lock (recentChatPlayersLock)
+            recentChatPlayers.Clear();
+    }
+
     private class Config : ModuleConfig
     {
         public FilterConfig DefaultConfig = new();
+
+        // 兼容旧配置: 拆分非战斗宠物/时尚配饰开关前, 它们跟随 HidePet。
+        public bool SplitCompanionOrnamentConfig;
     }
 
     private class FilterConfig
@@ -865,6 +1147,12 @@ public unsafe class AutoHideGameObjects : ModuleBase
 
         // 宠物
         public bool HidePet = true;
+
+        // 非战斗宠物
+        public bool HideCompanion = true;
+
+        // 时尚配饰
+        public bool HideOrnament = true;
 
         // 玩家
         public bool HidePlayer = true;
@@ -882,6 +1170,9 @@ public unsafe class AutoHideGameObjects : ModuleBase
 
         // 保留一段时间内以自己为目标的玩家
         public bool KeepPlayersTargetingMe = true;
+
+        // 保留最近发言或发送表情的玩家
+        public bool KeepRecentChatPlayers = true;
 
         // 不重要 NPC
         public bool HideUnimportantENPC = true;
