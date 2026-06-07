@@ -74,6 +74,10 @@ public unsafe class AutoHideGameObjects : ModuleBase
                 config.Save(this);
             ImGuiOm.TooltipHover(Lang.Get("AutoHideGameObjects-HidePetHelp"));
 
+            if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HideOrnament"), ref config.DefaultConfig.HideOrnament))
+                config.Save(this);
+            ImGuiOm.TooltipHover(Lang.Get("AutoHideGameObjects-HideOrnamentHelp"));
+
             if (ImGui.Checkbox(Lang.Get("AutoHideGameObjects-HideChocobo"), ref config.DefaultConfig.HideChocobo))
                 config.Save(this);
             ImGuiOm.TooltipHover(Lang.Get("AutoHideGameObjects-HideChocoboHelp"));
@@ -171,10 +175,18 @@ public unsafe class AutoHideGameObjects : ModuleBase
         }
 
         // 宠物
-        if (config.HidePet                             &&
-            index                  <= 200              &&
-            index % 2              == 1                &&
-            gameObject->ObjectKind != ObjectKind.Mount &&
+        if (config.HidePet                                 &&
+            index                  <= 200                  &&
+            index % 2              == 1                    &&
+            gameObject->ObjectKind == ObjectKind.Companion &&
+            gameObject->OwnerId    != LocalPlayerState.EntityID)
+            return true;
+
+        // 时尚配饰
+        if (config.HideOrnament                           &&
+            index                  <= 200                 &&
+            index % 2              == 1                   &&
+            gameObject->ObjectKind == ObjectKind.Ornament &&
             gameObject->OwnerId    != LocalPlayerState.EntityID)
             return true;
         
@@ -307,6 +319,9 @@ public unsafe class AutoHideGameObjects : ModuleBase
 
         // 宠物
         public bool HidePet = true;
+
+        // 时尚配饰
+        public bool HideOrnament = true;
 
         // 玩家
         public bool HidePlayer = true;
