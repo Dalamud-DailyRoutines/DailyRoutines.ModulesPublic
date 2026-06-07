@@ -449,14 +449,33 @@ public class FastWorldTravel : ModuleBase
 
     private unsafe void EnqueueLogout()
     {
-        TaskHelper.EnqueueAsync(() => ModuleManager.Instance().UnloadAsync(ModuleManager.Instance().GetModuleByName("AutoLogin")), "禁用自动登录");
+        TaskHelper.Enqueue(() =>
+        {
+            if (!Throttler.Shared.Throttle("FastWorldTravel.DisableAutoLogin", 1_000))
+                return false;
+            
+            if (!(ModuleManager.Instance().IsModuleEnabled(MODULE_NAME_AUTO_LOGIN) ?? false))
+                return true;
 
-        TaskHelper.DelayNext(500, "等待 500 毫秒");
-        
-        TaskHelper.Enqueue(() => ChatManager.Instance().SendCommand("/logout"), "登出游戏");
-        
-        TaskHelper.DelayNext(500, "等待 500 毫秒");
+            if (ModuleManager.Instance().IsBusy)
+                return false;
 
+            ModuleManager.Instance().LoadOrUnloadModuleByName(MODULE_NAME_AUTO_LOGIN, false, false);
+            return false;
+        }, "禁用自动登录");
+        
+        TaskHelper.Enqueue(() =>
+        {
+            if (!Throttler.Shared.Throttle("FastWorldTravel.Logout"))
+                return false;
+
+            if (!GameState.IsLoggedIn)
+                return true;
+            
+            ChatManager.Instance().SendCommand("/logout");
+            return false;
+        }, "登出游戏");
+        
         TaskHelper.Enqueue(() => TitleMenu->IsAddonAndNodesReady(), "等待标题界面");
         
         TaskHelper.DelayNext(2000, "等待 2 秒");
@@ -510,7 +529,11 @@ public class FastWorldTravel : ModuleBase
                     TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == travelData.ContentID), "选择目标角色");
 
                     if (PluginConfig.Instance().ModuleEnabled.GetValueOrDefault("AutoLogin", false))
-                        TaskHelper.EnqueueAsync(() => ModuleManager.Instance().LoadAsync(ModuleManager.Instance().GetModuleByName("AutoLogin")), "启用自动登录");
+                        TaskHelper.Enqueue
+                        (
+                            () => ModuleManager.Instance().LoadOrUnloadModuleByName(MODULE_NAME_AUTO_LOGIN, false, true),
+                            "启用自动登录"
+                        );
                     return;
                 }
 
@@ -1165,6 +1188,8 @@ public class FastWorldTravel : ModuleBase
     #region 常量
 
     private const string COMMAND = "worldtravel";
+    
+    private const string MODULE_NAME_AUTO_LOGIN = "AutoLogin";
 
     private static readonly FrozenSet<uint> WorldTravelValidZones = [132, 129, 130];
 
