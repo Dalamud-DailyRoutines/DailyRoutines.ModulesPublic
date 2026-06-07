@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -6,11 +7,11 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.AgentEvent;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models.Native;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
@@ -27,17 +28,24 @@ public unsafe class AutoLogin : ModuleBase
         ModulesPrerequisite = ["InstantLogout"]
     };
 
+    private static string CurrentProcessInfo
+    {
+        get
+        {
+            using var p = Process.GetCurrentProcess();
+            return $"{Environment.ProcessId}-{p.StartTime.ToUniversalTime().Ticks}";
+        }
+    }
+
     private Config config = null!;
 
     private readonly WorldSelectCombo worldSelectCombo = new("World");
 
-    private int selectedCharaIndex;
-    private int dropIndex = -1;
+    // 界面
+    private string selectedCharaName;
+    private int    dropIndex = -1;
 
-    private bool   hasLoginOnce;
-    private int    defaultLoginIndex = -1;
-    private ushort manualWorldID;
-    private int    manualCharaIndex = -1;
+    private (string? ChracterName, int CharacterIndex, uint WorldID)? manualLoginInfo;
 
     protected override void Init()
     {
@@ -45,23 +53,18 @@ public unsafe class AutoLogin : ModuleBase
         TaskHelper ??= new() { TimeoutMS = 180_000, ShowDebug = true };
 
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "_TitleMenu", OnTitleMenu);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,  "Dialogue",   OnDialogue);
         OnTitleMenu(AddonEvent.PostSetup, null);
 
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoLogin-CommandHelp") });
-        DService.Instance().ClientState.Login += OnLogin;
+        GameState.Instance().Login += OnLogin;
     }
 
     protected override void Uninit()
     {
-        DService.Instance().ClientState.Login -= OnLogin;
+        GameState.Instance().Login -= OnLogin;
         CommandManager.Instance().RemoveCommand(COMMAND);
 
         DService.Instance().AddonLifecycle.UnregisterListener(OnTitleMenu);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnDialogue);
-
-        ResetStates();
-        hasLoginOnce = false;
     }
 
     protected override void ConfigUI()
@@ -69,7 +72,7 @@ public unsafe class AutoLogin : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}");
 
         using (ImRaii.PushIndent())
-            ImGui.TextUnformatted(Lang.Get("AutoLogin-AddCommandHelp", COMMAND, COMMAND));
+            ImGui.TextWrapped($"{COMMAND} {Lang.Get("AutoLogin-CommandHelp")}");
 
         ImGui.NewLine();
 
@@ -77,147 +80,12 @@ public unsafe class AutoLogin : ModuleBase
 
         ImGui.NewLine();
 
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoLogin-LoginInfos")}");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoLogin-BehaviourMode")}");
 
         using (ImRaii.PushIndent())
         {
             ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-            using (var combo = ImRaii.Combo
-                   (
-                       "###LoginInfosCombo",
-                       Lang.Get("AutoLogin-SavedLoginInfosAmount", config.LoginInfos.Count),
-                       ImGuiComboFlags.HeightLarge
-                   ))
-            {
-                if (combo)
-                {
-                    using (ImRaii.Group())
-                    {
-                        // 服务器选择
-                        ImGui.AlignTextToFramePadding();
-                        ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(15834)}:");
-
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-                        worldSelectCombo.DrawRadio();
-
-                        // 选择当前服务器
-                        ImGui.SameLine();
-
-                        if (ImGui.SmallButton(Lang.Get("AutoLogin-CurrentWorld")))
-                        {
-                            if (Sheets.Worlds.TryGetValue(GameState.CurrentWorld, out var world))
-                                worldSelectCombo.SelectedID = world.RowId;
-                        }
-
-                        // 角色登录索引选择
-                        ImGui.AlignTextToFramePadding();
-                        ImGui.TextUnformatted($"{Lang.Get("AutoLogin-CharacterIndex")}:");
-
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-                        if (ImGui.InputInt("##AutoLogin-EnterCharaIndex", ref selectedCharaIndex, flags: ImGuiInputTextFlags.EnterReturnsTrue))
-                            selectedCharaIndex = Math.Clamp(selectedCharaIndex, 0, 8);
-                        ImGuiOm.TooltipHover(Lang.Get("AutoLogin-CharaIndexInputTooltip"));
-                    }
-
-                    ImGui.SameLine();
-                    ImGui.Dummy(new(12));
-
-                    ImGui.SameLine();
-
-                    if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, Lang.Get("Add")))
-                    {
-                        if (selectedCharaIndex is < 0 or > 7 || worldSelectCombo.SelectedID == 0) return;
-                        var info = new LoginInfo(worldSelectCombo.SelectedID, selectedCharaIndex);
-
-                        if (!config.LoginInfos.Contains(info))
-                        {
-                            config.LoginInfos.Add(info);
-                            config.Save(this);
-                        }
-                    }
-
-                    ImGuiOm.TooltipHover(Lang.Get("AutoLogin-LoginInfoOrderHelp"));
-
-                    ImGui.Separator();
-                    ImGui.Separator();
-
-                    for (var i = 0; i < config.LoginInfos.Count; i++)
-                    {
-                        var info          = config.LoginInfos[i];
-                        var worldNullable = LuminaGetter.GetRow<World>(info.WorldID);
-                        if (worldNullable == null) continue;
-                        var world = worldNullable.Value;
-
-                        using (ImRaii.PushColor(ImGuiCol.Text, i % 2 == 0 ? ImGuiColors.TankBlue : ImGuiColors.DalamudWhite))
-                        {
-                            ImGui.Selectable
-                            (
-                                $"{i + 1}. {Lang.Get("AutoLogin-LoginInfoDisplayText", world.Name.ToString(), world.DataCenter.Value.Name.ToString(), info.CharaIndex)}"
-                            );
-                        }
-
-                        using (var source = ImRaii.DragDropSource())
-                        {
-                            if (source)
-                            {
-                                if (ImGui.SetDragDropPayload("LoginInfoReorder", []))
-                                    dropIndex = i;
-
-                                ImGui.TextColored
-                                (
-                                    ImGuiColors.DalamudYellow,
-                                    Lang.Get
-                                    (
-                                        "AutoLogin-LoginInfoDisplayText",
-                                        world.Name.ToString(),
-                                        world.DataCenter.Value.Name.ToString(),
-                                        info.CharaIndex
-                                    )
-                                );
-                            }
-                        }
-
-                        using (var target = ImRaii.DragDropTarget())
-                        {
-                            if (target)
-                            {
-                                if (ImGui.AcceptDragDropPayload("LoginInfoReorder").Handle != null)
-                                {
-                                    Swap(dropIndex, i);
-                                    dropIndex = -1;
-                                }
-                            }
-                        }
-
-                        using (var context = ImRaii.ContextPopupItem($"ContextMenu_{i}"))
-                        {
-                            if (context)
-                            {
-                                if (ImGui.Selectable(Lang.Get("Delete")))
-                                {
-                                    config.LoginInfos.Remove(info);
-                                    config.Save(this);
-                                }
-                            }
-                        }
-
-                        if (i != config.LoginInfos.Count - 1)
-                            ImGui.Separator();
-                    }
-                }
-            }
-        }
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoLogin-BehaviourMode")}");
-
-        ImGui.SetNextItemWidth(300f * GlobalUIScale);
-
-        using (ImRaii.PushIndent())
-        {
             using (var combo = ImRaii.Combo("###BehaviourModeCombo", BehaviourModeLoc[config.Mode]))
             {
                 if (combo)
@@ -232,78 +100,183 @@ public unsafe class AutoLogin : ModuleBase
                     }
                 }
             }
+        }
 
-            if (config.Mode == BehaviourMode.Once)
+        ImGui.NewLine();
+
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoLogin-LoginInfos")}");
+
+        using (ImRaii.PushIndent())
+        {
+            using (ImRaii.Group())
             {
-                ImGui.Spacing();
-
-                ImGui.TextUnformatted($"{Lang.Get("State")}:");
+                // 服务器选择
+                ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                worldSelectCombo.DrawRadio();
 
                 ImGui.SameLine();
-                ImGui.TextColored
-                (
-                    hasLoginOnce ? KnownColor.LawnGreen.ToVector4() : KnownColor.OrangeRed.ToVector4(),
-                    hasLoginOnce
-                        ? Lang.Get("AutoLogin-LoginOnce")
-                        : Lang.Get("AutoLogin-HaveNotLogin")
-                );
+                ImGui.TextUnformatted(LuminaWrapper.GetAddonText(13634));
 
-                ImGui.SameLine(0, 8f * GlobalUIScale);
-                if (ImGui.SmallButton(Lang.Get("Clear")))
-                    hasLoginOnce = false;
+                // 选择当前服务器
+                ImGui.SameLine();
+                if (ImGui.SmallButton(Lang.Get("Current")))
+                    worldSelectCombo.SelectedID = GameState.CurrentWorld;
+
+                // 角色名
+                ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                ImGui.InputText
+                (
+                    $"{LuminaWrapper.GetAddonText(14055)}##AutoLogin-EnterCharacterName",
+                    ref selectedCharaName,
+                    flags: ImGuiInputTextFlags.EnterReturnsTrue
+                );
+            }
+
+            ImGui.SameLine(0, 16f * GlobalUIScale);
+
+            if (ImGuiOm.ButtonIconWithTextVertical(FontAwesomeIcon.Plus, Lang.Get("Add")))
+            {
+                if (string.IsNullOrWhiteSpace(selectedCharaName) || worldSelectCombo.SelectedID == 0) return;
+                var info = new LoginInfo(worldSelectCombo.SelectedID, selectedCharaName);
+
+                if (!config.LoginData.Contains(info))
+                {
+                    config.LoginData.Add(info);
+                    config.Save(this);
+                }
+            }
+
+            ImGuiOm.TooltipHover(Lang.Get("AutoLogin-LoginInfoOrderHelp"));
+
+            for (var i = 0; i < config.LoginData.Count; i++)
+            {
+                var info = config.LoginData[i];
+
+                var text =
+                    $"{i + 1}. {Lang.Get("AutoLogin-LoginInfoDisplayText", LuminaWrapper.GetWorldName(info.WorldID), LuminaWrapper.GetWorldDCName(info.WorldID), info.CharacterName)}";
+
+                using (ImRaii.PushColor(ImGuiCol.Text, i % 2 == 0 ? ImGuiColors.TankBlue : ImGuiColors.DalamudWhite))
+                    ImGui.Selectable(text);
+
+                using (var source = ImRaii.DragDropSource())
+                {
+                    if (source)
+                    {
+                        if (ImGui.SetDragDropPayload("LoginInfoReorder", []))
+                            dropIndex = i;
+
+                        ImGui.TextColored(ImGuiColors.DalamudYellow, text);
+                    }
+                }
+
+                using (var target = ImRaii.DragDropTarget())
+                {
+                    if (target)
+                    {
+                        if (ImGui.AcceptDragDropPayload("LoginInfoReorder").Handle != null)
+                        {
+                            Swap(dropIndex, i);
+                            dropIndex = -1;
+                        }
+                    }
+                }
+
+                using (var context = ImRaii.ContextPopupItem($"ContextMenu_{i}"))
+                {
+                    if (context)
+                    {
+                        if (ImGui.Selectable(Lang.Get("Delete")))
+                        {
+                            config.LoginData.Remove(info);
+                            config.Save(this);
+                        }
+                    }
+                }
+
+                if (i != config.LoginData.Count - 1)
+                    ImGui.Separator();
             }
         }
     }
 
+    #region 事件
+
     private void OnLogin()
     {
         TaskHelper.Abort();
-        ResetStates();
+        manualLoginInfo = null;
+
+        config.CurrentProcessInfo = CurrentProcessInfo;
+        config.Save(this);
     }
 
     private void OnCommand(string command, string args)
     {
         args = args.Trim();
-        if (string.IsNullOrWhiteSpace(args) || !DService.Instance().ClientState.IsLoggedIn || DService.Instance().Condition.IsBoundByDuty)
+
+        if (string.IsNullOrWhiteSpace(args)       ||
+            !GameState.IsLoggedIn                 ||
+            GameState.ContentFinderCondition != 0 ||
+            TaskHelper.IsBusy)
             return;
 
         var parts = args.Split(' ');
+        if (parts.Length is not (1 or 2))
+            return;
 
-        switch (parts.Length)
+        manualLoginInfo = null;
+        
+        string? characterName  = null;
+        var     characterIndex = -1;
+        var     worldID        = (uint)AgentLobby.Instance()->WorldId;
+
+        var characterPart = parts[0];
+
+        // 角色参数: 索引 (0-7) 或名称 (两段式用 + 连接)
+        if (uint.TryParse(characterPart, out var idx) && idx < 8)
+            characterIndex = (int)idx;
+        else
+            characterName = characterPart.Replace('+', ' ');
+
+        // 可选服务器参数: ID 或名称
+        if (parts.Length > 1)
         {
-            case 1:
-                if (!int.TryParse(args, out var charaIndex0) || charaIndex0 < 0 || charaIndex0 > 8) return;
+            var worldPart = parts[1];
 
-                manualWorldID    = (ushort)GameState.HomeWorld;
-                manualCharaIndex = charaIndex0;
-                break;
-            case 2:
-                var world1 = Sheets.Worlds.Where(x => x.Value.Name.ToString().Contains(parts[0]))
-                                   .OrderBy(x => x.Value.Name.ToString())
-                                   .FirstOrDefault()
-                                   .Key;
-                if (world1 == 0) return;
-
-                if (!int.TryParse(parts[1], out var charaIndex1) || charaIndex1 < 0 || charaIndex1 > 8) return;
-
-                manualWorldID    = (ushort)world1;
-                manualCharaIndex = charaIndex1;
-                break;
-            default:
-                return;
+            if (uint.TryParse(worldPart, out var id) && Sheets.Worlds.ContainsKey(id))
+                worldID = id;
+            else
+            {
+                var found = Sheets.Worlds.FirstOrDefault(x => x.Value.Name.ToString().Equals(worldPart, StringComparison.OrdinalIgnoreCase));
+                if (found.Key != 0)
+                    worldID = found.Key;
+            }
         }
 
-        TaskHelper.Abort();
+        manualLoginInfo = new(characterName, characterIndex, worldID);
         TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/logout"));
     }
 
     private void OnTitleMenu(AddonEvent eventType, AddonArgs? args)
     {
-        if (config.LoginInfos.Count <= 0                        ||
-            (config.Mode == BehaviourMode.Once && hasLoginOnce) ||
-            TaskHelper.AbortByConflictKey(this)                 ||
-            LobbyDKT->IsAddonAndNodesReady()                    ||
-            DService.Instance().ClientState.IsLoggedIn)
+        if (config.LoginData.Count == 0 && manualLoginInfo == null)
+            return;
+
+        if (TaskHelper.AbortByConflictKey(this))
+            return;
+
+        // 超域旅行
+        if (LobbyDKT->IsAddonAndNodesReady())
+            return;
+
+        // 真的可能吗?
+        if (GameState.IsLoggedIn)
+            return;
+
+        // 登录过一次了 (手动登录不受此限制)
+        if (manualLoginInfo           == null               &&
+            config.Mode               == BehaviourMode.Once &&
+            config.CurrentProcessInfo == CurrentProcessInfo)
             return;
 
         TaskHelper.Abort();
@@ -318,46 +291,12 @@ public unsafe class AutoLogin : ModuleBase
             }
         );
 
-        if (manualWorldID != 0 && manualCharaIndex != -1)
-            TaskHelper.Enqueue(() => SelectCharacter(manualWorldID, manualCharaIndex), "SelectCharaManual");
-        else
-            TaskHelper.Enqueue(SelectCharacterDefault, "SelectCharaDefault0");
+        TaskHelper.Enqueue(EnqueueLogin);
     }
 
-    private static void OnDialogue(AddonEvent type, AddonArgs args)
-    {
-        var addon = Dialogue;
-        if (!addon->IsAddonAndNodesReady()) return;
+    #endregion
 
-        var buttonNode = addon->GetComponentButtonById(4);
-        if (buttonNode == null) return;
-
-        buttonNode->Click();
-    }
-
-    private void SelectCharacterDefault()
-    {
-        defaultLoginIndex = 0;
-        TryNextDefaultLogin();
-    }
-
-    private void TryNextDefaultLogin()
-    {
-        if (defaultLoginIndex < 0 || defaultLoginIndex >= config.LoginInfos.Count)
-        {
-            defaultLoginIndex = -1;
-            return;
-        }
-
-        var loginInfo = config.LoginInfos[defaultLoginIndex++];
-        TaskHelper.Enqueue
-        (
-            () => SelectCharacter((ushort)loginInfo.WorldID, loginInfo.CharaIndex),
-            $"选择默认角色_{loginInfo.WorldID}_{loginInfo.CharaIndex}"
-        );
-    }
-
-    private bool SelectCharacter(ushort worldID, int charaIndex)
+    private bool EnqueueLogin()
     {
         if (TaskHelper.AbortByConflictKey(this)) return true;
         if (!Throttler.Shared.Throttle("AutoLogin-SelectCharacter", 100)) return false;
@@ -365,82 +304,63 @@ public unsafe class AutoLogin : ModuleBase
         var agent = AgentLobby.Instance();
         if (agent == null) return false;
 
-        var addon = CharaSelectListMenu;
-        if (!addon->IsAddonAndNodesReady()) return false;
-
-        // 不对应, 重新选
-        if (agent->WorldId != worldID)
-        {
-            TaskHelper.Enqueue(() => SelectWorld(worldID),                 "重新选择世界", weight: 2);
-            TaskHelper.Enqueue(() => SelectCharacter(worldID, charaIndex), "重新选择角色");
-            return true;
-        }
-
-        if (manualWorldID     == 0  &&
-            manualCharaIndex  == -1 &&
-            defaultLoginIndex >= 0  &&
-            !HasCharacterAtIndex(charaIndex))
-        {
-            TryNextDefaultLogin();
-            return true;
-        }
-
-        AgentLobbyEvent.SelectCharacterByIndex((uint)charaIndex);
-        return true;
-    }
-
-    private static bool HasCharacterAtIndex(int charaIndex)
-    {
-        var agent = AgentLobby.Instance();
-        if (agent == null) return false;
-
-        var entries = agent->LobbyData.CharaSelectEntries;
-        if (entries.Count <= charaIndex) return false;
-
-        var entryPtr = entries[charaIndex];
-        return entryPtr                   != null &&
-               entryPtr.Value             != null &&
-               entryPtr.Value->LoginFlags == CharaSelectCharacterEntryLoginFlags.None;
-    }
-
-    private bool SelectWorld(ushort worldID)
-    {
-        if (TaskHelper.AbortByConflictKey(this)) return true;
-        if (!Throttler.Shared.Throttle("AutoLogin-SelectWorld", 100)) return false;
-
-        var agent = AgentLobby.Instance();
-        if (agent == null) return false;
-
         if (!CharaSelectListMenu->IsAddonAndNodesReady()) return false;
 
-        if (!AgentLobbyEvent.SelectWorldByID(worldID))
-        {
-            // 没找到
-            TaskHelper.Abort();
+        var client = (LobbyUIClientEX*)&agent->LobbyData.LobbyUIClient;
 
-            TryNextDefaultLogin();
+        // 手动登录优先
+        if (manualLoginInfo is var (charName, charIndex, worldID))
+        {
+            var target = charIndex >= 0
+                             ? client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Index == charIndex && x.CurrentWorldID == worldID)
+                             : client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Name  == charName  && x.CurrentWorldID == worldID);
+
+            // 角色不存在, 回退到配置列表
+            if (target.HomeWorldID == 0)
+                manualLoginInfo = null;
+            else
+            {
+                var contentID = target.ContentID;
+                TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(target.CurrentWorldID));
+                TaskHelper.Enqueue(() => agent->WorldId == target.CurrentWorldID);
+                TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == contentID));
+
+                manualLoginInfo = null;
+                return true;
+            }
+        }
+
+        var counter = config.LoginData.Count + 1;
+
+        foreach (var loginInfo in config.LoginData)
+        {
+            counter--;
+
+            var found = client->CurrentDataCenterCharacters.FirstOrDefault
+            (x => x.Name        == loginInfo.CharacterName &&
+                  x.HomeWorldID == loginInfo.WorldID
+            );
+            if (found.HomeWorldID == 0)
+                continue;
+
+            TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(found.CurrentWorldID),                         weight: counter);
+            TaskHelper.Enqueue(() => agent->WorldId == found.CurrentWorldID,                                        weight: counter);
+            TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.NameString == loginInfo.CharacterName), weight: counter);
+            break;
         }
 
         return true;
-    }
-
-    private void ResetStates()
-    {
-        hasLoginOnce      = true;
-        defaultLoginIndex = -1;
-        manualWorldID     = 0;
-        manualCharaIndex  = -1;
     }
 
     private void Swap(int index1, int index2)
     {
-        if (index1 < 0                       ||
-            index1 > config.LoginInfos.Count ||
-            index2 < 0                       ||
-            index2 > config.LoginInfos.Count) return;
+        if (index1 < 0                      ||
+            index1 > config.LoginData.Count ||
+            index2 < 0                      ||
+            index2 > config.LoginData.Count) return;
 
-        (config.LoginInfos[index1], config.LoginInfos[index2]) =
-            (config.LoginInfos[index2], config.LoginInfos[index1]);
+        (config.LoginData[index1], config.LoginData[index2]) =
+            (config.LoginData[index2], config.LoginData[index1]);
 
         TaskHelper.Abort();
         TaskHelper.DelayNext(500);
@@ -449,32 +369,35 @@ public unsafe class AutoLogin : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public List<LoginInfo> LoginInfos = [];
-        public BehaviourMode   Mode       = BehaviourMode.Once;
+        public List<LoginInfo> LoginData = [];
+
+        public BehaviourMode Mode = BehaviourMode.Once;
+
+        public string CurrentProcessInfo = string.Empty;
     }
 
     private class LoginInfo
     (
-        uint worldID,
-        int  index
+        uint   worldID,
+        string characterName
     ) : IEquatable<LoginInfo>
     {
-        public uint WorldID    { get; set; } = worldID;
-        public int  CharaIndex { get; set; } = index;
+        public uint   WorldID       { get; set; } = worldID;
+        public string CharacterName { get; set; } = characterName;
 
         public bool Equals(LoginInfo? other)
         {
             if (other is null || GetType() != other.GetType())
                 return false;
 
-            return WorldID == other.WorldID && CharaIndex == other.CharaIndex;
+            return WorldID == other.WorldID && CharacterName == other.CharacterName;
         }
 
         public override bool Equals(object? obj) =>
             Equals(obj as LoginInfo);
 
         public override int GetHashCode() =>
-            HashCode.Combine(WorldID, CharaIndex);
+            HashCode.Combine(WorldID, CharacterName);
 
         public static bool operator ==(LoginInfo? lhs, LoginInfo? rhs)
         {
