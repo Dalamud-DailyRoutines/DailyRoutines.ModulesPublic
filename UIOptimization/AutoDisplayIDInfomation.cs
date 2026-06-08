@@ -295,7 +295,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
 
         using var utf8String = new Utf8String(modifiedText);
         output->Copy(&utf8String);
-        return output->StringPtr;
+        return utf8String.StringPtr;
     }
 
     private void UpdateDTRInfo()
