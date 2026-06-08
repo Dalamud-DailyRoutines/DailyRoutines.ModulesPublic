@@ -7,6 +7,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using OmenTools.Dalamud.Attributes;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.AgentEvent;
@@ -46,6 +47,9 @@ public unsafe class AutoLogin : ModuleBase
     private int    dropIndex = -1;
 
     private (string? ChracterName, int CharacterIndex, uint WorldID)? manualLoginInfo;
+
+    // 外部控制
+    private bool isNextAutoLoginHandled;
 
     protected override void Init()
     {
@@ -204,7 +208,9 @@ public unsafe class AutoLogin : ModuleBase
     private void OnLogin()
     {
         TaskHelper.Abort();
-        manualLoginInfo = null;
+        
+        manualLoginInfo        = null;
+        isNextAutoLoginHandled = false;
 
         config.CurrentProcessInfo = CurrentProcessInfo;
         config.Save(this);
@@ -259,6 +265,9 @@ public unsafe class AutoLogin : ModuleBase
 
     private void OnTitleMenu(AddonEvent eventType, AddonArgs? args)
     {
+        if (isNextAutoLoginHandled)
+            return;
+        
         if (config.LoginData.Count == 0 && manualLoginInfo == null)
             return;
 
@@ -280,6 +289,7 @@ public unsafe class AutoLogin : ModuleBase
             return;
 
         TaskHelper.Abort();
+        
         TaskHelper.Enqueue
         (() =>
             {
@@ -291,66 +301,66 @@ public unsafe class AutoLogin : ModuleBase
             }
         );
 
-        TaskHelper.Enqueue(EnqueueLogin);
+        TaskHelper.Enqueue
+        (() =>
+            {
+                if (TaskHelper.AbortByConflictKey(this)) return true;
+                if (!Throttler.Shared.Throttle("AutoLogin-SelectCharacter", 100)) return false;
+
+                var agent = AgentLobby.Instance();
+                if (agent == null) return false;
+
+                if (!CharaSelectListMenu->IsAddonAndNodesReady()) return false;
+
+                var client = (LobbyUIClientEX*)&agent->LobbyData.LobbyUIClient;
+
+                // 手动登录优先
+                if (manualLoginInfo is var (charName, charIndex, worldID))
+                {
+                    var target = charIndex >= 0
+                                     ? client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Index == charIndex && x.CurrentWorldID == worldID)
+                                     : client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Name  == charName  && x.CurrentWorldID == worldID);
+
+                    // 角色不存在, 回退到配置列表
+                    if (target.HomeWorldID == 0)
+                        manualLoginInfo = null;
+                    else
+                    {
+                        var contentID = target.ContentID;
+                        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(target.CurrentWorldID));
+                        TaskHelper.Enqueue(() => agent->WorldId == target.CurrentWorldID);
+                        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == contentID));
+
+                        manualLoginInfo = null;
+                        return true;
+                    }
+                }
+
+                var counter = config.LoginData.Count + 1;
+
+                foreach (var loginInfo in config.LoginData)
+                {
+                    counter--;
+
+                    var found = client->CurrentDataCenterCharacters.FirstOrDefault
+                    (x => x.Name        == loginInfo.CharacterName &&
+                          x.HomeWorldID == loginInfo.WorldID
+                    );
+                    if (found.HomeWorldID == 0)
+                        continue;
+
+                    TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(found.CurrentWorldID),                         weight: counter);
+                    TaskHelper.Enqueue(() => agent->WorldId == found.CurrentWorldID,                                        weight: counter);
+                    TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.NameString == loginInfo.CharacterName), weight: counter);
+                    break;
+                }
+
+                return true;
+            }
+        );
     }
 
     #endregion
-
-    private bool EnqueueLogin()
-    {
-        if (TaskHelper.AbortByConflictKey(this)) return true;
-        if (!Throttler.Shared.Throttle("AutoLogin-SelectCharacter", 100)) return false;
-
-        var agent = AgentLobby.Instance();
-        if (agent == null) return false;
-
-        if (!CharaSelectListMenu->IsAddonAndNodesReady()) return false;
-
-        var client = (LobbyUIClientEX*)&agent->LobbyData.LobbyUIClient;
-
-        // 手动登录优先
-        if (manualLoginInfo is var (charName, charIndex, worldID))
-        {
-            var target = charIndex >= 0
-                             ? client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Index == charIndex && x.CurrentWorldID == worldID)
-                             : client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Name  == charName  && x.CurrentWorldID == worldID);
-
-            // 角色不存在, 回退到配置列表
-            if (target.HomeWorldID == 0)
-                manualLoginInfo = null;
-            else
-            {
-                var contentID = target.ContentID;
-                TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(target.CurrentWorldID));
-                TaskHelper.Enqueue(() => agent->WorldId == target.CurrentWorldID);
-                TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == contentID));
-
-                manualLoginInfo = null;
-                return true;
-            }
-        }
-
-        var counter = config.LoginData.Count + 1;
-
-        foreach (var loginInfo in config.LoginData)
-        {
-            counter--;
-
-            var found = client->CurrentDataCenterCharacters.FirstOrDefault
-            (x => x.Name        == loginInfo.CharacterName &&
-                  x.HomeWorldID == loginInfo.WorldID
-            );
-            if (found.HomeWorldID == 0)
-                continue;
-
-            TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(found.CurrentWorldID),                         weight: counter);
-            TaskHelper.Enqueue(() => agent->WorldId == found.CurrentWorldID,                                        weight: counter);
-            TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.NameString == loginInfo.CharacterName), weight: counter);
-            break;
-        }
-
-        return true;
-    }
 
     private void Swap(int index1, int index2)
     {
@@ -415,6 +425,14 @@ public unsafe class AutoLogin : ModuleBase
         Repeat
     }
 
+    #region IPC
+
+    [IPCProvider("AutoLogin.MarkNextAutoLoginHandled")]
+    private void MarkNextAutoLoginHandled() => 
+        isNextAutoLoginHandled = true;
+
+    #endregion
+    
     #region 常量
 
     private const string COMMAND = "/pdrlogin";

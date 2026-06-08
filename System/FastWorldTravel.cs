@@ -451,17 +451,10 @@ public class FastWorldTravel : ModuleBase
     {
         TaskHelper.Enqueue(() =>
         {
-            if (!Throttler.Shared.Throttle("FastWorldTravel.DisableAutoLogin", 1_000))
-                return false;
-            
             if (!(ModuleManager.Instance().IsModuleEnabled(MODULE_NAME_AUTO_LOGIN) ?? false))
-                return true;
+                return;
 
-            if (ModuleManager.Instance().IsBusy)
-                return false;
-
-            ModuleManager.Instance().LoadOrUnloadModuleByName(MODULE_NAME_AUTO_LOGIN, false, false);
-            return false;
+            markNextAutoLoginHandledIPC.InvokeAction();
         }, "禁用自动登录");
         
         TaskHelper.Enqueue(() =>
@@ -520,20 +513,15 @@ public class FastWorldTravel : ModuleBase
                     unsafe
                     {
                         TaskHelper.Enqueue(() => CharaSelect != null || CharaSelectListMenu != null, "等待角色选择界面可用");
-                        TaskHelper.DelayNext(1000);
+                        TaskHelper.DelayNext(500);
                     }
 
                     TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(travelData.TargetWorldID), "选择目标服务器");
 
-                    TaskHelper.DelayNext(1000);
+                    TaskHelper.DelayNext(500);
                     TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == travelData.ContentID), "选择目标角色");
-
-                    if (PluginConfig.Instance().ModuleEnabled.GetValueOrDefault("AutoLogin", false))
-                        TaskHelper.Enqueue
-                        (
-                            () => ModuleManager.Instance().LoadOrUnloadModuleByName(MODULE_NAME_AUTO_LOGIN, false, true),
-                            "启用自动登录"
-                        );
+                    
+                    TaskHelper.Enqueue(() => GameState.IsLoggedIn, "等待登录");
                     return;
                 }
 
@@ -1185,6 +1173,13 @@ public class FastWorldTravel : ModuleBase
         }
     }
 
+    #region IPC
+
+    [IPCSubscriber("AutoLogin.MarkNextAutoLoginHandled")]
+    private IPCSubscriber<object> markNextAutoLoginHandledIPC;
+
+    #endregion
+    
     #region 常量
 
     private const string COMMAND = "worldtravel";
