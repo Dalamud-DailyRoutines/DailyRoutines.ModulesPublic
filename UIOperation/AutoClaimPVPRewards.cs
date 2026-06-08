@@ -17,7 +17,7 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
     {
         Title       = Lang.Get("AutoClaimPVPRewardsTitle"),
         Description = Lang.Get("AutoClaimPVPRewardsDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

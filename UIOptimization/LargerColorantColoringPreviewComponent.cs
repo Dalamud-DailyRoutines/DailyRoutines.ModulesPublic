@@ -12,7 +12,7 @@ public unsafe class LargerColorantColoringPreviewComponent : ModuleBase
     {
         Title       = Lang.Get("LargerColorantColoringPreviewComponentTitle"),
         Description = Lang.Get("LargerColorantColoringPreviewComponentDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

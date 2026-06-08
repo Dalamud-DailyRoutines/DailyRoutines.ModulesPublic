@@ -25,7 +25,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
     {
         Title       = "自动无人岛工房生产计划",
         Description = "允许从剪贴板导入外部无人岛生产计划, 并一键自动安排对应生产计划",
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { CNOnly = true, TCOnly = true };

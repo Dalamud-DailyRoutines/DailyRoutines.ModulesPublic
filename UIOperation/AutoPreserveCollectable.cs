@@ -17,7 +17,7 @@ public class AutoPreserveCollectable : ModuleBase
     {
         Title       = Lang.Get("AutoPreserveCollectableTitle"),
         Description = Lang.Get("AutoPreserveCollectableDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     protected override void Init() =>

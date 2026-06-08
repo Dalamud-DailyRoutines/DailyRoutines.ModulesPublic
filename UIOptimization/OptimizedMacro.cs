@@ -21,7 +21,7 @@ public unsafe class OptimizedMacro : ModuleBase
     {
         Title           = Lang.Get("OptimizedMacroTitle"),
         Description     = Lang.Get("OptimizedMacroDescription"),
-        Category        = ModuleCategory.UIOptimization,
+        Category        = ModuleCategory.Interface,
         Author          = ["Rorinnn"],
         PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/OptimizedMacro-UI.png"] // TODO: 更改仓库
     };

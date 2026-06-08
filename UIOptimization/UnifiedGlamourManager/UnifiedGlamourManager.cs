@@ -14,7 +14,7 @@ public unsafe partial class UnifiedGlamourManager : ModuleBase
     {
         Title       = Lang.Get("UnifiedGlamourManagerTitle"),
         Description = Lang.Get("UnifiedGlamourManagerDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["ErxCharlotte"]
     };
 

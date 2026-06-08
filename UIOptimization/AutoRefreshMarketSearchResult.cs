@@ -18,7 +18,7 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
     {
         Title       = Lang.Get("AutoRefreshMarketSearchResultTitle"),
         Description = Lang.Get("AutoRefreshMarketSearchResultDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

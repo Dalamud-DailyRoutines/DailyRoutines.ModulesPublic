@@ -19,7 +19,7 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
     {
         Title       = Lang.Get("AutoDesynthesizeItemsTitle"),
         Description = Lang.Get("AutoDesynthesizeItemsDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
     
     private Config config = null!;

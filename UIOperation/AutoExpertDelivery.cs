@@ -37,7 +37,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
     {
         Title               = Lang.Get("AutoExpertDeliveryTitle"),
         Description         = Lang.Get("AutoExpertDeliveryDescription"),
-        Category            = ModuleCategory.UIOperation,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["FastGrandCompanyExchange"]
     };
     

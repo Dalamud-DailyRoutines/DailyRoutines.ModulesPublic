@@ -20,7 +20,7 @@ public unsafe class AutoAetherialReduction : ModuleBase
     {
         Title       = Lang.Get("AutoAetherialReductionTitle"),
         Description = Lang.Get("AutoAetherialReductionDescription"),
-        Category    = ModuleCategory.UIOperation,
+        Category    = ModuleCategory.Interface,
         Author      = ["YLCHEN"]
     };
     

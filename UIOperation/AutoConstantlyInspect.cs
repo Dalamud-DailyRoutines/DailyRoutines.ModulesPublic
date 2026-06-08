@@ -17,7 +17,7 @@ public class AutoConstantlyInspect : ModuleBase
     {
         Title       = Lang.Get("AutoConstantlyInspectTitle"),
         Description = Lang.Get("AutoConstantlyInspectDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     protected override void Init() =>

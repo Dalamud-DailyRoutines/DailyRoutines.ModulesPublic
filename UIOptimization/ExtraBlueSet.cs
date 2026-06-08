@@ -19,7 +19,7 @@ public unsafe class ExtraBlueSet : ModuleBase
     {
         Title       = Lang.Get("ExtraBlueSetTitle"),
         Description = Lang.Get("ExtraBlueSetDescription", COMMAND),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Marsh"]
     };
     

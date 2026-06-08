@@ -14,7 +14,7 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
     {
         Title       = Lang.Get("AutoHideNeedlessPopupsTitle"),
         Description = Lang.Get("AutoHideNeedlessPopupsDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     protected override void Init()

@@ -18,7 +18,7 @@ public unsafe class AutoDisplayMSQProgress : ModuleBase
     {
         Title       = Lang.Get("AutoDisplayMSQProgressTitle"),
         Description = Lang.Get("AutoDisplayMSQProgressDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

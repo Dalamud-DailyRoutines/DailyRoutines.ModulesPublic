@@ -16,7 +16,7 @@ public class AutoNotifyChaoticRaidBonus : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyChaoticRaidBonusTitle"),
         Description = Lang.Get("AutoNotifyChaoticRaidBonusDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
     
     private Config config = null!;

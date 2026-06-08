@@ -18,7 +18,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
     {
         Title       = Lang.Get("BetterBlueSetLoadTitle"),
         Description = Lang.Get("BetterBlueSetLoadDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

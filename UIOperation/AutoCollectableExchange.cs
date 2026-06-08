@@ -21,7 +21,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
     {
         Title       = Lang.Get("AutoCollectableExchangeTitle"),
         Description = Lang.Get("AutoCollectableExchangeDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

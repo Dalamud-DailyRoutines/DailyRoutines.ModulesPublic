@@ -26,7 +26,7 @@ public class BetterFateProgressUI : ModuleBase
     {
         Title       = Lang.Get("BetterFateProgressUITitle"),
         Description = Lang.Get("BetterFateProgressUIDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

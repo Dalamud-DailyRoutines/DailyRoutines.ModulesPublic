@@ -31,7 +31,7 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
     {
         Title       = Lang.Get("OptimizedFreeCompanyChestTitle"),
         Description = Lang.Get("OptimizedFreeCompanyChestDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

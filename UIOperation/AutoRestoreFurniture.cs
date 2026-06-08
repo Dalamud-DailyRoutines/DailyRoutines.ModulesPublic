@@ -21,7 +21,7 @@ public unsafe class AutoRestoreFurniture : ModuleBase
     {
         Title       = Lang.Get("AutoRestoreFurnitureTitle"),
         Description = Lang.Get("AutoRestoreFurnitureDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
     
     private AutoRestoreFurnitureAddon? addon;

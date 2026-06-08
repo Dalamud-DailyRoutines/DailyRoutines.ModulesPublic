@@ -21,7 +21,7 @@ public class AutoNotifySPPlayers : ModuleBase
     {
         Title       = Lang.Get("AutoNotifySPPlayersTitle"),
         Description = Lang.Get("AutoNotifySPPlayersDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
     
     private Config config = null!;

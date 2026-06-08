@@ -15,7 +15,7 @@ public class AutoNotifyReadyCheck : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyReadyCheckTitle"),
         Description = Lang.Get("AutoNotifyReadyCheckDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

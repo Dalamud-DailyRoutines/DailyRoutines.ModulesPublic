@@ -21,7 +21,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyMentorRouletteProgressTitle"),
         Description = Lang.Get("AutoNotifyMentorRouletteProgressDescription"),
-        Category    = ModuleCategory.Notice,
+        Category    = ModuleCategory.Notification,
         PreviewImageURL =
         [
             "https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoNotifyMentorRouletteProgress-UI.png"

@@ -25,7 +25,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
     {
         Title       = Lang.Get("OptimizedTargetInfoTitle"),
         Description = Lang.Get("OptimizedTargetInfoDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

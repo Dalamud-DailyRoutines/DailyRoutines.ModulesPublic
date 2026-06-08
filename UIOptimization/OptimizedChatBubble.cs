@@ -18,7 +18,7 @@ public unsafe class OptimizedChatBubble : ModuleBase
     {
         Title       = Lang.Get("OptimizedChatBubbleTitle"),
         Description = Lang.Get("OptimizedChatBubbleDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Middo", "Xww"]
     };
 

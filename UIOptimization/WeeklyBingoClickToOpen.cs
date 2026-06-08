@@ -21,7 +21,7 @@ public class WeeklyBingoClickToOpen : ModuleBase
     {
         Title       = Lang.Get("WeeklyBingoClickToOpenTitle"),
         Description = Lang.Get("WeeklyBingoClickToOpenDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Due"]
     };
     

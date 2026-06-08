@@ -19,7 +19,7 @@ public class ExpandItemMenuSearch : ModuleBase
     {
         Title       = Lang.Get("ExpandItemMenuSearchTitle"),
         Description = Lang.Get("ExpandItemMenuSearchDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["HSS"]
     };
 

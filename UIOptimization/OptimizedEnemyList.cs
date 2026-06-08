@@ -33,7 +33,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
     {
         Title           = Lang.Get("OptimizedEnemyListTitle"),
         Description     = Lang.Get("OptimizedEnemyListDescription"),
-        Category        = ModuleCategory.UIOptimization,
+        Category        = ModuleCategory.Interface,
         PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/OptimizedEnemyList-UI.png"]
     };
 

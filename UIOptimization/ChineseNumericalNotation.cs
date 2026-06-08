@@ -22,7 +22,7 @@ public unsafe class ChineseNumericalNotation : ModuleBase
     {
         Title       = Lang.Get("ChineseNumericalNotationTitle"),
         Description = Lang.Get("ChineseNumericalNotationDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { CNDefaultEnabled = true, TCDefaultEnabled = true };

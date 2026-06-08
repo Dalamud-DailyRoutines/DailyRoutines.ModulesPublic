@@ -21,7 +21,7 @@ public unsafe class OptimizedCastBar : ModuleBase
     {
         Title       = Lang.Get("OptimizedCastBarTitle"),
         Description = Lang.Get("OptimizedCastBarDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Middo"]
     };
 

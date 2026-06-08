@@ -14,7 +14,7 @@ public unsafe class AutoNotifyLeveUpdate : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyLeveUpdateTitle"),
         Description = Lang.Get("AutoNotifyLeveUpdateDescription"),
-        Category    = ModuleCategory.Notice,
+        Category    = ModuleCategory.Notification,
         Author      = ["HSS"]
     };
     

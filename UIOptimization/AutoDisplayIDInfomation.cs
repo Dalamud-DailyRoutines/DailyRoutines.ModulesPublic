@@ -28,7 +28,7 @@ public unsafe class AutoDisplayIDInfomation : ModuleBase
     {
         Title       = Lang.Get("AutoDisplayIDInfomationTitle"),
         Description = Lang.Get("AutoDisplayIDInfomationDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Middo"]
     };
 

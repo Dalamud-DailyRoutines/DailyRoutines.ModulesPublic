@@ -24,7 +24,7 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyRouletteBonusTitle"),
         Description = Lang.Get("AutoNotifyRouletteBonusDescription"),
-        Category    = ModuleCategory.Notice,
+        Category    = ModuleCategory.Notification,
         Author      = ["BoxingBunny"]
     };
 

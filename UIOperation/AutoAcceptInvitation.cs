@@ -23,7 +23,7 @@ public unsafe class AutoAcceptInvitation : ModuleBase
     {
         Title       = Lang.Get("AutoAcceptInvitationTitle"),
         Description = Lang.Get("AutoAcceptInvitationDescription"),
-        Category    = ModuleCategory.UIOperation,
+        Category    = ModuleCategory.Interface,
         Author      = ["Fragile"]
     };
     

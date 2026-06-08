@@ -25,7 +25,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
     {
         Title       = Lang.Get("ExpandPlayerMenuSearchTitle"),
         Description = Lang.Get("ExpandPlayerMenuSearchDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

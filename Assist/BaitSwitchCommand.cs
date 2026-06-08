@@ -159,7 +159,7 @@ public class BaitSwitchCommand : ModuleBase
 
     private static readonly FrozenDictionary<uint, (string NameLower, string NamePinyin)> Baits =
         LuminaGetter.Get<Item>()
-                    .Where(x => x.FilterGroup == 17 && !string.IsNullOrWhiteSpace(x.Name.ToString()))
+                    .Where(x => x.ItemUICategory.RowId == 33 && !string.IsNullOrWhiteSpace(x.Name.ToString()))
                     .ToFrozenDictionary
                     (
                         x => x.RowId,

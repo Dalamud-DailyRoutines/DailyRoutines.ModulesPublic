@@ -31,7 +31,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
     {
         Title               = Lang.Get("FastObjectInteractTitle"),
         Description         = Lang.Get("FastObjectInteractDescription"),
-        Category            = ModuleCategory.UIOptimization,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["FastWorldTravel", "FastInstanceZoneChange"]
     };
 

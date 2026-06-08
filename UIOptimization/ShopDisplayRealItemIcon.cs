@@ -20,7 +20,7 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
     {
         Title       = Lang.Get("ShopDisplayRealItemIconTitle"),
         Description = Lang.Get("ShopDisplayRealItemIconDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

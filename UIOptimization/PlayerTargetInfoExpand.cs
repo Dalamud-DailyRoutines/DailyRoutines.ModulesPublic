@@ -20,7 +20,7 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
     {
         Title           = Lang.Get("PlayerTargetInfoExpandTitle"),
         Description     = Lang.Get("PlayerTargetInfoExpandDescription"),
-        Category        = ModuleCategory.UIOptimization,
+        Category        = ModuleCategory.Interface,
         ModulesConflict = ["LiveAnonymousMode"]
     };
 

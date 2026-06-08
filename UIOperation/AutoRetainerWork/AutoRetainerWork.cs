@@ -24,7 +24,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
     {
         Title               = Lang.Get("AutoRetainerWorkTitle"),
         Description         = Lang.Get("AutoRetainerWorkDescription"),
-        Category            = ModuleCategory.UIOperation,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoTalkSkip", "AutoRefreshMarketSearchResult"]
     };
 

@@ -23,7 +23,7 @@ public unsafe class AutoFCWSDeliver : ModuleBase
     {
         Title               = Lang.Get("AutoFCWSDeliverTitle"),
         Description         = Lang.Get("AutoFCWSDeliverDescription"),
-        Category            = ModuleCategory.UIOperation,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoRequestItemSubmit", "AutoCutsceneSkip"]
     };
 

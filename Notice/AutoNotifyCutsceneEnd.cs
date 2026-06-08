@@ -20,7 +20,7 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyCutsceneEndTitle"),
         Description = Lang.Get("AutoNotifyCutsceneEndDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

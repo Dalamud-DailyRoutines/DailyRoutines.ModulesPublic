@@ -24,7 +24,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
     {
         Title       = Lang.Get("FastCustomDeliveriesInfoTitle"),
         Description = Lang.Get("FastCustomDeliveriesInfoDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

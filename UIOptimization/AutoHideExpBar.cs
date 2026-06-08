@@ -14,7 +14,7 @@ public unsafe class AutoHideExpBar : ModuleBase
     {
         Title       = Lang.Get("AutoHideExpBarTitle"),
         Description = Lang.Get("AutoHideExpBarDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

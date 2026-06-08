@@ -28,7 +28,7 @@ public class FastGrandCompanyExchange : ModuleBase
     {
         Title       = Lang.Get("FastGrandCompanyExchangeTitle"),
         Description = Lang.Get("FastGrandCompanyExchangeDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
     
     private bool IsExchanging => TaskHelper?.IsBusy ?? false;

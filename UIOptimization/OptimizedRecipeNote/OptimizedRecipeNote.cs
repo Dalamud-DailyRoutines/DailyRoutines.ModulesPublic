@@ -43,7 +43,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     {
         Title               = Lang.Get("OptimizedRecipeNoteTitle"),
         Description         = Lang.Get("OptimizedRecipeNoteDescription"),
-        Category            = ModuleCategory.UIOptimization,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoShowItemNPCShopInfo"]
     };
 

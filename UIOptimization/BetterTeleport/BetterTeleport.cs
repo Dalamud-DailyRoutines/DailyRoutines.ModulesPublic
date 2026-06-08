@@ -28,7 +28,7 @@ public unsafe partial class BetterTeleport : ModuleBase
     {
         Title               = Lang.Get("BetterTeleportTitle"),
         Description         = Lang.Get("BetterTeleportDescription"),
-        Category            = ModuleCategory.UIOptimization,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["SameAethernetTeleport"]
     };
 

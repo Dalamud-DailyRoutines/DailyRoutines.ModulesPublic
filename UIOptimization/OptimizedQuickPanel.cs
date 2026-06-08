@@ -28,7 +28,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
     {
         Title       = Lang.Get("OptimizedQuickPanelTitle"),
         Description = Lang.Get("OptimizedQuickPanelDescription", QuickPanelLine.Command, QuickPanelLine.Alias),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

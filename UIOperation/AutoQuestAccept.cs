@@ -14,7 +14,7 @@ public class AutoQuestAccept : ModuleBase
     {
         Title       = Lang.Get("AutoQuestAcceptTitle"),
         Description = Lang.Get("AutoQuestAcceptDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     protected override void Init() =>

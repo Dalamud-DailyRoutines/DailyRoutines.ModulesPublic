@@ -18,7 +18,7 @@ public unsafe class FastRetainerStore : ModuleBase
     {
         Title       = Lang.Get("FastRetainerStoreTitle"),
         Description = Lang.Get("FastRetainerStoreDescription"),
-        Category    = ModuleCategory.UIOperation,
+        Category    = ModuleCategory.Interface,
         Author      = ["YLCHEN"]
     };
 

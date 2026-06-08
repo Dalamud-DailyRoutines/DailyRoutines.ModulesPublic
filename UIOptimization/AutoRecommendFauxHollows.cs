@@ -18,7 +18,7 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
     {
         Title       = Lang.Get("AutoRecommendFauxHollowsTitle"),
         Description = Lang.Get("AutoRecommendFauxHollowsDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Veever"]
     };
 

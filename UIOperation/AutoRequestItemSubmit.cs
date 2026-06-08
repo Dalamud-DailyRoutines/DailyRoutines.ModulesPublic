@@ -21,7 +21,7 @@ public unsafe class AutoRequestItemSubmit : ModuleBase
     {
         Title       = Lang.Get("AutoRequestItemSubmitTitle"),
         Description = Lang.Get("AutoRequestItemSubmitDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     private Config config = null!;

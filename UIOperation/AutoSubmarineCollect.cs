@@ -45,7 +45,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     {
         Title               = Lang.Get("AutoSubmarineCollectTitle"),
         Description         = Lang.Get("AutoSubmarineCollectDescription"),
-        Category            = ModuleCategory.UIOperation,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoCutsceneSkip"],
         ModulesRecommend    = ["OptimizedInteraction"]
     };

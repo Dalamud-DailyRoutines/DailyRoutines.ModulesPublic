@@ -23,7 +23,7 @@ public unsafe class AutoGlamourDresser : ModuleBase
     {
         Title       = Lang.Get("AutoGlamourDresserTitle"),
         Description = Lang.Get("AutoGlamourDresserDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

@@ -20,7 +20,7 @@ public class AutoStoreToCabinet : ModuleBase
     {
         Title       = Lang.Get("AutoStoreToCabinetTitle"),
         Description = Lang.Get("AutoStoreToCabinetDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     private readonly CancellationTokenSource cancelSource = new();

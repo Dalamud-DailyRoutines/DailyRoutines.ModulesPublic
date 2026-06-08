@@ -13,7 +13,7 @@ public class AutoCommenceDuty : ModuleBase
     {
         Title       = Lang.Get("AutoCommenceDutyTitle"),
         Description = Lang.Get("AutoCommenceDutyDescription"),
-        Category    = ModuleCategory.UIOperation,
+        Category    = ModuleCategory.Interface,
         Author      = ["Cindy-Master"]
     };
 

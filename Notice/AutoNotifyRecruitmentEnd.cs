@@ -15,7 +15,7 @@ public class AutoNotifyRecruitmentEnd : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyRecruitmentEndTitle"),
         Description = Lang.Get("AutoNotifyRecruitmentEndDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

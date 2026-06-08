@@ -19,7 +19,7 @@ public unsafe class AutoNumericInputMax : ModuleBase
     {
         Title       = Lang.Get("AutoNumericInputMaxTitle"),
         Description = Lang.Get("AutoNumericInputMaxDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

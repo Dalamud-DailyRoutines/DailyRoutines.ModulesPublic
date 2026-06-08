@@ -13,7 +13,7 @@ public unsafe class NoUIFade : ModuleBase
     {
         Title       = Lang.Get("NoUIFadeTitle"),
         Description = Lang.Get("NoUIFadeDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

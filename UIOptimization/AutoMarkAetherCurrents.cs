@@ -32,7 +32,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
     {
         Title       = Lang.Get("AutoMarkAetherCurrentsTitle"),
         Description = Lang.Get("AutoMarkAetherCurrentsDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };

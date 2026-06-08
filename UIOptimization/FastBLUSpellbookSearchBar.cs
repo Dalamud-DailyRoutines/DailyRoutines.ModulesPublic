@@ -15,7 +15,7 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
     {
         Title       = Lang.Get("FastBLUSpellbookSearchBarTitle"),
         Description = Lang.Get("FastBLUSpellbookSearchBarDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

@@ -25,7 +25,7 @@ public class OptimizedLetter : ModuleBase
     {
         Title       = Lang.Get("OptimizedLetterTitle"),
         Description = Lang.Get("OptimizedLetterDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

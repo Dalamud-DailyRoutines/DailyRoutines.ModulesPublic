@@ -13,7 +13,7 @@ public class AutoNotifyDutyStart : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyDutyStartTitle"),
         Description = Lang.Get("AutoNotifyDutyStartDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

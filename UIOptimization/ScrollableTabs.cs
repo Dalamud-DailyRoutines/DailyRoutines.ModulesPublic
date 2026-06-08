@@ -18,7 +18,7 @@ public unsafe class ScrollableTabs : ModuleBase
     {
         Title       = Lang.Get("ScrollableTabsTitle"),
         Description = Lang.Get("ScrollableTabsDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Cyf5119"]
     };
     

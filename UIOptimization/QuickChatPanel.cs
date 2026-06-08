@@ -36,7 +36,7 @@ public unsafe class QuickChatPanel : ModuleBase
     {
         Title       = Lang.Get("QuickChatPanelTitle"),
         Description = Lang.Get("QuickChatPanelDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     private Config config = null!;

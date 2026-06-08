@@ -19,7 +19,7 @@ public class AutoMoveGearsNotInSet : ModuleBase
     {
         Title       = Lang.Get("AutoMoveGearsNotInSetTitle"),
         Description = Lang.Get("AutoMoveGearsNotInSetDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

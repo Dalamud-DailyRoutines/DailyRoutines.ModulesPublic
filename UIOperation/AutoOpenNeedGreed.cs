@@ -15,7 +15,7 @@ public class AutoOpenNeedGreed : ModuleBase
     {
         Title       = Lang.Get("AutoOpenNeedGreedTitle"),
         Description = Lang.Get("AutoOpenNeedGreedDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

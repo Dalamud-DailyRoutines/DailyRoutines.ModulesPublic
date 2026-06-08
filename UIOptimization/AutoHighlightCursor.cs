@@ -21,7 +21,7 @@ public class AutoHighlightCursor : ModuleBase
     {
         Title       = Lang.Get("AutoHighlightCursorTitle"),
         Description = Lang.Get("AutoHighlightCursorDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

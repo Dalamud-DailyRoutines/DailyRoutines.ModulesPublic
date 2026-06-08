@@ -16,7 +16,7 @@ public class AutoNotifyDutyName : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyDutyNameTitle"),
         Description = Lang.Get("AutoNotifyDutyNameDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

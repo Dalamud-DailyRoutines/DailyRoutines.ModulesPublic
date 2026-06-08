@@ -16,7 +16,7 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
     {
         Title       = Lang.Get("AutoTryOnPlayerOutfitTitle"),
         Description = Lang.Get("AutoTryOnPlayerOutfitDescription"),
-        Category    = ModuleCategory.UIOperation,
+        Category    = ModuleCategory.Interface,
         Author      = ["ErxCharlotte"]
     };
 

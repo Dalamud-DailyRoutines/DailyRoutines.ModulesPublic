@@ -23,7 +23,7 @@ public class MoreMessageFilterPresets : ModuleBase
     {
         Title       = Lang.Get("MoreMessageFilterPresetsTitle"),
         Description = Lang.Get("MoreMessageFilterPresetsDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Ponta"]
     };
     

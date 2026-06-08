@@ -14,7 +14,7 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
     {
         Title       = Lang.Get("AutoClaimItemIgnoringMismatchJobAndLevelTitle"),
         Description = Lang.Get("AutoClaimItemIgnoringMismatchJobAndLevelDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
     
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

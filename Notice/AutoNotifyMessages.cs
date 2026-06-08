@@ -17,7 +17,7 @@ public class AutoNotifyMessages : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyMessagesTitle"),
         Description = Lang.Get("AutoNotifyMessagesDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
     
     private Config config = null!;

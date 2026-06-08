@@ -12,7 +12,7 @@ public class AutoQuestComplete : ModuleBase
     {
         Title       = Lang.Get("AutoQuestCompleteTitle"),
         Description = Lang.Get("AutoQuestCompleteDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     protected override void Init()

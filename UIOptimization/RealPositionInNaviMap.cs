@@ -18,7 +18,7 @@ public unsafe class RealPositionInNaviMap : ModuleBase
     {
         Title       = Lang.Get("RealPositionInNaviMapTitle"),
         Description = Lang.Get("RealPositionInNaviMapDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
     
     private Config config = null!;

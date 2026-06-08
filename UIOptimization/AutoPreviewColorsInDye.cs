@@ -21,7 +21,7 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
     {
         Title       = Lang.Get("AutoPreviewColorsInDyeTitle"),
         Description = Lang.Get("AutoPreviewColorsInDyeDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["ErxCharlotte"]
     };
 

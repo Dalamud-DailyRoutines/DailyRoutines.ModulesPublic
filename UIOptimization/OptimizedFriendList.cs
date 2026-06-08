@@ -39,7 +39,7 @@ public unsafe class OptimizedFriendList : ModuleBase
     {
         Title               = Lang.Get("OptimizedFriendListTitle"),
         Description         = Lang.Get("OptimizedFriendListDescription"),
-        Category            = ModuleCategory.UIOptimization,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["FastWorldTravel"]
     };
 

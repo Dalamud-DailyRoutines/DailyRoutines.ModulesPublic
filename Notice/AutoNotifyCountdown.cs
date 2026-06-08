@@ -13,7 +13,7 @@ public class AutoNotifyCountdown : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyCountdownTitle"),
         Description = Lang.Get("AutoNotifyCountdownDescription"),
-        Category    = ModuleCategory.Notice,
+        Category    = ModuleCategory.Notification,
         Author      = ["HSS"]
     };
 

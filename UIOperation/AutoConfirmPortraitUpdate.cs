@@ -14,7 +14,7 @@ public class AutoConfirmPortraitUpdate : ModuleBase
     {
         Title       = Lang.Get("AutoConfirmPortraitUpdateTitle"),
         Description = Lang.Get("AutoConfirmPortraitUpdateDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
     
     private Config config = null!;

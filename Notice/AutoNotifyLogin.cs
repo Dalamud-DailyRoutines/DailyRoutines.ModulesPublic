@@ -12,7 +12,7 @@ public class AutoNotifyLogin : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyLoginTitle"),
         Description = Lang.Get("AutoNotifyLoginDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

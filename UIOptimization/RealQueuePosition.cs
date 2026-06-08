@@ -21,7 +21,7 @@ public unsafe class RealQueuePosition : ModuleBase
     {
         Title       = Lang.Get("RealQueuePositionTitle"),
         Description = Lang.Get("RealQueuePositionDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["逆光", "Nukoooo"]
     };
 

@@ -22,7 +22,7 @@ public class AutoShopPurchase : ModuleBase
     {
         Title       = Lang.Get("AutoShopPurchaseTitle"),
         Description = Lang.Get("AutoShopPurchaseDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

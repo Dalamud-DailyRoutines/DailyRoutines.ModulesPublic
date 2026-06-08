@@ -30,7 +30,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
     {
         Title               = Lang.Get("OptimizedFreeShopTitle"),
         Description         = Lang.Get("OptimizedFreeShopDescription"),
-        Category            = ModuleCategory.UIOptimization,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoClaimItemIgnoringMismatchJobAndLevel"]
     };
 

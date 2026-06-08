@@ -23,7 +23,7 @@ public unsafe class OptimizedCharacterClass : ModuleBase
     {
         Title       = Lang.Get("OptimizedCharacterClassTitle"),
         Description = Lang.Get("OptimizedCharacterClassDescription"),
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["Middo"]
     };
 

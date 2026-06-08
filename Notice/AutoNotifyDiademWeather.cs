@@ -17,7 +17,7 @@ public class AutoNotifyDiademWeather : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyDiademWeatherTitle"),
         Description = Lang.Get("AutoNotifyDiademWeatherDescription"),
-        Category    = ModuleCategory.Notice
+        Category    = ModuleCategory.Notification
     };
     
     private Config config = null!;

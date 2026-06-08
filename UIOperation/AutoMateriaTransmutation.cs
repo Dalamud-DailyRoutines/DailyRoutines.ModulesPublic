@@ -20,7 +20,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
     {
         Title               = Lang.Get("AutoMateriaTransmutationTitle"),
         Description         = Lang.Get("AutoMateriaTransmutationDescription"),
-        Category            = ModuleCategory.UIOperation,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoCutsceneSkip", "AutoTalkSkip"]
     };
 

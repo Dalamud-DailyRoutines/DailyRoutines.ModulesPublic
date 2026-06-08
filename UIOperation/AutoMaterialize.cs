@@ -26,7 +26,7 @@ public unsafe class AutoMaterialize : ModuleBase
     {
         Title       = Lang.Get("AutoMaterializeTitle"),
         Description = Lang.Get("AutoMaterializeDescription"),
-        Category    = ModuleCategory.UIOperation
+        Category    = ModuleCategory.Interface
     };
     
     // 0 - 成功; 3 - 获取 InventoryType 或 InventorySlot 失败; 4 - 物品为空或不符合条件; 34 - 当前状态无法使用; 

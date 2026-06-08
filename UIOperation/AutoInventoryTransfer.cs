@@ -15,7 +15,7 @@ public unsafe class AutoInventoryTransfer : ModuleBase
     {
         Title       = Lang.Get("AutoInventoryTransferTitle"),
         Description = Lang.Get("AutoInventoryTransferDescription"),
-        Category    = ModuleCategory.UIOperation,
+        Category    = ModuleCategory.Interface,
         Author      = ["Yangdoubao"]
     };
 

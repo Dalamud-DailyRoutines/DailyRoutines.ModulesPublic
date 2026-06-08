@@ -14,7 +14,7 @@ public unsafe class LargerIME : ModuleBase
     {
         Title       = Lang.Get("LargerIMETitle"),
         Description = Lang.Get("LargerIMEDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

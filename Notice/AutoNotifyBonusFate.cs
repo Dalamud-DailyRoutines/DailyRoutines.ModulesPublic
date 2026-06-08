@@ -20,7 +20,7 @@ public class AutoNotifyBonusFate : ModuleBase
     {
         Title       = Lang.Get("AutoNotifyBonusFateTitle"),
         Description = Lang.Get("AutoNotifyBonusFateDescription"),
-        Category    = ModuleCategory.Notice,
+        Category    = ModuleCategory.Notification,
         Author      = ["Due"]
     };
 

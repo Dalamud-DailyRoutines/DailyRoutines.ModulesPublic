@@ -21,7 +21,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
     {
         Title               = Lang.Get("AutoShowItemNPCShopInfoTitle"),
         Description         = Lang.Get("AutoShowItemNPCShopInfoDescription"),
-        Category            = ModuleCategory.UIOptimization,
+        Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["BetterMarketBoard", "BetterTeleport"],
         PreviewImageURL =
         [

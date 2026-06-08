@@ -21,7 +21,7 @@ public unsafe class CustomizeInterfaceText : ModuleBase
     {
         Title       = Lang.Get("CustomizeInterfaceTextTitle"),
         Description = Lang.Get("CustomizeInterfaceTextDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

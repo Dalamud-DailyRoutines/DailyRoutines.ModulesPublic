@@ -13,7 +13,7 @@ public unsafe class NoHideHotbars : ModuleBase
     {
         Title       = Lang.Get("NoHideHotbarsTitle"),
         Description = Lang.Get("NoHideHotbarsDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
     
     private static readonly CompSig                 ToggleUISig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 48 8B 01 41 0F B6 D9");

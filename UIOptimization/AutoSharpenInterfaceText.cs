@@ -14,7 +14,7 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
     {
         Title       = Lang.Get("AutoSharpenInterfaceTextTitle"),
         Description = Lang.Get("AutoSharpenInterfaceTextDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

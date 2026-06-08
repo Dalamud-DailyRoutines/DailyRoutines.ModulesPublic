@@ -16,7 +16,7 @@ public unsafe class AdventurerPlateThroughInspect : ModuleBase
     {
         Title       = Lang.Get("AdventurerPlateThroughInspectTitle"),
         Description = Lang.Get("AdventurerPlateThroughInspectDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

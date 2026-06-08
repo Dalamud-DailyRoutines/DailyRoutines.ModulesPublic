@@ -23,7 +23,7 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         Title       = Lang.Get("PortraitAnimationTimeEditorTitle"),
         Description = Lang.Get("PortraitAnimationTimeEditorDescription"),
         Author      = ["Yarukon"],
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
     
     private float duration;

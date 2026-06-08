@@ -26,7 +26,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
     {
         Title       = Lang.Get("FCMemberManagePanelTitle"),
         Description = Lang.Get("FCMemberManagePanelDescription"),
-        Category    = ModuleCategory.UIOptimization
+        Category    = ModuleCategory.Interface
     };
 
     private static readonly CompSig AgentFCReceiveEventInternalSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 41 56 48 83 EC ?? 48 8B F1 48 8B DA");
