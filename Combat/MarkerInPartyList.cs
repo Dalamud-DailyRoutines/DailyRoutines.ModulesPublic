@@ -143,7 +143,7 @@ public unsafe class MarkerInPartyList : ModuleBase
 
     private void ProcessMarkIconSetted(uint markIndex, uint entityID)
     {
-        if (AgentHUD.Instance() is null || InfoProxyCrossRealm.Instance() is null)
+        if (AgentHUD.Instance() == null || InfoProxyCrossRealm.Instance() == null || !PartyList->IsAddonAndNodesReady())
             return;
 
         int index;
@@ -190,7 +190,7 @@ public unsafe class MarkerInPartyList : ModuleBase
 
     private void ShowImageNode(int i, int iconID)
     {
-        if (i is < 0 or > 7 || PartyList is null || nodeList.Count <= i)
+        if (i is < 0 or > 7 || !PartyList->IsAddonAndNodesReady() || nodeList.Count <= i)
             return;
 
         var node = nodeList[i];
