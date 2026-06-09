@@ -6,15 +6,16 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using Lumina.Excel.Sheets;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using OmenTools.Info.Game.Data;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
-public class AutoStoreToCabinet : ModuleBase
+public unsafe class AutoStoreToCabinet : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,26 +24,19 @@ public class AutoStoreToCabinet : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    private readonly CancellationTokenSource cancelSource = new();
-
-    private bool isOnTask;
-
     protected override void Init()
     {
         Overlay = new(this);
 
+        TaskHelper = new();
+
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Cabinet", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Cabinet", OnAddon);
     }
-    
-    protected override void Uninit()
-    {
-        cancelSource.Cancel();
-        cancelSource.Dispose();
-        
+
+    protected override void Uninit() =>
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-    }
-    
+
     // TODO: 改成原生的
     private void OnAddon(AddonEvent type, AddonArgs args) =>
         Overlay.IsOpen = type switch
@@ -52,7 +46,7 @@ public class AutoStoreToCabinet : ModuleBase
             _                      => Overlay.IsOpen
         };
 
-    protected override unsafe void OverlayPreDraw()
+    protected override void OverlayPreDraw()
     {
         if (CabinetAddon == null)
             Overlay.IsOpen = false;
@@ -60,14 +54,9 @@ public class AutoStoreToCabinet : ModuleBase
 
     protected override void OverlayUI()
     {
-        using var font = FontManager.Instance().UIFont.Push();
-
-        unsafe
-        {
-            var addon = CabinetAddon;
-            var pos   = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight() + 6);
-            ImGui.SetWindowPos(pos);
-        }
+        var addon = CabinetAddon;
+        var pos   = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight() + 6);
+        ImGui.SetWindowPos(pos);
 
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoStoreToCabinetTitle"));
@@ -75,89 +64,48 @@ public class AutoStoreToCabinet : ModuleBase
         ImGui.SameLine();
         ImGui.Spacing();
 
-        ImGui.SameLine();
-        ImGui.BeginDisabled(isOnTask);
-
-        if (ImGui.Button(Lang.Get("Start")))
-        {
-            isOnTask = true;
-            DService.Instance().Framework.RunOnTick
-            (
-                async () =>
-                {
-                    try
-                    {
-                        var list = ScanValidCabinetItems();
-
-                        if (list.Count > 0)
-                        {
-                            foreach (var item in list)
-                            {
-                                ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StoreToCabinet, item);
-                                ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RefreshInventory);
-                                await Task.Delay(100).ConfigureAwait(false);
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        isOnTask = false;
-                    }
-                },
-                cancellationToken: cancelSource.Token
-            );
-        }
-
-        ImGui.EndDisabled();
+        var cabinet = UIState.Instance()->Cabinet;
 
         ImGui.SameLine();
-
-        if (ImGui.Button(Lang.Get("Stop")))
+        using (ImRaii.Disabled(TaskHelper.IsBusy))
         {
-            cancelSource.Cancel();
-            isOnTask = false;
-        }
-
-        ImGuiOm.HelpMarker(Lang.Get("AutoStoreToCabinet-StoreHelp"));
-
-    }
-
-    private static List<uint> ScanValidCabinetItems()
-    {
-        var list = new List<uint>();
-
-        unsafe
-        {
-            var inventoryManager = InventoryManager.Instance();
-
-            foreach (var inventory in Inventories.PlayerWithArmory)
+            if (ImGui.Button(Lang.Get("Start")))
             {
-                var container = inventoryManager->GetInventoryContainer(inventory);
-                if (container == null) continue;
-
-                for (var i = 0; i < container->Size; i++)
+                var list = GetItemsToStoreToCabinet();
+                foreach (var item in list)
                 {
-                    var slot = container->GetInventorySlot(i);
-                    if (slot == null) continue;
-
-                    var item = slot->ItemId;
-                    if (item == 0) continue;
-
-                    if (!CabinetItems.TryGetValue(item, out var index)) continue;
-
-                    list.Add(index);
+                    TaskHelper.Enqueue(() => cabinet.State != Cabinet.CabinetState.Requested);
+                    TaskHelper.Enqueue(() => cabinet.StoreCabinetItem(item));
                 }
             }
         }
 
-        return list;
+        ImGui.SameLine();
+        if (ImGui.Button(Lang.Get("Stop")))
+            TaskHelper.Abort();
     }
-    
+
+    private static List<uint> GetItemsToStoreToCabinet() =>
+        Inventories.PlayerWithArmory.TryGetItems
+        (
+            x =>
+            {
+                var itemID = x.GetBaseItemId();
+                if (itemID == 0) return false;
+
+                return CabinetItems.TryGetValue(itemID, out var index) &&
+                       !UIState.Instance()->Cabinet.IsItemInCabinet(index);
+            },
+            out var items
+        )
+            ? items.Select(x => CabinetItems[x.GetBaseItemId()]).ToList()
+            : [];
+
     #region 常量
 
     // Item ID - Cabinet Index
     private static readonly FrozenDictionary<uint, uint> CabinetItems =
-        LuminaGetter.Get<Cabinet>()
+        LuminaGetter.Get<CabinetSheet>()
                     .Where(x => x.Item.RowId > 0)
                     .ToFrozenDictionary(x => x.Item.RowId, x => x.RowId);
 
