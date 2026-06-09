@@ -1,16 +1,16 @@
 using System.Collections.Frozen;
-using System.Numerics;
+using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Classes;
+using KamiToolKit.Nodes;
 using OmenTools.Info.Game.Data;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -24,65 +24,25 @@ public unsafe class AutoStoreToCabinet : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    private AutoStoreToCabinetAddon? addon;
+
     protected override void Init()
     {
-        Overlay = new(this);
-
         TaskHelper = new();
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "Cabinet", OnAddon);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Cabinet", OnAddon);
-    }
-
-    protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
-
-    // TODO: 改成原生的
-    private void OnAddon(AddonEvent type, AddonArgs args) =>
-        Overlay.IsOpen = type switch
+        addon ??= new(this)
         {
-            AddonEvent.PostSetup   => true,
-            AddonEvent.PreFinalize => false,
-            _                      => Overlay.IsOpen
+            InternalName          = "DRAutoStoreToCabinet",
+            Title                 = Info.Title,
+            Size                  = new(220f, 100f),
+            RememberClosePosition = false
         };
-
-    protected override void OverlayPreDraw()
-    {
-        if (CabinetAddon == null)
-            Overlay.IsOpen = false;
     }
 
-    protected override void OverlayUI()
+    protected override void Uninit()
     {
-        var addon = CabinetAddon;
-        var pos   = new Vector2(addon->GetX() + 6, addon->GetY() - ImGui.GetWindowHeight() + 6);
-        ImGui.SetWindowPos(pos);
-
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoStoreToCabinetTitle"));
-
-        ImGui.SameLine();
-        ImGui.Spacing();
-
-        var cabinet = UIState.Instance()->Cabinet;
-
-        ImGui.SameLine();
-        using (ImRaii.Disabled(TaskHelper.IsBusy))
-        {
-            if (ImGui.Button(Lang.Get("Start")))
-            {
-                var list = GetItemsToStoreToCabinet();
-                foreach (var item in list)
-                {
-                    TaskHelper.Enqueue(() => cabinet.State != Cabinet.CabinetState.Requested);
-                    TaskHelper.Enqueue(() => cabinet.StoreCabinetItem(item));
-                }
-            }
-        }
-
-        ImGui.SameLine();
-        if (ImGui.Button(Lang.Get("Stop")))
-            TaskHelper.Abort();
+        addon?.Dispose();
+        addon = null;
     }
 
     private static List<uint> GetItemsToStoreToCabinet() =>
@@ -100,6 +60,98 @@ public unsafe class AutoStoreToCabinet : ModuleBase
         )
             ? items.Select(x => CabinetItems[x.GetBaseItemId()]).ToList()
             : [];
+
+    private sealed class AutoStoreToCabinetAddon(AutoStoreToCabinet module) : AttachedAddon("Cabinet")
+    {
+        private TextButtonNode? startButton;
+        private TextButtonNode? stopButton;
+
+        protected override AttachedAddonPosition AttachPosition =>
+            AttachedAddonPosition.LeftTop;
+
+        protected override bool CanOpenAddon =>
+            CabinetAddon != null && CabinetAddon->IsAddonAndNodesReady();
+
+        protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) =>
+            false;
+
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
+        {
+            if (WindowNode is WindowNode windowNode)
+                windowNode.CloseButtonNode.IsVisible = false;
+
+            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x4,  true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A0, 0x80, true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x40, true);
+            FlagHelper.UpdateFlag(ref addon->Flags1A3, 0x1,  true);
+
+            var layout = new VerticalListNode
+            {
+                IsVisible   = true,
+                Position    = ContentStartPosition,
+                ItemSpacing = 4,
+                Size        = ContentSize,
+                FitContents = true
+            };
+
+            startButton = new()
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                Size      = new(ContentSize.X - 4f, 32f),
+                String    = Lang.Get("Start"),
+                OnClick   = () =>
+                {
+                    var list = GetItemsToStoreToCabinet();
+                    var cabinet = UIState.Instance()->Cabinet;
+                    foreach (var item in list)
+                    {
+                        module.TaskHelper.Enqueue(() => cabinet.State != Cabinet.CabinetState.Requested);
+                        module.TaskHelper.Enqueue(() => cabinet.StoreCabinetItem(item));
+                    }
+                }
+            };
+
+            stopButton = new()
+            {
+                IsVisible = true,
+                IsEnabled = true,
+                Size      = new(ContentSize.X - 4f, 32f),
+                String    = Lang.Get("Stop"),
+                OnClick   = module.TaskHelper.Abort
+            };
+
+            layout.AddNode(startButton);
+            layout.AddNode(stopButton);
+
+            layout.AttachNode(this);
+            layout.RecalculateLayout();
+
+            SetWindowSize(Size.X, ContentStartPosition.Y + layout.Height + 16f);
+            layout.Position = ContentStartPosition;
+            layout.Height   = layout.Height;
+        }
+
+        protected override void OnAttachedAddonUpdate(AtkUnitBase* addon, AtkUnitBase* hostAddon) =>
+            RefreshState();
+
+        protected override void OnHostAddon(AddonEvent type, AddonArgs? args)
+        {
+            if (type == AddonEvent.PreFinalize)
+                module.TaskHelper.Abort();
+        }
+
+        private void RefreshState()
+        {
+            var isBusy = module.TaskHelper.IsBusy;
+
+            if (startButton != null)
+                startButton.IsEnabled = !isBusy;
+
+            if (stopButton != null)
+                stopButton.IsEnabled = isBusy;
+        }
+    }
 
     #region 常量
 
