@@ -21,12 +21,12 @@ public class AutoTrackStatusOff : ModuleBase
     };
 
     private Config config = null!;
-    
+
     private readonly StatusSelectCombo? statusSelectCombo = new
         ("Status", LuminaGetter.Get<Status>().Where(x => x.CanStatusOff && !string.IsNullOrEmpty(x.Name.ToString())));
 
     private readonly Dictionary<uint, (float Duration, ulong SourceID, DateTime GainTime, uint TargetID)> records = [];
-    
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -36,7 +36,7 @@ public class AutoTrackStatusOff : ModuleBase
         CharacterStatusManager.Instance().RegGain(OnGainStatus);
         CharacterStatusManager.Instance().RegLose(OnLoseStatus);
     }
-    
+
     protected override void Uninit()
     {
         CharacterStatusManager.Instance().Unreg(OnGainStatus);
@@ -66,8 +66,8 @@ public class AutoTrackStatusOff : ModuleBase
 
                 if (imported != null)
                 {
-                    this.config.StatusToMonitor.AddRange(imported);
-                    this.config.Save(this);
+                    config.StatusToMonitor.AddRange(imported);
+                    config.Save(this);
                 }
             }
 
@@ -130,7 +130,7 @@ public class AutoTrackStatusOff : ModuleBase
                             statusID,
                             $"{expectedDuration:F1}",
                             $"{actualDuration:F1}",
-                            new PlayerPayload(player.Name.ToString(), player.HomeWorld.RowId),
+                            new PlayerPayload(player.Name, player.HomeWorld.RowId),
                             player.ClassJob.Value.ToBitmapFontIcon(),
                             player.ClassJob.Value.Name.ToString()
                         )
@@ -149,9 +149,9 @@ public class AutoTrackStatusOff : ModuleBase
 
         public HashSet<uint> StatusToMonitor = [];
     }
-    
+
     #region 常量
-    
+
     private const float TIME_THRESHOLD = 0.2f;
 
     #endregion
