@@ -5,22 +5,28 @@ namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 
 public partial class UnifiedGlamourManager
 {
-    private const string PLATE_EDITOR_ADDON_NAME           = nameof(MiragePrismMiragePlate);
-    private const uint   MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW = 0;
-    private const string FAVORITE_ICON_ON                  = "★";
-    private const string FAVORITE_ICON_OFF                 = "☆";
+    private const string PLATE_EDITOR_ADDON_NAME = nameof(MiragePrismMiragePlate);
+    private const byte FEMALE_SEX                = 1;
+    private const string COMMAND                 = "ugm";
+    private const string STONE_SCRIPT_URL        = "https://greasyfork.org/en/scripts/580109-%E7%9F%B3%E4%B9%8B%E5%AE%B6%E5%B9%BB%E5%8C%96%E6%A8%A1%E6%9D%BF%E5%AF%BC%E5%85%A5dr";
+    private const string STONE_URL               = "https://ff14risingstones.web.sdo.com/pc/index.html#/glamour";
+    private const string FAVORITE_ICON_ON        = "★";
+    private const string FAVORITE_ICON_OFF       = "☆";
+    private string newPresetTitle;
+    private string newPresetNote;
 
-    private const int TASK_TIMEOUT_MS         = 30_000;
-    private const int REFRESH_STEP_DELAY_MS   = 1;
-    private const int APPLY_RETRY_DELAY_MS    = 50;
-    private const int DEFAULT_MIN_EQUIP_LEVEL = 1;
-    private const int DEFAULT_MAX_EQUIP_LEVEL = 100;
-    private const int MAX_EQUIP_LEVEL_INPUT   = 999;
 
-    private const uint PRISM_BOX_CAPACITY = 800;
-
+    private const int TASK_TIMEOUT_MS              = 30_000;
+    private const int REFRESH_STEP_DELAY_MS        = 1;
+    private const int APPLY_RETRY_DELAY_MS         = 50;
+    private const int DEFAULT_MIN_EQUIP_LEVEL      = 1;
+    private const int DEFAULT_MAX_EQUIP_LEVEL      = 100;
+    private const int MAX_EQUIP_LEVEL_INPUT        = 999;
     private const int VIRTUALIZED_LIST_BUFFER_ROWS = 3;
     private const int VIRTUALIZED_GRID_BUFFER_ROWS = 2;
+
+    private const uint MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW = 0;
+    private const uint PRISM_BOX_CAPACITY                = 800;
 
     private static readonly SourceFilter[] SourceFilters =
     [
@@ -58,6 +64,14 @@ public partial class UnifiedGlamourManager
         [8, 9, 10, 11, 12, 13, 14, 15],
         [16, 17, 18]
     ];
+
+    private static readonly uint[] PLATE_SLOT_ADDON_TEXT_IDS =
+    [
+        11960, 11961, 11962, 11963, 11964, 11965, 11966, 11968, 11967, 11969, 750, 749
+    ];
+    
+    // 5 是腰带，13 是职业水晶
+    private static readonly int[] PLATE_SLOTS = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12];
 
     private static string[] JobFilterNames
     {

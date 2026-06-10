@@ -31,6 +31,13 @@ public partial class UnifiedGlamourManager
         NonSetOnly
     }
 
+    // 模版来源
+    private enum PresetSource
+    {
+        Self,
+        OtherPlayer
+    }
+
     private sealed class UnifiedItem : IEquatable<UnifiedItem>
     {
         public uint   ItemID                 { get; set; }
@@ -195,6 +202,24 @@ public partial class UnifiedGlamourManager
         public long   AddedAt { get; set; }
     }
 
+    // 预设模版
+    private sealed class PlatePreset
+    {
+        // 玩家设置的标题/备注
+        public string Title = string.Empty;
+        public string Note = string.Empty;
+
+        // 当前保存的游戏角色的种族/性别
+        public string Race = string.Empty;
+        public string Sex = string.Empty;
+
+        // 保存的时间
+        public DateTime CreatedAt = DateTime.Now;
+
+        // 当前投影模板的所有内容
+        public List<PlateItemInfo> Items = [];
+    }
+
     private readonly record struct SetPartInfo
     (
         uint   ItemID,
@@ -207,4 +232,36 @@ public partial class UnifiedGlamourManager
         uint                          AddonTextID,
         Func<EquipSlotCategory, bool> CanUse
     );
+
+    // 投影模板
+    private readonly record struct PlateItemInfo
+    (
+        uint SlotIndex,
+        uint ItemID,
+        byte Stain0ID,
+        byte Stain1ID
+    );
+
+    // UIOperation/AutoGlamourDresser.cs
+    // 投影台
+    private readonly record struct PrismBoxItemInfo
+    (
+        uint  Index,
+        uint  RawItemID,
+        uint  ItemID,
+        uint  Stain0ID,
+        uint  Stain1ID,
+        bool  IsGlamorous,
+        ulong ModelMain,
+        uint  EquipSlotCategoryRowID
+    )
+    {
+        public bool IsGlamourModelValid =>
+            IsGlamorous &&
+            ModelMain              != 0 &&
+            EquipSlotCategoryRowID != 0;
+
+        public bool IsStained =>
+            Stain0ID != 0 || Stain1ID != 0;
+    }
 }

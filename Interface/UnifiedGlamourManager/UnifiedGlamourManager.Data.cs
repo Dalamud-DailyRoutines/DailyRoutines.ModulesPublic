@@ -9,6 +9,7 @@ using GameCabinet = FFXIVClientStructs.FFXIV.Client.Game.UI.Cabinet;
 using ItemSheet = Lumina.Excel.Sheets.Item;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
 using Action = System.Action;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 
@@ -214,4 +215,72 @@ public unsafe partial class UnifiedGlamourManager
         name = item.Name.ExtractText();
         return !string.IsNullOrWhiteSpace(name);
     }
+
+    private static List<PlateItemInfo> GetCurrentPlateItems()
+    {
+        if (!TryGetReadyPlateEditor(out var agent)) return [];
+
+        List<PlateItemInfo> items = [];
+
+        var currentItems = agent->Data->CurrentItems;
+
+        for (var i = 0; i < currentItems.Length; i++)
+        {
+            var item = currentItems[i];
+            if (item.ItemId == 0) continue;
+
+            items.Add(new(
+                (uint)i,
+                item.ItemId,
+                item.StainIds[0],
+                item.StainIds[1]));
+        }
+
+        return items;
+    }
+
+    private static List<PlateItemInfo> GetInspectPlateItems()
+    {
+        if (!InventoryType.Examine.TryGetItems(
+                x => x.ItemId != 0 && PLATE_SLOTS.Contains(x.Slot),
+                out var inspectItems))
+            return [];
+
+        List<PlateItemInfo> items = [];
+
+        foreach (var item in inspectItems)
+        {
+            var itemID = item.GlamourId != 0 ? item.GlamourId : item.ItemId;
+            var plateSlot = (uint)Array.IndexOf(PLATE_SLOTS, item.Slot);
+            if (itemID == 0) continue;
+
+            items.Add(new(
+                plateSlot,
+                itemID,
+                item.Stains[0],
+                item.Stains[1]));
+        }
+
+        return items;
+    }
+
+    private static string GetRaceName(byte race, byte sex) =>
+        !LuminaGetter.TryGetRow(race, out Race raceRow)
+            ? Lang.Get("Unknown")
+            : sex == FEMALE_SEX
+                ? raceRow.Feminine.ToString() ?? Lang.Get("Unknown")
+                : raceRow.Masculine.ToString() ?? Lang.Get("Unknown");
+    private static string GetSexName(byte sex) =>
+        sex == FEMALE_SEX
+            ? LuminaWrapper.GetAddonText(15609)
+            : LuminaWrapper.GetAddonText(15608);
+    
+    private static string GetDefaultPresetTitle(PresetSource source) =>
+    source switch
+    {
+        PresetSource.Self => $"{Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")}-{LuminaWrapper.GetAddonText(3991)}",
+        PresetSource.OtherPlayer => $"{Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")}-{LuminaWrapper.GetAddonText(7979)}",
+        _ => Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")
+    };
+
 }

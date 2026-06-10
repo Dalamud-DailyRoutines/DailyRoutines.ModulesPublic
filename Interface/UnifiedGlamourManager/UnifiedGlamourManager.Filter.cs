@@ -7,7 +7,8 @@ public unsafe partial class UnifiedGlamourManager
     private readonly Dictionary<ulong, bool> jobFilterCache       = [];
     private readonly Dictionary<ulong, bool> plateSlotFilterCache = [];
 
-    private string            searchText               = string.Empty;
+    private string searchText   = string.Empty;
+    private string presetSearch = string.Empty;
     private SourceFilter      sourceFilter             = SourceFilter.All;
     private SortMode          sortMode                 = SortMode.FavoriteThenNameAsc;
     private SetRelationFilter setRelationFilter        = SetRelationFilter.All;
@@ -17,9 +18,16 @@ public unsafe partial class UnifiedGlamourManager
     private int               maxEquipLevel = DEFAULT_MAX_EQUIP_LEVEL;
     private int               selectedJobFilterIndex;
     private bool              requestClearFavoritesConfirm;
-    private bool              filteredItemsDirty  = true;
-    private uint              lastFilterPlateSlot = uint.MaxValue;
-    private UnifiedItem?      selectedItem;
+    private bool              filteredItemsDirty = true;
+
+    private uint lastFilterPlateSlot = uint.MaxValue;
+    
+    private byte sourceRace;
+    private byte sourceSex;
+
+    private UnifiedItem? selectedItem;
+    private PlatePreset? selectedPreset;
+
 
     private bool PassFilter(UnifiedItem item)
     {
