@@ -7,8 +7,8 @@ public unsafe partial class UnifiedGlamourManager
     private readonly Dictionary<ulong, bool> jobFilterCache       = [];
     private readonly Dictionary<ulong, bool> plateSlotFilterCache = [];
 
-    private string searchText   = string.Empty;
-    private string presetSearch = string.Empty;
+    private string            searchText               = string.Empty;
+    private string            presetSearch             = string.Empty;
     private SourceFilter      sourceFilter             = SourceFilter.All;
     private SortMode          sortMode                 = SortMode.FavoriteThenNameAsc;
     private SetRelationFilter setRelationFilter        = SetRelationFilter.All;
@@ -21,7 +21,7 @@ public unsafe partial class UnifiedGlamourManager
     private bool              filteredItemsDirty = true;
 
     private uint lastFilterPlateSlot = uint.MaxValue;
-    
+
     private byte sourceRace;
     private byte sourceSex;
 
@@ -66,7 +66,7 @@ public unsafe partial class UnifiedGlamourManager
         if (jobFilterCache.TryGetValue(cacheKey, out var cached)) return cached;
 
         var classJobIDs = JobFilterClassJobIDs[selectedJobFilterIndex];
-        var result = item.IsCompatibleWithJobs(classJobIDs);
+        var result      = item.IsCompatibleWithJobs(classJobIDs);
         jobFilterCache[cacheKey] = result;
         return result;
     }

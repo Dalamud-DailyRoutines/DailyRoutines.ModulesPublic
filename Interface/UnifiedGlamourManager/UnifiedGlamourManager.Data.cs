@@ -2,6 +2,7 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
@@ -9,18 +10,12 @@ using GameCabinet = FFXIVClientStructs.FFXIV.Client.Game.UI.Cabinet;
 using ItemSheet = Lumina.Excel.Sheets.Item;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
 using Action = System.Action;
-using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 
 public unsafe partial class UnifiedGlamourManager
 {
-    private int StoredItemCount =>
-        prismBoxItemCount + cabinetItemCount;
-
     private readonly List<UnifiedItem> items = [];
-    private          int               prismBoxItemCount;
-    private          int               cabinetItemCount;
     private          bool              isRefreshingItems;
 
     private static bool TryGetLoadedMirageManager(out MirageManager* manager)
@@ -52,8 +47,6 @@ public unsafe partial class UnifiedGlamourManager
         isRefreshingItems = true;
         items.Clear();
         filteredItems.Clear();
-        prismBoxItemCount = 0;
-        cabinetItemCount  = 0;
         MarkFilteredItemsDirty(true, true);
 
         TaskHelper.Enqueue(() => RunRefreshStep(LoadPrismBoxItems, nameof(LoadPrismBoxItems)), nameof(LoadPrismBoxItems));
@@ -104,7 +97,6 @@ public unsafe partial class UnifiedGlamourManager
         if (!TryGetLoadedMirageManager(out var manager)) return;
 
         var itemSheet = LuminaGetter.Get<ItemSheet>();
-        var count     = 0;
 
         for (var i = 0U; i < PRISM_BOX_CAPACITY; i++)
         {
@@ -130,10 +122,8 @@ public unsafe partial class UnifiedGlamourManager
                 manager
             );
 
-            count++;
         }
 
-        prismBoxItemCount = count;
     }
 
     private void LoadCabinetItems()
@@ -142,7 +132,6 @@ public unsafe partial class UnifiedGlamourManager
         if (cabinet == null) return;
 
         var itemSheet = LuminaGetter.Get<ItemSheet>();
-        var count     = 0;
 
         foreach (var cabinetRow in LuminaGetter.Get<CabinetSheet>())
         {
@@ -155,10 +144,7 @@ public unsafe partial class UnifiedGlamourManager
                 continue;
 
             AddStoredItem(itemRow.Value, name, ItemSource.Cabinet, itemID, itemID, 0, cabinetID);
-            count++;
         }
-
-        cabinetItemCount = count;
     }
 
     private void AddStoredItem
@@ -229,11 +215,16 @@ public unsafe partial class UnifiedGlamourManager
             var item = currentItems[i];
             if (item.ItemId == 0) continue;
 
-            items.Add(new(
-                (uint)i,
-                item.ItemId,
-                item.StainIds[0],
-                item.StainIds[1]));
+            items.Add
+            (
+                new
+                (
+                    (uint)i,
+                    item.ItemId,
+                    item.StainIds[0],
+                    item.StainIds[1]
+                )
+            );
         }
 
         return items;
@@ -241,24 +232,31 @@ public unsafe partial class UnifiedGlamourManager
 
     private static List<PlateItemInfo> GetInspectPlateItems()
     {
-        if (!InventoryType.Examine.TryGetItems(
-                x => x.ItemId != 0 && PLATE_SLOTS.Contains(x.Slot),
-                out var inspectItems))
+        if (!InventoryType.Examine.TryGetItems
+            (
+                x => x.ItemId != 0 && PlateSlots.Contains(x.Slot),
+                out var inspectItems
+            ))
             return [];
 
         List<PlateItemInfo> items = [];
 
         foreach (var item in inspectItems)
         {
-            var itemID = item.GlamourId != 0 ? item.GlamourId : item.ItemId;
-            var plateSlot = (uint)Array.IndexOf(PLATE_SLOTS, item.Slot);
+            var itemID    = item.GlamourId != 0 ? item.GlamourId : item.ItemId;
+            var plateSlot = (uint)Array.IndexOf(PlateSlots, item.Slot);
             if (itemID == 0) continue;
 
-            items.Add(new(
-                plateSlot,
-                itemID,
-                item.Stains[0],
-                item.Stains[1]));
+            items.Add
+            (
+                new
+                (
+                    plateSlot,
+                    itemID,
+                    item.Stains[0],
+                    item.Stains[1]
+                )
+            );
         }
 
         return items;
@@ -268,19 +266,19 @@ public unsafe partial class UnifiedGlamourManager
         !LuminaGetter.TryGetRow(race, out Race raceRow)
             ? Lang.Get("Unknown")
             : sex == FEMALE_SEX
-                ? raceRow.Feminine.ToString() ?? Lang.Get("Unknown")
+                ? raceRow.Feminine.ToString()  ?? Lang.Get("Unknown")
                 : raceRow.Masculine.ToString() ?? Lang.Get("Unknown");
+
     private static string GetSexName(byte sex) =>
         sex == FEMALE_SEX
             ? LuminaWrapper.GetAddonText(15609)
             : LuminaWrapper.GetAddonText(15608);
-    
-    private static string GetDefaultPresetTitle(PresetSource source) =>
-    source switch
-    {
-        PresetSource.Self => $"{Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")}-{LuminaWrapper.GetAddonText(3991)}",
-        PresetSource.OtherPlayer => $"{Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")}-{LuminaWrapper.GetAddonText(7979)}",
-        _ => Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")
-    };
 
+    private static string GetDefaultPresetTitle(PresetSource source) =>
+        source switch
+        {
+            PresetSource.Self        => $"{Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")}-{LuminaWrapper.GetAddonText(3991)}",
+            PresetSource.OtherPlayer => $"{Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")}-{LuminaWrapper.GetAddonText(7979)}",
+            _                        => Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")
+        };
 }

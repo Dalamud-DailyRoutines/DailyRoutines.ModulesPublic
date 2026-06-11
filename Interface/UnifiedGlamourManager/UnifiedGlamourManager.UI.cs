@@ -1,11 +1,11 @@
 using System.Numerics;
+using DailyRoutines.Extensions;
 using Dalamud.Interface.Utility;
+using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using DailyRoutines.Extensions;
-using Dalamud.Utility;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
@@ -13,38 +13,41 @@ namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 public unsafe partial class UnifiedGlamourManager
 {
     private PlatePreset? editingPreset;
-    private string editPresetTitleInput = string.Empty;
-    private string editPresetNoteInput  = string.Empty;
-    
+    private string       editPresetTitleInput = string.Empty;
+    private string       editPresetNoteInput  = string.Empty;
+
     protected override void ConfigUI()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Command"));
 
-        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("UnifiedGlamourManager-Preset-CommandHelp")}");
-
-        // 打开下载用于石之家导出的脚本页面(国服only)
+        using (ImRaii.PushIndent())
+            ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("UnifiedGlamourManager-CommandHelp")}");
+        
+        // 打开下载用于石之家导出的脚本页面 (国服only)
         if (GameState.IsCN)
         {
             ImGui.NewLine();
 
             ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "石之家导入功能");
 
-            ImGui.TextWrapped
-            (
-                "如需使用石之家导入功能, 需要先安装浏览器脚本。\n" +
-                "安装脚本前, 请先为浏览器安装 Tampermonkey / Violentmonkey 等用户脚本管理器。\n" +
-                "安装完成后, 再打开脚本页面并点击 Install this script 安装导入脚本。\n" +
-                "安装导入脚本后, 打开石之家幻化详情页, 页面右下角会出现复制按钮。\n" +
-                "点击复制后, 回到本模块中使用导入功能。"
-            );
+            using (ImRaii.PushIndent())
+            {
+                ImGui.TextWrapped
+                (
+                    "使用石之家导入功能前, 请先安装浏览器脚本。\n"                                  +
+                    "安装脚本前, 请先在浏览器中安装 Tampermonkey 或 Violentmonkey 等用户脚本管理器。\n" +
+                    "安装完成后, 打开脚本页面, 点击 Install this script 安装导入脚本。\n"            +
+                    "安装导入脚本后, 打开石之家幻化详情页, 页面右下角会出现复制按钮。\n"                       +
+                    "点击复制, 回到本模块中使用导入功能。"
+                );
 
-            if (ImGui.Button("获取导入脚本"))
-                Util.OpenLink(STONE_SCRIPT_URL);
+                if (ImGui.Button("获取导入脚本"))
+                    Util.OpenLink(STONE_SCRIPT_URL);
 
-            ImGui.SameLine();
-
-            if (ImGui.Button("打开石之家"))
-                Util.OpenLink(STONE_URL);
+                ImGui.SameLine();
+                if (ImGui.Button("打开石之家"))
+                    Util.OpenLink(STONE_URL);
+            }
         }
     }
 
@@ -430,7 +433,7 @@ public unsafe partial class UnifiedGlamourManager
     {
         if (filtered.Count == 0) return;
 
-        var rowHeight = CardHeight + ImGui.GetStyle().ItemSpacing.Y;
+        var rowHeight      = CardHeight + ImGui.GetStyle().ItemSpacing.Y;
         var startCursorPos = ImGui.GetCursorPos();
         var scrollY        = ImGui.GetScrollY();
         var visibleHeight  = ImGui.GetWindowHeight();
@@ -703,32 +706,36 @@ public unsafe partial class UnifiedGlamourManager
     // UI - Preset
     private void DrawStatusBar()
     {
-        var mirageLoaded = TryGetLoadedMirageManager(out _);
+        var mirageLoaded  = TryGetLoadedMirageManager(out _);
         var cabinetLoaded = GetLoadedCabinet() is not null;
 
         // 投影台状态
         ImGui.AlignTextToFramePadding();
         ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(11910)}:");
         ImGui.SameLine();
-        ImGui.TextColored(
+        ImGui.TextColored
+        (
             (mirageLoaded ? KnownColor.LimeGreen : KnownColor.Red).ToVector4(),
-            mirageLoaded ? Lang.Get("Connected") : Lang.Get("Disconnected"));
+            mirageLoaded ? Lang.Get("Connected") : Lang.Get("Disconnected")
+        );
 
         ImGui.SameLine();
         // 收藏柜状态
         ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(12216)}:");
         ImGui.SameLine();
-        ImGui.TextColored(
+        ImGui.TextColored
+        (
             (cabinetLoaded ? KnownColor.LimeGreen : KnownColor.Red).ToVector4(),
-            cabinetLoaded ? Lang.Get("Connected") : Lang.Get("Disconnected"));
+            cabinetLoaded ? Lang.Get("Connected") : Lang.Get("Disconnected")
+        );
     }
-    
+
     private void DrawPresetSearchAndFilterBar()
     {
         using var table = ImRaii.Table("##PresetSearchAndFilterBar", 2, ImGuiTableFlags.SizingStretchProp);
         if (!table) return;
 
-        ImGui.TableSetupColumn("##Search", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("##Search",  ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("##Filters", ImGuiTableColumnFlags.WidthFixed);
         // 搜索框
         ImGui.TableNextColumn();
@@ -751,7 +758,7 @@ public unsafe partial class UnifiedGlamourManager
         using var table = ImRaii.Table("##GlamourPresetMainLayout", 2, ImGuiTableFlags.Resizable, size);
         if (!table) return;
 
-        ImGui.TableSetupColumn("##PresetList", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+        ImGui.TableSetupColumn("##PresetList",   ImGuiTableColumnFlags.WidthStretch, 0.35f);
         ImGui.TableSetupColumn("##PresetDetail", ImGuiTableColumnFlags.WidthStretch, 0.65f);
 
         // 预设列表
@@ -773,17 +780,21 @@ public unsafe partial class UnifiedGlamourManager
         var keyword = presetSearch.Trim();
 
         var visiblePresets = config.Presets
-                                .Where(x =>
-                                    (!config.OnlyCurrentRace || x.Race == race) &&
-                                    (!config.OnlyCurrentSex || x.Sex == sex) &&
-                                    (keyword.Length == 0 ||
-                                        x.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
-                                        x.Note.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
-                                        x.Items.Any(item =>
-                                            LuminaGetter.GetRow<Item>(ItemUtil.GetBaseId(item.ItemID).ItemId) is { } itemRow &&
-                                            itemRow.Name.ToString().Contains(keyword, StringComparison.OrdinalIgnoreCase))))
-                                .OrderByDescending(x => x.CreatedAt)
-                                .ToList();
+                                   .Where
+                                   (x =>
+                                        (!config.OnlyCurrentRace || x.Race == race) &&
+                                        (!config.OnlyCurrentSex  || x.Sex  == sex)  &&
+                                        (keyword.Length == 0                                           ||
+                                         x.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                                         x.Note.Contains(keyword, StringComparison.OrdinalIgnoreCase)  ||
+                                         x.Items.Any
+                                         (item =>
+                                              LuminaGetter.GetRow<Item>(ItemUtil.GetBaseId(item.ItemID).ItemId) is { } itemRow &&
+                                              itemRow.Name.ToString().Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                                         ))
+                                   )
+                                   .OrderByDescending(x => x.CreatedAt)
+                                   .ToList();
 
         // 当前筛选数/总数
         ImGui.AlignTextToFramePadding();
@@ -795,15 +806,17 @@ public unsafe partial class UnifiedGlamourManager
         {
             if (buttonTable)
             {
-                ImGui.TableSetupColumn("##Import", ImGuiTableColumnFlags.WidthStretch, 1f);
+                ImGui.TableSetupColumn("##Import",      ImGuiTableColumnFlags.WidthStretch, 1f);
                 ImGui.TableSetupColumn("##TryOnImport", ImGuiTableColumnFlags.WidthStretch, 1f);
 
                 ImGui.TableNextRow();
 
                 ImGui.TableNextColumn();
+
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileImport, Lang.Get("Import"), new Vector2(-1f, 0f)))
                 {
                     var preset = ImportFromClipboard<PlatePreset>();
+
                     if (preset != null)
                     {
                         preset.Title = preset.Title.Trim();
@@ -816,6 +829,7 @@ public unsafe partial class UnifiedGlamourManager
                 }
 
                 ImGui.TableNextColumn();
+
                 using (ImRaii.Disabled(TaskHelper.IsBusy || AgentTryon.Instance() == null || DService.Instance().Condition.IsOccupiedInEvent))
                 {
                     if (ImGui.Button(Lang.Get("UnifiedGlamourManager-Preset-TryOnImportedContent"), new Vector2(-1f, 0f)))
@@ -824,144 +838,140 @@ public unsafe partial class UnifiedGlamourManager
             }
         }
 
-            ImGui.Separator();
+        ImGui.Separator();
 
-            using var child = ImRaii.Child("##PresetListChild", Vector2.Zero, true);
-            if (!child) return;
+        using var child = ImRaii.Child("##PresetListChild", Vector2.Zero, true);
+        if (!child) return;
 
-            if (visiblePresets.Count == 0)
+        if (visiblePresets.Count == 0)
+            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSearchResult"));
+        else
+        {
+            foreach (var preset in visiblePresets)
             {
-                ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSearchResult"));
-            }
-            else
-            {
-                foreach (var preset in visiblePresets)
+                using var id = ImRaii.PushId($"{preset.Title}-{preset.CreatedAt.Ticks}");
+
+                var pos      = ImGui.GetCursorScreenPos();
+                var size     = new Vector2(ImGui.GetContentRegionAvail().X, ImGui.GetTextLineHeightWithSpacing() * 3.5f);
+                var selected = selectedPreset == preset;
+
+                if (ImGui.InvisibleButton("##PresetItem", size))
+                    selectedPreset = preset;
+
+                // 双击修改
+                var hovered = ImGui.IsItemHovered();
+                ImGuiOm.TooltipHover(Lang.Get("UnifiedGlamourManager-Preset-DoubleClickEditHint"));
+
+                if (hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
                 {
-                    using var id = ImRaii.PushId($"{preset.Title}-{preset.CreatedAt.Ticks}");
-
-                    var pos = ImGui.GetCursorScreenPos();
-                    var size = new Vector2(ImGui.GetContentRegionAvail().X, ImGui.GetTextLineHeightWithSpacing() * 3.5f);
-                    var selected = selectedPreset == preset;
-
-                    if (ImGui.InvisibleButton("##PresetItem", size))
-                        selectedPreset = preset;
-
-                    // 双击修改
-                    var hovered = ImGui.IsItemHovered();
-                    ImGuiOm.TooltipHover(Lang.Get("UnifiedGlamourManager-Preset-DoubleClickEditHint"));
-                    
-                    if (hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-                    {
-                        selectedPreset = preset;
-                        editingPreset = preset;
-                        editPresetTitleInput = preset.Title;
-                        editPresetNoteInput = preset.Note;
-                        ImGui.OpenPopup("EditPresetPopup");
-                    }
-
-                    var drawList = ImGui.GetWindowDrawList();
-                    var color = selected
-                                       ? ImGui.GetColorU32(ImGuiCol.HeaderActive)
-                                       : hovered
-                                           ? ImGui.GetColorU32(ImGuiCol.HeaderHovered)
-                                           : ImGui.GetColorU32(ImGuiCol.FrameBg);
-
-                    drawList.AddRectFilled(pos, pos + size, color, ImGui.GetStyle().FrameRounding);
-                    drawList.AddRect(pos, pos + size, ImGui.GetColorU32(ImGuiCol.Border), ImGui.GetStyle().FrameRounding);
-
-                    var textPos = pos + ImGui.GetStyle().FramePadding;
-
-                    // 模板标题
-                    drawList.AddText
-                    (
-                        textPos,
-                        ImGui.GetColorU32(ImGuiCol.Text),
-                        string.IsNullOrWhiteSpace(preset.Title) ? Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset") : preset.Title
-                    );
-
-                    // 种族/性别/保存时间
-                    drawList.AddText
-                    (
-                        textPos + new Vector2(0f, ImGui.GetTextLineHeightWithSpacing()),
-                        ImGui.GetColorU32(ImGuiCol.TextDisabled),
-                        $"{preset.Race} / {preset.Sex} / {preset.CreatedAt:yyyy-MM-dd HH:mm}"
-                    );
-
-                    // 备注
-                    drawList.AddText
-                    (
-                        textPos + new Vector2(0f, ImGui.GetTextLineHeightWithSpacing() * 2f),
-                        ImGui.GetColorU32(ImGuiCol.TextDisabled),
-                        $"{Lang.Get("Note")}: {(string.IsNullOrWhiteSpace(preset.Note) ? Lang.Get("None") : preset.Note)}"
-                    );
-
-                    ImGui.SetCursorScreenPos(pos + new Vector2(0f, size.Y + ImGui.GetStyle().ItemSpacing.Y));
-
-                    DrawEditPresetPopup();
+                    selectedPreset       = preset;
+                    editingPreset        = preset;
+                    editPresetTitleInput = preset.Title;
+                    editPresetNoteInput  = preset.Note;
+                    ImGui.OpenPopup("EditPresetPopup");
                 }
+
+                var drawList = ImGui.GetWindowDrawList();
+                var color = selected
+                                ? ImGui.GetColorU32(ImGuiCol.HeaderActive)
+                                : hovered
+                                    ? ImGui.GetColorU32(ImGuiCol.HeaderHovered)
+                                    : ImGui.GetColorU32(ImGuiCol.FrameBg);
+
+                drawList.AddRectFilled(pos, pos + size, color, ImGui.GetStyle().FrameRounding);
+                drawList.AddRect(pos, pos       + size, ImGui.GetColorU32(ImGuiCol.Border), ImGui.GetStyle().FrameRounding);
+
+                var textPos = pos + ImGui.GetStyle().FramePadding;
+
+                // 模板标题
+                drawList.AddText
+                (
+                    textPos,
+                    ImGui.GetColorU32(ImGuiCol.Text),
+                    string.IsNullOrWhiteSpace(preset.Title) ? Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset") : preset.Title
+                );
+
+                // 种族/性别/保存时间
+                drawList.AddText
+                (
+                    textPos + new Vector2(0f, ImGui.GetTextLineHeightWithSpacing()),
+                    ImGui.GetColorU32(ImGuiCol.TextDisabled),
+                    $"{preset.Race} / {preset.Sex} / {preset.CreatedAt:yyyy-MM-dd HH:mm}"
+                );
+
+                // 备注
+                drawList.AddText
+                (
+                    textPos + new Vector2(0f, ImGui.GetTextLineHeightWithSpacing() * 2f),
+                    ImGui.GetColorU32(ImGuiCol.TextDisabled),
+                    $"{Lang.Get("Note")}: {(string.IsNullOrWhiteSpace(preset.Note) ? Lang.Get("None") : preset.Note)}"
+                );
+
+                ImGui.SetCursorScreenPos(pos + new Vector2(0f, size.Y + ImGui.GetStyle().ItemSpacing.Y));
+
+                DrawEditPresetPopup();
             }
         }
+    }
 
     private void DrawEditPresetPopup()
     {
-        using (var popup = ImRaii.Popup("EditPresetPopup", ImGuiWindowFlags.AlwaysAutoResize))
+        using var popup = ImRaii.Popup("EditPresetPopup", ImGuiWindowFlags.AlwaysAutoResize);
+        if (!popup) return;
+
+        if (editingPreset == selectedPreset)
         {
-            if (popup)
+            using (var table = ImRaii.Table("##EditPresetTable", 2))
             {
-                if (editingPreset == selectedPreset)
+                if (table)
                 {
-                    using (var table = ImRaii.Table("##EditPresetTable", 2))
-                    {
-                        if (table)
-                        {
-                            ImGui.TableSetupColumn("##Label", ImGuiTableColumnFlags.WidthFixed);
-                            ImGui.TableSetupColumn("##Input", ImGuiTableColumnFlags.WidthFixed, 120f * GlobalUIScale);
+                    ImGui.TableSetupColumn("##Label", ImGuiTableColumnFlags.WidthFixed);
+                    ImGui.TableSetupColumn("##Input", ImGuiTableColumnFlags.WidthFixed, 120f * GlobalUIScale);
 
-                            ImGui.TableNextRow();
-                            ImGui.TableNextColumn();
-                            ImGui.AlignTextToFramePadding();
-                            ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(4534)}:");
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+                    ImGui.AlignTextToFramePadding();
+                    ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(4534)}:");
 
-                            ImGui.TableNextColumn();
-                            ImGui.SetNextItemWidth(120f * GlobalUIScale);
-                            ImGui.InputTextWithHint("##EditPresetTitle", LuminaWrapper.GetAddonText(4534), ref editPresetTitleInput, 40);
+                    ImGui.TableNextColumn();
+                    ImGui.SetNextItemWidth(120f * GlobalUIScale);
+                    ImGui.InputTextWithHint("##EditPresetTitle", LuminaWrapper.GetAddonText(4534), ref editPresetTitleInput, 40);
 
-                            ImGui.TableNextRow();
-                            ImGui.TableNextColumn();
-                            ImGui.AlignTextToFramePadding();
-                            ImGui.TextUnformatted($"{Lang.Get("Note")}:");
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+                    ImGui.AlignTextToFramePadding();
+                    ImGui.TextUnformatted($"{Lang.Get("Note")}:");
 
-                            ImGui.TableNextColumn();
-                            ImGui.SetNextItemWidth(120f * GlobalUIScale);
-                            ImGui.InputTextMultiline
-                            (
-                                "##EditPresetNote",
-                                ref editPresetNoteInput,
-                                120,
-                                new(120f * GlobalUIScale, ImGui.GetTextLineHeightWithSpacing() * 3f)
-                            );
-                        }
-                    }
-
-                    if (ImGui.Button(Lang.Get("Confirm")))
-                    {
-                        if (!string.IsNullOrWhiteSpace(editPresetTitleInput))
-                            editingPreset.Title = editPresetTitleInput.Trim();
-
-                        editingPreset.Note = editPresetNoteInput.Trim();
-
-                        selectedPreset = editingPreset;
-                        config.Save(this);
-                        ImGui.CloseCurrentPopup();
-                    }
-
-                    ImGui.SameLine();
-
-                    if (ImGui.Button(Lang.Get("Cancel")))
-                        ImGui.CloseCurrentPopup();
+                    ImGui.TableNextColumn();
+                    ImGui.SetNextItemWidth(120f * GlobalUIScale);
+                    ImGui.InputTextMultiline
+                    (
+                        "##EditPresetNote",
+                        ref editPresetNoteInput,
+                        120,
+                        new(120f * GlobalUIScale, ImGui.GetTextLineHeightWithSpacing() * 3f)
+                    );
                 }
             }
+
+            if (ImGui.Button(Lang.Get("Confirm")))
+            {
+                if (!string.IsNullOrWhiteSpace(editPresetTitleInput))
+                    editingPreset.Title = editPresetTitleInput.Trim();
+
+                editingPreset.Note = editPresetNoteInput.Trim();
+
+                selectedPreset = editingPreset;
+                config.Save(this);
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button(Lang.Get("Cancel")))
+                ImGui.CloseCurrentPopup();
         }
+
     }
 
     private void DrawPresetDetail()
@@ -973,8 +983,8 @@ public unsafe partial class UnifiedGlamourManager
         // 未选择
         if (selectedPreset == null)
         {
-            var text = LuminaWrapper.GetAddonText(1440);
-            var size = ImGui.GetContentRegionAvail();
+            var text     = LuminaWrapper.GetAddonText(1440);
+            var size     = ImGui.GetContentRegionAvail();
             var textSize = ImGui.CalcTextSize(text);
 
             ImGui.SetCursorPosY(ImGui.GetCursorPosY() + MathF.Max(0f, (size.Y - textSize.Y) * 0.5f));
@@ -991,13 +1001,14 @@ public unsafe partial class UnifiedGlamourManager
         using var table = ImRaii.Table("##PresetActionButtons", 2, ImGuiTableFlags.SizingStretchProp);
         if (!table) return;
 
-        ImGui.TableSetupColumn("##Left", ImGuiTableColumnFlags.WidthStretch, 1f);
+        ImGui.TableSetupColumn("##Left",  ImGuiTableColumnFlags.WidthStretch, 1f);
         ImGui.TableSetupColumn("##Right", ImGuiTableColumnFlags.WidthStretch, 1f);
 
         ImGui.TableNextRow();
 
         // 应用按钮
         ImGui.TableNextColumn();
+
         using (ImRaii.Disabled(TaskHelper.IsBusy || !TryGetReadyPlateEditor(out var agent) || agent->Data->OpenMode != 0))
         {
             if (ImGui.Button(Lang.Get("Apply"), new Vector2(-1f, 0f)))
@@ -1006,12 +1017,13 @@ public unsafe partial class UnifiedGlamourManager
 
         // 试穿按钮
         ImGui.TableNextColumn();
+
         using (ImRaii.Disabled(TaskHelper.IsBusy || AgentTryon.Instance() == null || DService.Instance().Condition.IsOccupiedInEvent))
         {
             if (ImGui.Button(LuminaWrapper.GetAddonText(2426), new Vector2(-1f, 0f)))
                 TaskHelper.Enqueue(() => StartTryOnPreset(selectedPreset));
         }
-            
+
         ImGui.TableNextRow();
 
         // 导出按钮
@@ -1021,6 +1033,7 @@ public unsafe partial class UnifiedGlamourManager
 
         // 删除按钮
         ImGui.TableNextColumn();
+
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("HoldCtrlToDelete"), new Vector2(-1f, 0f)))
         {
             if (ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
@@ -1067,7 +1080,7 @@ public unsafe partial class UnifiedGlamourManager
         ImGui.TableHeadersRow();
 
         foreach (var item in selectedPreset.Items
-                                           .Where(x => x.SlotIndex < PLATE_SLOT_ADDON_TEXT_IDS.Length)
+                                           .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
                                            .OrderBy(x => x.SlotIndex))
         {
             var itemRow = LuminaGetter.GetRow<Item>(ItemUtil.GetBaseId(item.ItemID).ItemId).GetValueOrDefault();
@@ -1078,7 +1091,7 @@ public unsafe partial class UnifiedGlamourManager
             // 槽位
             ImGui.TableNextColumn();
             ImGui.AlignTextToFramePadding();
-            ImGui.TextUnformatted(LuminaWrapper.GetAddonText(PLATE_SLOT_ADDON_TEXT_IDS[item.SlotIndex]));
+            ImGui.TextUnformatted(LuminaWrapper.GetAddonText(PlateSlotAddonTextIDs[item.SlotIndex]));
 
             // 装备图标/名称
             ImGui.TableNextColumn();
@@ -1118,10 +1131,12 @@ public unsafe partial class UnifiedGlamourManager
         ImGui.Separator();
 
         foreach (var item in missingApplyItems)
+        {
             ImGui.BulletText
             (
-                $"{LuminaWrapper.GetAddonText(PLATE_SLOT_ADDON_TEXT_IDS[item.SlotIndex])}: {LuminaWrapper.GetItemName(ItemUtil.GetBaseId(item.ItemID).ItemId)}"
+                $"{LuminaWrapper.GetAddonText(PlateSlotAddonTextIDs[item.SlotIndex])}: {LuminaWrapper.GetItemName(ItemUtil.GetBaseId(item.ItemID).ItemId)}"
             );
+        }
 
         ImGui.Separator();
 
@@ -1172,8 +1187,8 @@ public unsafe partial class UnifiedGlamourManager
 
     private static float CardHeight => MathF.Max
     (
-        (ImGui.GetFrameHeight() * 1.6f) + (ImGui.GetStyle().WindowPadding.Y * 2f),
-        (ImGui.GetTextLineHeightWithSpacing() * 2f) + (ImGui.GetStyle().WindowPadding.Y * 2f)
+        (ImGui.GetFrameHeight()               * 1.6f) + (ImGui.GetStyle().WindowPadding.Y * 2f),
+        (ImGui.GetTextLineHeightWithSpacing() * 2f)   + (ImGui.GetStyle().WindowPadding.Y * 2f)
     );
 
     private static void DrawStainLabel(uint labelAddonID, Stain stain)

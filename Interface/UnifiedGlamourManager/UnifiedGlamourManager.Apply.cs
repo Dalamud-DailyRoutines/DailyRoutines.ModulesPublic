@@ -1,12 +1,12 @@
+using DailyRoutines.Extensions;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using OmenTools.Dalamud;
-using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
-using DailyRoutines.Extensions;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
@@ -15,6 +15,7 @@ public unsafe partial class UnifiedGlamourManager
 {
     // 用于记录用户当前没有的幻化
     private readonly List<PlateItemInfo> missingApplyItems = [];
+
     private bool openMissingApplyItemsPopup;
 
     private void ApplySelectedItemToCurrentPlateSlot(UnifiedItem item)
@@ -124,7 +125,7 @@ public unsafe partial class UnifiedGlamourManager
     private void SaveCurrentPlateAsPreset(string title, string note, PresetSource source)
     {
         var isInspect = source == PresetSource.OtherPlayer;
-        var items = isInspect ? GetInspectPlateItems() : GetCurrentPlateItems();
+        var items     = isInspect ? GetInspectPlateItems() : GetCurrentPlateItems();
         if (items.Count == 0) return;
 
         // get目标对象的种族/性别
@@ -154,8 +155,6 @@ public unsafe partial class UnifiedGlamourManager
         // 保存预设，清空输入框
         config.Presets.Add(preset);
         selectedPreset = preset;
-        newPresetTitle = string.Empty;
-        newPresetNote  = string.Empty;
 
         config.Save(this);
         NotifyHelper.Instance().NotificationSuccess(Lang.Get("SavedSuccessfully"));
@@ -163,13 +162,13 @@ public unsafe partial class UnifiedGlamourManager
 
     private bool StartApplyPreset()
     {
-        if (!TryGetReadyPlateEditor(out var applyAgent) ||
+        if (!TryGetReadyPlateEditor(out _)    ||
             !TryGetLoadedMirageManager(out _) ||
             selectedPreset == null)
             return false;
 
         var entries = selectedPreset.Items
-                                    .Where(x => x.SlotIndex < PLATE_SLOT_ADDON_TEXT_IDS.Length)
+                                    .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
                                     .OrderBy(x => x.SlotIndex)
                                     .ToList();
 
@@ -180,10 +179,12 @@ public unsafe partial class UnifiedGlamourManager
             var itemID = ItemUtil.GetBaseId(entry.ItemID).ItemId;
 
             var target = items
-                         .Where(x =>
-                             x.ItemID == itemID &&
-                             x.CanUseInPlate &&
-                             x.IsCompatibleWithSlot(entry.SlotIndex))
+                         .Where
+                         (x =>
+                              x.ItemID == itemID &&
+                              x.CanUseInPlate    &&
+                              x.IsCompatibleWithSlot(entry.SlotIndex)
+                         )
                          .OrderBy(x => x.IsSetPart)
                          .ThenByDescending(x => x.InPrismBox)
                          .FirstOrDefault();
@@ -245,8 +246,8 @@ public unsafe partial class UnifiedGlamourManager
                         currentItem.Flags |= ItemFlag.HasStain0;
 
                         var dye0ID = LuminaGetter.TryGetRow<Stain>(entry.Stain0ID, out var dye0Row)
-                            ? dye0Row.Item[0].RowId
-                            : 0;
+                                         ? dye0Row.Item[0].RowId
+                                         : 0;
 
                         Inventories.Player.TryGetFirstItem(x => x.ItemId == dye0ID, out var dye0);
                         applyAgent->SetItemStain(entry.SlotIndex, entry.Stain0ID, dye0, dye0ID, 0);
@@ -257,8 +258,8 @@ public unsafe partial class UnifiedGlamourManager
                         currentItem.Flags |= ItemFlag.HasStain1;
 
                         var dye1ID = LuminaGetter.TryGetRow<Stain>(entry.Stain1ID, out var dye1Row)
-                            ? dye1Row.Item[0].RowId
-                            : 0;
+                                         ? dye1Row.Item[0].RowId
+                                         : 0;
 
                         Inventories.Player.TryGetFirstItem(x => x.ItemId == dye1ID, out var dye1);
                         applyAgent->SetItemStain(entry.SlotIndex, entry.Stain1ID, dye1, dye1ID, 1);
@@ -290,10 +291,12 @@ public unsafe partial class UnifiedGlamourManager
             return false;
 
         var entries = preset.Items
-                            .Where(x =>
-                                x.ItemID > 0 &&
-                                x.SlotIndex < PLATE_SLOT_ADDON_TEXT_IDS.Length &&
-                                LuminaGetter.TryGetRow<Item>(ItemUtil.GetBaseId(x.ItemID).ItemId, out _))
+                            .Where
+                            (x =>
+                                 x.ItemID    > 0                                &&
+                                 x.SlotIndex < PlateSlotAddonTextIDs.Length &&
+                                 LuminaGetter.TryGetRow<Item>(ItemUtil.GetBaseId(x.ItemID).ItemId, out _)
+                            )
                             .OrderBy(x => x.SlotIndex)
                             .ToList();
 

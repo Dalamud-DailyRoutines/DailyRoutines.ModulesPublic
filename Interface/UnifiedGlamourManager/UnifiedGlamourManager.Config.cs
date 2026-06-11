@@ -13,11 +13,10 @@ public partial class UnifiedGlamourManager
     {
         public bool            UseGridView = true;
         public List<SavedItem> Favorites   = [];
-        
-        public List<PlatePreset> Presets = [];
-        public bool OnlyCurrentRace;
-        public bool OnlyCurrentSex;
 
+        public List<PlatePreset> Presets = [];
+        public bool              OnlyCurrentRace;
+        public bool              OnlyCurrentSex;
     }
 
     private void NormalizeConfig()

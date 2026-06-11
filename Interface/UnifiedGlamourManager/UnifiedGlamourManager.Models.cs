@@ -207,11 +207,11 @@ public partial class UnifiedGlamourManager
     {
         // 玩家设置的标题/备注
         public string Title = string.Empty;
-        public string Note = string.Empty;
+        public string Note  = string.Empty;
 
         // 当前保存的游戏角色的种族/性别
         public string Race = string.Empty;
-        public string Sex = string.Empty;
+        public string Sex  = string.Empty;
 
         // 保存的时间
         public DateTime CreatedAt = DateTime.Now;
@@ -257,7 +257,7 @@ public partial class UnifiedGlamourManager
     )
     {
         public bool IsGlamourModelValid =>
-            IsGlamorous &&
+            IsGlamorous                 &&
             ModelMain              != 0 &&
             EquipSlotCategoryRowID != 0;
 
