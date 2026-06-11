@@ -3,21 +3,53 @@ using Dalamud.Interface.Utility;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using DailyRoutines.Extensions;
+using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 
 public unsafe partial class UnifiedGlamourManager
 {
+    private PlatePreset? editingPreset;
+    private string editPresetTitleInput = string.Empty;
+    private string editPresetNoteInput  = string.Empty;
+    
+    protected override void ConfigUI()
+    {
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Command"));
+
+        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("UnifiedGlamourManager-Preset-CommandHelp")}");
+
+        // 打开下载用于石之家导出的脚本页面(国服only)
+        if (GameState.IsCN)
+        {
+            ImGui.NewLine();
+
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), "石之家导入功能");
+
+            ImGui.TextWrapped
+            (
+                "如需使用石之家导入功能, 需要先安装浏览器脚本。\n" +
+                "安装脚本前, 请先为浏览器安装 Tampermonkey / Violentmonkey 等用户脚本管理器。\n" +
+                "安装完成后, 再打开脚本页面并点击 Install this script 安装导入脚本。\n" +
+                "安装导入脚本后, 打开石之家幻化详情页, 页面右下角会出现复制按钮。\n" +
+                "点击复制后, 回到本模块中使用导入功能。"
+            );
+
+            if (ImGui.Button("获取导入脚本"))
+                Util.OpenLink(STONE_SCRIPT_URL);
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("打开石之家"))
+                Util.OpenLink(STONE_URL);
+        }
+    }
+
     protected override void OverlayPreDraw()
     {
-        if (Overlay?.IsOpen == true &&
-            (!TryGetReadyPlateEditor(out var agent) ||
-             agent->Data->OpenMode != MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW))
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
         var minSize = new Vector2
         (
             ImGui.GetFrameHeight()               * 28f,
@@ -29,9 +61,49 @@ public unsafe partial class UnifiedGlamourManager
 
     protected override void OverlayUI()
     {
-        DrawTopBar();
-        DrawMainLayout();
-        DrawConfirmPopups();
+        if (DService.Instance().Condition.IsBetweenAreas) return;
+
+        var storage       = ImGui.GetStateStorage();
+        var selectedTabID = ImGui.GetID("##UnifiedGlamourManagerSelectedTab");
+        var selectedTab   = storage.GetInt(selectedTabID, 0);
+
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var tabSize = new Vector2
+        (
+            (ImGui.GetContentRegionAvail().X - spacing) * 0.5f,
+            ImGui.GetFrameHeight()
+        );
+
+        using (ImRaii.PushStyle(ImGuiStyleVar.SelectableTextAlign, new Vector2(0.5f, 0.5f)))
+        {
+            if (ImGui.Selectable(Lang.Get("UnifiedGlamourManagerTitle"), selectedTab == 0, ImGuiSelectableFlags.None, tabSize))
+                storage.SetInt(selectedTabID, 0);
+
+            ImGui.SameLine();
+
+            if (ImGui.Selectable(Lang.Get("UnifiedGlamourManager-GlamourPresetManagerTitle"), selectedTab == 1, ImGuiSelectableFlags.None, tabSize))
+                storage.SetInt(selectedTabID, 1);
+        }
+
+        ImGui.Separator();
+
+        selectedTab = storage.GetInt(selectedTabID, 0);
+
+        if (selectedTab == 0)
+        {
+            DrawTopBar();
+            DrawMainLayout();
+            DrawConfirmPopups();
+        }
+        else
+        {
+            DrawStatusBar();
+            DrawPresetSearchAndFilterBar();
+            ImGui.Separator();
+
+            DrawPresetMainLayout();
+            DrawMissingApplyItemsPopup();
+        }
     }
 
     private static void DrawSectionTitle(string text)
@@ -91,10 +163,7 @@ public unsafe partial class UnifiedGlamourManager
         if (!child) return;
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextDisabled
-        (
-            $"{LuminaWrapper.GetAddonText(11910)}: {prismBoxItemCount} / {LuminaWrapper.GetAddonText(12216)}: {cabinetItemCount} / {LuminaWrapper.GetAddonText(929)}: {StoredItemCount}"
-        );
+        DrawStatusBar();
 
         if (ImGui.Button(Lang.Get("Refresh")))
             StartRefreshAll();
@@ -107,7 +176,7 @@ public unsafe partial class UnifiedGlamourManager
             ImGui.GetContentRegionAvail().X
         );
         ImGui.SetNextItemWidth(searchWidth);
-        if (ImGui.InputTextWithHint("##Search", Lang.Get("Search"), ref searchText))
+        if (ImGui.InputTextWithHint("##UnifiedItemSearch", Lang.Get("Search"), ref searchText, 128))
             MarkFilteredItemsDirty();
 
         ImGui.SameLine();
@@ -458,7 +527,7 @@ public unsafe partial class UnifiedGlamourManager
         var cellSize       = MathF.Floor((availableWidth - (spacing                  * (columns     - 1))) / columns);
         cellSize = Math.Clamp(cellSize, minCellSize, maxCellSize);
 
-        var iconSize        = MathF.Max(ImGui.GetFrameHeight() * 1.3f, cellSize - (ImGui.GetStyle().FramePadding.X * 2f));
+        var iconSize        = MathF.Max(ImGui.GetFrameHeight() * 1.3f, cellSize - ImGui.GetStyle().FramePadding.X);
         var start           = ImGui.GetCursorScreenPos();
         var drawList        = ImGui.GetWindowDrawList();
         var rows            = (filtered.Count + columns - 1) / columns;
@@ -631,6 +700,435 @@ public unsafe partial class UnifiedGlamourManager
         ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-RightClickFavoriteHint"));
     }
 
+    // UI - Preset
+    private void DrawStatusBar()
+    {
+        var mirageLoaded = TryGetLoadedMirageManager(out _);
+        var cabinetLoaded = GetLoadedCabinet() is not null;
+
+        // 投影台状态
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(11910)}:");
+        ImGui.SameLine();
+        ImGui.TextColored(
+            (mirageLoaded ? KnownColor.LimeGreen : KnownColor.Red).ToVector4(),
+            mirageLoaded ? Lang.Get("Connected") : Lang.Get("Disconnected"));
+
+        ImGui.SameLine();
+        // 收藏柜状态
+        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(12216)}:");
+        ImGui.SameLine();
+        ImGui.TextColored(
+            (cabinetLoaded ? KnownColor.LimeGreen : KnownColor.Red).ToVector4(),
+            cabinetLoaded ? Lang.Get("Connected") : Lang.Get("Disconnected"));
+    }
+    
+    private void DrawPresetSearchAndFilterBar()
+    {
+        using var table = ImRaii.Table("##PresetSearchAndFilterBar", 2, ImGuiTableFlags.SizingStretchProp);
+        if (!table) return;
+
+        ImGui.TableSetupColumn("##Search", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("##Filters", ImGuiTableColumnFlags.WidthFixed);
+        // 搜索框
+        ImGui.TableNextColumn();
+        ImGui.SetNextItemWidth(-1f);
+        ImGui.InputTextWithHint("##PresetSearch", Lang.Get("Search"), ref presetSearch, 128);
+        // 筛选条件
+        ImGui.TableNextColumn();
+        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-Preset-OnlyCurrentRace"), ref config.OnlyCurrentRace))
+            config.Save(this);
+        ImGui.SameLine();
+        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-Preset-OnlyCurrentSex"), ref config.OnlyCurrentSex))
+            config.Save(this);
+    }
+
+    private void DrawPresetMainLayout()
+    {
+        var size = ImGui.GetContentRegionAvail();
+        if (size.X <= 0f || size.Y <= 0f) return;
+
+        using var table = ImRaii.Table("##GlamourPresetMainLayout", 2, ImGuiTableFlags.Resizable, size);
+        if (!table) return;
+
+        ImGui.TableSetupColumn("##PresetList", ImGuiTableColumnFlags.WidthStretch, 0.35f);
+        ImGui.TableSetupColumn("##PresetDetail", ImGuiTableColumnFlags.WidthStretch, 0.65f);
+
+        // 预设列表
+        ImGui.TableNextColumn();
+        DrawPresetList();
+
+        // 预设详情
+        ImGui.TableNextColumn();
+        DrawPresetDetail();
+    }
+
+    private void DrawPresetList()
+    {
+        // 获取玩家的种族/性别
+        var player = Control.GetLocalPlayer();
+        var race   = GetRaceName(player->DrawData.CustomizeData.Race, player->DrawData.CustomizeData.Sex);
+        var sex    = GetSexName(player->DrawData.CustomizeData.Sex);
+
+        var keyword = presetSearch.Trim();
+
+        var visiblePresets = config.Presets
+                                .Where(x =>
+                                    (!config.OnlyCurrentRace || x.Race == race) &&
+                                    (!config.OnlyCurrentSex || x.Sex == sex) &&
+                                    (keyword.Length == 0 ||
+                                        x.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                                        x.Note.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                                        x.Items.Any(item =>
+                                            LuminaGetter.GetRow<Item>(ItemUtil.GetBaseId(item.ItemID).ItemId) is { } itemRow &&
+                                            itemRow.Name.ToString().Contains(keyword, StringComparison.OrdinalIgnoreCase))))
+                                .OrderByDescending(x => x.CreatedAt)
+                                .ToList();
+
+        // 当前筛选数/总数
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(TitleColor, $"{Lang.Get("List")} {visiblePresets.Count} / {config.Presets.Count}");
+        ImGui.Separator();
+
+        // 导入/导入试穿
+        using (var buttonTable = ImRaii.Table("##PresetImportButtons", 2, ImGuiTableFlags.SizingStretchProp))
+        {
+            if (buttonTable)
+            {
+                ImGui.TableSetupColumn("##Import", ImGuiTableColumnFlags.WidthStretch, 1f);
+                ImGui.TableSetupColumn("##TryOnImport", ImGuiTableColumnFlags.WidthStretch, 1f);
+
+                ImGui.TableNextRow();
+
+                ImGui.TableNextColumn();
+                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileImport, Lang.Get("Import"), new Vector2(-1f, 0f)))
+                {
+                    var preset = ImportFromClipboard<PlatePreset>();
+                    if (preset != null)
+                    {
+                        preset.Title = preset.Title.Trim();
+
+                        preset.CreatedAt = DateTime.Now;
+                        config.Presets.Add(preset);
+                        selectedPreset = preset;
+                        config.Save(this);
+                    }
+                }
+
+                ImGui.TableNextColumn();
+                using (ImRaii.Disabled(TaskHelper.IsBusy || AgentTryon.Instance() == null || DService.Instance().Condition.IsOccupiedInEvent))
+                {
+                    if (ImGui.Button(Lang.Get("UnifiedGlamourManager-Preset-TryOnImportedContent"), new Vector2(-1f, 0f)))
+                        TaskHelper.Enqueue(() => StartTryOnPreset(ImportFromClipboard<PlatePreset>()));
+                }
+            }
+        }
+
+            ImGui.Separator();
+
+            using var child = ImRaii.Child("##PresetListChild", Vector2.Zero, true);
+            if (!child) return;
+
+            if (visiblePresets.Count == 0)
+            {
+                ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-NoSearchResult"));
+            }
+            else
+            {
+                foreach (var preset in visiblePresets)
+                {
+                    using var id = ImRaii.PushId($"{preset.Title}-{preset.CreatedAt.Ticks}");
+
+                    var pos = ImGui.GetCursorScreenPos();
+                    var size = new Vector2(ImGui.GetContentRegionAvail().X, ImGui.GetTextLineHeightWithSpacing() * 3.5f);
+                    var selected = selectedPreset == preset;
+
+                    if (ImGui.InvisibleButton("##PresetItem", size))
+                        selectedPreset = preset;
+
+                    // 双击修改
+                    var hovered = ImGui.IsItemHovered();
+                    ImGuiOm.TooltipHover(Lang.Get("UnifiedGlamourManager-Preset-DoubleClickEditHint"));
+                    
+                    if (hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                    {
+                        selectedPreset = preset;
+                        editingPreset = preset;
+                        editPresetTitleInput = preset.Title;
+                        editPresetNoteInput = preset.Note;
+                        ImGui.OpenPopup("EditPresetPopup");
+                    }
+
+                    var drawList = ImGui.GetWindowDrawList();
+                    var color = selected
+                                       ? ImGui.GetColorU32(ImGuiCol.HeaderActive)
+                                       : hovered
+                                           ? ImGui.GetColorU32(ImGuiCol.HeaderHovered)
+                                           : ImGui.GetColorU32(ImGuiCol.FrameBg);
+
+                    drawList.AddRectFilled(pos, pos + size, color, ImGui.GetStyle().FrameRounding);
+                    drawList.AddRect(pos, pos + size, ImGui.GetColorU32(ImGuiCol.Border), ImGui.GetStyle().FrameRounding);
+
+                    var textPos = pos + ImGui.GetStyle().FramePadding;
+
+                    // 模板标题
+                    drawList.AddText
+                    (
+                        textPos,
+                        ImGui.GetColorU32(ImGuiCol.Text),
+                        string.IsNullOrWhiteSpace(preset.Title) ? Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset") : preset.Title
+                    );
+
+                    // 种族/性别/保存时间
+                    drawList.AddText
+                    (
+                        textPos + new Vector2(0f, ImGui.GetTextLineHeightWithSpacing()),
+                        ImGui.GetColorU32(ImGuiCol.TextDisabled),
+                        $"{preset.Race} / {preset.Sex} / {preset.CreatedAt:yyyy-MM-dd HH:mm}"
+                    );
+
+                    // 备注
+                    drawList.AddText
+                    (
+                        textPos + new Vector2(0f, ImGui.GetTextLineHeightWithSpacing() * 2f),
+                        ImGui.GetColorU32(ImGuiCol.TextDisabled),
+                        $"{Lang.Get("Note")}: {(string.IsNullOrWhiteSpace(preset.Note) ? Lang.Get("None") : preset.Note)}"
+                    );
+
+                    ImGui.SetCursorScreenPos(pos + new Vector2(0f, size.Y + ImGui.GetStyle().ItemSpacing.Y));
+
+                    DrawEditPresetPopup();
+                }
+            }
+        }
+
+    private void DrawEditPresetPopup()
+    {
+        using (var popup = ImRaii.Popup("EditPresetPopup", ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            if (popup)
+            {
+                if (editingPreset == selectedPreset)
+                {
+                    using (var table = ImRaii.Table("##EditPresetTable", 2))
+                    {
+                        if (table)
+                        {
+                            ImGui.TableSetupColumn("##Label", ImGuiTableColumnFlags.WidthFixed);
+                            ImGui.TableSetupColumn("##Input", ImGuiTableColumnFlags.WidthFixed, 120f * GlobalUIScale);
+
+                            ImGui.TableNextRow();
+                            ImGui.TableNextColumn();
+                            ImGui.AlignTextToFramePadding();
+                            ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(4534)}:");
+
+                            ImGui.TableNextColumn();
+                            ImGui.SetNextItemWidth(120f * GlobalUIScale);
+                            ImGui.InputTextWithHint("##EditPresetTitle", LuminaWrapper.GetAddonText(4534), ref editPresetTitleInput, 40);
+
+                            ImGui.TableNextRow();
+                            ImGui.TableNextColumn();
+                            ImGui.AlignTextToFramePadding();
+                            ImGui.TextUnformatted($"{Lang.Get("Note")}:");
+
+                            ImGui.TableNextColumn();
+                            ImGui.SetNextItemWidth(120f * GlobalUIScale);
+                            ImGui.InputTextMultiline
+                            (
+                                "##EditPresetNote",
+                                ref editPresetNoteInput,
+                                120,
+                                new(120f * GlobalUIScale, ImGui.GetTextLineHeightWithSpacing() * 3f)
+                            );
+                        }
+                    }
+
+                    if (ImGui.Button(Lang.Get("Confirm")))
+                    {
+                        if (!string.IsNullOrWhiteSpace(editPresetTitleInput))
+                            editingPreset.Title = editPresetTitleInput.Trim();
+
+                        editingPreset.Note = editPresetNoteInput.Trim();
+
+                        selectedPreset = editingPreset;
+                        config.Save(this);
+                        ImGui.CloseCurrentPopup();
+                    }
+
+                    ImGui.SameLine();
+
+                    if (ImGui.Button(Lang.Get("Cancel")))
+                        ImGui.CloseCurrentPopup();
+                }
+            }
+        }
+    }
+
+    private void DrawPresetDetail()
+    {
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(TitleColor, Lang.Get("UnifiedGlamourManager-Preset-PresetDetail"));
+        ImGui.Separator();
+
+        // 未选择
+        if (selectedPreset == null)
+        {
+            var text = LuminaWrapper.GetAddonText(1440);
+            var size = ImGui.GetContentRegionAvail();
+            var textSize = ImGui.CalcTextSize(text);
+
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + MathF.Max(0f, (size.Y - textSize.Y) * 0.5f));
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + MathF.Max(0f, (size.X - textSize.X) * 0.5f));
+            ImGui.TextDisabled(text);
+            return;
+        }
+
+        // 模版内容
+        DrawSavedContent();
+        ImGui.Separator();
+
+        // 按钮
+        using var table = ImRaii.Table("##PresetActionButtons", 2, ImGuiTableFlags.SizingStretchProp);
+        if (!table) return;
+
+        ImGui.TableSetupColumn("##Left", ImGuiTableColumnFlags.WidthStretch, 1f);
+        ImGui.TableSetupColumn("##Right", ImGuiTableColumnFlags.WidthStretch, 1f);
+
+        ImGui.TableNextRow();
+
+        // 应用按钮
+        ImGui.TableNextColumn();
+        using (ImRaii.Disabled(TaskHelper.IsBusy || !TryGetReadyPlateEditor(out var agent) || agent->Data->OpenMode != 0))
+        {
+            if (ImGui.Button(Lang.Get("Apply"), new Vector2(-1f, 0f)))
+                TaskHelper.Enqueue(StartApplyPreset);
+        }
+
+        // 试穿按钮
+        ImGui.TableNextColumn();
+        using (ImRaii.Disabled(TaskHelper.IsBusy || AgentTryon.Instance() == null || DService.Instance().Condition.IsOccupiedInEvent))
+        {
+            if (ImGui.Button(LuminaWrapper.GetAddonText(2426), new Vector2(-1f, 0f)))
+                TaskHelper.Enqueue(() => StartTryOnPreset(selectedPreset));
+        }
+            
+        ImGui.TableNextRow();
+
+        // 导出按钮
+        ImGui.TableNextColumn();
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileExport, Lang.Get("Export"), new Vector2(-1f, 0f)))
+            ExportToClipboard(selectedPreset);
+
+        // 删除按钮
+        ImGui.TableNextColumn();
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("HoldCtrlToDelete"), new Vector2(-1f, 0f)))
+        {
+            if (ImGui.IsKeyDown(ImGuiKey.LeftCtrl))
+            {
+                config.Presets.Remove(selectedPreset);
+                selectedPreset = null;
+                config.Save(this);
+            }
+        }
+    }
+
+    private void DrawSavedContent()
+    {
+        if (selectedPreset == null) return;
+
+        using var child = ImRaii.Child
+        (
+            "##SavedContentChild",
+            new Vector2(0f, -(ImGui.GetFrameHeightWithSpacing() * 2.5f)),
+            true
+        );
+        if (!child) return;
+
+        using var table = ImRaii.Table
+        (
+            "##SavedContentTable",
+            3,
+            ImGuiTableFlags.RowBg         |
+            ImGuiTableFlags.BordersInnerH |
+            ImGuiTableFlags.ScrollY       |
+            ImGuiTableFlags.SizingStretchProp
+        );
+
+        if (!table) return;
+
+        ImGui.TableSetupColumn
+        (
+            Lang.Get("UnifiedGlamourManager-GlamourTargetSlot"),
+            ImGuiTableColumnFlags.WidthFixed,
+            ImGui.GetFrameHeight() * 3f
+        );
+        ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(6942));
+        ImGui.TableSetupColumn(Lang.Get("Dye"), ImGuiTableColumnFlags.WidthStretch, 0.9f);
+        ImGui.TableHeadersRow();
+
+        foreach (var item in selectedPreset.Items
+                                           .Where(x => x.SlotIndex < PLATE_SLOT_ADDON_TEXT_IDS.Length)
+                                           .OrderBy(x => x.SlotIndex))
+        {
+            var itemRow = LuminaGetter.GetRow<Item>(ItemUtil.GetBaseId(item.ItemID).ItemId).GetValueOrDefault();
+            var size    = new Vector2(ImGui.GetFrameHeight());
+
+            ImGui.TableNextRow();
+
+            // 槽位
+            ImGui.TableNextColumn();
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextUnformatted(LuminaWrapper.GetAddonText(PLATE_SLOT_ADDON_TEXT_IDS[item.SlotIndex]));
+
+            // 装备图标/名称
+            ImGui.TableNextColumn();
+            if (ImageHelper.GetGameIcon(itemRow.Icon) is { } itemIcon)
+                ImGui.Image(itemIcon.Handle, size);
+            ImGui.SameLine();
+            ImGui.TextUnformatted(itemRow.Name.ToString());
+
+            // 染色
+            ImGui.TableNextColumn();
+
+            var stain0 = LuminaGetter.GetRow<Stain>(item.Stain0ID).GetValueOrDefault();
+            var stain1 = LuminaGetter.GetRow<Stain>(item.Stain1ID).GetValueOrDefault();
+
+            DrawStainLabel(15970, stain0);
+
+            ImGui.SameLine();
+            ImGui.TextDisabled(" / ");
+            ImGui.SameLine();
+
+            DrawStainLabel(15971, stain1);
+        }
+    }
+
+    private void DrawMissingApplyItemsPopup()
+    {
+        if (openMissingApplyItemsPopup)
+        {
+            ImGui.OpenPopup("##MissingApplyItemsPopup");
+            openMissingApplyItemsPopup = false;
+        }
+
+        using var popup = ImRaii.PopupModal("##MissingApplyItemsPopup", ImGuiWindowFlags.AlwaysAutoResize);
+        if (!popup) return;
+
+        ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Preset-MissingItemsText"));
+        ImGui.Separator();
+
+        foreach (var item in missingApplyItems)
+            ImGui.BulletText
+            (
+                $"{LuminaWrapper.GetAddonText(PLATE_SLOT_ADDON_TEXT_IDS[item.SlotIndex])}: {LuminaWrapper.GetItemName(ItemUtil.GetBaseId(item.ItemID).ItemId)}"
+            );
+
+        ImGui.Separator();
+
+        if (ImGui.Button(LuminaWrapper.GetAddonText(1219), new Vector2(-1f, 0f)))
+            ImGui.CloseCurrentPopup();
+    }
+
     #region 工具
 
     private static Vector4 GetCardBackgroundColor(bool selected, bool favorite, bool hovered)
@@ -650,8 +1148,6 @@ public unsafe partial class UnifiedGlamourManager
             : favorite
                 ? GoldColor
                 : MutedBorderColor;
-
-
 
     private static string GetSourceFilterLabel(SourceFilter filter) =>
         filter switch
