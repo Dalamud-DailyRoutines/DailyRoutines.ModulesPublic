@@ -59,6 +59,8 @@ public unsafe class AutoLogin : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "_TitleMenu", OnTitleMenu);
         OnTitleMenu(AddonEvent.PostSetup, null);
 
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreDraw, "Dialogue", OnDialogue);
+        
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoLogin-CommandHelp") });
         GameState.Instance().Login += OnLogin;
     }
@@ -68,7 +70,7 @@ public unsafe class AutoLogin : ModuleBase
         GameState.Instance().Login -= OnLogin;
         CommandManager.Instance().RemoveCommand(COMMAND);
 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnTitleMenu);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnTitleMenu, OnDialogue);
     }
 
     protected override void ConfigUI()
@@ -204,6 +206,17 @@ public unsafe class AutoLogin : ModuleBase
     }
 
     #region 事件
+    
+    private static void OnDialogue(AddonEvent type, AddonArgs args)
+    {
+        var addon = Dialogue;
+        if (!addon->IsAddonAndNodesReady()) return;
+
+        var buttonNode = addon->GetComponentButtonById(4);
+        if (buttonNode == null) return;
+
+        buttonNode->Click();
+    }
 
     private void OnLogin()
     {
