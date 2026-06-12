@@ -1,9 +1,12 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Windows.Models;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -21,8 +24,16 @@ public class FastResetStrikingDummy : ModuleBase
 
     private readonly CancellationTokenSource cancelSource = new();
 
+    private Config config = null!;
+
+    private bool isAlreadyRequest;
+
     protected override void Init()
     {
+        config = Config.Load(this) ?? new();
+
+        DService.Instance().Condition.ConditionChange += OnConditionChanged;
+
         ExecuteCommandManager.Instance().RegPre(OnResetStrikingDummies);
         CommandManager.Instance().AddSubCommand
         (
@@ -32,10 +43,14 @@ public class FastResetStrikingDummy : ModuleBase
                 HelpMessage = Lang.Get("FastResetStrikingDummy-CommandHelp")
             }
         );
+
+        _ = Task.Run(AutoClearLoop);
     }
-    
+
     protected override void Uninit()
     {
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
+
         ExecuteCommandManager.Instance().Unreg(OnResetStrikingDummies);
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
@@ -49,9 +64,26 @@ public class FastResetStrikingDummy : ModuleBase
 
         using (ImRaii.PushIndent())
             ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("FastResetStrikingDummy-CommandHelp")}");
+
+        ImGui.NewLine();
+
+        if (ImGui.Checkbox(Lang.Get("FastResetStrikingDummy-AutoClearEnmityWhenInactive"), ref config.IsAutoClearEnmityWhenInactive))
+            config.Save(this);
+
+        ImGuiOm.HelpMarker(Lang.Get("FastResetStrikingDummy-AutoClearEnmityWhenInactive-Help"));
+
+        if (config.IsAutoClearEnmityWhenInactive)
+        {
+            ImGui.SetNextItemWidth(200f * GlobalUIScale);
+            if (ImGui.InputUInt(Lang.Get("FastResetStrikingDummy-AutoClearEnmityInterval"), ref config.AutoClearEnmityInterval))
+                config.AutoClearEnmityInterval = Math.Clamp(config.AutoClearEnmityInterval, 5, 300);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+        }
     }
 
-    private void OnCommand(string command, string arguments) => ResetAllStrikingDummies();
+    private void OnCommand(string command, string arguments) =>
+        ResetAllStrikingDummies();
 
     public void OnResetStrikingDummies
     (
@@ -71,10 +103,9 @@ public class FastResetStrikingDummy : ModuleBase
 
     private void ResetAllStrikingDummies()
     {
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.Zero,                   0, cancelSource.Token);
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(500),  0, cancelSource.Token);
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(1000), 0, cancelSource.Token);
-        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(1500), 0, cancelSource.Token);
+        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.Zero,                   cancellationToken: cancelSource.Token);
+        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(500),  cancellationToken: cancelSource.Token);
+        DService.Instance().Framework.RunOnTick(FindAndResetInternal, TimeSpan.FromMilliseconds(1000), cancellationToken: cancelSource.Token);
     }
 
     private static unsafe void FindAndResetInternal()
@@ -83,10 +114,49 @@ public class FastResetStrikingDummy : ModuleBase
         foreach (var targetID in targets)
             ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.ResetStrikingDummy, targetID.EntityId);
     }
-    
+
     #region 常量
 
     private const string COMMAND = "resetallsd";
 
     #endregion
+
+    private void OnConditionChanged(ConditionFlag flag, bool value)
+    {
+        if (flag != ConditionFlag.InCombat || !value) return;
+        isAlreadyRequest = false;
+    }
+
+    private async Task AutoClearLoop()
+    {
+        try
+        {
+            while (!cancelSource.IsCancellationRequested)
+            {
+                await Task.Delay(1_000, cancelSource.Token).ConfigureAwait(false);
+
+                if (isAlreadyRequest)
+                    continue;
+                if (!config.IsAutoClearEnmityWhenInactive ||
+                    !DService.Instance().Condition[ConditionFlag.InCombat])
+                    continue;
+                if (LastInputInfo.GetIdleTimeTick() <= config.AutoClearEnmityInterval * 1_000 &&
+                    GameState.IsForeground)
+                    continue;
+
+                isAlreadyRequest = true;
+                ResetAllStrikingDummies();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
+    }
+
+    private class Config : ModuleConfig
+    {
+        public bool IsAutoClearEnmityWhenInactive;
+        public uint AutoClearEnmityInterval = 30;
+    }
 }
