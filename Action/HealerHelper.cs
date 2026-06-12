@@ -254,9 +254,9 @@ public class HealerHelper : ModuleBase
                 if (Vector3.DistanceSquared(LocalPlayerState.Object.Position, obj->Position) >= actionRange)
                     continue;
 
-                if (obj->IsMounted()                                  ||
-                    obj->MovementState != MovementStateOptions.Normal ||
-                    obj->StatusManager.HasStatus(43)                  ||
+                if (obj->IsMounted()                                                 ||
+                    obj->MoveController.MovementState != MovementStateOptions.Normal ||
+                    obj->StatusManager.HasStatus(43)                                 ||
                     obj->StatusManager.HasStatus(44)) // Weakness
                 {
                     fallbackObj      = candidate.Object;
