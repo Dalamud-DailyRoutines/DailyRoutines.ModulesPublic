@@ -5,7 +5,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using OmenTools.Interop.Windows.Models;
 using OmenTools.OmenService;
@@ -24,7 +23,7 @@ public unsafe class AutoNoviceNetwork : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-    
+
     private Config config = null!;
 
     private Timer? afkTimer;
@@ -44,7 +43,7 @@ public unsafe class AutoNoviceNetwork : ModuleBase
         afkTimer.AutoReset =   true;
         afkTimer.Enabled   =   true;
     }
-    
+
     protected override void Uninit()
     {
         if (afkTimer != null)
@@ -150,13 +149,13 @@ public unsafe class AutoNoviceNetwork : ModuleBase
         isJoined = IsInNoviceNetwork();
         if (isJoined) return;
 
-        if (!config.IsTryJoinWhenInactive         || TaskHelper.IsBusy) return;
+        if (!config.IsTryJoinWhenInactive               || TaskHelper.IsBusy) return;
         if (DService.Instance().Condition.IsBoundByDuty || DService.Instance().Condition.IsOccupiedInEvent) return;
 
-        if (LastInputInfo.GetIdleTimeTick() > 10_000 || Framework.Instance()->WindowInactive)
+        if (LastInputInfo.GetIdleTimeTick() > 10_000 || !GameState.IsForeground)
             TryJoin();
     }
-    
+
     private class Config : ModuleConfig
     {
         public bool IsTryJoinWhenInactive;
