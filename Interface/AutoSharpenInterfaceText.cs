@@ -39,6 +39,9 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
         // 100% 缩放
         if (node == null || UIHighScaleMode == 0) return;
 
+        var addon = ((AtkResNode*)node)->GetOwnerAddon();
+        if (addon == null || addon->NameString == "NamePlate") return;
+
         var flag = node->TextFlags;
         if (!flag.IsSet(FLAG_TO_REMOVE)) return;
         
