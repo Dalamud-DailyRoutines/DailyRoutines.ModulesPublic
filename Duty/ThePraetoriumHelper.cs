@@ -34,6 +34,7 @@ public unsafe class ThePraetoriumHelper : ModuleBase
     private static void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
+        
         if (GameState.TerritoryType != 1044) return;
 
         FrameworkManager.Instance().Reg(OnUpdate, 1000);
@@ -41,16 +42,7 @@ public unsafe class ThePraetoriumHelper : ModuleBase
 
     private static void OnUpdate(IFramework framework)
     {
-        if (!Throttler.Shared.Throttle("ThePraetoriumHelper-OnUpdate", 1_000)) return;
-
-        if (GameState.TerritoryType != 1044)
-        {
-            FrameworkManager.Instance().Unreg(OnUpdate);
-            return;
-        }
-
-        if (!DService.Instance().Condition[ConditionFlag.Mounted]                      ||
-            DService.Instance().ObjectTable.LocalPlayer                        == null ||
+        if (!DService.Instance().Condition[ConditionFlag.Mounted] ||
             ActionManager.Instance()->GetActionStatus(ActionType.Action, 1128) != 0)
             return;
 
@@ -63,7 +55,11 @@ public unsafe class ThePraetoriumHelper : ModuleBase
     private static IGameObject? GetMostCanTargetObjects()
     {
         var allTargets = DService.Instance().ObjectTable.SearchObjects
-            (o => o.IsTargetable && ActionManager.CanUseActionOnTarget(7, o.ToStruct()), IObjectTable.CharactersRange).ToList();
+                                 (
+                                     o => o.IsTargetable && ActionManager.CanUseActionOnTarget(7, o.ToStruct()),
+                                     IObjectTable.CharactersRange
+                                 )
+                                 .ToList();
         if (allTargets.Count <= 0) return null;
 
         IGameObject? preObjects         = null;
