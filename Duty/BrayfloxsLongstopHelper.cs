@@ -1,75 +1,75 @@
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
-public class BrayfloxsLongstopHelper : ModuleBase
+public unsafe class BrayfloxsLongstopHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("BrayfloxsLongstopHelperTitle"),
-        Description = Lang.Get("BrayfloxsLongstopHelperDescription"),
-        Category    = ModuleCategory.Duty
+        Title = Lang.Get("BrayfloxsLongstopHelperTitle"),
+        Description = Lang.Get
+        (
+            "BrayfloxsLongstopHelperDescription",
+            LuminaWrapper.GetContentName(8),        // 休养胜地布雷福洛克斯野营地
+            LuminaWrapper.GetBNPCName(1298),        // 哥布林寻路人
+            LuminaWrapper.GetEventItemName(2000521) // 避难地正门的钥匙
+        ),
+        Category            = ModuleCategory.Duty,
+        ModulesPrerequisite = ["AutoTalkSkip"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-    
-    private Config config = null!;
 
     protected override void Init()
     {
-        config     =   Config.Load(this) ?? new();
-        TaskHelper ??= new() { TimeoutMS = 30_000 };
-
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
     }
-    
-    protected override void Uninit() =>
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-    protected override void ConfigUI()
+    protected override void Uninit()
     {
-        if (ImGui.Checkbox(Lang.Get("OnlyValidWhenSolo"), ref config.ValidWhenSolo))
-            config.Save(this);
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        FrameworkManager.Instance().Unreg(OnUpdate);
     }
 
-    private unsafe void OnZoneChanged(uint u)
+    private static void OnZoneChanged(uint zone)
     {
-        TaskHelper.Abort();
+        FrameworkManager.Instance().Unreg(OnUpdate);
 
         if (GameState.TerritoryType != 1041) return;
 
-        TaskHelper.Enqueue
-        (() =>
-            {
-                if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
-                if (DService.Instance().Condition.IsBetweenAreas || !UIModule.IsScreenReady()) return false;
-
-                if (config.ValidWhenSolo && (DService.Instance().PartyList.Length > 1 || PlayersManager.Instance().PlayersAroundCount > 0))
-                {
-                    TaskHelper.Abort();
-                    return true;
-                }
-
-                if (!EventFramework.Instance()->IsEventIDNearby(1638401)) return false;
-
-                new EventStartPackt(localPlayer.EntityID, 1638401).Send();
-                return true;
-            }
-        );
+        FrameworkManager.Instance().Reg(OnUpdate, 100);
     }
-    
-    private class Config : ModuleConfig
+
+    private static void OnUpdate(IFramework framework)
     {
-        public bool ValidWhenSolo = true;
+        var director = EventFramework.Instance()->GetContentDirector();
+        if (director == null) return;
+
+        if (director->DirectorTodos[0].CurrentCount != 1)
+        {
+            var chara = CharacterManager.Instance()->FindFirst(&FindNPC);
+            if (chara != null)
+                new EventStartPackt(chara->EntityId, 1638401).Send();
+        }
+        else
+            FrameworkManager.Instance().Unreg(OnUpdate);
+
+        return;
+
+        static bool FindNPC(BattleChara* chara) =>
+            chara                          != null                &&
+            chara->ObjectKind              == ObjectKind.EventNpc &&
+            chara->BaseId                  == 1004346             &&
+            chara->YalmDistanceFromPlayerX <= 4                   &&
+            chara->YalmDistanceFromPlayerZ <= 4;
     }
 }
