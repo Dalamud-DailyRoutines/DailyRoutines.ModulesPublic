@@ -2,7 +2,7 @@ using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -37,14 +37,14 @@ public unsafe class SastashaHelper : ModuleBase
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
-        
+
         handle = ImGuiZoneObjectIndicator.Instance().RegisterPermanent
         (
             1036,
             () =>
             {
                 if (correctBookID == 0 || !BookToCoral.TryGetValue(correctBookID, out var data)) return [];
-                
+
                 var director = EventFramework.Instance()->GetContentDirector();
                 if (director == null) return [];
 
@@ -56,13 +56,15 @@ public unsafe class SastashaHelper : ModuleBase
                 if (LocalPlayerState.DistanceTo2DSquared(FirstBossCenter) > 625)
                     return [];
 
-                var gameObject = EventObjectManager.Instance()->FindFirst(ptr =>
-                {
-                    var gameObject = (GameObject*)ptr;
-                    return gameObject             != null                &&
-                           gameObject->ObjectKind == ObjectKind.EventObj &&
-                           gameObject->BaseId     == data.CoralDataID;
-                });
+                var gameObject = EventObjectManager.Instance()->FindFirst
+                (ptr =>
+                    {
+                        var gameObject = (GameObject*)ptr;
+                        return gameObject             != null                &&
+                               gameObject->ObjectKind == ObjectKind.EventObj &&
+                               gameObject->BaseId     == data.CoralDataID;
+                    }
+                );
                 if (gameObject == null)
                     return [];
 
@@ -119,14 +121,18 @@ public unsafe class SastashaHelper : ModuleBase
         if (book == null) return false;
 
         var info = BookToCoral[book.DataID];
+
+        using var rented = new RentedSeStringBuilder();
         NotifyHelper.Instance().Chat
         (
             Lang.GetSe
             (
                 "SastashaHelper-Message",
-                new SeStringBuilder()
-                    .AddUiForeground(LuminaWrapper.GetEObjName(info.CoralDataID), info.UIColor)
-                    .Build()
+                rented.Builder
+                      .PushColorType(info.UIColor)
+                      .Append(LuminaWrapper.GetEObjName(info.CoralDataID))
+                      .PopColorType()
+                      .ToReadOnlySeString()
             )
         );
 
