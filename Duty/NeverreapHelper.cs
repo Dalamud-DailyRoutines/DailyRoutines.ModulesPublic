@@ -1,8 +1,6 @@
 using System.Numerics;
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
@@ -34,16 +32,11 @@ public unsafe class NeverreapHelper : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
-
-    private Config config = null!;
-
+    
     private ZoneIndicatorHandle? handle;
 
     protected override void Init()
     {
-        config     =   Config.Load(this) ?? new();
-        TaskHelper ??= new() { TimeoutMS = 30_000 };
-
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
 
@@ -95,19 +88,13 @@ public unsafe class NeverreapHelper : ModuleBase
         handle = null;
     }
 
-    protected override void ConfigUI()
-    {
-        if (ImGui.Checkbox(Lang.Get("OnlyValidWhenSolo"), ref config.ValidWhenSolo))
-            config.Save(this);
-    }
-
     private static void OnZoneChanged(uint u)
     {
         FrameworkManager.Instance().Unreg(OnUpdate);
 
         if (GameState.TerritoryType != 420) return;
 
-        FrameworkManager.Instance().Reg(OnUpdate, 500);
+        FrameworkManager.Instance().Reg(OnUpdate, 100);
     }
 
     private static void OnUpdate(IFramework framework)
@@ -118,32 +105,21 @@ public unsafe class NeverreapHelper : ModuleBase
         // 获取云卵石
         if (director->DirectorTodos[0].Type != TodoType.Number)
         {
-            var manager = CharacterManager.Instance();
-
-            foreach (var battleCharaPtr in manager->BattleCharas)
-            {
-                if (battleCharaPtr == null) continue;
-
-                var battleChara = battleCharaPtr.Value;
-                if (battleChara == null) continue;
-
-                if (battleChara->ObjectKind != ObjectKind.EventNpc ||
-                    battleChara->BaseId     != STONE_NPC_DATA_ID)
-                    continue;
-
-                if (battleChara->YalmDistanceFromPlayerX > 4 ||
-                    battleChara->YalmDistanceFromPlayerZ > 4)
-                    break;
-
-                new EventStartPackt(battleChara->EntityId, STONE_NPC_EVENT_ID).Send();
-                break;
-            }
+            var chara = CharacterManager.Instance()->FindFirst(&FindNPC);
+            if (chara != null)
+                new EventStartPackt(chara->EntityId, STONE_NPC_EVENT_ID).Send();
         }
-    }
+        else
+            FrameworkManager.Instance().Unreg(OnUpdate);
 
-    private class Config : ModuleConfig
-    {
-        public bool ValidWhenSolo = true;
+        return;
+
+        static bool FindNPC(BattleChara* chara) =>
+            chara                          != null                &&
+            chara->ObjectKind              == ObjectKind.EventNpc &&
+            chara->BaseId                  == STONE_NPC_DATA_ID   &&
+            chara->YalmDistanceFromPlayerX <= 4                   &&
+            chara->YalmDistanceFromPlayerZ <= 4;
     }
 
     #region
