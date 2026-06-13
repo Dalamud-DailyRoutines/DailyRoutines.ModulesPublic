@@ -1,14 +1,18 @@
 using System.Collections.Frozen;
-using DailyRoutines.Common.Module.Abstractions;
+using System.Numerics;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Text.SeStringHandling;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using KamiToolKit.Classes;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
-using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
+using OmenTools.OmenService.ImGuiZoneObject;
+using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
+using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
+using DObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
@@ -17,14 +21,15 @@ public unsafe class SastashaHelper : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("SastashaHelperTitle"),
-        Description = Lang.Get("SastashaHelperDescription"),
+        Description = Lang.Get("SastashaHelperDescription", LuminaWrapper.GetContentName(4)),
         Category    = ModuleCategory.Duty
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+
+    private uint correctBookID;
     
-    private ulong                correctCoralDataID;
-    private ObjectHighlightColor correctCoralHighlightColor;
+    private ZoneIndicatorHandle? handle;
 
     protected override void Init()
     {
@@ -32,68 +37,88 @@ public unsafe class SastashaHelper : ModuleBase
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
+        
+        handle = ImGuiZoneObjectIndicator.Instance().RegisterPermanent
+        (
+            1036,
+            () =>
+            {
+                if (correctBookID == 0 || !BookToCoral.TryGetValue(correctBookID, out var data)) return [];
+                
+                var director = EventFramework.Instance()->GetContentDirector();
+                if (director == null) return [];
+
+                // 已经完成了
+                var todos = director->DirectorTodos;
+                if (todos[0].CurrentCount != 0)
+                    return [];
+
+                if (LocalPlayerState.DistanceTo2DSquared(FirstBossCenter) > 625)
+                    return [];
+
+                var gameObject = EventObjectManager.Instance()->FindFirst(ptr =>
+                {
+                    var gameObject = (GameObject*)ptr;
+                    return gameObject             != null                &&
+                           gameObject->ObjectKind == ObjectKind.EventObj &&
+                           gameObject->BaseId     == data.CoralDataID;
+                });
+                if (gameObject == null)
+                    return [];
+
+                return [IGameObject.Create((nint)gameObject)];
+            },
+            gameObject => new()
+            {
+                Text      = $"→ {gameObject.Name} ←",
+                TextScale = 1.6f,
+                TextColor = ColorHelper.GetColor(BookToCoral[correctBookID].UIColor)
+            }
+        );
     }
 
     protected override void Uninit()
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        FrameworkManager.Instance().Unreg(OnUpdate);
-        GamePacketManager.Instance().Unreg(OnPostSendPackt);
+        
+        handle?.Unregister();
+        handle = null;
 
-        correctCoralDataID         = 0;
-        correctCoralHighlightColor = ObjectHighlightColor.None;
+        correctBookID = 0;
     }
 
     private void OnZoneChanged(uint u)
     {
         TaskHelper?.Abort();
-        FrameworkManager.Instance().Unreg(OnUpdate);
-        GamePacketManager.Instance().Unreg(OnPostSendPackt);
+        correctBookID = 0;
 
-        correctCoralDataID         = 0;
-        correctCoralHighlightColor = ObjectHighlightColor.None;
-
-        if (GameState.TerritoryType != 1036) return;
+        if (GameState.TerritoryType != DUTY_ZONE_ID) return;
 
         TaskHelper.Enqueue(GetCorrectCoral);
-        GamePacketManager.Instance().RegPostSendPacket(OnPostSendPackt);
-        FrameworkManager.Instance().Reg(OnUpdate, 2_000);
-    }
-
-    private void OnPostSendPackt(int opcode, nint packet, bool isPrioritize)
-    {
-        if (opcode != UpstreamOpcode.EventStartOpcode) return;
-
-        var packetData = (EventStartPackt*)packet;
-        if (packetData->EventID == 983066)
-            FrameworkManager.Instance().Unreg(OnUpdate);
-    }
-
-    private void OnUpdate(IFramework _)
-    {
-        if (correctCoralDataID == 0 || correctCoralHighlightColor == ObjectHighlightColor.None) return;
-
-        if (DService.Instance().ObjectTable.SearchObject
-                (x => x.ObjectKind == ObjectKind.EventObj && x.DataID == correctCoralDataID) is not { } coral)
-            return;
-
-        coral.ToStruct()->Highlight(coral.IsTargetable ? correctCoralHighlightColor : ObjectHighlightColor.None);
     }
 
     private bool GetCorrectCoral()
     {
         if (!UIModule.IsScreenReady()) return false;
+        
+        var director = EventFramework.Instance()->GetContentDirector();
+        if (director == null) return false;
+
+        // 已经完成了
+        var todos = director->DirectorTodos;
+        if (todos[0].CurrentCount != 0)
+            return true;
 
         var book = DService.Instance().ObjectTable
                            .SearchObject
                            (
-                               x => x is { IsTargetable: true, ObjectKind: ObjectKind.EventObj } && BookToCoral.ContainsKey(x.DataID),
+                               x => x is { IsTargetable: true, ObjectKind: DObjectKind.EventObj } && 
+                                    BookToCoral.ContainsKey(x.DataID),
                                IObjectTable.EventRange
                            );
         if (book == null) return false;
 
         var info = BookToCoral[book.DataID];
-
         NotifyHelper.Instance().Chat
         (
             Lang.GetSe
@@ -105,24 +130,27 @@ public unsafe class SastashaHelper : ModuleBase
             )
         );
 
-        correctCoralDataID         = info.CoralDataID;
-        correctCoralHighlightColor = info.HighlightColor;
+        correctBookID = book.DataID;
         return true;
     }
 
     #region 常量
 
-    // Book Data ID - Coral Data ID
-    private static readonly FrozenDictionary<uint, (uint CoralDataID, ushort UIColor, ObjectHighlightColor HighlightColor)> BookToCoral =
-        new Dictionary<uint, (uint CoralDataID, ushort UIColor, ObjectHighlightColor HighlightColor)>
+    // Book Data ID - Data
+    private static readonly FrozenDictionary<uint, (uint CoralDataID, ushort UIColor)> BookToCoral =
+        new Dictionary<uint, (uint CoralDataID, ushort UIColor)>
         {
             // 蓝珊瑚
-            [2000212] = (2000213, 37, ObjectHighlightColor.Yellow),
+            [2000212] = (2000213, 37),
             // 红珊瑚
-            [2001548] = (2000214, 17, ObjectHighlightColor.Green),
+            [2001548] = (2000214, 17),
             // 绿珊瑚
-            [2001549] = (2000215, 45, ObjectHighlightColor.Red)
+            [2001549] = (2000215, 45)
         }.ToFrozenDictionary();
+
+    private static readonly Vector2 FirstBossCenter = new(75.0f, -45.0f);
+
+    private const uint DUTY_ZONE_ID = 1036;
 
     #endregion
 }
