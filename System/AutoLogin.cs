@@ -280,7 +280,7 @@ public unsafe class AutoLogin : ModuleBase
     {
         if (isNextAutoLoginHandled)
             return;
-        
+
         if (config.LoginData.Count == 0 && manualLoginInfo == null)
             return;
 
@@ -302,7 +302,7 @@ public unsafe class AutoLogin : ModuleBase
             return;
 
         TaskHelper.Abort();
-        
+
         TaskHelper.Enqueue
         (() =>
             {
@@ -325,23 +325,23 @@ public unsafe class AutoLogin : ModuleBase
 
                 if (!CharaSelectListMenu->IsAddonAndNodesReady()) return false;
 
-                var client = (LobbyUIClientEX*)&agent->LobbyData.LobbyUIClient;
+                var client = agent->LobbyData.LobbyUIClient;
 
                 // 手动登录优先
                 if (manualLoginInfo is var (charName, charIndex, worldID))
                 {
                     var target = charIndex >= 0
-                                     ? client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Index == charIndex && x.CurrentWorldID == worldID)
-                                     : client->CurrentDataCenterCharacters.FirstOrDefault(x => x.Name  == charName  && x.CurrentWorldID == worldID);
+                                     ? client.CurrentDataCenterCharacters.FirstOrDefault(x => x.Index      == charIndex && x.CurrentWorldId == worldID)
+                                     : client.CurrentDataCenterCharacters.FirstOrDefault(x => x.NameString == charName  && x.CurrentWorldId == worldID);
 
                     // 角色不存在, 回退到配置列表
-                    if (target.HomeWorldID == 0)
+                    if (target.HomeWorldId == 0)
                         manualLoginInfo = null;
                     else
                     {
-                        var contentID = target.ContentID;
-                        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(target.CurrentWorldID));
-                        TaskHelper.Enqueue(() => agent->WorldId == target.CurrentWorldID);
+                        var contentID = target.ContentId;
+                        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(target.CurrentWorldId));
+                        TaskHelper.Enqueue(() => agent->WorldId == target.CurrentWorldId);
                         TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == contentID));
 
                         manualLoginInfo = null;
@@ -355,15 +355,15 @@ public unsafe class AutoLogin : ModuleBase
                 {
                     counter--;
 
-                    var found = client->CurrentDataCenterCharacters.FirstOrDefault
-                    (x => x.Name        == loginInfo.CharacterName &&
-                          x.HomeWorldID == loginInfo.WorldID
+                    var found = client.CurrentDataCenterCharacters.FirstOrDefault
+                    (x => x.NameString  == loginInfo.CharacterName &&
+                          x.HomeWorldId == loginInfo.WorldID
                     );
-                    if (found.HomeWorldID == 0)
+                    if (found.HomeWorldId == 0)
                         continue;
 
-                    TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(found.CurrentWorldID),                         weight: counter);
-                    TaskHelper.Enqueue(() => agent->WorldId == found.CurrentWorldID,                                        weight: counter);
+                    TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(found.CurrentWorldId),                         weight: counter);
+                    TaskHelper.Enqueue(() => agent->WorldId == found.CurrentWorldId,                                        weight: counter);
                     TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.NameString == loginInfo.CharacterName), weight: counter);
                     break;
                 }
