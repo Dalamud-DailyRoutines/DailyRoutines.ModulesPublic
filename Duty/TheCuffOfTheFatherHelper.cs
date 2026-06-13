@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -11,7 +12,6 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.OmenService.ImGuiZoneObject;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
-using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
@@ -34,7 +34,7 @@ public unsafe class TheCuffOfTheFatherHelper : ModuleBase
 
     private ZoneIndicatorHandle? handle;
     
-    private List<IGameObject> bombObjects = [];
+    private List<nint> bombObjects = [];
 
     protected override void Init()
     {
@@ -45,9 +45,9 @@ public unsafe class TheCuffOfTheFatherHelper : ModuleBase
         (
             443,
             () => bombObjects,
-            gameObject => new()
+            ptr => new()
             {
-                Text      = $"→ {gameObject.Name} ←",
+                Text      = $"→ {((GameObject*)ptr)->NameString} ←",
                 TextScale = 1.4f,
                 TextColor = ColorHelper.GetColor(518)
             },
@@ -99,7 +99,7 @@ public unsafe class TheCuffOfTheFatherHelper : ModuleBase
         var todos = director->DirectorTodos;
         if (todos[2].CurrentCount != 1) return;
 
-        List<IGameObject> bombs = [];
+        List<nint> bombs = [];
         for (var i = 0; i < enemyCount; i++)
         {
             var offset = 8 + (i * 6);
@@ -107,22 +107,24 @@ public unsafe class TheCuffOfTheFatherHelper : ModuleBase
             var gameObjectID = (ulong)enemyListArray->IntArray[offset];
             if (gameObjectID is 0 or 0xE0000000) continue;
 
-            if (DService.Instance().ObjectTable.SearchByID(gameObjectID, IObjectTable.CharactersRange) is not
+            var chara = CharacterManager.Instance()->FindFirst
+            (ptr =>
                 {
-                    ObjectKind: ObjectKind.BattleNpc,
-                    DataID: 3865
+                    var chara = (BattleChara*)ptr;
+                    if (chara == null) return false;
+
+                    return chara->GetGameObjectId() == gameObjectID         &&
+                           chara->ObjectKind        == ObjectKind.BattleNpc &&
+                           chara->BaseId            == 3865;
                 }
-                obj)
-                continue;
+            );
             
-            bombs.Add(obj);
+            bombs.Add((nint)chara);
 
             if (DService.Instance().Condition[ConditionFlag.Mounted])
-                obj.ToStruct()->TargetableStatus |= ObjectTargetableFlags.IsTargetable;
+                chara->TargetableStatus |= ObjectTargetableFlags.IsTargetable;
             else
-                obj.ToStruct()->TargetableStatus &= ~ObjectTargetableFlags.IsTargetable;
-
-            obj.ToStruct()->Highlight(ObjectHighlightColor.Yellow);
+                chara->TargetableStatus &= ~ObjectTargetableFlags.IsTargetable;
         }
 
         bombObjects = bombs;

@@ -69,7 +69,7 @@ public unsafe class NeverreapHelper : ModuleBase
                 if (gameObject == null)
                     return [];
 
-                return [IGameObject.Create((nint)gameObject)];
+                return [(nint)gameObject];
             },
             _ => new()
             {

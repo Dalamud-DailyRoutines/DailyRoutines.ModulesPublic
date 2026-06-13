@@ -68,11 +68,11 @@ public unsafe class SastashaHelper : ModuleBase
                 if (gameObject == null)
                     return [];
 
-                return [IGameObject.Create((nint)gameObject)];
+                return [(nint)gameObject];
             },
-            gameObject => new()
+            ptr => new()
             {
-                Text      = $"→ {gameObject.Name} ←",
+                Text      = $"→ {((GameObject*)ptr)->NameString} ←",
                 TextScale = 1.6f,
                 TextColor = ColorHelper.GetColor(BookToCoral[correctBookID].UIColor)
             }
