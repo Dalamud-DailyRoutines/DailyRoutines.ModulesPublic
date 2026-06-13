@@ -38,7 +38,7 @@ public unsafe class SastashaHelper : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
 
-        handle = ImGuiZoneObjectIndicator.Instance().RegisterPermanent
+        handle = ZoneIndicatorRenderer.Instance().RegPermanent
         (
             1036,
             () =>
@@ -83,7 +83,7 @@ public unsafe class SastashaHelper : ModuleBase
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         
-        handle?.Unregister();
+        handle?.Unreg();
         handle = null;
 
         correctBookID = 0;

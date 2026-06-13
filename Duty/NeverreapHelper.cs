@@ -47,7 +47,7 @@ public unsafe class NeverreapHelper : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
 
-        handle = ImGuiZoneObjectIndicator.Instance().RegisterPermanent
+        handle = ZoneIndicatorRenderer.Instance().RegPermanent
         (
             420,
             () =>
@@ -91,7 +91,7 @@ public unsafe class NeverreapHelper : ModuleBase
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-        handle?.Unregister();
+        handle?.Unreg();
         handle = null;
     }
 
