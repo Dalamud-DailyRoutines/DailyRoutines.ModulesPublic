@@ -19,8 +19,16 @@ public unsafe class NeverreapHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = Lang.Get("NeverreapHelperTitle"),
-        Description         = Lang.Get("NeverreapHelperDescription"),
+        Title = Lang.Get("NeverreapHelperTitle"),
+        Description = Lang.Get
+        (
+            "NeverreapHelperDescription",
+            LuminaWrapper.GetContentName(33),                      // 空中神域不获岛
+            LuminaWrapper.GetENPCName(1013331),                    // 托努瓦努                      
+            LuminaWrapper.GetItemName(2001568),                    // 云卵石
+            LuminaWrapper.GetBNPCName(3726),                       // 奴涅努克怪鸟
+            LuminaWrapper.GetBNPCName(SHADOW_MONSTER_BNPC_NAME_ID) // 奴涅努克之影
+        ),
         Category            = ModuleCategory.Duty,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
@@ -46,7 +54,7 @@ public unsafe class NeverreapHelper : ModuleBase
             {
                 var director = EventFramework.Instance()->GetContentDirector();
                 if (director == null) return [];
-                
+
                 if (!DService.Instance().Condition[ConditionFlag.InCombat])
                     return [];
 
@@ -57,7 +65,7 @@ public unsafe class NeverreapHelper : ModuleBase
                 if (LocalPlayerState.DistanceTo2DSquared(FirstBossCenter) > 625)
                     return [];
 
-                var gameObject = CharacterManager.Instance()->LookupBattleCharaByName(LuminaWrapper.GetBNPCName(3727));
+                var gameObject = CharacterManager.Instance()->FindFirst(&FindFirstShadow);
                 if (gameObject == null)
                     return [];
 
@@ -65,10 +73,17 @@ public unsafe class NeverreapHelper : ModuleBase
             },
             _ => new()
             {
-                Text      = LuminaWrapper.GetBNPCName(3727),
+                Text      = LuminaWrapper.GetBNPCName(SHADOW_MONSTER_BNPC_NAME_ID),
                 TextScale = 1.6f
             }
         );
+
+        return;
+
+        static bool FindFirstShadow(BattleChara* chara) =>
+            chara             != null                 &&
+            chara->ObjectKind == ObjectKind.BattleNpc &&
+            chara->NameId     == SHADOW_MONSTER_BNPC_NAME_ID;
     }
 
     protected override void Uninit()
@@ -135,6 +150,8 @@ public unsafe class NeverreapHelper : ModuleBase
 
     private const uint STONE_NPC_DATA_ID  = 1013331;
     private const uint STONE_NPC_EVENT_ID = 0x190007;
+
+    private const uint SHADOW_MONSTER_BNPC_NAME_ID = 3727;
 
     private static readonly Vector2 FirstBossCenter = new(53.6f, 222.7f);
 
