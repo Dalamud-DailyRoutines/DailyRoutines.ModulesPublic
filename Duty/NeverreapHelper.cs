@@ -8,7 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
-using OmenTools.OmenService.ImGuiZoneObject;
+using OmenTools.OmenService.ZoneIndicator;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic.Duty;

@@ -8,7 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using KamiToolKit.Classes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using OmenTools.OmenService.ImGuiZoneObject;
+using OmenTools.OmenService.ZoneIndicator;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 

@@ -12,7 +12,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.Interop.Game.Models.Native;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
-using OmenTools.OmenService.ImGuiZoneObject;
+using OmenTools.OmenService.ZoneIndicator;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 
