@@ -38,7 +38,7 @@ public unsafe class SastashaHelper : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
 
-        handle = ZoneIndicatorRenderer.Instance().RegPermanent
+        handle = ZoneIndicatorRenderer.Instance().RegPermanent<nint>
         (
             1036,
             () =>
@@ -70,11 +70,15 @@ public unsafe class SastashaHelper : ModuleBase
 
                 return [(nint)gameObject];
             },
-            ptr => new()
+            ptr => ((GameObject*)ptr)->Position,
+            new()
             {
-                Text      = $"→ {((GameObject*)ptr)->NameString} ←",
-                TextScale = 1.6f,
-                TextColor = ColorHelper.GetColor(BookToCoral[correctBookID].UIColor)
+                TextGetter = ptr => new()
+                {
+                    Text      = $"→ {((GameObject*)ptr)->NameString} ←",
+                    TextScale = 1.6f,
+                    TextColor = ColorHelper.GetColor(BookToCoral[correctBookID].UIColor)
+                }
             }
         );
     }

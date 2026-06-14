@@ -45,14 +45,15 @@ public unsafe class TheCuffOfTheFatherHelper : ModuleBase
         (
             443,
             () => bombObjects,
-            ptr => new()
+            ptr => ((GameObject*)ptr)->Position,
+            new()
             {
-                Text      = $"→ {((GameObject*)ptr)->NameString} ←",
-                TextScale = 1.4f,
-                TextColor = ColorHelper.GetColor(518)
-            },
-            options: new()
-            {
+                TextGetter = ptr => new()
+                {
+                    Text      = $"→ {((GameObject*)ptr)->NameString} ←",
+                    TextScale = 1.4f,
+                    TextColor = ColorHelper.GetColor(518)
+                },
                 Surrounding = new()
                 {
                     Type      = ZoneIndicatorSurrounding.Shape.Circle,

@@ -49,14 +49,15 @@ public unsafe class HullbreakerIsleHelper : ModuleBase
 
                 return CharacterManager.Instance()->FindAll(&FindTrap);
             },
-            ptr => new()
+            ptr => ((GameObject*)ptr)->Position,
+            new()
             {
-                Text      = $"{((GameObject*)ptr)->NameString}",
-                TextScale = 1.2f,
-                TextColor = KnownColor.OrangeRed.ToVector4()
-            },
-            options: new()
-            {
+                TextGetter = ptr => new()
+                {
+                    Text      = $"{((GameObject*)ptr)->NameString}",
+                    TextScale = 1.2f,
+                    TextColor = KnownColor.OrangeRed.ToVector4()
+                },
                 Surrounding = new()
                 {
                     Type      = ZoneIndicatorSurrounding.Shape.Circle,
@@ -81,11 +82,15 @@ public unsafe class HullbreakerIsleHelper : ModuleBase
 
                 return EventObjectManager.Instance()->FindAll(&FindFakeTreasure);
             },
-            ptr => new()
+            ptr => ((GameObject*)ptr)->Position,
+            new()
             {
-                Text      = $"{((GameObject*)ptr)->NameString} ({Lang.Get("HullbreakerIsleHelper-FakeTreasureTip")})",
-                TextScale = 1.2f,
-                TextColor = KnownColor.DarkOrange.ToVector4()
+                TextGetter = ptr => new()
+                {
+                    Text      = $"{((GameObject*)ptr)->NameString} ({Lang.Get("HullbreakerIsleHelper-FakeTreasureTip")})",
+                    TextScale = 1.2f,
+                    TextColor = KnownColor.DarkOrange.ToVector4()
+                }
             }
         );
         

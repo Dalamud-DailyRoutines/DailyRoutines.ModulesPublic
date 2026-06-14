@@ -40,7 +40,7 @@ public unsafe class NeverreapHelper : ModuleBase
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         OnZoneChanged(0);
 
-        handle = ZoneIndicatorRenderer.Instance().RegPermanent
+        handle = ZoneIndicatorRenderer.Instance().RegPermanent<nint>
         (
             420,
             () =>
@@ -64,10 +64,14 @@ public unsafe class NeverreapHelper : ModuleBase
 
                 return [(nint)gameObject];
             },
-            _ => new()
+            ptr => ((GameObject*)ptr)->Position,
+            new()
             {
-                Text      = LuminaWrapper.GetBNPCName(SHADOW_MONSTER_BNPC_NAME_ID),
-                TextScale = 1.6f
+                TextGetter = _ => new()
+                {
+                    Text      = LuminaWrapper.GetBNPCName(SHADOW_MONSTER_BNPC_NAME_ID),
+                    TextScale = 1.6f
+                }
             }
         );
 
