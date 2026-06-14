@@ -12,9 +12,9 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.Interop.Game.Models.Native;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
+using OmenTools.OmenService.ImGuiZoneObject;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
-using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
@@ -28,7 +28,10 @@ public partial class OccultCrescentHelper
         private TaskHelper? treasureTaskHelper;
 
         private Queue<TreasureHuntPoint> queuedGatheringList = [];
-        private List<TreasureData>       treasureDatas       = [];
+
+        private List<Vector3> treasurePositions    = [];
+        private List<Vector3> surveyPointPositions = [];
+        private List<Vector3> carrotPositions      = [];
 
         private Vector3 originalPosition;
 
@@ -42,12 +45,17 @@ public partial class OccultCrescentHelper
             EnableDefaultMarkers = true
         };
 
+        private ZoneIndicatorHandle? treasureHandle;
+        private ZoneIndicatorHandle? surveyPointHandle;
+        private ZoneIndicatorHandle? carrotHandle;
+
         public override void Init()
         {
             treasureTaskHelper ??= new() { TimeoutMS = 180_000 };
 
             WindowManager.Instance().PostDraw                += OnPosDraw;
             DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
+            OnZoneChanged(0);
 
             GamePacketManager.Instance().RegPreSendPacket(OnPreSendPacket);
 
@@ -56,6 +64,25 @@ public partial class OccultCrescentHelper
                 COMMAND_TREASURE,
                 new(OnCommandTreasure) { HelpMessage = $"{Lang.Get("OccultCrescentHelper-Command-PTreasure-Help")}" }
             );
+        }
+
+        public override void Uninit()
+        {
+            CommandManager.Instance().RemoveSubCommand(COMMAND_TREASURE);
+
+            GamePacketManager.Instance().Unreg(OnPreSendPacket);
+
+            DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+            WindowManager.Instance().PostDraw                -= OnPosDraw;
+
+            treasureHandle?.Unreg();
+            treasureHandle = null;
+
+            treasureTaskHelper?.Abort();
+            treasureTaskHelper?.Dispose();
+            treasureTaskHelper = null;
+
+            treasurePositions.Clear();
         }
 
         public override void DrawConfig()
@@ -115,22 +142,22 @@ public partial class OccultCrescentHelper
 
             if (ImGui.Checkbox
                 (
-                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-ShowLinkLine")} ({LuminaWrapper.GetAddonText(395)})",
-                    ref MainModule.config.IsEnabledDrawLineToTreasure
+                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-Highlight")} ({LuminaWrapper.GetAddonText(395)})",
+                    ref MainModule.config.IsEnabledHighlightTreasure
                 ))
                 MainModule.config.Save(MainModule);
 
             if (ImGui.Checkbox
                 (
-                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-ShowLinkLine")} ({LuminaWrapper.GetEObjName(2014695)})",
-                    ref MainModule.config.IsEnabledDrawLineToLog
+                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-Highlight")} ({LuminaWrapper.GetEObjName(2014695)})",
+                    ref MainModule.config.IsEnabledHighlightSurveyPoint
                 ))
                 MainModule.config.Save(MainModule);
 
             if (ImGui.Checkbox
                 (
-                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-ShowLinkLine")} ({LuminaWrapper.GetItemName(48096)})",
-                    ref MainModule.config.IsEnabledDrawLineToCarrot
+                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-Highlight")} ({LuminaWrapper.GetItemName(48096)})",
+                    ref MainModule.config.IsEnabledHighlightCarrot
                 ))
                 MainModule.config.Save(MainModule);
 
@@ -169,11 +196,15 @@ public partial class OccultCrescentHelper
                     ImGui.Spacing();
                 }
 
-                foreach (var treasureData in treasureDatas)
+                foreach (var treasurePosition in treasurePositions)
                 {
-                    var pos = treasureData.Position;
+                    var pos = treasurePosition;
 
-                    if (ImGui.Button($"{treasureData.Name} [{pos.X:F1}, {pos.Y:F1}, {pos.Z:F1}]", new(textSize.X * 2, ImGui.GetTextLineHeightWithSpacing())))
+                    if (ImGui.Button
+                        (
+                            $"{LuminaWrapper.GetAddonText(395)} [{pos.X:F1}, {pos.Y:F1}, {pos.Z:F1}]",
+                            new(textSize.X * 2, ImGui.GetTextLineHeightWithSpacing())
+                        ))
                     {
                         originalPosition = LocalPlayerState.Object.Position;
 
@@ -206,21 +237,7 @@ public partial class OccultCrescentHelper
                 ImGui.TextUnformatted($"/pdr {COMMAND_TREASURE} {Lang.Get("OccultCrescentHelper-Command-PTreasure-Help")}");
         }
 
-        public override void Uninit()
-        {
-            CommandManager.Instance().RemoveSubCommand(COMMAND_TREASURE);
-
-            GamePacketManager.Instance().Unreg(OnPreSendPacket);
-
-            DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-            WindowManager.Instance().PostDraw                -= OnPosDraw;
-
-            treasureTaskHelper?.Abort();
-            treasureTaskHelper?.Dispose();
-            treasureTaskHelper = null;
-
-            treasureDatas.Clear();
-        }
+        #region 事件
 
         private void OnCommandTreasure(string command, string args)
         {
@@ -235,11 +252,93 @@ public partial class OccultCrescentHelper
                 return;
             }
 
-            var (_, routeData) = Routes.Where(x => x.Key.Contains(args, StringComparison.OrdinalIgnoreCase)).OrderBy(x => x.Key.Length).FirstOrDefault();
+            var (_, routeData) = Routes.Where(x => x.Key.Contains(args, StringComparison.OrdinalIgnoreCase))
+                                       .OrderBy(x => x.Key.Length)
+                                       .FirstOrDefault();
             if (routeData.Count <= 0) return;
 
             EnqueueAutoTreasureHunt(routeData);
         }
+
+        private void OnPreSendPacket(ref bool isPrevented, int opcode, ref nint packet, ref bool isPrioritize)
+        {
+            if (opcode                         != UpstreamOpcode.PositionUpdateInstanceOpcode ||
+                GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent         ||
+                !treasureTaskHelper.IsBusy)
+                return;
+
+            isPrevented = true;
+        }
+
+        private void OnZoneChanged(uint u)
+        {
+            currentRoute.Clear();
+            queuedGatheringList.Clear();
+            
+            treasurePositions.Clear();
+            surveyPointPositions.Clear();
+            carrotPositions.Clear();
+
+            treasureHandle?.Unreg();
+            treasureHandle = null;
+            
+            surveyPointHandle?.Unreg();
+            surveyPointHandle = null;
+            
+            carrotHandle?.Unreg();
+            carrotHandle = null;
+
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
+
+            treasureHandle = ZoneIndicatorRenderer.Instance().RegTemporary
+            (
+                () => treasurePositions,
+                _ => new()
+                {
+                    Text      = LuminaWrapper.GetAddonText(395),
+                    TextScale = 1.4f
+                }
+            );
+            
+            surveyPointHandle = ZoneIndicatorRenderer.Instance().RegTemporary
+            (
+                () => surveyPointPositions,
+                _ => new()
+                {
+                    Text      = LuminaWrapper.GetEObjName(2014695),
+                    TextScale = 1.4f
+                }
+            );
+            
+            carrotHandle = ZoneIndicatorRenderer.Instance().RegTemporary
+            (
+                () => carrotPositions,
+                _ => new()
+                {
+                    Text      = LuminaWrapper.GetItemName(48096),
+                    TextScale = 1.4f
+                }
+            );
+        }
+
+        // 更新箱子数据并处理开箱
+        public override void OnUpdate()
+        {
+            RefreshSpecialObjectsAround();
+            HandleAutoOpenTreasures();
+        }
+
+        // 绘制连接线和地图
+        private void OnPosDraw()
+        {
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
+
+            // 绘制地图
+            if (treasureTaskHelper.IsBusy)
+                DrawTreasureRouteMap();
+        }
+
+        #endregion
 
         private void EnqueueAutoTreasureHunt(List<TreasureHuntPoint> routeData)
         {
@@ -321,12 +420,9 @@ public partial class OccultCrescentHelper
                     OnUpdate();
 
                     // 找到了, 移动过去
-                    if (treasureDatas.FirstOrDefault
-                        (x => x.ObjectType                                                          == SpecialObjectType.Treasure &&
-                              Vector2.DistanceSquared(x.Position.ToVector2(), position.ToVector2()) <= 225
-                        ) is { } obj)
+                    if (treasurePositions.FirstOrDefault(x => Vector2.DistanceSquared(x.ToVector2(), position.ToVector2()) <= 225) is var pos)
                     {
-                        position      = obj.Position;
+                        position      = pos;
                         foundTreasure = true;
                         return false;
                     }
@@ -337,56 +433,6 @@ public partial class OccultCrescentHelper
             );
 
             treasureTaskHelper.Enqueue(MoveToNextTreasurePoint, "下一轮开始");
-        }
-
-        private void OnPreSendPacket(ref bool isPrevented, int opcode, ref nint packet, ref bool isPrioritize)
-        {
-            if (opcode                         != UpstreamOpcode.PositionUpdateInstanceOpcode ||
-                GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent         ||
-                !treasureTaskHelper.IsBusy)
-                return;
-
-            isPrevented = true;
-        }
-
-        // 区域切换时清除掉宝藏信息和地图纹理
-        private void OnZoneChanged(uint u)
-        {
-            treasureDatas.Clear();
-            currentRoute.Clear();
-            queuedGatheringList.Clear();
-        }
-
-        // 绘制连接线和地图
-        private void OnPosDraw()
-        {
-            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
-
-            // 绘制地图
-            if (treasureTaskHelper.IsBusy)
-                DrawTreasureRouteMap();
-
-            // 绘制连接线
-            if (treasureDatas is { Count: > 0 } treasures &&
-                DService.Instance().ObjectTable.LocalPlayer is { } localPlayer)
-            {
-                foreach (var treasure in treasures)
-                {
-                    switch (treasure.ObjectType)
-                    {
-                        case SpecialObjectType.Treasure when !MainModule.config.IsEnabledDrawLineToTreasure:
-                        case SpecialObjectType.SurveyPoint when !MainModule.config.IsEnabledDrawLineToLog:
-                        case SpecialObjectType.SurveyPoint when !MainModule.config.IsEnabledDrawLineToCarrot:
-                            continue;
-                    }
-
-                    if (!DService.Instance().GameGUI.WorldToScreen(treasure.Position,    out var screenPos) ||
-                        !DService.Instance().GameGUI.WorldToScreen(localPlayer.Position, out var localScreenPos))
-                        continue;
-
-                    DrawLine(localScreenPos, screenPos, treasure);
-                }
-            }
         }
 
         // 绘制寻宝路线地图
@@ -428,29 +474,23 @@ public partial class OccultCrescentHelper
                 routeMapRenderer.ClearMarkers();
 
                 for (var i = 0; i < currentRoute.Count; i++)
-                {
-                    routeMapRenderer.AddMarker(new()
-                    {
-                        ID          = $"TreasureRoute_{i}",
-                        Position    = currentRoute[i].Position,
-                        Color       = DotColor,
-                        Size        = new(8f),
-                        ShowLabel   = false,
-                        ShowTooltip = false
-                    });
-                }
+                    routeMapRenderer.AddMarker
+                    (
+                        new()
+                        {
+                            ID          = $"TreasureRoute_{i}",
+                            Position    = currentRoute[i].Position,
+                            Color       = DotColor,
+                            Size        = new(8f),
+                            ShowLabel   = false,
+                            ShowTooltip = false
+                        }
+                    );
 
                 routeMapRenderer.Draw(displaySize);
             }
 
             ImGui.End();
-        }
-
-        // 更新箱子数据并处理开箱
-        public override void OnUpdate()
-        {
-            RefreshTreasuresAround();
-            HandleAutoOpenTreasures();
         }
 
         // 自动开箱
@@ -459,165 +499,90 @@ public partial class OccultCrescentHelper
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
                 !MainModule.config.IsEnabledAutoOpenTreasure                          ||
                 DService.Instance().Condition[ConditionFlag.InCombat]                 ||
-                treasureDatas is not { Count: > 0 } treasures)
+                treasurePositions is not { Count: > 0 })
                 return;
 
             if (DService.Instance().ObjectTable.LocalPlayer is not { IsDead: false, Position.Y: > -40 }) return;
 
-            foreach (var treasure in treasures)
-            {
-                if (treasure.ObjectType != SpecialObjectType.Treasure) continue;
-                if (treasure.GetGameObject() is not { } gameObject) continue;
+            var treasure = EventObjectManager.Instance()->FindFirst
+            (ptr =>
+                {
+                    var gameObject = (Treasure*)ptr;
+                    if (gameObject == null) return false;
 
-                var treasureObj = (Treasure*)gameObject.Address;
-                if (treasureObj->Flags.HasFlag(Treasure.TreasureFlags.Opened) ||
-                    treasureObj->Flags.HasFlag(Treasure.TreasureFlags.FadedOut))
-                    continue;
+                    if (gameObject->Flags.IsSetAny(Treasure.TreasureFlags.Opened, Treasure.TreasureFlags.FadedOut))
+                        return false;
 
-                if (LocalPlayerState.DistanceTo2D(treasure.Position.ToVector2()) > MainModule.config.DistanceToAutoOpenTreasure)
-                    continue;
+                    var distanceSquared = MainModule.config.DistanceToAutoOpenTreasure * MainModule.config.DistanceToAutoOpenTreasure;
 
-                // 一次只开 1 个, 避免移速上限
-                InteractWithTreasure(gameObject);
+                    if (LocalPlayerState.DistanceTo2DSquared(gameObject->Position.ToVector2()) > distanceSquared)
+                        return false;
+
+                    return true;
+                }
+            );
+
+            if (treasure == null)
                 return;
-            }
+
+            InteractWithTreasure((Treasure*)treasure);
         }
 
         // 更新箱子数据
-        private void RefreshTreasuresAround()
+        private void RefreshSpecialObjectsAround()
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
 
-            var newTreasures = new List<TreasureData>();
-
-            // 仅在未战斗或正在坐骑上时更新数据 (考虑到坐骑上误进战状态)
-            if (!DService.Instance().Condition[ConditionFlag.InCombat] || DService.Instance().Condition[ConditionFlag.Mounted])
+            List<Vector3> treasures    = [];
+            List<Vector3> surveyPoints = [];
+            List<Vector3> carrots      = [];
+            foreach (var eventObjectPtr in EventObjectManager.Instance()->EventObjects)
             {
-                foreach (var obj in DService.Instance().ObjectTable.Where(o => !((RenderFlag)o.RenderFlags).HasFlag(RenderFlag.Invisible)))
+                if (eventObjectPtr.IsNull) continue;
+
+                var eventObject = eventObjectPtr.Value;
+                if (!eventObject->IsReadyToDraw()) return;
+                
+                switch (eventObject->ObjectKind)
                 {
-                    if (TreasureData.FromGameObject(obj) is not { } treasure) continue;
-
-                    if (treasure.ObjectType == SpecialObjectType.Treasure)
-                    {
-                        var treasureObj = (Treasure*)obj.Address;
-                        if (treasureObj->Flags.HasFlag(Treasure.TreasureFlags.Opened) ||
-                            treasureObj->Flags.HasFlag(Treasure.TreasureFlags.FadedOut))
-                            continue;
-                    }
-
-                    newTreasures.Add(treasure);
+                    case ObjectKind.Treasure:
+                        var treasureObject = (Treasure*)eventObject;
+                        if (treasureObject->Flags.IsSetAny(Treasure.TreasureFlags.Opened, Treasure.TreasureFlags.FadedOut))
+                            break;
+                        
+                        treasures.Add(treasureObject->Position);
+                        break;
+                    
+                    case ObjectKind.EventObj:
+                        switch (eventObject->BaseId)
+                        {
+                            // 调查地点
+                            case 2014695:
+                                surveyPoints.Add(eventObject->Position);
+                                break;
+                            
+                            // 胡萝卜
+                            case 2010139:
+                                carrots.Add(eventObject->Position);
+                                break;
+                        }
+                        break;
                 }
             }
 
-            treasureDatas = newTreasures.OrderBy(x => x.EntityID).ToList();
+            treasurePositions    = treasures;
+            surveyPointPositions = surveyPoints;
+            carrotPositions      = carrots;
         }
 
-        private static void DrawLine(Vector2 startPos, Vector2 endPos, TreasureData treasure, uint lineColor = 0)
-        {
-            lineColor = lineColor == 0 ? LineColorBlue : lineColor;
-
-            var drawList = ImGui.GetForegroundDrawList();
-
-            drawList.AddLine(startPos, endPos, lineColor, 8f);
-            drawList.AddCircleFilled(startPos, 12f, DotColor);
-            drawList.AddCircleFilled(endPos,   12f, DotColor);
-
-            ImGui.SetNextWindowPos(endPos);
-
-            if (ImGui.Begin($"OccultCrescentHelper-{treasure.EntityID}", WINDOW_FLAGS))
-            {
-                using (ImRaii.Group())
-                {
-                    ImGuiOm.ScaledDummy(12f);
-
-                    if (DService.Instance().Texture.TryGetFromGameIcon(new(60354), out var texture))
-                    {
-                        var origPosY = ImGui.GetCursorPosY();
-                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 8f * GlobalUIScale);
-                        ImGui.Image(texture.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeightWithSpacing()));
-                        ImGui.SetCursorPosY(origPosY);
-                        ImGui.SameLine();
-                    }
-
-                    var name = treasure.ObjectType switch
-                    {
-                        SpecialObjectType.Treasure    => LuminaWrapper.GetAddonText(395),
-                        SpecialObjectType.SurveyPoint => LuminaWrapper.GetEObjName(2014695),
-                        SpecialObjectType.Carrot      => LuminaWrapper.GetItemName(48096),
-                        _                             => string.Empty
-                    };
-
-                    ImGuiOm.TextOutlined(KnownColor.Orange.ToVector4(), $"{name}");
-                }
-
-                ImGui.End();
-            }
-        }
-
-        private static void InteractWithTreasure(IGameObject obj)
+        private static void InteractWithTreasure(Treasure* treasure)
         {
             if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
-            var moveType = (PositionUpdateInstancePacket.MoveType)(MovementManager.Instance().CurrentZoneMoveState << 16);
-            new PositionUpdateInstancePacket(localPlayer.Rotation, obj.Position, moveType).Send();
-            new TreasureOpenPacket(obj.EntityID).Send();
+            var moveType = MovementManager.Instance().GetInstanceMoveType(PositionUpdateInstancePacket.MoveType.NormalMove0);
+            new PositionUpdateInstancePacket(localPlayer.Rotation, treasure->Position, moveType).Send();
+            new TreasureOpenPacket(treasure->EntityId).Send();
             new PositionUpdateInstancePacket(localPlayer.Rotation, localPlayer.Position, moveType).Send();
-        }
-
-        private class TreasureData
-        (
-            SpecialObjectType objectType,
-            uint              entityID,
-            string            name,
-            Vector3           position
-        )
-        {
-            public SpecialObjectType ObjectType { get; } = objectType;
-            public uint              EntityID   { get; } = entityID;
-            public string            Name       { get; } = name ?? string.Empty;
-            public Vector3           Position   { get; } = position;
-
-            public static TreasureData? FromGameObject(IGameObject? gameObject)
-            {
-                try
-                {
-                    if (gameObject == null || !gameObject.IsValid() || gameObject.Address == nint.Zero)
-                        return null;
-
-                    var type = SpecialObjectType.Treasure;
-
-                    switch (gameObject.ObjectKind)
-                    {
-                        case ObjectKind.Treasure:
-                            break;
-                        case ObjectKind.EventObj:
-                            switch (gameObject.EntityID)
-                            {
-                                case (uint)SpecialObjectType.SurveyPoint:
-                                    type = SpecialObjectType.SurveyPoint;
-                                    break;
-                                case (uint)SpecialObjectType.Carrot:
-                                    type = SpecialObjectType.Carrot;
-                                    break;
-                                default:
-                                    return null;
-                            }
-
-                            break;
-                        default:
-                            return null;
-                    }
-
-                    return new(type, gameObject.EntityID, gameObject.Name, gameObject.Position);
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-
-            public IGameObject? GetGameObject() =>
-                DService.Instance().ObjectTable.SearchByEntityID(EntityID);
         }
 
         public class TreasureHuntPoint
@@ -630,29 +595,6 @@ public partial class OccultCrescentHelper
         {
             public Vector3 Position { get; } = new(x, y, z);
             public bool    IsExact  { get; } = isExact;
-        }
-
-        private enum RenderFlag
-        {
-            Invisible = 256
-        }
-
-        private enum SpecialObjectType : uint
-        {
-            /// <summary>
-            ///     宝藏
-            /// </summary>
-            Treasure,
-
-            /// <summary>
-            ///     调查地点
-            /// </summary>
-            SurveyPoint = 2014695,
-
-            /// <summary>
-            ///     胡萝卜
-            /// </summary>
-            Carrot = 2010139
         }
 
         private static class PathPlanner

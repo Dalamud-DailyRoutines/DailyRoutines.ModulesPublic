@@ -371,15 +371,16 @@ public partial class OccultCrescentHelper
 
             if (MainModule.config.IsEnabledIslandIDChat)
             {
-                var message = new SeStringBuilder()
-                              .AddText($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandID")}: ")
-                              .AddUiForeground(45)
-                              .AddText(islandID.ToString())
-                              .AddUiForegroundOff()
-                              .Build();
+                using var rented = new RentedSeStringBuilder();
                 
-                // TODO: 改成 ReadOnlyString
-                NotifyHelper.Instance().Chat(message.Encode());
+                var message = rented.Builder
+                                    .Append($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandID")}: ")
+                                    .PushColorType(45)
+                                    .Append(islandID.ToString())
+                                    .PopColorType()
+                                    .ToReadOnlySeString();
+                
+                NotifyHelper.Instance().Chat(message);
             }
 
             if (!isJustLogin                                                       &&
@@ -439,6 +440,14 @@ public partial class OccultCrescentHelper
 
                     if (MainModule.config.IsEnabledModifyInfoHUD && settingButton == null)
                     {
+                        var textNode0 = MKDInfo->GetTextNodeById(18);
+                        if (textNode0 != null)
+                            textNode0->SetAlpha(0);
+
+                        var textNode1 = MKDInfo->GetTextNodeById(20);
+                        if (textNode1 != null)
+                            textNode1->SetAlpha(0);
+                        
                         var textNode = MKDInfo->GetTextNodeById(19);
                         if (textNode != null)
                             textNode->SetText($"{Lang.Get("OccultCrescentHelper-OthersManager-IslandID")}: {MainModule.GetIslandID()}");

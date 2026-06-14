@@ -19,8 +19,12 @@ public partial class OccultCrescentHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = Lang.Get("OccultCrescentHelperTitle"),
-        Description     = Lang.Get("OccultCrescentHelperDescription"),
+        Title = Lang.Get("OccultCrescentHelperTitle"),
+        Description = Lang.Get
+        (
+            "OccultCrescentHelperDescription",
+            LuminaWrapper.GetContentTypeName(38) // 蜃景幻界新月岛
+        ),
         Category        = ModuleCategory.Duty,
         Author          = ["Fragile"],
         ModulesConflict = ["AutoFaceCameraDirection"]
@@ -199,12 +203,11 @@ public partial class OccultCrescentHelper : ModuleBase
         // 辅助狂战士
         public bool IsEnabledBerserkerRageAutoFace = true;
         public bool IsEnabledBerserkerRageReplace  = true;
-        public bool IsEnabledDrawLineToCarrot      = true;
-
-        public bool IsEnabledDrawLineToLog = true;
-
-        // 连接线
-        public bool IsEnabledDrawLineToTreasure = true;
+        
+        // 突出标注
+        public bool IsEnabledHighlightCarrot      = true;
+        public bool IsEnabledHighlightSurveyPoint = true;
+        public bool IsEnabledHighlightTreasure    = true;
 
         // 隐藏任务指令
         public bool IsEnabledHideDutyCommand;
