@@ -142,21 +142,21 @@ public partial class OccultCrescentHelper
 
             if (ImGui.Checkbox
                 (
-                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-Highlight")} ({LuminaWrapper.GetAddonText(395)})",
+                    $"{Lang.Get("OccultCrescentHelper-Highlight")} ({LuminaWrapper.GetAddonText(395)})",
                     ref MainModule.config.IsEnabledHighlightTreasure
                 ))
                 MainModule.config.Save(MainModule);
 
             if (ImGui.Checkbox
                 (
-                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-Highlight")} ({LuminaWrapper.GetEObjName(2014695)})",
+                    $"{Lang.Get("OccultCrescentHelper-Highlight")} ({LuminaWrapper.GetEObjName(2014695)})",
                     ref MainModule.config.IsEnabledHighlightSurveyPoint
                 ))
                 MainModule.config.Save(MainModule);
 
             if (ImGui.Checkbox
                 (
-                    $"{Lang.Get("OccultCrescentHelper-TreasureManager-Highlight")} ({LuminaWrapper.GetItemName(48096)})",
+                    $"{Lang.Get("OccultCrescentHelper-Highlight")} ({LuminaWrapper.GetItemName(48096)})",
                     ref MainModule.config.IsEnabledHighlightCarrot
                 ))
                 MainModule.config.Save(MainModule);
@@ -292,31 +292,43 @@ public partial class OccultCrescentHelper
 
             treasureHandle = ZoneIndicatorRenderer.Instance().RegTemporary
             (
-                () => treasurePositions,
-                _ => new()
+                () => MainModule.config.IsEnabledHighlightTreasure ? treasurePositions : [],
+                pos => pos,
+                new()
                 {
-                    Text      = LuminaWrapper.GetAddonText(395),
-                    TextScale = 1.4f
+                    TextGetter = _ => new()
+                    {
+                        Text      = LuminaWrapper.GetAddonText(395),
+                        TextScale = 1.4f
+                    }
                 }
             );
             
             surveyPointHandle = ZoneIndicatorRenderer.Instance().RegTemporary
             (
-                () => surveyPointPositions,
-                _ => new()
+                () => MainModule.config.IsEnabledHighlightSurveyPoint ? surveyPointPositions : [],
+                pos => pos,
+                new()
                 {
-                    Text      = LuminaWrapper.GetEObjName(2014695),
-                    TextScale = 1.4f
+                    TextGetter = _ => new()
+                    {
+                        Text      = LuminaWrapper.GetEObjName(2014695),
+                        TextScale = 1.4f
+                    }
                 }
             );
             
             carrotHandle = ZoneIndicatorRenderer.Instance().RegTemporary
             (
-                () => carrotPositions,
-                _ => new()
+                () => MainModule.config.IsEnabledHighlightCarrot ? carrotPositions : [],
+                pos => pos,
+                new()
                 {
-                    Text      = LuminaWrapper.GetItemName(48096),
-                    TextScale = 1.4f
+                    TextGetter = _ => new()
+                    {
+                        Text      = LuminaWrapper.GetItemName(48096),
+                        TextScale = 1.4f
+                    }
                 }
             );
         }
@@ -528,7 +540,7 @@ public partial class OccultCrescentHelper
             InteractWithTreasure((Treasure*)treasure);
         }
 
-        // 更新箱子数据
+        // 更新特殊物体数据
         private void RefreshSpecialObjectsAround()
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
@@ -552,7 +564,18 @@ public partial class OccultCrescentHelper
                         
                         treasures.Add(treasureObject->Position);
                         break;
-                    
+                }
+            }
+
+            foreach (var eventObjectPtr in StandObjectManager.Instance()->EventObjects)
+            {
+                if (eventObjectPtr.IsNull) continue;
+
+                var eventObject = eventObjectPtr.Value;
+                if (!eventObject->IsReadyToDraw()) return;
+                
+                switch (eventObject->ObjectKind)
+                {
                     case ObjectKind.EventObj:
                         switch (eventObject->BaseId)
                         {
@@ -560,7 +583,7 @@ public partial class OccultCrescentHelper
                             case 2014695:
                                 surveyPoints.Add(eventObject->Position);
                                 break;
-                            
+
                             // 胡萝卜
                             case 2010139:
                                 carrots.Add(eventObject->Position);

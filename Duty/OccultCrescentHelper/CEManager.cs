@@ -9,12 +9,14 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.Game.InstanceContent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
+using OmenTools.OmenService.ZoneIndicator;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using TimeAgo;
@@ -37,6 +39,9 @@ public partial class OccultCrescentHelper
 
         private readonly Dictionary<long, DateTime> localTimes = [];
 
+        private ZoneIndicatorHandle? fateHandle;
+        private ZoneIndicatorHandle? ceHandle;
+
         private TaskHelper? ceTaskHelper;
 
         public override void Init()
@@ -44,6 +49,8 @@ public partial class OccultCrescentHelper
             ceTaskHelper ??= new() { TimeoutMS = 180_000 };
 
             DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
+            OnZoneChanged(0);
+            
             ExecuteCommandManager.Instance().RegPost(OnPostReceivedCommand);
             LogMessageManager.Instance().RegPost(OnPostReceivedMessage);
             GameState.Instance().Logout += OnLogout;
@@ -82,8 +89,15 @@ public partial class OccultCrescentHelper
             LogMessageManager.Instance().Unreg(OnPostReceivedMessage);
             DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
 
-            // 清理资源
-            OnZoneChanged(0);
+            fateHandle?.Unreg();
+            fateHandle = null;
+
+            ceHandle?.Unreg();
+            ceHandle = null;
+
+            allIslandEvents.Clear();
+            knownCENames.Clear();
+            ceTaskHelper?.Abort();
 
             ceTaskHelper?.Dispose();
             ceTaskHelper = null;
@@ -126,11 +140,11 @@ public partial class OccultCrescentHelper
                             }
                         }
                     }
-                    
+
                     ImGui.NewLine();
                 }
             }
-            
+
             if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent &&
                 ImGui.CollapsingHeader($"{Lang.Get("OccultCrescentHelper-CEManager-CEHistory")} ({MainModule.GetIslandID()})###CEHistory"))
             {
@@ -172,7 +186,7 @@ public partial class OccultCrescentHelper
             }
 
             ImGui.NewLine();
-            
+
             if (ImGui.Checkbox($"{Lang.Get("OccultCrescentHelper-PrioritizeMoveTo")}", ref MainModule.config.IsEnabledMoveToEvent))
                 MainModule.config.Save(MainModule);
 
@@ -185,11 +199,28 @@ public partial class OccultCrescentHelper
             if (MainModule.config.IsEnabledMoveToEvent)
             {
                 ImGui.SetNextItemWidth(150f * GlobalUIScale);
-                ImGui.SliderFloat($"{Lang.Get("OccultCrescentHelper-CEManager-PrioritizeMoveTo-LeftTime")}", ref MainModule.config.LeftTimeMoveToEvent, 1f, 180f, "%.1f");
+                ImGui.SliderFloat
+                    ($"{Lang.Get("OccultCrescentHelper-CEManager-PrioritizeMoveTo-LeftTime")}", ref MainModule.config.LeftTimeMoveToEvent, 1f, 180f, "%.1f");
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     MainModule.config.Save(MainModule);
                 ImGuiOm.HelpMarker($"{Lang.Get("OccultCrescentHelper-CEManager-PrioritizeMoveTo-LeftTime-Help")}", 20f * GlobalUIScale);
             }
+            
+            ImGui.NewLine();
+            
+            if (ImGui.Checkbox
+                (
+                    $"{Lang.Get("OccultCrescentHelper-Highlight")} ({LuminaWrapper.GetAddonText(13988)})",
+                    ref MainModule.config.IsEnabledHighlightCE
+                ))
+                MainModule.config.Save(MainModule);
+
+            if (ImGui.Checkbox
+                (
+                    $"{Lang.Get("OccultCrescentHelper-Highlight")} ({LuminaWrapper.GetAddonText(5768)})",
+                    ref MainModule.config.IsEnabledHighlightFATE
+                ))
+                MainModule.config.Save(MainModule);
 
             ImGui.NewLine();
 
@@ -239,10 +270,10 @@ public partial class OccultCrescentHelper
             {
                 if (ImGui.Checkbox(Lang.Get("SendNotification"), ref MainModule.config.IsEnabledNotifyCENotification))
                     MainModule.config.Save(MainModule);
-                
+
                 if (ImGui.Checkbox(Lang.Get("SendTTS"), ref MainModule.config.IsEnabledNotifyCETTS))
                     MainModule.config.Save(MainModule);
-                
+
                 if (ImGui.Checkbox(Lang.Get("SendSystemSound"), ref MainModule.config.IsEnabledNotifyCESystemSound))
                     MainModule.config.Save(MainModule);
             }
@@ -264,9 +295,103 @@ public partial class OccultCrescentHelper
 
         private void OnZoneChanged(uint u)
         {
+            fateHandle?.Unreg();
+            fateHandle = null;
+
+            ceHandle?.Unreg();
+            ceHandle = null;
+
             allIslandEvents.Clear();
             knownCENames.Clear();
             ceTaskHelper?.Abort();
+
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
+
+            fateHandle = ZoneIndicatorRenderer.Instance().RegTemporary
+            (
+                () =>
+                {
+                    if (!MainModule.config.IsEnabledHighlightFATE || DService.Instance().Condition[ConditionFlag.InCombat])
+                        return [];
+                    
+                    return allIslandEvents
+                           .Where(x => x.Event.Type is CrescentEventType.FATE or CrescentEventType.MagicPot)
+                           .ToList();
+                },
+                data => data.Event.Position,
+                new()
+                {
+                    TextGetter = data =>
+                    {
+                        ZoneIndicatorText.TextImage? image = null;
+
+                        if (data.Event.IconID != 0 &&
+                            DService.Instance().Texture.TryGetFromGameIcon(new(data.Event.IconID), out var iconTex))
+                        {
+                            image = new()
+                            {
+                                Texture    = iconTex,
+                                SizeGetter = () => new(ImGui.GetTextLineHeightWithSpacing())
+                            };
+                        }
+
+                        return new()
+                        {
+                            Text      = $"{data.Event.NameDisplay} ({TimeSpan.FromSeconds(data.FateTimeRemaining):mm\\:ss})",
+                            TextScale = 1.2f,
+                            Image     = image,
+                            TextColor = KnownColor.LawnGreen.ToVector4()
+                        };
+                    },
+                    RenderRadius = 300
+                }
+            );
+
+            ceHandle = ZoneIndicatorRenderer.Instance().RegTemporary
+            (
+                () =>
+                {
+                    if (!MainModule.config.IsEnabledHighlightCE || DService.Instance().Condition[ConditionFlag.InCombat])
+                        return [];
+                    
+                    return allIslandEvents
+                           .Where(x => x.Event.Type is CrescentEventType.CE)
+                           .ToList();
+                },
+                data => data.Event.Position,
+                new()
+                {
+                    TextGetter = data =>
+                    {
+                        var text = data.Event.CEState switch
+                        {
+                            DynamicEventState.Register => $"{data.Event.Name} ({TimeSpan.FromSeconds(data.Event.CELeftTimeSecond):mm\\:ss})",
+                            _                          => data.Event.NameDisplay
+                        };
+
+                        ZoneIndicatorText.TextImage? image = null;
+
+                        if (data.Event.IconID != 0 &&
+                            DService.Instance().Texture.TryGetFromGameIcon(new(data.Event.IconID), out var iconTex))
+                        {
+                            image = new()
+                            {
+                                Texture    = iconTex,
+                                SizeGetter = () => new Vector2(20f)
+                            };
+                        }
+
+                        return new()
+                        {
+                            Text      = new ReadOnlySeString(text),
+                            TextScale = 1.2f,
+                            TextColor = KnownColor.LawnGreen.ToVector4(),
+                            Image     = image
+                        };
+                    },
+                    RenderRadius = 300
+                }
+            );
         }
 
         public override void OnUpdate()
@@ -411,7 +536,7 @@ public partial class OccultCrescentHelper
 
             // 没开绿玩移动或时间不够了
             if (!MainModule.config.IsEnabledMoveToEvent ||
-                data.Event.Type == CrescentEventType.CE && data.Event.CELeftTimeSecond < MainModule.config.LeftTimeMoveToEvent)
+                (data.Event.Type == CrescentEventType.CE && data.Event.CELeftTimeSecond < MainModule.config.LeftTimeMoveToEvent))
             {
                 ceTaskHelper.Abort();
 
@@ -466,17 +591,15 @@ public partial class OccultCrescentHelper
                     }
 
                     if (!vnavmeshIPC.GetIsPathfindRunning() ||
-                        data.Event.Type is CrescentEventType.FATE or CrescentEventType.MagicPot &&
-                        FateManager.Instance()->CurrentFate         != null                     &&
-                        FateManager.Instance()->CurrentFate->FateId == data.Event.DataID)
-                    {
+                        (data.Event.Type is CrescentEventType.FATE or CrescentEventType.MagicPot &&
+                         FateManager.Instance()->CurrentFate         != null                     &&
+                         FateManager.Instance()->CurrentFate->FateId == data.Event.DataID))
                         return true;
-                    }
 
                     return false;
                 }
             );
-            
+
             ceTaskHelper.DelayNext(1000, 2000);
 
             if (MainModule.config.IsEnabledDismount)
@@ -639,6 +762,8 @@ public partial class OccultCrescentHelper
             public int                LinkPayloadID { get; private set; } = -1;
             public DalamudLinkPayload LinkPayload   { get; private set; }
 
+            public float FateTimeRemaining { get; set; }
+
             public bool Equals(IslandEventData? other)
             {
                 if (other is null) return false;
@@ -660,6 +785,7 @@ public partial class OccultCrescentHelper
                 var data = new IslandEventData(fate.FateId);
                 data.Event.UpdateTempDataFATE(name, fate.Progress, fate.State);
                 data.Event.UpdatePositionAndRadius(fate.Position, fate.Radius);
+                data.FateTimeRemaining = fate.TimeRemaining;
 
                 return data;
             }
@@ -706,6 +832,7 @@ public partial class OccultCrescentHelper
             {
                 var name = $"{fate.Name} ({fate.Progress}%)";
                 Event.UpdateTempDataFATE(name, fate.Progress, fate.State);
+                FateTimeRemaining = fate.TimeRemaining;
             }
 
             public void Update(DynamicEvent ce)

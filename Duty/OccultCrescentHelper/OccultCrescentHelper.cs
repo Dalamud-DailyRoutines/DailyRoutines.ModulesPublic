@@ -208,6 +208,8 @@ public partial class OccultCrescentHelper : ModuleBase
         public bool IsEnabledHighlightCarrot      = true;
         public bool IsEnabledHighlightSurveyPoint = true;
         public bool IsEnabledHighlightTreasure    = true;
+        public bool IsEnabledHighlightCE          = true;
+        public bool IsEnabledHighlightFATE        = true;
 
         // 隐藏任务指令
         public bool IsEnabledHideDutyCommand;
