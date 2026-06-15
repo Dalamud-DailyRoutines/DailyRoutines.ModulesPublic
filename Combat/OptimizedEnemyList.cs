@@ -94,11 +94,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
         ImGui.SameLine();
         ImGui.TextUnformatted($"{Lang.Get("EdgeColor")} ({Lang.Get("Text")})");
-
-        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        if (ImGui.SliderFloat($"{Lang.Get("Alpha")} ({Lang.Get("Background")})", ref config.BackgroundAlpha, 0, 1, "%.1f"))
-            config.BackgroundAlpha = Math.Clamp(config.BackgroundAlpha, 0, 1);
-
+        
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Save, $"{Lang.Get("Save")}"))
             config.Save(this);
 
@@ -109,7 +105,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var newConfig = new Config();
             config.TextColor       = newConfig.TextColor;
             config.TextEdgeColor   = newConfig.TextEdgeColor;
-            config.BackgroundAlpha = newConfig.BackgroundAlpha;
 
             config.Save(this);
         }
@@ -254,9 +249,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             
             healthMarkerNode.TextColor        = config.TextColor;
             healthMarkerNode.TextOutlineColor = config.TextEdgeColor;
-
-            castBackgroundNode.Alpha = config.BackgroundAlpha;
-
+            
             #endregion
 
             #region 状态效果更新
@@ -496,8 +489,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public float  BackgroundAlpha       = 0.6f;
-
         public bool DisplayStatus = true;
         public byte FontSize      = 10;
 
