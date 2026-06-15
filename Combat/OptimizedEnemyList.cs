@@ -6,24 +6,17 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Hooking;
 using Dalamud.Interface.Components;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Overlay.UiOverlay;
 using KamiToolKit.Premade.Node.Simple;
-using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -31,34 +24,28 @@ public unsafe class OptimizedEnemyList : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = Lang.Get("OptimizedEnemyListTitle"),
-        Description     = Lang.Get("OptimizedEnemyListDescription"),
-        Category        = ModuleCategory.Combat,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/OptimizedEnemyList-UI.png"]
+        Title       = Lang.Get("OptimizedEnemyListTitle"),
+        Description = Lang.Get("OptimizedEnemyListDescription"),
+        Category    = ModuleCategory.Combat,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedEnemyList/preview-1.png"
+        ],
+        ModulesRecommend = ["AutoDisplayHiddenCast"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
-    private static readonly CompSig                                AgentHudUpdateEnemyListSig = new("40 55 57 41 56 48 81 EC ?? ?? ?? ?? 4C 8B F1");
-    private delegate        void                                   AgentHudUpdateEnemyListDelegate(AgentHUD* agent);
-    private                 Hook<AgentHudUpdateEnemyListDelegate>? AgentHudUpdateEnemyListHook;
-    
-    private Config             config = null!;
-    private OverlayController? controller;
 
-    private          Dictionary<uint, int> haterInfo = [];
-    private readonly List<EnemyListNode>   nodes     = [];
+    private Config config = null!;
+    
+    private readonly List<EnemyListNode> nodes     = [];
+    private          OverlayController?  controller;
     
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
 
-        controller ??= new();
-
-        AgentHudUpdateEnemyListHook ??= AgentHudUpdateEnemyListSig.GetHook<AgentHudUpdateEnemyListDelegate>(AgentHudUpdateEnemyListDetour);
-        AgentHudUpdateEnemyListHook.Enable();
-
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, "_EnemyList", OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate,  "_EnemyList", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,            "_EnemyList", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,         "_EnemyList", OnAddon);
     }
@@ -67,10 +54,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
-        ClearTextNodes();
-
-        haterInfo.Clear();
-
+        ClearNodes();
+        
         controller?.Dispose();
         controller = null;
     }
@@ -139,37 +124,40 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
         }
+        
+        ImGui.NewLine();
+        
+        if (ImGui.Checkbox(Lang.Get("OptimizedEnemyList-AlwaysUnlock"), ref config.AlwaysUnlock))
+            config.Save(this);
+        ImGuiOm.HelpMarker(Lang.Get("OptimizedEnemyList-AlwaysUnlock-Help"));
     }
+
+    #region 事件
 
     private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
-            case AddonEvent.PostRequestedUpdate:
-                UpdateTextNodes();
-                break;
+            case AddonEvent.PreRequestedUpdate:
+                if (config.AlwaysUnlock)
+                {
+                    var enemyListArray = EnemyListNumberArray.Instance();
+                    for (var i = 0; i < enemyListArray->Enemies.Length; i++)
+                        enemyListArray->Enemies[i].LockedInList = false;
+                }
 
-            case AddonEvent.PostDraw:
-                if (!DService.Instance().Condition[ConditionFlag.InCombat] ||
-                    !Throttler.Shared.Throttle("OptimizedEnemyList-OnAddonDraw", 10))
-                    return;
-
-                UpdateTextNodes();
+                UpdateNodes();
                 break;
 
             case AddonEvent.PreFinalize:
-                ClearTextNodes();
+                ClearNodes();
                 break;
         }
     }
 
-    private void AgentHudUpdateEnemyListDetour(AgentHUD* agent)
-    {
-        AgentHudUpdateEnemyListHook.Original(agent);
-        UpdateHaterInfo();
-    }
+    #endregion
 
-    private void UpdateTextNodes()
+    private void UpdateNodes()
     {
         if (!EnemyList->IsAddonAndNodesReady()) return;
 
@@ -180,7 +168,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
         if (nodes is not { Count: > 0 })
         {
-            CreateTextNodes();
+            CreateNodes();
             return;
         }
 
@@ -202,8 +190,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var statusNodes    = nodes[i].StatusNodes;
 
             var gameObj = CharacterManager.Instance()->LookupBattleCharaByEntityId(entityID);
-
-            if (gameObj == null || !haterInfo.TryGetValue(gameObj->EntityId, out var enmity))
+            if (gameObj == null)
             {
                 textNode.String             = string.Empty;
                 backgroundNode.IsVisible    = false;
@@ -215,7 +202,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             if (componentNode == null)
             {
-                CreateTextNodes();
+                CreateNodes();
                 return;
             }
 
@@ -230,7 +217,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             if (origCastBarNode == null || origCastBarProgressNode == null) continue;
 
             statusNodes.Scale    = componentNode->GetScale()             - new Vector2(0.1f);
-            statusNodes.Position = componentNode->GetNodeState().TopLeft - new Vector2(0, 1) * statusNodes.Scale;
+            statusNodes.Position = componentNode->GetNodeState().TopLeft - (new Vector2(0, 1) * statusNodes.Scale);
             statusNodes.Alpha    = info.ActiveInList ? 1f : 0.5f;
 
             var counter = 0;
@@ -305,7 +292,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
             else
             {
-                textNode.String          = GetGeneralInfoText((float)gameObj->Health / gameObj->MaxHealth * 100, enmity);
+                textNode.String          = GetGeneralInfoText((float)gameObj->Health / gameObj->MaxHealth * 100);
                 backgroundNode.IsVisible = true;
             }
 
@@ -328,15 +315,16 @@ public unsafe class OptimizedEnemyList : ModuleBase
         }
     }
 
-    private void CreateTextNodes()
+    private void CreateNodes()
     {
         if (EnemyList == null) return;
         if (!TryFindButtonNodes(out var buttonNodesPtr)) return;
 
-        ClearTextNodes();
+        ClearNodes();
 
+        controller ??= new();
+        
         var counter = -1;
-
         foreach (var nodePtr in buttonNodesPtr)
         {
             var node = (AtkComponentNode*)nodePtr;
@@ -394,37 +382,24 @@ public unsafe class OptimizedEnemyList : ModuleBase
         }
     }
 
-    private void ClearTextNodes()
+    private void ClearNodes()
     {
-        foreach (var (_, textNode, backgroundNode, castBarNode, statusNodes) in nodes)
+        foreach (var (_, textNode, backgroundNode, castBarNode, _) in nodes)
         {
             textNode?.Dispose();
             backgroundNode?.Dispose();
             castBarNode?.Dispose();
-
-            foreach (var statusNode in statusNodes)
-                statusNode?.Dispose();
-            statusNodes?.Dispose();
         }
-
         nodes.Clear();
+        
+        controller?.Dispose();
+        controller = null;
     }
 
-    private void UpdateHaterInfo()
-    {
-        var hater = UIState.Instance()->Hater;
-        haterInfo = hater.Haters
-                         .ToArray()
-                         .Take(hater.HaterCount)
-                         .Where(x => x.EntityId != 0 && x.EntityId != 0xE0000000)
-                         .DistinctBy(x => x.EntityId)
-                         .ToDictionary(x => x.EntityId, x => x.Enmity);
-    }
-
-    private string GetGeneralInfoText(float percentage, int enmity) =>
+    private string GetGeneralInfoText(float percentage) =>
         config.UseCustomizeText
-            ? string.Format(config.CustomTextPattern, percentage.ToString("F1"), enmity.ToString())
-            : $"{LuminaWrapper.GetAddonText(232)}: {percentage:F1}% / {LuminaWrapper.GetAddonText(721)}: {enmity.ToString()}%";
+            ? string.Format(config.CustomTextPattern, percentage.ToString("F1"))
+            : $"{LuminaWrapper.GetAddonText(232)}: {percentage:F1}%";
 
     private string GetCastInfoText(ActionType type, uint actionID, float remainingTime, float percentage)
     {
@@ -479,8 +454,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
     private class Config : ModuleConfig
     {
         public float  BackgroundAlpha       = 0.6f;
-        public string CustomCastTextPattern = @"{0}: {1} / HP: {2}%";
-        public string CustomTextPattern     = @"HP: {0}% / Enmity: {1}%";
+        public string CustomCastTextPattern = "{0}: {1} / HP: {2}%";
+        public string CustomTextPattern     = "HP: {0}%";
 
         public bool DisplayStatus = true;
         public byte FontSize      = 10;
@@ -490,6 +465,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
         public Vector2 TextOffset    = Vector2.Zero;
 
         public bool UseCustomizeText;
+
+        public bool AlwaysUnlock = true;
     }
 
     private sealed class EnemyListNode
@@ -567,13 +544,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        protected override void OnUpdate()
-        {
+        protected override void OnUpdate() =>
             IsVisible = ShouldBeVisible                   &&
                         !GameState.IsInPVPInstance        &&
                         EnemyList->IsAddonAndNodesReady() &&
                         Index < EnemyListNumberArray.Instance()->EnemyCount;
-        }
     }
 
     private class IconTextNode : SimpleComponentNode
