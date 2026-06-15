@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
@@ -13,10 +14,16 @@ public unsafe class ThePraetoriumHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("ThePraetoriumHelperTitle"),
-        Description = Lang.Get("ThePraetoriumHelperDescription"),
-        Category    = ModuleCategory.Duty,
-        Author      = ["逆光"]
+        Title = Lang.Get("ThePraetoriumHelperTitle"),
+        Description = Lang.Get
+        (
+            "ThePraetoriumHelperDescription",
+            LuminaWrapper.GetContentName(16), // 最终决战天幕魔导城
+            LuminaWrapper.GetMountName(6),    // 魔导装甲
+            LuminaWrapper.GetActionName(2434) // 魔导加农炮
+        ),
+        Category = ModuleCategory.Duty,
+        Author   = ["逆光"]
     };
 
     protected override void Init()
