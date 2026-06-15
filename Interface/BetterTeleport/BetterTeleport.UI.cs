@@ -545,7 +545,8 @@ public unsafe partial class BetterTeleport
         AetheryteRecord aetheryte,
         int?            index           = null,
         bool            isSelected      = false,
-        bool            drawHotkeyBadge = true
+        bool            drawHotkeyBadge = true,
+        string?         searchText      = null
     )
     {
         if (config.HideAethernetInParty && !aetheryte.IsAetheryte && DService.Instance().PartyList.Length > 1)
@@ -567,7 +568,7 @@ public unsafe partial class BetterTeleport
         {
             if (index.HasValue)
                 hasUsedArrowKeys = false;
-            HandleTeleport(aetheryte);
+            HandleTeleport(aetheryte, searchText);
         }
 
         var isHovered = ImGui.IsItemHovered() && !hasUsedArrowKeys;

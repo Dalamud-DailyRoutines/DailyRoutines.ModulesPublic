@@ -165,17 +165,21 @@ public unsafe partial class BetterTeleport
             else
             {
                 if (recordMatcher != null)
-                    fullSearchResult = recordMatcher.Search(fullSearchWord, limit: int.MaxValue).ToList();
+                    fullSearchResult = SortSearchMatches(fullSearchWord, recordMatcher.Search(fullSearchWord, limit: int.MaxValue).ToList());
                 else
                 {
-                    fullSearchResult = records.Values
-                                              .SelectMany(x => x)
-                                              .Where
-                                              (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                    (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
-                                                     remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
-                                              )
-                                              .ToList();
+                    fullSearchResult = SortSearchMatches
+                    (
+                        fullSearchWord,
+                        records.Values
+                               .SelectMany(x => x)
+                               .Where
+                               (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
+                                     (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                      remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
+                               )
+                               .ToList()
+                    );
                 }
             }
 
@@ -222,7 +226,7 @@ public unsafe partial class BetterTeleport
             if (ImGui.IsKeyPressed(ImGuiKey.Enter) && !isWindowAppearing)
             {
                 if (hasUsedArrowKeys || isSearchBarFocused)
-                    HandleTeleport(currentSelectableRecords[selectedIndex]);
+                    HandleTeleport(currentSelectableRecords[selectedIndex], isSearchEmpty ? null : fullSearchWord);
             }
         }
 
@@ -240,7 +244,7 @@ public unsafe partial class BetterTeleport
 
                     for (var i = 0; i < list.Count; i++)
                     {
-                        DrawAetheryteItem(list[i], i, selectedIndex == i, false);
+                        DrawAetheryteItem(list[i], i, selectedIndex == i, false, fullSearchWord);
 
                         if (selectedIndex == i && shouldScrollToSelected)
                         {

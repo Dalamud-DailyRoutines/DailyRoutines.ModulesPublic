@@ -133,25 +133,29 @@ public unsafe partial class BetterTeleport
 
         AetheryteRecord? result;
         if (recordMatcher != null)
-            result = recordMatcher.Search(args, CompareCommandResult, int.MaxValue).FirstOrDefault();
+            result = SortSearchMatches(args, recordMatcher.Search(args, CompareCommandResult, int.MaxValue).ToList()).FirstOrDefault();
         else
         {
-            result = records.Values
-                            .SelectMany(x => x)
-                            .Concat(houseRecords)
-                            .Where
-                            (x => x.Name.Contains(args, StringComparison.OrdinalIgnoreCase) ||
-                                  (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
-                                   remark.Contains(args, StringComparison.OrdinalIgnoreCase))
-                            )
-                            .OrderByDescending(x => x.IsAetheryte)
-                            .ThenBy(x => x.Name.Length)
-                            .FirstOrDefault();
+            result = SortSearchMatches
+            (
+                args,
+                records.Values
+                       .SelectMany(x => x)
+                       .Concat(houseRecords)
+                       .Where
+                       (x => x.Name.Contains(args, StringComparison.OrdinalIgnoreCase) ||
+                             (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                              remark.Contains(args, StringComparison.OrdinalIgnoreCase))
+                       )
+                       .OrderByDescending(x => x.IsAetheryte)
+                       .ThenBy(x => x.Name.Length)
+                       .ToList()
+            ).FirstOrDefault();
         }
 
         if (result == null) return;
 
-        HandleTeleport(result);
+        HandleTeleport(result, args);
         
         return;
 

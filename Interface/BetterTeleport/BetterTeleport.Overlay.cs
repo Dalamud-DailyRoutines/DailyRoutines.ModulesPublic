@@ -93,18 +93,22 @@ public unsafe partial class BetterTeleport
             List<AetheryteRecord> matches;
 
             if (recordMatcher != null)
-                matches = recordMatcher.Search(searchWord, limit: int.MaxValue).ToList();
+                matches = SortSearchMatches(searchWord, recordMatcher.Search(searchWord, limit: int.MaxValue).ToList());
             else
             {
-                matches = records.Values
-                                 .SelectMany(x => x)
-                                 .Concat(houseRecords)
-                                 .Where
-                                 (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
-                                       (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
-                                        remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
-                                 )
-                                 .ToList();
+                matches = SortSearchMatches
+                (
+                    searchWord,
+                    records.Values
+                           .SelectMany(x => x)
+                           .Concat(houseRecords)
+                           .Where
+                           (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
+                                 (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                  remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
+                           )
+                           .ToList()
+                );
             }
 
             var searchCount = Math.Min(8, matches.Count);
@@ -232,7 +236,7 @@ public unsafe partial class BetterTeleport
 
         if (item is { IsShowMore: false, Record: not null })
         {
-            DrawAetheryteItem(item.Record, index, isSelected);
+            DrawAetheryteItem(item.Record, index, isSelected, searchText: searchWord);
             return;
         }
 
@@ -295,7 +299,7 @@ public unsafe partial class BetterTeleport
             Overlay.IsOpen = false;
         }
         else if (item.Record != null)
-            HandleTeleport(item.Record);
+            HandleTeleport(item.Record, searchWord);
     }
 
     private List<AetheryteRecord> GetCombinedRecentRecords()

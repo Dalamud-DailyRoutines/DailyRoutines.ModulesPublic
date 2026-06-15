@@ -130,9 +130,11 @@ public unsafe partial class BetterTeleport : ModuleBase
         }
     }
 
-    private void HandleTeleport(AetheryteRecord aetheryte)
+    private void HandleTeleport(AetheryteRecord aetheryte, string? searchText = null)
     {
         if (GameState.ContentFinderCondition != 0) return;
+
+        var searchTerms = GetSearchSelectionTerms(searchText).ToList();
 
         TaskHelper.Abort();
         Overlay.IsOpen    = false;
@@ -153,6 +155,8 @@ public unsafe partial class BetterTeleport : ModuleBase
         var isPosDefault = aetherytePos.Y == 0;
 
         NotifyHelper.Instance().NotificationInfo(Lang.Get("BetterTeleport-Notification", aetheryte.Name));
+
+        RememberSearchSelection(aetheryte, searchTerms);
 
         searchWord       = string.Empty;
         pinnedAetheryte  = null;
@@ -338,6 +342,143 @@ public unsafe partial class BetterTeleport : ModuleBase
         RefreshDefaultOverlayItems();
     }
 
+    private static IEnumerable<string> GetSearchSelectionTerms(string? searchText)
+    {
+        var normalized = NormalizeSearchSelectionTerm(searchText);
+        if (string.IsNullOrEmpty(normalized)) yield break;
+
+        yield return normalized;
+
+        var parts = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length <= 1) yield break;
+
+        foreach (var part in parts)
+        {
+            if (part.Length >= 2)
+                yield return part;
+        }
+    }
+
+    private void RememberSearchSelection(AetheryteRecord aetheryte, IEnumerable<string> searchTerms)
+    {
+        var terms = searchTerms.Distinct(StringComparer.Ordinal).ToList();
+        if (terms.Count == 0) return;
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        foreach (var term in terms)
+        {
+            if (!config.SearchSelections.TryGetValue(term, out var recordsForTerm))
+            {
+                recordsForTerm                = [];
+                config.SearchSelections[term] = recordsForTerm;
+            }
+
+            var existing = recordsForTerm.FirstOrDefault(x => x.AetheryteID == aetheryte.RowID && x.SubIndex == aetheryte.SubIndex);
+
+            if (existing == null)
+            {
+                recordsForTerm.Add
+                (
+                    new SearchSelectionRecord
+                    {
+                        AetheryteID         = aetheryte.RowID,
+                        SubIndex            = aetheryte.SubIndex,
+                        Count               = 1,
+                        LastUsedUnixSeconds = now
+                    }
+                );
+            }
+            else
+            {
+                existing.Count++;
+                existing.LastUsedUnixSeconds = now;
+            }
+
+            recordsForTerm.Sort(CompareSearchSelectionRecords);
+
+            if (recordsForTerm.Count > MAX_SEARCH_SELECTION_RECORDS_PER_TERM)
+                recordsForTerm.RemoveRange(MAX_SEARCH_SELECTION_RECORDS_PER_TERM, recordsForTerm.Count - MAX_SEARCH_SELECTION_RECORDS_PER_TERM);
+        }
+
+        TrimSearchSelections();
+    }
+
+    private void TrimSearchSelections()
+    {
+        if (config.SearchSelections.Count <= MAX_SEARCH_SELECTION_TERMS) return;
+
+        foreach (var key in config.SearchSelections
+                                  .OrderByDescending(x => x.Value.Count == 0 ? 0 : x.Value.Max(r => r.LastUsedUnixSeconds))
+                                  .Skip(MAX_SEARCH_SELECTION_TERMS)
+                                  .Select(x => x.Key)
+                                  .ToList())
+            config.SearchSelections.Remove(key);
+    }
+
+    private List<AetheryteRecord> SortSearchMatches(string searchText, List<AetheryteRecord> matches)
+    {
+        var normalized = NormalizeSearchSelectionTerm(searchText);
+        if (string.IsNullOrEmpty(normalized) || config.SearchSelections.Count == 0)
+            return matches;
+
+        return matches.Select((record, index) => new { record, index, score = GetSearchSelectionScore(normalized, record) })
+                      .OrderByDescending(x => x.score)
+                      .ThenBy(x => x.index)
+                      .Select(x => x.record)
+                      .ToList();
+    }
+
+    private double GetSearchSelectionScore(string normalizedSearchText, AetheryteRecord record)
+    {
+        double score = 0;
+
+        foreach (var (term, selections) in config.SearchSelections)
+        {
+            var relationWeight = GetSearchTermRelationWeight(normalizedSearchText, term);
+            if (relationWeight <= 0) continue;
+
+            var selection = selections.FirstOrDefault(x => x.AetheryteID == record.RowID && x.SubIndex == record.SubIndex);
+            if (selection == null) continue;
+
+            var countScore   = Math.Min(selection.Count, 20) * 100;
+            var recencyScore = selection.LastUsedUnixSeconds / 86_400d;
+            score = Math.Max(score, (countScore + recencyScore) * relationWeight);
+        }
+
+        return score;
+    }
+
+    private static double GetSearchTermRelationWeight(string searchText, string storedTerm)
+    {
+        if (searchText == storedTerm) return 1;
+        if (searchText.Length < 2 || storedTerm.Length < 2) return 0;
+        if (searchText.StartsWith(storedTerm, StringComparison.Ordinal) || storedTerm.StartsWith(searchText, StringComparison.Ordinal))
+            return 0.75;
+        if (searchText.Contains(storedTerm, StringComparison.Ordinal) || storedTerm.Contains(searchText, StringComparison.Ordinal))
+            return 0.4;
+
+        return 0;
+    }
+
+    private static string NormalizeSearchSelectionTerm(string? searchText) =>
+        string.Join
+        (
+            ' ',
+            (searchText ?? string.Empty)
+            .Trim()
+            .ToLowerInvariant()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        );
+
+    private static int CompareSearchSelectionRecords(SearchSelectionRecord a, SearchSelectionRecord b)
+    {
+        var byCount = b.Count.CompareTo(a.Count);
+        if (byCount != 0) return byCount;
+
+        return b.LastUsedUnixSeconds.CompareTo(a.LastUsedUnixSeconds);
+    }
+
     private static bool IsWithPermission() =>
         !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
 
@@ -401,6 +542,14 @@ public unsafe partial class BetterTeleport : ModuleBase
         public byte SubIndex    { get; set; }
     }
 
+    public class SearchSelectionRecord
+    {
+        public uint AetheryteID          { get; set; }
+        public byte SubIndex             { get; set; }
+        public int  Count                { get; set; }
+        public long LastUsedUnixSeconds  { get; set; }
+    }
+
     private enum PageType
     {
         Search,
@@ -409,14 +558,15 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public PageType                    DefaultPage          = PageType.Search;
-        public bool                        FocusSearchOnOpen    = true;
-        public bool                        CloseOnLoseFocus     = true;
-        public HashSet<uint>               Favorites            = [];
-        public bool                        HideAethernetInParty = true;
-        public Dictionary<string, Vector3> Positions            = [];
-        public Dictionary<string, string>  Remarks              = [];
-        public List<RecentRecord>          RecentTeleports      = [];
+        public PageType                                        DefaultPage          = PageType.Search;
+        public bool                                            FocusSearchOnOpen    = true;
+        public bool                                            CloseOnLoseFocus     = true;
+        public HashSet<uint>                                   Favorites            = [];
+        public bool                                            HideAethernetInParty = true;
+        public Dictionary<string, Vector3>                     Positions            = [];
+        public Dictionary<string, string>                      Remarks              = [];
+        public List<RecentRecord>                              RecentTeleports      = [];
+        public Dictionary<string, List<SearchSelectionRecord>> SearchSelections     = [];
     }
 
     #endregion
@@ -426,6 +576,8 @@ public unsafe partial class BetterTeleport : ModuleBase
     private const string COMMAND = "/pdrtelepo";
 
     private const ulong INVALID_HOUSE_ID = 0xFFFFFFFFFFFFFFFF;
+    private const int   MAX_SEARCH_SELECTION_TERMS            = 200;
+    private const int   MAX_SEARCH_SELECTION_RECORDS_PER_TERM = 8;
 
 
     private static Dictionary<uint, string> TicketUsageTypes
