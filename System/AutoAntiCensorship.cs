@@ -430,21 +430,34 @@ public unsafe class AutoAntiCensorship : ModuleBase
 
         for (var i = 0; i < text.Length; i++)
         {
-            if (text[i] != '<') continue;
+            // 跳过战术板分享码 [stgy:...]
+            if (IsStgyCodeStart(text, i, out var stgyEnd))
+            {
+                if (segmentStart < i)
+                    builder.Append(ProcessCensoredSegment(text[segmentStart..i]));
+                builder.Append(text[i..(stgyEnd + 1)]);
+                i = stgyEnd;
+                segmentStart = i + 1;
+                continue;
+            }
 
-            if (segmentStart < i)
-                builder.Append(ProcessCensoredSegment(text[segmentStart..i]));
+            // 跳过 <...> 标签
+            if (IsTagStart(text, i, out var tagEnd))
+            {
+                if (segmentStart < i)
+                    builder.Append(ProcessCensoredSegment(text[segmentStart..i]));
+                builder.Append(text[i..(tagEnd + 1)]);
+                i = tagEnd;
+                segmentStart = i + 1;
+                continue;
+            }
 
-            var tagEnd = text.IndexOf('>', i + 1);
-            if (tagEnd == -1)
+            // 未闭合的 <，保留剩余文本
+            if (text[i] == '<')
             {
                 segmentStart = i;
                 break;
             }
-
-            builder.Append(text[i..(tagEnd + 1)]);
-            i = tagEnd;
-            segmentStart = i + 1;
         }
 
         if (segmentStart < text.Length)
@@ -605,36 +618,43 @@ public unsafe class AutoAntiCensorship : ModuleBase
         using var rented = new RentedSeStringBuilder();
         var builder = rented.Builder;
 
-        var (insideTag, insideCensored) = (false, false);
+        var insideCensored = false;
 
         for (var i = 0; i < originalText.Length; i++)
         {
             var currentChar = originalText[i];
 
-            // 检查是否进入或离开标签
-            if (currentChar == '<') insideTag = true;
-
-            if (insideTag)
+            // 跳过战术板分享码 [stgy:...]
+            if (IsStgyCodeStart(originalText, i, out var stgyEnd))
             {
-                builder.Append(currentChar.ToString());
-                if (currentChar == '>') insideTag = false;
+                builder.Append(originalText[i..(stgyEnd + 1)]);
+                i = stgyEnd;
+                continue;
+            }
+
+            // 跳过 <...> 标签
+            if (IsTagStart(originalText, i, out var tagEnd))
+            {
+                builder.Append(originalText[i..(tagEnd + 1)]);
+                i = tagEnd;
                 continue;
             }
 
             // 处理非标签内容
             var isCensoredChar = i < filtered.Length && filtered[i] == '*' && currentChar != '*';
 
-            if (isCensoredChar && !insideCensored)
+            switch (isCensoredChar)
             {
-                // 屏蔽词开始, 添加染色
-                builder.PushColorType((ushort)config.HighlightColor);
-                insideCensored = true;
-            }
-            else if (!isCensoredChar && insideCensored)
-            {
-                // 屏蔽词结束, 结束染色
-                builder.PopColorType();
-                insideCensored = false;
+                case true when !insideCensored:
+                    // 屏蔽词开始, 添加染色
+                    builder.PushColorType((ushort)config.HighlightColor);
+                    insideCensored = true;
+                    break;
+                case false when insideCensored:
+                    // 屏蔽词结束, 结束染色
+                    builder.PopColorType();
+                    insideCensored = false;
+                    break;
             }
 
             builder.Append(currentChar.ToString());
@@ -660,7 +680,22 @@ public unsafe class AutoAntiCensorship : ModuleBase
     {
         if (string.IsNullOrEmpty(text) || config.CustomReplacements.Count == 0) return text;
 
-        var result = text;
+        // 提取战术板分享码，避免被替换规则破坏
+        var stgyCodes = new List<(string placeholder, string original)>();
+        var workingText = text;
+        for (var i = 0; i < workingText.Length; i++)
+        {
+            if (IsStgyCodeStart(workingText, i, out var endIdx))
+            {
+                var original = workingText[i..(endIdx + 1)];
+                var placeholder = $"\0stgy{stgyCodes.Count}\0";
+                stgyCodes.Add((placeholder, original));
+                workingText = workingText.Replace(original, placeholder);
+                i += placeholder.Length - 1;
+            }
+        }
+
+        var result = workingText;
         var sortedReplacements = config.CustomReplacements
                                        .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) &&
                                                      !string.IsNullOrWhiteSpace(kvp.Value) &&
@@ -673,11 +708,40 @@ public unsafe class AutoAntiCensorship : ModuleBase
                 result = result.Replace(originalWord, replacement);
         }
 
+        // 还原战术板分享码
+        foreach (var (placeholder, original) in stgyCodes)
+            result = result.Replace(placeholder, original);
+
         return result;
     }
 
     private bool ValidateCustomReplacement(string replacement) => 
         !string.IsNullOrWhiteSpace(replacement) && GetFilteredString(replacement) == replacement;
+
+    /// <summary>检查指定位置是否以 [stgy: 开头，并返回匹配 ] 的索引</summary>
+    private static bool IsStgyCodeStart(string text, int index, out int endIndex)
+    {
+        endIndex = -1;
+        
+        if (text[index] != '[') 
+            return false;
+        if (index + 6 > text.Length) 
+            return false;
+        if (!text.AsSpan(index, 6).Equals("[stgy:", StringComparison.Ordinal))
+            return false;
+        
+        endIndex = text.IndexOf(']', index + 6);
+        return endIndex != -1;
+    }
+
+    /// <summary>检查指定位置是否以 &lt; 开头，并返回匹配 &gt; 的索引</summary>
+    private static bool IsTagStart(string text, int index, out int endIndex)
+    {
+        endIndex = -1;
+        if (text[index] != '<') return false;
+        endIndex = text.IndexOf('>', index + 1);
+        return endIndex != -1;
+    }
 
     private class Config : ModuleConfig
     {
