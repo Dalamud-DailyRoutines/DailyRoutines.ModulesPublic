@@ -262,7 +262,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             #region 状态效果更新
 
             statusNodes.Scale    = componentNode->GetScale()             - new Vector2(0.1f);
-            statusNodes.Position = componentNode->GetNodeState().TopLeft - (new Vector2(0, 1) * statusNodes.Scale);
+            statusNodes.Position = componentNode->GetNodeState().TopLeft + (new Vector2(216, -1) * statusNodes.Scale);
             statusNodes.Alpha    = info.ActiveInList ? 1f : 0.5f;
 
             var counter = 0;
@@ -306,8 +306,18 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 healthNode.IsVisible       = true;
                 healthMarkerNode.IsVisible = true;
 
-                healthNode.String  = $"{healthPercentage:F1}";
-                healthMarkerNode.X = healthNode.X + healthNode.GetTextDrawSize(false).X + 1f;
+                const float HEALTH_NODE_BASE_X    = -60f;
+                const float HEALTH_MARKER_PADDING = 1f;
+
+                healthNode.String = $"{healthPercentage:F1}";
+
+                var healthTextWidth     = healthNode.GetTextDrawSize(false).X;
+                var healthBaseTextWidth = healthNode.GetTextDrawSize("99.9", false).X;
+                var healthMarkerWidth   = healthMarkerNode.GetTextDrawSize(false).X;
+                var healthRightX        = HEALTH_NODE_BASE_X + healthBaseTextWidth + HEALTH_MARKER_PADDING + healthMarkerWidth;
+
+                healthNode.X       = healthRightX - healthTextWidth - HEALTH_MARKER_PADDING - healthMarkerWidth;
+                healthMarkerNode.X = healthNode.X + healthTextWidth + HEALTH_MARKER_PADDING;
             }
             
             #endregion
@@ -397,7 +407,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 FontType      = FontType.Miedinger,
                 TextFlags     = TextFlags.Edge,
                 AlignmentType = AlignmentType.TopLeft,
-                Position      = new(206, 8),
+                Position      = new(-60, 8),
             };
 
             var healthMarkerNode = new TextNode
@@ -406,7 +416,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 FontSize      = 14,
                 TextFlags     = TextFlags.Edge,
                 AlignmentType = AlignmentType.TopLeft,
-                Position      = new(206, 8),
+                Position      = new(-60, 8),
             };
 
             var backgroundNode = new SimpleNineGridNode
@@ -554,7 +564,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 var statusNode = new IconTextNode
                 {
                     Size     = new(25, 41),
-                    Position = new(-25 + ((-25 + -2) * i), 0)
+                    Position = new((25 + 2) * i, 0)
                 };
                 statusNode.AttachNode(this);
                 Nodes.Add(statusNode);
