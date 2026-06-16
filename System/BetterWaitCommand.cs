@@ -17,7 +17,7 @@ public class BetterWaitCommand : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private readonly MemoryPatch WaitSyntaxDecimalPatch = new
+    private readonly MemoryPatch waitSyntaxDecimalPatch = new
     (
         "F3 0F 58 05 ?? ?? ?? ?? F3 48 0F 2C C0 69 C8",
         [
@@ -30,7 +30,7 @@ public class BetterWaitCommand : ModuleBase
         ]
     );
 
-    private readonly MemoryPatch WaitCommandDecimalPatch = new
+    private readonly MemoryPatch waitCommandDecimalPatch = new
     (
         "F3 0F 58 0D ?? ?? ?? ?? F3 48 0F 2C C1 69 C8",
         [
@@ -47,13 +47,7 @@ public class BetterWaitCommand : ModuleBase
 
     protected override void Init()
     {
-        WaitSyntaxDecimalPatch.Enable();
-        WaitCommandDecimalPatch.Enable();
-    }
-
-    protected override void Uninit()
-    {
-        WaitSyntaxDecimalPatch.Disable();
-        WaitCommandDecimalPatch.Disable();
+        waitSyntaxDecimalPatch.Enable();
+        waitCommandDecimalPatch.Enable();
     }
 }
