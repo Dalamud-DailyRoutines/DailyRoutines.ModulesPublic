@@ -417,8 +417,8 @@ public unsafe class AutoCountPlayers : ModuleBase
 
     private void OnPlayersTargetingMeUpdate(IReadOnlyList<PlayerTargetingInfo> targetingPlayersInfo)
     {
-        var currentIds     = targetingPlayersInfo.Select(x => x.Player.EntityID).ToHashSet();
-        var endedTargeting = lastTargetingData.Where(x => !currentIds.Contains(x.Key)).ToList();
+        var currentIDs     = targetingPlayersInfo.Select(x => x.Player.EntityID).ToHashSet();
+        var endedTargeting = lastTargetingData.Where(x => !currentIDs.Contains(x.Key)).ToList();
 
         if (endedTargeting.Count > 0)
         {
@@ -449,7 +449,10 @@ public unsafe class AutoCountPlayers : ModuleBase
         }
 
         foreach (var info in targetingPlayersInfo)
+        {
+            if (info.Player.ClassJob.RowId == 0) continue;
             lastTargetingData[info.Player.EntityID] = info;
+        }
 
         if (targetingPlayersInfo.Count > 0 &&
             (GameState.ContentFinderCondition == 0 || DService.Instance().PartyList.Length < 2))
