@@ -4,9 +4,9 @@
     "net10.0-windows7.0": {
       "DailyRoutines.CodeAnalysis": {
         "type": "Direct",
-        "requested": "[2.3.0, )",
-        "resolved": "2.3.0",
-        "contentHash": "kM5tXWU3mOdBRUy5P2ENSwobFn1mRa4bUaUY7aRmDNysWsjofEcAFyKPJP5qyevBr+PKHq9OVMYCxREnnLpotg=="
+        "requested": "[2.4.0, )",
+        "resolved": "2.4.0",
+        "contentHash": "+G2MANDREROWvWMFQ3Ft+G0/zoDsNh3sQ4etCNysvC73JctGos6Wn4fvB//ZLCXOmxTsFDFD4q59yjSG28RvQA=="
       },
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
@@ -38,8 +38,8 @@
       },
       "MemoEngine": {
         "type": "Transitive",
-        "resolved": "2.2.0",
-        "contentHash": "/xmmwOszf1NJz/qRMtaWFJV7EgcUJtZNRSgg1KcpVeQ86zhmIYYoIiMBofTwzX6YFOnITaB3IzAcWPoJenre4Q==",
+        "resolved": "2.3.0",
+        "contentHash": "6Cg2qt8ZbXbjdbCGLNyeb1vSLqSyLdcSElgNoEEUH7vu+d+8uMGCSfnz0QxMR/1Fmgo8/uR+hCQtdz7WBsvkDw==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.4"
         }
@@ -151,7 +151,7 @@
           "DalamudPackager": "[15.0.0, )",
           "EdgeTTS": "[1.0.0, )",
           "KamiToolKit": "[1.0.0, )",
-          "MemoEngine": "[2.2.0, )",
+          "MemoEngine": "[2.3.0, )",
           "Microsoft.CodeAnalysis.CSharp": "[5.0.0, )",
           "OmenTools": "[1.0.0, )",
           "Otp.NET": "[1.4.1, )",
@@ -166,7 +166,7 @@
         "dependencies": {
           "EdgeTTS": "[1.0.0, )",
           "KamiToolKit": "[1.0.0, )",
-          "MemoEngine": "[2.2.0, )",
+          "MemoEngine": "[2.3.0, )",
           "Microsoft.CodeAnalysis.CSharp": "[5.0.0, )",
           "OmenTools": "[1.0.0, )",
           "TimeAgo.Core": "[1.1.0, )",

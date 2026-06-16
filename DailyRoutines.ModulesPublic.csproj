@@ -24,9 +24,7 @@
     </ItemDefinitionGroup>
 
     <ItemGroup>
-        <PackageReference Include="DailyRoutines.CodeAnalysis" Version="2.3.0"
-                          PrivateAssets="all"
-                          IncludeAssets="runtime;build;native;contentfiles;analyzers;buildtransitive"/>
+        <PackageReference Include="DailyRoutines.CodeAnalysis" Version="2.4.0" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
         <PackageReference Include="TimeAgo.Core" Version="1.1.0"/>
         <PackageReference Include="TinyPinyin" Version="1.1.0"/>
     </ItemGroup>
