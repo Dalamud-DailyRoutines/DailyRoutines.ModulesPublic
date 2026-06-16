@@ -23,6 +23,8 @@ public class SoundEffectThrottler : ModuleBase
 
     private Config? config;
 
+    private long lastPlayTick;
+    
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -41,13 +43,7 @@ public class SoundEffectThrottler : ModuleBase
             config.Throttle = Math.Max(100, config.Throttle);
             config.Save(this);
         }
-
         ImGuiOm.HelpMarker(Lang.Get("SoundEffectThrottler-ThrottleHelp", config.Throttle));
-
-        ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        ImGui.SliderInt(Lang.Get("SoundEffectThrottler-Volume"), ref config.Volume, 1, 3);
-        if (ImGui.IsItemDeactivatedAfterEdit())
-            config.Save(this);
     }
 
     private void PlaySoundEffectDetour(uint sound, nint a2, nint a3, byte a4)
@@ -56,9 +52,19 @@ public class SoundEffectThrottler : ModuleBase
 
         switch (se)
         {
-            case <= 16 when Throttler.Shared.Throttle($"SoundEffectThrottler-{se}", config.Throttle):
-                for (var i = 0; i < config.Volume; i++)
+            case <= 16:
+
+                if (Environment.TickCount64 == lastPlayTick)
+                {
                     PlaySoundEffectHook.Original(sound, a2, a3, a4);
+                    return;
+                }
+                
+                if (Throttler.Shared.Throttle($"SoundEffectThrottler.SoundEffect{se}", config.Throttle))
+                {
+                    PlaySoundEffectHook.Original(sound, a2, a3, a4);
+                    lastPlayTick = Environment.TickCount64;
+                }
 
                 break;
             case > 16:
@@ -70,6 +76,5 @@ public class SoundEffectThrottler : ModuleBase
     private class Config : ModuleConfig
     {
         public uint Throttle = 1000;
-        public int  Volume   = 3;
     }
 }
