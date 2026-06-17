@@ -1,17 +1,11 @@
-using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Game.ClientState.Conditions;
-using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using OmenTools.Info.Game.Enums;
-using OmenTools.Interop.Game.ExecuteCommand.Implementations;
-using OmenTools.OmenService;
+using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoEnableAttack : ModuleBase
+public class AutoEnableAttack : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,40 +14,8 @@ public unsafe class AutoEnableAttack : ModuleBase
         Category    = ModuleCategory.Combat
     };
 
-    protected override void Init() =>
-        UseActionManager.Instance().RegPostUseAction(OnPostUseAction);
+    private MemoryPatch autoAttackPatch = new("41 0F B6 46 ?? FF C8", [0xB8, 0x02, 0x00, 0x00, 0x00]);
     
-    protected override void Uninit() =>
-        UseActionManager.Instance().Unreg(OnPostUseAction);
-
-    private static void OnPostUseAction
-    (
-        bool                        result,
-        ActionType                  actionType,
-        uint                        actionID,
-        ulong                       targetID,
-        uint                        extraParam,
-        ActionManager.UseActionMode queueState,
-        uint                        comboRouteID
-    )
-    {
-        if (actionType != ActionType.Action ||
-            targetID   == 0xE000_0000       ||
-            InvalidActions.Contains(actionID))
-            return;
-
-        if (GameState.IsInPVPArea                                  ||
-            !DService.Instance().Condition[ConditionFlag.InCombat] ||
-            DService.Instance().Condition[ConditionFlag.Casting]   ||
-            UIState.Instance()->WeaponState.AutoAttackState.IsAutoAttacking)
-            return;
-
-        AutoAttackCommand.Enable((uint)targetID);
-    }
-
-    #region 常量
-
-    private static readonly FrozenSet<uint> InvalidActions = [7385, 7418, 23288, 23289, 34581, 23273];
-
-    #endregion
+    protected override void Init() =>
+        autoAttackPatch.Enable();
 }
