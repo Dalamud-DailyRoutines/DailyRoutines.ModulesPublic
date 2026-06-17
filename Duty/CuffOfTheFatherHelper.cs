@@ -15,14 +15,14 @@ using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
-public unsafe class TheCuffOfTheFatherHelper : ModuleBase
+public unsafe class CuffOfTheFatherHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = Lang.Get("TheCuffOfTheFatherHelperTitle"),
+        Title = Lang.Get("CuffOfTheFatherHelperTitle"),
         Description = Lang.Get
         (
-            "TheCuffOfTheFatherHelperDescription",
+            "CuffOfTheFatherHelperDescription",
             LuminaWrapper.GetContentName(113), // 启动之章 2
             LuminaWrapper.GetBNPCName(3751),   // 7 号哥布林战车
             LuminaWrapper.GetBNPCName(2667)    // 炸弹

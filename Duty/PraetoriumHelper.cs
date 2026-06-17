@@ -6,18 +6,17 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
-public unsafe class ThePraetoriumHelper : ModuleBase
+public unsafe class PraetoriumHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = Lang.Get("ThePraetoriumHelperTitle"),
+        Title = Lang.Get("PraetoriumHelperTitle"),
         Description = Lang.Get
         (
-            "ThePraetoriumHelperDescription",
+            "PraetoriumHelperDescription",
             LuminaWrapper.GetContentName(16), // 最终决战天幕魔导城
             LuminaWrapper.GetMountName(6),    // 魔导装甲
             LuminaWrapper.GetActionName(2434) // 魔导加农炮
@@ -25,6 +24,8 @@ public unsafe class ThePraetoriumHelper : ModuleBase
         Category = ModuleCategory.Duty,
         Author   = ["逆光"]
     };
+
+    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init()
     {
