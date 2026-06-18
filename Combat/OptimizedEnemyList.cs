@@ -347,11 +347,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 );
                 castNode.String = castText;
 
-                var padding      = *(ushort*)((nint)EnemyList + 646);
-                var castTextSize = castNode.GetTextDrawSize(false);
+                var padding       = *(ushort*)((nint)EnemyList + 646);
+                var castTextWidth = castNode.GetTextDrawSize(false).X + 2f;
                 
-                castBackgroundNode.X     = castNode.Position.X - castTextSize.X - (padding / 2f);
-                castBackgroundNode.Width = castTextSize.X      + padding;
+                castBackgroundNode.X     = castNode.Position.X - castTextWidth - 1f;
+                castBackgroundNode.Width = castTextWidth      + (padding / 2f);
             }
 
             #endregion
@@ -417,10 +417,9 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 TexturePath        = "ui/uld/EnemyList_hr1.tex",
                 TextureCoordinates = new(96, 80),
                 TextureSize        = new(24, 20),
-                Size               = new(124, 20),
-                Offsets            = new(0, 0, 8, 8),
-                MultiplyColor      = new(100),
-                Position           = new(75, 6),
+                Size               = new(124, 24),
+                Position           = new(75, 2),
+                Offsets            = new(8),
                 Alpha              = 1f,
             };
 
