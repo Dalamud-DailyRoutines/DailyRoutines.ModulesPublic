@@ -389,7 +389,12 @@ public partial class CrossDCPartyFinder
                 LuminaGetter.GetRowOrDefault<World>(HomeWorldID).Name.ToString();
 
             public string Duty =>
-                LuminaWrapper.GetContentName(DutyID);
+                CategoryID switch
+                {
+                    DutyCategory.Roulette     => LuminaWrapper.GetContentRouletteName(DutyID),
+                    DutyCategory.DeepDungeons => LuminaWrapper.GetDeepDungeonName(DutyID),
+                    _                         => LuminaWrapper.GetContentName(DutyID)
+                };
 
             public string CategoryName =>
                 PartyFinderRequest.ParseCategoryIDToLoc(CategoryID);
