@@ -55,12 +55,13 @@ public unsafe class OptimizedEnemyList : ModuleBase
     {
         DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
-        foreach (var (_, textNode, heathTextNode, healthMarkerNode, backgroundNode, castBarNode, _) in nodes)
+        foreach (var (_, textNode, heathTextNode, healthMarkerNode, backgroundNode, healthBackgroundNode, castBarNode, _) in nodes)
         {
             textNode?.Dispose();
             heathTextNode?.Dispose();
             healthMarkerNode?.Dispose();
             backgroundNode?.Dispose();
+            healthBackgroundNode?.Dispose();
             castBarNode?.Dispose();
         }
 
@@ -175,6 +176,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 out var healthNode,
                 out var healthMarkerNode,
                 out var castBackgroundNode,
+                out var healthBackgroundNode,
                 out var castBarNode,
                 out var statusNodes
             );
@@ -291,13 +293,15 @@ public unsafe class OptimizedEnemyList : ModuleBase
             if (!gameObj->GetIsTargetable() &&
                 (gameObj->Health == gameObj->MaxHealth || gameObj->Health == 0))
             {
-                healthNode.IsVisible       = false;
-                healthMarkerNode.IsVisible = false;
+                healthNode.IsVisible           = false;
+                healthMarkerNode.IsVisible     = false;
+                healthBackgroundNode.IsVisible = false;
             }
             else
             {
-                healthNode.IsVisible       = true;
-                healthMarkerNode.IsVisible = true;
+                healthNode.IsVisible           = true;
+                healthMarkerNode.IsVisible     = true;
+                healthBackgroundNode.IsVisible = true;
 
                 const float HEALTH_NODE_BASE_X    = -60f;
                 const float HEALTH_MARKER_PADDING = 1f;
@@ -307,10 +311,14 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 var healthTextWidth     = healthNode.GetTextDrawSize(false).X;
                 var healthBaseTextWidth = healthNode.GetTextDrawSize("99.9", false).X;
                 var healthMarkerWidth   = healthMarkerNode.GetTextDrawSize(false).X;
-                var healthRightX        = HEALTH_NODE_BASE_X + healthBaseTextWidth + HEALTH_MARKER_PADDING + healthMarkerWidth;
+                var healthRightX        = HEALTH_NODE_BASE_X + healthBaseTextWidth - 3f + healthMarkerWidth;
 
                 healthNode.X       = healthRightX - healthTextWidth - HEALTH_MARKER_PADDING - healthMarkerWidth;
                 healthMarkerNode.X = healthNode.X + healthTextWidth + HEALTH_MARKER_PADDING;
+
+                var totalHealthWidth = healthTextWidth + HEALTH_MARKER_PADDING + healthMarkerWidth + 2f;
+                healthBackgroundNode.X     = healthNode.X - 5f;
+                healthBackgroundNode.Width = totalHealthWidth + 9f;
             }
             
             #endregion
@@ -360,11 +368,12 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             void HideNodes()
             {
-                castNode.IsVisible           = false;
-                healthNode.IsVisible         = false;
-                castBackgroundNode.IsVisible = false;
-                castBarNode.IsVisible        = false;
-                statusNodes.ShouldBeVisible  = false;
+                castNode.IsVisible             = false;
+                healthNode.IsVisible           = false;
+                castBackgroundNode.IsVisible   = false;
+                healthBackgroundNode.IsVisible = false;
+                castBarNode.IsVisible          = false;
+                statusNodes.ShouldBeVisible    = false;
             }
         }
     }
@@ -423,6 +432,17 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 Alpha              = 1f,
             };
 
+            var healthBackgroundNode = new SimpleNineGridNode
+            {
+                TexturePath        = "ui/uld/EnemyList_hr1.tex",
+                TextureCoordinates = new(96, 80),
+                TextureSize        = new(24, 20),
+                Size               = new(60, 24),
+                Position           = new(-64, 6),
+                Offsets            = new(8),
+                Alpha              = 0.6f,
+            };
+
             var castBarNode = new ProgressBarEnemyCastNode
             {
                 IsVisible = true,
@@ -436,6 +456,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             backgroundNode.AttachNode(node);
             castNode.AttachNode(node);
+            healthBackgroundNode.AttachNode(node);
             healthNode.AttachNode(node);
             healthMarkerNode.AttachNode(node);
             castBarNode.AttachNode(node);
@@ -443,7 +464,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var statusNodes = new IconTextNodesRow(5, node->NodeId, counter);
             controller.AddNode(statusNodes);
 
-            nodes.Add(new(node->NodeId, castNode, healthNode, healthMarkerNode, backgroundNode, castBarNode, statusNodes));
+            nodes.Add(new(node->NodeId, castNode, healthNode, healthMarkerNode, backgroundNode, healthBackgroundNode, castBarNode, statusNodes));
         }
     }
     
@@ -505,17 +526,19 @@ public unsafe class OptimizedEnemyList : ModuleBase
         TextNode                 heathNode,
         TextNode                 healthMarkerNode,
         NineGridNode             castBackgroundNode,
+        NineGridNode             healthBackgroundNode,
         ProgressBarEnemyCastNode castBarNode,
         IconTextNodesRow         statusNodes
     )
     {
-        public uint                      ComponentNodeID    { get; set; } = componentNodeID;
-        public TextNode?                 CastNode           { get; set; } = castNode;
-        public TextNode?                 HeathNode          { get; set; } = heathNode;
-        public TextNode?                 HealthMarkerNode   { get; set; } = healthMarkerNode;
-        public NineGridNode?             CastBackgroundNode { get; set; } = castBackgroundNode;
-        public ProgressBarEnemyCastNode? CastBarNode        { get; set; } = castBarNode;
-        public IconTextNodesRow?         StatusNodes        { get; set; } = statusNodes;
+        public uint                      ComponentNodeID      { get; set; } = componentNodeID;
+        public TextNode?                 CastNode             { get; set; } = castNode;
+        public TextNode?                 HeathNode            { get; set; } = heathNode;
+        public TextNode?                 HealthMarkerNode     { get; set; } = healthMarkerNode;
+        public NineGridNode?             CastBackgroundNode   { get; set; } = castBackgroundNode;
+        public NineGridNode?             HealthBackgroundNode { get; set; } = healthBackgroundNode;
+        public ProgressBarEnemyCastNode? CastBarNode          { get; set; } = castBarNode;
+        public IconTextNodesRow?         StatusNodes          { get; set; } = statusNodes;
 
         public void Deconstruct
         (
@@ -524,17 +547,19 @@ public unsafe class OptimizedEnemyList : ModuleBase
             out TextNode?                 heathNode,
             out TextNode?                 healthMarkerNode,
             out NineGridNode?             castBackgroundNode,
+            out NineGridNode?             healthBackgroundNode,
             out ProgressBarEnemyCastNode? castBarNode,
             out IconTextNodesRow?         statusNodes
         )
         {
-            componentNodeID    = ComponentNodeID;
-            castNode           = CastNode;
-            heathNode          = HeathNode;
-            healthMarkerNode   = HealthMarkerNode;
-            castBackgroundNode = CastBackgroundNode;
-            castBarNode        = CastBarNode;
-            statusNodes        = StatusNodes;
+            componentNodeID      = ComponentNodeID;
+            castNode             = CastNode;
+            heathNode            = HeathNode;
+            healthMarkerNode     = HealthMarkerNode;
+            castBackgroundNode   = CastBackgroundNode;
+            healthBackgroundNode = HealthBackgroundNode;
+            castBarNode          = CastBarNode;
+            statusNodes          = StatusNodes;
         }
     }
 
