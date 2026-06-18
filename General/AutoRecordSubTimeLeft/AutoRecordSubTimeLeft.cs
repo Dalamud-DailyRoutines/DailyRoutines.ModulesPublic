@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -207,14 +208,11 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         return true;
     }
 
-    private static unsafe (int MonthTime, int PointTime) GetLeftTimeSecond(in LobbySubscriptionInfo info)
+    private static unsafe (long MonthTime, long PointTime) GetLeftTimeSecond(in LobbySubscriptionInfo info)
     {
-        var bytes = new ReadOnlySpan<byte>(Unsafe.AsPointer(ref Unsafe.AsRef(in info)), sizeof(LobbySubscriptionInfo));
-        return (ReadLittleEndian24(bytes, 16), ReadLittleEndian24(bytes, 24));
+        var ptr = Unsafe.AsPointer(ref Unsafe.AsRef(in info));
+        return (Marshal.ReadInt64((nint)ptr, 16), Marshal.ReadInt64((nint)ptr, 24));
     }
-
-    private static int ReadLittleEndian24(ReadOnlySpan<byte> bytes, int offset) =>
-        bytes[offset] | bytes[offset + 1] << 8 | bytes[offset + 2] << 16;
 
     private void UpdateEntryAndTimeInfo(ulong contentID = 0)
     {

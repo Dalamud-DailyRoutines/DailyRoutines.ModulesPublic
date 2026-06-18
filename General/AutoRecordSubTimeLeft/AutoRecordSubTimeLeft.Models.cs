@@ -193,7 +193,7 @@ public partial class AutoRecordSubTimeLeft
         );
     }
 
-    private static TimeSpan NormalizeSubscriptionTime(int totalSeconds) =>
+    private static TimeSpan NormalizeSubscriptionTime(long totalSeconds) =>
         totalSeconds <= 0 ? TimeSpan.MinValue : TimeSpan.FromSeconds(totalSeconds);
 
     private static DateTime UTCToLocalDateTime(long utcTicks) =>
