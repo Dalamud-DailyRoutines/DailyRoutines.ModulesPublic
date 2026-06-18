@@ -8,6 +8,7 @@ using DailyRoutines.Manager;
 using DailyRoutines.Verification;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface.Windowing;
+using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -152,7 +153,8 @@ public unsafe partial class BetterTeleport : ModuleBase
                              : Vector2.DistanceSquared(localPlayer->Position.ToVector2(), aetherytePos.ToVector2());
         if (distance2D <= 900) return;
 
-        var isPosDefault = aetherytePos.Y == 0;
+        if (aetherytePos.Y == 0)
+            aetherytePos = aetherytePos.WithY(500);
 
         NotifyHelper.Instance().NotificationInfo(Lang.Get("BetterTeleport-Notification", aetheryte.Name));
 
@@ -172,59 +174,31 @@ public unsafe partial class BetterTeleport : ModuleBase
                 Telepo.Instance()->Teleport(aetheryte.RowID, aetheryte.SubIndex);
                 return;
             // 天穹街
-            case 254:
-                TaskHelper.Enqueue(MovementManager.Instance().TeleportFirmament, "天穹街");
+            // case 254:
+            //     TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(886, aetherytePos), "天穹街");
+            //     return;
+            // 野外大水晶直接传
+            default:
+                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
                 TaskHelper.Enqueue
-                (
-                    () => GameState.TerritoryType  == 886  &&
-                          Control.GetLocalPlayer() != null &&
-                          !MovementManager.Instance().IsManagerBusy,
-                    "等待天穹街"
-                );
-                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos), "区域内TP");
-                TaskHelper.Enqueue
-                (
-                    () =>
+                (() =>
                     {
-                        if (MovementManager.Instance().IsManagerBusy || DService.Instance().ObjectTable.LocalPlayer == null)
+                        if (MovementManager.Instance().IsManagerBusy     ||
+                            DService.Instance().Condition.IsBetweenAreas ||
+                            !UIModule.IsScreenReady()                    ||
+                            DService.Instance().Condition.Any(ConditionFlag.Mounted))
                             return false;
-
+                            
                         MovementManager.Instance().TPGround();
                         return true;
-                    },
-                    "TP到地面"
+                    }
                 );
-                return;
-            // 野外大水晶直接传
-            case 0:
-                var direction = !isPosDefault
-                                    ? new()
-                                    : Vector2.Normalize(((Vector3)localPlayer->Position).ToVector2() - aetherytePos.ToVector2());
-                var offset = direction * 10;
-
-                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos + offset.ToVector3(0)));
-
-                if (isPosDefault)
-                {
-                    TaskHelper.Enqueue
-                    (() =>
-                        {
-                            if (MovementManager.Instance().IsManagerBusy     ||
-                                DService.Instance().Condition.IsBetweenAreas ||
-                                !UIModule.IsScreenReady()                    ||
-                                DService.Instance().Condition.Any(ConditionFlag.Mounted))
-                                return false;
-                            MovementManager.Instance().TPGround();
-                            return true;
-                        }
-                    );
-                }
 
                 return;
         }
 
         // 当前在有小水晶的城区
-        if (GameState.TerritoryType == aetheryte.ZoneID && aetheryte.Group != 0)
+        /*if (GameState.TerritoryType == aetheryte.ZoneID && aetheryte.Group != 0)
         {
             // 大水晶才要偏移一下
             var offset = new Vector3();
@@ -329,7 +303,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         {
             TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && Control.GetLocalPlayer() != null);
             TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos));
-        }
+        }*/
     }
 
     private void AddToRecentTeleports(AetheryteRecord aetheryte)

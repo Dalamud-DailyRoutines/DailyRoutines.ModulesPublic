@@ -88,19 +88,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         {
             if (ImGui.MenuItem(Lang.Get("Teleport")))
             {
-                switch (selectedInfo?.Index)
-                {
-                    // 天穹街
-                    case 6 or 7:
-                        var posCopy = selectedInfo?.Position ?? default;
-                        EnqueueFirmament();
-                        TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(posCopy, false, true));
-                        break;
-                    default:
-                        MovementManager.Instance().TPSmart_BetweenZone(selectedInfo?.Zone ?? 0, selectedInfo?.Position ?? default);
-                        break;
-                }
-
+                MovementManager.Instance().TPSmart_BetweenZone(selectedInfo?.Zone ?? 0, selectedInfo?.Position ?? default);
                 isNeedToClose = true;
             }
         }
@@ -111,14 +99,13 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
             {
                 // 天穹街
                 case 6 or 7:
-                    EnqueueFirmament();
+                    MovementManager.Instance().TPSmart_BetweenZone(selectedInfo?.Zone ?? 0);
                     break;
                 default:
                     MovementManager.Instance().TeleportNearestAetheryte
                     (
-                        selectedInfo?.Position ?? default,
                         selectedInfo?.Zone     ?? 0,
-                        true
+                        selectedInfo?.Position ?? default
                     );
                     break;
             }
@@ -179,19 +166,6 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
 
         AtkValue* InvokeOriginal() =>
             AgentSatisfactionListReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
-    }
-
-    // 进入天穹街
-    private void EnqueueFirmament()
-    {
-        // 不在天穹街 → 先去伊修加德基础层
-        TaskHelper.Enqueue(MovementManager.Instance().TeleportFirmament);
-        TaskHelper.Enqueue
-        (() => GameState.TerritoryType == 886                        &&
-               UIModule.IsScreenReady()                              &&
-               !DService.Instance().Condition[ConditionFlag.Jumping] &&
-               !MovementManager.Instance().IsManagerBusy
-        );
     }
 
     private record CustomDeliveryInfo

@@ -598,7 +598,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
             if (taskHelper == null) return;
 
             if (GameState.TerritoryType != RealTerritory.RowId)
-                taskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(Position, RealTerritory.RowId));
+                taskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(RealTerritory.RowId, Position));
             taskHelper.Enqueue(() => GameState.TerritoryType == RealTerritory.RowId && UIModule.IsScreenReady());
             taskHelper.Enqueue
             (() =>

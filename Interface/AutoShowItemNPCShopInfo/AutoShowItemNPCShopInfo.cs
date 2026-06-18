@@ -164,7 +164,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
         var instance = AgentMap.Instance();
         instance->SetFlagMapMarker(location.TerritoryID, location.MapID, pos);
 
-        var aetheryte = MovementManager.GetNearestAetheryte(pos, location.TerritoryID);
+        var aetheryte = MovementManager.GetNearestAetheryte(location.TerritoryID, pos);
         if (aetheryte != null)
             ChatManager.Instance().SendMessage($"/pdrtelepo {aetheryte.Name}");
     }

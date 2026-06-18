@@ -1,19 +1,12 @@
 using System.Collections.Frozen;
-using System.Numerics;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
-using Dalamud.Game.ClientState.Conditions;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
-using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 using Action = System.Action;
-using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
@@ -30,29 +23,24 @@ public unsafe class FieldEntryCommand : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
     
-    private readonly FrozenDictionary<string, (Action EnqueueAction, uint Content)> commandArgs;
+    private readonly FrozenDictionary<string, (Action EnqueueAction, uint Content)> commandArgs = new Dictionary<string, (Action EnqueueAction, uint Content)>
+    {
+        ["bozja"]   = (EnqueueBozja, 735),
+        ["zadnor"]  = (EnqueueZadonor, 778),
+        ["anemos"]  = (EnqueueAnemos, 283),
+        ["pagos"]   = (EnqueuePagos, 581),
+        ["pyros"]   = (EnqueuePyros, 598),
+        ["hydatos"] = (EnqueueHydatos, 639),
+        ["diadem"]  = (EnqueueDiadem, 753),
+        ["island"]  = (EnqueueIsland, 1),
+        ["ardorum"] = (EnqueueArdorum, 2),
+        ["phaenna"] = (EnqueuePhaenna, 3),
+        ["oizys"]   = (EnqueueOizys, 4),
+        ["auxesia"] = (EnqueueAuxesia, 5),
+        ["ocs"]     = (EnqueueSouthHorn, 1018)
+    }.ToFrozenDictionary();
     
     private uint redirectTargetZoneInMoon;
-
-    public FieldEntryCommand()
-    {
-        commandArgs = new Dictionary<string, (Action EnqueueAction, uint Content)>
-        {
-            ["bozja"]   = (EnqueueBozja, 735),
-            ["zadnor"]  = (EnqueueZadonor, 778),
-            ["anemos"]  = (EnqueueAnemos, 283),
-            ["pagos"]   = (EnqueuePagos, 581),
-            ["pyros"]   = (EnqueuePyros, 598),
-            ["hydatos"] = (EnqueueHydatos, 639),
-            ["diadem"]  = (EnqueueDiadem, 753),
-            ["island"]  = (EnqueueIsland, 1),
-            ["ardorum"] = (EnqueueArdorum, 2),
-            ["phaenna"] = (EnqueuePhaenna, 3),
-            ["oizys"]   = (EnqueueOizys, 4),
-            ["auxesia"] = (EnqueueAuxesia, 5),
-            ["ocs"]     = (EnqueueOccultCrescent, 1018)
-        }.ToFrozenDictionary();
-    }
 
     protected override void Init()
     {
@@ -121,7 +109,6 @@ public unsafe class FieldEntryCommand : ModuleBase
 
     private void OnCommand(string command, string args)
     {
-        if (DService.Instance().Condition.IsBoundByDuty) return;
         TaskHelper.Abort();
 
         args = args.Trim().ToLowerInvariant();
@@ -162,366 +149,56 @@ public unsafe class FieldEntryCommand : ModuleBase
     }
 
     // 开拓无人岛
-    private void EnqueueIsland()
-    {
-        // 已在无人岛
-        if (GameState.TerritoryType == 1055) return;
-
-        // 不在拉诺西亚低地 → 先去拉诺西亚低地
-        if (GameState.TerritoryType != 135)
-        {
-            TaskHelper.Enqueue(() => MovementManager.Instance().TeleportZone(135));
-            TaskHelper.Enqueue
-            (() => GameState.TerritoryType == 135                        &&
-                   UIModule.IsScreenReady()                              &&
-                   !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                   !MovementManager.Instance().IsManagerBusy
-            );
-        }
-
-        TaskHelper.Enqueue
-        (() =>
-            {
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!EventFramework.Instance()->IsEventIDNearby(721694))
-                        {
-                            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(LowerLaNosceaDefaultPosition), weight: 2);
-                            TaskHelper.Enqueue
-                            (
-                                () => GameState.TerritoryType == 135                        &&
-                                      UIModule.IsScreenReady()                              &&
-                                      !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.Instance().IsManagerBusy,
-                                weight: 2
-                            );
-                        }
-
-                        return true;
-                    }
-                );
-                
-                TaskHelper.Enqueue(() => LocalPlayerState.Object != null);
-                
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!DService.Instance().Condition[ConditionFlag.Mounted])
-                            return true;
-
-                        if (!Throttler.Shared.Throttle("FieldEntryCommand.Dismount"))
-                            return false;
-
-                        MovementManager.Instance().Dismount();
-                        return false;
-                    }
-                );
-
-                TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 721694).Send());
-
-                // 第一次
-                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(0));
-                // 第二次
-                TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
-
-                // 等待进入无人岛
-                TaskHelper.Enqueue(() => GameState.TerritoryType == 1055 && DService.Instance().ObjectTable.LocalPlayer != null);
-                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(IslandDefaultPosition));
-            }
-        );
-    }
+    private static void EnqueueIsland() =>
+        MovementManager.Instance().TPSmart_BetweenZone(1055, new(-269.4f, 40.0f, 227.8f));
 
     // 云冠群岛
-    private void EnqueueDiadem()
-    {
-        MovementManager.Instance().TeleportFirmament();
-        TaskHelper.Enqueue(() => GameState.TerritoryType == 886 && !MovementManager.Instance().IsManagerBusy);
-
-        TaskHelper.Enqueue
-        (() =>
-            {
-                TaskHelper.Enqueue(() => GameState.TerritoryType == 886 && Control.GetLocalPlayer() != null);
-                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(DiademDefaultPosition));
-
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!Throttler.Shared.Throttle("FieldEntryCommand-Diadem")) return false;
-                        if (!UIModule.IsScreenReady()) return false;
-
-                        new EventStartPackt(LocalPlayerState.EntityID, 721532).Send();
-                        return DService.Instance().Condition.IsOccupiedInEvent;
-                    }
-                );
-
-                // 第一次
-                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(LuminaWrapper.GetContentName(753)));
-                // 第二次
-                TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
-            }
-        );
-    }
+    private static void EnqueueDiadem() =>
+        MovementManager.Instance().TPSmart_BetweenZone(939);
 
     // 常风之地
-    private void EnqueueAnemos() =>
-        EnqueueKugane(LuminaWrapper.GetContentName(283));
+    private static void EnqueueAnemos() =>
+        MovementManager.Instance().TPSmart_BetweenZone(732);
 
     // 恒冰之地
-    private void EnqueuePagos() =>
-        EnqueueKugane(LuminaWrapper.GetContentName(581));
+    private static void EnqueuePagos() =>
+        MovementManager.Instance().TPSmart_BetweenZone(763);
 
     // 涌火之地
-    private void EnqueuePyros() =>
-        EnqueueKugane(LuminaWrapper.GetContentName(598));
+    private static void EnqueuePyros() =>
+        MovementManager.Instance().TPSmart_BetweenZone(795);
 
     // 丰水之地
-    private void EnqueueHydatos() =>
-        EnqueueKugane(LuminaWrapper.GetContentName(639));
-
-    private void EnqueueKugane(string dutyName)
-    {
-        // 不在黄金港 → 先去黄金港
-        if (GameState.TerritoryType != 628)
-        {
-            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(628, KuganeDefaultPosition, false, true));
-            TaskHelper.Enqueue
-            (() => GameState.TerritoryType == 628                        &&
-                   UIModule.IsScreenReady()                              &&
-                   !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                   !MovementManager.Instance().IsManagerBusy
-            );
-        }
-
-        TaskHelper.Enqueue
-        (() =>
-            {
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!EventFramework.Instance()->IsEventIDNearby(721355))
-                        {
-                            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(KuganeDefaultPosition), weight: 2);
-                            TaskHelper.Enqueue
-                            (
-                                () => GameState.TerritoryType == 628                        &&
-                                      UIModule.IsScreenReady()                              &&
-                                      !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.Instance().IsManagerBusy,
-                                weight: 2
-                            );
-                        }
-
-                        return true;
-                    }
-                );
-
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
-
-                        GamePacketManager.Instance().SendPackt(new EventStartPackt(localPlayer.GameObjectID, 721355));
-                        return true;
-                    }
-                );
-
-                // 第一次
-                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(dutyName));
-                // 第二次
-                TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
-            }
-        );
-    }
-
+    private static void EnqueueHydatos() =>
+        MovementManager.Instance().TPSmart_BetweenZone(827);
+    
     // 博兹雅
-    private void EnqueueBozja() =>
-        EnqueueGangos(LuminaWrapper.GetContentName(735));
+    private static void EnqueueBozja() =>
+        MovementManager.Instance().TPSmart_BetweenZone(920);
 
     // 扎杜诺尔
-    private void EnqueueZadonor() =>
-        EnqueueGangos(LuminaWrapper.GetContentName(778));
-
-    private void EnqueueGangos(string dutyName)
-    {
-        // 不在甘戈斯 → 先去甘戈斯
-        if (GameState.TerritoryType != 915)
-        {
-            TaskHelper.Enqueue(() => MovementManager.Instance().TeleportZone(915, false, true));
-            TaskHelper.Enqueue
-            (() => GameState.TerritoryType == 915                        &&
-                   UIModule.IsScreenReady()                              &&
-                   !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                   !MovementManager.Instance().IsManagerBusy
-            );
-        }
-
-        TaskHelper.Enqueue
-        (() =>
-            {
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!EventFramework.Instance()->IsEventIDNearby(721601))
-                        {
-                            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(GangosDefaultPosition), weight: 2);
-                            TaskHelper.Enqueue
-                            (
-                                () => GameState.TerritoryType == 915                        &&
-                                      UIModule.IsScreenReady()                              &&
-                                      !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.Instance().IsManagerBusy,
-                                weight: 2
-                            );
-                        }
-
-                        return true;
-                    }
-                );
-
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return false;
-
-                        GamePacketManager.Instance().SendPackt(new EventStartPackt(localPlayer.GameObjectID, 721601));
-                        return true;
-                    }
-                );
-
-                // 第一次
-                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(dutyName));
-                // 第二次
-                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(dutyName));
-            }
-        );
-    }
-
+    private static void EnqueueZadonor() =>
+        MovementManager.Instance().TPSmart_BetweenZone(975);
+    
+    // 蜃景幻界新月岛 南征之章
+    private static void EnqueueSouthHorn() =>
+        MovementManager.Instance().TPSmart_BetweenZone(1252);
+    
     // 憧憬湾
-    private void EnqueueArdorum() =>
-        EnqueueCosmic(1237);
+    private static void EnqueueArdorum() =>
+        MovementManager.Instance().TPSmart_BetweenZone(1237);
 
     // 法恩娜
-    private void EnqueuePhaenna() =>
-        EnqueueCosmic(1291);
+    private static void EnqueuePhaenna() =>
+        MovementManager.Instance().TPSmart_BetweenZone(1291);
 
     // 俄匊斯
-    private void EnqueueOizys() =>
-        EnqueueCosmic(1310);
+    private static void EnqueueOizys() =>
+        MovementManager.Instance().TPSmart_BetweenZone(1310);
     
     // 奥克塞西亚
-    private void EnqueueAuxesia() =>
-        EnqueueCosmic(1319);
-
-    private void EnqueueCosmic(uint targetZone)
-    {
-        if (GameState.TerritoryType == targetZone) return;
-
-        if (GameState.TerritoryType != 959)
-        {
-            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(959, CosmicDefaultPosition, false, true));
-            TaskHelper.Enqueue(() => GameState.TerritoryType == 959 && UIModule.IsScreenReady() && !MovementManager.Instance().IsManagerBusy);
-        }
-
-        TaskHelper.Enqueue
-        (() =>
-            {
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!EventFramework.Instance()->IsEventIDNearby(327855))
-                        {
-                            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(CosmicDefaultPosition), weight: 2);
-                            TaskHelper.Enqueue
-                            (
-                                () => GameState.TerritoryType == 959                        &&
-                                      UIModule.IsScreenReady()                              &&
-                                      !DService.Instance().Condition[ConditionFlag.Jumping] &&
-                                      !MovementManager.Instance().IsManagerBusy,
-                                weight: 2
-                            );
-                        }
-
-                        return true;
-                    }
-                );
-
-                TaskHelper.Enqueue(() => redirectTargetZoneInMoon = targetZone);
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!DService.Instance().Condition[ConditionFlag.Mounted])
-                            return true;
-
-                        if (!Throttler.Shared.Throttle("FieldEntryCommand.Dismount"))
-                            return false;
-
-                        MovementManager.Instance().Dismount();
-                        return false;
-                    }
-                );
-                TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 327855).Send());
-                TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(3));
-            }
-        );
-    }
-
-    private void EnqueueOccultCrescent()
-    {
-        if (GameState.TerritoryType == 1278) //已经在幻象村了
-        {
-            TaskHelper.Enqueue(() => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.Instance().IsManagerBusy);
-            TaskHelper.Enqueue
-            (() =>
-                {
-                    if (!EventFramework.Instance()->IsEventIDNearby(721825))
-                    {
-                        TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(PhantomVillagePosition), weight: 2);
-                        TaskHelper.Enqueue
-                        (
-                            () => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.Instance().IsManagerBusy,
-                            weight: 2
-                        );
-                    }
-
-                    return true;
-                }
-            );
-
-            TaskHelper.Enqueue(() => UIModule.IsScreenReady());
-            TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 721825).Send());
-            TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(0));
-            TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(0));
-            return;
-        }
-
-
-        if (GameState.TerritoryType != 1278)
-            TaskHelper.Enqueue(() => MovementManager.Instance().TeleportZone(1278));
-
-        TaskHelper.Enqueue(() => GameState.TerritoryType == 1278 && LocalPlayerState.Object != null);
-        TaskHelper.Enqueue
-        (() =>
-            {
-                if (!EventFramework.Instance()->IsEventIDNearby(721825))
-                {
-                    TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(PhantomVillagePosition), weight: 2);
-                    TaskHelper.Enqueue
-                    (
-                        () => GameState.TerritoryType == 1278 && !DService.Instance().Condition[ConditionFlag.Jumping] && !MovementManager.Instance().IsManagerBusy,
-                        weight: 2
-                    );
-                }
-
-                return true;
-            }
-        );
-
-        TaskHelper.Enqueue(() => UIModule.IsScreenReady());
-        TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 721825).Send());
-        TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(0));
-        TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(0));
-    }
+    private static void EnqueueAuxesia() =>
+        MovementManager.Instance().TPSmart_BetweenZone(1319);
     
     #region 常量
 
@@ -540,14 +217,6 @@ public unsafe class FieldEntryCommand : ModuleBase
         // 奥克塞西亚
         [5] = LuminaWrapper.GetPlaceName(5551),
     }.ToFrozenDictionary();
-
-    private static readonly Vector3 GangosDefaultPosition        = new(-33f, 0.15f, -41f);
-    private static readonly Vector3 KuganeDefaultPosition        = new(-114.3f, -5f, 150f);
-    private static readonly Vector3 DiademDefaultPosition        = new(-19.6f, -16f, 143f);
-    private static readonly Vector3 LowerLaNosceaDefaultPosition = new(172, 12, 642);
-    private static readonly Vector3 IslandDefaultPosition        = new(-269, 40, 228);
-    private static readonly Vector3 CosmicDefaultPosition        = new(-5.3f, -131.1f, -504.0f);
-    private static readonly Vector3 PhantomVillagePosition       = new(-71.93f, 5f, -16.02f);
 
     #endregion
 }
