@@ -94,6 +94,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
             Size      = new(140, 28),
             Position  = new(100, 0),
             IsVisible = false,
+            IsEnabled = LocalPlayerState.IsInAnyParty,
             String    = Lang.Get("FastJoinAnotherPartyRecruitment-LeaveAndJoin"),
             OnClick   = () => Enqueue(taskHelper)
         };
@@ -141,7 +142,10 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         }
 
         if (button != null)
+        {
+            button.IsEnabled = LocalPlayerState.IsInAnyParty;
             button.IsVisible = button2->OwnerNode->IsVisible();
+        }
     }
 
     private static void Enqueue(TaskHelper taskHelper)
