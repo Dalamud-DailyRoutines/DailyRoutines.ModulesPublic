@@ -15,6 +15,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Overlay.UiOverlay;
 using KamiToolKit.Premade.Node.Simple;
+using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
@@ -37,6 +38,24 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private MemoryPatch enemyListIsCastInProgressPatch = new
+    (
+        "0F 84 ?? ?? ?? ?? 49 8B 04 24 49 8B CC FF 90 ?? ?? ?? ?? 48 85 C0",
+        [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]
+    );
+
+    private MemoryPatch enemyListClearSpellIDPatch = new
+    (
+        "83 7E ?? ?? 0F 84 ?? ?? ?? ?? 8B B4 24",
+        [0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90]
+    );
+    
+    private MemoryPatch enemyListDisplayCastPatch = new
+    (
+        "74 ?? 49 8B 04 24 49 8B CC FF 90 ?? ?? ?? ?? 48 85 C0",
+        [0x90, 0x90]
+    );
+    
     private Config config = null!;
 
     private readonly List<EnemyListNode> nodes = [];
@@ -46,6 +65,10 @@ public unsafe class OptimizedEnemyList : ModuleBase
     {
         config = Config.Load(this) ?? new();
 
+        enemyListIsCastInProgressPatch.Enable();
+        enemyListClearSpellIDPatch.Enable();
+        enemyListDisplayCastPatch.Enable();
+        
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "_EnemyList", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,           "_EnemyList", OnAddon);
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize,        "_EnemyList", OnAddon);
@@ -326,7 +349,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
             #region 咏唱
 
             // 当前不在咏唱
-            if (!gameObj->IsCasting)
+            var leftCastTime = MathF.Max(gameObj->CastInfo.TotalCastTime - gameObj->CastInfo.CurrentCastTime, 0f);
+            if (leftCastTime <= 0 && gameObj->CastInfo.ActionId == 0)
             {
                 castNode.IsVisible           = false;
                 castBackgroundNode.IsVisible = false;
@@ -351,7 +375,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 (
                     (ActionType)gameObj->CastInfo.ActionType,
                     gameObj->CastInfo.ActionId,
-                    MathF.Max(gameObj->CastInfo.TotalCastTime - gameObj->CastInfo.CurrentCastTime, 0f)
+                    leftCastTime
                 );
                 castNode.String = castText;
 
@@ -359,7 +383,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 var castTextWidth = castNode.GetTextDrawSize(false).X + 2f;
                 
                 castBackgroundNode.X     = castNode.Position.X - castTextWidth - 1f;
-                castBackgroundNode.Width = castTextWidth      + (padding / 2f);
+                castBackgroundNode.Width = castTextWidth       + (padding / 2f);
             }
 
             #endregion
