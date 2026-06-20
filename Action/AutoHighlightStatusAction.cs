@@ -260,19 +260,18 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         if (dt > 5f)
             dt = 5f;
 
-        if (TargetManager.Target is not IBattleNPC { IsDead: false } battleNpcTarget)
-        {
-            actionsToHighlight.Clear();
-            return;
-        }
+        uint currentTargetEntityID = 0;
+        if (TargetManager.Target is IBattleNPC { IsDead: false } battleNpcTarget)
+            currentTargetEntityID = battleNpcTarget.EntityID;
 
-        var currentTargetEntityID = battleNpcTarget.EntityID;
+        var localPlayerEntityID = LocalPlayerState.EntityID;
+
         resyncKeys.Clear();
         removeKeys.Clear();
 
         foreach (var key in trackedStatusKeys)
         {
-            if (key.EntityID != currentTargetEntityID) continue;
+            if (key.EntityID != currentTargetEntityID && key.EntityID != localPlayerEntityID) continue;
             ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(trackedStatuses, key);
             if (Unsafe.IsNullRef(ref state))
                 continue;
@@ -294,7 +293,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
 
         foreach (var key in resyncKeys)
         {
-            if (key.EntityID != currentTargetEntityID) continue;
+            if (key.EntityID != currentTargetEntityID && key.EntityID != localPlayerEntityID) continue;
             ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, key.StatusID);
 
             if (Unsafe.IsNullRef(ref statusConfig))
@@ -339,7 +338,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
 
         foreach (var key in trackedStatusKeys)
         {
-            if (key.EntityID != currentTargetEntityID) continue;
+            if (key.EntityID != currentTargetEntityID && key.EntityID != localPlayerEntityID) continue;
             ref var state = ref CollectionsMarshal.GetValueRefOrNullRef(trackedStatuses, key);
             if (Unsafe.IsNullRef(ref state))
                 continue;
