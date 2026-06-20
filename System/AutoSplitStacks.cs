@@ -27,12 +27,6 @@ public unsafe class AutoSplitStacks : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    #region 常量
-
-    private const string COMMAND = "/pdrsplit";
-
-    #endregion
-
     private Config config = null!;
 
     private readonly ItemSelectCombo itemSelectCombo =
@@ -354,7 +348,7 @@ public unsafe class AutoSplitStacks : ModuleBase
             {
                 var slot = container->GetInventorySlot(i);
 
-                if (slot->ItemId == itemID)
+                if (slot->GetBaseItemId() == itemID)
                 {
                     if (slot->GetQuantity() > amount)
                     {
@@ -457,4 +451,10 @@ public unsafe class AutoSplitStacks : ModuleBase
             module.isNeedToOpen    = true;
         }
     }
+    
+    #region 常量
+
+    private const string COMMAND = "/pdrsplit";
+
+    #endregion
 }
