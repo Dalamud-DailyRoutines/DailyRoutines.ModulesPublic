@@ -11,13 +11,13 @@ using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using KamiToolKit.Overlay.UiOverlay;
-using KamiToolKit.Premade.Node.Simple;
+using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.Timelines;
+using KamiToolKit.UiOverlay;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
@@ -590,10 +590,10 @@ public partial class OccultCrescentHelper
 
                 var windowNode = (WindowNode)WindowNode;
 
-                windowNode.CloseButtonNode.IsVisible = false;
-                windowNode.BackgroundNode.IsVisible  = false;
-                windowNode.BorderNode.Alpha          = 0f;
-                windowNode.TitleNode.IsVisible       = false;
+                windowNode.CloseButtonNode.IsVisible       = false;
+                windowNode.BackgroundTextureNode.IsVisible = false;
+                windowNode.BorderTextureNode.Alpha         = 0f;
+                windowNode.TitleNode.IsVisible             = false;
 
                 CreateWindowStyle();
 
@@ -612,7 +612,7 @@ public partial class OccultCrescentHelper
 
                 var windowNode = (WindowNode)WindowNode;
 
-                isFocused                               = windowNode.BorderNode.IsVisible;
+                isFocused                               = windowNode.BorderTextureNode.IsVisible;
                 windowNode.BackgroundImageNode.Position = new(0);
                 windowNode.BackgroundImageNode.Size     = new(windowNode.Width - 2f, windowNode.Height - 12f);
 

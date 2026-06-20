@@ -7,6 +7,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -200,7 +201,7 @@ public class AutoAethericMimicry : ModuleBase
                 (
                     "AutoAethericMimicry-MimicTarget",
                     chara.ClassJob.Value.ToBitmapFontIcon(),
-                    new PlayerPayload(chara.Name.ToString(), chara.HomeWorld.RowId)
+                    new PlayerPayload(chara.Name, chara.HomeWorld.RowId)
                 )
             );
         }

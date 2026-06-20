@@ -7,6 +7,7 @@ using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Controllers;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;

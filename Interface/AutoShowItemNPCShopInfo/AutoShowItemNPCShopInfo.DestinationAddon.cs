@@ -2,10 +2,10 @@ using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
-using KamiToolKit.Premade.Node.Simple;
+using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.Interop.Game.Lumina;
@@ -36,13 +36,13 @@ public unsafe partial class AutoShowItemNPCShopInfo
         private int                    currentPage;
         private int                    totalPages;
 
-        private ScrollingAreaNode<VerticalListNode>? scrollingAreaNode;
-        private VerticalListNode?                    contentNode;
-        private HorizontalListNode?                  paginationBar;
-        private TextButtonNode?                      prevButton;
-        private TextNode?                            pageIndicator;
-        private TextButtonNode?                      nextButton;
-        private SectionSlot[]?                       sectionSlots;
+        private ScrollingNode<VerticalListNode>? scrollingAreaNode;
+        private VerticalListNode?                contentNode;
+        private HorizontalListNode?              paginationBar;
+        private TextButtonNode?                  prevButton;
+        private TextNode?                        pageIndicator;
+        private TextButtonNode?                  nextButton;
+        private SectionSlot[]?                   sectionSlots;
 
         public static void CloseAndClear()
         {
@@ -194,14 +194,14 @@ public unsafe partial class AutoShowItemNPCShopInfo
             };
             paginationBar.AddNode(nextButton);
 
-            scrollingAreaNode = new ScrollingAreaNode<VerticalListNode>
+            scrollingAreaNode = new ScrollingNode<VerticalListNode>
             {
                 Position          = ContentStartPosition + new Vector2(6,  headerHeight + 6),
                 Size              = ContentSize          - new Vector2(12, headerHeight + 6),
-                ContentHeight     = 100,
                 ScrollSpeed       = 100,
                 AutoHideScrollBar = true
             };
+            scrollingAreaNode.ContentNode.Height = 100;
             scrollingAreaNode.AttachNode(this);
 
             contentNode             = scrollingAreaNode.ContentNode;
@@ -242,9 +242,9 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 }
                 else sectionSlots[i].Container.IsVisible = false;
 
-            scrollingAreaNode.ScrollPosition = 0;
+            scrollingAreaNode.ScrollBarNode.ScrollPosition = 0;
             contentNode.RecalculateLayout();
-            scrollingAreaNode.FitToContentHeight();
+            scrollingAreaNode.RecalculateSizes();
             UpdatePaginationState();
         }
 
@@ -348,7 +348,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             if (recalculateOuter && contentNode != null && scrollingAreaNode != null)
             {
                 contentNode.RecalculateLayout();
-                scrollingAreaNode.FitToContentHeight();
+                scrollingAreaNode.RecalculateSizes();
             }
         }
 

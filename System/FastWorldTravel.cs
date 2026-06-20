@@ -5,7 +5,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Internal;
 using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -16,11 +15,11 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Classes;
 using KamiToolKit.ContextMenu;
 using KamiToolKit.Nodes;
-using KamiToolKit.Premade.Node.Simple;
+using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
@@ -142,15 +141,13 @@ public class FastWorldTravel : ModuleBase
         }
     }
 
-    private void EnsureAddon()
-    {
+    private void EnsureAddon() =>
         addon ??= new(this, TaskHelper)
         {
             InternalName = "DRFastWorldTravel",
             Title        = GameState.IsCN ? $"Daily Routines {Info.Title}" : LuminaWrapper.GetAddonText(12510),
             Size         = new(GameState.IsCN ? 710f : 180f, 480f)
         };
-    }
 
     #region 事件
 
@@ -721,8 +718,7 @@ public class FastWorldTravel : ModuleBase
             ContextMenuService = null;
         }
 
-        private void RequestWaitTimeInfoUpdate()
-        {
+        private void RequestWaitTimeInfoUpdate() =>
             DService.Instance().Framework.RunOnTick
             (async () =>
                 {
@@ -730,7 +726,6 @@ public class FastWorldTravel : ModuleBase
                     await RequestDCTravelInfo.InvokeFunc();
                 }
             );
-        }
 
         private void UpdateWaitTimeInfo()
         {

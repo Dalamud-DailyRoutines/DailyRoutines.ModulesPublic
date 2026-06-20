@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -20,6 +21,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Text.ReadOnly;
@@ -561,8 +563,9 @@ public unsafe class OptimizedFriendList : ModuleBase
                 AutoSelectAll = false,
                 String        = existedRemark
             };
+            remarkInputNode.Flags |= TextInputFlags.MultiLine;
 
-            remarkInputNode.Size = new(440, remarkInputNode.CurrentTextNode.LineSpacing * 5 + 20);
+            remarkInputNode.Size = new(440, (remarkInputNode.CurrentTextNode.LineSpacing * 5) + 20);
 
             remarkInputNode.AttachNode(this);
 

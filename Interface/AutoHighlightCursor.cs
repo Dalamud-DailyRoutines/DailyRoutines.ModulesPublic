@@ -9,8 +9,8 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using KamiToolKit.Overlay.UiOverlay;
 using KamiToolKit.Timelines;
+using KamiToolKit.UiOverlay;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;

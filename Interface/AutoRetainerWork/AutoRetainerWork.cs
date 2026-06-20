@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
@@ -38,8 +39,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     private readonly RetainerWorkerBase[] workers;
 
-    public AutoRetainerWork()
-    {
+    public AutoRetainerWork() =>
         workers =
         [
             new CollectWorker(this),
@@ -50,7 +50,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             new TownDispatchWorker(this),
             new PriceAdjustWorker(this)
         ];
-    }
 
     protected override void Init()
     {
@@ -341,7 +340,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                 IsVisible      = true,
                 Size           = new(width, 28f),
                 AlignmentFlags = FlexFlags.FitContentHeight | FlexFlags.FitWidth,
-                FitPadding     = 4f
+                ItemSpacing    = 4,
             };
             row.AddNode
             (

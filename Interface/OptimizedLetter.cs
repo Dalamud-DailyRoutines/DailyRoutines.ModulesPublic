@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
@@ -139,8 +140,7 @@ public class OptimizedLetter : ModuleBase
                                 }
                             };
 
-                            if (names.Count <= 8)
-                                listNode.ScrollBarNode.IsVisible = false;
+                            listNode.ScrollingListNode.AutoHideScrollBar = true;
 
                             listNode.AttachNode(LetterAddress->RootNode);
                         }

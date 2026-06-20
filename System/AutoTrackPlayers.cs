@@ -10,6 +10,7 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -169,9 +170,9 @@ public class AutoTrackPlayers : ModuleBase
 
     private class AddonDRAutoTrackPlayers(AutoTrackPlayers module) : NativeAddon
     {
-        private ScrollingListNode     scrollArea    = null!;
-        private TextNode              emptyHintText = null!;
-        private List<PlayerEntryNode> playerEntries = [];
+        private ScrollingNode<VerticalListNode> scrollArea    = null!;
+        private TextNode                        emptyHintText = null!;
+        private List<PlayerEntryNode>           playerEntries = [];
 
         private bool isRebuildingList;
 
@@ -181,9 +182,9 @@ public class AutoTrackPlayers : ModuleBase
             {
                 Position          = ContentStartPosition,
                 Size              = ContentSize,
-                FitContents       = true,
                 AutoHideScrollBar = true,
             };
+            scrollArea.ContentNode.FitContents = true;
             scrollArea.AttachNode(this);
 
             emptyHintText = new()
@@ -195,7 +196,7 @@ public class AutoTrackPlayers : ModuleBase
                 FontSize      = 12,
                 IsVisible     = true
             };
-            scrollArea.AddNode(emptyHintText);
+            scrollArea.ContentNode.AddNode(emptyHintText);
 
             RebuildList();
         }
@@ -238,7 +239,7 @@ public class AutoTrackPlayers : ModuleBase
                     playerEntries.Add(entry);
                 }
 
-                scrollArea.RecalculateLayout();
+                scrollArea.ContentNode.RecalculateLayout();
             }
             finally
             {
@@ -268,14 +269,14 @@ public class AutoTrackPlayers : ModuleBase
         {
             public PlayerEntryNode
             (
-                ScrollingListNode         parent,
-                FieldMarkerPoint?         currentMarker,
-                ulong                     contentID,
-                string                    name,
-                string                    world,
-                Action<FieldMarkerPoint?> onMarkerChange,
-                Action                    onDelete,
-                List<string>              availableOptions
+                ScrollingNode<VerticalListNode> parent,
+                FieldMarkerPoint?               currentMarker,
+                ulong                           contentID,
+                string                          name,
+                string                          world,
+                Action<FieldMarkerPoint?>       onMarkerChange,
+                Action                          onDelete,
+                List<string>                    availableOptions
             )
             {
                 ItemSpacing = 5;
@@ -341,7 +342,7 @@ public class AutoTrackPlayers : ModuleBase
                 
                 AddNode(deleteButton);
                 
-                parent.AddNode(this);
+                parent.ContentNode.AddNode(this);
             }
         }
     }
