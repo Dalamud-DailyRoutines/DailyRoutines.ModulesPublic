@@ -29,7 +29,7 @@ public partial class OccultCrescentHelper
 
         private Queue<TreasureHuntPoint> queuedGatheringList = [];
 
-        private List<Vector3> treasurePositions    = [];
+        private List<nint>    treasureObjects    = [];
         private List<Vector3> surveyPointPositions = [];
         private List<Vector3> carrotPositions      = [];
 
@@ -82,7 +82,7 @@ public partial class OccultCrescentHelper
             treasureTaskHelper?.Dispose();
             treasureTaskHelper = null;
 
-            treasurePositions.Clear();
+            treasureObjects.Clear();
         }
 
         public override void DrawConfig()
@@ -196,13 +196,14 @@ public partial class OccultCrescentHelper
                     ImGui.Spacing();
                 }
 
-                foreach (var treasurePosition in treasurePositions)
+                foreach (var treasure in treasureObjects)
                 {
-                    var pos = treasurePosition;
+                    var treasureObject = (GameObject*)treasure;
+                    if (treasureObject == null) continue;
 
                     if (ImGui.Button
                         (
-                            $"{LuminaWrapper.GetAddonText(395)} [{pos.X:F1}, {pos.Y:F1}, {pos.Z:F1}]",
+                            $"{LuminaWrapper.GetAddonText(395)} [{treasureObject->Position.X:F1}, {treasureObject->Position.Y:F1}, {treasureObject->Position.Z:F1}]",
                             new(textSize.X * 2, ImGui.GetTextLineHeightWithSpacing())
                         ))
                     {
@@ -212,11 +213,11 @@ public partial class OccultCrescentHelper
                         (() =>
                             {
                                 PlayerController.Instance()->MoveControllerWalk.IsMovementLocked = true;
-                                MovementManager.Instance().TPSmooth(pos, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
+                                MovementManager.Instance().TPSmooth(treasureObject->Position, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
 
                                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
-                                if (LocalPlayerState.DistanceTo2D(pos.ToVector2()) >= 3) return false;
+                                if (LocalPlayerState.DistanceTo2D(treasureObject->Position.ToVector2()) >= 3) return false;
 
                                 OnUpdate();
 
@@ -275,7 +276,7 @@ public partial class OccultCrescentHelper
             currentRoute.Clear();
             queuedGatheringList.Clear();
             
-            treasurePositions.Clear();
+            treasureObjects.Clear();
             surveyPointPositions.Clear();
             carrotPositions.Clear();
 
@@ -292,8 +293,8 @@ public partial class OccultCrescentHelper
 
             treasureHandle = ZoneIndicatorRenderer.Instance().RegTemporary
             (
-                () => MainModule.config.IsEnabledHighlightTreasure ? treasurePositions : [],
-                pos => pos,
+                () => MainModule.config.IsEnabledHighlightTreasure ? treasureObjects : [],
+                ptr => ((GameObject*)ptr)->Position,
                 new()
                 {
                     TextGetter = _ => new()
@@ -394,9 +395,8 @@ public partial class OccultCrescentHelper
                 return;
             }
 
-            var data          = queuedGatheringList.Dequeue();
-            var position      = data.Position;
-            var foundTreasure = false;
+            var data     = queuedGatheringList.Dequeue();
+            var position = data.Position;
 
             treasureTaskHelper.Enqueue
             (() =>
@@ -415,27 +415,31 @@ public partial class OccultCrescentHelper
             (() =>
                 {
                     PlayerController.Instance()->MoveControllerWalk.IsMovementLocked = true;
-                    MovementManager.Instance().TPSmooth(position, 24, foundTreasure, -20);
+                    MovementManager.Instance().TPSmooth(position, 24, true, -20);
 
-                    if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
+                    if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) 
+                        return false;
 
                     if (!data.IsExact)
                     {
                         // 还没加载出来呢
-                        if (LocalPlayerState.DistanceTo2D(position.ToVector2()) >= 50) return false;
+                        if (LocalPlayerState.DistanceTo2D(position.ToVector2()) >= 50) 
+                            return false;
                     }
                     else
                     {
-                        if (LocalPlayerState.DistanceTo2D(position.ToVector2()) >= 3) return false;
+                        if (LocalPlayerState.DistanceTo2D(position.ToVector2()) >= 3) 
+                            return false;
                     }
 
                     OnUpdate();
 
                     // 找到了, 移动过去
-                    if (treasurePositions.FirstOrDefault(x => Vector2.DistanceSquared(x.ToVector2(), position.ToVector2()) <= 225) is var pos)
+                    if (treasureObjects.FirstOrDefault
+                            (x => Vector2.DistanceSquared(((GameObject*)x)->Position.ToVector2(), position.ToVector2()) <= 225) is var ptr &&
+                        ptr > nint.Zero)
                     {
-                        position      = pos;
-                        foundTreasure = true;
+                        position = ((GameObject*)ptr)->Position;
                         return false;
                     }
 
@@ -511,7 +515,7 @@ public partial class OccultCrescentHelper
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
                 !MainModule.config.IsEnabledAutoOpenTreasure                          ||
                 DService.Instance().Condition[ConditionFlag.InCombat]                 ||
-                treasurePositions is not { Count: > 0 })
+                treasureObjects is not { Count: > 0 })
                 return;
 
             if (DService.Instance().ObjectTable.LocalPlayer is not { IsDead: false, Position.Y: > -40 }) return;
@@ -521,6 +525,9 @@ public partial class OccultCrescentHelper
                 {
                     var gameObject = (Treasure*)ptr;
                     if (gameObject == null) return false;
+                    
+                    if (gameObject->ObjectKind != ObjectKind.Treasure)
+                        return false;
 
                     if (gameObject->Flags.IsSetAny(Treasure.TreasureFlags.Opened, Treasure.TreasureFlags.FadedOut))
                         return false;
@@ -545,9 +552,25 @@ public partial class OccultCrescentHelper
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
 
-            List<Vector3> treasures    = [];
-            List<Vector3> surveyPoints = [];
-            List<Vector3> carrots      = [];
+            List<Vector3> surveyPoints  = [];
+            List<Vector3> carrots       = [];
+            
+            var treasures = EventObjectManager.Instance()->FindAll
+            (ptr =>
+                {
+                    var gameObject = (Treasure*)ptr;
+                    if (gameObject == null) return false;
+                    
+                    if (gameObject->ObjectKind != ObjectKind.Treasure)
+                        return false;
+
+                    if (gameObject->Flags.IsSetAny(Treasure.TreasureFlags.Opened, Treasure.TreasureFlags.FadedOut))
+                        return false;
+
+                    return true;
+                }
+            );
+            
             foreach (var eventObjectPtr in EventObjectManager.Instance()->EventObjects)
             {
                 if (eventObjectPtr.IsNull) continue;
@@ -562,7 +585,7 @@ public partial class OccultCrescentHelper
                         if (treasureObject->Flags.IsSetAny(Treasure.TreasureFlags.Opened, Treasure.TreasureFlags.FadedOut))
                             break;
                         
-                        treasures.Add(treasureObject->Position);
+                        treasures.Add((nint)treasureObject);
                         break;
                 }
             }
@@ -593,7 +616,7 @@ public partial class OccultCrescentHelper
                 }
             }
 
-            treasurePositions    = treasures;
+            treasureObjects      = treasures;
             surveyPointPositions = surveyPoints;
             carrotPositions      = carrots;
         }
