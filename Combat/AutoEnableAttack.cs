@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -23,22 +24,25 @@ public class AutoEnableAttack : ModuleBase
 
     protected override void Init()
     {
-        UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
-        UseActionManager.Instance().RegPostUseAction(OnPostUseAction);
+        UseActionManager.Instance().RegPreUseActionLocation(OnPreUseAction);
+        UseActionManager.Instance().RegPostUseActionLocation(OnPostUseAction);
     }
 
-    protected override void Uninit() =>
+    protected override void Uninit()
+    {
         UseActionManager.Instance().Unreg(OnPreUseAction);
+        UseActionManager.Instance().Unreg(OnPostUseAction);
+    }
 
     private void OnPreUseAction
     (
-        ref bool                        isPrevented,
-        ref ActionType                  type,
-        ref uint                        actionID,
-        ref ulong                       targetID,
-        ref uint                        extraParam,
-        ref ActionManager.UseActionMode queueState,
-        ref uint                        comboRouteID
+        ref bool       isPrevented,
+        ref ActionType type,
+        ref uint       actionID,
+        ref ulong      targetID,
+        ref Vector3    location,
+        ref uint       extraParam,
+        ref byte       a7
     )
     {
         if (type != ActionType.Action ||
@@ -53,13 +57,13 @@ public class AutoEnableAttack : ModuleBase
     
     private void OnPostUseAction
     (
-        bool                        result,
-        ActionType                  actionType,
-        uint                        actionID,
-        ulong                       targetID,
-        uint                        extraParam,
-        ActionManager.UseActionMode queueState,
-        uint                        comboRouteID
+        bool       result,
+        ActionType actionType,
+        uint       actionID,
+        ulong      targetID,
+        Vector3    location,
+        uint       extraParam,
+        byte       a7
     ) =>
         autoAttackPatch.Disable();
     
