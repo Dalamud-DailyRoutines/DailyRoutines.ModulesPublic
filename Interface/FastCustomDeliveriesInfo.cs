@@ -184,6 +184,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
     
     private static readonly FrozenDictionary<uint, CustomDeliveryInfo> Infos = new Dictionary<uint, CustomDeliveryInfo>
     {
+        [12] = new(12, "缇索加", 1185, new(90, -14, 59.7f)),
         [11] = new(11, "尼托维凯", 1190, new(-355.7f, 19.6f, -108.7f)),
         [10] = new(10, "玛格拉特", 956, new(-52.8f, -29.5f, -61.5f)),
         [9]  = new(9, "安登", 816, new(-241f, 51f, 615.7f)),
