@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
+using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Native;
 using OmenTools.Threading;

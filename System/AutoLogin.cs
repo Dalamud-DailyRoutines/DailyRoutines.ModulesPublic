@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
+using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.AgentEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models.Native;

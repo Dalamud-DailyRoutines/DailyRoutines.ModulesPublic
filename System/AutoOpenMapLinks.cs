@@ -12,6 +12,7 @@ using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Info.Game.Data;
+using OmenTools.Info.Lumina;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;

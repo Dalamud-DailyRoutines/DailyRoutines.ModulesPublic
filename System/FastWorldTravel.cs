@@ -25,6 +25,7 @@ using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Game.Data;
+using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.AgentEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;

@@ -7,6 +7,7 @@ using Dalamud.Game.ClientState.JobGauge.Types;
 using Dalamud.Game.DutyState;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Info.Game.Data;
+using OmenTools.Info.Lumina;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
