@@ -67,7 +67,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         (
             new()
             {
-                Name = LuminaWrapper.GetAddonText(66),
+                Name = LuminaWrapper.GetAddonText(8887),
                 OnClick = () => DService.Instance().Framework.RunOnTick
                 (
                     () => AgentMap.Instance()->SetMapFlagAndOpen
