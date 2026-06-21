@@ -253,17 +253,7 @@ public class BetterFateProgressUI : ModuleBase
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
 
             if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
-            {
-                var agent = AgentMap.Instance();
-
-                if (agent->AgentInterface.IsAgentActive() && agent->SelectedMapId == zoneSheetRow.Map.RowId)
-                    agent->AgentInterface.Hide();
-                else
-                {
-                    agent->MapTitleString = *Utf8String.FromString(LuminaWrapper.GetAddonText(3933));
-                    agent->OpenMapByMapId(zoneSheetRow.Map.RowId);
-                }
-            }
+                AgentMap.Instance()->SetMapAndOpen(zoneSheetRow.Map.RowId);
 
             if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
             {
