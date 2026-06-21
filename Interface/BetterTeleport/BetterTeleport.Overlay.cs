@@ -2,7 +2,6 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -25,6 +24,25 @@ public unsafe partial class BetterTeleport
     private readonly List<OverlayListItem> visibleItems        = [];
     private readonly List<OverlayListItem> defaultOverlayItems = [];
 
+    protected override void OverlayOnOpen()
+    {
+        RefreshFavoritesInfo();
+        RefreshDefaultOverlayItems();
+        recordMatcher?.Dispose();
+        recordMatcher = CreateRecordMatcher();
+
+        searchWord    = string.Empty;
+        selectedIndex = 0;
+        if (config.FocusSearchOnOpen)
+            shouldFocusSearchBar = true;
+        hasUsedArrowKeys     = true;
+        hoveredAetheryte     = null;
+        pinnedAetheryte      = null;
+        lastMousePos         = ImGui.GetMousePos();
+        isSearchingInputting = false;
+        lastMousePosForInput = ImGui.GetMousePos();
+    }
+
     protected override void OverlayUI()
     {
         var currentMousePos = ImGui.GetMousePos();
@@ -38,22 +56,6 @@ public unsafe partial class BetterTeleport
 
         if (!hasUsedArrowKeys)
             hoveredAetheryte = null;
-
-        var isWindowAppearing = ImGui.IsWindowAppearing();
-
-        if (isWindowAppearing)
-        {
-            searchWord    = string.Empty;
-            selectedIndex = 0;
-            if (config.FocusSearchOnOpen)
-                shouldFocusSearchBar = true;
-            hasUsedArrowKeys     = true;
-            hoveredAetheryte     = null;
-            pinnedAetheryte      = null;
-            lastMousePos         = ImGui.GetMousePos();
-            isSearchingInputting = false;
-            lastMousePosForInput = ImGui.GetMousePos();
-        }
 
         if (config.CloseOnLoseFocus                                       &&
             !ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
@@ -101,15 +103,13 @@ public unsafe partial class BetterTeleport
                 matches = SortSearchMatches
                 (
                     searchWord,
-                    records.Values
-                           .SelectMany(x => x)
-                           .Concat(houseRecords)
-                           .Where
-                           (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
-                                 (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
-                                  remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
-                           )
-                           .ToList()
+                    AetheryteRecordManager.Instance().AllRecords
+                                          .Where
+                                          (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
+                                                (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                                 remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
+                                          )
+                                          .ToList()
                 );
             }
 
@@ -141,11 +141,8 @@ public unsafe partial class BetterTeleport
 
             shouldFocusSearchBar = false;
 
-            if (isMoving)
-            {
+            if (LocalPlayerState.Instance().IsMoving)
                 ChatManager.Instance().SendCommand("/automove on");
-                isMoving = false;
-            }
         }
 
         var isSearchChanged = ImGui.InputTextWithHint("###BetterTeleportQuickSearch", Lang.Get("PleaseSearch"), ref searchWord, 128);
@@ -185,11 +182,9 @@ public unsafe partial class BetterTeleport
                     hoveredAetheryte = visibleItems[selectedIndex].Record;
             }
 
-            if (ImGui.IsKeyPressed(ImGuiKey.Enter) && !isWindowAppearing)
+            if (ImGui.IsKeyPressed(ImGuiKey.Enter) && !ImGui.IsWindowAppearing())
             {
-                if (hasUsedArrowKeys)
-                    TriggerListItem(visibleItems[selectedIndex]);
-                else if (isSearchBarFocused)
+                if (hasUsedArrowKeys || isSearchBarFocused)
                     TriggerListItem(visibleItems[selectedIndex]);
                 else
                     shouldFocusSearchBar = true;
@@ -313,7 +308,7 @@ public unsafe partial class BetterTeleport
         {
             if (seen.Add((rec.AetheryteID, rec.SubIndex)))
             {
-                var found = AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteID && x.SubIndex == rec.SubIndex);
+                var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteID && x.SubIndex == rec.SubIndex);
                 if (found != null) result.Add(found);
             }
         }
@@ -326,7 +321,7 @@ public unsafe partial class BetterTeleport
             {
                 if (seen.Add((rec.AetheryteId, rec.SubIndex)))
                 {
-                    var found = AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
+                    var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
                     if (found != null) result.Add(found);
                 }
             }
@@ -346,7 +341,7 @@ public unsafe partial class BetterTeleport
                 specialItems.Add(fav);
         }
 
-        var home = AllRecords.FirstOrDefault(x => x.State == AetheryteRecordState.Home);
+        var home = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.State == AetheryteRecordState.Home);
 
         if (home != null)
         {
@@ -354,7 +349,7 @@ public unsafe partial class BetterTeleport
                 specialItems.Add(home);
         }
 
-        var freePoints     = AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
+        var freePoints     = AetheryteRecordManager.Instance().AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
         var freeCountAdded = 0;
 
         foreach (var free in freePoints)
@@ -368,7 +363,7 @@ public unsafe partial class BetterTeleport
             }
         }
 
-        var officialFavs  = AllRecords.Where(x => x.State == AetheryteRecordState.Favorite).ToList();
+        var officialFavs  = AetheryteRecordManager.Instance().AllRecords.Where(x => x.State == AetheryteRecordState.Favorite).ToList();
         var favCountAdded = 0;
 
         foreach (var fav in officialFavs)
@@ -400,11 +395,11 @@ public unsafe partial class BetterTeleport
         var specialList = new List<AetheryteRecord>();
         var usedSeen    = new HashSet<(uint, byte)>();
 
-        var recentLimit = 2;
+        const int RECENT_LIMIT = 2;
 
         foreach (var r in combinedHistory)
         {
-            if (recentList.Count >= recentLimit) break;
+            if (recentList.Count >= RECENT_LIMIT) break;
             if (usedSeen.Add((r.RowID, r.SubIndex))) recentList.Add(r);
         }
 

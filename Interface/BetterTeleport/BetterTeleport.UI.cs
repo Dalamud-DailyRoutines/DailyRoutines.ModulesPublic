@@ -20,11 +20,11 @@ namespace DailyRoutines.ModulesPublic.Interface.BetterTeleport;
 public unsafe partial class BetterTeleport
 {
     private FuzzyMatcher<AetheryteRecord>? recordMatcher;
-    
+
     private List<AetheryteRecord> favorites = [];
 
     private bool shouldFocusSearchBar;
-    
+
     private AetheryteRecord? hoveredAetheryte;
     private AetheryteRecord? pinnedAetheryte;
 
@@ -39,7 +39,7 @@ public unsafe partial class BetterTeleport
         EnableDefaultMarkers = true,
         DefaultMarkerFilter  = marker => marker.DataType is not (3 or 4)
     };
-    
+
     protected override void ConfigUI()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
@@ -51,11 +51,27 @@ public unsafe partial class BetterTeleport
 
         DrawGeneralSettings(150f * GlobalUIScale);
     }
-    
+
+    private void ToggleDefaultPage()
+    {
+        if (Overlay.IsOpen || fullWindow.IsOpen)
+        {
+            Overlay.IsOpen    = false;
+            fullWindow.IsOpen = false;
+        }
+        else
+        {
+            if (config.DefaultPage == PageType.Search)
+                Overlay.IsOpen = true;
+            else
+                fullWindow.IsOpen = true;
+        }
+    }
+
     private FuzzyMatcher<AetheryteRecord> CreateRecordMatcher() =>
         new
         (
-            AllRecords,
+            AetheryteRecordManager.Instance().AllRecords,
             x =>
             {
                 var keys = new List<(IEnumerable<string?>, FuzzySearchWeight)>();
@@ -87,7 +103,7 @@ public unsafe partial class BetterTeleport
         mapRenderer.ClearMarkers();
 
         var mapID    = aetheryte.GetMap().RowId;
-        var siblings = AllRecords.Where(x => x.GetMap().RowId == mapID).ToList();
+        var siblings = AetheryteRecordManager.Instance().AllRecords.Where(x => x.GetMap().RowId == mapID).ToList();
 
         // 1. 绘制其他水晶 Marker
         foreach (var record in siblings)
@@ -724,6 +740,7 @@ public unsafe partial class BetterTeleport
 
         if (width > 0)
             ImGui.SetNextItemWidth(width);
+
         if (ImGui.Combo
             (
                 $"{Lang.Get("BetterTeleport-DefaultPage")}###BetterTeleportDefaultPageCombo",

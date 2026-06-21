@@ -9,16 +9,11 @@ using DailyRoutines.Verification;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface.Windowing;
 using Dalamud.Utility.Numerics;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Info.Game.AetheryteRecord;
-using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
-using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
@@ -49,17 +44,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         set => DService.Instance().GameConfig.UiConfig.Set("TelepoTicketGilSetting", value);
     }
 
-    private IEnumerable<AetheryteRecord> AllRecords =>
-        records.Values.SelectMany(x => x).Concat(houseRecords);
-
     private Config config = null!;
-
-    // Icon ID - Record
-    private readonly Dictionary<string, List<AetheryteRecord>> records      = [];
-    private readonly List<AetheryteRecord>                     houseRecords = [];
-
-    private bool isRefreshing;
-    private bool isMoving;
 
     protected override void Init()
     {
@@ -86,10 +71,6 @@ public unsafe partial class BetterTeleport : ModuleBase
         config = Config.Load(this) ?? new();
         MigrateConfig();
 
-        DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
-        OnZoneChanged(0);
-        GameState.Instance().Login += OnLogin;
-
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterTeleport-CommandHelp") });
 
         UseActionManager.Instance().RegPreUseAction(OnPostUseAction);
@@ -104,9 +85,6 @@ public unsafe partial class BetterTeleport : ModuleBase
         UseActionManager.Instance().Unreg(OnPostUseAction);
         CommandManager.Instance().RemoveCommand(COMMAND);
 
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        GameState.Instance().Login                       -= OnLogin;
-
         if (fullWindow != null)
         {
             ManagerHost.Current.RemoveWindow(fullWindow);
@@ -116,21 +94,16 @@ public unsafe partial class BetterTeleport : ModuleBase
         recordMatcher?.Dispose();
         recordMatcher = null;
     }
-    
-    private void ToggleDefaultPage()
+
+    private void RefreshFavoritesInfo()
     {
-        if (Overlay.IsOpen || fullWindow.IsOpen)
-        {
-            Overlay.IsOpen    = false;
-            fullWindow.IsOpen = false;
-        }
-        else
-        {
-            if (config.DefaultPage == PageType.Search)
-                Overlay.IsOpen = true;
-            else
-                fullWindow.IsOpen = true;
-        }
+        if (config.Favorites.Count == 0) return;
+        favorites = config.Favorites
+                          .Select(x => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(d => d.RowID == x))
+                          .Where(x => x != null)
+                          .OfType<AetheryteRecord>()
+                          .OrderBy(x => x.RowID)
+                          .ToList();
     }
 
     private void HandleTeleport(AetheryteRecord aetheryte, string? searchText = null)
@@ -186,7 +159,7 @@ public unsafe partial class BetterTeleport : ModuleBase
                             !UIModule.IsScreenReady()                    ||
                             DService.Instance().Condition.Any(ConditionFlag.Mounted))
                             return false;
-                            
+
                         MovementManager.Instance().TPGround();
                         return true;
                     }
@@ -516,10 +489,10 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     public class SearchSelectionRecord
     {
-        public uint AetheryteID          { get; set; }
-        public byte SubIndex             { get; set; }
-        public int  Count                { get; set; }
-        public long LastUsedUnixSeconds  { get; set; }
+        public uint AetheryteID         { get; set; }
+        public byte SubIndex            { get; set; }
+        public int  Count               { get; set; }
+        public long LastUsedUnixSeconds { get; set; }
     }
 
     private enum PageType
@@ -547,9 +520,8 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     private const string COMMAND = "/pdrtelepo";
 
-    private const ulong INVALID_HOUSE_ID = 0xFFFFFFFFFFFFFFFF;
-    private const int   MAX_SEARCH_SELECTION_TERMS            = 200;
-    private const int   MAX_SEARCH_SELECTION_RECORDS_PER_TERM = 8;
+    private const int MAX_SEARCH_SELECTION_TERMS            = 200;
+    private const int MAX_SEARCH_SELECTION_RECORDS_PER_TERM = 8;
 
 
     private static Dictionary<uint, string> TicketUsageTypes

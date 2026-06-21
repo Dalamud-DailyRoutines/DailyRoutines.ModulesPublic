@@ -1,6 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -39,11 +38,9 @@ public unsafe partial class BetterTeleport
 
         var isSearchEmpty = string.IsNullOrWhiteSpace(fullSearchWord);
 
-        var defaultTab = favorites.Count > 0 ? "Favorite" : records.Keys.FirstOrDefault() ?? "Setting";
-
         if (string.IsNullOrEmpty(activeTabName))
         {
-            activeTabName        = defaultTab;
+            activeTabName        = favorites.Count > 0 ? "Favorite" : AetheryteRecordManager.Instance().Records.Keys.FirstOrDefault() ?? "Setting";
             tabToSelect          = activeTabName;
             shouldFocusSearchBar = true;
             selectedIndex        = 0;
@@ -67,7 +64,7 @@ public unsafe partial class BetterTeleport
 
         if (agentLobby != null)
         {
-            foreach (var name in records.Keys)
+            foreach (var name in AetheryteRecordManager.Instance().Records.Keys)
                 availableTabs.Add(name);
         }
 
@@ -119,9 +116,9 @@ public unsafe partial class BetterTeleport
             currentSelectableRecords.AddRange(fullSearchResult);
         else if (activeTabName == "Favorite")
             currentSelectableRecords.AddRange(favorites);
-        else if (records.TryGetValue(activeTabName, out var aetherytes))
+        else if (AetheryteRecordManager.Instance().Records.TryGetValue(activeTabName, out var aetherytes))
         {
-            var source = activeTabName == LuminaWrapper.GetAddonText(832) ? houseRecords.Concat(aetherytes) : aetherytes;
+            var source = activeTabName == LuminaWrapper.GetAddonText(832) ? AetheryteRecordManager.Instance().HouseRecords.Concat(aetherytes) : aetherytes;
 
             foreach (var aetheryte in source.ToList())
             {
@@ -150,11 +147,8 @@ public unsafe partial class BetterTeleport
 
             shouldFocusSearchBar = false;
 
-            if (isMoving)
-            {
+            if (LocalPlayerState.Instance().IsMoving)
                 ChatManager.Instance().SendCommand("/automove on");
-                isMoving = false;
-            }
         }
 
         ImGui.SetNextItemWidth(isSearchEmpty ? -1f : -ImGui.GetFrameHeight() - ImGui.GetStyle().ItemSpacing.X);
@@ -172,14 +166,14 @@ public unsafe partial class BetterTeleport
                     fullSearchResult = SortSearchMatches
                     (
                         fullSearchWord,
-                        records.Values
-                               .SelectMany(x => x)
-                               .Where
-                               (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
-                                     (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
-                                      remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
-                               )
-                               .ToList()
+                        AetheryteRecordManager.Instance().Records.Values
+                                              .SelectMany(x => x)
+                                              .Where
+                                              (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
+                                                    (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                                     remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
+                                              )
+                                              .ToList()
                     );
                 }
             }
@@ -298,7 +292,7 @@ public unsafe partial class BetterTeleport
 
                 if (agentLobby != null)
                 {
-                    foreach (var (name, aetherytes) in records.ToList())
+                    foreach (var (name, aetherytes) in AetheryteRecordManager.Instance().Records.ToList())
                     {
                         var tabFlags                      = ImGuiTabItemFlags.None;
                         if (tabToSelect == name) tabFlags |= ImGuiTabItemFlags.SetSelected;
@@ -312,7 +306,7 @@ public unsafe partial class BetterTeleport
                         using var child     = ImRaii.Child($"###{name}ChildFull", childSize, false, ImGuiWindowFlags.NoBackground);
                         if (!child) continue;
 
-                        var source      = name == LuminaWrapper.GetAddonText(832) ? houseRecords.Concat(aetherytes) : aetherytes;
+                        var source      = name == LuminaWrapper.GetAddonText(832) ? AetheryteRecordManager.Instance().HouseRecords.Concat(aetherytes) : aetherytes;
                         var lastName    = string.Empty;
                         var lastGroupID = -1;
 
@@ -429,13 +423,18 @@ public unsafe partial class BetterTeleport
     {
         public override void OnOpen()
         {
+            module.RefreshFavoritesInfo();
+            module.RefreshDefaultOverlayItems();
+            module.recordMatcher?.Dispose();
+            module.recordMatcher = module.CreateRecordMatcher();
+
             module.fullSearchWord         = string.Empty;
             module.fullSearchResult       = [];
             module.selectedIndex          = 0;
             module.hasUsedArrowKeys       = true;
             module.hoveredAetheryte       = null;
             module.pinnedAetheryte        = null;
-            module.activeTabName          = module.favorites.Count > 0 ? "Favorite" : module.records.Keys.FirstOrDefault() ?? "Setting";
+            module.activeTabName          = module.favorites.Count > 0 ? "Favorite" : AetheryteRecordManager.Instance().Records.Keys.FirstOrDefault() ?? "Setting";
             module.tabToSelect            = module.activeTabName;
             module.shouldFocusSearchBar   = module.config.FocusSearchOnOpen;
             module.shouldScrollToSelected = false;
