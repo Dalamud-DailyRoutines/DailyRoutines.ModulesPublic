@@ -503,11 +503,12 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public PageType                                        DefaultPage          = PageType.Search;
-        public bool                                            FocusSearchOnOpen    = true;
-        public bool                                            CloseOnLoseFocus     = true;
+        public PageType DefaultPage          = PageType.Search;
+        public bool     FocusSearchOnOpen    = true;
+        public bool     CloseOnLoseFocus     = true;
+        public bool     HideAethernetInParty = true;
+        
         public HashSet<uint>                                   Favorites            = [];
-        public bool                                            HideAethernetInParty = true;
         public Dictionary<string, Vector3>                     Positions            = [];
         public Dictionary<string, string>                      Remarks              = [];
         public List<RecentRecord>                              RecentTeleports      = [];
