@@ -4,17 +4,13 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
-using DailyRoutines.Verification;
-using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.UI;
+using Dalamud.Game.Agent;
+using Dalamud.Game.Agent.AgentArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
-using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
-using AgentReceiveEventDelegate = OmenTools.Interop.Game.Models.Native.AgentReceiveEventDelegate;
+using AgentId = Dalamud.Game.Agent.AgentId;
+using ContextMenu = KamiToolKit.ContextMenu.ContextMenu;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -29,174 +25,112 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private static bool IsEligibleForTeleporting =>
-        !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium;
+    private ContextMenu? contextMenu;
 
-    private Hook<AgentReceiveEventDelegate> AgentSatisfactionListReceiveEventHook;
+    protected override void Init() =>
+        DService.Instance().AgentLifecycle.RegisterListener(AgentEvent.PreReceiveEvent, AgentId.SatisfactionList, OnAgent);
 
-    private CustomDeliveryInfo? selectedInfo;
-
-    private bool isNeedToRefresh;
-    
-    protected override void Init()
+    protected override void Uninit()
     {
-        Overlay    ??= new(this);
-        TaskHelper ??= new() { TimeoutMS = 30_000 };
-        
-        AgentSatisfactionListReceiveEventHook ??= DService.Instance().Hook.HookFromAddress<AgentReceiveEventDelegate>
+        DService.Instance().AgentLifecycle.UnregisterListener(OnAgent);
+
+        contextMenu?.Dispose();
+        contextMenu = null;
+    }
+
+    private void ShowContextMenu(CustomDeliveryInfo? selectedInfo)
+    {
+        if (selectedInfo == null) return;
+
+        contextMenu?.Dispose();
+        contextMenu = new();
+
+        contextMenu.AddItem
         (
-            AgentModule.Instance()->GetAgentByInternalId(AgentId.SatisfactionList)->VirtualTable->GetVFuncByName("ReceiveEvent"),
-            AgentSatisfactionListReceiveEventDetour
+            new()
+            {
+                Name    = Lang.Get("Teleport"),
+                OnClick = () => MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(selectedInfo.Map), selectedInfo.Position)
+            }
         );
-        AgentSatisfactionListReceiveEventHook.Enable();
-    }
 
-    protected override void OverlayUI()
-    {
-        if (selectedInfo == null)
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        using var font = FontManager.Instance().UIFont.Push();
-
-        if (ImGui.IsWindowAppearing() || isNeedToRefresh)
-        {
-            isNeedToRefresh = false;
-            ImGui.SetWindowPos(ImGui.GetMousePos());
-        }
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetAddonText(8813));
-
-        using (ImRaii.PushIndent())
-        {
-            using (FontManager.Instance().UIFont120.Push())
-                ImGui.TextUnformatted(selectedInfo?.GetRow().Npc.Value.Singular.ToString());
-        }
-
-        ImGui.Separator();
-        ImGui.Spacing();
-
-        var isNeedToClose = false;
-
-        using (ImRaii.Disabled
-               (
-                   !IsEligibleForTeleporting &&
-                   Sheets.SpeedDetectionZones.ContainsKey(selectedInfo?.Zone ?? 0)
-               ))
-        {
-            if (ImGui.MenuItem(Lang.Get("Teleport")))
+        contextMenu.AddItem
+        (
+            new()
             {
-                MovementManager.Instance().TPSmart_BetweenZone(selectedInfo?.Zone ?? 0, selectedInfo?.Position ?? default);
-                isNeedToClose = true;
+                Name    = Lang.Get("FastCustomDeliveriesInfo-TeleportToZone"),
+                OnClick = () => MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(selectedInfo.Map))
             }
-        }
+        );
 
-        if (ImGui.MenuItem(Lang.Get("FastCustomDeliveriesInfo-TeleportToZone")))
-        {
-            switch (selectedInfo?.Index)
+        contextMenu.AddItem
+        (
+            new()
             {
-                // 天穹街
-                case 6 or 7:
-                    MovementManager.Instance().TPSmart_BetweenZone(selectedInfo?.Zone ?? 0);
-                    break;
-                default:
-                    MovementManager.Instance().TeleportNearestAetheryte
+                Name = LuminaWrapper.GetAddonText(66),
+                OnClick = () => DService.Instance().Framework.RunOnTick
+                (
+                    () => AgentMap.Instance()->SetMapFlagAndOpen
                     (
-                        selectedInfo?.Zone     ?? 0,
-                        selectedInfo?.Position ?? default
-                    );
-                    break;
+                        selectedInfo.Map,
+                        selectedInfo.Position,
+                        selectedInfo.Name
+                    ),
+                    delayTicks: 1
+                )
             }
+        );
 
-            isNeedToClose = true;
-        }
-
-        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(66)))
-        {
-            var instance = AgentMap.Instance();
-
-            var zoneID = (uint)selectedInfo?.Zone!;
-            var mapID  = LuminaGetter.GetRow<TerritoryType>(zoneID)!.Value.Map.RowId;
-
-            instance->SetFlagMapMarker(zoneID, mapID, selectedInfo?.Position ?? default);
-            instance->OpenMap(mapID, zoneID, selectedInfo?.Name ?? string.Empty);
-
-            isNeedToClose = true;
-        }
-
-        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(1219)) | isNeedToClose)
-        {
-            Overlay.IsOpen = false;
-            selectedInfo   = null;
-        }
+        contextMenu.Open();
     }
 
-    private AtkValue* AgentSatisfactionListReceiveEventDetour
-    (
-        AgentInterface* agent,
-        AtkValue*       returnValues,
-        AtkValue*       values,
-        uint            valueCount,
-        ulong           eventKind
-    )
+    private void OnAgent(AgentEvent type, AgentArgs args)
     {
-        if (agent == null || values == null || valueCount < 1)
-            return InvokeOriginal();
+        var formatted = args as AgentReceiveEventArgs;
+        if (formatted.ValueCount < 2) return;
+
+        var atkValues = (AtkValue*)formatted.AtkValues;
+        if (atkValues == null) return;
 
         // 非右键
-        var valueType = values[0].Int;
-        if (valueType != 1)
-            return InvokeOriginal();
+        var valueType = atkValues[0].Int;
+        if (valueType != 1) return;
 
-        var customDeliveryIndex = values[1].UInt;
-        if (customDeliveryIndex < 1)
-            return InvokeOriginal();
+        var customDeliveryIndex = atkValues[1].UInt;
+        if (customDeliveryIndex < 1) return;
 
         if (!Infos.TryGetValue(customDeliveryIndex, out var customDeliveryInfo))
-            return InvokeOriginal();
+            return;
 
-        selectedInfo    = customDeliveryInfo;
-        isNeedToRefresh = true;
-        Overlay.IsOpen  = true;
-
-        var defaultValue = new AtkValue { Type = AtkValueType.Bool, Bool = false };
-        return &defaultValue;
-
-        AtkValue* InvokeOriginal() =>
-            AgentSatisfactionListReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
+        ShowContextMenu(customDeliveryInfo);
+        formatted.PreventOriginal();
     }
 
     private record CustomDeliveryInfo
     (
         uint    Index,
         string  Name,
-        uint    Zone,
+        uint    Map,
         Vector3 Position
-    )
-    {
-        public SatisfactionNpc GetRow() => 
-            LuminaGetter.GetRow<SatisfactionNpc>(Index).GetValueOrDefault();
-    }
-    
+    );
+
     #region 常量
-    
+
     private static readonly FrozenDictionary<uint, CustomDeliveryInfo> Infos = new Dictionary<uint, CustomDeliveryInfo>
     {
-        [12] = new(12, "缇索加", 1185, new(90, -14, 59.7f)),
-        [11] = new(11, "尼托维凯", 1190, new(-355.7f, 19.6f, -108.7f)),
-        [10] = new(10, "玛格拉特", 956, new(-52.8f, -29.5f, -61.5f)),
-        [9]  = new(9, "安登", 816, new(-241f, 51f, 615.7f)),
-        [8]  = new(8, "阿梅莉安丝", 962, new(223, 25, -193)),
-        [7]  = new(7, "狄兰达尔伯爵", 886, new(-112, 0, -135)),
-        [6]  = new(6, "艾尔·图", 886, new(110, -20, 0)),
-        [5]  = new(5, "凯·希尔", 820, new(50, 83, -66)),
-        [4]  = new(4, "亚德基拉", 478, new(-64, 206.5f, 22)),
-        [3]  = new(3, "红", 613, new(345, -120, -302)),
-        [2]  = new(2, "梅·娜格", 635, new(162, 13, -88)),
-        [1]  = new(1, "熙洛·阿里亚珀", 478, new(-72, 206.5f, 28))
+        [12] = new(12, "缇索加", 855, new(90, -14, 59.7f)),
+        [11] = new(11, "尼托维凯", 860, new(-355.7f, 19.6f, -108.7f)),
+        [10] = new(10, "玛格拉特", 695, new(-52.8f, -29.5f, -61.5f)),
+        [9]  = new(9, "安登", 494, new(-241f, 51f, 615.7f)),
+        [8]  = new(8, "阿梅莉安丝", 693, new(223, 25, -193)),
+        [7]  = new(7, "狄兰达尔伯爵", 574, new(-112, 0, -135)),
+        [6]  = new(6, "艾尔·图", 574, new(110, -20, 0)),
+        [5]  = new(5, "凯·希尔", 555, new(50, 83, -66)),
+        [4]  = new(4, "亚德基拉", 257, new(-64, 206.5f, 22)),
+        [3]  = new(3, "红", 371, new(345, -120, -302)),
+        [2]  = new(2, "梅·娜格", 366, new(162, 13, -88)),
+        [1]  = new(1, "熙洛·阿里亚珀", 257, new(-72, 206.5f, 28))
     }.ToFrozenDictionary();
-    
+
     #endregion
 }
