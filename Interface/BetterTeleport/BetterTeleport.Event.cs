@@ -98,7 +98,7 @@ public unsafe partial class BetterTeleport
                         }
                     }
 
-                    RefreshHwdInfo();
+                    RefreshFirmamentInfo();
 
                     RefreshFavoritesInfo();
 

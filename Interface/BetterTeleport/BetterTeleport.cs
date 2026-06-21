@@ -174,10 +174,6 @@ public unsafe partial class BetterTeleport : ModuleBase
             case 255:
                 Telepo.Instance()->Teleport(aetheryte.RowID, aetheryte.SubIndex);
                 return;
-            // 天穹街
-            // case 254:
-            //     TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(886, aetherytePos), "天穹街");
-            //     return;
             // 野外大水晶直接传
             default:
                 TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));

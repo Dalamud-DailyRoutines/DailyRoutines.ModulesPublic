@@ -179,8 +179,8 @@ public partial class BetterTeleport
         }
     }
 
-    // 公寓
-    private void RefreshHwdInfo()
+    // 天穹街
+    private void RefreshFirmamentInfo()
     {
         var markers = LuminaGetter.GetRowOrDefault<TerritoryType>(886)
                                   .GetMapMarkers()
@@ -189,7 +189,7 @@ public partial class BetterTeleport
                                   (x => new
                                       {
                                           Name     = AetheryteRecord.TryParseName(x, out var markerName) ? markerName : string.Empty,
-                                          Position = PositionHelper.TextureToWorld(new(x.X, x.Y), LuminaGetter.GetRow<Map>(574)!.Value).ToVector3(0),
+                                          Position = PositionHelper.TextureToWorld(new(x.X, x.Y), LuminaGetter.GetRowOrDefault<Map>(574)).ToVector3(0),
                                           Marker   = x
                                       }
                                   )
