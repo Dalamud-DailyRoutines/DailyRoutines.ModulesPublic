@@ -6,6 +6,8 @@ using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.Info.Game.AetheryteRecord;
+using OmenTools.Info.Game.AetheryteRecord.Enums;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface.BetterTeleport;

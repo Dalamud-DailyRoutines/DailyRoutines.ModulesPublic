@@ -4,6 +4,7 @@ using DailyRoutines.Manager;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 

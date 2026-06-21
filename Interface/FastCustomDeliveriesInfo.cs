@@ -58,8 +58,23 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         (
             new()
             {
-                Name    = Lang.Get("FastCustomDeliveriesInfo-TeleportToZone"),
-                OnClick = () => MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(selectedInfo.Map))
+                Name = Lang.Get("FastCustomDeliveriesInfo-TeleportToZone"),
+                OnClick = () =>
+                {
+                    switch (selectedInfo.Index)
+                    {
+                        case 6 or 7:
+                            MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(selectedInfo.Map));
+                            break;
+                        default:
+                            MovementManager.Instance().TeleportNearestAetheryte
+                            (
+                                LuminaWrapper.GetZoneFromMap(selectedInfo.Map),
+                                selectedInfo.Position
+                            );
+                            break;
+                    }
+                }
             }
         );
 

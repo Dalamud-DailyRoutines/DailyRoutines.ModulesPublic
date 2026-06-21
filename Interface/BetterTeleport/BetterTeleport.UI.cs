@@ -8,6 +8,8 @@ using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.MapRenderer;
+using OmenTools.Info.Game.AetheryteRecord;
+using OmenTools.Info.Game.AetheryteRecord.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Utils.FuzzyMatcher;
