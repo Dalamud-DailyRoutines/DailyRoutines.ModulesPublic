@@ -14,11 +14,11 @@ using ContextMenu = KamiToolKit.ContextMenu.ContextMenu;
 
 namespace DailyRoutines.ModulesPublic.AutoRecordPartyFinderSettings;
 
-public unsafe partial class AutoRecordPartyFinderSettings
+public unsafe partial class AutoRecordPartyFinderSetting
 {
     private sealed class AutoRecordPartyFinderSettingAddon
     (
-        AutoRecordPartyFinderSettings module
+        AutoRecordPartyFinderSetting module
     )
         : AttachedAddon("LookingForGroupCondition", AddonEvent.PostSetup)
     {
@@ -32,18 +32,22 @@ public unsafe partial class AutoRecordPartyFinderSettings
         private          TextButtonNode      nextPageBtn = null!;
         private          TextNode            pageLabel   = null!;
 
-        public           int         CurrentPageIndex;
-        private readonly ContextMenu contextMenu = new();
+        public int CurrentPageIndex;
+        
+        private ContextMenu? contextMenu;
 
         public override void Dispose()
         {
-            contextMenu.Dispose();
+            contextMenu?.Dispose();
+            contextMenu = null;
+            
             base.Dispose();
         }
 
         public void ShowContextMenu(PartyFinderSetting setting)
         {
-            contextMenu.Clear();
+            contextMenu?.Dispose();
+            contextMenu = new();
 
             contextMenu.AddItem
             (
@@ -66,6 +70,7 @@ public unsafe partial class AutoRecordPartyFinderSettings
                     }
                 }
             );
+            
             contextMenu.Open();
         }
 
@@ -282,7 +287,7 @@ public unsafe partial class AutoRecordPartyFinderSettings
         private readonly TextButtonNode titleButton;
         private readonly TextButtonNode deleteButton;
 
-        public PresetRowNode(AutoRecordPartyFinderSettings module, AutoRecordPartyFinderSettingAddon addon)
+        public PresetRowNode(AutoRecordPartyFinderSetting module, AutoRecordPartyFinderSettingAddon addon)
         {
             IsVisible   = true;
             Size        = new(addon.ContentSize.X - 8f, 28f);
