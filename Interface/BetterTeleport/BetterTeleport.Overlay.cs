@@ -106,7 +106,7 @@ public unsafe partial class BetterTeleport
                     AetheryteRecordManager.Instance().AllRecords
                                           .Where
                                           (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                                (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
                                                  remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
                                           )
                                           .ToList()
@@ -302,15 +302,13 @@ public unsafe partial class BetterTeleport
     private List<AetheryteRecord> GetCombinedRecentRecords()
     {
         var result = new List<AetheryteRecord>();
-        var seen   = new HashSet<(uint, byte)>();
+        var seen   = new HashSet<string>();
 
         foreach (var rec in config.RecentTeleports)
         {
-            if (seen.Add((rec.AetheryteID, rec.SubIndex)))
-            {
-                var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteID && x.SubIndex == rec.SubIndex);
-                if (found != null) result.Add(found);
-            }
+            if (string.IsNullOrEmpty(rec.Key) || !seen.Add(rec.Key)) continue;
+            var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.ToString() == rec.Key);
+            if (found != null) result.Add(found);
         }
 
         var module = TeleportHistoryModule.Instance();
@@ -319,11 +317,9 @@ public unsafe partial class BetterTeleport
         {
             foreach (var rec in module->History)
             {
-                if (seen.Add((rec.AetheryteId, rec.SubIndex)))
-                {
-                    var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
-                    if (found != null) result.Add(found);
-                }
+                var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
+                if (found != null && seen.Add(found.ToString()))
+                    result.Add(found);
             }
         }
 

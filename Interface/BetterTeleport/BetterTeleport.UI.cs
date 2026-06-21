@@ -76,7 +76,7 @@ public unsafe partial class BetterTeleport
             {
                 var keys = new List<(IEnumerable<string?>, FuzzySearchWeight)>();
 
-                if (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) && !string.IsNullOrWhiteSpace(remark))
+                if (config.Remarks.TryGetValue(x.ToString(), out var remark) && !string.IsNullOrWhiteSpace(remark))
                     keys.Add(([remark], FuzzySearchWeight.Title));
 
                 keys.Add(([x.Name], FuzzySearchWeight.Name));
@@ -110,12 +110,12 @@ public unsafe partial class BetterTeleport
         {
             if (record.RowID == aetheryte.RowID) continue;
 
-            var recordPos   = config.Positions.TryGetValue(GetConfigKey(record), out var redirected) ? redirected : record.Position;
+            var recordPos   = config.Positions.TryGetValue(record.ToString(), out var redirected) ? redirected : record.Position;
             var isAetheryte = record.IsAetheryte;
 
             var marker = new ImGuiMapMarker
             {
-                ID          = GetConfigKey(record),
+                ID          = record.ToString(),
                 Position    = recordPos,
                 IconID      = isAetheryte ? 60453U : 60430U,
                 Name        = record.Name,
@@ -137,12 +137,12 @@ public unsafe partial class BetterTeleport
         }
 
         // 2. 绘制当前主水晶 Marker (带高亮脉冲、Label)
-        var targetPos   = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var redirectedPos) ? redirectedPos : aetheryte.Position;
-        var displayName = config.Remarks.TryGetValue(GetConfigKey(aetheryte), out var remark) ? remark : aetheryte.Name;
+        var targetPos   = config.Positions.TryGetValue(aetheryte.ToString(), out var redirectedPos) ? redirectedPos : aetheryte.Position;
+        var displayName = config.Remarks.TryGetValue(aetheryte.ToString(), out var remark) ? remark : aetheryte.Name;
 
         var mainMarker = new ImGuiMapMarker
         {
-            ID          = GetConfigKey(aetheryte),
+            ID          = aetheryte.ToString(),
             Position    = targetPos,
             IconID      = aetheryte.IsAetheryte ? 60453U : 60430U,
             Name        = aetheryte.Name,
@@ -432,7 +432,7 @@ public unsafe partial class BetterTeleport
     )
     {
         var curX      = startX;
-        var hasRemark = config.Remarks.ContainsKey(GetConfigKey(aetheryte));
+        var hasRemark = config.Remarks.ContainsKey(aetheryte.ToString());
 
         if (hasRemark)
         {
@@ -442,7 +442,7 @@ public unsafe partial class BetterTeleport
             curX += remarkIconSize.X + (6f * GlobalUIScale);
         }
 
-        var hasCustomPos = config.Positions.ContainsKey(GetConfigKey(aetheryte));
+        var hasCustomPos = config.Positions.ContainsKey(aetheryte.ToString());
 
         if (hasCustomPos)
         {
@@ -477,7 +477,7 @@ public unsafe partial class BetterTeleport
                 iconStr = FavoriteChar;
                 break;
             default:
-                if (config.Favorites.Contains(aetheryte.RowID))
+                if (config.Favorites.Contains(aetheryte.ToString()))
                     iconStr = FavoriteChar;
                 break;
         }
@@ -499,10 +499,10 @@ public unsafe partial class BetterTeleport
         ImGui.Separator();
         ImGui.Spacing();
 
-        if (ImGui.MenuItem(Lang.Get("Favorite"), string.Empty, config.Favorites.Contains(aetheryte.RowID)))
+        if (ImGui.MenuItem(Lang.Get("Favorite"), string.Empty, config.Favorites.Contains(aetheryte.ToString())))
         {
-            if (!config.Favorites.Add(aetheryte.RowID))
-                config.Favorites.Remove(aetheryte.RowID);
+            if (!config.Favorites.Add(aetheryte.ToString()))
+                config.Favorites.Remove(aetheryte.ToString());
 
             RefreshFavoritesInfo();
             config.Save(this);
@@ -514,16 +514,16 @@ public unsafe partial class BetterTeleport
 
         ImGui.TextUnformatted(Lang.Get("Note"));
 
-        var hasRemark = config.Remarks.TryGetValue(GetConfigKey(aetheryte), out var remark);
+        var hasRemark = config.Remarks.TryGetValue(aetheryte.ToString(), out var remark);
         var input     = hasRemark ? remark : string.Empty;
         ImGui.SetNextItemWidth(Math.Max(150f * GlobalUIScale, ImGui.CalcTextSize(aetheryte.Name).X));
 
         if (ImGui.InputText("###Note", ref input, 128))
         {
             if (string.IsNullOrWhiteSpace(input))
-                config.Remarks.Remove(GetConfigKey(aetheryte));
+                config.Remarks.Remove(aetheryte.ToString());
             else
-                config.Remarks[GetConfigKey(aetheryte)] = input;
+                config.Remarks[aetheryte.ToString()] = input;
         }
 
         if (ImGui.IsItemDeactivatedAfterEdit())
@@ -538,21 +538,21 @@ public unsafe partial class BetterTeleport
 
         ImGui.TextUnformatted(Lang.Get("Position"));
 
-        var hasPosition = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var position);
+        var hasPosition = config.Positions.TryGetValue(aetheryte.ToString(), out var position);
         using (FontManager.Instance().UIFont60.Push())
             ImGui.TextUnformatted($"{(hasPosition ? position : aetheryte.Position):F1}");
 
         if (ImGui.MenuItem(Lang.Get("BetterTeleport-RedirectedToCurrentPos")))
         {
-            config.Positions[GetConfigKey(aetheryte)] = Control.GetLocalPlayer()->Position;
+            config.Positions[aetheryte.ToString()] = Control.GetLocalPlayer()->Position;
             config.Save(this);
         }
 
-        using (ImRaii.Disabled(!config.Positions.ContainsKey(GetConfigKey(aetheryte))))
+        using (ImRaii.Disabled(!config.Positions.ContainsKey(aetheryte.ToString())))
         {
             if (ImGui.MenuItem($"{Lang.Get("Clear")}###DeleteRedirected"))
             {
-                config.Positions.Remove(GetConfigKey(aetheryte));
+                config.Positions.Remove(aetheryte.ToString());
                 config.Save(this);
             }
         }
@@ -570,7 +570,7 @@ public unsafe partial class BetterTeleport
         if (config.HideAethernetInParty && !aetheryte.IsAetheryte && DService.Instance().PartyList.Length > 1)
             return;
 
-        var hasRemark   = config.Remarks.TryGetValue(GetConfigKey(aetheryte), out var remark);
+        var hasRemark   = config.Remarks.TryGetValue(aetheryte.ToString(), out var remark);
         var displayName = hasRemark ? remark : aetheryte.Name;
         var cost        = aetheryte.Cost;
 

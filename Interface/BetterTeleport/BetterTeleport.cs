@@ -11,6 +11,8 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
@@ -68,8 +70,8 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         TaskHelper ??= new() { TimeoutMS = 60_000 };
 
-        config = Config.Load(this) ?? new();
         MigrateConfig();
+        config = Config.Load(this) ?? new();
 
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterTeleport-CommandHelp") });
 
@@ -98,10 +100,8 @@ public unsafe partial class BetterTeleport : ModuleBase
     private void RefreshFavoritesInfo()
     {
         if (config.Favorites.Count == 0) return;
-        favorites = config.Favorites
-                          .Select(x => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(d => d.RowID == x))
-                          .Where(x => x != null)
-                          .OfType<AetheryteRecord>()
+        favorites = AetheryteRecordManager.Instance().AllRecords
+                          .Where(x => config.Favorites.Contains(x.ToString()))
                           .OrderBy(x => x.RowID)
                           .ToList();
     }
@@ -119,7 +119,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return;
 
-        var hasRedirect  = config.Positions.TryGetValue(GetConfigKey(aetheryte), out var redirected);
+        var hasRedirect  = config.Positions.TryGetValue(aetheryte.ToString(), out var redirected);
         var aetherytePos = hasRedirect ? redirected : aetheryte.Position;
 
         var isSameZone = aetheryte.ZoneID == GameState.TerritoryType;
@@ -167,120 +167,13 @@ public unsafe partial class BetterTeleport : ModuleBase
 
                 return;
         }
-
-        // 当前在有小水晶的城区
-        /*if (GameState.TerritoryType == aetheryte.ZoneID && aetheryte.Group != 0)
-        {
-            // 大水晶才要偏移一下
-            var offset = new Vector3();
-
-            if (aetheryte.IsAetheryte)
-            {
-                var direction = !isPosDefault
-                                    ? new()
-                                    : Vector3.Normalize((Vector3)localPlayer->Position - aetherytePos);
-                offset = direction * 10;
-            }
-
-            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos + offset));
-
-            if (isPosDefault)
-            {
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (MovementManager.Instance().IsManagerBusy     ||
-                            DService.Instance().Condition.IsBetweenAreas ||
-                            !UIModule.IsScreenReady()                    ||
-                            DService.Instance().Condition.Any(ConditionFlag.Mounted))
-                            return false;
-                        MovementManager.Instance().TPGround();
-                        return true;
-                    }
-                );
-            }
-
-            return;
-        }
-
-        // 先获取当前区域任一水晶
-        var aetheryteInThisZone = MovementManager.GetNearestAetheryte(Control.GetLocalPlayer()->Position, GameState.TerritoryType);
-
-        // 获取不到水晶 / 不属于同一组水晶 / 附近没有能交互到的水晶 → 直接传
-        if ((!isSameZone && aetheryte.Group == 0)        ||
-            aetheryteInThisZone       == null            ||
-            aetheryteInThisZone.Group != aetheryte.Group ||
-            !EventFramework.Instance()->TryGetNearestEventID
-            (
-                x => x.EventId.ContentId is EventHandlerContent.Aetheryte,
-                _ => true,
-                DService.Instance().ObjectTable.LocalPlayer.Position,
-                out var eventIDAetheryte
-            ))
-        {
-            // 大水晶直接传
-            if (aetheryte.IsAetheryte)
-            {
-                Telepo.Instance()->Teleport(aetheryte.RowID, aetheryte.SubIndex);
-
-                if (hasRedirect)
-                {
-                    TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && Control.GetLocalPlayer() != null);
-                    TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos));
-                }
-
-                return;
-            }
-
-            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
-
-            if (isPosDefault)
-            {
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (MovementManager.Instance().IsManagerBusy     ||
-                            DService.Instance().Condition.IsBetweenAreas ||
-                            !UIModule.IsScreenReady()                    ||
-                            DService.Instance().Condition.Any(ConditionFlag.Mounted))
-                            return false;
-                        MovementManager.Instance().TPGround();
-                        return true;
-                    }
-                );
-            }
-
-            return;
-        }
-
-        TaskHelper.Enqueue(() => !DService.Instance().Condition.IsOccupiedInEvent);
-        if (!TelepotTown->IsAddonAndNodesReady())
-            TaskHelper.Enqueue(() => new EventStartPackt(Control.GetLocalPlayer()->EntityId, eventIDAetheryte).Send());
-        TaskHelper.Enqueue
-        (() =>
-            {
-                AddonSelectStringEvent.Select(["都市传送网", "Aethernet", "都市転送網"]);
-
-                var agent = AgentTelepotTown.Instance();
-                if (agent == null || !agent->IsAgentActive()) return false;
-
-                AgentId.TelepotTown.SendEvent(1, 11, (uint)aetheryte.SubIndex);
-                AgentId.TelepotTown.SendEvent(1, 11, (uint)aetheryte.SubIndex);
-                return true;
-            }
-        );
-
-        if (hasRedirect)
-        {
-            TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && Control.GetLocalPlayer() != null);
-            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_InZone(aetherytePos));
-        }*/
     }
 
     private void AddToRecentTeleports(AetheryteRecord aetheryte)
     {
-        config.RecentTeleports.RemoveAll(x => x.AetheryteID == aetheryte.RowID && x.SubIndex == aetheryte.SubIndex);
-        config.RecentTeleports.Insert(0, new RecentRecord { AetheryteID = aetheryte.RowID, SubIndex = aetheryte.SubIndex });
+        var key = aetheryte.ToString();
+        config.RecentTeleports.RemoveAll(x => x.Key == key);
+        config.RecentTeleports.Insert(0, new RecentRecord { Key = key });
         if (config.RecentTeleports.Count > 20)
             config.RecentTeleports.RemoveRange(20, config.RecentTeleports.Count - 20);
         config.Save(this);
@@ -319,7 +212,7 @@ public unsafe partial class BetterTeleport : ModuleBase
                 config.SearchSelections[term] = recordsForTerm;
             }
 
-            var existing = recordsForTerm.FirstOrDefault(x => x.AetheryteID == aetheryte.RowID && x.SubIndex == aetheryte.SubIndex);
+            var existing = recordsForTerm.FirstOrDefault(x => x.Key == aetheryte.ToString());
 
             if (existing == null)
             {
@@ -327,8 +220,7 @@ public unsafe partial class BetterTeleport : ModuleBase
                 (
                     new SearchSelectionRecord
                     {
-                        AetheryteID         = aetheryte.RowID,
-                        SubIndex            = aetheryte.SubIndex,
+                        Key                 = aetheryte.ToString(),
                         Count               = 1,
                         LastUsedUnixSeconds = now
                     }
@@ -383,7 +275,7 @@ public unsafe partial class BetterTeleport : ModuleBase
             var relationWeight = GetSearchTermRelationWeight(normalizedSearchText, term);
             if (relationWeight <= 0) continue;
 
-            var selection = selections.FirstOrDefault(x => x.AetheryteID == record.RowID && x.SubIndex == record.SubIndex);
+            var selection = selections.FirstOrDefault(x => x.Key == record.ToString());
             if (selection == null) continue;
 
             var countScore   = Math.Min(selection.Count, 20) * 100;
@@ -429,70 +321,181 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     #region 配置
 
-    private static string GetConfigKey(AetheryteRecord record) => $"{record.RowID}_{record.SubIndex}";
-
-    private static string GetConfigKey(uint rowID, byte subIndex) => $"{rowID}_{subIndex}";
-
     private void MigrateConfig()
     {
+        if (!File.Exists(ConfigFilePath)) return;
+
+        var allRecords = AetheryteRecordManager.Instance().AllRecords.ToList();
+        if (allRecords.Count == 0) return;
+
+        var jsonObj = JObject.Parse(File.ReadAllText(ConfigFilePath));
         var migrated = false;
 
-        // 迁移 Remarks
-        var oldRemarksKeys = config.Remarks.Keys.Where(k => !k.Contains('_')).ToList();
-
-        if (oldRemarksKeys.Count > 0)
+        // 迁移 Remarks (v1: 纯数字 RowID / v2: RowID_SubIndex → v3: AetheryteRecord.ToString())
+        if (jsonObj["Remarks"] is JObject remarks)
         {
-            foreach (var oldKey in oldRemarksKeys)
+            var oldKeys = remarks.Properties()
+                                 .Where(p => !p.Name.StartsWith("AetheryteRecord.", StringComparison.Ordinal))
+                                 .Select(p => p.Name)
+                                 .ToList();
+
+            if (oldKeys.Count > 0)
             {
-                if (uint.TryParse(oldKey, out var rowID))
+                foreach (var oldKey in oldKeys)
                 {
-                    var val    = config.Remarks[oldKey];
-                    var newKey = GetConfigKey(rowID, 0);
-                    config.Remarks[newKey] = val;
+                    var value = remarks[oldKey]!;
+                    remarks.Remove(oldKey);
+                    var newKey = MigrateOldKeyToToString(oldKey, allRecords);
+                    if (newKey != null) remarks[newKey] = value;
                 }
 
-                config.Remarks.Remove(oldKey);
+                migrated = true;
+            }
+        }
+
+        // 迁移 Positions (同上)
+        if (jsonObj["Positions"] is JObject positions)
+        {
+            var oldKeys = positions.Properties()
+                                  .Where(p => !p.Name.StartsWith("AetheryteRecord.", StringComparison.Ordinal))
+                                  .Select(p => p.Name)
+                                  .ToList();
+
+            if (oldKeys.Count > 0)
+            {
+                foreach (var oldKey in oldKeys)
+                {
+                    var value = positions[oldKey]!;
+                    positions.Remove(oldKey);
+                    var newKey = MigrateOldKeyToToString(oldKey, allRecords);
+                    if (newKey != null) positions[newKey] = value;
+                }
+
+                migrated = true;
+            }
+        }
+
+        // 迁移 Favorites (v1/v2: HashSet<uint> → v3: HashSet<string>)
+        if (jsonObj["Favorites"] is JArray favorites)
+        {
+            var hasOld = favorites.Any(x => x.Type == JTokenType.Integer ||
+                                            (x.Type == JTokenType.String &&
+                                             !x.Value<string>()!.StartsWith("AetheryteRecord.", StringComparison.Ordinal)));
+            if (hasOld)
+            {
+                var newFavorites = new JArray();
+                foreach (var item in favorites)
+                {
+                    uint? rowID = item.Type == JTokenType.Integer
+                                      ? item.Value<uint>()
+                                      : item.Type == JTokenType.String && uint.TryParse(item.Value<string>(), out var parsed)
+                                          ? parsed
+                                          : null;
+
+                    if (rowID.HasValue)
+                    {
+                        var record = allRecords.FirstOrDefault(x => x.RowID == rowID.Value);
+                        if (record != null) newFavorites.Add(record.ToString());
+                    }
+                    else if (item.Type == JTokenType.String)
+                    {
+                        newFavorites.Add(item.Value<string>()!);
+                    }
+                }
+
+                jsonObj["Favorites"] = newFavorites;
+                migrated = true;
+            }
+        }
+
+        // 迁移 RecentTeleports (v1/v2: AetheryteID+SubIndex → v3: Key)
+        if (jsonObj["RecentTeleports"] is JArray recentTeleports &&
+            recentTeleports.Any(x => x["AetheryteID"] != null))
+        {
+            var newList = new JArray();
+            foreach (var item in recentTeleports)
+            {
+                var aetheryteID = item["AetheryteID"]?.Value<uint>();
+                var subIndex    = item["SubIndex"]?.Value<byte>() ?? 0;
+                if (!aetheryteID.HasValue) continue;
+
+                var record = allRecords.FirstOrDefault(x => x.RowID == aetheryteID.Value && x.SubIndex == subIndex);
+                if (record != null)
+                    newList.Add(new JObject { ["Key"] = record.ToString() });
+            }
+
+            jsonObj["RecentTeleports"] = newList;
+            migrated = true;
+        }
+
+        // 迁移 SearchSelections (v1/v2: AetheryteID+SubIndex → v3: Key)
+        if (jsonObj["SearchSelections"] is JObject searchSelections &&
+            searchSelections.Properties().Any(p => p.Value is JArray arr && arr.Any(x => x["AetheryteID"] != null)))
+        {
+            foreach (var prop in searchSelections.Properties().ToList())
+            {
+                if (prop.Value is not JArray arr) continue;
+                var newArr = new JArray();
+                foreach (var item in arr)
+                {
+                    var aetheryteID = item["AetheryteID"]?.Value<uint>();
+                    var subIndex    = item["SubIndex"]?.Value<byte>() ?? 0;
+                    if (!aetheryteID.HasValue) continue;
+
+                    var record = allRecords.FirstOrDefault(x => x.RowID == aetheryteID.Value && x.SubIndex == subIndex);
+                    if (record == null) continue;
+
+                    newArr.Add(new JObject
+                    {
+                        ["Key"]                 = record.ToString(),
+                        ["Count"]               = item["Count"]?.Value<int>() ?? 1,
+                        ["LastUsedUnixSeconds"] = item["LastUsedUnixSeconds"]?.Value<long>() ?? 0
+                    });
+                }
+
+                prop.Value = newArr;
             }
 
             migrated = true;
         }
 
-        // 迁移 Positions
-        var oldPositionsKeys = config.Positions.Keys.Where(k => !k.Contains('_')).ToList();
+        if (!migrated) return;
 
-        if (oldPositionsKeys.Count > 0)
+        File.WriteAllText(ConfigFilePath, jsonObj.ToString(Formatting.Indented));
+    }
+
+    private static string? MigrateOldKeyToToString(string oldKey, List<AetheryteRecord> allRecords)
+    {
+        uint rowID;
+        byte subIndex;
+
+        if (oldKey.Contains('_'))
         {
-            foreach (var oldKey in oldPositionsKeys)
-            {
-                if (uint.TryParse(oldKey, out var rowID))
-                {
-                    var val    = config.Positions[oldKey];
-                    var newKey = GetConfigKey(rowID, 0);
-                    config.Positions[newKey] = val;
-                }
-
-                config.Positions.Remove(oldKey);
-            }
-
-            migrated = true;
+            var parts = oldKey.Split('_');
+            if (parts.Length != 2 ||
+                !uint.TryParse(parts[0], out rowID) ||
+                !byte.TryParse(parts[1], out subIndex))
+                return null;
+        }
+        else
+        {
+            if (!uint.TryParse(oldKey, out rowID)) return null;
+            subIndex = 0;
         }
 
-        if (migrated)
-            config.Save(this);
+        return allRecords.FirstOrDefault(x => x.RowID == rowID && x.SubIndex == subIndex)?.ToString();
     }
 
     public class RecentRecord
     {
-        public uint AetheryteID { get; set; }
-        public byte SubIndex    { get; set; }
+        public string Key { get; set; } = string.Empty;
     }
 
     public class SearchSelectionRecord
     {
-        public uint AetheryteID         { get; set; }
-        public byte SubIndex            { get; set; }
-        public int  Count               { get; set; }
-        public long LastUsedUnixSeconds { get; set; }
+        public string Key                 { get; set; } = string.Empty;
+        public int    Count               { get; set; }
+        public long   LastUsedUnixSeconds { get; set; }
     }
 
     private enum PageType
@@ -508,11 +511,11 @@ public unsafe partial class BetterTeleport : ModuleBase
         public bool     CloseOnLoseFocus     = true;
         public bool     HideAethernetInParty = true;
         
-        public HashSet<uint>                                   Favorites            = [];
-        public Dictionary<string, Vector3>                     Positions            = [];
-        public Dictionary<string, string>                      Remarks              = [];
-        public List<RecentRecord>                              RecentTeleports      = [];
-        public Dictionary<string, List<SearchSelectionRecord>> SearchSelections     = [];
+        public HashSet<string>                                 Favorites        = [];
+        public Dictionary<string, Vector3>                     Positions        = [];
+        public Dictionary<string, string>                      Remarks          = [];
+        public List<RecentRecord>                              RecentTeleports  = [];
+        public Dictionary<string, List<SearchSelectionRecord>> SearchSelections = [];
     }
 
     #endregion

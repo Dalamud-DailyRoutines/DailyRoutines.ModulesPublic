@@ -170,7 +170,7 @@ public unsafe partial class BetterTeleport
                                               .SelectMany(x => x)
                                               .Where
                                               (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                    (config.Remarks.TryGetValue(GetConfigKey(x), out var remark) &&
+                                                    (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
                                                      remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
                                               )
                                               .ToList()
