@@ -240,23 +240,16 @@ public unsafe partial class BetterTeleport
         using (ImRaii.PushColor(ImGuiCol.PopupBg, ImGui.GetColorU32(ImGuiCol.WindowBg)))
         using (ImRaii.Tooltip())
         {
-            var tex  = DService.Instance().Texture.GetFromGame(hoveredAetheryte.GetMap().GetTexturePath());
-            var warp = tex.GetWrapOrEmpty();
+            var imageSize  = ScaledVector2(384f);
 
-            if (warp.Handle != nint.Zero)
-            {
-                var widthScale = Math.Min(1f, warp.Width / 2048f);
-                var imageSize  = ScaledVector2(384f      * widthScale);
+            ImGuiOm.ScaledDummy(0f, 2f);
+            var hint     = Lang.Get("BetterTeleport-MapHint-Pin");
+            var hintSize = ImGui.CalcTextSize(hint);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((imageSize.X - hintSize.X) / 2));
+            ImGui.TextDisabled(hint);
 
-                ImGuiOm.ScaledDummy(0f, 2f);
-                var hint     = Lang.Get("BetterTeleport-MapHint-Pin");
-                var hintSize = ImGui.CalcTextSize(hint);
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((imageSize.X - hintSize.X) / 2));
-                ImGui.TextDisabled(hint);
-
-                SetupMapRenderer(hoveredAetheryte, false);
-                mapRenderer.Draw(imageSize);
-            }
+            SetupMapRenderer(hoveredAetheryte, false);
+            mapRenderer.Draw(imageSize);
         }
     }
 
