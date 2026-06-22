@@ -11,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.InstanceContent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
+using OmenTools.Info.Game;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;

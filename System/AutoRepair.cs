@@ -12,8 +12,8 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Game.Enums;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 

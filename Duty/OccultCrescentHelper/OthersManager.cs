@@ -19,6 +19,7 @@ using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.Timelines;
 using KamiToolKit.UiOverlay;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;

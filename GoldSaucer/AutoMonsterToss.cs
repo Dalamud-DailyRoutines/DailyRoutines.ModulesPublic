@@ -8,7 +8,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;

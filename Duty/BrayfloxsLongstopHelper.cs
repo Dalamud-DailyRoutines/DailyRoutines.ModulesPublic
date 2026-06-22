@@ -3,8 +3,8 @@ using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 

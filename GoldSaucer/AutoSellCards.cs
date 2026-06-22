@@ -8,7 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;

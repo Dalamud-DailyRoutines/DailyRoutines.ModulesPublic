@@ -3,8 +3,8 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;

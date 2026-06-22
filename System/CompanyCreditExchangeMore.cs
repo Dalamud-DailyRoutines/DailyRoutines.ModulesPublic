@@ -6,8 +6,8 @@ using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;

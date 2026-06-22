@@ -7,6 +7,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;

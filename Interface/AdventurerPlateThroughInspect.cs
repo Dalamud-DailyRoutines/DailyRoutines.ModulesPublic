@@ -5,8 +5,8 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using KamiToolKit.Nodes;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 

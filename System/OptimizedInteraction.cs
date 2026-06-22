@@ -11,9 +11,9 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using Camera = FFXIVClientStructs.FFXIV.Client.Game.Camera;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 

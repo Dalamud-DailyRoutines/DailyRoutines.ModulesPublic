@@ -8,9 +8,9 @@ using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;

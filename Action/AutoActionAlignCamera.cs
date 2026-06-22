@@ -7,9 +7,9 @@ using DailyRoutines.Manager;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Packets.Upstream;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 
