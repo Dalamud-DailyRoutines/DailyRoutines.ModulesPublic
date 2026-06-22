@@ -150,6 +150,12 @@ public unsafe partial class BetterTeleport : ModuleBase
                 return;
             // 野外大水晶直接传
             default:
+                if (Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType) && aetheryte.ZoneID == GameState.TerritoryType)
+                {
+                    aetheryte.TeleportTo();
+                    return;
+                }
+                
                 TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
                 TaskHelper.Enqueue
                 (() =>
