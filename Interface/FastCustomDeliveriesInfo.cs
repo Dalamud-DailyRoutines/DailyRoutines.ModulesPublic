@@ -3,12 +3,14 @@ using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.Agent;
 using Dalamud.Game.Agent.AgentArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 using ContextMenu = KamiToolKit.ContextMenu.ContextMenu;
 
@@ -67,11 +69,11 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
                             MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(selectedInfo.Map));
                             break;
                         default:
-                            MovementManager.Instance().TeleportNearestAetheryte
+                            AetheryteRecordManager.Instance().GetNearestAetheryte
                             (
                                 LuminaWrapper.GetZoneFromMap(selectedInfo.Map),
                                 selectedInfo.Position
-                            );
+                            )?.TeleportTo();
                             break;
                     }
                 }

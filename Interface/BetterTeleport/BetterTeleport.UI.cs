@@ -281,7 +281,7 @@ public unsafe partial class BetterTeleport
             }
             else
             {
-                TaskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(contextMenuTargetZone, contextMenuTargetPos));
+                TaskHelper.Enqueue(() => AetheryteRecordManager.Instance().GetNearestAetheryte(contextMenuTargetZone, contextMenuTargetPos)?.TeleportTo());
                 TaskHelper.Enqueue(() => DService.Instance().Condition.IsBetweenAreas && DService.Instance().ObjectTable.LocalPlayer != null);
                 TaskHelper.Enqueue
                 (() =>

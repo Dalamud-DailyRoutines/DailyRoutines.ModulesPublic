@@ -197,7 +197,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
         {
             TaskHelper.Enqueue
             (
-                () => MovementManager.Instance().TeleportNearestAetheryte(GameState.TerritoryType, Vector3.Zero),
+                () => AetheryteRecordManager.Instance().GetNearestAetheryte(GameState.TerritoryType, Vector3.Zero)?.TeleportTo(),
                 "传送到目标区域最近以太之光",
                 weight: 2
             );

@@ -3,6 +3,7 @@ using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using DailyRoutines.Verification;
 using Dalamud.Game.Addon.Lifecycle;
@@ -598,7 +599,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
             if (taskHelper == null) return;
 
             if (GameState.TerritoryType != RealTerritory.RowId)
-                taskHelper.Enqueue(() => MovementManager.Instance().TeleportNearestAetheryte(RealTerritory.RowId, Position));
+                taskHelper.Enqueue(() => AetheryteRecordManager.Instance().GetNearestAetheryte(RealTerritory.RowId, Position)?.TeleportTo());
             taskHelper.Enqueue(() => GameState.TerritoryType == RealTerritory.RowId && UIModule.IsScreenReady());
             taskHelper.Enqueue
             (() =>

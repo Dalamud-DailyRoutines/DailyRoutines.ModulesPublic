@@ -180,7 +180,7 @@ public partial class OccultCrescentHelper
                         (() =>
                             {
                                 PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
-                                MovementManager.Instance().TPSmooth(originalPosition, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
+                                MovementManager.Instance().TPSmooth(originalPosition, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, -20);
 
                                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
@@ -214,7 +214,7 @@ public partial class OccultCrescentHelper
                         (() =>
                             {
                                 PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
-                                MovementManager.Instance().TPSmooth(treasureObject->Position, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, true, -20);
+                                MovementManager.Instance().TPSmooth(treasureObject->Position, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, -20);
 
                                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
@@ -416,7 +416,7 @@ public partial class OccultCrescentHelper
             (() =>
                 {
                     PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
-                    MovementManager.Instance().TPSmooth(position, 24, true, -20);
+                    MovementManager.Instance().TPSmooth(position, 24, -20);
 
                     if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) 
                         return false;
