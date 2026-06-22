@@ -328,12 +328,12 @@ public unsafe partial class BetterTeleport
 
     private List<AetheryteRecord> GetSortedSpecialRecords(List<AetheryteRecord> combinedHistory)
     {
-        var specialSeen  = new HashSet<(uint, byte)>();
+        var specialSeen  = new HashSet<(uint, byte, uint)>();
         var specialItems = new List<AetheryteRecord>();
 
         foreach (var fav in favorites)
         {
-            if (specialSeen.Add((fav.RowID, fav.SubIndex)))
+            if (specialSeen.Add((fav.RowID, fav.SubIndex, fav.Group)))
                 specialItems.Add(fav);
         }
 
@@ -341,18 +341,25 @@ public unsafe partial class BetterTeleport
 
         if (home != null)
         {
-            if (specialSeen.Add((home.RowID, home.SubIndex)))
+            if (specialSeen.Add((home.RowID, home.SubIndex, home.Group)))
                 specialItems.Add(home);
         }
 
-        var freePoints     = AetheryteRecordManager.Instance().AllRecords.Where(x => x.State is AetheryteRecordState.Free or AetheryteRecordState.FreePS).ToList();
+        var freePoints = AetheryteRecordManager.Instance().AllRecords
+                                               .Where
+                                               (x => x.State is
+                                                         AetheryteRecordState.Free or
+                                                         AetheryteRecordState.FreePS or
+                                                         AetheryteRecordState.FreeNSO
+                                               )
+                                               .ToList();
         var freeCountAdded = 0;
 
         foreach (var free in freePoints)
         {
             if (freeCountAdded >= 2) break;
 
-            if (specialSeen.Add((free.RowID, free.SubIndex)))
+            if (specialSeen.Add((free.RowID, free.SubIndex, free.Group)))
             {
                 specialItems.Add(free);
                 freeCountAdded++;
@@ -366,7 +373,7 @@ public unsafe partial class BetterTeleport
         {
             if (favCountAdded >= 3) break;
 
-            if (specialSeen.Add((fav.RowID, fav.SubIndex)))
+            if (specialSeen.Add((fav.RowID, fav.SubIndex, fav.Group)))
             {
                 specialItems.Add(fav);
                 favCountAdded++;
@@ -375,9 +382,10 @@ public unsafe partial class BetterTeleport
 
         var historyIndices = combinedHistory
                              .Select((record, index) => new { record, index })
-                             .ToDictionary(x => (x.record.RowID, x.record.SubIndex), x => x.index);
+                             .ToDictionary(x => (x.record.RowID, x.record.SubIndex, x.record.Group), x => x.index);
 
-        return specialItems.OrderBy(x => historyIndices.GetValueOrDefault((x.RowID, x.SubIndex), int.MaxValue)).ToList();
+        return specialItems.OrderBy(x => historyIndices.GetValueOrDefault((x.RowID, x.SubIndex, x.Group), int.MaxValue))
+                           .ToList();
     }
 
     public void RefreshDefaultOverlayItems()
