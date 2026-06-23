@@ -142,17 +142,21 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         AddToRecentTeleports(aetheryte);
         
-        aetheryte.TeleportTo();
         TaskHelper.Enqueue(aetheryte.TeleportTo);
-        TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && !UIModule.IsScreenReady());
-        TaskHelper.Enqueue(() =>
+        if (hasRedirect)
         {
-            if (UIModule.IsScreenReady())
-                return true;
+            TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && !UIModule.IsScreenReady());
+            TaskHelper.Enqueue
+            (() =>
+                {
+                    if (UIModule.IsScreenReady())
+                        return true;
 
-            MovementManager.Instance().TPSmart_InZone(aetherytePos);
-            return false;
-        });
+                    MovementManager.Instance().TPSmart_InZone(aetherytePos);
+                    return false;
+                }
+            );
+        }
     }
 
     private void AddToRecentTeleports(AetheryteRecord aetheryte)
