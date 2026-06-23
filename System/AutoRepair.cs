@@ -92,50 +92,108 @@ public unsafe class AutoRepair : ModuleBase
 
         TaskHelper.Abort();
 
-        // 优先委托 NPC 修理
-        if (config is { AllowNPCRepair: true, PrioritizeNPCRepair: true } &&
-            EventFramework.Instance()->IsEventIDNearby(REPAIR_EVENT_ID))
-        {
-            TaskHelper.Enqueue
-            (
-                IsAbleToRepair,
-                "等待进入可以修理状态"
-            );
-            TaskHelper.Enqueue
-            (
-                NotifyStartRepair,
-                "通知开始自动修复"
-            );
-            TaskHelper.Enqueue
-            (
-                () =>
-                    new EventStartPackt(LocalPlayerState.EntityID, REPAIR_EVENT_ID).Send(),
-                "打开 NPC 修理委托界面"
-            );
-            TaskHelper.Enqueue
-            (
-                () => Repair->IsAddonAndNodesReady(),
-                "等待修理界面就绪"
-            );
-            TaskHelper.Enqueue
-            (
-                () => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairEquippedItemsNPC, 1000),
-                "发送 NPC 修理委托请求"
-            );
-            TaskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (!Repair->IsAddonAndNodesReady()) return;
-                    Repair->Close(true);
-                },
-                "关闭修理界面"
-            );
+        var npcNearby = EventFramework.Instance()->IsEventIDNearby(REPAIR_EVENT_ID);
 
+        // 优先委托 NPC 修理
+        if (config is { AllowNPCRepair: true, PrioritizeNPCRepair: true } && npcNearby)
+        {
+            TaskHelper.Enqueue(NotifyStartRepair, "通知开始自动修复");
+            EnqueueNPCRepairTasks();
             return;
         }
 
-        List<uint> itemsUnableToRepair = [];
+        var (itemsUnableToRepair, isDMInsufficient) = AnalyzeItems(items);
+
+        var hasSelfRepair   = items.Count > itemsUnableToRepair.Count;
+        var needNPCFallback = config.AllowNPCRepair && itemsUnableToRepair.Count > 0 && npcNearby;
+
+        if (!hasSelfRepair && !needNPCFallback)
+            return;
+
+        TaskHelper.Enqueue(NotifyStartRepair, "通知开始自动修复");
+
+        if (hasSelfRepair)
+            EnqueueSelfRepairTasks(items, itemsUnableToRepair, isDMInsufficient);
+
+        if (needNPCFallback)
+            EnqueueNPCRepairTasks();
+    }
+
+    private void EnqueueSelfRepairTasks(List<InventoryItem> items, List<uint> itemsUnableToRepair, bool isDMInsufficient)
+    {
+        TaskHelper.Enqueue
+        (
+            IsAbleToRepair,
+            "等待可以维修状态"
+        );
+
+        // 没有暗物质不足的情况
+        if (!isDMInsufficient)
+        {
+            TaskHelper.Enqueue
+            (
+                () => RepairManager.Instance()->RepairEquipped(false),
+                "开始自动修复"
+            );
+        }
+        else
+        {
+            var itemsSelfRepair = items.ToList();
+            itemsSelfRepair.RemoveAll(x => itemsUnableToRepair.Contains(x.ItemId));
+
+            foreach (var item in itemsSelfRepair)
+            {
+                TaskHelper.Enqueue
+                (
+                    () => RepairManager.Instance()->RepairItem(item.Container, (ushort)item.Slot, false),
+                    $"修理装备: {LuminaWrapper.GetItemName(item.GetBaseItemId())}"
+                );
+                TaskHelper.DelayNext(3_000, "等待 3 秒, 开始下一件单独装备修理");
+            }
+        }
+
+        TaskHelper.DelayNext(5_00, "等待 500 毫秒");
+    }
+
+    private void EnqueueNPCRepairTasks()
+    {
+        TaskHelper.Enqueue
+        (
+            IsAbleToRepair,
+            "等待进入可以修理状态"
+        );
+        TaskHelper.Enqueue
+        (
+            () =>
+                new EventStartPackt(LocalPlayerState.EntityID, REPAIR_EVENT_ID).Send(),
+            "打开 NPC 修理委托界面"
+        );
+        TaskHelper.Enqueue
+        (
+            () => Repair->IsAddonAndNodesReady(),
+            "等待修理界面就绪"
+        );
+        TaskHelper.Enqueue
+        (
+            () => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairEquippedItemsNPC, 1000),
+            "发送 NPC 修理委托请求"
+        );
+        TaskHelper.Enqueue
+        (
+            () =>
+            {
+                if (!Repair->IsAddonAndNodesReady()) return;
+                Repair->Close(true);
+            },
+            "关闭修理界面"
+        );
+    }
+
+    private static (List<uint> ItemsUnableToRepair, bool IsDMInsufficient) AnalyzeItems(List<InventoryItem> items)
+    {
+        var itemsUnableToRepair = new List<uint>();
+        var isDMInsufficient    = false;
+
         var repairDMs = LuminaGetter.Get<ItemRepairResource>()
                                     .Where(x => x.Item.RowId != 0)
                                     .ToDictionary
@@ -144,11 +202,11 @@ public unsafe class AutoRepair : ModuleBase
                                         x => LocalPlayerState.GetItemCount(x.Item.RowId)
                                     );
 
-        var isDMInsufficient = false;
-
         foreach (var itemToRepair in items)
         {
-            if (!LuminaGetter.TryGetRow<Item>(itemToRepair.ItemId, out var data))
+            var itemID = itemToRepair.ItemId;
+
+            if (!LuminaGetter.TryGetRow<Item>(itemID, out var data))
                 continue;
 
             var repairJob   = data.ClassJobRepair.RowId;
@@ -169,93 +227,10 @@ public unsafe class AutoRepair : ModuleBase
             if (firstDM is 0)
                 isDMInsufficient = true;
 
-            itemsUnableToRepair.Add(itemToRepair.ItemId);
+            itemsUnableToRepair.Add(itemID);
         }
 
-        // 还是有能自己修的装备的
-        if (items.Count > itemsUnableToRepair.Count)
-        {
-            TaskHelper.Enqueue
-            (
-                IsAbleToRepair,
-                "等待可以维修状态"
-            );
-            
-            TaskHelper.Enqueue
-            (
-                NotifyStartRepair,
-                "通知开始自动修复"
-            );
-
-            // 没有暗物质不足的情况
-            if (!isDMInsufficient)
-            {
-                TaskHelper.Enqueue
-                (
-                    () => RepairManager.Instance()->RepairEquipped(false),
-                    "开始自动修复"
-                );
-            }
-            else
-            {
-                var itemsSelfRepair = items.ToList();
-                itemsSelfRepair.RemoveAll(x => itemsUnableToRepair.Contains(x.ItemId));
-
-                foreach (var item in itemsSelfRepair)
-                {
-                    TaskHelper.Enqueue
-                    (
-                        () => RepairManager.Instance()->RepairItem(item.Container, (ushort)item.Slot, false),
-                        $"修理装备: {LuminaWrapper.GetItemName(item.GetBaseItemId())}"
-                    );
-                    TaskHelper.DelayNext(3_000, "等待 3 秒, 开始下一件单独装备修理");
-                }
-            }
-
-            TaskHelper.DelayNext(5_00, "等待 500 毫秒");
-        }
-
-        // 附近存在修理工
-        if (config.AllowNPCRepair         &&
-            itemsUnableToRepair.Count > 0 &&
-            EventFramework.Instance()->IsEventIDNearby(REPAIR_EVENT_ID))
-        {
-            TaskHelper.Enqueue
-            (
-                IsAbleToRepair,
-                "等待进入可以修理状态"
-            );
-            TaskHelper.Enqueue
-            (
-                NotifyStartRepair,
-                "通知开始自动修复"
-            );
-            TaskHelper.Enqueue
-            (
-                () =>
-                    new EventStartPackt(LocalPlayerState.EntityID, REPAIR_EVENT_ID).Send(),
-                "打开 NPC 修理委托界面"
-            );
-            TaskHelper.Enqueue
-            (
-                () => Repair->IsAddonAndNodesReady(),
-                "等待修理界面就绪"
-            );
-            TaskHelper.Enqueue
-            (
-                () => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairEquippedItemsNPC, 1000),
-                "发送 NPC 修理委托请求"
-            );
-            TaskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (!Repair->IsAddonAndNodesReady()) return;
-                    Repair->Close(true);
-                },
-                "关闭修理界面"
-            );
-        }
+        return (itemsUnableToRepair, isDMInsufficient);
     }
 
     private static void NotifyStartRepair()
