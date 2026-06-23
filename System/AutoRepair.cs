@@ -29,15 +29,13 @@ public unsafe class AutoRepair : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-    
-    private bool IsBusy => TaskHelper?.IsBusy ?? false;
 
     private Config config = null!;
-    
+
     protected override void Init()
     {
-        config ??= Config.Load(this) ?? new();
-        TaskHelper   ??= new();
+        config     ??= Config.Load(this) ?? new();
+        TaskHelper ??= new() { ShowDebug = true };
 
         ExecuteCommandManager.Instance().RegPost(OnExecuteCommand);
 
@@ -45,15 +43,16 @@ public unsafe class AutoRepair : ModuleBase
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
         DService.Instance().DutyState.DutyRecommenced    += OnDutyRecommenced;
     }
-    
+
     protected override void Uninit()
     {
         ExecuteCommandManager.Instance().Unreg(OnExecuteCommand);
+        
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
         DService.Instance().DutyState.DutyRecommenced    -= OnDutyRecommenced;
     }
-    
+
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
@@ -77,8 +76,8 @@ public unsafe class AutoRepair : ModuleBase
 
     public void EnqueueRepair()
     {
-        if (TaskHelper.IsBusy                                 ||
-            DService.Instance().ClientState.IsPvPExcludingDen ||
+        if (TaskHelper.IsBusy         ||
+            GameState.IsInPVPInstance ||
             DService.Instance().ObjectTable.LocalPlayer is not { CurrentHp: > 0 })
             return;
 
@@ -91,21 +90,46 @@ public unsafe class AutoRepair : ModuleBase
         if (!InventoryType.EquippedItems.TryGetItems(x => x.Condition < config.RepairThreshold * 300f, out var items))
             return;
 
+        TaskHelper.Abort();
+
         // 优先委托 NPC 修理
-        if (config is { AllowNPCRepair: true, PrioritizeNPCRepair: true } && EventFramework.Instance()->IsEventIDNearby(720915))
+        if (config is { AllowNPCRepair: true, PrioritizeNPCRepair: true } &&
+            EventFramework.Instance()->IsEventIDNearby(REPAIR_EVENT_ID))
         {
-            TaskHelper.Abort();
-            TaskHelper.Enqueue(() => IsAbleToRepair());
-            TaskHelper.Enqueue(() => NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoRepair-RepairNotice"), Lang.Get("AutoRepairTitle")));
-            TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 720915).Send());
-            TaskHelper.Enqueue(() => Repair->IsAddonAndNodesReady());
-            TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairEquippedItemsNPC, 1000));
             TaskHelper.Enqueue
-            (() =>
+            (
+                IsAbleToRepair,
+                "等待进入可以修理状态"
+            );
+            TaskHelper.Enqueue
+            (
+                NotifyStartRepair,
+                "通知开始自动修复"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
+                    new EventStartPackt(LocalPlayerState.EntityID, REPAIR_EVENT_ID).Send(),
+                "打开 NPC 修理委托界面"
+            );
+            TaskHelper.Enqueue
+            (
+                () => Repair->IsAddonAndNodesReady(),
+                "等待修理界面就绪"
+            );
+            TaskHelper.Enqueue
+            (
+                () => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairEquippedItemsNPC, 1000),
+                "发送 NPC 修理委托请求"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
                 {
                     if (!Repair->IsAddonAndNodesReady()) return;
                     Repair->Close(true);
-                }
+                },
+                "关闭修理界面"
             );
 
             return;
@@ -117,20 +141,23 @@ public unsafe class AutoRepair : ModuleBase
                                     .ToDictionary
                                     (
                                         x => x.RowId,
-                                        x => inventoryManager->GetInventoryItemCount(x.Item.RowId)
+                                        x => LocalPlayerState.GetItemCount(x.Item.RowId)
                                     );
 
         var isDMInsufficient = false;
 
         foreach (var itemToRepair in items)
         {
-            if (!LuminaGetter.TryGetRow<Item>(itemToRepair.ItemId, out var data)) continue;
+            if (!LuminaGetter.TryGetRow<Item>(itemToRepair.ItemId, out var data))
+                continue;
 
             var repairJob   = data.ClassJobRepair.RowId;
             var repairLevel = Math.Max(1, Math.Max(0, data.LevelEquip - 10));
             var repairDM    = data.ItemRepair.RowId;
 
-            var firstDM = repairDMs.OrderBy(x => x.Key).FirstOrDefault(x => x.Key >= repairDM && x.Value - 1 >= 0).Key;
+            var firstDM = repairDMs.OrderBy(x => x.Key)
+                                   .FirstOrDefault(x => x.Key >= repairDM && x.Value - 1 >= 0)
+                                   .Key;
 
             // 可以自己修 + 暗物质数量足够
             if (LocalPlayerState.GetClassJobLevel(repairJob) >= repairLevel && firstDM != 0)
@@ -145,17 +172,30 @@ public unsafe class AutoRepair : ModuleBase
             itemsUnableToRepair.Add(itemToRepair.ItemId);
         }
 
-        TaskHelper.Abort();
-
         // 还是有能自己修的装备的
         if (items.Count > itemsUnableToRepair.Count)
         {
-            TaskHelper.Enqueue(() => IsAbleToRepair(),                                                                                "等待可以维修状态");
-            TaskHelper.Enqueue(() => NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoRepair-RepairNotice"), Lang.Get("AutoRepairTitle")), "发送开始维修通知");
+            TaskHelper.Enqueue
+            (
+                IsAbleToRepair,
+                "等待可以维修状态"
+            );
+            
+            TaskHelper.Enqueue
+            (
+                NotifyStartRepair,
+                "通知开始自动修复"
+            );
 
             // 没有暗物质不足的情况
             if (!isDMInsufficient)
-                TaskHelper.Enqueue(() => RepairManager.Instance()->RepairEquipped(false), "发送一键全修");
+            {
+                TaskHelper.Enqueue
+                (
+                    () => RepairManager.Instance()->RepairEquipped(false),
+                    "开始自动修复"
+                );
+            }
             else
             {
                 var itemsSelfRepair = items.ToList();
@@ -164,30 +204,71 @@ public unsafe class AutoRepair : ModuleBase
                 foreach (var item in itemsSelfRepair)
                 {
                     TaskHelper.Enqueue
-                        (() => RepairManager.Instance()->RepairItem(item.Container, (ushort)item.Slot, false), $"修理: {LuminaWrapper.GetItemName(item.ItemId)}");
-                    TaskHelper.DelayNext(3_000);
+                    (
+                        () => RepairManager.Instance()->RepairItem(item.Container, (ushort)item.Slot, false),
+                        $"修理装备: {LuminaWrapper.GetItemName(item.GetBaseItemId())}"
+                    );
+                    TaskHelper.DelayNext(3_000, "等待 3 秒, 开始下一件单独装备修理");
                 }
             }
 
-            TaskHelper.DelayNext(5_00);
+            TaskHelper.DelayNext(5_00, "等待 500 毫秒");
         }
 
         // 附近存在修理工
-        if (config.AllowNPCRepair && itemsUnableToRepair.Count > 0 && EventFramework.Instance()->IsEventIDNearby(720915))
+        if (config.AllowNPCRepair         &&
+            itemsUnableToRepair.Count > 0 &&
+            EventFramework.Instance()->IsEventIDNearby(REPAIR_EVENT_ID))
         {
-            TaskHelper.Enqueue(() => IsAbleToRepair());
-            TaskHelper.Enqueue(() => NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoRepair-RepairNotice"), Lang.Get("AutoRepairTitle")));
-            TaskHelper.Enqueue(() => new EventStartPackt(LocalPlayerState.EntityID, 720915).Send());
-            TaskHelper.Enqueue(() => Repair->IsAddonAndNodesReady());
-            TaskHelper.Enqueue(() => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairEquippedItemsNPC, 1000));
             TaskHelper.Enqueue
-            (() =>
+            (
+                IsAbleToRepair,
+                "等待进入可以修理状态"
+            );
+            TaskHelper.Enqueue
+            (
+                NotifyStartRepair,
+                "通知开始自动修复"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
+                    new EventStartPackt(LocalPlayerState.EntityID, REPAIR_EVENT_ID).Send(),
+                "打开 NPC 修理委托界面"
+            );
+            TaskHelper.Enqueue
+            (
+                () => Repair->IsAddonAndNodesReady(),
+                "等待修理界面就绪"
+            );
+            TaskHelper.Enqueue
+            (
+                () => ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RepairEquippedItemsNPC, 1000),
+                "发送 NPC 修理委托请求"
+            );
+            TaskHelper.Enqueue
+            (
+                () =>
                 {
                     if (!Repair->IsAddonAndNodesReady()) return;
                     Repair->Close(true);
-                }
+                },
+                "关闭修理界面"
             );
         }
+    }
+
+    private static void NotifyStartRepair()
+    {
+        NotifyHelper.ToastQuest
+        (
+            Lang.Get("AutoRepair-Notification-AutoStart"),
+            new()
+            {
+                IconId = 106
+            }
+        );
+        NotifyHelper.Instance().Chat(Lang.Get("AutoRepair-Notification-AutoStart"));
     }
 
     private static bool IsAbleToRepair() =>
@@ -197,7 +278,7 @@ public unsafe class AutoRepair : ModuleBase
         !DService.Instance().Condition.IsOnMount         &&
         !DService.Instance().Condition.IsCasting         &&
         ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 6) == 0;
-    
+
     #region 事件
 
     private void OnDutyRecommenced(IDutyStateEventArgs args) =>
@@ -212,7 +293,14 @@ public unsafe class AutoRepair : ModuleBase
     private void OnZoneChanged(uint u) =>
         EnqueueRepair();
 
-    private static void OnExecuteCommand(ExecuteCommandFlag command, uint param1, uint param2, uint param3, uint param4)
+    private static void OnExecuteCommand
+    (
+        ExecuteCommandFlag command,
+        uint               param1,
+        uint               param2,
+        uint               param3,
+        uint               param4
+    )
     {
         if (!ValidRepairFlags.Contains(command)) return;
 
@@ -220,15 +308,17 @@ public unsafe class AutoRepair : ModuleBase
     }
 
     #endregion
-    
+
     private class Config : ModuleConfig
     {
         public bool  AllowNPCRepair = true;
         public bool  PrioritizeNPCRepair;
         public float RepairThreshold = 20;
     }
-    
+
     #region 常量
+
+    private const uint REPAIR_EVENT_ID = 720915;
 
     private static readonly FrozenSet<ConditionFlag> ValidConditions =
     [
@@ -245,25 +335,25 @@ public unsafe class AutoRepair : ModuleBase
         ExecuteCommandFlag.RepairAllItemsNPC,
         ExecuteCommandFlag.RepairEquippedItemsNPC,
 
-        ExecuteCommandFlag.EventFrameworkAction,
+        ExecuteCommandFlag.EventFrameworkAction
     ];
 
     #endregion
-    
+
     #region IPC
 
     [IPCProvider("DailyRoutines.Modules.AutoRepair.IsBusy")]
-    public bool IsBusyIPC => IsBusy;
+    private bool IsBusyIPC => TaskHelper?.IsBusy ?? false;
 
     [IPCProvider("DailyRoutines.Modules.AutoRepair.IsNeedToRepair")]
-    public bool IsNeedToRepairIPC =>
+    private bool IsNeedToRepairIPC =>
         InventoryType.EquippedItems.TryGetItems(x => x.Condition < config.RepairThreshold * 300f, out _);
 
     [IPCProvider("DailyRoutines.Modules.AutoRepair.IsAbleToRepair")]
-    public bool IsAbleToRepairIPC => IsAbleToRepair();
-    
+    private bool IsAbleToRepairIPC => IsAbleToRepair();
+
     [IPCProvider("DailyRoutines.Modules.AutoRepair.EnqueueRepair")]
-    public void EnqueueRepairIPC() => EnqueueRepair();
+    private void EnqueueRepairIPC() => EnqueueRepair();
 
     #endregion
 }
