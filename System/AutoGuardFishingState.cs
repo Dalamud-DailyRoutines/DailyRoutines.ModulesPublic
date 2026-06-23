@@ -15,12 +15,14 @@ public class AutoGuardFishingState : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("AutoGuardFishingStateTitle"),
-        Description = Lang.Get("AutoGuardFishingStateDescription", LuminaWrapper.GetActionName(InterruptFishingActionID)),
-        Category    = ModuleCategory.System
+        Title = Lang.Get("AutoGuardFishingStateTitle"),
+        Description = Lang.Get
+        (
+            "AutoGuardFishingStateDescription",
+            LuminaWrapper.GetActionName(INTERRUPT_FISHING_ACTION_ID)
+        ),
+        Category = ModuleCategory.System
     };
-
-    private const uint InterruptFishingActionID = 299;
     
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
@@ -50,7 +52,7 @@ public class AutoGuardFishingState : ModuleBase
         ref uint                        comboRouteID
     )
     {
-        if (actionType != ActionType.Action || actionID != InterruptFishingActionID)
+        if (actionType != ActionType.Action || actionID != INTERRUPT_FISHING_ACTION_ID)
             return;
 
         FishingCommand.Quit();
@@ -74,4 +76,10 @@ public class AutoGuardFishingState : ModuleBase
         if (param1 == 1)
             isPrevented = true;
     }
+
+    #region 常量
+
+    private const uint INTERRUPT_FISHING_ACTION_ID = 299;
+
+    #endregion
 }
