@@ -141,38 +141,18 @@ public unsafe partial class BetterTeleport : ModuleBase
         Overlay.IsOpen   = false;
 
         AddToRecentTeleports(aetheryte);
-
-        switch (aetheryte.Group)
+        
+        aetheryte.TeleportTo();
+        TaskHelper.Enqueue(aetheryte.TeleportTo);
+        TaskHelper.Enqueue(() => GameState.TerritoryType == aetheryte.ZoneID && !UIModule.IsScreenReady());
+        TaskHelper.Enqueue(() =>
         {
-            // 房区
-            case 255:
-                Telepo.Instance()->Teleport(aetheryte.RowID, aetheryte.SubIndex);
-                return;
-            // 野外大水晶直接传
-            default:
-                if (Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType) && aetheryte.ZoneID == GameState.TerritoryType)
-                {
-                    aetheryte.TeleportTo();
-                    return;
-                }
-                
-                TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (MovementManager.Instance().IsManagerBusy     ||
-                            DService.Instance().Condition.IsBetweenAreas ||
-                            !UIModule.IsScreenReady()                    ||
-                            DService.Instance().Condition.Any(ConditionFlag.Mounted))
-                            return false;
+            if (UIModule.IsScreenReady())
+                return true;
 
-                        MovementManager.Instance().TPGround();
-                        return true;
-                    }
-                );
-
-                return;
-        }
+            MovementManager.Instance().TPSmart_InZone(aetherytePos);
+            return false;
+        });
     }
 
     private void AddToRecentTeleports(AetheryteRecord aetheryte)
