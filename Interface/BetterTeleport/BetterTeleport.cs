@@ -130,17 +130,18 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         if (aetherytePos.Y == 0)
             aetherytePos = aetherytePos.WithY(500);
-
-        NotifyHelper.Instance().NotificationInfo(Lang.Get("BetterTeleport-Notification", aetheryte.Name));
-
-        RememberSearchSelection(aetheryte, searchTerms);
-
+        
         searchWord       = string.Empty;
         pinnedAetheryte  = null;
         hoveredAetheryte = null;
-        Overlay.IsOpen   = false;
+        
+        Overlay.IsOpen    = false;
+        fullWindow.IsOpen = false;
 
+        RememberSearchSelection(aetheryte, searchTerms);
         AddToRecentTeleports(aetheryte);
+        
+        NotifyHelper.Instance().NotificationInfo(Lang.Get("BetterTeleport-Notification", aetheryte.Name));
         
         TaskHelper.Enqueue(aetheryte.TeleportTo);
         if (hasRedirect)
