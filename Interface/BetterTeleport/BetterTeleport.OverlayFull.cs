@@ -122,11 +122,7 @@ public unsafe partial class BetterTeleport
 
             foreach (var aetheryte in source.ToList())
             {
-                if (!aetheryte.IsUnlocked() && aetheryte.Group != 255) continue;
-                if (aetheryte.Group                   == 254  &&
-                    agentLobby                        != null &&
-                    agentLobby->LobbyData.HomeWorldId != agentLobby->LobbyData.CurrentWorldId)
-                    continue;
+                if (!aetheryte.IsUnlocked()) continue;
                 currentSelectableRecords.Add(aetheryte);
             }
         }
@@ -166,8 +162,8 @@ public unsafe partial class BetterTeleport
                     fullSearchResult = SortSearchMatches
                     (
                         fullSearchWord,
-                        AetheryteRecordManager.Instance().Records.Values
-                                              .SelectMany(x => x)
+                        AetheryteRecordManager.Instance()
+                                              .AllRecords
                                               .Where
                                               (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
                                                     (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
@@ -292,10 +288,11 @@ public unsafe partial class BetterTeleport
 
                 if (agentLobby != null)
                 {
-                    foreach (var (name, aetherytes) in AetheryteRecordManager.Instance().Records.ToList())
+                    foreach (var (name, aetherytes) in AetheryteRecordManager.Instance().Records)
                     {
-                        var tabFlags                      = ImGuiTabItemFlags.None;
-                        if (tabToSelect == name) tabFlags |= ImGuiTabItemFlags.SetSelected;
+                        var tabFlags = ImGuiTabItemFlags.None;
+                        if (tabToSelect == name) 
+                            tabFlags |= ImGuiTabItemFlags.SetSelected;
 
                         using var tabItem = ImRaii.TabItem($"{name}##TabItemFull", tabFlags);
                         if (!tabItem) continue;
@@ -312,12 +309,9 @@ public unsafe partial class BetterTeleport
 
                         var visibleIndex = 0;
 
-                        foreach (var aetheryte in source.ToList())
+                        foreach (var aetheryte in source)
                         {
-                            if (!aetheryte.IsUnlocked() && aetheryte.Group != 255) continue;
-                            if (aetheryte.Group                   == 254 &&
-                                agentLobby->LobbyData.HomeWorldId != agentLobby->LobbyData.CurrentWorldId)
-                                continue;
+                            if (!aetheryte.IsUnlocked()) continue;
 
                             var isNewGroup = false;
 

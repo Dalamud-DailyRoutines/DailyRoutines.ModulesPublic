@@ -398,7 +398,7 @@ public unsafe partial class BetterTeleport
     )
     {
         var iconID = (uint)(LuminaGetter.GetRow<GeneralAction>(7)?.Icon ?? 60752);
-        if (aetheryte.Group == 255)
+        if (aetheryte.IsHouse)
             iconID = 60752;
         else if (aetheryte.IsAetheryte)
             iconID = 60453;
