@@ -24,6 +24,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO: 等待 FFCS 的 InfoProxyContentMember 合并
 public unsafe class AutoCountPlayers : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
