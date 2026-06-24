@@ -236,21 +236,8 @@ public unsafe class AutoLucidDreaming : ModuleBase
                         NotifyHelper.Instance().Chat(message);
 
                     if (config.SendNotification)
-                    {
-                        NotifyHelper.Instance().NotificationInfo
-                        (
-                            message.ToString(),
-                            options: new()
-                            {
-                                Icon = DService.Instance().Texture.GetFromGameIcon(LuminaWrapper.GetActionIconID(LUCID_DREAMING_ID))
-                            }
-                        );
-                    }
+                        NotifyHelper.ToastQuest(message, new() { IconId = LuminaWrapper.GetActionIconID(LUCID_DREAMING_ID) });
                 }
-
-                if (config.SendChat &&
-                    Throttler.Shared.Throttle("AutoLucidDreaming-SendChat", 10_000))
-                    NotifyHelper.Instance().Chat(Lang.Get("AutoLucidDreaming-Notification", LocalPlayerState.Object?.CurrentMp ?? 0));
 
                 return true;
             },
