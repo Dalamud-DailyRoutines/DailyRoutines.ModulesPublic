@@ -236,7 +236,7 @@ public unsafe class AutoLucidDreaming : ModuleBase
                         NotifyHelper.Instance().Chat(message);
 
                     if (config.SendNotification)
-                        NotifyHelper.ToastQuest(message, new() { IconId = LuminaWrapper.GetActionIconID(LUCID_DREAMING_ID) });
+                        NotifyHelper.ToastQuest(message.ToString(), new() { IconId = LuminaWrapper.GetActionIconID(LUCID_DREAMING_ID) });
                 }
 
                 return true;
