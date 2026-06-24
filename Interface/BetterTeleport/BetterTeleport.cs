@@ -140,8 +140,15 @@ public unsafe partial class BetterTeleport : ModuleBase
 
         RememberSearchSelection(aetheryte, searchTerms);
         AddToRecentTeleports(aetheryte);
-        
-        NotifyHelper.Instance().NotificationInfo(Lang.Get("BetterTeleport-Notification", aetheryte.Name));
+
+        NotifyHelper.ToastQuest
+        (
+            Lang.Get("BetterTeleport-Notification", aetheryte.Name),
+            new()
+            {
+                IconId = 111
+            }
+        );
         
         TaskHelper.Enqueue(aetheryte.TeleportTo);
         if (hasRedirect)
