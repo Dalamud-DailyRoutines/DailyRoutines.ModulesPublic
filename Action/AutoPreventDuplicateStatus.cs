@@ -291,8 +291,6 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
                     var battleChara = (BattleChara*)target;
                     return HasStatus(module, battleChara->GetStatusManager());
                 case DetectType.Member:
-                    if (DService.Instance().PartyList.Length <= 0) return false;
-
                     foreach (var partyMember in AgentHUD.Instance()->PartyMembers)
                     {
                         if (partyMember.Object == null) continue;
