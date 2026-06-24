@@ -7,7 +7,9 @@ using DailyRoutines.Extensions;
 using Dalamud.Interface.Textures.TextureWraps;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
@@ -74,69 +76,67 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
 
         ImGui.Spacing();
 
-        using (var node = ImRaii.TreeNode($"{Lang.Get("Action")}: {config.EnabledActions.Count(x => x.Value)} / {config.EnabledActions.Count}"))
+        using var node = ImRaii.TreeNode($"{Lang.Get("Action")}: {config.EnabledActions.Count(x => x.Value)} / {config.EnabledActions.Count}");
+        if (!node) return;
+        
+        var       tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
+        using var table     = ImRaii.Table("###ActionTable", 3, ImGuiTableFlags.Borders, tableSize);
+        if (!table) return;
+
+        ImGui.TableSetupColumn("名称",   ImGuiTableColumnFlags.WidthStretch, 30);
+        ImGui.TableSetupColumn("一层状态", ImGuiTableColumnFlags.WidthStretch, 30);
+        ImGui.TableSetupColumn("二层状态", ImGuiTableColumnFlags.WidthStretch, 30);
+
+        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(Lang.Get("Action"));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(Lang.Get("AutoPreventDuplicateStatus-RelatedStatus"));
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted($"{Lang.Get("AutoPreventDuplicateStatus-RelatedStatus")} 2");
+
+        foreach (var actionInfo in DuplicateActions)
         {
-            if (node)
+            if (!LuminaGetter.TryGetRow<Action>(actionInfo.Key, out var result)) continue;
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            var isActionEnabled = config.EnabledActions[actionInfo.Key];
+
+            if (ImGui.Checkbox($"###Is{actionInfo.Key}Enabled", ref isActionEnabled))
             {
-                var       tableSize = new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetTextLineHeightWithSpacing(), 0);
-                using var table     = ImRaii.Table("###ActionTable", 3, ImGuiTableFlags.Borders, tableSize);
-                if (!table) return;
+                config.EnabledActions[actionInfo.Key] ^= true;
+                config.Save(this);
+            }
 
-                ImGui.TableSetupColumn("名称",   ImGuiTableColumnFlags.WidthStretch, 30);
-                ImGui.TableSetupColumn("一层状态", ImGuiTableColumnFlags.WidthStretch, 30);
-                ImGui.TableSetupColumn("二层状态", ImGuiTableColumnFlags.WidthStretch, 30);
+            ImGui.SameLine();
+            ImGui.Spacing();
 
-                ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+            ImGui.SameLine();
+            ImGuiOm.TextImage
+            (
+                result.Name.ToString(),
+                ImageHelper.GetGameIcon(result.Icon).Handle,
+                ScaledVector2(20f)
+            );
 
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted(Lang.Get("Action"));
+            ImGui.TableNextColumn();
+            ImGui.Spacing();
+            foreach (var status in actionInfo.Value.Statuses)
+                DrawDuplicateStatus(status);
 
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted(Lang.Get("AutoPreventDuplicateStatus-RelatedStatus"));
+            ImGui.TableNextColumn();
 
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{Lang.Get("AutoPreventDuplicateStatus-RelatedStatus")} 2");
-
-                foreach (var actionInfo in DuplicateActions)
-                {
-                    if (!LuminaGetter.TryGetRow<Action>(actionInfo.Key, out var result)) continue;
-                    ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
-                    var isActionEnabled = config.EnabledActions[actionInfo.Key];
-
-                    if (ImGui.Checkbox($"###Is{actionInfo.Key}Enabled", ref isActionEnabled))
-                    {
-                        config.EnabledActions[actionInfo.Key] ^= true;
-                        config.Save(this);
-                    }
-
-                    ImGui.SameLine();
-                    ImGui.Spacing();
-
-                    ImGui.SameLine();
-                    ImGuiOm.TextImage
-                    (
-                        result.Name.ToString(),
-                        ImageHelper.GetGameIcon(result.Icon).Handle,
-                        ScaledVector2(20f)
-                    );
-
-                    ImGui.TableNextColumn();
-                    ImGui.Spacing();
-                    foreach (var status in actionInfo.Value.Statuses)
-                        DrawDuplicateStatus(status);
-
-                    ImGui.TableNextColumn();
-
-                    if (actionInfo.Value.SecondStatuses != null)
-                    {
-                        ImGui.Spacing();
-                        foreach (var status in actionInfo.Value.SecondStatuses)
-                            DrawDuplicateStatus(status);
-                    }
-                }
+            if (actionInfo.Value.SecondStatuses != null)
+            {
+                ImGui.Spacing();
+                foreach (var status in actionInfo.Value.SecondStatuses)
+                    DrawDuplicateStatus(status);
             }
         }
+
     }
 
     private static void DrawDuplicateStatus(DuplicateStatusInfo status)
@@ -269,26 +269,38 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         public IDalamudTextureWrap? GetIcon() =>
             !LuminaGetter.TryGetRow(StatusID, out Status row) ? null : DService.Instance().Texture.GetFromGameIcon(new(row.Icon)).GetWrapOrDefault();
 
-        public string? GetName() => !Sheets.Statuses.TryGetValue(StatusID, out var rowData) ? null : rowData.Name.ToString();
+        public string? GetName() => 
+            !Sheets.Statuses.TryGetValue(StatusID, out var rowData) ? null : rowData.Name.ToString();
 
         public bool HasStatus(AutoPreventDuplicateStatus module)
         {
             switch (DetectType)
             {
                 case DetectType.Self:
-                    return HasStatus(module, &Control.GetLocalPlayer()->StatusManager);
+                    var localPlayer = Control.GetLocalPlayer();
+                    if (localPlayer == null) return false;
+                    
+                    return HasStatus(module, localPlayer->GetStatusManager());
                 case DetectType.Target:
-                    if (TargetManager.Target is not IBattleChara chara) return false;
-                    return HasStatus(module, &chara.ToStruct()->StatusManager);
+                    var target = TargetSystem.Instance()->Target;
+                    if (target == null         ||
+                        !target->IsCharacter() ||
+                        target->ObjectKind != ObjectKind.BattleNpc)
+                        return false;
+                    
+                    var battleChara = (BattleChara*)target;
+                    return HasStatus(module, battleChara->GetStatusManager());
                 case DetectType.Member:
                     if (DService.Instance().PartyList.Length <= 0) return false;
 
-                    foreach (var partyMember in DService.Instance().PartyList)
+                    foreach (var partyMember in AgentHUD.Instance()->PartyMembers)
                     {
-                        if (IBattleChara.Create(partyMember.Address) is not { } member) continue;
-
-                        var state = HasStatus(module, member.ToStruct()->GetStatusManager());
-                        if (state) return true;
+                        if (partyMember.Object == null) continue;
+                        if (partyMember.EntityId == LocalPlayerState.EntityID) continue;
+                        
+                        var state = HasStatus(module, partyMember.Object->GetStatusManager());
+                        if (state) 
+                            return true;
                     }
 
                     return false;
