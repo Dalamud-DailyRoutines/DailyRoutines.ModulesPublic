@@ -61,6 +61,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
     private readonly List<EnemyListNode> nodes = [];
     private          OverlayController?  controller;
 
+    private bool isUpdating;
+    
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -154,14 +156,32 @@ public unsafe class OptimizedEnemyList : ModuleBase
                         enemyListArray->Enemies[i].LockedInList = false;
                 }
 
-                UpdateNodes();
+                if (isUpdating)
+                    break;
+                try
+                {
+                    UpdateNodes();
+                }
+                finally
+                {
+                    isUpdating = false;
+                }
                 break;
             
             case AddonEvent.PostDraw:
                 if (!Throttler.Shared.Throttle("OptimizedEnemyList.UpdateEnemyList", 100))
                     return;
                 
-                UpdateNodes();
+                if (isUpdating)
+                    break;
+                try
+                {
+                    UpdateNodes();
+                }
+                finally
+                {
+                    isUpdating = false;
+                }
                 break;
 
             case AddonEvent.PreFinalize:
@@ -279,8 +299,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             #region 状态效果更新
 
-            statusNodes.Scale    = componentNode->GetScale()             - new Vector2(0.1f);
-            statusNodes.Position = componentNode->GetNodeState().TopLeft + (new Vector2(216, -1) * statusNodes.Scale);
+            statusNodes.Scale    = componentNode->GetScale()                            - new Vector2(0.1f);
+            statusNodes.Position = ((AtkResNode*)castNode.Node)->GetNodeState().TopLeft + (new Vector2(4, -8) * statusNodes.Scale);
             statusNodes.Alpha    = info.ActiveInList ? 1f : 0.5f;
 
             var counter = 0;
@@ -424,7 +444,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 FontSize      = config.FontSize,
                 TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                 AlignmentType = AlignmentType.TopRight,
-                Position      = new(198, 5),
+                Position      = new(198, 6),
             };
             
             var healthNode = new TextNode
@@ -617,15 +637,9 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
         public int Index { get; init; }
 
-        public override OverlayLayer OverlayLayer
-        {
-            get => OverlayLayer.Foreground;
-        }
+        public override OverlayLayer OverlayLayer => OverlayLayer.Foreground;
 
-        public override bool HideWithNativeUi
-        {
-            get => true;
-        }
+        public override bool HideWithNativeUi => true;
 
         public bool ShouldBeVisible { get; set; }
 
