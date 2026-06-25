@@ -143,6 +143,12 @@ public class BetterFPSLimitation : ModuleBase
 
     protected override unsafe void OverlayUI()
     {
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
+        {
+            Overlay.IsOpen = false;
+            return;
+        }
+        
         var color = GetFPSColor(currentFPS);
 
         ImGui.SetWindowFontScale(1.5f);
