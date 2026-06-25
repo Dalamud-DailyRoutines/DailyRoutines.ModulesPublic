@@ -233,7 +233,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
                         out var groundPosition
                     ))
                 {
-                    MovementManager.Instance().TPMountAddress(groundPosition with { Y = groundPosition.Y - 0.5f });
+                    MovementManager.Instance().TPPlayerAddress(groundPosition with { Y = groundPosition.Y - 0.5f });
                     UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9);
                 }
 

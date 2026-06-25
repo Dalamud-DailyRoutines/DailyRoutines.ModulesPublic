@@ -160,20 +160,39 @@ public partial class OccultCrescentHelper : ModuleBase
         if (abortBefore)
             taskHelper.Abort();
 
-        taskHelper.Enqueue(() => UseActionManager.Instance().UseActionLocation(ActionType.Action, 41343),         weight: weight);
-        taskHelper.Enqueue(() => !UIModule.IsScreenReady(),                                                       weight: weight);
-        taskHelper.Enqueue(() => DService.Instance().ObjectTable.LocalPlayer != null && UIModule.IsScreenReady(), weight: weight);
         taskHelper.Enqueue
         (
             () =>
-            {
-                MovementManager.Instance().TPPlayerAddress(pos);
-                MovementManager.Instance().TPMountAddress(pos);
-            },
+                UseActionManager.Instance().UseActionLocation(ActionType.Action, 41343),
             weight: weight
         );
-        taskHelper.DelayNext(100, weight: weight);
-        taskHelper.Enqueue(() => MovementManager.Instance().TPGround(), weight: weight);
+        taskHelper.Enqueue
+        (
+            () =>
+                !UIModule.IsScreenReady(),
+            weight: weight
+        );
+        taskHelper.Enqueue
+        (
+            () =>
+                DService.Instance().ObjectTable.LocalPlayer != null && UIModule.IsScreenReady(),
+            weight: weight
+        );
+        taskHelper.Enqueue
+        (
+            () => MovementManager.Instance().TPPlayerAddress(pos),
+            weight: weight
+        );
+        taskHelper.DelayNext
+        (
+            100,
+            weight: weight
+        );
+        taskHelper.Enqueue
+        (
+            () => MovementManager.Instance().TPGround(),
+            weight: weight
+        );
     }
 
     private unsafe uint GetIslandID() =>
