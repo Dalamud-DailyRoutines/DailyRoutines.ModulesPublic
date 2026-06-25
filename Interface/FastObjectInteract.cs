@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using DailyRoutines.Common.Interface.Windows;
 using DailyRoutines.Common.Module.Abstractions;
@@ -43,7 +42,6 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
     private string blacklistKeyInput = string.Empty;
     private float  windowWidth;
-    private bool   isUpdatingObjects;
     private bool   isOnWorldTraveling;
 
     private readonly List<InteractableObject> currentObjects = new(20);
@@ -273,26 +271,21 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
         using var group = ImRaii.Group();
 
-
         foreach (var obj in currentObjects)
         {
             if (obj.Pointer == null) continue;
 
-
-            if (InstancesManager.IsInstancedArea && obj.Kind == ObjectKind.Aetheryte)
+            if (obj.Kind == ObjectKind.Aetheryte)
             {
                 if (LuminaGetter.GetRow<Aetheryte>(obj.Pointer->BaseId) is { IsAetheryte: true })
-                    instanceChangeObject = obj;
-            }
+                {
+                    if (InstancesManager.IsInstancedArea)
+                        instanceChangeObject = obj;
 
-            if (!isOnWorldTraveling                                     &&
-                WorldTravelValidZones.Contains(GameState.TerritoryType) &&
-                obj.Kind == ObjectKind.Aetheryte)
-            {
-                if (LuminaGetter.GetRow<Aetheryte>(obj.Pointer->BaseId) is { IsAetheryte: true })
-                    worldTravelObject = obj;
+                    if (!isOnWorldTraveling && WorldTravelValidZones.Contains(GameState.TerritoryType))
+                        worldTravelObject = obj;
+                }
             }
-
 
             RenderSingleObjectButton(obj);
         }
@@ -307,7 +300,6 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
         if (clickToTarget)
         {
-
             using var colorActive = ImRaii.PushColor(ImGuiCol.ButtonActive,  ImGui.GetStyle().Colors[(int)ImGuiCol.HeaderActive],  !isReachable);
             using var colorHover  = ImRaii.PushColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.HeaderHovered], !isReachable);
 
@@ -319,33 +311,28 @@ public unsafe partial class FastObjectInteract : ModuleBase
         }
         else
         {
-
             using var disabled = ImRaii.Disabled(!isReachable);
             if (ButtonCenterText(obj.ID.ToString(), obj.Name) && isReachable)
                 InteractWithObject(obj.Pointer, obj.Kind);
         }
 
-        using (var popup = ImRaii.ContextPopupItem($"{obj.ID}_{obj.Name}"))
-        {
-            if (popup)
-            {
-                if (ImGui.MenuItem(Lang.Get("FastObjectInteract-AddToBlacklist")))
-                {
-                    var cleanName = FastObjectInteractTitleRegex().Replace(obj.Name, string.Empty).Trim();
+        using var popup = ImRaii.ContextPopupItem($"{obj.ID}_{obj.Name}");
+        if (!popup) return;
 
-                    if (config.BlacklistKeys.Add(cleanName))
-                    {
-                        config.Save(this);
-                        forceObjectUpdate = true;
-                    }
-                }
+        if (ImGui.MenuItem(Lang.Get("FastObjectInteract-AddToBlacklist")))
+        {
+            var cleanName = FastObjectInteractTitleRegex().Replace(obj.Name, string.Empty).Trim();
+
+            if (config.BlacklistKeys.Add(cleanName))
+            {
+                config.Save(this);
+                forceObjectUpdate = true;
             }
         }
     }
 
     private void RenderInstanceZoneChangeButtons()
     {
-
         for (var i = 1; i <= InstancesManager.Instance().GetInstancesCount(); i++)
         {
             if (i == InstancesManager.CurrentInstance) continue;
@@ -388,8 +375,6 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
     private void OnUpdate(IFramework framework)
     {
-        if (isUpdatingObjects) return;
-
         var localPlayer    = Control.GetLocalPlayer();
         var canShowOverlay = !DService.Instance().Condition.IsBetweenAreas && localPlayer != null;
 
@@ -407,12 +392,8 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
         if (forceObjectUpdate || Throttler.Shared.Throttle("FastObjectInteract-Monitor"))
         {
-            isUpdatingObjects = true;
             forceObjectUpdate = false;
-
             UpdateObjectsList((GameObject*)localPlayer);
-
-            isUpdatingObjects = false;
         }
 
         var shouldShowWindow = currentObjects.Count > 0 && IsWindowShouldBeOpen();
@@ -430,7 +411,6 @@ public unsafe partial class FastObjectInteract : ModuleBase
     private void OnTerritoryChanged(uint u) =>
         forceObjectUpdate = true;
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private void UpdateObjectsList(GameObject* localPlayer)
     {
         currentObjects.Clear();
@@ -503,7 +483,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
             currentObjects.Add(new(obj, name, kind, distSq));
         }
 
-        currentObjects.Sort(InteractableObjectComparer.Instance);
+        currentObjects.Sort(InteractableObjectComparison);
 
         if (currentObjects.Count > maxAmount)
             currentObjects.RemoveRange(maxAmount, currentObjects.Count - maxAmount);
@@ -611,34 +591,27 @@ public unsafe partial class FastObjectInteract : ModuleBase
         public readonly ObjectKind  Kind       = kind;
         public readonly float       DistanceSq = distSq;
 
-
         public nint ID => (nint)Pointer;
     }
 
-    private class InteractableObjectComparer : IComparer<InteractableObject>
+    private static int InteractableObjectComparison(InteractableObject x, InteractableObject y)
     {
-        public static readonly InteractableObjectComparer Instance = new();
+        var c = x.DistanceSq.CompareTo(y.DistanceSq);
+        if (c != 0) return c;
 
-        public int Compare(InteractableObject x, InteractableObject y)
-        {
-            var c = x.DistanceSq.CompareTo(y.DistanceSq);
-            if (c != 0) return c;
-
-            return GetPriority(x.Kind).CompareTo(GetPriority(y.Kind));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int GetPriority(ObjectKind kind) => kind switch
-        {
-            ObjectKind.Aetheryte      => 1,
-            ObjectKind.EventNpc       => 2,
-            ObjectKind.EventObj       => 3,
-            ObjectKind.Treasure       => 4,
-            ObjectKind.GatheringPoint => 5,
-            _                         => 10
-        };
+        return GetKindPriority(x.Kind).CompareTo(GetKindPriority(y.Kind));
     }
-    
+
+    private static int GetKindPriority(ObjectKind kind) => kind switch
+    {
+        ObjectKind.Aetheryte      => 1,
+        ObjectKind.EventNpc       => 2,
+        ObjectKind.EventObj       => 3,
+        ObjectKind.Treasure       => 4,
+        ObjectKind.GatheringPoint => 5,
+        _                         => 10
+    };
+
     #region 常量
 
     private const string ENPC_TITLE_FORMAT = "[{0}] {1}";
