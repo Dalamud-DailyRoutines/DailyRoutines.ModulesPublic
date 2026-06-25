@@ -87,6 +87,12 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
     protected override unsafe void OverlayUI()
     {
         if (monitor == null) return;
+        
+        if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
+        {
+            Overlay.IsOpen = false;
+            return;
+        }
 
         float min          = 9999f, max = 0f, sum = 0f;
         var   validCount   = 0;

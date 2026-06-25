@@ -143,7 +143,7 @@ public class BetterFPSLimitation : ModuleBase
 
     protected override unsafe void OverlayUI()
     {
-        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
+        if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
         {
             Overlay.IsOpen = false;
             return;
