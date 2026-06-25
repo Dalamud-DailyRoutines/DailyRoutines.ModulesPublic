@@ -15,11 +15,13 @@ using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using Aetheryte = Lumina.Excel.Sheets.Aetheryte;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
+using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 using Treasure = FFXIVClientStructs.FFXIV.Client.Game.Object.Treasure;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -44,7 +46,8 @@ public unsafe partial class FastObjectInteract : ModuleBase
     private float  windowWidth;
     private bool   isOnWorldTraveling;
 
-    private readonly List<InteractableObject> currentObjects = new(20);
+    private readonly List<InteractableObject> currentObjects         = new(20);
+    private readonly List<AetheryteRecord>    currentAethernetShards = [];
     private          bool                     forceObjectUpdate;
 
     protected override void Init()
@@ -236,16 +239,26 @@ public unsafe partial class FastObjectInteract : ModuleBase
     {
         using var fontPush = FontManager.Instance().GetUIFont(config.FontScale).Push();
 
-        RenderObjectButtons(out var instanceChangeObj, out var worldTravelObj);
+        var isAnyRendered = RenderObjectButtons
+        (
+            out var instanceChangeObj,
+            out var worldTravelObj,
+            out var aetheryteID
+        );
 
-        if (instanceChangeObj.HasValue || worldTravelObj.HasValue)
+        if (instanceChangeObj.HasValue || worldTravelObj.HasValue || currentAethernetShards.Count > 0)
         {
-            ImGui.SameLine();
+            if (isAnyRendered)
+                ImGui.SameLine();
 
             using (ImRaii.Group())
             {
-                if (instanceChangeObj.HasValue) RenderInstanceZoneChangeButtons();
-                if (worldTravelObj.HasValue) RenderWorldChangeButtons();
+                if (instanceChangeObj.HasValue) 
+                    RenderInstanceZoneChangeButtons();
+                if (worldTravelObj.HasValue) 
+                    RenderWorldChangeButtons();
+                if (currentAethernetShards.Count > 0) 
+                    RenderAethernetShardButtons(aetheryteID);
             }
         }
 
@@ -264,10 +277,18 @@ public unsafe partial class FastObjectInteract : ModuleBase
         config.MaxButtonWidth = Math.Max(1, config.MaxButtonWidth);
     }
 
-    private void RenderObjectButtons(out InteractableObject? instanceChangeObject, out InteractableObject? worldTravelObject)
+    private bool RenderObjectButtons
+    (
+        out InteractableObject? instanceChangeObject,
+        out InteractableObject? worldTravelObject,
+        out uint                currentAetheryteID
+    )
     {
+        var isAnyRendered = false;
+        
         instanceChangeObject = null;
         worldTravelObject    = null;
+        currentAetheryteID   = 0;
 
         using var group = ImRaii.Group();
 
@@ -277,18 +298,24 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
             if (obj.Kind == ObjectKind.Aetheryte)
             {
+                currentAetheryteID = obj.Pointer->BaseId;
+                
                 if (LuminaGetter.GetRow<Aetheryte>(obj.Pointer->BaseId) is { IsAetheryte: true })
                 {
                     if (InstancesManager.IsInstancedArea)
                         instanceChangeObject = obj;
-
                     if (!isOnWorldTraveling && WorldTravelValidZones.Contains(GameState.TerritoryType))
                         worldTravelObject = obj;
                 }
+                else
+                    continue;
             }
 
+            isAnyRendered = true;
             RenderSingleObjectButton(obj);
         }
+
+        return isAnyRendered;
     }
 
     private void RenderSingleObjectButton(InteractableObject obj)
@@ -352,6 +379,17 @@ public unsafe partial class FastObjectInteract : ModuleBase
                 ChatManager.Instance().SendMessage($"/pdr worldtravel {worldPair.Key}");
         }
     }
+    
+    private void RenderAethernetShardButtons(uint aetheryteID)
+    {
+        foreach (var shard in currentAethernetShards)
+        {
+            if (shard.RowID == aetheryteID) continue;
+
+            if (ButtonCenterText($"AethernetShard_{shard.RowID}_{shard.SubIndex}", shard.Name))
+                shard.TeleportTo();
+        }
+    }
 
     public bool ButtonCenterText(string id, string text)
     {
@@ -372,6 +410,8 @@ public unsafe partial class FastObjectInteract : ModuleBase
     }
 
     #endregion
+
+    #region 事件
 
     private void OnUpdate(IFramework framework)
     {
@@ -396,8 +436,11 @@ public unsafe partial class FastObjectInteract : ModuleBase
             UpdateObjectsList((GameObject*)localPlayer);
         }
 
-        var shouldShowWindow = currentObjects.Count > 0 && IsWindowShouldBeOpen();
+        if (currentAethernetShards.Count   == 0 &&
+            GameState.TerritoryIntendedUse == TerritoryIntendedUse.Town)
+            TryPopulateAethernetShards();
 
+        var shouldShowWindow = (currentObjects.Count > 0 || currentAethernetShards.Count > 0) && IsWindowShouldBeOpen();
         if (Overlay != null)
         {
             Overlay.IsOpen = shouldShowWindow;
@@ -408,8 +451,13 @@ public unsafe partial class FastObjectInteract : ModuleBase
     private void OnLogin() =>
         LoadWorldData();
 
-    private void OnTerritoryChanged(uint u) =>
+    private void OnTerritoryChanged(uint u)
+    {
         forceObjectUpdate = true;
+        currentAethernetShards.Clear();
+    }
+
+    #endregion
 
     private void UpdateObjectsList(GameObject* localPlayer)
     {
@@ -500,7 +548,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
     private bool IsWindowShouldBeOpen()
     {
-        if (currentObjects.Count == 0) return false;
+        if (currentObjects.Count == 0 && currentAethernetShards.Count == 0) return false;
 
         if (config.WindowInvisibleWhenInteract && DService.Instance().Condition.IsOccupiedInEvent)
             return false;
@@ -560,6 +608,33 @@ public unsafe partial class FastObjectInteract : ModuleBase
                          .ToDictionary(x => x.Key, x => x.Value.Name.ToString());
     }
 
+    private void TryPopulateAethernetShards()
+    {
+        foreach (var obj in currentObjects)
+        {
+            if (obj.Kind != ObjectKind.Aetheryte || obj.Pointer == null) continue;
+
+            PopulateAethernetShards(obj.Pointer->BaseId);
+            break;
+        }
+    }
+
+    private void PopulateAethernetShards(uint baseID)
+    {
+        var manager = AetheryteRecordManager.Instance();
+
+        var self = manager.AllRecords.FirstOrDefault(x => x.RowID == baseID);
+        if (self == null || self.Group == 0) return;
+
+        foreach (var record in manager.AllRecords)
+        {
+            if (record.Group != self.Group) continue;
+            if (!record.IsUnlocked()) continue;
+
+            currentAethernetShards.Add(record);
+        }
+    }
+    
     [GeneratedRegex(@"\[.*?\]")]
     private static partial Regex FastObjectInteractTitleRegex();
 
@@ -567,7 +642,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
     {
         public bool                AllowClickToTarget;
         public HashSet<string>     BlacklistKeys = [];
-        public float               FontScale     = 1f;
+        public float               FontScale     = 0.6f;
         public bool                LockWindow;
         public float               MaxButtonWidth   = 400f;
         public int                 MaxDisplayAmount = 5;
