@@ -353,9 +353,10 @@ public unsafe class QuickChatPanel : ModuleBase
         private readonly Dictionary<QuickChatTab, ListButtonNode>                  tabButtons      = [];
         private readonly Dictionary<QuickChatTab, ResNode>                         tabRoots        = [];
         private readonly Dictionary<QuickChatTab, ScrollingNode<VerticalListNode>> tabContentLists = [];
-        private readonly LuminaSearcher<Item>                                      searcher;
-        private readonly QuickChatPanel                                            instance;
-        private readonly TaskHelper                                                TaskHelper = new();
+        
+        private readonly LuminaSearcher<Item> searcher;
+        private readonly QuickChatPanel       instance;
+        private readonly TaskHelper           taskHelper = new();
 
         private QuickChatTab         selectedTab;
         private SimpleComponentNode? contentPanel;
@@ -479,7 +480,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
         public override void Dispose()
         {
-            TaskHelper.Dispose();
+            taskHelper.Dispose();
             base.Dispose();
         }
 
@@ -514,21 +515,20 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var contentList = new ScrollingNode<VerticalListNode>
             {
-                IsVisible         = true,
-                Position          = new(9f),
-                Size              = tabContentSize - new Vector2(8f, 12f),
-                AutoHideScrollBar = true,
-                ScrollSpeed       = 36
+                Position    = new(9f),
+                Size        = tabContentSize - new Vector2(8f, 12f),
+                ScrollSpeed = 36
             };
-            contentList.ContentNode.ItemSpacing = 5f;
-            contentList.ContentNode.FitWidth    = true;
+            contentList.ContentNode.ItemSpacing  = 5f;
+            contentList.ContentNode.FitWidth     = true;
+            contentList.ContentNode.FitContents  = true;
             contentList.AttachNode(tabRoot);
 
             tabRoots[tab]        = tabRoot;
             tabContentLists[tab] = contentList;
 
             BuildTab(tab, contentList);
-            contentList.ContentNode.RecalculateLayout();
+            contentList.RecalculateSizes();
         }
 
         private void BuildTab(QuickChatTab tab, ScrollingNode<VerticalListNode> contentList)
@@ -557,7 +557,7 @@ public unsafe class QuickChatPanel : ModuleBase
         }
 
         private void ShowTab(QuickChatTab tab) =>
-            TaskHelper.Enqueue
+            taskHelper.Enqueue
             (() =>
                 {
                     EnsureTabBuilt(tab);
@@ -862,16 +862,16 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var button = CreateGlyphButton(text, $"0x{(int)icon:X4}", () => CopyText(text));
 
-                if (currentWidth + button.Width > contentList.ContentNode.Width)
+                if (currentWidth + row.ItemSpacing + button.Width > contentList.ContentNode.Width)
                 {
                     contentList.ContentNode.AddNode(row);
-                    
+
                     row          = CreateGlyphRow();
                     currentWidth = 0f;
                 }
 
                 row.AddNode(button);
-                currentWidth += button.Width;
+                currentWidth += row.ItemSpacing + button.Width;
             }
 
             if (row.Nodes.Count > 0)
@@ -910,7 +910,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
         private void BuildSettingsTab(ScrollingNode<VerticalListNode> contentList)
         {
-            var contentWidth = contentList.ContentNode.Width;
+            var contentWidth = contentList.ContentNode.Width - 12f;
 
             TreeListNode? tree = null;
             tree = new()
@@ -924,7 +924,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 if (tree == null) return;
 
                 tree.Height = height;
-                contentList.ContentNode.RecalculateLayout();
+                contentList.RecalculateSizes();
             };
 
             var generalOverlay = new VerticalListNode
@@ -1204,6 +1204,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
             contentList.ContentNode.AddNode(tree);
             tree.RefreshLayout();
+            contentList.RecalculateSizes();
             return;
 
             void AddMacroSection(bool isIndividual)
