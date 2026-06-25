@@ -118,9 +118,7 @@ public unsafe partial class BetterTeleport
             currentSelectableRecords.AddRange(favorites);
         else if (AetheryteRecordManager.Instance().Records.TryGetValue(activeTabName, out var aetherytes))
         {
-            var source = activeTabName == LuminaWrapper.GetAddonText(832) ? AetheryteRecordManager.Instance().HouseRecords.Concat(aetherytes) : aetherytes;
-
-            foreach (var aetheryte in source.ToList())
+            foreach (var aetheryte in aetherytes.ToList())
             {
                 if (!aetheryte.IsUnlocked()) continue;
                 currentSelectableRecords.Add(aetheryte);
@@ -303,13 +301,12 @@ public unsafe partial class BetterTeleport
                         using var child     = ImRaii.Child($"###{name}ChildFull", childSize, false, ImGuiWindowFlags.NoBackground);
                         if (!child) continue;
 
-                        var source      = name == LuminaWrapper.GetAddonText(832) ? AetheryteRecordManager.Instance().HouseRecords.Concat(aetherytes) : aetherytes;
                         var lastName    = string.Empty;
                         var lastGroupID = -1;
 
                         var visibleIndex = 0;
 
-                        foreach (var aetheryte in source)
+                        foreach (var aetheryte in aetherytes)
                         {
                             if (!aetheryte.IsUnlocked()) continue;
 
