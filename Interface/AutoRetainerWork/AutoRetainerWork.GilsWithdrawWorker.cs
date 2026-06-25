@@ -1,4 +1,5 @@
-﻿using DailyRoutines.Extensions;
+﻿using DailyRoutines.Common.KamiToolKit.Nodes;
+using DailyRoutines.Extensions;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Threading.TaskHelper;

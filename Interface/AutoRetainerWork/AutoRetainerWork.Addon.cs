@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using DailyRoutines.Common.KamiToolKit.Addons;
+using DailyRoutines.Common.KamiToolKit.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;

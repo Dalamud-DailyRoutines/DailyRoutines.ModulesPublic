@@ -1216,7 +1216,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     {
                         IsVisible     = true,
                         Size          = new(contentWidth, 22f),
-                        String        = Lang.Get($"QuickChatPanel-{(isIndividual ? "Individual" : "Shared")}Macros"),
+                        String        = LuminaWrapper.GetAddonText(isIndividual ? 17337U : 17338),
                         FontSize      = 13,
                         AlignmentType = AlignmentType.Left
                     }
