@@ -371,7 +371,7 @@ public unsafe class CustomizeGameObject : ModuleBase
         ImGui.TableNextColumn();
         ImGuiOm.Text(Lang.Get("Value"));
         ImGui.TableNextColumn();
-        ImGuiOm.Text(Lang.Get("CustomizeGameObject-Scale"));
+        ImGuiOm.Text(Lang.Get("Scale"));
         ImGui.TableNextColumn();
         ImGui.Dummy(new(32f));
         ImGuiOm.TooltipHover(Lang.Get("CustomizeGameObject-ScaleVFX"));
@@ -582,7 +582,7 @@ public unsafe class CustomizeGameObject : ModuleBase
         // Scale
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted($"{Lang.Get("CustomizeGameObject-Scale")}:");
+        ImGui.TextUnformatted($"{Lang.Get("Scale")}:");
         ImGui.TableNextColumn();
         ImGui.SliderFloat("###CustomizeScaleSilder", ref scaleInput, 0.1f, 10f, "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit()) state = true;
