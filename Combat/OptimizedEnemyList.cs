@@ -432,7 +432,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 );
                 castNode.String = castText;
                 
-                var castTextWidth = castNode.GetTextDrawSize(false).X + (leftCastTime == 0 ? 1f : 0f);
+                var castTextWidth = castNode.GetTextDrawSize(false).X + (leftCastTime == 0 ? 2f : 1f);
 
                 castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f } +
                                               config.TextOffset;
