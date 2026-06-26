@@ -1,12 +1,13 @@
 using System.Collections;
 using System.Numerics;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Interface.Components;
+using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
@@ -15,6 +16,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.UiOverlay;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -98,41 +100,63 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputFloat2($"{Lang.Get("Offset")}###TextOffsetInput", ref config.TextOffset, format: "%.1f");
-
-        if (ImGui.IsItemDeactivatedAfterEdit())
-            config.Save(this);
-
-        ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.InputByte($"{Lang.Get("FontSize")}###FontSize", ref config.FontSize);
-        if (ImGui.IsItemDeactivatedAfterEdit())
-            config.Save(this);
-
-        ImGui.NewLine();
-
-        config.TextColor = ImGuiComponents.ColorPickerWithPalette(0, "###TextColorInput", config.TextColor);
-
-        ImGui.SameLine();
-        ImGui.TextUnformatted($"{Lang.Get("Color")} ({Lang.Get("Text")})");
-
-        config.TextEdgeColor = ImGuiComponents.ColorPickerWithPalette(1, "###EdgeColorInput", config.TextEdgeColor);
-
-        ImGui.SameLine();
-        ImGui.TextUnformatted($"{Lang.Get("EdgeColor")} ({Lang.Get("Text")})");
-        
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Save, $"{Lang.Get("Save")}"))
-            config.Save(this);
-
-        ImGui.SameLine();
-
-        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Redo, $"{Lang.Get("Reset")}"))
+        using (ImRaii.Heading1(Lang.Get("OptimizedEnemyList-CastText")))
+        using (ImRaii.ItemWidth(200f * GlobalUIScale))
+        using (ImRaii.PushId("CastText"))
         {
-            var newConfig = new Config();
-            config.TextColor       = newConfig.TextColor;
-            config.TextEdgeColor   = newConfig.TextEdgeColor;
+            ImGui.InputFloat2(Lang.Get("Offset"), ref config.TextOffset, format: "%.1f");
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
 
-            config.Save(this);
+            ImGui.InputByte(Lang.Get("FontSize"), ref config.TextSize);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.TextColor);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+            
+            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.TextEdgeColor);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+        }
+        
+        ImGui.NewLine();
+        
+        using (ImRaii.Heading1(Lang.Get("OptimizedEnemyList-HealthText")))
+        using (ImRaii.ItemWidth(200f * GlobalUIScale))
+        using (ImRaii.PushId("HealthText"))
+        {
+            ImGui.InputFloat2(Lang.Get("Offset"), ref config.HealthTextOffset, format: "%.1f");
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+
+            ImGui.InputByte(Lang.Get("FontSize"), ref config.HealthTextSize);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+
+            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.HealthTextColor);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+            
+            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.HealthTextEdgeColor);
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+        }
+        
+        ImGui.NewLine();
+        
+        using (ImRaii.Heading1(Lang.Get("Status")))
+        using (ImRaii.ItemWidth(200f * GlobalUIScale))
+        using (ImRaii.PushId("Status"))
+        {
+            ImGui.InputFloat2(Lang.Get("Offset"), ref config.StatusOffset, format: "%.1f");
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
+            
+            ImGui.InputFloat(Lang.Get("Scale"), ref config.StatusScale, format: "%.1f");
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                config.Save(this);
         }
         
         ImGui.NewLine();
@@ -276,6 +300,9 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 continue;
             }
             
+            var lockImageNode = componentNode->Component->UldManager.SearchNodeById(14);
+            if (lockImageNode == null) continue;
+            
             nativeCastBarNode->SetAlpha(0);
             nativeCastBarProgressNode->SetAlpha(0);
             nativeCastNode->SetAlpha(0);
@@ -283,25 +310,16 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             #endregion
             
-            #region 更新属性
-
-            castNode.TextColor        = config.TextColor;
-            castNode.TextOutlineColor = config.TextEdgeColor;
-            castNode.FontSize         = config.FontSize;
-            
-            healthNode.TextColor        = config.TextColor;
-            healthNode.TextOutlineColor = config.TextEdgeColor;
-            
-            healthMarkerNode.TextColor        = config.TextColor;
-            healthMarkerNode.TextOutlineColor = config.TextEdgeColor;
-            
-            #endregion
-
             #region 状态效果更新
 
-            statusNodes.Scale    = componentNode->GetScale()                            - new Vector2(0.1f);
-            statusNodes.Position = ((AtkResNode*)castNode.Node)->GetNodeState().TopLeft + (new Vector2(4, -8) * statusNodes.Scale);
-            statusNodes.Alpha    = info.ActiveInList ? 1f : 0.5f;
+            statusNodes.Scale = (componentNode->GetScale() - new Vector2(0.1f)) * config.StatusScale;
+            statusNodes.Alpha = info.ActiveInList ? 1f : 0.5f;
+
+            var nodeState = componentNode->GetNodeState();
+            statusNodes.Position = nodeState.TopRight -
+                                   lockImageNode->GetNodeState().Size.WithY(0) +
+                                   (new Vector2(6, -1) * statusNodes.Scale) +
+                                   config.StatusOffset;
 
             var counter = 0;
             foreach (var status in gameObj->StatusManager.Status)
@@ -346,27 +364,42 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 healthMarkerNode.IsVisible     = true;
                 healthBackgroundNode.IsVisible = true;
 
-                const float HEALTH_NODE_BASE_X    = -60f;
-                const float HEALTH_MARKER_PADDING = 1f;
+                healthNode.TextColor        = config.HealthTextColor;
+                healthNode.TextOutlineColor = config.HealthTextEdgeColor;
+                healthNode.FontSize         = config.HealthTextSize;
 
+                healthMarkerNode.TextColor        = config.HealthTextColor;
+                healthMarkerNode.TextOutlineColor = config.HealthTextEdgeColor;
+                healthMarkerNode.FontSize         = (byte)Math.Max(0, config.HealthTextSize - 2);
+                
                 healthNode.String = $"{healthPercentage:F1}";
 
                 var healthTextWidth     = healthNode.GetTextDrawSize(false).X;
+                var healthTextHeight    = healthNode.GetTextDrawSize(false).Y;
                 var healthBaseTextWidth = healthNode.GetTextDrawSize("99.9", false).X;
                 var healthMarkerWidth   = healthMarkerNode.GetTextDrawSize(false).X;
-                var healthRightX        = HEALTH_NODE_BASE_X + healthBaseTextWidth - 3f + healthMarkerWidth;
+                var healthRightX        = HealthTextDefaultPosition.X + config.HealthTextOffset.X + healthBaseTextWidth - 3f + healthMarkerWidth;
 
-                healthNode.X       = healthRightX - healthTextWidth - HEALTH_MARKER_PADDING - healthMarkerWidth;
-                healthMarkerNode.X = healthNode.X + healthTextWidth + HEALTH_MARKER_PADDING;
+                healthNode.X = healthRightX                - healthTextWidth - HEALTH_TEXT_MARKER_PADDING - healthMarkerWidth;
+                healthNode.Y = HealthTextDefaultPosition.Y + config.HealthTextOffset.Y;
 
-                var totalHealthWidth = healthTextWidth + HEALTH_MARKER_PADDING + healthMarkerWidth + 2f;
-                healthBackgroundNode.X     = healthNode.X - 5f;
-                healthBackgroundNode.Width = totalHealthWidth + 9f;
+                healthMarkerNode.X = healthNode.X                + healthTextWidth + HEALTH_TEXT_MARKER_PADDING;
+                healthMarkerNode.Y = HealthTextDefaultPosition.Y + config.HealthTextOffset.Y;
+
+                healthBackgroundNode.X      = healthNode.X     - 5f;
+                healthBackgroundNode.Y      = 6f               + config.HealthTextOffset.Y;
+                healthBackgroundNode.Width  = healthTextWidth  + HEALTH_TEXT_MARKER_PADDING + healthMarkerWidth + 11f;
+                healthBackgroundNode.Height = healthTextHeight + 4f;
             }
             
             #endregion
 
             #region 咏唱
+            
+            castNode.TextColor        = config.TextColor;
+            castNode.TextOutlineColor = config.TextEdgeColor;
+            castNode.FontSize         = config.TextSize;
+            castNode.Position         = CastTextDefaultPosition + config.TextOffset;
 
             // 当前不在咏唱
             var leftCastTime = MathF.Max(gameObj->CastInfo.TotalCastTime - gameObj->CastInfo.CurrentCastTime, 0f);
@@ -398,12 +431,12 @@ public unsafe class OptimizedEnemyList : ModuleBase
                     leftCastTime
                 );
                 castNode.String = castText;
-
-                var padding       = *(ushort*)((nint)EnemyList + 646);
-                var castTextWidth = castNode.GetTextDrawSize(false).X + 2f;
                 
-                castBackgroundNode.X     = castNode.Position.X - castTextWidth - 1f;
-                castBackgroundNode.Width = castTextWidth       + (padding / 2f);
+                var castTextWidth = castNode.GetTextDrawSize(false).X + (leftCastTime == 0 ? 1f : 0f);
+
+                castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f } +
+                                              config.TextOffset;
+                castBackgroundNode.Width = castTextWidth + (CAST_TEXT_BACKGROUND_PADDING * (config.TextSize / 10f));
             }
 
             #endregion
@@ -441,39 +474,43 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             var castNode = new TextNode
             {
-                FontSize      = config.FontSize,
                 TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                 AlignmentType = AlignmentType.TopRight,
-                Position      = new(198, 6),
             };
             
-            var healthNode = new TextNode
+            var castBarNode = new ProgressBarEnemyCastNode
             {
-                FontSize      = 16,
-                FontType      = FontType.Miedinger,
-                TextFlags     = TextFlags.Edge,
-                AlignmentType = AlignmentType.TopLeft,
-                Position      = new(-60, 8),
+                IsVisible = true,
+                Position  = new(85, 13.7f),
+                Size      = new(120, 20)
             };
-
-            var healthMarkerNode = new TextNode
-            {
-                String        = "%",
-                FontSize      = 14,
-                TextFlags     = TextFlags.Edge,
-                AlignmentType = AlignmentType.TopLeft,
-                Position      = new(-60, 8),
-            };
-
-            var backgroundNode = new SimpleNineGridNode
+            
+            var castBackgroundNode = new SimpleNineGridNode
             {
                 TexturePath        = "ui/uld/EnemyList_hr1.tex",
                 TextureCoordinates = new(96, 80),
                 TextureSize        = new(24, 20),
                 Size               = new(124, 24),
-                Position           = new(75, 2),
                 Offsets            = new(8),
                 Alpha              = 1f,
+            };
+
+            castBarNode.ProgressNode.Height   -= 12f;
+            castBarNode.ProgressNode.Position += new Vector2(7.7f, 6.5f);
+            castBarNode.ProgressNode.AddColor =  new(1);
+            
+            var healthNode = new TextNode
+            {
+                FontType      = FontType.Miedinger,
+                TextFlags     = TextFlags.Edge,
+                AlignmentType = AlignmentType.TopLeft,
+            };
+
+            var healthMarkerNode = new TextNode
+            {
+                String        = "%",
+                TextFlags     = TextFlags.Edge,
+                AlignmentType = AlignmentType.TopLeft,
             };
 
             var healthBackgroundNode = new SimpleNineGridNode
@@ -487,18 +524,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 Alpha              = 0.6f,
             };
 
-            var castBarNode = new ProgressBarEnemyCastNode
-            {
-                IsVisible = true,
-                Position  = new(85, 13.7f),
-                Size      = new(120, 20)
-            };
-
-            castBarNode.ProgressNode.Height   -= 12f;
-            castBarNode.ProgressNode.Position += new Vector2(7.7f, 6.5f);
-            castBarNode.ProgressNode.AddColor =  new(1);
-
-            backgroundNode.AttachNode(node);
+            castBackgroundNode.AttachNode(node);
             castNode.AttachNode(node);
             healthBackgroundNode.AttachNode(node);
             healthNode.AttachNode(node);
@@ -508,7 +534,20 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var statusNodes = new IconTextNodesRow(5, node->NodeId, counter);
             controller.AddNode(statusNodes);
 
-            nodes.Add(new(node->NodeId, castNode, healthNode, healthMarkerNode, backgroundNode, healthBackgroundNode, castBarNode, statusNodes));
+            nodes.Add
+            (
+                new
+                (
+                    node->NodeId,
+                    castNode,
+                    healthNode,
+                    healthMarkerNode,
+                    castBackgroundNode,
+                    healthBackgroundNode,
+                    castBarNode,
+                    statusNodes
+                )
+            );
         }
     }
     
@@ -554,11 +593,22 @@ public unsafe class OptimizedEnemyList : ModuleBase
     private class Config : ModuleConfig
     {
         public bool DisplayStatus = true;
-        public byte FontSize      = 10;
-
+        
+        // 咏唱
+        public byte    TextSize      = 10;
         public Vector4 TextColor     = Vector4.One;
         public Vector4 TextEdgeColor = new(0, 0.372549f, 1, 1);
         public Vector2 TextOffset    = Vector2.Zero;
+        
+        // 体力值
+        public byte    HealthTextSize      = 16;
+        public Vector4 HealthTextColor     = Vector4.One;
+        public Vector4 HealthTextEdgeColor = new(0, 0.372549f, 1, 1);
+        public Vector2 HealthTextOffset    = Vector2.Zero;
+        
+        // 状态效果
+        public float   StatusScale  = 1f;
+        public Vector2 StatusOffset = Vector2.Zero;
         
         public bool AlwaysUnlock = true;
     }
@@ -699,4 +749,15 @@ public unsafe class OptimizedEnemyList : ModuleBase
             TextTooltip = $"{row.Name}\n{row.Description}";
         }
     }
+
+    #region 常量
+
+    private static readonly Vector2 CastTextDefaultPosition           = new(198, 6);
+    private static readonly Vector2 HealthTextDefaultPosition         = new(-60, 8);
+    private static readonly Vector2 CastBackgroundTextDefaultPosition = new(192, 2);
+    
+    private const float HEALTH_TEXT_MARKER_PADDING   = 1f;
+    private const float CAST_TEXT_BACKGROUND_PADDING = 7f;
+
+    #endregion
 }
