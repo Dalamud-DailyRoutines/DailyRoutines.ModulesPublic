@@ -101,9 +101,11 @@ public class AutoDrawMotifs : ModuleBase
     {
         var gauge = DService.Instance().JobGauges.Get<PCTGauge>();
 
-        if (DService.Instance().ObjectTable.LocalPlayer == null ||
-            DService.Instance().Condition.IsBetweenAreas        ||
-            DService.Instance().Condition[ConditionFlag.Casting]) return false;
+        if (DService.Instance().ObjectTable.LocalPlayer == null  ||
+            DService.Instance().Condition.IsBetweenAreas         ||
+            DService.Instance().Condition[ConditionFlag.Casting] ||
+            DService.Instance().Condition.IsOccupiedInEvent)
+            return false;
 
         if (DService.Instance().Condition.Any(ConditionFlag.InCombat, ConditionFlag.Mounted, ConditionFlag.Mounting, ConditionFlag.InFlight))
         {
