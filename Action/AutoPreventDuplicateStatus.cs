@@ -5,6 +5,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Interface.Textures.TextureWraps;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
@@ -193,7 +194,22 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         {
             if (config.SendNotification &&
                 Throttler.Shared.Throttle($"AutoPreventDuplicateStatus-Notification-{adjustedActionID}", 1_000))
-                NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoPreventDuplicateStatus-PreventedNotification", actionData.Value.Name.ToString(), adjustedActionID));
+            {
+                using var rented = new RentedSeStringBuilder();
+                rented.Builder
+                      .PushColorType(32)
+                      .Append(actionData.Value.Name)
+                      .PopColorType();
+                
+                NotifyHelper.ToastQuest
+                (
+                    Lang.GetSe("AutoPreventDuplicateStatus-Notification-Prevented", rented),
+                    new()
+                    {
+                        IconId = actionData.Value.Icon,
+                    }
+                );
+            }
 
             isPrevented = true;
         }
