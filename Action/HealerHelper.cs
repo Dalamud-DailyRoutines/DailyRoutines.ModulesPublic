@@ -7,6 +7,8 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.DutyState;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
@@ -15,7 +17,6 @@ using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using Newtonsoft.Json;
 using OmenTools.ImGuiOm.Widgets.Combos;
-using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -69,18 +70,48 @@ public class HealerHelper : ModuleBase
 
     #region Utils
 
-    private void NotifyTargetChange(IBattleChara gameObject, string locKeySuffix)
+    private void NotifyTargetChange(IBattleChara gameObject, uint actionID)
     {
-        var name = gameObject.Name.ToString();
-        var job  = gameObject.ClassJob.Value;
+        var job = gameObject.ClassJob.Value;
+
+        using var rented = new RentedSeStringBuilder();
+        rented.Builder
+              .PushColorType(32)
+              .Append(LuminaWrapper.GetActionName(actionID))
+              .PopColorType();
 
         if (config.SendChat)
-            NotifyHelper.Instance().Chat(Lang.GetSe(locKeySuffix, name, job.ToBitmapFontIcon(), job.Name));
+        {
+            NotifyHelper.Instance().Chat
+            (
+                Lang.GetSe
+                (
+                    "HealerHelper-Message-TargetRedirected",
+                    rented,
+                    new PlayerPayload(gameObject.Name, gameObject.HomeWorld.RowId),
+                    job.ToBitmapFontIcon(),
+                    job.Name
+                )
+            );
+        }
+        
         if (config.SendNotification)
-            NotifyHelper.Instance().Notify(Lang.Get(locKeySuffix, name, string.Empty, job.Name), options: new()
-            {
-                Icon = DService.Instance().Texture.GetFromGameIcon(gameObject.ClassJob.Value.GetIcon())
-            });
+        {
+            NotifyHelper.ToastQuest
+            (
+                Lang.GetSe
+                (
+                    "HealerHelper-Notification-TargetRedirected",
+                    new PlayerPayload(gameObject.Name, gameObject.HomeWorld.RowId),
+                    job.ToBitmapFontIcon(),
+                    job.Name
+                ),
+                new()
+                {
+                    IconId = LuminaWrapper.GetActionIconID(actionID)
+                }
+            );
+        }
     }
 
     #endregion
@@ -283,7 +314,7 @@ public class HealerHelper : ModuleBase
             module.NotifyTargetChange
             (
                 IBattleChara.Create((nint)finalTarget),
-                actionID == 37023 ? "HealerHelper-AutoPlayCard-Message-Melee" : "HealerHelper-AutoPlayCard-Message-Range"
+                actionID
             );
         }
 
@@ -411,7 +442,11 @@ public class HealerHelper : ModuleBase
             {
                 targetID = needHealObject->EntityId;
 
-                module.NotifyTargetChange(IBattleChara.Create((nint)needHealObject), "HealerHelper-EasyHeal-Message");
+                module.NotifyTargetChange
+                (
+                    IBattleChara.Create((nint)needHealObject),
+                    actionID
+                );
                 return;
             }
 
@@ -423,7 +458,11 @@ public class HealerHelper : ModuleBase
 
                 case OverhealTarget.Local:
                     targetID = LocalPlayerState.EntityID;
-                    module.NotifyTargetChange(LocalPlayerState.Object, "HealerHelper-EasyHeal-Message");
+                    module.NotifyTargetChange
+                    (
+                        LocalPlayerState.Object,
+                        actionID
+                    );
                     return;
 
                 case OverhealTarget.FirstTank:
@@ -447,7 +486,11 @@ public class HealerHelper : ModuleBase
                             continue;
 
                         targetID = info.EntityId;
-                        module.NotifyTargetChange(IBattleChara.Create((nint)info.Object), "HealerHelper-EasyHeal-Message");
+                        module.NotifyTargetChange
+                        (
+                            IBattleChara.Create((nint)info.Object),
+                            actionID
+                        );
                         return;
                     }
 
@@ -466,13 +509,17 @@ public class HealerHelper : ModuleBase
             if (LocalPlayerState.Object.StatusList.Any(s => Sheets.DispellableStatuses.ContainsKey(s.StatusID)))
             {
                 targetID = LocalPlayerState.EntityID;
-                module.NotifyTargetChange(LocalPlayerState.Object, "HealerHelper-EasyDispel-Message");
+                module.NotifyTargetChange
+                (
+                    LocalPlayerState.Object,
+                    DISPELL_ACTION_ID
+                );
             }
             else
             {
                 var obj = FindTarget
                 (
-                    7568,
+                    DISPELL_ACTION_ID,
                     m =>
                     {
                         if (m.Object->IsDead() || m.Object->Health <= 0) return false;
@@ -491,7 +538,11 @@ public class HealerHelper : ModuleBase
                 if (obj != null)
                 {
                     targetID = obj->EntityId;
-                    module.NotifyTargetChange(IBattleChara.Create((nint)obj), "HealerHelper-EasyDispel-Message");
+                    module.NotifyTargetChange
+                    (
+                        IBattleChara.Create((nint)obj),
+                        DISPELL_ACTION_ID
+                    );
                 }
             }
         }
@@ -514,7 +565,11 @@ public class HealerHelper : ModuleBase
             if (obj == null || obj->EntityId == targetID) return;
 
             targetID = obj->EntityId;
-            module.NotifyTargetChange(IBattleChara.Create((nint)obj), "HealerHelper-EasyRaise-Message");
+            module.NotifyTargetChange
+            (
+                IBattleChara.Create((nint)obj),
+                actionID
+            );
         }
 
         public static unsafe bool IsHealable(IGameObject? gameObject) =>
@@ -1009,6 +1064,8 @@ public class HealerHelper : ModuleBase
     private const string REMOTE_URI = "https://assets.sumemo.dev";
 
     private const uint UNSPECIFIC_TARGET_ID = 0xE000_0000;
+
+    private const uint DISPELL_ACTION_ID = 7568;
 
     private static FrozenDictionary<ReadOnlySeString, ReadOnlySeString> JobNameMap { get; } =
         LuminaGetter.Get<ClassJob>()
