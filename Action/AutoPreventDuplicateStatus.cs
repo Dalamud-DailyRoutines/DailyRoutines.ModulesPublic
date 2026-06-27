@@ -193,7 +193,7 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         if (info.ShouldPrevent(this, targetIDDetection))
         {
             if (config.SendNotification &&
-                Throttler.Shared.Throttle($"AutoPreventDuplicateStatus-Notification-{adjustedActionID}", 1_000))
+                Throttler.Shared.Throttle($"AutoPreventDuplicateStatus-Notification-{adjustedActionID}", 2_500))
             {
                 using var rented = new RentedSeStringBuilder();
                 rented.Builder
