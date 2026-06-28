@@ -126,7 +126,7 @@ public unsafe class AutoRedirectActionTarget : ModuleBase
                 }
             }
 
-            for (var i = 0; i < 200; i++)
+            for (var i = 0; i < 100; i++)
             {
                 var obj = CharacterManager.Instance()->BattleCharas[i].Value;
                 if (obj == null) continue;
