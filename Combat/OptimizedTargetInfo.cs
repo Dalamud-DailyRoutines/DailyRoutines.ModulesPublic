@@ -8,6 +8,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
@@ -432,8 +433,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         HandleAddonEventTargetStatus(type, TargetInfo, 32);
     }
 
-    private void OnAddonTargetInfoSplitTarget(AddonEvent type, AddonArgs args)
-    {
+    private void OnAddonTargetInfoSplitTarget(AddonEvent type, AddonArgs args) =>
         HandleAddonEventTargetInfo
         (
             type,
@@ -452,7 +452,6 @@ public unsafe class OptimizedTargetInfo : ModuleBase
             () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
             (width, height) => new Vector2(width - 5, height + 2)
         );
-    }
 
     private void OnAddonFocusTargetInfo(AddonEvent type, AddonArgs args)
     {
@@ -496,8 +495,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         HandleAddonEventFocusTargetControl(type);
     }
 
-    private void OnAddonTargetInfoCastBar(AddonEvent type, AddonArgs args)
-    {
+    private void OnAddonTargetInfoCastBar(AddonEvent type, AddonArgs args) =>
         HandleAddonEventCastBar
         (
             type,
@@ -515,7 +513,6 @@ public unsafe class OptimizedTargetInfo : ModuleBase
             () => (TargetManager.SoftTarget ?? TargetManager.Target) as IBattleChara,
             (width, height) => new Vector2(width - 5, height)
         );
-    }
 
     private void OnAddonTargetInfoBuffDebuff(AddonEvent type, AddonArgs args) =>
         HandleAddonEventTargetStatus(type, TargetInfoBuffDebuff, 31);
@@ -692,15 +689,20 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                 foreach (var nodeInfo in addon->CastBarNodes)
                 {
                     var componentNode = (AtkComponentNode*)nodeInfo.CastBarNode;
-                    if (!componentNode->IsVisible() || !nodeInfo.ProgressBarNode->IsVisible()) continue;
+                    if (!componentNode->IsVisible()) continue;
+                    
+                    var chara = CharacterManager.Instance()->LookupBattleCharaByEntityId(nodeInfo.ObjectId.ObjectId);
+                    if (chara == null)
+                        continue;
 
-                    if (DService.Instance().ObjectTable.SearchByID(nodeInfo.ObjectId.Id) is not IBattleChara { CurrentCastTime: > 0 } target)
+                    var castInfo = chara->GetCastInfo();
+                    if (castInfo == null || castInfo->CurrentCastTime <= 0)
                         continue;
 
                     currentCount++;
 
                     var textNode     = componentNode->Component->GetTextNodeById(4);
-                    var leftCastTime = target.TotalCastTime - target.CurrentCastTime;
+                    var leftCastTime = castInfo->TotalCastTime - castInfo->CurrentCastTime;
 
                     textNode->SetText($"{leftCastTime:F2}");
                     textNode->FontSize = 16;
