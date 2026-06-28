@@ -434,8 +434,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 
                 var castTextWidth = castNode.GetTextDrawSize(false).X + (leftCastTime == 0 ? 2f : 1f);
 
-                castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f } +
-                                              config.TextOffset;
+                castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f };
                 castBackgroundNode.Width = castTextWidth + (CAST_TEXT_BACKGROUND_PADDING * (config.TextSize / 10f));
             }
 
