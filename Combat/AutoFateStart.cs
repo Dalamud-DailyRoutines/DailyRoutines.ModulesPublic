@@ -45,6 +45,8 @@ public unsafe class AutoFateStart : ModuleBase
             FateManager.Instance()->CurrentFate != null)
             return;
         
+        // TODO: 等待 FFCS 的 PR 合并
+        
         List<IFate> fatesInPre = [];
         foreach (var fate in DService.Instance().Fate)
         {
