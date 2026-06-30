@@ -5,6 +5,7 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
@@ -114,6 +115,9 @@ public unsafe class AutoMount : ModuleBase
 
         if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenCombatEnd"), ref config.MountWhenCombatEnd))
             config.Save(this);
+
+        if (ImGui.Checkbox(Lang.Get("AutoMount-JumpAfterMount"), ref config.JumpAfterMount))
+            config.Save(this);
     }
 
     private void OnZoneChanged(uint u)
@@ -167,11 +171,23 @@ public unsafe class AutoMount : ModuleBase
                    ? UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9)
                    : UseActionManager.Instance().UseAction(ActionType.Mount,         config.SelectedMount)
         );
+
+        if (config.JumpAfterMount && CanFlyCurrentZone())
+        {
+            TaskHelper.Enqueue(() => DService.Instance().Condition[ConditionFlag.Mounted], "WaitForMount", 5_000);
+            TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2));
+            TaskHelper.DelayNext(50);
+            TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2));
+        }
+
         return true;
     }
 
     private static bool CanUseMountCurrentZone() =>
         GameState.TerritoryTypeData is { Mount: true };
+
+    private static bool CanFlyCurrentZone() =>
+        PlayerState.Instance()->CanFly;
 
     protected override void Uninit()
     {
@@ -186,6 +202,7 @@ public unsafe class AutoMount : ModuleBase
         public bool          MountWhenCombatEnd  = true;
         public bool          MountWhenGatherEnd  = true;
         public bool          MountWhenZoneChange = true;
+        public bool          JumpAfterMount      = false;
 
         public uint SelectedMount;
     }
