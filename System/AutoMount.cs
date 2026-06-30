@@ -1,3 +1,4 @@
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -6,13 +7,11 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -24,7 +23,7 @@ public unsafe class AutoMount : ModuleBase
         Description = Lang.Get("AutoMountDescription"),
         Category    = ModuleCategory.System
     };
-    
+
     private Config config = null!;
 
     private readonly MountSelectCombo mountSelectCombo = new("Mount");
@@ -37,20 +36,24 @@ public unsafe class AutoMount : ModuleBase
         mountSelectCombo.SelectedID = config.SelectedMount;
         zoneSelectCombo.SelectedIDs = config.BlacklistZones;
 
-        TaskHelper ??= new TaskHelper { TimeoutMS = 20000 };
+        TaskHelper = new() { TimeoutMS = 10_000 };
 
         DService.Instance().Condition.ConditionChange    += OnConditionChanged;
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
     }
 
+    protected override void Uninit()
+    {
+        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
+        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
+    }
+
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(4964)}");
+        using var itemWidth = ImRaii.ItemWidth(300f * GlobalUIScale);
 
-        using (ImRaii.PushIndent())
+        using (ImRaii.Heading1(LuminaWrapper.GetAddonText(4964)))
         {
-            ImGui.SetNextItemWidth(300f * GlobalUIScale);
-
             if (mountSelectCombo.DrawRadio())
             {
                 config.SelectedMount = mountSelectCombo.SelectedID;
@@ -65,7 +68,8 @@ public unsafe class AutoMount : ModuleBase
                 config.Save(this);
             }
 
-            if (config.SelectedMount == 0 || !LuminaGetter.TryGetRow(config.SelectedMount, out Mount selectedMount))
+            if (config.SelectedMount == 0 ||
+                !LuminaGetter.TryGetRow(config.SelectedMount, out Mount selectedMount))
             {
                 if (ImageHelper.TryGetGameIcon(118, out var texture))
                     ImGuiOm.TextImage(LuminaWrapper.GetGeneralActionName(9), texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
@@ -75,34 +79,6 @@ public unsafe class AutoMount : ModuleBase
                 if (ImageHelper.TryGetGameIcon(selectedMount.Icon, out var texture))
                     ImGuiOm.TextImage(selectedMount.Singular.ToString(), texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()));
             }
-        }
-
-        ImGui.Spacing();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("BlacklistZones")}");
-
-        using (ImRaii.PushIndent())
-        {
-            ImGui.SetNextItemWidth(300f * GlobalUIScale);
-
-            if (zoneSelectCombo.DrawCheckbox())
-            {
-                config.BlacklistZones = zoneSelectCombo.SelectedIDs;
-                config.Save(this);
-            }
-        }
-
-        ImGui.Spacing();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Delay")}");
-
-        using (ImRaii.PushIndent())
-        {
-            ImGui.SetNextItemWidth(300f * GlobalUIScale);
-            if (ImGui.InputInt("ms###AutoMount-Delay", ref config.Delay))
-                config.Delay = Math.Max(0, config.Delay);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
         }
 
         ImGui.NewLine();
@@ -116,6 +92,22 @@ public unsafe class AutoMount : ModuleBase
         if (ImGui.Checkbox(Lang.Get("AutoMount-MountWhenCombatEnd"), ref config.MountWhenCombatEnd))
             config.Save(this);
 
+        ImGui.NewLine();
+
+        if (zoneSelectCombo.DrawCheckbox())
+        {
+            config.BlacklistZones = zoneSelectCombo.SelectedIDs;
+            config.Save(this);
+        }
+
+        ImGui.SameLine();
+        ImGui.TextUnformatted(Lang.Get("BlacklistZones"));
+
+        if (ImGui.InputInt($"{Lang.Get("Delay")} (ms)###AutoMount-Delay", ref config.Delay))
+            config.Delay = Math.Max(0, config.Delay);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            config.Save(this);
+
         if (ImGui.Checkbox(Lang.Get("AutoMount-JumpAfterMount"), ref config.JumpAfterMount))
             config.Save(this);
     }
@@ -123,7 +115,7 @@ public unsafe class AutoMount : ModuleBase
     private void OnZoneChanged(uint u)
     {
         if (!config.MountWhenZoneChange                             ||
-            GameState.TerritoryType == 0                                  ||
+            GameState.TerritoryType == 0                            ||
             config.BlacklistZones.Contains(GameState.TerritoryType) ||
             !CanUseMountCurrentZone())
             return;
@@ -140,7 +132,7 @@ public unsafe class AutoMount : ModuleBase
         {
             case ConditionFlag.Gathering when !value && config.MountWhenGatherEnd:
             case ConditionFlag.InCombat when !value                                 &&
-                                             config.MountWhenCombatEnd        &&
+                                             config.MountWhenCombatEnd              &&
                                              !DService.Instance().ClientState.IsPvP &&
                                              (FateManager.Instance()->CurrentFate           == null ||
                                               FateManager.Instance()->CurrentFate->Progress == 100):
@@ -155,12 +147,17 @@ public unsafe class AutoMount : ModuleBase
 
     private bool UseMount()
     {
-        if (!Throttler.Shared.Throttle("AutoMount-UseMount")) return false;
-        if (DService.Instance().Condition.IsBetweenAreas) return false;
-        if (AgentMap.Instance()->IsPlayerMoving) return true;
-        if (DService.Instance().Condition.IsCasting) return false;
-        if (DService.Instance().Condition.IsOnMount) return true;
-        if (ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 9) != 0) return false;
+        if (!Throttler.Shared.Throttle("AutoMount.UseMount"))
+            return false;
+
+        if (ICondition.Instance().IsOnMount ||
+            LocalPlayerState.Instance().IsMoving)
+            return true;
+
+        if (ICondition.Instance().IsCasting      ||
+            ICondition.Instance().IsBetweenAreas ||
+            ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 9) != 0)
+            return false;
 
         if (config.Delay > 0)
             TaskHelper.DelayNext(config.Delay);
@@ -172,12 +169,16 @@ public unsafe class AutoMount : ModuleBase
                    : UseActionManager.Instance().UseAction(ActionType.Mount,         config.SelectedMount)
         );
 
-        if (config.JumpAfterMount && CanFlyCurrentZone())
+        if (config.JumpAfterMount)
         {
-            TaskHelper.Enqueue(() => DService.Instance().Condition[ConditionFlag.Mounted], "WaitForMount", 5_000);
-            TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2));
-            TaskHelper.DelayNext(50);
-            TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2));
+            TaskHelper.Enqueue(() =>
+            {
+                if (!PlayerState.Instance()->CanFly) return;
+                TaskHelper.Enqueue(() => ICondition.Instance().IsOnMount,                                    "WaitForMount", 5_000);
+                TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2), "使用跳跃");
+                TaskHelper.DelayNext(50);
+                TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2), "再次使用跳跃");
+            });
         }
 
         return true;
@@ -186,23 +187,17 @@ public unsafe class AutoMount : ModuleBase
     private static bool CanUseMountCurrentZone() =>
         GameState.TerritoryTypeData is { Mount: true };
 
-    private static bool CanFlyCurrentZone() =>
-        PlayerState.Instance()->CanFly;
-
-    protected override void Uninit()
-    {
-        DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-        DService.Instance().Condition.ConditionChange    -= OnConditionChanged;
-    }
-
     private class Config : ModuleConfig
     {
-        public HashSet<uint> BlacklistZones      = [];
-        public int           Delay               = 1000;
-        public bool          MountWhenCombatEnd  = true;
-        public bool          MountWhenGatherEnd  = true;
-        public bool          MountWhenZoneChange = true;
-        public bool          JumpAfterMount      = false;
+        public HashSet<uint> BlacklistZones = [];
+
+        public int Delay = 1000;
+
+        public bool MountWhenCombatEnd  = true;
+        public bool MountWhenGatherEnd  = true;
+        public bool MountWhenZoneChange = true;
+
+        public bool JumpAfterMount;
 
         public uint SelectedMount;
     }
