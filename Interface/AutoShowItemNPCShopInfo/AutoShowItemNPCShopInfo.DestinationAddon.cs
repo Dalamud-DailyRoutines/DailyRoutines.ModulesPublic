@@ -196,16 +196,19 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             scrollingAreaNode = new ScrollingNode<VerticalListNode>
             {
+                ContentNode =
+                {
+                    FitContents = true,
+                    ItemSpacing = 6
+                },
                 Position          = ContentStartPosition + new Vector2(6,  headerHeight + 6),
                 Size              = ContentSize          - new Vector2(12, headerHeight + 6),
                 ScrollSpeed       = 100,
                 AutoHideScrollBar = true
             };
-            scrollingAreaNode.ContentNode.Height = 100;
             scrollingAreaNode.AttachNode(this);
 
-            contentNode             = scrollingAreaNode.ContentNode;
-            contentNode.ItemSpacing = 6;
+            contentNode = scrollingAreaNode.ContentNode;
 
             sectionSlots = new SectionSlot[ITEMS_PER_PAGE];
 
