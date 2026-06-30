@@ -7,7 +7,6 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
 using DailyRoutines.Common.KamiToolKit.Nodes;
@@ -234,10 +233,9 @@ public class OptimizedLetter : ModuleBase
 
             var deleteAllButton = new HoldButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(layoutNode.Size.X - 10, 38),
-                String    = $"{Lang.Get("OptimizedLetter-DeleteMails")} ({Lang.Get("All")})",
+                UnlockAfterClick = true,
+                Size             = new(layoutNode.Size.X - 10, 38),
+                String           = $"{Lang.Get("OptimizedLetter-DeleteMails")} ({Lang.Get("All")})",
                 OnClick = () =>
                 {
                     if (!TryFindLetters(_ => true, out var letters)) return;
@@ -254,10 +252,9 @@ public class OptimizedLetter : ModuleBase
 
             var deleteNonPlayerButton = new HoldButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(layoutNode.Size.X - 10, 38),
-                String    = $"{Lang.Get("OptimizedLetter-DeleteMails")} ({Lang.Get("OptimizedLetter-DeleteMails-ExceptPlayers")})",
+                UnlockAfterClick = true,
+                Size             = new(layoutNode.Size.X - 10, 38),
+                String           = $"{Lang.Get("OptimizedLetter-DeleteMails")} ({Lang.Get("OptimizedLetter-DeleteMails-ExceptPlayers")})",
                 OnClick = () =>
                 {
                     if (!TryFindLetters(x => x.SenderContentId < 100000000000, out var letters)) return;
