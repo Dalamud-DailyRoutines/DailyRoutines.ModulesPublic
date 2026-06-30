@@ -5,9 +5,9 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
-using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -175,7 +175,6 @@ public unsafe class AutoMount : ModuleBase
         if (config.JumpAfterMount && CanFlyCurrentZone())
         {
             TaskHelper.Enqueue(() => DService.Instance().Condition[ConditionFlag.Mounted], "WaitForMount", 5_000);
-            TaskHelper.DelayNext(50);
             TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2));
             TaskHelper.DelayNext(50);
             TaskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 2));
@@ -188,9 +187,7 @@ public unsafe class AutoMount : ModuleBase
         GameState.TerritoryTypeData is { Mount: true };
 
     private static bool CanFlyCurrentZone() =>
-        GameState.TerritoryIntendedUse is TerritoryIntendedUse.Overworld
-            or TerritoryIntendedUse.Diadem
-            or TerritoryIntendedUse.IslandSanctuary;
+        PlayerState.Instance()->CanFly;
 
     protected override void Uninit()
     {
