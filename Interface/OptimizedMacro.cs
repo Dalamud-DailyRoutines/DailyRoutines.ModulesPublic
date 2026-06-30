@@ -33,7 +33,7 @@ public unsafe class OptimizedMacro : ModuleBase
     private AddonController? macroController;
 
     private HorizontalListNode? controlListNode;
-    private TextDropDownNode?   presetDropdownNode;
+    private StringDropDownNode? presetDropdownNode;
     private TextButtonNode?     loadButtonNode;
     private TextButtonNode?     saveButtonNode;
     private TextButtonNode?     deleteButtonNode;
@@ -151,7 +151,7 @@ public unsafe class OptimizedMacro : ModuleBase
         };
         controlListNode.AttachNode(addon);
 
-        presetDropdownNode = new TextDropDownNode
+        presetDropdownNode = new StringDropDownNode
         {
             Size             = new(150, 30),
             Position         = new(0, -1),

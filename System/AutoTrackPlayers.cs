@@ -282,7 +282,7 @@ public class AutoTrackPlayers : ModuleBase
                 ItemSpacing = 5;
                 Size        = new(parent.Width, 30);
 
-                var markerDropdown = new TextDropDownNode
+                var markerDropdown = new StringDropDownNode
                 {
                     Size           = new(120, 30),
                     Options        = availableOptions,

@@ -1109,7 +1109,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 }
             );
 
-            var dropdown = new TextDropDownNode
+            var dropdown = new StringDropDownNode
             {
                 IsVisible      = true,
                 Size           = new(contentWidth, 30f),
