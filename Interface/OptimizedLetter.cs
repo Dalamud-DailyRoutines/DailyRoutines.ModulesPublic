@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
+using DailyRoutines.Common.KamiToolKit.Nodes;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.AddonEvent;
@@ -33,8 +34,8 @@ public class OptimizedLetter : ModuleBase
 
     private AddonDROptimizedLetter? addon;
 
-    private TextInputNode?                   textInputButton;
-    private ScrollingNode<VerticalListNode>? listNode;
+    private TextInputNode?      textInputButton;
+    private TextButtonListNode? listNode;
 
     protected override void Init()
     {
@@ -95,74 +96,67 @@ public class OptimizedLetter : ModuleBase
                 
                 textInputButton = new()
                 {
-                    IsVisible = true,
                     Size      = new(200, 30),
                     Position  = new(12, 32),
                     OnInputReceived = name =>
                     {
-                        listNode?.Dispose();
-                        listNode = null;
+                        if (listNode == null)
+                        {
+                            listNode = new()
+                            {
+                                IsVisible = false,
+                                Position  = new(16, 68),
+                                Size      = new(316, 192),
+                                OnOptionSelected = option =>
+                                {
+                                    AgentId.LetterEdit.SendEvent(8, 2, 1, option);
+                                    AgentId.LetterEdit.SendEvent(8, -1);
+
+                                    if (LetterEditor != null)
+                                        LetterEditor->GetComponentButtonById(3)->SetText(option);
+
+                                    if (LetterAddress != null)
+                                        LetterAddress->Close(true);
+                                }
+                            };
+
+                            listNode.BackgroundNode.IsVisible            = false;
+                            listNode.ScrollingListNode.AutoHideScrollBar = true;
+                            
+                            listNode.AttachNode(LetterAddress);
+                        }
 
                         List<string> names = [];
-
                         foreach (var chara in InfoProxyFriendList.Instance()->CharDataSpan)
                         {
                             if (chara.HomeWorld != GameState.HomeWorld) continue;
-
+                            
                             var remark   = GetRemarkByContentID.TryInvokeFunc(chara.ContentId)   ?? string.Empty;
                             var nickname = GetNicknameByContentID.TryInvokeFunc(chara.ContentId) ?? string.Empty;
 
-                            if (chara.NameString.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)                                       ||
-                                PinyinHelper.GetPinyin(chara.NameString, string.Empty).Contains(name.ToString(), StringComparison.OrdinalIgnoreCase) ||
-                                remark.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)                                                 ||
-                                PinyinHelper.GetPinyin(remark, string.Empty).Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)           ||
-                                nickname.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)                                               ||
-                                PinyinHelper.GetPinyin(nickname, string.Empty).Contains(name.ToString(), StringComparison.OrdinalIgnoreCase))
+                            var namePinyin     = PinyinHelper.GetPinyin(chara.NameString, string.Empty);
+                            var remarkPinyin   = PinyinHelper.GetPinyin(remark,           string.Empty);
+                            var nickNamePinyin = PinyinHelper.GetPinyin(nickname,         string.Empty);
+
+                            if (chara.NameString.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase) ||
+                                namePinyin.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)       ||
+                                remark.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)           ||
+                                remarkPinyin.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)     ||
+                                nickname.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase)         ||
+                                nickNamePinyin.Contains(name.ToString(), StringComparison.OrdinalIgnoreCase))
                                 names.Add(chara.NameString);
                         }
 
-                        if (names.Count == 0) return;
+                        var isInputEmpty = string.IsNullOrWhiteSpace(name.ToString());
 
-                        listNode = new()
-                        {
-                            IsVisible         = true,
-                            Position          = new(16, 68),
-                            Size              = new(308, 192),
-                            AutoHideScrollBar = true
-                        };
-                        listNode.ContentNode.FitContents = true;
-                        listNode.ContentNode.ItemSpacing = 3;
+                        listNode.IsVisible = !isInputEmpty;
                         
                         var origList = LetterAddress->GetComponentListById(7);
                         if (origList != null)
-                            origList->OwnerNode->ToggleVisibility(false);
-
-                        var buttonWidth = listNode.Width - 12f;
-                        foreach (var entryName in names)
-                        {
-                            var button = new ListButtonNode
-                            {
-                                Size   = new(buttonWidth, 22f),
-                                String = entryName
-                            };
-                            button.OnClick = () =>
-                            {
-                                AgentId.LetterEdit.SendEvent(8, 2, 1, entryName);
-                                AgentId.LetterEdit.SendEvent(8, -1);
-
-                                if (LetterEditor != null)
-                                    LetterEditor->GetComponentButtonById(3)->SetText(entryName);
-
-                                if (LetterAddress != null)
-                                    LetterAddress->Close(true);
-                            };
-                            listNode.ContentNode.AddNode(button);
-                        }
-
-                        listNode.ContentNode.RecalculateLayout();
-                        listNode.RecalculateSizes();
-
-                        listNode.AttachNode(LetterAddress->RootNode);
+                            origList->OwnerNode->ToggleVisibility(isInputEmpty);
+                        
+                        listNode.MaxButtons = (int)MathF.Min(names.Count, 8);
+                        listNode.Options    = names;
                     }
                 };
                 textInputButton.AttachNode(LetterAddress->RootNode);
@@ -238,7 +232,7 @@ public class OptimizedLetter : ModuleBase
                 FitContents = true
             };
 
-            var deleteAllButton = new TextButtonNode
+            var deleteAllButton = new HoldButtonNode
             {
                 IsVisible = true,
                 IsEnabled = true,
@@ -258,7 +252,7 @@ public class OptimizedLetter : ModuleBase
             layoutNode.AddNode(deleteAllButton);
             layoutNode.AddDummy(5);
 
-            var deleteNonPlayerButton = new TextButtonNode
+            var deleteNonPlayerButton = new HoldButtonNode
             {
                 IsVisible = true,
                 IsEnabled = true,
