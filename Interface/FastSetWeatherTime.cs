@@ -551,21 +551,14 @@ public unsafe class FastSetWeatherTime : ModuleBase
                     };
                     module.config.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
 
-                    var setting = module.config.ZoneSettings[GameState.TerritoryType];
-
-                    var message = Lang.Get
+                    NotifyHelper.ToastQuest
                     (
-                        "FastSetWeatherTime-Notification-Saved",
-                        GameState.TerritoryTypeData.ExtractPlaceName(),
-                        GameState.TerritoryType,
-                        setting.IsWeatherEnabled && setting.WeatherID != 255
-                            ? LuminaWrapper.GetWeatherName(setting.WeatherID)
-                            : LuminaWrapper.GetAddonText(7),
-                        setting.IsTimeEnabled && TimeSpan.FromSeconds(setting.Time) is { } timeSpan
-                            ? $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}"
-                            : LuminaWrapper.GetAddonText(7)
+                        Lang.Get("FastSetWeatherTime-Notification-Saved"),
+                        new()
+                        {
+                            DisplayCheckmark = true
+                        }
                     );
-                    NotifyHelper.Instance().Chat(message);
                 }
             };
             operationRow.AddNode(saveButtonNode);
@@ -579,7 +572,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
                     if (module.config.ZoneSettings.Remove(GameState.TerritoryType))
                     {
                         module.config.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
-                        NotifyHelper.Instance().Chat(Lang.Get("FastSetWeatherTime-Notification-Cleard"));
+                        NotifyHelper.ToastQuest(Lang.Get("FastSetWeatherTime-Notification-Cleard"));
                     }
                 }
             };
