@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Numerics;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -687,10 +688,10 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
                 FontSize         = 14,
                 TextFlags        = TextFlags.Edge,
                 AlignmentType    = AlignmentType.Left,
-                TextColor        = ColorHelper.GetColor(8),
-                TextOutlineColor = ColorHelper.GetColor(7),
                 String           = value
             };
+            AtkColors.Label.ApplyTo(ref valueNode);
+            
             valueNode.AttachNode(row);
             dynamicNodes.Add(valueNode);
 
