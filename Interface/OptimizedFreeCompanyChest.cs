@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -7,12 +8,12 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Classes;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
@@ -49,11 +50,10 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
     private CheckboxNode? defaultPageNode;
 
-    private VerticalListNode? componentNode;
-    private IconImageNode?    gilIconNode;
-    private TextNode?         gilItemsValueNode;
-    private TextNode?         gilItemsValueCountNode;
-
+    private HorizontalListNode? componentNode;
+    private IconImageNode?      gilIconNode;
+    private TextNode?           gilItemsValueCountNode;
+    
     private bool isNeedToClose;
     private long lastTotalPrice;
 
@@ -165,28 +165,12 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                                     break;
                             }
 
-                            defaultPageNode.TextTooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
-                                                                               .Append($" {Lang.Get("OptimizedFreeCompanyChest-DefaultPageHelp")}")
-                                                                               .AddRange([NewLinePayload.Payload, NewLinePayload.Payload])
-                                                                               .Append
-                                                                               (
-                                                                                   $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(config.DefaultPage, LuminaWrapper.GetAddonText(7))}"
-                                                                               )
-                                                                               .Build()
-                                                                               .Encode();
+                            UpdateDefaultPageTooltip();
                             defaultPageNode.HideTooltip();
                             defaultPageNode.ShowTooltip();
                         },
-                        TextTooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
-                                                           .Append($" {Lang.Get("OptimizedFreeCompanyChest-DefaultPageHelp")}")
-                                                           .AddRange([NewLinePayload.Payload, NewLinePayload.Payload])
-                                                           .Append
-                                                           (
-                                                               $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(config.DefaultPage, LuminaWrapper.GetAddonText(7))}"
-                                                           )
-                                                           .Build()
-                                                           .Encode()
                     };
+                    UpdateDefaultPageTooltip();
                     defaultPageNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
@@ -201,49 +185,36 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                 {
                     componentNode = new()
                     {
-                        IsVisible = true,
-                        Position  = new(0, -70),
-                        Size      = new(0, 60)
+                        IsVisible   = true,
+                        Position    = new(380, -38),
+                        Size        = new(0, 60),
+                        ItemSpacing = 4,
+                        Alignment = HorizontalListAnchor.Right
                     };
+                    componentNode.AddNodeFlags(NodeFlags.HasCollision);
 
                     gilIconNode = new()
                     {
                         IsVisible  = true,
                         IconId     = 65002,
                         Size       = new(32),
-                        Position   = new(345, 34),
                         FitTexture = true
-                    };
-
-                    gilItemsValueNode = new()
-                    {
-                        IsVisible        = true,
-                        Position         = new(-55, 50),
-                        Size             = new(395, 24),
-                        String           = $"({Lang.Get("OptimizedFreeCompanyChest-ExchangableItemsTotalValue")})",
-                        FontSize         = 8,
-                        TextColor        = ColorHelper.GetColor(50),
-                        TextFlags        = TextFlags.Edge,
-                        TextOutlineColor = ColorHelper.GetColor(1),
-                        AlignmentType    = AlignmentType.Right
                     };
 
                     gilItemsValueCountNode = new()
                     {
-                        Position         = new(-55, 30),
-                        Size             = new(395, 28),
-                        IsVisible        = true,
-                        String           = "0\ue049",
-                        TextFlags        = TextFlags.Glare | TextFlags.Edge,
-                        TextOutlineColor = ColorHelper.GetColor(32),
-                        FontSize         = 14,
-                        TextColor        = ColorHelper.GetColor(50),
-                        AlignmentType    = AlignmentType.Right
+                        Size          = new(100, 28),
+                        Position      = new(0, 6),
+                        TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Glare | TextFlags.Edge,
+                        String        = "0\ue049",
+                        FontSize      = 14,
+                        AlignmentType = AlignmentType.Right,
+                        TextTooltip   = Lang.Get("OptimizedFreeCompanyChest-ExchangableItemsTotalValue"),
                     };
+                    AtkColors.Value.ApplyTo(ref gilItemsValueCountNode);
 
-                    gilIconNode.AttachNode(componentNode);
-                    gilItemsValueNode.AttachNode(componentNode);
-                    gilItemsValueCountNode.AttachNode(componentNode);
+                    componentNode.AddNode([gilIconNode, gilItemsValueCountNode]);
+                    componentNode.RecalculateLayout();
                     componentNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
@@ -251,8 +222,12 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                 {
                     lastTotalPrice = TryGetTotalPrice(out var totalPrice) ? totalPrice : 0;
 
-                    componentNode.IsVisible       = lastTotalPrice > 0;
                     gilItemsValueCountNode.String = $"{lastTotalPrice.ToChineseString()}\ue049";
+                    gilItemsValueCountNode.Width  = gilItemsValueCountNode.GetTextDrawSize(false).X - 8;
+                    
+                    componentNode.RecalculateLayout();
+
+                    componentNode.IsVisible = lastTotalPrice > 0;
                 }
 
                 break;
@@ -263,6 +238,24 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                 break;
         }
 
+        return;
+
+        void UpdateDefaultPageTooltip()
+        {
+            using var rented  = new RentedSeStringBuilder();
+            var       builder = rented.Builder;
+
+            defaultPageNode.TextTooltip =
+                builder.AppendIcon((uint)BitmapFontIcon.ExclamationRectangle)
+                       .Append($" {Lang.Get("OptimizedFreeCompanyChest-DefaultPageHelp")}")
+                       .AppendNewLine()
+                       .AppendNewLine()
+                       .Append
+                       (
+                           $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(config.DefaultPage, LuminaWrapper.GetAddonText(7))}"
+                       )
+                       .ToReadOnlySeString();
+        }
     }
 
     // 快捷存取
@@ -349,9 +342,6 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
         gilItemsValueCountNode?.Dispose();
         gilItemsValueCountNode = null;
-
-        gilItemsValueNode?.Dispose();
-        gilItemsValueNode = null;
     }
     
     #region 工具
