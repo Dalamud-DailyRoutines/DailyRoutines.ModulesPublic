@@ -674,7 +674,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         public Vector2 HealthTextOffset    = Vector2.Zero;
         
         // 仇恨值
-        public byte    EnemityTextSize      = 16;
+        public byte    EnemityTextSize      = 8;
         public Vector4 EnemityTextColor     = AtkColors.Value.GetTextColor();
         public Vector4 EnemityTextEdgeColor = AtkColors.Value.GetEdgeColor();
         public Vector2 EnemityTextOffset    = Vector2.Zero;
@@ -832,7 +832,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
     private static readonly Vector2 CastTextDefaultPosition           = new(198, 6);
     private static readonly Vector2 HealthTextDefaultPosition         = new(-60, 8);
     private static readonly Vector2 CastBackgroundTextDefaultPosition = new(192, 2);
-    private static readonly Vector2 EnemityTextDefaultPosition        = new(12, 22);
+    private static readonly Vector2 EnemityTextDefaultPosition        = new(12, 21);
     
     private const float HEALTH_TEXT_MARKER_PADDING   = 1f;
     private const float CAST_TEXT_BACKGROUND_PADDING = 7f;
