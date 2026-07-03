@@ -1,8 +1,8 @@
 ﻿using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -29,74 +29,30 @@ public unsafe partial class AutoRetainerWork
             taskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width)
-        {
-            CheckboxNode? methodOneNode   = null;
-            CheckboxNode? methodTwoNode   = null;
-            var           methodNodeWidth = width / 2f;
-
-            methodOneNode = CreateOverlayCheckbox
-            (
-                $"{Lang.Get("Method")} 1",
-                Module.config.GilsShareMethod == 0,
-                isChecked =>
-                {
-                    if (!isChecked)
-                    {
-                        methodOneNode!.IsChecked = true;
-                        return;
-                    }
-
-                    Module.config.GilsShareMethod = 0;
-                    Module.config.Save(Module);
-                    methodTwoNode!.IsChecked = false;
-                },
-                methodNodeWidth,
-                Lang.Get("AutoRetainerWork-GilsShare-MethodsHelp")
-            );
-
-            methodTwoNode = CreateOverlayCheckbox
-            (
-                $"{Lang.Get("Method")} 2",
-                Module.config.GilsShareMethod == 1,
-                isChecked =>
-                {
-                    if (!isChecked)
-                    {
-                        methodTwoNode!.IsChecked = true;
-                        return;
-                    }
-
-                    Module.config.GilsShareMethod = 1;
-                    Module.config.Save(Module);
-                    methodOneNode!.IsChecked = false;
-                },
-                methodNodeWidth,
-                Lang.Get("AutoRetainerWork-GilsShare-MethodsHelp")
-            );
-
-            var methodRow = new HorizontalListNode
-            {
-                IsVisible          = true,
-                Size               = new(width, 24f),
-                ItemSpacing        = 4f,
-                FitToContentHeight = true
-            };
-            methodRow.AddNode([methodOneNode, methodTwoNode]);
-
-            return CreateOverlayCategory
+        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+            CreateOverlayCategory
             (
                 Lang.Get("AutoRetainerWork-GilsShare-Title"),
                 width,
-                methodRow,
                 CreateOverlayButtonRow(EnqueueRetainersGilShare, () => taskHelper?.Abort(), width)
             );
-        }
 
         private void EnqueueRetainersGilShare()
         {
             if (taskHelper.AbortByConflictKey(Module)) return;
             if (Module.IsAnyOtherWorkerBusy(typeof(GilsShareWorker))) return;
+
+            var playerGil = LocalPlayerState.GetItemCount(1);
+
+            if (playerGil >= MAX_PLAYER_GIL)
+            {
+                NotifyHelper.Instance().NotificationWarning
+                (
+                    Lang.Get("AutoRetainerWork-GilsShare-PlayerGilFull"),
+                    Module.Info.Title
+                );
+                return;
+            }
 
             var retainerManager = RetainerManager.Instance();
             var retainerCount   = retainerManager->GetRetainerCount();
@@ -106,27 +62,112 @@ public unsafe partial class AutoRetainerWork
                 totalGilAmount += retainerManager->GetRetainerBySortedIndex(i)->Gil;
 
             var avgAmount = (uint)Math.Floor(totalGilAmount / (double)retainerCount);
-            if (avgAmount <= 1) return;
 
-            switch (Module.config.GilsShareMethod)
+            if (avgAmount <= 1)
             {
-                case 0:
-                    for (var i = 0U; i < retainerCount; i++)
-                        EnqueueRetainersGilShareMethodFirst(i, avgAmount);
-
-                    break;
-                case 1:
-                    for (var i = 0U; i < retainerCount; i++)
-                        EnqueueRetainersGilShareMethodSecond(i);
-
-                    for (var i = 0U; i < retainerCount; i++)
-                        EnqueueRetainersGilShareMethodFirst(i, avgAmount);
-
-                    break;
+                NotifyHelper.Instance().NotificationInfo
+                (
+                    Lang.Get("AutoRetainerWork-GilsShare-NoNeedToShare"),
+                    Module.Info.Title
+                );
+                return;
             }
+
+            // 按金币盈余 / 不足分组
+            var richRetainers = new List<(uint Index, uint Excess)>();
+            var poorRetainers = new List<(uint Index, uint Deficit)>();
+
+            for (var i = 0U; i < retainerCount; i++)
+            {
+                var gil = retainerManager->GetRetainerBySortedIndex(i)->Gil;
+                if (gil > avgAmount)
+                    richRetainers.Add((i, gil - avgAmount));
+                else if (gil < avgAmount)
+                    poorRetainers.Add((i, avgAmount - gil));
+            }
+
+            if (richRetainers.Count == 0)
+            {
+                NotifyHelper.Instance().NotificationInfo
+                (
+                    Lang.Get("AutoRetainerWork-GilsShare-NoNeedToShare"),
+                    Module.Info.Title
+                );
+                return;
+            }
+
+            // 规划操作序列, 交替存取以避免玩家金币溢出
+            var operations     = new List<(uint Index, uint Amount, bool IsWithdraw)>();
+            var richIdx        = 0;
+            var poorIdx        = 0;
+            var pendingExcess  = richRetainers[0].Excess;
+            var pendingDeficit = poorRetainers.Count > 0 ? poorRetainers[0].Deficit : 0U;
+
+            while (richIdx < richRetainers.Count || poorIdx < poorRetainers.Count)
+            {
+                var madeProgress = false;
+
+                // 先向金币不足的雇员存入金币, 降低玩家持有量以腾出取出空间
+                while (poorIdx < poorRetainers.Count && playerGil > 0 && pendingDeficit > 0)
+                {
+                    var amount = Math.Min(playerGil, pendingDeficit);
+                    operations.Add((poorRetainers[poorIdx].Index, amount, false));
+                    playerGil      -= amount;
+                    pendingDeficit -= amount;
+                    madeProgress   =  true;
+
+                    if (pendingDeficit == 0)
+                    {
+                        poorIdx++;
+                        if (poorIdx < poorRetainers.Count)
+                            pendingDeficit = poorRetainers[poorIdx].Deficit;
+                    }
+                }
+
+                // 再从金币盈余的雇员取出金币
+                if (richIdx < richRetainers.Count && pendingExcess > 0)
+                {
+                    var maxCanHold = MAX_PLAYER_GIL - playerGil;
+
+                    if (maxCanHold > 0)
+                    {
+                        var amount = Math.Min(pendingExcess, maxCanHold);
+                        operations.Add((richRetainers[richIdx].Index, amount, true));
+                        playerGil     += amount;
+                        pendingExcess -= amount;
+                        madeProgress  =  true;
+
+                        if (pendingExcess == 0)
+                        {
+                            richIdx++;
+                            if (richIdx < richRetainers.Count)
+                                pendingExcess = richRetainers[richIdx].Excess;
+                        }
+                    }
+                }
+
+                if (!madeProgress) break;
+            }
+
+            foreach (var (index, amount, isWithdraw) in operations)
+                EnqueueRetainerGilOperation(index, amount, isWithdraw);
+
+            taskHelper.Enqueue
+            (
+                () =>
+                {
+                    NotifyHelper.Instance().NotificationSuccess
+                    (
+                        Lang.Get("AutoRetainerWork-GilsShare-Complete"),
+                        Module.Info.Title
+                    );
+                    return true;
+                },
+                "发送完成通知"
+            );
         }
 
-        private void EnqueueRetainersGilShareMethodFirst(uint index, uint avgAmount)
+        private void EnqueueRetainerGilOperation(uint index, uint amount, bool isWithdraw)
         {
             taskHelper.Enqueue
             (
@@ -153,87 +194,16 @@ public unsafe partial class AutoRetainerWork
                     if (taskHelper.AbortByConflictKey(Module)) return true;
                     if (!Bank->IsAddonAndNodesReady()) return false;
 
-                    var gils = AddonBankEvent.RetainerGilAmount;
+                    if (!isWithdraw)
+                        AddonBankEvent.SwitchMode();
 
-                    if (gils < 0 || gils == avgAmount) // 金币恰好相等
-                    {
-                        AddonBankEvent.ClickCancel();
-                        Bank->Close(true);
-                        return true;
-                    }
-
-                    if (gils > avgAmount) // 雇员金币多于平均值
-                    {
-                        AddonBankEvent.SetNumber((uint)(gils - avgAmount));
-                        AddonBankEvent.ClickConfirm();
-                        Bank->Close(true);
-                        return true;
-                    }
-
-                    // 雇员金币少于平均值
-                    AddonBankEvent.SwitchMode();
-                    AddonBankEvent.SetNumber((uint)(avgAmount - gils));
+                    AddonBankEvent.SetNumber(amount);
                     AddonBankEvent.ClickConfirm();
                     Bank->Close(true);
                     return true;
                 },
-                $"使用 1 号方法均分 {index} 号雇员的金币"
+                $"{(isWithdraw ? "取出" : "存入")} {amount} 金币 ({index} 号雇员)"
             );
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(Module)) return true;
-                    return LeaveRetainer();
-                },
-                "回到雇员列表"
-            );
-        }
-
-        private void EnqueueRetainersGilShareMethodSecond(uint index)
-        {
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(Module)) return true;
-                    return Module.EnterRetainer(index);
-                },
-                $"选择进入 {index} 号雇员"
-            );
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(Module)) return true;
-                    return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
-                },
-                "选择进入金币管理"
-            );
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(Module)) return true;
-                    if (!Bank->IsAddonAndNodesReady()) return false;
-
-                    var gils = AddonBankEvent.RetainerGilAmount;
-
-                    if (gils <= 0)
-                        AddonBankEvent.ClickCancel();
-                    else
-                    {
-                        AddonBankEvent.SetNumber((uint)gils);
-                        AddonBankEvent.ClickConfirm();
-                    }
-
-                    Bank->Close(true);
-                    return true;
-                },
-                $"使用 2 号方法取出 {index} 号雇员的金币"
-            );
-
-            // 回到雇员列表
             taskHelper.Enqueue
             (
                 () =>
@@ -245,4 +215,10 @@ public unsafe partial class AutoRetainerWork
             );
         }
     }
+
+    #region 常量
+
+    private const uint MAX_PLAYER_GIL = 999_999_999U;
+
+    #endregion
 }
