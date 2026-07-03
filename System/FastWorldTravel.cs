@@ -476,7 +476,7 @@ public class FastWorldTravel : ModuleBase
     {
         try
         {
-            NotifyHelper.Instance().NotificationInfo("DCTravelrX 正在处理超域旅行请求, 请稍等");
+            NotifyHelper.Instance().NotificationInfo("DCTravelerX 正在处理超域旅行请求, 请稍等");
 
             for (var i = 0; i < data.Length; i++)
             {
