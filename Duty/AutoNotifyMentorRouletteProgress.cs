@@ -91,8 +91,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
 
                 if (achievementLinkPayload != null)
                     LinkPayloadManager.Instance().Unreg(achievementLinkPayload.CommandId);
-
-
+                
                 achievementLinkPayload = LinkPayloadManager.Instance().Reg((_, _) => AgentAchievement.Instance()->OpenById(firstIncomplete.ID), out _);
                 var builder = new SeStringBuilder();
                 builder.AddText(Lang.Get("AutoNotifyMentorRouletteProgres-Notification-Title"))
