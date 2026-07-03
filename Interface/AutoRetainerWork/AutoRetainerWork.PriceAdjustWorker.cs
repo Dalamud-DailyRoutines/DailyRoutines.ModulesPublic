@@ -1691,7 +1691,7 @@ public unsafe partial class AutoRetainerWork
 
         #region 队列
 
-        private void EnqueuePriceAdjustAll()
+        internal void EnqueuePriceAdjustAll()
         {
             if (taskHelper.AbortByConflictKey(Module)) return;
             if (Module.IsAnyOtherWorkerBusy(typeof(PriceAdjustWorker))) return;

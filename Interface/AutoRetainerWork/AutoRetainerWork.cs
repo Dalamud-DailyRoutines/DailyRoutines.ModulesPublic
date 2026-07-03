@@ -488,6 +488,8 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public bool AutoRetainerCollect = true;
 
+        public bool AutoPriceAdjustAfterCollect;
+
         public Dictionary<string, ItemConfig> ItemConfigs = new()
         {
             { new ItemKey(0, false).ToString(), new ItemConfig(0, false) },

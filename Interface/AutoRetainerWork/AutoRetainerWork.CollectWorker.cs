@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.KamiToolKit.Nodes;
+﻿﻿using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -58,6 +58,17 @@ public unsafe partial class AutoRetainerWork
                     },
                     width
                 ),
+                CreateOverlayCheckbox
+                (
+                    Lang.Get("AutoRetainerWork-Collect-AutoPriceAdjustAfterCollect"),
+                    Module.config.AutoPriceAdjustAfterCollect,
+                    isChecked =>
+                    {
+                        Module.config.AutoPriceAdjustAfterCollect = isChecked;
+                        Module.config.Save(Module);
+                    },
+                    width
+                ),
                 CreateOverlayButtonRow(EnqueueRetainersCollect, () => taskHelper?.Abort(), width)
             );
 
@@ -105,7 +116,32 @@ public unsafe partial class AutoRetainerWork
             if (count == 0)
             {
                 if (taskHelper.IsBusy)
+                {
                     taskHelper.Enqueue(LeaveRetainer, "确保所有雇员均已返回");
+
+                    if (Module.config.AutoPriceAdjustAfterCollect)
+                    {
+                        taskHelper.Enqueue
+                        (
+                            () =>
+                            {
+                                if (taskHelper.AbortByConflictKey(Module)) return true;
+                                DService.Instance().Framework.RunOnTick
+                                (
+                                    () =>
+                                    {
+                                        if (!Module.config.AutoPriceAdjustAfterCollect) return;
+
+                                        var priceAdjustWorker = Array.Find(Module.workers, w => w is PriceAdjustWorker) as PriceAdjustWorker;
+                                        priceAdjustWorker?.EnqueuePriceAdjustAll();
+                                    }
+                                );
+                                return true;
+                            },
+                            "收取完成后触发自动改价"
+                        );
+                    }
+                }
                 return;
             }
 
