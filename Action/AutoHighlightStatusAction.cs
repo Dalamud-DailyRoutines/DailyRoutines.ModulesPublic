@@ -33,7 +33,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
     private static readonly CompSig IsActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 47 41 80 BB C9 00 00 00 01");
     [return: MarshalAs(UnmanagedType.U1)]
     private delegate bool IsActionHighlightedDelegate(ActionManager* actionManager, ActionType actionType, uint actionID);
-    private          Hook<IsActionHighlightedDelegate>? IsActionHighlightedHook;
+    private Hook<IsActionHighlightedDelegate>? IsActionHighlightedHook;
 
     private Config config = null!;
 
@@ -60,14 +60,16 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
 
         if (config.MonitoredStatus.Count == 0)
         {
-            config.MonitoredStatus = StatusConfigs.ToDictionary(
+            config.MonitoredStatus = StatusConfigs.ToDictionary
+            (
                 x => x.Key,
                 x => new StatusConfig
                 {
                     BindActions   = x.Value.BindActions,
                     Countdown     = x.Value.Countdown,
                     KeepHighlight = x.Value.KeepHighlight
-                });
+                }
+            );
             config.Save(this);
         }
 
@@ -170,12 +172,12 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         ImGuiOm.SelectableTextCentered(Lang.Get("AutoHighlightStatusAction-KeepHighlightAfterExpire"));
 
         uint pendingDeleteKey = 0;
-        var hasPendingDelete  = false;
+        var  hasPendingDelete = false;
 
         foreach (var (status, statusConfig) in config.MonitoredStatus)
         {
             using var id = ImRaii.PushId($"{status}");
-            
+
             if (!LuminaGetter.TryGetRow<Status>(status, out var statusRow) ||
                 !DService.Instance().Texture.TryGetFromGameIcon(new(statusRow.Icon), out var texture))
                 continue;
@@ -183,6 +185,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
+
             if (ImGuiOm.ButtonStretch($"{FontAwesomeIcon.TrashAlt.ToIconString()}  {Lang.Get("Delete")}"))
             {
                 pendingDeleteKey = status;
@@ -198,17 +201,18 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
                     texture.GetWrapOrEmpty().Handle,
                     new(ImGui.GetTextLineHeight())
                 );
-                        
+
                 ImGui.SameLine();
                 ImGui.TextUnformatted(statusRow.Name.ToString());
             }
-            
+
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
                 statusCombo.SelectedID = status;
 
             ImGui.TableNextColumn();
+
             using (ImRaii.Group())
             {
                 foreach (var action in statusConfig.BindActions)
@@ -224,11 +228,11 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
                             actionTexture.GetWrapOrEmpty().Handle,
                             new(ImGui.GetTextLineHeight())
                         );
-                        
+
                         ImGui.SameLine();
                         ImGui.TextUnformatted(actionRow.Name.ToString());
                     }
-                    
+
                     ImGui.SameLine();
                 }
             }
@@ -243,6 +247,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
             ImGui.SetNextItemWidth(-1f);
             if (ImGui.InputFloat($"##Countdown_{status}", ref countdown, 0.1f, 0.5f, "%.1f"))
                 statusConfig.Countdown = Math.Clamp(countdown, 0.5f, 30.0f);
+
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
                 config.Save(this);
@@ -251,7 +256,8 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
 
             ImGui.TableNextColumn();
             var keepHighlight = statusConfig.KeepHighlight;
-            ImGuiOm.CenterCursorXFor(ImGui.GetFrameHeight());     
+            ImGuiOm.CenterCursorXFor(ImGui.GetFrameHeight());
+
             if (ImGui.Checkbox($"##KeepHighlight_{status}", ref keepHighlight))
             {
                 statusConfig.KeepHighlight = keepHighlight;
@@ -347,7 +353,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         // 第二遍: resync
         foreach (var idx in resyncIndices)
         {
-            ref var entry = ref CollectionsMarshal.AsSpan(trackedStatuses)[idx];
+            ref var entry        = ref CollectionsMarshal.AsSpan(trackedStatuses)[idx];
             ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, entry.Key.StatusID);
 
             if (Unsafe.IsNullRef(ref statusConfig))
@@ -393,6 +399,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
                 continue;
 
             ref var statusConfig = ref CollectionsMarshal.GetValueRefOrNullRef(config.MonitoredStatus, entry.Key.StatusID);
+
             if (Unsafe.IsNullRef(ref statusConfig))
             {
                 removeIndices.Add(i);
@@ -408,9 +415,10 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
                 if (chainIdx < 0) continue;
 
                 ref var chain = ref CollectionsMarshal.AsSpan(comboChainsCache)[chainIdx];
-                var score = effectiveRemaining - countdown * chain.Chain.Length;
+                var     score = effectiveRemaining - countdown * chain.Chain.Length;
 
                 var found = false;
+
                 for (var j = 0; j < actionCalculationCache.Count; j++)
                 {
                     if (actionCalculationCache[j].ActionID != actionID)
@@ -445,6 +453,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
             // 此处经过 Detour 回到自身, 由于上方刚 Clear 且尚未 Add,
             // 实际只检查游戏原生高亮 (如连击进行中游戏会高亮下一步, 据此判断连击是否在进行)
             var notInChain = true;
+
             foreach (var actionIDChain in chain.Chain)
             {
                 if (ActionManager.Instance()->IsActionHighlighted(ActionType.Action, actionIDChain))
@@ -455,8 +464,6 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
             }
 
             if (!notInChain) continue;
-
-            if (ActionManager.Instance()->GetActionStatus(ActionType.Action, chain.Chain[0]) != 0) continue;
 
             actionsToHighlight.Add(chain.Chain[0]);
         }
@@ -494,7 +501,15 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         return IsActionHighlightedHook.Original(actionManager, actionType, actionID);
     }
 
-    private void OnGainStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, TimeSpan remainingTime, ulong sourceID)
+    private void OnGainStatus
+    (
+        IBattleChara player,
+        ushort       statusID,
+        ushort       param,
+        ushort       stackCount,
+        TimeSpan     remainingTime,
+        ulong        sourceID
+    )
     {
         if (sourceID                   != LocalPlayerState.EntityID ||
             remainingTime.TotalSeconds <= 0)
@@ -506,7 +521,14 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         AddOrUpdateTrackedStatus(player.EntityID, statusID, true, (float)remainingTime.TotalSeconds);
     }
 
-    private void OnLoseStatus(IBattleChara player, ushort statusID, ushort param, ushort stackCount, ulong sourceID)
+    private void OnLoseStatus
+    (
+        IBattleChara player,
+        ushort       statusID,
+        ushort       param,
+        ushort       stackCount,
+        ulong        sourceID
+    )
     {
         if (sourceID != LocalPlayerState.EntityID) return;
 
@@ -561,10 +583,8 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
     private int FindComboChainIndex(uint actionID)
     {
         for (var i = 0; i < comboChainsCache.Count; i++)
-        {
             if (comboChainsCache[i].ActionID == actionID)
                 return i;
-        }
 
         return -1;
     }
@@ -633,6 +653,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
     private void AddOrUpdateTrackedStatus(uint entityID, ushort statusID, bool active, float remainingTime)
     {
         var span = CollectionsMarshal.AsSpan(trackedStatuses);
+
         for (var i = 0; i < span.Length; i++)
         {
             if (span[i].Key.EntityID != entityID || span[i].Key.StatusID != statusID)
@@ -643,9 +664,14 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
             return;
         }
 
-        trackedStatuses.Add(new TrackedStatus(
-            new StatusKey(entityID, statusID),
-            new StatusState(active, remainingTime)));
+        trackedStatuses.Add
+        (
+            new TrackedStatus
+            (
+                new StatusKey(entityID, statusID),
+                new StatusState(active, remainingTime)
+            )
+        );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -670,6 +696,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
             foreach (var actionID in statusConfig.BindActions)
             {
                 var exists = false;
+
                 for (var i = 0; i < comboChainsCache.Count; i++)
                 {
                     if (comboChainsCache[i].ActionID != actionID)
@@ -768,7 +795,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
 
         [838]  = new() { BindActions = [3599], Countdown  = 4.0f, KeepHighlight  = true },
         [843]  = new() { BindActions = [3608], Countdown  = 4.0f, KeepHighlight  = true },
-        [1881] = new() { BindActions = [16554], Countdown = 4.0f, KeepHighlight = true },
+        [1881] = new() { BindActions = [16554], Countdown = 4.0f, KeepHighlight  = true },
         [1248] = new() { BindActions = [8324], Countdown  = 10.0f, KeepHighlight = false },
 
         [143]  = new() { BindActions = [121], Countdown   = 4.0f, KeepHighlight = true },
