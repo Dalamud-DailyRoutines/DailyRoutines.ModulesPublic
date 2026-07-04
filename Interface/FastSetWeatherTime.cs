@@ -58,7 +58,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
         get
         {
             var date = EorzeaDate.GetTime();
-            return (uint)(date.Second + 60 * date.Minute + 3600 * date.Hour);
+            return (uint)(date.Second + (60 * date.Minute) + (3600 * date.Hour));
         }
     }
 
@@ -119,9 +119,6 @@ public unsafe class FastSetWeatherTime : ModuleBase
 
         AddonDRFastSetWeather.Addon?.Dispose();
         AddonDRFastSetWeather.Addon = null;
-
-        ToggleWeather(false);
-        ToggleTime(false);
     }
 
     protected override void ConfigUI()
@@ -317,6 +314,8 @@ public unsafe class FastSetWeatherTime : ModuleBase
 
     private class AddonDRFastSetWeather(FastSetWeatherTime module) : NativeAddon
     {
+        public static AddonDRFastSetWeather? Addon { get; set; }
+
         private TextButtonNode? clearButtonNode;
 
         private NumericInputNode? hourInputNode;
@@ -327,8 +326,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
 
         private SliderNode? timeNode;
 
-        private       Dictionary<byte, (IconButtonNode IconButton, SimpleNineGridNode EnabledIcon)> weatherButtons = [];
-        public static AddonDRFastSetWeather?                                                        Addon { get; set; }
+        private Dictionary<byte, (IconButtonNode IconButton, SimpleNineGridNode EnabledIcon)> weatherButtons = [];
 
         protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
         {
