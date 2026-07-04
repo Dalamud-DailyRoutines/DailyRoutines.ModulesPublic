@@ -17,9 +17,9 @@ public unsafe class PoolOfTributeHelper : ModuleBase
         Description = Lang.Get
         (
             "PoolOfTributeHelperDescription",
-            LuminaWrapper.GetContentName(243), // 须佐之男歼灭战
-            LuminaWrapper.GetStatusName(292), // 拘束
-            LuminaWrapper.GetBNPCName(6224) // 天之岩户
+            LuminaWrapper.GetContentName(243),      // 须佐之男歼灭战
+            LuminaWrapper.GetStatusName(STATUS_ID), // 拘束
+            LuminaWrapper.GetBNPCName(6224)         // 天之岩户
         ),
         Category = ModuleCategory.Duty
     };
@@ -37,14 +37,14 @@ public unsafe class PoolOfTributeHelper : ModuleBase
 
         handle = ZoneIndicatorRenderer.Instance().RegPermanent<nint>
         (
-            674,
+            ZONE_ID,
             () => gameObject == nint.Zero ? [] : [gameObject],
             ptr => ((GameObject*)ptr)->Position,
             new()
             {
                 TextGetter = _ => new()
                 {
-                    Text      = $"{LuminaWrapper.GetStatusName(292)}",
+                    Text      = $"{LuminaWrapper.GetStatusName(STATUS_ID)}",
                     TextScale = 1.4f,
                     TextColor = ColorHelper.GetColor(518)
                 }
@@ -69,7 +69,7 @@ public unsafe class PoolOfTributeHelper : ModuleBase
         ulong        sourceID
     )
     {
-        if (id != 292) return;
+        if (id != STATUS_ID) return;
 
         gameObject = nint.Zero;
     }
@@ -84,7 +84,7 @@ public unsafe class PoolOfTributeHelper : ModuleBase
         ulong        sourceID
     )
     {
-        if (id != 292) return;
+        if (id != STATUS_ID) return;
 
         gameObject = player.Address;
     }
@@ -96,9 +96,16 @@ public unsafe class PoolOfTributeHelper : ModuleBase
 
         gameObject = nint.Zero;
 
-        if (GameState.TerritoryType != 674) return;
+        if (GameState.TerritoryType != ZONE_ID) return;
 
         CharacterStatusManager.Instance().RegGain(OnStatusGain);
         CharacterStatusManager.Instance().RegLose(OnStatusLose);
     }
+    
+    #region 常量
+
+    private const uint STATUS_ID = 292;
+    private const uint ZONE_ID   = 674;
+
+    #endregion
 }
