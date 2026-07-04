@@ -45,7 +45,7 @@ public unsafe class GlamourPlateApplyCommand : ModuleBase
     private static void ApplyGlamourPlate(int index)
     {
         GlamourPlateCommand.Enter();
-        GlamourPlateCommand.Apply((uint)index - 1);
+        GlamourPlateCommand.ApplyPlate((uint)index - 1);
         GlamourPlateCommand.Exit();
     }
 
