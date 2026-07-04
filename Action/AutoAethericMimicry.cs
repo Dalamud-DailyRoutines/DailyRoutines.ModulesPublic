@@ -180,8 +180,8 @@ public class AutoAethericMimicry : ModuleBase
                                   player.EntityID != LocalPlayerState.EntityID &&
                                   roles.Contains(player.ClassJob.Value.Role)
                             )
-                            .Where(x => x is { YalmDistanceX: <= 25, YalmDistanceZ: <= 25 })
-                            .OrderBy(x => x.YalmDistanceX + x.YalmDistanceZ)
+                            .Where(x => x is { Distance: <= 25 })
+                            .OrderBy(x => x.Distance)
                             .OfType<IPlayerCharacter>()
                             .FirstOrDefault();
             return chara != null;
