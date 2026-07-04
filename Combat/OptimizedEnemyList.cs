@@ -336,7 +336,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             #endregion
             
-            #region 状态效果更新
+            #region 状态更新
 
             statusNodes.Scale = (componentNode->GetScale() - new Vector2(0.1f)) * config.StatusScale;
             statusNodes.Alpha = info.ActiveInList ? 1f : 0.5f;
@@ -679,7 +679,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         public Vector4 EnemityTextEdgeColor = AtkColors.Value.GetEdgeColor();
         public Vector2 EnemityTextOffset    = Vector2.Zero;
         
-        // 状态效果
+        // 状态
         public float   StatusScale  = 1f;
         public Vector2 StatusOffset = Vector2.Zero;
         

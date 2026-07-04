@@ -234,7 +234,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
         ImGui.NewLine();
 
-        // 状态效果
+        // 状态
         using (ImRaii.PushId("Status"))
         {
             ImGui.AlignTextToFramePadding();
@@ -551,7 +551,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         }
     }
 
-    // 状态效果
+    // 状态
     private void HandleAddonEventTargetStatus(AddonEvent type, AtkUnitBase* addon, int statusNodeStartIndex)
     {
         if (!addon->IsAddonAndNodesReady()) return;

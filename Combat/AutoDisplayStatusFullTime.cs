@@ -23,7 +23,7 @@ public unsafe class AutoDisplayStatusFullTime : ModuleBase
 
     private Hook<RaptureTextModule.Delegates.FormatTimeSpan> FormatTimeSpanHook;
 
-    // 把状态效果更新间隔始终改为实时更新
+    // 把状态更新间隔始终改为实时更新
     private MemoryPatch updateIntervalPatch = new("85 D2 74 ?? 83 FA ?? 73 ?? 41 3B D0", [0xB0, 0x01, 0xC3, 0x90]);
 
     private Config config = null!;
