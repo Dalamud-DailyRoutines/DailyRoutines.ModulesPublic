@@ -10,6 +10,7 @@
         <DebugType>none</DebugType>
         <DebugSymbols>false</DebugSymbols>
         <Optimize>True</Optimize>
+        <LangVersion>latest</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup>
