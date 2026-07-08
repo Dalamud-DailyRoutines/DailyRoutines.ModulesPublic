@@ -57,13 +57,6 @@ public unsafe class PlaceFurnitureAnywhere : ModuleBase
         RaycastFilterHook ??= RaycastFilterSig.GetHook<RaycastFilterDelegate>(RaycastFilterDetour);
         RaycastFilterHook.Enable();
     }
-    
-    protected override void Uninit()
-    {
-        patch0?.Disable();
-        patch1?.Disable();
-        patch2?.Disable();
-    }
 
     private bool RaycastFilterDetour
     (

@@ -73,8 +73,6 @@ public unsafe class CustomizeSightDistance : ModuleBase
     protected override void Uninit()
     {
         if (!IsEnabled) return;
-        cameraCollisionPatch.Disable();
-
         UpdateCamera(CameraManager.Instance()->Camera, 20f, 1.5f, 0.785398f, -1.483530f, 0.78f, 0.69f, 0.78f);
     }
 

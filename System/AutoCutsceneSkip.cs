@@ -116,7 +116,6 @@ public unsafe class AutoCutsceneSkip : ModuleBase
     {
         DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
         DService.Instance().AgentLifecycle.UnregisterListener(OnAgent);
-        cutsceneUnskippablePatch.Dispose();
     }
 
     protected override void ConfigUI()

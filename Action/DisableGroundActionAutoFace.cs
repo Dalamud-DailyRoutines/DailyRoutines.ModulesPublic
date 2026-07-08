@@ -19,7 +19,4 @@ public class DisableGroundActionAutoFace : ModuleBase
 
     protected override void Init() =>
         groundActionAutoFacePatch.Set(true);
-
-    protected override void Uninit() =>
-        groundActionAutoFacePatch.Dispose();
 }

@@ -42,14 +42,10 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
 
         waitMessagePatch.Set(true);
     }
-    
-    protected override void Uninit() =>
-        waitMessagePatch.Dispose();
 
-    // TODO: 需要验证参数情况
     private void ProcessRequestResultDetour(InfoProxyItemSearch* info, byte a2, int a3)
     {
-        if (a2                       == 0                              &&
+        if (a2                               == 0                              &&
             a3                               > 0                               &&
             GameState.ContentFinderCondition == 0                              &&
             info->SearchItemId               != 0                              &&

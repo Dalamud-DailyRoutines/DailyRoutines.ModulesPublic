@@ -24,10 +24,4 @@ public class SameAethernetTeleport : ModuleBase
         patch0.Enable();
         patch1.Enable();
     }
-
-    protected override void Uninit()
-    {
-        patch0.Disable();
-        patch1.Disable();
-    }
 }

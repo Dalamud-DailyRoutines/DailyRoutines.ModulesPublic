@@ -151,9 +151,6 @@ public unsafe class ChineseNumericalNotation : ModuleBase
         }
     }
 
-    protected override void Uninit() =>
-        AtkTextNodeSetNumberCommaPatch.Dispose();
-
     private Utf8String* FormatNumberDetour(Utf8String* outNumberString, int number, int baseNumber, int mode, void* seperator)
     {
         var ret = FormatNumberHook.Original(outNumberString, number, baseNumber, mode, seperator);
