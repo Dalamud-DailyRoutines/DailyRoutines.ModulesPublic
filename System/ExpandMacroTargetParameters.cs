@@ -1,20 +1,19 @@
 using System.Collections.Frozen;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
-using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
@@ -119,19 +118,25 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var agent = AgentHUD.Instance();
         if (agent == null) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x => x.Object != null            &&
-                                                      x.Object->GetIsTargetable() &&
-                                                      !x.Object->IsDead()         &&
-                                                      x.Object->Health != x.Object->MaxHealth
-                                                )
-                                                .OrderBy(x => (float)x.Object->Health / x.Object->MaxHealth)
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
+        BattleChara* result = null;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var obj = agent->PartyMembers[i].Object;
+            if (obj == null) continue;
+
+            if (!obj->GetIsTargetable() ||
+                obj->IsDead()           ||
+                obj->Health == obj->MaxHealth)
+                continue;
+
+            if (result == null || (float)result->Health / result->MaxHealth > (float)obj->Health / obj->MaxHealth)
+                result = obj;
+        }
+        
+        if (result == null)
             return nint.Zero;
 
-        return (nint)hudPartyMember.Object;
+        return (nint)result;
     }
 
     private static nint LowHPMemberHandler()
@@ -139,35 +144,51 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var agent = AgentHUD.Instance();
         if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x => x.ContentId != LocalPlayerState.ContentID &&
-                                                      x.Object    != null                       &&
-                                                      x.Object->GetIsTargetable()               &&
-                                                      !x.Object->IsDead()                       &&
-                                                      x.Object->Health != x.Object->MaxHealth
-                                                )
-                                                .OrderBy(x => (float)x.Object->Health / x.Object->MaxHealth)
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
+        BattleChara* result = null;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var obj = agent->PartyMembers[i].Object;
+            if (obj == null) continue;
+
+            if (!obj->GetIsTargetable() ||
+                obj->IsDead()           ||
+                obj->Health == obj->MaxHealth)
+                continue;
+
+            if (result == null || (float)result->Health / result->MaxHealth > (float)obj->Health / obj->MaxHealth)
+                result = obj;
+        }
+        
+        if (result == null)
             return nint.Zero;
 
-        return (nint)hudPartyMember.Object;
+        return (nint)result;
     }
 
     private static nint LowHPEnemyHandler()
     {
-        var enemy = DService.Instance().ObjectTable
-                            .Where
-                            (x => x is IBattleChara { IsTargetable: true, IsDead: false } chara &&
-                                  CanUseActionOnEnemy(x.ToStruct())                             &&
-                                  chara.CurrentHp != chara.MaxHp
-                            )
-                            .OrderBy(x => (float)x.ToBCStruct()->Health / x.ToBCStruct()->MaxHealth)
-                            .FirstOrDefault();
-        if (enemy == null) return nint.Zero;
+        var manager = CharacterManager.Instance();
+        
+        BattleChara* result = null;
+        foreach (var battleCharaPtr in manager->BattleCharas)
+        {
+            if (battleCharaPtr.IsNull) continue;
 
-        return enemy.Address;
+            var battleChara = battleCharaPtr.Value;
+            if (!battleChara->GetIsTargetable()               ||
+                battleChara->IsDead()                         ||
+                battleChara->Health == battleChara->MaxHealth ||
+                !CanUseActionOnEnemy((GameObject*)battleChara))
+                continue;
+            
+            if (result == null || (float)result->Health / result->MaxHealth > (float)battleChara->Health / battleChara->MaxHealth)
+                result = battleChara;
+        }
+        
+        if (result == null)
+            return nint.Zero;
+
+        return (nint)result;
     }
 
     private static nint DeadMemberHandler()
@@ -175,20 +196,32 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var agent = AgentHUD.Instance();
         if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
 
-        // TH 优先
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x => x.ContentId != LocalPlayerState.ContentID &&
-                                                      x.Object    != null                       &&
-                                                      x.Object->GetIsTargetable()               &&
-                                                      x.Object->IsDead()
-                                                )
-                                                .OrderByDescending(x => LuminaGetter.GetRow<ClassJob>(x.Object->ClassJob)!.Value.Role is 1 or 4)
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
+        BattleChara* result = null;
+        var resultIsTH = false;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var member = agent->PartyMembers[i];
+            if (member.ContentId == LocalPlayerState.ContentID) continue;
+
+            var obj = member.Object;
+            if (obj == null) continue;
+
+            if (!obj->GetIsTargetable() ||
+                !obj->IsDead())
+                continue;
+
+            var isTH = LuminaGetter.GetRowOrDefault<ClassJob>(obj->ClassJob).Role is 1 or 4;
+            if (result == null || (isTH && !resultIsTH))
+            {
+                result = obj;
+                resultIsTH = isTH;
+            }
+        }
+
+        if (result == null)
             return nint.Zero;
 
-        return (nint)hudPartyMember.Object;
+        return (nint)result;
     }
 
     private static nint NearMemberHandler()
@@ -199,19 +232,31 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x => x.ContentId != LocalPlayerState.ContentID &&
-                                                      x.Object    != null                       &&
-                                                      x.Object->GetIsTargetable()               &&
-                                                      !x.Object->IsDead()
-                                                )
-                                                .OrderBy(x => Vector3.DistanceSquared(localPlayer->Position, x.Object->Position))
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
+        BattleChara* result = null;
+        var minDist = float.MaxValue;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var member = agent->PartyMembers[i];
+            if (member.ContentId == LocalPlayerState.ContentID) continue;
+
+            var obj = member.Object;
+            if (obj == null) continue;
+
+            if (!obj->GetIsTargetable() || obj->IsDead())
+                continue;
+
+            var dist = Vector3.DistanceSquared(localPlayer->Position, obj->Position);
+            if (result == null || dist < minDist)
+            {
+                result = obj;
+                minDist = dist;
+            }
+        }
+
+        if (result == null)
             return nint.Zero;
 
-        return (nint)hudPartyMember.Object;
+        return (nint)result;
     }
 
     private static nint FarMemberHandler()
@@ -222,19 +267,31 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x => x.ContentId != LocalPlayerState.ContentID &&
-                                                      x.Object    != null                       &&
-                                                      x.Object->GetIsTargetable()               &&
-                                                      !x.Object->IsDead()
-                                                )
-                                                .OrderByDescending(x => Vector3.DistanceSquared(localPlayer->Position, x.Object->Position))
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
+        BattleChara* result = null;
+        var maxDist = float.MinValue;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var member = agent->PartyMembers[i];
+            if (member.ContentId == LocalPlayerState.ContentID) continue;
+
+            var obj = member.Object;
+            if (obj == null) continue;
+
+            if (!obj->GetIsTargetable() || obj->IsDead())
+                continue;
+
+            var dist = Vector3.DistanceSquared(localPlayer->Position, obj->Position);
+            if (result == null || dist > maxDist)
+            {
+                result = obj;
+                maxDist = dist;
+            }
+        }
+
+        if (result == null)
             return nint.Zero;
 
-        return (nint)hudPartyMember.Object;
+        return (nint)result;
     }
 
     private static nint NearEnemyHandler()
@@ -242,13 +299,30 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        var enemy = DService.Instance().ObjectTable
-                            .Where(x => CanUseActionOnEnemy(x.ToStruct()))
-                            .OrderBy(x => Vector3.DistanceSquared(localPlayer->Position, x.Position))
-                            .FirstOrDefault();
-        if (enemy == null) return nint.Zero;
+        var manager = CharacterManager.Instance();
 
-        return enemy.Address;
+        BattleChara* result = null;
+        var minDist = float.MaxValue;
+        foreach (var battleCharaPtr in manager->BattleCharas)
+        {
+            if (battleCharaPtr.IsNull) continue;
+
+            var battleChara = battleCharaPtr.Value;
+            if (!CanUseActionOnEnemy((GameObject*)battleChara))
+                continue;
+
+            var dist = Vector3.DistanceSquared(localPlayer->Position, battleChara->Position);
+            if (result == null || dist < minDist)
+            {
+                result = battleChara;
+                minDist = dist;
+            }
+        }
+
+        if (result == null)
+            return nint.Zero;
+
+        return (nint)result;
     }
 
     private static nint FarEnemyHandler()
@@ -256,13 +330,30 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        var enemy = DService.Instance().ObjectTable
-                            .Where(x => CanUseActionOnEnemy(x.ToStruct()))
-                            .OrderByDescending(x => Vector3.DistanceSquared(localPlayer->Position, x.Position))
-                            .FirstOrDefault();
-        if (enemy == null) return nint.Zero;
+        var manager = CharacterManager.Instance();
 
-        return enemy.Address;
+        BattleChara* result = null;
+        var maxDist = float.MinValue;
+        foreach (var battleCharaPtr in manager->BattleCharas)
+        {
+            if (battleCharaPtr.IsNull) continue;
+
+            var battleChara = battleCharaPtr.Value;
+            if (!CanUseActionOnEnemy((GameObject*)battleChara))
+                continue;
+
+            var dist = Vector3.DistanceSquared(localPlayer->Position, battleChara->Position);
+            if (result == null || dist > maxDist)
+            {
+                result = battleChara;
+                maxDist = dist;
+            }
+        }
+
+        if (result == null)
+            return nint.Zero;
+
+        return (nint)result;
     }
 
     private static nint DispellableMeAndMemberHandler()
@@ -270,28 +361,20 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var agent = AgentHUD.Instance();
         if (agent == null) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x =>
-                                                    {
-                                                        if (x.Object == null) return false;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var obj = agent->PartyMembers[i].Object;
+            if (obj == null) continue;
 
-                                                        var statuses = x.Object->GetStatusManager()->Status;
+            var statuses = obj->GetStatusManager()->Status;
+            foreach (var status in statuses)
+            {
+                if (Sheets.DispellableStatuses.ContainsKey(status.StatusId))
+                    return (nint)obj;
+            }
+        }
 
-                                                        foreach (var status in statuses)
-                                                        {
-                                                            if (Sheets.DispellableStatuses.ContainsKey(status.StatusId))
-                                                                return true;
-                                                        }
-
-                                                        return false;
-                                                    }
-                                                )
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
-            return nint.Zero;
-
-        return (nint)hudPartyMember.Object;
+        return nint.Zero;
     }
 
     private static nint DispellableMemberHandler()
@@ -299,28 +382,23 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var agent = AgentHUD.Instance();
         if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x =>
-                                                    {
-                                                        if (x.ContentId == LocalPlayerState.ContentID || x.Object == null) return false;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var member = agent->PartyMembers[i];
+            if (member.ContentId == LocalPlayerState.ContentID) continue;
 
-                                                        var statuses = x.Object->GetStatusManager()->Status;
+            var obj = member.Object;
+            if (obj == null) continue;
 
-                                                        foreach (var status in statuses)
-                                                        {
-                                                            if (Sheets.DispellableStatuses.ContainsKey(status.StatusId))
-                                                                return true;
-                                                        }
+            var statuses = obj->GetStatusManager()->Status;
+            foreach (var status in statuses)
+            {
+                if (Sheets.DispellableStatuses.ContainsKey(status.StatusId))
+                    return (nint)obj;
+            }
+        }
 
-                                                        return false;
-                                                    }
-                                                )
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
-            return nint.Zero;
-
-        return (nint)hudPartyMember.Object;
+        return nint.Zero;
     }
 
     private static nint MeAndMemberStatusHandler(uint id)
@@ -328,28 +406,20 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var agent = AgentHUD.Instance();
         if (agent == null) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x =>
-                                                    {
-                                                        if (x.Object == null) return false;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var obj = agent->PartyMembers[i].Object;
+            if (obj == null) continue;
 
-                                                        var statuses = x.Object->GetStatusManager()->Status;
+            var statuses = obj->GetStatusManager()->Status;
+            foreach (var status in statuses)
+            {
+                if (status.StatusId == id)
+                    return (nint)obj;
+            }
+        }
 
-                                                        foreach (var status in statuses)
-                                                        {
-                                                            if (status.StatusId == id)
-                                                                return true;
-                                                        }
-
-                                                        return false;
-                                                    }
-                                                )
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
-            return nint.Zero;
-
-        return (nint)hudPartyMember.Object;
+        return nint.Zero;
     }
 
     private static nint MemberStatusHandler(uint id)
@@ -357,63 +427,135 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var agent = AgentHUD.Instance();
         if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
 
-        var hudPartyMember = agent->PartyMembers.ToArray()
-                                                .Where
-                                                (x =>
-                                                    {
-                                                        if (x.ContentId == LocalPlayerState.ContentID || x.Object == null) return false;
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var member = agent->PartyMembers[i];
+            if (member.ContentId == LocalPlayerState.ContentID) continue;
 
-                                                        var statuses = x.Object->GetStatusManager()->Status;
+            var obj = member.Object;
+            if (obj == null) continue;
 
-                                                        foreach (var status in statuses)
-                                                        {
-                                                            if (status.StatusId == id)
-                                                                return true;
-                                                        }
+            var statuses = obj->GetStatusManager()->Status;
+            foreach (var status in statuses)
+            {
+                if (status.StatusId == id)
+                    return (nint)obj;
+            }
+        }
 
-                                                        return false;
-                                                    }
-                                                )
-                                                .FirstOrDefault();
-        if (hudPartyMember.Object == null)
-            return nint.Zero;
-
-        return (nint)hudPartyMember.Object;
+        return nint.Zero;
     }
 
     private static nint EnemyStatusHandler(uint id)
     {
-        var enemy = DService.Instance().ObjectTable
-                            .Where
-                            (x =>
-                                {
-                                    if (!CanUseActionOnEnemy(x.ToStruct())) return false;
+        var manager = CharacterManager.Instance();
 
-                                    var bc = x.ToBCStruct();
-                                    if (bc == null) return false;
+        foreach (var battleCharaPtr in manager->BattleCharas)
+        {
+            if (battleCharaPtr.IsNull) continue;
 
-                                    var statuses = bc->GetStatusManager()->Status;
+            var battleChara = battleCharaPtr.Value;
+            if (!CanUseActionOnEnemy((GameObject*)battleChara))
+                continue;
 
-                                    foreach (var status in statuses)
-                                    {
-                                        if (status.StatusId == id)
-                                            return true;
-                                    }
+            var statuses = battleChara->GetStatusManager()->Status;
+            foreach (var status in statuses)
+            {
+                if (status.StatusId == id)
+                    return (nint)battleChara;
+            }
+        }
 
-                                    return false;
-                                }
-                            )
-                            .FirstOrDefault();
-        if (enemy == null) return nint.Zero;
+        return nint.Zero;
+    }
+    
+    private static nint LowestHateEnemyHandler()
+    {
+        var localPlayer = Control.GetLocalPlayer();
+        if (localPlayer == null) return nint.Zero;
 
-        return enemy.Address;
+        var manager = CharacterManager.Instance();
+        var hater    = UIState.Instance()->Hater;
+
+        BattleChara* result  = null;
+        var          minHate = float.MaxValue;
+        foreach (var battleCharaPtr in manager->BattleCharas)
+        {
+            if (battleCharaPtr.IsNull) continue;
+
+            var battleChara = battleCharaPtr.Value;
+            if (!CanUseActionOnEnemy((GameObject*)battleChara))
+                continue;
+
+            var hate = 0;
+            for (var i = 0; i < hater.HaterCount; i++)
+            {
+                var hateInfo = hater.Haters[i];
+                if (hateInfo.EntityId != battleChara->EntityId) continue;
+
+                hate = hateInfo.Enmity;
+            }
+            
+            if (result == null || hate < minHate)
+            {
+                result  = battleChara;
+                minHate = hate;
+            }
+        }
+
+        if (result == null)
+            return nint.Zero;
+
+        return (nint)result;
+    }
+    
+    private static nint LowestHateEnemyInListHandler()
+    {
+        var localPlayer = Control.GetLocalPlayer();
+        if (localPlayer == null) return nint.Zero;
+
+        var manager = CharacterManager.Instance();
+        var hater   = UIState.Instance()->Hater;
+
+        BattleChara* result  = null;
+        var          minHate = float.MaxValue;
+        foreach (var battleCharaPtr in manager->BattleCharas)
+        {
+            if (battleCharaPtr.IsNull) continue;
+
+            var battleChara = battleCharaPtr.Value;
+            if (!CanUseActionOnEnemy((GameObject*)battleChara))
+                continue;
+
+            int? hate = null;
+            for (var i = 0; i < hater.HaterCount; i++)
+            {
+                var hateInfo = hater.Haters[i];
+                if (hateInfo.EntityId != battleChara->EntityId) continue;
+
+                hate = hateInfo.Enmity;
+            }
+            
+            if (hate == null)
+                continue;
+            
+            if (result == null || hate < minHate)
+            {
+                result  = battleChara;
+                minHate = hate.Value;
+            }
+        }
+
+        if (result == null)
+            return nint.Zero;
+
+        return (nint)result;
     }
 
     // 真龙波和魔弹射手
     private static bool CanUseActionOnEnemy(GameObject* target) =>
         target->GetIsTargetable()             &&
         target->IsReadyToDraw()               &&
-        target->YalmDistanceFromPlayerX <= 45 &&
         target->YalmDistanceFromPlayerZ <= 45 &&
         (ActionManager.CanUseActionOnTarget(7428, target) || ActionManager.CanUseActionOnTarget(29415, target));
     
@@ -422,24 +564,86 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
     private static readonly FrozenDictionary<string, (string Description, Func<nint> Handler)> Arguments =
         new Dictionary<string, (string Description, Func<nint> Handler)>
         {
-            ["<lowhpmeandmember>"]       = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpMeAndMember"), LowHPMeAndMemberHandler),
-            ["<lowhpmember>"]            = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpMember"), LowHPMemberHandler),
-            ["<lowhpenemy>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-LowHpEnemy"), LowHPEnemyHandler),
-            ["<deadmember>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-DeadMember"), DeadMemberHandler),
-            ["<nearmember>"]             = new(Lang.Get("ExpandMacroTargetParameters-Param-NearMember"), NearMemberHandler),
-            ["<farmember>"]              = new(Lang.Get("ExpandMacroTargetParameters-Param-FarMember"), FarMemberHandler),
-            ["<nearenemy>"]              = new(Lang.Get("ExpandMacroTargetParameters-Param-NearEnemy"), NearEnemyHandler),
-            ["<farenemy>"]               = new(Lang.Get("ExpandMacroTargetParameters-Param-FarEnemy"), FarEnemyHandler),
-            ["<dispellablemeandmember>"] = new(Lang.Get("ExpandMacroTargetParameters-Param-DispellableMeAndMember"), DispellableMeAndMemberHandler),
-            ["<dispellablemember>"]      = new(Lang.Get("ExpandMacroTargetParameters-Param-DispellableMember"), DispellableMemberHandler)
+            ["<lowhpmeandmember>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-LowHpMeAndMember"),
+                LowHPMeAndMemberHandler
+            ),
+            ["<lowhpmember>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-LowHpMember"),
+                LowHPMemberHandler
+            ),
+            ["<lowhpenemy>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-LowHpEnemy"),
+                LowHPEnemyHandler
+            ),
+            ["<deadmember>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-DeadMember"),
+                DeadMemberHandler
+            ),
+            ["<nearmember>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-NearMember"),
+                NearMemberHandler
+            ),
+            ["<farmember>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-FarMember"),
+                FarMemberHandler
+            ),
+            ["<nearenemy>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-NearEnemy"),
+                NearEnemyHandler
+            ),
+            ["<farenemy>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-FarEnemy"),
+                FarEnemyHandler
+            ),
+            ["<dispellablemeandmember>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-DispellableMeAndMember"),
+                DispellableMeAndMemberHandler
+            ),
+            ["<dispellablemember>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-DispellableMember"),
+                DispellableMemberHandler
+            ),
+            ["<lowesthateenemy>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-LowestHateEnemy"),
+                LowestHateEnemyHandler
+            ),
+            ["<lowesthateinlistenemy>"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-LowestHateInListEnemy"),
+                LowestHateEnemyInListHandler
+            )
         }.ToFrozenDictionary();
 
     private static readonly FrozenDictionary<string, (string Description, Func<uint, nint> Handler)> StartWithArguments =
         new Dictionary<string, (string Description, Func<uint, nint> Handler)>
         {
-            ["<meandmemberstatus:"] = new(Lang.Get("ExpandMacroTargetParameters-Param-MeAndMemberStatus"), MeAndMemberStatusHandler),
-            ["<memberstatus:"]      = new(Lang.Get("ExpandMacroTargetParameters-Param-MemberStatus"), MemberStatusHandler),
-            ["<enemystatus:"]       = new(Lang.Get("ExpandMacroTargetParameters-Param-EnemyStatus"), EnemyStatusHandler)
+            ["<meandmemberstatus:"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-MeAndMemberStatus"),
+                MeAndMemberStatusHandler
+            ),
+            ["<memberstatus:"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-MemberStatus"),
+                MemberStatusHandler
+            ),
+            ["<enemystatus:"] = new
+            (
+                Lang.Get("ExpandMacroTargetParameters-Param-EnemyStatus"),
+                EnemyStatusHandler
+            )
         }.ToFrozenDictionary();
 
     #endregion
