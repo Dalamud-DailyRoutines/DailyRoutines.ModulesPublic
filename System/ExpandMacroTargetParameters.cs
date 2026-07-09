@@ -21,6 +21,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ExpandMacroTargetParameters : ModuleBase
 {
+    private delegate float? BattleCharaMetric(BattleChara* chara);
+
+    private delegate bool BattleCharaPredicate(BattleChara* chara);
+
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("ExpandMacroTargetParametersTitle"),
@@ -113,185 +117,86 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         return null;
     }
 
-    private static nint LowHPMeAndMemberHandler()
-    {
-        var agent = AgentHUD.Instance();
-        if (agent == null) return nint.Zero;
-
-        BattleChara* result = null;
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var obj = agent->PartyMembers[i].Object;
-            if (obj == null) continue;
-
-            if (!obj->GetIsTargetable() ||
-                obj->IsDead()           ||
-                obj->Health == obj->MaxHealth)
-                continue;
-
-            if (result == null || (float)result->Health / result->MaxHealth > (float)obj->Health / obj->MaxHealth)
-                result = obj;
-        }
-        
-        if (result == null)
-            return nint.Zero;
-
-        return (nint)result;
-    }
-
-    private static nint LowHPMemberHandler()
-    {
-        var agent = AgentHUD.Instance();
-        if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
-
-        BattleChara* result = null;
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var obj = agent->PartyMembers[i].Object;
-            if (obj == null) continue;
-
-            if (!obj->GetIsTargetable() ||
-                obj->IsDead()           ||
-                obj->Health == obj->MaxHealth)
-                continue;
-
-            if (result == null || (float)result->Health / result->MaxHealth > (float)obj->Health / obj->MaxHealth)
-                result = obj;
-        }
-        
-        if (result == null)
-            return nint.Zero;
-
-        return (nint)result;
-    }
-
-    private static nint LowHPEnemyHandler()
-    {
-        var manager = CharacterManager.Instance();
-        
-        BattleChara* result = null;
-        foreach (var battleCharaPtr in manager->BattleCharas)
-        {
-            if (battleCharaPtr.IsNull) continue;
-
-            var battleChara = battleCharaPtr.Value;
-            if (!battleChara->GetIsTargetable()               ||
-                battleChara->IsDead()                         ||
-                battleChara->Health == battleChara->MaxHealth ||
-                !CanUseActionOnEnemy((GameObject*)battleChara))
-                continue;
-            
-            if (result == null || (float)result->Health / result->MaxHealth > (float)battleChara->Health / battleChara->MaxHealth)
-                result = battleChara;
-        }
-        
-        if (result == null)
-            return nint.Zero;
-
-        return (nint)result;
-    }
-
-    private static nint DeadMemberHandler()
-    {
-        var agent = AgentHUD.Instance();
-        if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
-
-        BattleChara* result = null;
-        var resultIsTH = false;
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var member = agent->PartyMembers[i];
-            if (member.ContentId == LocalPlayerState.ContentID) continue;
-
-            var obj = member.Object;
-            if (obj == null) continue;
-
-            if (!obj->GetIsTargetable() ||
-                !obj->IsDead())
-                continue;
-
-            var isTH = LuminaGetter.GetRowOrDefault<ClassJob>(obj->ClassJob).Role is 1 or 4;
-            if (result == null || (isTH && !resultIsTH))
+    private static nint LowHPMeAndMemberHandler() =>
+        FindBestPartyMember
+        (
+            true,
+            false,
+            obj =>
             {
-                result = obj;
-                resultIsTH = isTH;
+                if (!obj->GetIsTargetable() || obj->IsDead() || obj->Health == obj->MaxHealth)
+                    return null;
+
+                return (float)obj->Health / obj->MaxHealth;
             }
-        }
+        );
 
-        if (result == null)
-            return nint.Zero;
+    private static nint LowHPMemberHandler() =>
+        FindBestPartyMember
+        (
+            false,
+            true,
+            obj =>
+            {
+                if (!obj->GetIsTargetable() || obj->IsDead() || obj->Health == obj->MaxHealth)
+                    return null;
 
-        return (nint)result;
-    }
+                return (float)obj->Health / obj->MaxHealth;
+            }
+        );
+
+    private static nint LowHPEnemyHandler() =>
+        FindBestEnemy
+        (enemy =>
+            {
+                if (enemy->IsDead() || enemy->Health == enemy->MaxHealth)
+                    return null;
+
+                return (float)enemy->Health / enemy->MaxHealth;
+            }
+        );
+
+    private static nint DeadMemberHandler() =>
+        FindBestPartyMember
+        (
+            false,
+            true,
+            obj =>
+            {
+                if (!obj->GetIsTargetable() || !obj->IsDead())
+                    return null;
+
+                var isTH = LuminaGetter.GetRowOrDefault<ClassJob>(obj->ClassJob).Role is 1 or 4;
+                return isTH ?
+                           0f :
+                           1f;
+            }
+        );
 
     private static nint NearMemberHandler()
     {
-        var agent = AgentHUD.Instance();
-        if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
-
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        BattleChara* result = null;
-        var minDist = float.MaxValue;
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var member = agent->PartyMembers[i];
-            if (member.ContentId == LocalPlayerState.ContentID) continue;
-
-            var obj = member.Object;
-            if (obj == null) continue;
-
-            if (!obj->GetIsTargetable() || obj->IsDead())
-                continue;
-
-            var dist = Vector3.DistanceSquared(localPlayer->Position, obj->Position);
-            if (result == null || dist < minDist)
-            {
-                result = obj;
-                minDist = dist;
-            }
-        }
-
-        if (result == null)
-            return nint.Zero;
-
-        return (nint)result;
+        return FindBestPartyMember
+        (
+            false,
+            true,
+            obj => Vector3.DistanceSquared(localPlayer->Position, obj->Position)
+        );
     }
 
     private static nint FarMemberHandler()
     {
-        var agent = AgentHUD.Instance();
-        if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
-
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        BattleChara* result = null;
-        var maxDist = float.MinValue;
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var member = agent->PartyMembers[i];
-            if (member.ContentId == LocalPlayerState.ContentID) continue;
-
-            var obj = member.Object;
-            if (obj == null) continue;
-
-            if (!obj->GetIsTargetable() || obj->IsDead())
-                continue;
-
-            var dist = Vector3.DistanceSquared(localPlayer->Position, obj->Position);
-            if (result == null || dist > maxDist)
-            {
-                result = obj;
-                maxDist = dist;
-            }
-        }
-
-        if (result == null)
-            return nint.Zero;
-
-        return (nint)result;
+        return FindBestPartyMember
+        (
+            false,
+            true,
+            obj => -Vector3.DistanceSquared(localPlayer->Position, obj->Position)
+        );
     }
 
     private static nint NearEnemyHandler()
@@ -299,30 +204,7 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        var manager = CharacterManager.Instance();
-
-        BattleChara* result = null;
-        var minDist = float.MaxValue;
-        foreach (var battleCharaPtr in manager->BattleCharas)
-        {
-            if (battleCharaPtr.IsNull) continue;
-
-            var battleChara = battleCharaPtr.Value;
-            if (!CanUseActionOnEnemy((GameObject*)battleChara))
-                continue;
-
-            var dist = Vector3.DistanceSquared(localPlayer->Position, battleChara->Position);
-            if (result == null || dist < minDist)
-            {
-                result = battleChara;
-                minDist = dist;
-            }
-        }
-
-        if (result == null)
-            return nint.Zero;
-
-        return (nint)result;
+        return FindBestEnemy(enemy => Vector3.DistanceSquared(localPlayer->Position, enemy->Position));
     }
 
     private static nint FarEnemyHandler()
@@ -330,121 +212,20 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return nint.Zero;
 
-        var manager = CharacterManager.Instance();
-
-        BattleChara* result = null;
-        var maxDist = float.MinValue;
-        foreach (var battleCharaPtr in manager->BattleCharas)
-        {
-            if (battleCharaPtr.IsNull) continue;
-
-            var battleChara = battleCharaPtr.Value;
-            if (!CanUseActionOnEnemy((GameObject*)battleChara))
-                continue;
-
-            var dist = Vector3.DistanceSquared(localPlayer->Position, battleChara->Position);
-            if (result == null || dist > maxDist)
-            {
-                result = battleChara;
-                maxDist = dist;
-            }
-        }
-
-        if (result == null)
-            return nint.Zero;
-
-        return (nint)result;
+        return FindBestEnemy(enemy => -Vector3.DistanceSquared(localPlayer->Position, enemy->Position));
     }
 
-    private static nint DispellableMeAndMemberHandler()
-    {
-        var agent = AgentHUD.Instance();
-        if (agent == null) return nint.Zero;
+    private static nint DispellableMeAndMemberHandler() =>
+        FindFirstPartyMember(true, false, HasDispellableStatus);
 
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var obj = agent->PartyMembers[i].Object;
-            if (obj == null) continue;
+    private static nint DispellableMemberHandler() =>
+        FindFirstPartyMember(false, true, HasDispellableStatus);
 
-            var statuses = obj->GetStatusManager()->Status;
-            foreach (var status in statuses)
-            {
-                if (Sheets.DispellableStatuses.ContainsKey(status.StatusId))
-                    return (nint)obj;
-            }
-        }
+    private static nint MeAndMemberStatusHandler(uint id) =>
+        FindFirstPartyMember(true, false, obj => HasStatus(obj, id));
 
-        return nint.Zero;
-    }
-
-    private static nint DispellableMemberHandler()
-    {
-        var agent = AgentHUD.Instance();
-        if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
-
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var member = agent->PartyMembers[i];
-            if (member.ContentId == LocalPlayerState.ContentID) continue;
-
-            var obj = member.Object;
-            if (obj == null) continue;
-
-            var statuses = obj->GetStatusManager()->Status;
-            foreach (var status in statuses)
-            {
-                if (Sheets.DispellableStatuses.ContainsKey(status.StatusId))
-                    return (nint)obj;
-            }
-        }
-
-        return nint.Zero;
-    }
-
-    private static nint MeAndMemberStatusHandler(uint id)
-    {
-        var agent = AgentHUD.Instance();
-        if (agent == null) return nint.Zero;
-
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var obj = agent->PartyMembers[i].Object;
-            if (obj == null) continue;
-
-            var statuses = obj->GetStatusManager()->Status;
-            foreach (var status in statuses)
-            {
-                if (status.StatusId == id)
-                    return (nint)obj;
-            }
-        }
-
-        return nint.Zero;
-    }
-
-    private static nint MemberStatusHandler(uint id)
-    {
-        var agent = AgentHUD.Instance();
-        if (agent == null || agent->PartyMemberCount == 1) return nint.Zero;
-
-        for (var i = 0; i < agent->PartyMemberCount; i++)
-        {
-            var member = agent->PartyMembers[i];
-            if (member.ContentId == LocalPlayerState.ContentID) continue;
-
-            var obj = member.Object;
-            if (obj == null) continue;
-
-            var statuses = obj->GetStatusManager()->Status;
-            foreach (var status in statuses)
-            {
-                if (status.StatusId == id)
-                    return (nint)obj;
-            }
-        }
-
-        return nint.Zero;
-    }
+    private static nint MemberStatusHandler(uint id) =>
+        FindFirstPartyMember(false, true, obj => HasStatus(obj, id));
 
     private static nint EnemyStatusHandler(uint id)
     {
@@ -458,98 +239,153 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
             if (!CanUseActionOnEnemy((GameObject*)battleChara))
                 continue;
 
-            var statuses = battleChara->GetStatusManager()->Status;
-            foreach (var status in statuses)
-            {
-                if (status.StatusId == id)
-                    return (nint)battleChara;
-            }
+            if (HasStatus(battleChara, id))
+                return (nint)battleChara;
         }
 
         return nint.Zero;
     }
-    
+
     private static nint LowestHateEnemyHandler()
     {
-        var localPlayer = Control.GetLocalPlayer();
-        if (localPlayer == null) return nint.Zero;
+        var hater = UIState.Instance()->Hater;
 
-        var manager = CharacterManager.Instance();
-        var hater    = UIState.Instance()->Hater;
-
-        BattleChara* result  = null;
-        var          minHate = float.MaxValue;
-        foreach (var battleCharaPtr in manager->BattleCharas)
-        {
-            if (battleCharaPtr.IsNull) continue;
-
-            var battleChara = battleCharaPtr.Value;
-            if (!CanUseActionOnEnemy((GameObject*)battleChara))
-                continue;
-
-            var hate = 0;
-            for (var i = 0; i < hater.HaterCount; i++)
+        return FindBestEnemy
+        (enemy =>
             {
-                var hateInfo = hater.Haters[i];
-                if (hateInfo.EntityId != battleChara->EntityId) continue;
+                for (var i = 0; i < hater.HaterCount; i++)
+                {
+                    var hateInfo = hater.Haters[i];
+                    if (hateInfo.EntityId == enemy->EntityId)
+                        return (float)hateInfo.Enmity;
+                }
 
-                hate = hateInfo.Enmity;
+                return 0f;
             }
-            
-            if (result == null || hate < minHate)
+        );
+    }
+
+    private static nint LowestHateEnemyInListHandler()
+    {
+        var hater = UIState.Instance()->Hater;
+
+        return FindBestEnemy
+        (enemy =>
             {
-                result  = battleChara;
-                minHate = hate;
+                for (var i = 0; i < hater.HaterCount; i++)
+                {
+                    var hateInfo = hater.Haters[i];
+                    if (hateInfo.EntityId == enemy->EntityId)
+                        return hateInfo.Enmity;
+                }
+
+                return null;
+            }
+        );
+    }
+
+    private static nint FindBestPartyMember(bool includeSelf, bool requireMultiple, BattleCharaMetric metric)
+    {
+        var agent = AgentHUD.Instance();
+        if (agent == null) return nint.Zero;
+        if (requireMultiple && agent->PartyMemberCount == 1) return nint.Zero;
+
+        BattleChara* result    = null;
+        var          bestValue = float.MaxValue;
+
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var member = agent->PartyMembers[i];
+            if (!includeSelf && member.ContentId == LocalPlayerState.ContentID) continue;
+
+            var obj = member.Object;
+            if (obj == null) continue;
+
+            var value = metric(obj);
+            if (value == null) continue;
+
+            if (result == null || value.Value < bestValue)
+            {
+                result    = obj;
+                bestValue = value.Value;
             }
         }
-
-        if (result == null)
-            return nint.Zero;
 
         return (nint)result;
     }
-    
-    private static nint LowestHateEnemyInListHandler()
+
+    private static nint FindFirstPartyMember(bool includeSelf, bool requireMultiple, BattleCharaPredicate predicate)
     {
-        var localPlayer = Control.GetLocalPlayer();
-        if (localPlayer == null) return nint.Zero;
+        var agent = AgentHUD.Instance();
+        if (agent == null) return nint.Zero;
+        if (requireMultiple && agent->PartyMemberCount == 1) return nint.Zero;
 
+        for (var i = 0; i < agent->PartyMemberCount; i++)
+        {
+            var member = agent->PartyMembers[i];
+            if (!includeSelf && member.ContentId == LocalPlayerState.ContentID) continue;
+
+            var obj = member.Object;
+            if (obj == null) continue;
+
+            if (predicate(obj))
+                return (nint)obj;
+        }
+
+        return nint.Zero;
+    }
+
+    private static nint FindBestEnemy(BattleCharaMetric metric)
+    {
         var manager = CharacterManager.Instance();
-        var hater   = UIState.Instance()->Hater;
 
-        BattleChara* result  = null;
-        var          minHate = float.MaxValue;
+        BattleChara* result    = null;
+        var          bestValue = float.MaxValue;
+
         foreach (var battleCharaPtr in manager->BattleCharas)
         {
             if (battleCharaPtr.IsNull) continue;
 
             var battleChara = battleCharaPtr.Value;
-            if (!CanUseActionOnEnemy((GameObject*)battleChara))
-                continue;
+            if (!CanUseActionOnEnemy((GameObject*)battleChara)) continue;
 
-            int? hate = null;
-            for (var i = 0; i < hater.HaterCount; i++)
-            {
-                var hateInfo = hater.Haters[i];
-                if (hateInfo.EntityId != battleChara->EntityId) continue;
+            var value = metric(battleChara);
+            if (value == null) continue;
 
-                hate = hateInfo.Enmity;
-            }
-            
-            if (hate == null)
-                continue;
-            
-            if (result == null || hate < minHate)
+            if (result == null || value.Value < bestValue)
             {
-                result  = battleChara;
-                minHate = hate.Value;
+                result    = battleChara;
+                bestValue = value.Value;
             }
         }
 
-        if (result == null)
-            return nint.Zero;
-
         return (nint)result;
+    }
+
+    private static bool HasStatus(BattleChara* obj, uint id)
+    {
+        var statuses = obj->GetStatusManager()->Status;
+
+        foreach (var status in statuses)
+        {
+            if (status.StatusId == id)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasDispellableStatus(BattleChara* obj)
+    {
+        var statuses = obj->GetStatusManager()->Status;
+
+        foreach (var status in statuses)
+        {
+            if (Sheets.DispellableStatuses.ContainsKey(status.StatusId))
+                return true;
+        }
+
+        return false;
     }
 
     // 真龙波和魔弹射手
@@ -558,7 +394,7 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         target->IsReadyToDraw()               &&
         target->YalmDistanceFromPlayerZ <= 45 &&
         (ActionManager.CanUseActionOnTarget(7428, target) || ActionManager.CanUseActionOnTarget(29415, target));
-    
+
     #region 常量
 
     private static readonly FrozenDictionary<string, (string Description, Func<nint> Handler)> Arguments =
