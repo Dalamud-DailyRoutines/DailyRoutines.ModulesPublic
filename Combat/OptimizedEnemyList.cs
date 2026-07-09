@@ -458,10 +458,14 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 );
                 castNode.String = castText;
                 
-                var castTextWidth = castNode.GetTextDrawSize(false).X + (leftCastTime == 0 ? 2f : 1f);
+                // 因为等于 0 的时候算出来的宽度有很不太好看的的变化
+                if (leftCastTime != 0)
+                {
+                    var castTextWidth = castNode.GetTextDrawSize(false).X + 1f;
 
-                castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f };
-                castBackgroundNode.Width = castTextWidth + (CAST_TEXT_BACKGROUND_PADDING * (config.TextSize / 10f));
+                    castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f };
+                    castBackgroundNode.Width    = castTextWidth + (CAST_TEXT_BACKGROUND_PADDING * (config.TextSize / 10f));
+                }
             }
 
             #endregion
