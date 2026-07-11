@@ -344,7 +344,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var nodeState = componentNode->GetNodeState();
             statusNodes.Position = nodeState.TopRight -
                                    lockImageNode->GetNodeState().Size.WithY(0) +
-                                   (new Vector2(6, -1) * statusNodes.Scale) +
+                                   (StatusComponentOffset * statusNodes.Scale) +
                                    config.StatusOffset;
 
             var counter = 0;
@@ -541,7 +541,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var castBarNode = new ProgressBarEnemyCastNode
             {
                 IsVisible = true,
-                Position  = new(85, 13.7f),
+                Position  = new(90, 13.7f),
                 Size      = new(120, 20)
             };
             
@@ -833,10 +833,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     #region 常量
 
-    private static readonly Vector2 CastTextDefaultPosition           = new(198, 6);
+    private static readonly Vector2 CastTextDefaultPosition           = new(203, 6);
+    private static readonly Vector2 CastBackgroundTextDefaultPosition = new(197, 2);
     private static readonly Vector2 HealthTextDefaultPosition         = new(-60, 8);
-    private static readonly Vector2 CastBackgroundTextDefaultPosition = new(192, 2);
     private static readonly Vector2 EnemityTextDefaultPosition        = new(12, 21);
+    private static readonly Vector2 StatusComponentOffset             = new(11, -1);
     
     private const float HEALTH_TEXT_MARKER_PADDING   = 1f;
     private const float CAST_TEXT_BACKGROUND_PADDING = 7f;
