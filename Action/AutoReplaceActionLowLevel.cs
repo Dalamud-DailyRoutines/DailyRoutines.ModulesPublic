@@ -138,7 +138,11 @@ public unsafe class AutoReplaceActionLowLevel : ModuleBase
         // 异言 - 悖论
         [16507] = 7422,
         // 必杀剑·闪影 - 必杀剑·红莲
-        [16481] = 7496
+        [16481] = 7496,
+        // 核爆 - 烈炎
+        [162] = 147,
+        // 玄冰 - 冰冻
+        [159] = 25793
     }.ToFrozenDictionary();
 
     #endregion
