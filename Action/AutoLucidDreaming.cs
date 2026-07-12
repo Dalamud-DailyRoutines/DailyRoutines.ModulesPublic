@@ -230,13 +230,37 @@ public unsafe class AutoLucidDreaming : ModuleBase
                           .Append(LuminaWrapper.GetActionName(LUCID_DREAMING_ID))
                           .PopColorType();
 
-                    var message = Lang.GetSe("AutoLucidDreaming-Notification", rented.Builder, LocalPlayerState.Object?.CurrentMp ?? 0);
-
                     if (config.SendChat)
-                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Instance().Chat
+                        (
+                            Lang.GetSe
+                            (
+                                "AutoLucidDreaming-Notification",
+                                rented.Builder,
+                                LocalPlayerState.Object?.CurrentMp ?? 0
+                            )
+                        );
+
+                    rented.Builder.Clear();
+                    rented.Builder
+                          .PushEdgeColorType(32)
+                          .Append(LuminaWrapper.GetActionName(LUCID_DREAMING_ID))
+                          .PopEdgeColorType();
 
                     if (config.SendNotification)
-                        NotifyHelper.ToastQuest(message.ToString(), new() { IconId = LuminaWrapper.GetActionIconID(LUCID_DREAMING_ID) });
+                        NotifyHelper.ToastQuest
+                        (
+                            Lang.GetSe
+                            (
+                                "AutoLucidDreaming-Notification",
+                                rented.Builder,
+                                LocalPlayerState.Object?.CurrentMp ?? 0
+                            ),
+                            new()
+                            {
+                                IconId = LuminaWrapper.GetActionIconID(LUCID_DREAMING_ID)
+                            }
+                        );
                 }
 
                 return true;

@@ -197,9 +197,9 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
             {
                 using var rented = new RentedSeStringBuilder();
                 rented.Builder
-                      .PushColorType(32)
+                      .PushEdgeColorType(32)
                       .Append(actionData.Value.Name)
-                      .PopColorType();
+                      .PopEdgeColorType();
                 
                 NotifyHelper.ToastQuest
                 (
