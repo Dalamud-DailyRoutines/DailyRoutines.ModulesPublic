@@ -73,7 +73,7 @@ public unsafe partial class AutoRetainerWork
                         () =>
                         {
                             if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し"]);
+                            return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し", "아이템 주고받기"]);
                         },
                         "选择道具管理"
                     );

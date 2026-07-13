@@ -183,7 +183,7 @@ public unsafe partial class AutoRetainerWork
                 () =>
                 {
                     if (taskHelper.AbortByConflictKey(Module)) return true;
-                    return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
+                    return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し", "길 주고받기"]);
                 },
                 "选择进入金币管理"
             );

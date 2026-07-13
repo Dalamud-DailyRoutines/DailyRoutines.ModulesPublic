@@ -39,7 +39,8 @@ public unsafe partial class AutoRetainerWork
         [
             "玩家所持物品",
             "Sell items in your inventory",
-            "プレイヤー所持品から"
+            "プレイヤー所持品から",
+            "플레이어 소지품에서 선택"
         ];
 
         private          TaskHelper?     taskHelper;
