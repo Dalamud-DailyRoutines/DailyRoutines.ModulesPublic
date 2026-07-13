@@ -3,7 +3,6 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Threading.TaskHelper;
@@ -73,7 +72,7 @@ public unsafe partial class AutoRetainerWork
                         () =>
                         {
                             if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し", "아이템 주고받기"]);
+                            return AddonSelectStringEvent.Select(ItemEntrustWithdrawTexts);
                         },
                         "选择道具管理"
                     );
@@ -149,5 +148,15 @@ public unsafe partial class AutoRetainerWork
                     break;
             }
         }
+
+        private static readonly string[] ItemEntrustWithdrawTexts =
+        [
+            "道具管理", 
+            "Entrust or withdraw items", 
+            "アイテムの受け渡し",
+            "아이템 주고받기",
+            "Gegenstände übergeben oder entnehmen",
+            "Échanger des objets"
+        ];
     }
 }

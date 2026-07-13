@@ -61,7 +61,7 @@ public unsafe partial class AutoRetainerWork
                         () =>
                         {
                             if (TaskHelper.AbortByConflictKey(Module)) return true;
-                            return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し", "길 주고받기"]);
+                            return AddonSelectStringEvent.Select(GilManageTexts);
                         },
                         "选择进入金币管理"
                     );
@@ -99,5 +99,16 @@ public unsafe partial class AutoRetainerWork
                 }
             );
         }
+        
+        private static readonly string[] GilManageTexts =
+        [
+            "金币管理",
+            "Gil管理",
+            "Entrust or withdraw gil",
+            "ギルの受け渡し",
+            "길 주고받기",
+            "Gil geben oder nehmen",
+            "Confier ou récupérer de l'argent"
+        ];
     }
 }

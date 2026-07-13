@@ -1,9 +1,8 @@
-﻿﻿using DailyRoutines.Common.KamiToolKit.Nodes;
+﻿using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
-using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Threading.TaskHelper;
 
@@ -16,8 +15,7 @@ public unsafe partial class AutoRetainerWork
         AutoRetainerWork module
     ) : RetainerWorkerBase(module)
     {
-        private                 TaskHelper? taskHelper;
-        private static readonly string[]    VentureCompleteTexts = ["结束", "Complete", "完了", "완료"];
+        private TaskHelper? taskHelper;
 
         public override bool DrawConfigCondition() => false;
 
@@ -216,5 +214,16 @@ public unsafe partial class AutoRetainerWork
 
             taskHelper.Enqueue(EnqueueRetainersCollect, "重新检查是否有其他雇员需要收取");
         }
+        
+        private static readonly string[] VentureCompleteTexts =
+        [
+            "结束",
+            "結束",
+            "Complete",
+            "完了",
+            "완료",
+            "Abgeschlossen",
+            "Terminée"
+        ];
     }
 }

@@ -35,14 +35,6 @@ public unsafe partial class AutoRetainerWork
     {
         private Hook<MoveToRetainerMarketDelegate>? MoveToRetainerMarketHook;
 
-        private static readonly List<string> SellInventoryItemsText =
-        [
-            "玩家所持物品",
-            "Sell items in your inventory",
-            "プレイヤー所持品から",
-            "플레이어 소지품에서 선택"
-        ];
-
         private          TaskHelper?     taskHelper;
         private readonly ItemSelectCombo itemSelectCombo = new("AddNewItem");
 
@@ -2306,6 +2298,20 @@ public unsafe partial class AutoRetainerWork
 
             return property != null && (bool)property.GetValue(null);
         }
+
+        #endregion
+
+        #region 常量
+
+        private static readonly string[] SellInventoryItemsText =
+        [
+            "玩家所持物品",
+            "Sell items in your inventory",
+            "プレイヤー所持品から",
+            "플레이어 소지품에서 선택",
+            "Gegenstände aus dem eigenen Inventar verkaufen",
+            "Mettre en vente un objet de votre inventaire"
+        ];
 
         #endregion
     }
