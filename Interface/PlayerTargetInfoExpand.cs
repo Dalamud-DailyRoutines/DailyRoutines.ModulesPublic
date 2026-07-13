@@ -218,6 +218,19 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
         new("/FCTag/", LuminaWrapper.GetAddonText(297), c => c.CompanyTag.ToString()),
         new
         (
+            "/Title/",
+            LuminaWrapper.GetAddonText(14119),
+            c =>
+            {
+                var character = c.ToStruct();
+                var titleID   = character->CharacterData.TitleId;
+                if (titleID == 0 || !LuminaGetter.TryGetRow<Title>(titleID, out var title)) return string.Empty;
+
+                return (character->DrawData.CustomizeData.Sex == 0 ? title.Masculine : title.Feminine).ToString();
+            }
+        ),
+        new
+        (
             "/OnlineStatus/",
             Lang.Get("OnlineStatus"),
             c => string.IsNullOrEmpty(c.OnlineStatus.ValueNullable?.Name.ToString())
