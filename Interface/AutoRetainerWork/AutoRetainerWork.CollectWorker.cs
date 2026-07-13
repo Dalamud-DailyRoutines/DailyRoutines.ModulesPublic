@@ -17,7 +17,7 @@ public unsafe partial class AutoRetainerWork
     ) : RetainerWorkerBase(module)
     {
         private                 TaskHelper? taskHelper;
-        private static readonly string[]    VentureCompleteTexts = ["结束", "Complete", "完了"];
+        private static readonly string[]    VentureCompleteTexts = ["结束", "Complete", "完了", "완료"];
 
         public override bool DrawConfigCondition() => false;
 
