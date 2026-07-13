@@ -246,18 +246,20 @@ public unsafe partial class FastObjectInteract : ModuleBase
             out var aetheryteID
         );
 
-        if (instanceChangeObj.HasValue || worldTravelObj.HasValue || currentAethernetShards.Count > 0)
+        if (instanceChangeObj.HasValue ||
+            worldTravelObj.HasValue    ||
+            (aetheryteID > 0 && currentAethernetShards.Count > 0))
         {
             if (isAnyRendered)
                 ImGui.SameLine();
 
             using (ImRaii.Group())
             {
-                if (instanceChangeObj.HasValue) 
+                if (instanceChangeObj.HasValue)
                     RenderInstanceZoneChangeButtons();
-                if (worldTravelObj.HasValue) 
+                if (worldTravelObj.HasValue)
                     RenderWorldChangeButtons();
-                if (currentAethernetShards.Count > 0) 
+                if (aetheryteID > 0 && currentAethernetShards.Count > 0)
                     RenderAethernetShardButtons(aetheryteID);
             }
         }
