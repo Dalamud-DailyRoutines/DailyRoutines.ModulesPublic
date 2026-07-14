@@ -442,7 +442,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
             GameState.TerritoryIntendedUse == TerritoryIntendedUse.Town)
             TryPopulateAethernetShards();
 
-        var shouldShowWindow = (currentObjects.Count > 0 || currentAethernetShards.Count > 0) && IsWindowShouldBeOpen();
+        var shouldShowWindow = currentObjects.Count > 0 && IsWindowShouldBeOpen();
         if (Overlay != null)
         {
             Overlay.IsOpen = shouldShowWindow;
