@@ -23,10 +23,13 @@ public class AutoDisplayNetworkLatency : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title           = Lang.Get("AutoDisplayNetworkLatencyTitle"),
-        Description     = Lang.Get("AutoDisplayNetworkLatencyDescription"),
-        Category        = ModuleCategory.Interface,
-        PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayNetworkLatency-UI.png"] // TODO: 修改仓库
+        Title       = Lang.Get("AutoDisplayNetworkLatencyTitle"),
+        Description = Lang.Get("AutoDisplayNetworkLatencyDescription"),
+        Category    = ModuleCategory.Interface,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayNetworkLatency/preview-1.png"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
@@ -220,6 +223,8 @@ public class AutoDisplayNetworkLatency : ModuleBase
             }
         }
 
+        return;
+
         static Vector4 GetPingColor(float ping)
         {
             return ping switch
@@ -391,7 +396,10 @@ public class AutoDisplayNetworkLatency : ModuleBase
             ZoneEndpoint? endpoint = null;
 
             await DService.Instance().Framework.RunOnTick
-            (() => endpoint = GetZoneEndpoint(), cancellationToken: cancellationToken);
+            (
+                () => endpoint = GetZoneEndpoint(),
+                cancellationToken: cancellationToken
+            );
 
             return endpoint;
         }
