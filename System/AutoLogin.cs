@@ -9,11 +9,9 @@ using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.ImGuiOm.Widgets.Combos;
-using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.AgentEvent;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Native;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
@@ -340,10 +338,12 @@ public unsafe class AutoLogin : ModuleBase
                         manualLoginInfo = null;
                     else
                     {
-                        var contentID = target.ContentId;
-                        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(target.CurrentWorldId));
-                        TaskHelper.Enqueue(() => agent->WorldId == target.CurrentWorldId);
-                        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == contentID));
+                        EnqueueLogin
+                        (
+                            target.ContentId,
+                            target.CurrentWorldId,
+                            0
+                        );
 
                         manualLoginInfo = null;
                         return true;
@@ -363,9 +363,14 @@ public unsafe class AutoLogin : ModuleBase
                     if (found.HomeWorldId == 0)
                         continue;
 
-                    TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(found.CurrentWorldId),                         weight: counter);
-                    TaskHelper.Enqueue(() => agent->WorldId == found.CurrentWorldId,                                        weight: counter);
-                    TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.NameString == loginInfo.CharacterName), weight: counter);
+                    EnqueueLogin
+                    (
+                        found.ContentId,
+                        found.LoginFlags == CharaSelectCharacterEntryLoginFlags.DCTraveling ?
+                            found.CurrentWorldId :
+                            found.HomeWorldId,
+                        counter
+                    );
                     break;
                 }
 
@@ -375,6 +380,16 @@ public unsafe class AutoLogin : ModuleBase
     }
 
     #endregion
+
+    private void EnqueueLogin(ulong contentID, uint world, int weight)
+    {
+        var agent = AgentLobby.Instance();
+        if (agent == null) return;
+        
+        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectWorldByID(world),                              weight: weight);
+        TaskHelper.Enqueue(() => agent->WorldId == world,                                             weight: weight);
+        TaskHelper.Enqueue(() => AgentLobbyEvent.SelectCharacter(x => x.ContentId == contentID), weight: weight);
+    }
 
     private void Swap(int index1, int index2)
     {
