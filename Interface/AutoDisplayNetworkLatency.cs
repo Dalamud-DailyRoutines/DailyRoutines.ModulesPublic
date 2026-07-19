@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
@@ -44,9 +45,9 @@ public class AutoDisplayNetworkLatency : ModuleBase
     {
         config = Config.Load(this) ?? new();
 
-        monitor       ??= new();
-        entry         ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayNetworkLatency");
-        entry.OnClick =   _ =>
+        monitor ??= new();
+        entry   ??= DService.Instance().DTRBar.Get("DailyRoutines-AutoDisplayNetworkLatency");
+        entry.OnClick = _ =>
         {
             if (Overlay == null)
             {
@@ -98,9 +99,9 @@ public class AutoDisplayNetworkLatency : ModuleBase
             return;
         }
 
-        float min        = 9999f, max = 0f, sum = 0f;
-        var   validCount = 0;
-        var   lossCount  = 0;
+        float min          = 9999f, max = 0f, sum = 0f;
+        var   validCount   = 0;
+        var   lossCount    = 0;
         var   totalSamples = monitor.FilledCount;
 
         for (var i = 0; i < totalSamples; i++)
@@ -119,8 +120,12 @@ public class AutoDisplayNetworkLatency : ModuleBase
             validCount++;
         }
 
-        var average  = validCount   > 0 ? sum              / validCount : 0f;
-        var lossRate = totalSamples > 0 ? (float)lossCount / totalSamples : 0f;
+        var average = validCount > 0 ?
+                          sum / validCount :
+                          0f;
+        var lossRate = totalSamples > 0 ?
+                           (float)lossCount / totalSamples :
+                           0f;
         if (min == 9999f)
             min = 0f;
 
@@ -136,9 +141,9 @@ public class AutoDisplayNetworkLatency : ModuleBase
 
         ImGui.SameLine();
 
-        var addressText  = $"{monitor.ServerAddress}:{monitor.ServerPort}";
-        var addressSize  = ImGui.CalcTextSize(addressText);
-        var availableX   = ImGui.GetContentRegionAvail().X;
+        var addressText = $"{monitor.ServerAddress}:{monitor.ServerPort}";
+        var addressSize = ImGui.CalcTextSize(addressText);
+        var availableX  = ImGui.GetContentRegionAvail().X;
         if (availableX > addressSize.X)
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availableX - addressSize.X);
         ImGui.TextDisabled(addressText);
@@ -177,9 +182,9 @@ public class AutoDisplayNetworkLatency : ModuleBase
         {
             if (table)
             {
-                DrawStatColumn("AVG",  $"{average:F0}", GetPingColor(average));
-                DrawStatColumn("MIN",  $"{min:F0}",     GetPingColor(min));
-                DrawStatColumn("MAX",  $"{max:F0}",     GetPingColor(max));
+                DrawStatColumn("AVG", $"{average:F0}", GetPingColor(average));
+                DrawStatColumn("MIN", $"{min:F0}",     GetPingColor(min));
+                DrawStatColumn("MAX", $"{max:F0}",     GetPingColor(max));
 
                 var lossColor = lossRate switch
                 {
@@ -215,6 +220,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
             if (average <= 0) return;
 
             var averageColor = KnownColor.White.ToVector4() with { W = 0.6f };
+
             using (ImRaii.PushColor(ImPlotCol.Line, averageColor))
             {
                 var xs = new double[] { 0, monitor.History.Length };
@@ -225,16 +231,14 @@ public class AutoDisplayNetworkLatency : ModuleBase
 
         return;
 
-        static Vector4 GetPingColor(float ping)
-        {
-            return ping switch
+        static Vector4 GetPingColor(float ping) =>
+            ping switch
             {
                 < 0   => KnownColor.Gray.ToVector4(),
                 < 100 => KnownColor.SpringGreen.ToVector4(),
                 < 200 => KnownColor.Orange.ToVector4(),
                 _     => KnownColor.Red.ToVector4()
             };
-        }
 
         static void DrawStatColumn(string label, string value, Vector4 color)
         {
@@ -297,7 +301,6 @@ public class AutoDisplayNetworkLatency : ModuleBase
         }
         catch (OperationCanceledException) when (cancelSource.IsCancellationRequested)
         {
-            return;
         }
         catch (Exception ex)
         {
@@ -312,19 +315,28 @@ public class AutoDisplayNetworkLatency : ModuleBase
 
     private class ServerPingMonitor : IDisposable
     {
-        private const string TARGET_IP_QUERY_API = "http://ip-api.com/json/{0}?lang={1}";
+        private const string TARGET_IP_QUERY_API             = "http://ip-api.com/json/{0}?lang={1}";
+        private const int    TUN_DETECTION_THRESHOLD_MS      = 5;
+        private const int    TUN_DETECTION_CONSECUTIVE_COUNT = 5;
 
         private CancellationTokenSource? ipInfoCancelSource;
-        private ZoneEndpoint?           endpoint;
+        private ZoneEndpoint?            endpoint;
 
         public IPAddress              ServerAddress { get; private set; } = IPAddress.Loopback;
         public ushort                 ServerPort    { get; private set; }
         public IPLocationDTO?         AddressInfo   { get; private set; }
         public ISPTranslatorResponse? ISPInfo       { get; private set; }
         public long                   LastPing      { get; private set; } = -1;
-        public float[]                History       { get; } = new float[100];
+        public float[]                History       { get; }              = new float[100];
         public int                    HistoryIndex  { get; private set; }
         public int                    FilledCount   { get; private set; }
+
+        private bool bypassTun;
+        private int  consecutiveLowPings;
+        private bool bypassTunAttempted;
+
+        private static IPAddress? CachedPhysicalNicIP;
+        private static bool       PhysicalNicResolved;
 
         public void Dispose()
         {
@@ -338,21 +350,29 @@ public class AutoDisplayNetworkLatency : ModuleBase
             {
                 if (await UpdateServerEndpointAsync(cancellationToken))
                 {
+                    bypassTun           = false;
+                    consecutiveLowPings = 0;
+                    bypassTunAttempted  = false;
+
                     if (ServerPort != 0)
                         RefreshIPInfo(ServerAddress);
                     else
                         ResetAddressInfo();
                 }
 
-                LastPing = ServerPort == 0 ? -1 : await MeasureLatencyAsync(cancellationToken);
+                LastPing = ServerPort == 0 ?
+                               -1 :
+                               await MeasureLatencyAsync(cancellationToken);
             }
             catch (Exception)
             {
                 LastPing = -1;
             }
 
-            History[HistoryIndex] = LastPing == -1 ? 0 : LastPing;
-            HistoryIndex          = (HistoryIndex + 1) % History.Length;
+            History[HistoryIndex] = LastPing == -1 ?
+                                        0 :
+                                        LastPing;
+            HistoryIndex = (HistoryIndex + 1) % History.Length;
             if (FilledCount < History.Length) FilledCount++;
         }
 
@@ -387,8 +407,10 @@ public class AutoDisplayNetworkLatency : ModuleBase
             if (zoneClient == null)
                 return null;
 
-            var host       = zoneClient->Host.ToString();
-            return string.IsNullOrWhiteSpace(host) || zoneClient->Port == 0 ? null : new(host, zoneClient->Port);
+            var host = zoneClient->Host.ToString();
+            return string.IsNullOrWhiteSpace(host) || zoneClient->Port == 0 ?
+                       null :
+                       new(host, zoneClient->Port);
         }
 
         private static async Task<ZoneEndpoint?> GetZoneEndpointAsync(CancellationToken cancellationToken)
@@ -406,16 +428,39 @@ public class AutoDisplayNetworkLatency : ModuleBase
 
         private async Task<long> MeasureLatencyAsync(CancellationToken cancellationToken)
         {
-            using var socket = new Socket(ServerAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            using var socket        = new Socket(ServerAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(1));
+
+            if (bypassTun && TryGetPhysicalNicIP() is { } physicalIP)
+            {
+                try
+                {
+                    socket.Bind(new IPEndPoint(physicalIP, 0));
+                }
+                catch (SocketException)
+                {
+                    // ignored
+                }
+            }
 
             var timestamp = Stopwatch.GetTimestamp();
 
             try
             {
                 await socket.ConnectAsync(new IPEndPoint(ServerAddress, ServerPort), timeoutSource.Token);
-                return (long)Math.Round(Stopwatch.GetElapsedTime(timestamp).TotalMilliseconds);
+                var elapsed = (long)Math.Round(Stopwatch.GetElapsedTime(timestamp).TotalMilliseconds);
+
+                if (!bypassTun && !bypassTunAttempted && elapsed is > 0 and < TUN_DETECTION_THRESHOLD_MS)
+                {
+                    consecutiveLowPings++;
+                    if (consecutiveLowPings >= TUN_DETECTION_CONSECUTIVE_COUNT && TryGetPhysicalNicIP() != null)
+                        bypassTun = true;
+                }
+                else if (elapsed > TUN_DETECTION_THRESHOLD_MS * 4)
+                    bypassTunAttempted = true;
+
+                return elapsed;
             }
             catch (OperationCanceledException)
             {
@@ -452,15 +497,17 @@ public class AutoDisplayNetworkLatency : ModuleBase
                                       newInfo.InternetServiceProvider,
                                       cancellationToken: token
                                   );
-                        if (await RemoteISPTranslation.GetFreshAsync(newInfo.CityName, 
-                                                                     cancellationToken: token) is { } cityNameInfo)
+                        if (await RemoteISPTranslation.GetFreshAsync
+                            (
+                                newInfo.CityName,
+                                cancellationToken: token
+                            ) is { } cityNameInfo)
                             newInfo.CityName = cityNameInfo.Translated;
 
                         AddressInfo = newInfo;
                     }
                     catch (OperationCanceledException)
                     {
-                        return;
                     }
                     catch (Exception)
                     {
@@ -479,6 +526,69 @@ public class AutoDisplayNetworkLatency : ModuleBase
             ServerAddress = IPAddress.Loopback;
             ServerPort    = 0;
             return changed;
+        }
+
+        private static IPAddress? TryGetPhysicalNicIP()
+        {
+            if (PhysicalNicResolved)
+                return CachedPhysicalNicIP;
+
+            PhysicalNicResolved = true;
+
+            try
+            {
+                CachedPhysicalNicIP =
+                    NetworkInterface.GetAllNetworkInterfaces()
+                                    .Where(n => n.OperationalStatus == OperationalStatus.Up)
+                                    .Where
+                                    (n => n.NetworkInterfaceType is
+                                              NetworkInterfaceType.Ethernet or
+                                              NetworkInterfaceType.Wireless80211 or
+                                              NetworkInterfaceType.GigabitEthernet
+                                    )
+                                    .Where(n => !IsVirtualNic(n.Description) && !IsVirtualNic(n.Name))
+                                    .Select
+                                    (n => new
+                                        {
+                                            Nic        = n,
+                                            HasGateway = n.GetIPProperties().GatewayAddresses.Count > 0
+                                        }
+                                    )
+                                    .OrderByDescending(x => x.HasGateway)
+                                    .ThenByDescending(x => x.Nic.Speed)
+                                    .Select(x => x.Nic)
+                                    .FirstOrDefault()
+                                    ?.GetIPProperties()
+                                    .UnicastAddresses
+                                    .FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork)
+                                    ?.Address;
+            }
+            catch
+            {
+                // Best-effort
+            }
+
+            return CachedPhysicalNicIP;
+        }
+
+        private static bool IsVirtualNic(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            var lower = text.ToLowerInvariant();
+
+            return lower.Contains("tun")       ||
+                   lower.Contains("tap")       ||
+                   lower.Contains("vpn")       ||
+                   lower.Contains("virtual")   ||
+                   lower.Contains("hyper-v")   ||
+                   lower.Contains("wsl")       ||
+                   lower.Contains("docker")    ||
+                   lower.Contains("loopback")  ||
+                   lower.Contains("tunnel")    ||
+                   lower.Contains("pseudo")    ||
+                   lower.Contains("bluetooth") ||
+                   lower.Contains("wwan");
         }
 
         private void ResetAddressInfo()
