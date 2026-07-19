@@ -125,7 +125,6 @@ public class DungeonLoggerUploader : ModuleBase
 
         inDungeon   = true;
         dungeonName = GameState.ContentFinderConditionData.Name.ToString();
-        jobName     = LocalPlayerState.ClassJobData.Name.ToString();
 
         if (config.SendChat)
             NotifyHelper.Instance().Chat("已进入 “随机任务：指导者” 任务, 完成后将自动上传记录至网站");
@@ -136,6 +135,7 @@ public class DungeonLoggerUploader : ModuleBase
         if (!inDungeon) return;
 
         inDungeon = false;
+        jobName   = LocalPlayerState.ClassJobData.Name.ToString();
         Task.Run(UploadDungeonRecordAsync);
     }
 
