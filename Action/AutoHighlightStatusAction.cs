@@ -30,10 +30,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         Author      = ["HaKu"]
     };
 
-    private static readonly CompSig IsActionHighlightedSig = new("E8 ?? ?? ?? ?? 88 47 41 80 BB C9 00 00 00 01");
-    [return: MarshalAs(UnmanagedType.U1)]
-    private delegate bool IsActionHighlightedDelegate(ActionManager* actionManager, ActionType actionType, uint actionID);
-    private Hook<IsActionHighlightedDelegate>? IsActionHighlightedHook;
+    private Hook<ActionManager.Delegates.IsActionHighlighted>? IsActionHighlightedHook;
 
     private Config config = null!;
 
@@ -75,7 +72,12 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
 
         RebuildComboChains();
 
-        IsActionHighlightedHook = IsActionHighlightedSig.GetHook<IsActionHighlightedDelegate>(IsActionHighlightedDetour);
+        IsActionHighlightedHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(ActionManager.MemberFunctionPointers),
+            "IsActionHighlighted",
+            (ActionManager.Delegates.IsActionHighlighted)IsActionHighlightedDetour
+        );
         IsActionHighlightedHook.Enable();
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
