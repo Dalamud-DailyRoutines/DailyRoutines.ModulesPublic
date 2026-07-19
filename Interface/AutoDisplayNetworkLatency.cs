@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
-using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -278,7 +279,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                     continue;
                 }
 
-                await monitor.UpdateAsync();
+                await monitor.UpdateAsync(cancelSource.Token);
 
                 var currentPing     = monitor.LastPing;
                 var address         = monitor.ServerAddress;
@@ -336,8 +337,6 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         private const    int  TCP_TABLE_OWNER_PID_ALL   = 5;
         private const    int  MIB_TCP_STATE_ESTABLISHED = 5;
         private const    int  MIB_TCP_STATE_LISTEN      = 2;
-        private readonly Ping pingSender                = new();
-
         private unsafe byte* buffer;
         private        int   bufferSize;
 
@@ -372,8 +371,6 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
             ipInfoCancelSource?.Cancel();
             ipInfoCancelSource?.Dispose();
 
-            pingSender.Dispose();
-
             unsafe
             {
                 if (buffer != null)
@@ -392,7 +389,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         private void OnZoneChanged(uint u) =>
             Interlocked.Exchange(ref needToRefreshAddress, 1);
 
-        public async Task UpdateAsync()
+        public async Task UpdateAsync(CancellationToken cancellationToken)
         {
             try
             {
@@ -415,8 +412,7 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                     return;
                 }
 
-                var reply = await pingSender.SendPingAsync(ServerAddress, 1000);
-                LastPing = reply.Status == IPStatus.Success ? reply.RoundtripTime : -1;
+                LastPing = await MeasureLatencyAsync(cancellationToken);
 
                 History[HistoryIndex] = LastPing == -1 ? 0 : (float)LastPing;
                 HistoryIndex          = (HistoryIndex + 1) % History.Length;
@@ -428,6 +424,29 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                 History[HistoryIndex] = 0;
                 HistoryIndex          = (HistoryIndex + 1) % History.Length;
                 if (FilledCount < History.Length) FilledCount++;
+            }
+        }
+
+        private async Task<long> MeasureLatencyAsync(CancellationToken cancellationToken)
+        {
+            using var socket = new Socket(ServerAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutSource.CancelAfter(TimeSpan.FromSeconds(1));
+
+            var timestamp = Stopwatch.GetTimestamp();
+
+            try
+            {
+                await socket.ConnectAsync(new IPEndPoint(ServerAddress, ServerPort), timeoutSource.Token);
+                return (long)Math.Round(Stopwatch.GetElapsedTime(timestamp).TotalMilliseconds);
+            }
+            catch (OperationCanceledException)
+            {
+                return -1;
+            }
+            catch (SocketException)
+            {
+                return -1;
             }
         }
 
