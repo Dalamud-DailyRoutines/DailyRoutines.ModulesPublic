@@ -1,11 +1,8 @@
-using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -14,12 +11,15 @@ using DailyRoutines.RemoteInteraction.ISPTranslation;
 using DailyRoutines.RemoteInteraction.ISPTranslation.Models.Responses;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
+using FFXIVClientStructs.FFXIV.Application.Network;
 using Newtonsoft.Json;
+using OmenTools.Dalamud;
 using OmenTools.OmenService;
+using Framework = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
-public partial class AutoDisplayNetworkLatency : ModuleBase
+public class AutoDisplayNetworkLatency : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,15 +28,15 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         Category        = ModuleCategory.Interface,
         PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoDisplayNetworkLatency-UI.png"] // TODO: 修改仓库
     };
-    
+
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-    
+
     private Config config = null!;
 
     private          ServerPingMonitor?      monitor;
     private          IDtrBarEntry?           entry;
     private readonly CancellationTokenSource cancelSource = new();
-    
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -88,35 +88,35 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
     protected override unsafe void OverlayUI()
     {
         if (monitor == null) return;
-        
+
         if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
         {
             Overlay.IsOpen = false;
             return;
         }
 
-        float min          = 9999f, max = 0f, sum = 0f;
-        var   validCount   = 0;
-        var   lossCount    = 0;
+        float min        = 9999f, max = 0f, sum = 0f;
+        var   validCount = 0;
+        var   lossCount  = 0;
         var   totalSamples = monitor.FilledCount;
 
         for (var i = 0; i < totalSamples; i++)
         {
-            var val = monitor.History[i];
+            var value = monitor.History[i];
 
-            if (val <= 0.1f)
+            if (value <= 0.1f)
             {
                 lossCount++;
                 continue;
             }
 
-            if (val < min) min = val;
-            if (val > max) max = val;
-            sum += val;
+            if (value < min) min = value;
+            if (value > max) max = value;
+            sum += value;
             validCount++;
         }
 
-        var avg      = validCount   > 0 ? sum              / validCount : 0f;
+        var average  = validCount   > 0 ? sum              / validCount : 0f;
         var lossRate = totalSamples > 0 ? (float)lossCount / totalSamples : 0f;
         if (min == 9999f)
             min = 0f;
@@ -133,47 +133,34 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
 
         ImGui.SameLine();
 
-        if (monitor.ObservedServerPort != 0 && (!monitor.ObservedServerAddress.Equals(monitor.ServerAddress) || monitor.ObservedServerPort != monitor.ServerPort))
-        {
-            var observedText   = $"{monitor.ObservedServerAddress}:{monitor.ObservedServerPort} → {monitor.ServerAddress}:{monitor.ServerPort}";
-            var observedSize   = ImGui.CalcTextSize(observedText);
-            var observedAvailX = ImGui.GetContentRegionAvail().X;
-            if (observedAvailX > observedSize.X)
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + observedAvailX - observedSize.X);
-            ImGui.TextDisabled(observedText);
-        }
-        else
-        {
-            var ipText = $"{monitor.ServerAddress}:{monitor.ServerPort}";
-            var ipSize = ImGui.CalcTextSize(ipText);
-            var availX = ImGui.GetContentRegionAvail().X;
-            if (availX > ipSize.X)
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availX - ipSize.X);
-            ImGui.TextDisabled(ipText);
-        }
+        var addressText  = $"{monitor.ServerAddress}:{monitor.ServerPort}";
+        var addressSize  = ImGui.CalcTextSize(addressText);
+        var availableX   = ImGui.GetContentRegionAvail().X;
+        if (availableX > addressSize.X)
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availableX - addressSize.X);
+        ImGui.TextDisabled(addressText);
 
-        var ipRectMax = ImGui.GetItemRectMax();
+        var addressRectMax = ImGui.GetItemRectMax();
 
         if (monitor.AddressInfo is { } info)
         {
             using (FontManager.Instance().UIFont80.Push())
             {
-                var locText = $"{info.CountryName} - {info.CityName}";
+                var locationText = $"{info.CountryName} - {info.CityName}";
                 if (monitor.ISPInfo is { } ispInfo)
-                    locText += $" / {ispInfo.Translated}";
+                    locationText += $" / {ispInfo.Translated}";
 
-                if (!string.IsNullOrWhiteSpace(locText))
+                if (!string.IsNullOrWhiteSpace(locationText))
                 {
-                    var locSize = ImGui.CalcTextSize(locText);
+                    var locationSize = ImGui.CalcTextSize(locationText);
+                    var windowPos    = ImGui.GetWindowPos();
+                    var scrollY      = ImGui.GetScrollY();
+                    ImGui.SetCursorPosY(addressRectMax.Y - windowPos.Y + scrollY);
 
-                    var windowPos = ImGui.GetWindowPos();
-                    var scrollY   = ImGui.GetScrollY();
-                    ImGui.SetCursorPosY(ipRectMax.Y - windowPos.Y + scrollY);
-
-                    var locAvailX = ImGui.GetContentRegionAvail().X;
-                    if (locAvailX > locSize.X)
-                        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + locAvailX - locSize.X);
-                    ImGui.TextDisabled(locText);
+                    var locationAvailableX = ImGui.GetContentRegionAvail().X;
+                    if (locationAvailableX > locationSize.X)
+                        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + locationAvailableX - locationSize.X);
+                    ImGui.TextDisabled(locationText);
                 }
             }
         }
@@ -181,16 +168,15 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         ImGui.Spacing();
         ImGui.Spacing();
         ImGui.Spacing();
-
         ImGui.SameLine();
 
         using (var table = ImRaii.Table("##StatsTable", 4, ImGuiTableFlags.SizingStretchProp))
         {
             if (table)
             {
-                DrawStatColumn("AVG", $"{avg:F0}", GetPingColor(avg));
-                DrawStatColumn("MIN", $"{min:F0}", GetPingColor(min));
-                DrawStatColumn("MAX", $"{max:F0}", GetPingColor(max));
+                DrawStatColumn("AVG",  $"{average:F0}", GetPingColor(average));
+                DrawStatColumn("MIN",  $"{min:F0}",     GetPingColor(min));
+                DrawStatColumn("MAX",  $"{max:F0}",     GetPingColor(max));
 
                 var lossColor = lossRate switch
                 {
@@ -209,36 +195,30 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         using (ImRaii.PushStyle(ImPlotStyleVar.LineWeight, 2f))
         using (var plot = ImRaii.Plot("##LatencyPlot", new(-1), ImPlotFlags.CanvasOnly | ImPlotFlags.NoTitle))
         {
-            if (plot)
+            if (!plot) return;
+
+            const ImPlotAxisFlags AXIS_FLAGS = ImPlotAxisFlags.NoLabel | ImPlotAxisFlags.NoTickLabels;
+            ImPlot.SetupAxes((byte*)null, (byte*)null, AXIS_FLAGS, AXIS_FLAGS);
+
+            var yMax = MathF.Max(max * 1.25f, 100f);
+            ImPlot.SetupAxesLimits(0, monitor.History.Length, 0, yMax, ImPlotCond.Always);
+            ImPlot.SetupAxisTicks(ImAxis.X1, 0, monitor.History.Length, 51);
+            ImPlot.SetupAxisTicks(ImAxis.Y1, 0, yMax,                   21);
+
+            using (ImRaii.PushColor(ImPlotCol.Line, color)
+                         .Push(ImPlotCol.Fill, color))
+                ImPlot.PlotLine("##Ping", ref monitor.History[0], monitor.History.Length, 1.0, 0.0, ImPlotLineFlags.Shaded, monitor.HistoryIndex);
+
+            if (average <= 0) return;
+
+            var averageColor = KnownColor.White.ToVector4() with { W = 0.6f };
+            using (ImRaii.PushColor(ImPlotCol.Line, averageColor))
             {
-                const ImPlotAxisFlags AXIS_FLAGS = ImPlotAxisFlags.NoLabel | ImPlotAxisFlags.NoTickLabels;
-                ImPlot.SetupAxes((byte*)null, (byte*)null, AXIS_FLAGS, AXIS_FLAGS);
-
-                var yMax = MathF.Max(max * 1.25f, 100f);
-                ImPlot.SetupAxesLimits(0, monitor.History.Length, 0, yMax, ImPlotCond.Always);
-
-                ImPlot.SetupAxisTicks(ImAxis.X1, 0, monitor.History.Length, 51);
-                ImPlot.SetupAxisTicks(ImAxis.Y1, 0, yMax,                   21);
-
-                using (ImRaii.PushColor(ImPlotCol.Line, color)
-                             .Push(ImPlotCol.Fill, color))
-                    ImPlot.PlotLine("##Ping", ref monitor.History[0], monitor.History.Length, 1.0, 0.0, ImPlotLineFlags.Shaded, monitor.HistoryIndex);
-
-                if (avg > 0)
-                {
-                    var avgColor = KnownColor.White.ToVector4() with { W = 0.6f };
-
-                    using (ImRaii.PushColor(ImPlotCol.Line, avgColor))
-                    {
-                        var xs = new double[] { 0, monitor.History.Length };
-                        var ys = new double[] { avg, avg };
-                        ImPlot.PlotLine("##Avg", ref xs[0], ref ys[0], 2);
-                    }
-                }
+                var xs = new double[] { 0, monitor.History.Length };
+                var ys = new double[] { average, average };
+                ImPlot.PlotLine("##Avg", ref xs[0], ref ys[0], 2);
             }
         }
-
-        return;
 
         static Vector4 GetPingColor(float ping)
         {
@@ -256,7 +236,6 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
             ImGui.TableNextColumn();
             ImGui.Spacing();
             ImGui.TextDisabled(label);
-
             ImGui.SameLine(0, 8f * GlobalUIScale);
             using (FontManager.Instance().UIFont120.Push())
                 ImGui.TextColored(color, value);
@@ -281,11 +260,9 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
 
                 await monitor.UpdateAsync(cancelSource.Token);
 
-                var currentPing     = monitor.LastPing;
-                var address         = monitor.ServerAddress;
-                var port            = monitor.ServerPort;
-                var observedAddress = monitor.ObservedServerAddress;
-                var observedPort    = monitor.ObservedServerPort;
+                var currentPing = monitor.LastPing;
+                var address     = monitor.ServerAddress;
+                var port        = monitor.ServerPort;
 
                 await DService.Instance().Framework.RunOnTick
                 (() =>
@@ -300,12 +277,8 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                             lastPing   = currentPing;
                         }
 
-                        var tooltipText = observedPort != 0 && (!observedAddress.Equals(address) || observedPort != port)
-                                              ? $"{observedAddress}:{observedPort} -> {address}:{port}"
-                                              : $"{address}:{port}";
-
                         var builder = new SeStringBuilder().AddIcon(BitmapFontIcon.Meteor)
-                                                           .AddText(tooltipText);
+                                                           .AddText($"{address}:{port}");
 
                         if (monitor.AddressInfo is { } info)
                             builder.AddText($" ({info.CountryName} - {info.CityName})");
@@ -317,9 +290,13 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                 await Task.Delay(1_000, cancelSource.Token);
             }
         }
-        catch
+        catch (OperationCanceledException) when (cancelSource.IsCancellationRequested)
         {
-            // ignored
+            return;
+        }
+        catch (Exception ex)
+        {
+            DLog.Error("更新网络延迟时发生错误", ex);
         }
     }
 
@@ -328,103 +305,95 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
         public string Format = Lang.Get("AutoDisplayNetworkLatency-DefaultFormat");
     }
 
-    private partial class ServerPingMonitor : IDisposable
+    private class ServerPingMonitor : IDisposable
     {
         private const string TARGET_IP_QUERY_API = "http://ip-api.com/json/{0}?lang={1}";
 
-        private const    int  AF_INET                   = 2;
-        private const    int  AF_INET6                  = 23;
-        private const    int  TCP_TABLE_OWNER_PID_ALL   = 5;
-        private const    int  MIB_TCP_STATE_ESTABLISHED = 5;
-        private const    int  MIB_TCP_STATE_LISTEN      = 2;
-        private unsafe byte* buffer;
-        private        int   bufferSize;
-
         private CancellationTokenSource? ipInfoCancelSource;
+        private ZoneEndpoint?           endpoint;
 
-        private int needToRefreshAddress;
-
-        public ServerPingMonitor()
-        {
-            DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
-            GameState.Instance().Login                       += OnLogin;
-        }
-
-        public IPAddress              ServerAddress         { get; private set; } = IPAddress.Loopback;
-        public ushort                 ServerPort            { get; private set; }
-        public IPAddress              ObservedServerAddress { get; private set; } = IPAddress.Loopback;
-        public ushort                 ObservedServerPort    { get; private set; }
-        public IPLocationDTO?         AddressInfo           { get; private set; }
-        public ISPTranslatorResponse? ISPInfo               { get; private set; }
-        public long                   LastPing              { get; private set; } = -1;
-        public float[]                History               { get; private set; } = new float[100];
-        public int                    HistoryIndex          { get; private set; }
-        public int                    FilledCount           { get; private set; }
+        public IPAddress              ServerAddress { get; private set; } = IPAddress.Loopback;
+        public ushort                 ServerPort    { get; private set; }
+        public IPLocationDTO?         AddressInfo   { get; private set; }
+        public ISPTranslatorResponse? ISPInfo       { get; private set; }
+        public long                   LastPing      { get; private set; } = -1;
+        public float[]                History       { get; } = new float[100];
+        public int                    HistoryIndex  { get; private set; }
+        public int                    FilledCount   { get; private set; }
 
         public void Dispose()
         {
-            GameState.Instance().Login                       -= OnLogin;
-            DService.Instance().ClientState.TerritoryChanged -= OnZoneChanged;
-
-            Volatile.Write(ref needToRefreshAddress, 0);
-
             ipInfoCancelSource?.Cancel();
             ipInfoCancelSource?.Dispose();
-
-            unsafe
-            {
-                if (buffer != null)
-                {
-                    NativeMemory.Free(buffer);
-                    buffer = null;
-                }
-            }
-
-            GC.SuppressFinalize(this);
         }
-
-        private void OnLogin() =>
-            Interlocked.Exchange(ref needToRefreshAddress, 1);
-
-        private void OnZoneChanged(uint u) =>
-            Interlocked.Exchange(ref needToRefreshAddress, 1);
 
         public async Task UpdateAsync(CancellationToken cancellationToken)
         {
             try
             {
-                if (UpdateAddressInfo())
+                if (await UpdateServerEndpointAsync(cancellationToken))
                 {
-                    if (IsPublicAddress(ServerAddress))
+                    if (ServerPort != 0)
                         RefreshIPInfo(ServerAddress);
                     else
-                    {
-                        ipInfoCancelSource?.Cancel();
-                        AddressInfo = null;
-                        ISPInfo     = null;
-                    }
+                        ResetAddressInfo();
                 }
 
-                if (ServerAddress.Equals(IPAddress.Loopback))
-                {
-                    LastPing   = -1;
-                    ServerPort = 0;
-                    return;
-                }
-
-                LastPing = await MeasureLatencyAsync(cancellationToken);
-
-                History[HistoryIndex] = LastPing == -1 ? 0 : (float)LastPing;
-                HistoryIndex          = (HistoryIndex + 1) % History.Length;
-                if (FilledCount < History.Length) FilledCount++;
+                LastPing = ServerPort == 0 ? -1 : await MeasureLatencyAsync(cancellationToken);
             }
-            catch
+            catch (Exception)
             {
-                LastPing              = -1;
-                History[HistoryIndex] = 0;
-                HistoryIndex          = (HistoryIndex + 1) % History.Length;
-                if (FilledCount < History.Length) FilledCount++;
+                LastPing = -1;
             }
+
+            History[HistoryIndex] = LastPing == -1 ? 0 : LastPing;
+            HistoryIndex          = (HistoryIndex + 1) % History.Length;
+            if (FilledCount < History.Length) FilledCount++;
+        }
+
+        private async Task<bool> UpdateServerEndpointAsync(CancellationToken cancellationToken)
+        {
+            var nextEndpoint = await GetZoneEndpointAsync(cancellationToken);
+            if (nextEndpoint == null || !IPAddress.TryParse(nextEndpoint.Value.Host, out var nextAddress))
+                return ResetServerEndpoint();
+
+            if (endpoint == nextEndpoint)
+                return false;
+
+            var changed = !nextAddress.Equals(ServerAddress) || nextEndpoint.Value.Port != ServerPort;
+            endpoint      = nextEndpoint;
+            ServerAddress = nextAddress;
+            ServerPort    = nextEndpoint.Value.Port;
+            return changed;
+        }
+
+        // TODO: 等待 FFCS 合并把 ZoneClient 变成 public
+        private static unsafe ZoneEndpoint? GetZoneEndpoint()
+        {
+            var framework = Framework.Instance();
+            if (framework == null)
+                return null;
+
+            var networkModuleProxy = framework->GetNetworkModuleProxy();
+            if (networkModuleProxy == null || networkModuleProxy->NetworkModule == null)
+                return null;
+
+            var zoneClient = *(ZoneClient**)((byte*)networkModuleProxy->NetworkModule + 0xA70);
+            if (zoneClient == null)
+                return null;
+
+            var host       = zoneClient->Host.ToString();
+            return string.IsNullOrWhiteSpace(host) || zoneClient->Port == 0 ? null : new(host, zoneClient->Port);
+        }
+
+        private static async Task<ZoneEndpoint?> GetZoneEndpointAsync(CancellationToken cancellationToken)
+        {
+            ZoneEndpoint? endpoint = null;
+
+            await DService.Instance().Framework.RunOnTick
+            (() => endpoint = GetZoneEndpoint(), cancellationToken: cancellationToken);
+
+            return endpoint;
         }
 
         private async Task<long> MeasureLatencyAsync(CancellationToken cancellationToken)
@@ -452,12 +421,8 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
 
         private void RefreshIPInfo(IPAddress address)
         {
-            ipInfoCancelSource?.Cancel();
-            ipInfoCancelSource?.Dispose();
+            ResetAddressInfo();
             ipInfoCancelSource = new();
-
-            ISPInfo     = null;
-            AddressInfo = null;
 
             var token = ipInfoCancelSource.Token;
             Task.Run
@@ -471,20 +436,23 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
                         var response = await httpClient.GetStringAsync(string.Format(TARGET_IP_QUERY_API, address, CultureInfo.CurrentUICulture), token);
                         if (token.IsCancellationRequested) return;
 
-                        if (JsonConvert.DeserializeObject<IPLocationDTO>(response) is { } newInfo)
-                        {
-                            if (token.IsCancellationRequested) return;
+                        if (JsonConvert.DeserializeObject<IPLocationDTO>(response) is not { } newInfo) return;
+                        if (token.IsCancellationRequested) return;
 
-                            ISPInfo = await RemoteISPTranslation.GetFreshAsync(newInfo.InternetServiceProvider, cancellationToken: token);
-                            if (await RemoteISPTranslation.GetFreshAsync(newInfo.CityName, cancellationToken: token) is { } cityNameInfo)
-                                newInfo.CityName = cityNameInfo.Translated;
+                        ISPInfo = await RemoteISPTranslation.GetFreshAsync
+                                  (
+                                      newInfo.InternetServiceProvider,
+                                      cancellationToken: token
+                                  );
+                        if (await RemoteISPTranslation.GetFreshAsync(newInfo.CityName, 
+                                                                     cancellationToken: token) is { } cityNameInfo)
+                            newInfo.CityName = cityNameInfo.Translated;
 
-                            AddressInfo = newInfo;
-                        }
+                        AddressInfo = newInfo;
                     }
                     catch (OperationCanceledException)
                     {
-                        // ignored
+                        return;
                     }
                     catch (Exception)
                     {
@@ -496,478 +464,40 @@ public partial class AutoDisplayNetworkLatency : ModuleBase
             );
         }
 
-        private bool UpdateAddressInfo()
+        private bool ResetServerEndpoint()
         {
-            try
-            {
-                var shouldRefresh =
-                    Volatile.Read(ref needToRefreshAddress) != 0 || ServerPort == 0 || IPAddress.IsLoopback(ServerAddress);
-
-                if (!shouldRefresh)
-                    return false;
-
-                ResetAddress();
-
-                var currentPID = (uint)Environment.ProcessId;
-
-                if (!TryFindBestEndpointForPID(currentPID, out var observed))
-                {
-                    ResetAddress();
-                    return false;
-                }
-
-                ObservedServerAddress = observed.Address;
-                ObservedServerPort    = observed.Port;
-
-                var effective = observed;
-
-                if (IPAddress.IsLoopback(observed.Address) && TryFindProxyPidByListenPort(observed.Port, out var proxyPid))
-                {
-                    if (TryFindBestEndpointForPID(proxyPid, out var proxyEndpoint) && !IPAddress.IsLoopback(proxyEndpoint.Address))
-                        effective = proxyEndpoint;
-                }
-
-                var changed = !effective.Address.Equals(ServerAddress) || effective.Port != ServerPort;
-                ServerAddress = effective.Address;
-                ServerPort    = effective.Port;
-
-                Volatile.Write(ref needToRefreshAddress, 0);
-                return changed;
-            }
-            catch
-            {
-                ResetAddress();
-            }
-
-            return false;
+            var changed = !ServerAddress.Equals(IPAddress.Loopback) || ServerPort != 0;
+            endpoint      = null;
+            ServerAddress = IPAddress.Loopback;
+            ServerPort    = 0;
+            return changed;
         }
 
-        private void ResetAddress()
+        private void ResetAddressInfo()
         {
-            ObservedServerAddress = IPAddress.Loopback;
-            ObservedServerPort    = 0;
-
-            if (!ServerAddress.Equals(IPAddress.Loopback))
-                ServerAddress = IPAddress.Loopback;
-            ServerPort = 0;
+            ipInfoCancelSource?.Cancel();
+            ipInfoCancelSource?.Dispose();
+            ipInfoCancelSource = null;
+            AddressInfo        = null;
+            ISPInfo            = null;
         }
 
-        private static bool InXIVPortRange(ushort port) =>
-            port is >= 54992 and <= 54994
-                or >= 55006 and <= 55007
-                or >= 55021 and <= 55040
-                or >= 55296 and <= 55551;
-
-        private static bool IsFilteredPort(ushort port) =>
-            port is 80 or 443;
-
-        private bool TryFindBestEndpointForPID(uint pid, out ConnectionEndpoint endpoint)
-        {
-            if (TryFindBestEndpointForPID(pid, true, out endpoint))
-                return true;
-
-            if (TryFindBestEndpointForPID(pid, false, out endpoint))
-                return true;
-
-            endpoint = default;
-            return false;
-        }
-
-        private bool TryFindBestEndpointForPID(uint pid, bool onlyXivPorts, out ConnectionEndpoint endpoint)
-        {
-            endpoint = default;
-            var found = false;
-
-            TryScanTCPTableForPID(pid, AF_INET,  onlyXivPorts, ref endpoint, ref found);
-            TryScanTCPTableForPID(pid, AF_INET6, onlyXivPorts, ref endpoint, ref found);
-
-            return found;
-        }
-
-        private unsafe void TryScanTCPTableForPID(uint pid, int ipVersion, bool onlyXivPorts, ref ConnectionEndpoint best, ref bool found)
-        {
-            var requiredSize = 0;
-            GetExtendedTCPTable(nint.Zero, ref requiredSize, false, ipVersion, TCP_TABLE_OWNER_PID_ALL);
-            if (requiredSize <= 0)
-                return;
-
-            if (bufferSize < requiredSize)
-            {
-                if (buffer != null) NativeMemory.Free(buffer);
-                bufferSize = requiredSize;
-                buffer     = (byte*)NativeMemory.Alloc((nuint)bufferSize);
-            }
-
-            if (GetExtendedTCPTable((nint)buffer, ref requiredSize, false, ipVersion, TCP_TABLE_OWNER_PID_ALL) != 0)
-                return;
-
-            var numEntries = Unsafe.Read<int>(buffer);
-
-            switch (ipVersion)
-            {
-                case AF_INET:
-                {
-                    var rowPtr = (TCPRow*)(buffer + sizeof(int));
-
-                    for (var i = 0; i < numEntries; i++)
-                    {
-                        ref readonly var row = ref rowPtr[i];
-                        if (row.OwningPID != pid || row.State != MIB_TCP_STATE_ESTABLISHED)
-                            continue;
-
-                        var port = BinaryPrimitives.ReverseEndianness((ushort)row.RemotePort);
-                        if (IsFilteredPort(port))
-                            continue;
-                        if (onlyXivPorts && !InXIVPortRange(port))
-                            continue;
-
-                        var remoteAddress = row.RemoteAddress;
-                        if (remoteAddress == 0)
-                            continue;
-
-                        var inXivRange       = InXIVPortRange(port);
-                        var isLoopback       = remoteAddress == 0x0100007F;
-                        var isPrivateOrLocal = IsPrivateOrLocalAddressIPv4(remoteAddress);
-                        var score            = ScoreEndpoint(isLoopback, isPrivateOrLocal, port, inXivRange);
-
-                        if (!found || score > best.Score)
-                        {
-                            best  = new ConnectionEndpoint(new IPAddress(remoteAddress), port, score);
-                            found = true;
-                        }
-                    }
-
-                    return;
-                }
-                case AF_INET6:
-                {
-                    var        rowPtr       = (TCP6Row*)(buffer + sizeof(int));
-                    Span<byte> addressBytes = stackalloc byte[16];
-
-                    for (var i = 0; i < numEntries; i++)
-                    {
-                        ref readonly var row = ref rowPtr[i];
-                        if (row.OwningPID != pid || row.State != MIB_TCP_STATE_ESTABLISHED)
-                            continue;
-
-                        var port = BinaryPrimitives.ReverseEndianness((ushort)row.RemotePort);
-                        if (IsFilteredPort(port))
-                            continue;
-                        if (onlyXivPorts && !InXIVPortRange(port))
-                            continue;
-
-                        var isUnspecified = true;
-                        for (var j = 0; j < 16; j++)
-                            isUnspecified &= row.RemoteAddress[j] == 0;
-                        if (isUnspecified)
-                            continue;
-
-                        var isLoopback = true;
-                        for (var j = 0; j < 16; j++)
-                            isLoopback &= j == 15 ? row.RemoteAddress[j] == 1 : row.RemoteAddress[j] == 0;
-
-                        var inXivRange = InXIVPortRange(port);
-
-                        fixed (byte* ptr = row.RemoteAddress)
-                        {
-                            var isPrivateOrLocal = IsPrivateOrLocalAddressIPv6(ptr);
-                            var score            = ScoreEndpoint(isLoopback, isPrivateOrLocal, port, inXivRange);
-
-                            if (!found || score > best.Score)
-                            {
-                                for (var j = 0; j < 16; j++)
-                                    addressBytes[j] = row.RemoteAddress[j];
-
-                                best  = new ConnectionEndpoint(new IPAddress(addressBytes), port, score);
-                                found = true;
-                            }
-                        }
-                    }
-
-                    break;
-                }
-            }
-
-        }
-
-        private static int ScoreEndpoint(bool isLoopback, bool isPrivateOrLocal, ushort port, bool inXivRange)
-        {
-            var score = 0;
-
-            if (inXivRange) score += 100;
-            score += isLoopback ? -200 : 40;
-            score += isPrivateOrLocal ? -30 : 20;
-
-            score += port switch
-            {
-                443 or 80 => 10,
-                _         => 0
-            };
-
-            return score;
-        }
-
-        private bool TryFindProxyPidByListenPort(ushort listenPort, out uint proxyPid)
-        {
-            proxyPid = 0;
-
-            if (TryFindProxyPIDByListenPortForIPVersion(listenPort, AF_INET, out proxyPid))
-                return true;
-
-            if (TryFindProxyPIDByListenPortForIPVersion(listenPort, AF_INET6, out proxyPid))
-                return true;
-
-            return false;
-        }
-
-        private unsafe bool TryFindProxyPIDByListenPortForIPVersion(ushort listenPort, int ipVersion, out uint proxyPid)
-        {
-            proxyPid = 0;
-
-            var requiredSize = 0;
-            GetExtendedTCPTable(nint.Zero, ref requiredSize, false, ipVersion, TCP_TABLE_OWNER_PID_ALL);
-            if (requiredSize <= 0)
-                return false;
-
-            if (bufferSize < requiredSize)
-            {
-                if (buffer != null) NativeMemory.Free(buffer);
-                bufferSize = requiredSize;
-                buffer     = (byte*)NativeMemory.Alloc((nuint)bufferSize);
-            }
-
-            if (GetExtendedTCPTable((nint)buffer, ref requiredSize, false, ipVersion, TCP_TABLE_OWNER_PID_ALL) != 0)
-                return false;
-
-            var numEntries = Unsafe.Read<int>(buffer);
-
-            switch (ipVersion)
-            {
-                case AF_INET:
-                {
-                    var rowPtr = (TCPRow*)(buffer + sizeof(int));
-
-                    for (var i = 0; i < numEntries; i++)
-                    {
-                        ref readonly var row = ref rowPtr[i];
-                        if (row.State != MIB_TCP_STATE_LISTEN)
-                            continue;
-
-                        var port = BinaryPrimitives.ReverseEndianness((ushort)row.LocalPort);
-                        if (port != listenPort)
-                            continue;
-
-                        if (row.LocalAddress != 0 && row.LocalAddress != 0x0100007F)
-                            continue;
-
-                        proxyPid = row.OwningPID;
-                        return true;
-                    }
-
-                    break;
-                }
-                case AF_INET6:
-                {
-                    var rowPtr = (TCP6Row*)(buffer + sizeof(int));
-
-                    for (var i = 0; i < numEntries; i++)
-                    {
-                        ref readonly var row = ref rowPtr[i];
-                        if (row.State != MIB_TCP_STATE_LISTEN)
-                            continue;
-
-                        var port = BinaryPrimitives.ReverseEndianness((ushort)row.LocalPort);
-                        if (port != listenPort)
-                            continue;
-
-                        var isUnspecified = true;
-                        var isLoopback    = true;
-
-                        for (var j = 0; j < 16; j++)
-                        {
-                            var b = row.LocalAddress[j];
-                            isUnspecified &= b == 0;
-                            isLoopback    &= j == 15 ? b == 1 : b == 0;
-                        }
-
-                        if (!isUnspecified && !isLoopback)
-                            continue;
-
-                        proxyPid = row.OwningPID;
-                        return true;
-                    }
-
-                    break;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool IsPublicAddress(IPAddress address)
-        {
-            if (IPAddress.IsLoopback(address))
-                return false;
-
-            Span<byte> bytes = stackalloc byte[16];
-            if (!address.TryWriteBytes(bytes, out var written))
-                return false;
-
-            return written switch
-            {
-                4  => !IsPrivateOrLocalAddressIPv4(bytes[0], bytes[1]),
-                16 => !IsPrivateOrLocalAddressIPv6(bytes),
-                _  => false
-            };
-        }
-
-        private static bool IsPrivateOrLocalAddressIPv4(uint addressValue)
-        {
-            var b0 = (byte)addressValue;
-            var b1 = (byte)(addressValue >> 8);
-
-            return IsPrivateOrLocalAddressIPv4(b0, b1);
-        }
-
-        private static bool IsPrivateOrLocalAddressIPv4(byte first, byte second)
-        {
-            switch (first)
-            {
-                case 10:
-                case 100 when second is >= 64 and <= 127:
-                case 172 when second is >= 16 and <= 31:
-                case 192 when second == 168:
-                case 169 when second == 254:
-                case 0:
-                case 127:
-                case >= 224:
-                    return true;
-                default:
-                    return false;
-            }
-
-        }
-
-        private static bool IsPrivateOrLocalAddressIPv6(ReadOnlySpan<byte> address)
-        {
-            if (address.Length < 16)
-                return true;
-
-            switch (address[0])
-            {
-                case 0xFF:
-                case 0xFE when (address[1] & 0xC0) == 0x80:
-                    return true;
-            }
-
-            if ((address[0] & 0xFE) == 0xFC)
-                return true;
-
-            var allZero = true;
-            for (var i = 0; i < 16; i++)
-                allZero &= address[i] == 0;
-
-            if (allZero)
-                return true;
-
-            var isLoopback = true;
-            for (var i = 0; i < 16; i++)
-                isLoopback &= i == 15 ? address[i] == 1 : address[i] == 0;
-
-            return isLoopback;
-        }
-
-        private static unsafe bool IsPrivateOrLocalAddressIPv6(byte* address) =>
-            IsPrivateOrLocalAddressIPv6(new ReadOnlySpan<byte>(address, 16));
-
-        [LibraryImport("Iphlpapi.dll", EntryPoint = "GetExtendedTcpTable", SetLastError = true)]
-        private static partial uint GetExtendedTCPTable
+        private readonly record struct ZoneEndpoint
         (
-            nint                                 pTcpTable,
-            ref                             int  dwOutBufLen,
-            [MarshalAs(UnmanagedType.Bool)] bool sort,
-            int                                  ipVersion,
-            int                                  tblClass,
-            uint                                 reserved = 0
+            string Host,
+            ushort Port
         );
-
-        ~ServerPingMonitor() =>
-            Dispose();
-
-        private readonly record struct ConnectionEndpoint
-        (
-            IPAddress Address,
-            ushort    Port,
-            int       Score
-        );
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct TCPRow
-        {
-            public uint State;
-            public uint LocalAddress;
-            public uint LocalPort;
-            public uint RemoteAddress;
-            public uint RemotePort;
-            public uint OwningPID;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private unsafe struct TCP6Row
-        {
-            public fixed byte LocalAddress[16];
-            public       uint LocalScopeID;
-            public       uint LocalPort;
-            public fixed byte RemoteAddress[16];
-            public       uint RemoteScopeID;
-            public       uint RemotePort;
-            public       uint State;
-            public       uint OwningPID;
-        }
     }
 
     private class IPLocationDTO
     {
-        [JsonProperty("status")]
-        public string? Status { get; set; }
-
         [JsonProperty("country")]
         public string? CountryName { get; set; }
-
-        [JsonProperty("countryCode")]
-        public string? CountryCode { get; set; }
-
-        [JsonProperty("region")]
-        public string? RegionCode { get; set; }
-
-        [JsonProperty("regionName")]
-        public string? RegionName { get; set; }
 
         [JsonProperty("city")]
         public string? CityName { get; set; }
 
-        [JsonProperty("zip")]
-        public string? ZipCode { get; set; }
-
-        [JsonProperty("lat")]
-        public double? Latitude { get; set; }
-
-        [JsonProperty("lon")]
-        public double? Longitude { get; set; }
-
-        [JsonProperty("timezone")]
-        public string? TimeZone { get; set; }
-
         [JsonProperty("isp")]
         public string? InternetServiceProvider { get; set; }
-
-        [JsonProperty("org")]
-        public string? Organization { get; set; }
-
-        [JsonProperty("as")]
-        public string? AutonomousSystem { get; set; }
-
-        [JsonProperty("query")]
-        public string? IPAddress { get; set; }
     }
 }
