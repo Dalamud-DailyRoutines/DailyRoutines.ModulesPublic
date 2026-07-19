@@ -24,7 +24,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-// TODO: 等待 FFCS 的 InfoProxyContentMember 合并
+// TODO: 用 PlayerSearch 做野外的
 public unsafe class AutoCountPlayers : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -36,8 +36,7 @@ public unsafe class AutoCountPlayers : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private delegate void InfoProxy24EndRequestDelegate(InfoProxy24* instance);
-    private Hook<InfoProxy24EndRequestDelegate> InfoProxy24EndRequestHook;
+    private Hook<InfoProxyContentMember.Delegates.EndRequest>? InfoProxyContentMemberEndRequestHook;
 
     private Config        config = null!;
     private IDtrBarEntry? entry;
@@ -65,13 +64,13 @@ public unsafe class AutoCountPlayers : ModuleBase
         PlayersManager.Instance().ReceivePlayersAround      += OnReceivePlayers;
         PlayersManager.Instance().ReceivePlayersTargetingMe += OnPlayersTargetingMeUpdate;
 
-        var instance = (InfoProxy24*)InfoModule.Instance()->GetInfoProxyById((InfoProxyId)24);
-        InfoProxy24EndRequestHook ??= instance->VirtualTable->HookVFuncFromName
+        var instance = InfoProxyContentMember.Instance();
+        InfoProxyContentMemberEndRequestHook = instance->VirtualTable->HookVFuncFromName
         (
             "EndRequest",
-            (InfoProxy24EndRequestDelegate)InfoProxy24EndRequestDetour
+            (InfoProxyContentMember.Delegates.EndRequest)InfoProxy24EndRequestDetour
         );
-        InfoProxy24EndRequestHook.Enable();
+        InfoProxyContentMemberEndRequestHook.Enable();
 
         DService.Instance().ClientState.TerritoryChanged += OnZoneChanged;
         FrameworkManager.Instance().Reg(OnUpdate, 10_000);
@@ -333,8 +332,7 @@ public unsafe class AutoCountPlayers : ModuleBase
             return;
         }
 
-        var proxy = (InfoProxy24*)InfoModule.Instance()->GetInfoProxyById((InfoProxyId)24);
-        if (proxy == null) return;
+        if (InfoProxyContentMember.Instance() == null) return;
 
         AgentId.ContentMemberList.SendEvent(0, 1);
     }
@@ -365,7 +363,7 @@ public unsafe class AutoCountPlayers : ModuleBase
             entry.Text.Append
             (
                 $" / {Lang.Get("AutoCountPlayers-PlayersZoneCount")}: " +
-                $"{((InfoProxy24*)InfoModule.Instance()->GetInfoProxyById((InfoProxyId)24))->EntryCount}"
+                $"{InfoProxyContentMember.Instance()->EntryCount}"
             );
         }
 
@@ -501,9 +499,9 @@ public unsafe class AutoCountPlayers : ModuleBase
         }
     }
 
-    private void InfoProxy24EndRequestDetour(InfoProxy24* proxy)
+    private void InfoProxy24EndRequestDetour(InfoProxyContentMember* proxy)
     {
-        InfoProxy24EndRequestHook.Original(proxy);
+        InfoProxyContentMemberEndRequestHook.Original(proxy);
         OnReceivePlayers(PlayersManager.Instance().PlayersAround);
     }
 

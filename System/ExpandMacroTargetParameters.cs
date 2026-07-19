@@ -390,9 +390,9 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
 
     // 真龙波和魔弹射手
     private static bool CanUseActionOnEnemy(GameObject* target) =>
-        target->GetIsTargetable()             &&
-        target->IsReadyToDraw()               &&
-        target->YalmDistanceFromPlayerZ <= 45 &&
+        target->GetIsTargetable()  &&
+        target->IsReadyToDraw()    &&
+        target->NextDistance <= 45 &&
         (ActionManager.CanUseActionOnTarget(7428, target) || ActionManager.CanUseActionOnTarget(29415, target));
 
     #region 常量

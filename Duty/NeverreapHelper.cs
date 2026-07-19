@@ -119,11 +119,10 @@ public unsafe class NeverreapHelper : ModuleBase
         return;
 
         static bool FindNPC(BattleChara* chara) =>
-            chara                          != null                &&
-            chara->ObjectKind              == ObjectKind.EventNpc &&
-            chara->BaseId                  == STONE_NPC_DATA_ID   &&
-            chara->YalmDistanceFromPlayerX <= 4                   &&
-            chara->YalmDistanceFromPlayerZ <= 4;
+            chara               != null                &&
+            chara->ObjectKind   == ObjectKind.EventNpc &&
+            chara->BaseId       == STONE_NPC_DATA_ID   &&
+            chara->NextDistance <= 4;
     }
 
     #region

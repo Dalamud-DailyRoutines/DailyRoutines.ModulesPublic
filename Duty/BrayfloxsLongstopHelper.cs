@@ -66,10 +66,9 @@ public unsafe class BrayfloxsLongstopHelper : ModuleBase
         return;
 
         static bool FindNPC(BattleChara* chara) =>
-            chara                          != null                &&
-            chara->ObjectKind              == ObjectKind.EventNpc &&
-            chara->BaseId                  == 1004346             &&
-            chara->YalmDistanceFromPlayerX <= 4                   &&
-            chara->YalmDistanceFromPlayerZ <= 4;
+            chara               != null                &&
+            chara->ObjectKind   == ObjectKind.EventNpc &&
+            chara->BaseId       == 1004346             &&
+            chara->NextDistance <= 4;
     }
 }

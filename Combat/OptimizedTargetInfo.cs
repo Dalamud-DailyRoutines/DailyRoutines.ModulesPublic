@@ -681,7 +681,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
             case AddonEvent.PostRequestedUpdate:
                 if (CastBarEnemy == null) return;
 
-                var addon = (AddonCastBarEnemy*)CastBarEnemy;
+                // TODO: 得等过时的被删除才能删掉完全限定
+                var addon = (FFXIVClientStructs.FFXIV.Client.UI.AddonCastBarEnemy*)CastBarEnemy;
 
                 var maxCount     = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.CastBarEnemy)->IntArray[1];
                 var currentCount = 0;
