@@ -21,7 +21,7 @@ namespace DailyRoutines.ModulesPublic.Duty;
 
 public partial class OccultCrescentHelper
 {
-    private unsafe class TreasureManager
+    private class TreasureManager
     (
         OccultCrescentHelper mainModule
     ) : BaseIslandModule(mainModule)
@@ -176,11 +176,23 @@ public partial class OccultCrescentHelper
                             new(textSize.X * 2, ImGui.GetTextLineHeightWithSpacing())
                         ))
                     {
-                        treasureTaskHelper.Enqueue
-                        (() =>
+                        treasureTaskHelper.EnqueueAsync
+                        (async ct =>
                             {
-                                PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
-                                MovementManager.Instance().TPSmooth(originalPosition, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, -20);
+                                unsafe
+                                {
+                                    PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
+                                }
+                                
+                                await MovementManager.Instance().TPSmoothAsync
+                                (
+                                    originalPosition,
+                                    ICondition.Instance()[ConditionFlag.Mounted] ?
+                                        24 :
+                                        12,
+                                    -20,
+                                    ct
+                                );
 
                                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
@@ -188,7 +200,10 @@ public partial class OccultCrescentHelper
 
                                 OnUpdate();
 
-                                PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = false;
+                                unsafe
+                                {
+                                    PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = false;
+                                }
                                 return true;
                             }
                         );
@@ -199,30 +214,44 @@ public partial class OccultCrescentHelper
 
                 foreach (var treasure in treasureObjects)
                 {
-                    var treasureObject = (GameObject*)treasure;
-                    if (treasureObject == null) continue;
+                    var treasureObject = IGameObject.Create(treasure);
 
                     if (ImGui.Button
                         (
-                            $"{LuminaWrapper.GetAddonText(395)} [{treasureObject->Position.X:F1}, {treasureObject->Position.Y:F1}, {treasureObject->Position.Z:F1}]",
+                            $"{LuminaWrapper.GetAddonText(395)} [{treasureObject.Position.X:F1}, {treasureObject.Position.Y:F1}, {treasureObject.Position.Z:F1}]",
                             new(textSize.X * 2, ImGui.GetTextLineHeightWithSpacing())
                         ))
                     {
                         originalPosition = LocalPlayerState.Object.Position;
 
-                        treasureTaskHelper.Enqueue
-                        (() =>
+                        treasureTaskHelper.EnqueueAsync
+                        (async ct =>
                             {
-                                PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
-                                MovementManager.Instance().TPSmooth(treasureObject->Position, DService.Instance().Condition[ConditionFlag.Mounted] ? 24 : 12, -20);
-
+                                unsafe
+                                {
+                                    PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
+                                }
+                                
+                                await MovementManager.Instance().TPSmoothAsync
+                                (
+                                    treasureObject.Position,
+                                    ICondition.Instance()[ConditionFlag.Mounted] ?
+                                        24 :
+                                        12,
+                                    -20,
+                                    ct
+                                );
+                                
                                 if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check")) return false;
 
-                                if (LocalPlayerState.DistanceTo2D(treasureObject->Position.ToVector2()) >= 3) return false;
+                                if (LocalPlayerState.DistanceTo2D(treasureObject.Position.ToVector2()) >= 3) return false;
 
                                 OnUpdate();
 
-                                PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = false;
+                                unsafe
+                                {
+                                    PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = false;
+                                }
                                 return true;
                             }
                         );
@@ -272,7 +301,7 @@ public partial class OccultCrescentHelper
             isPrevented = true;
         }
 
-        private void OnZoneChanged(uint u)
+        private unsafe void OnZoneChanged(uint u)
         {
             currentRoute.Clear();
             queuedGatheringList.Clear();
@@ -370,7 +399,7 @@ public partial class OccultCrescentHelper
             MoveToNextTreasurePoint();
         }
 
-        private void StopAutoTreasureHunt()
+        private unsafe void StopAutoTreasureHunt()
         {
             treasureTaskHelper.Abort();
             queuedGatheringList.Clear();
@@ -379,7 +408,7 @@ public partial class OccultCrescentHelper
             PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = false;
         }
 
-        private void MoveToNextTreasurePoint()
+        private unsafe void MoveToNextTreasurePoint()
         {
             treasureTaskHelper.Abort();
 
@@ -511,7 +540,7 @@ public partial class OccultCrescentHelper
         }
 
         // 自动开箱
-        private void HandleAutoOpenTreasures()
+        private unsafe void HandleAutoOpenTreasures()
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
                 !MainModule.config.IsEnabledAutoOpenTreasure                          ||
@@ -549,7 +578,7 @@ public partial class OccultCrescentHelper
         }
 
         // 更新特殊物体数据
-        private void RefreshSpecialObjectsAround()
+        private unsafe void RefreshSpecialObjectsAround()
         {
             if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
 
@@ -622,7 +651,7 @@ public partial class OccultCrescentHelper
             carrotPositions      = carrots;
         }
 
-        private static void InteractWithTreasure(Treasure* treasure)
+        private static unsafe void InteractWithTreasure(Treasure* treasure)
         {
             if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
