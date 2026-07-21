@@ -264,10 +264,9 @@ public unsafe partial class AutoShowItemNPCShopInfo
             var exchangeTargetItem = LuminaGetter.GetRowOrDefault<Item>(exchangeItem.ItemID);
 
             slot.ItemTooltipOverlay.ItemTooltip = exchangeItem.ItemID;
-            slot.ItemIcon.IconId               = LuminaWrapper.GetItemIconID(exchangeItem.ItemID);
-            slot.ItemName.String               = exchangeItem.GetItemName();
-            slot.ItemName.FontSize             = 16;
-            slot.ItemName.AutoAdjustTextSize();
+            slot.ItemIcon.IconId                = LuminaWrapper.GetItemIconID(exchangeItem.ItemID);
+            slot.ItemName.String                = exchangeItem.GetItemName();
+            slot.ItemName.FontSize              = 16;
 
             slot.MarketButton.IsVisible = exchangeTargetItem.ItemSearchCategory.RowId > 0;
             slot.MarketButton.OnClick   = () => OpenMarket(exchangeItem.ItemID);
@@ -403,9 +402,8 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.ItemName = new TextNode
             {
-                TextFlags        = TextFlags.Edge,
+                TextFlags        = TextFlags.Edge | TextFlags.Ellipsis,
                 AlignmentType    = AlignmentType.Left,
-                String           = "",
                 FontSize         = 16,
                 Size             = new(contentWidth - 32 - 6 - 38, 32),
                 Position         = new(0, 2),
@@ -541,7 +539,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.NPCNameNode = new TextNode
             {
-                String    = "",
+                TextFlags = TextFlags.Ellipsis,
                 Position  = new(0, 4),
                 Size      = new(NPC_COL_WIDTH, 28f),
                 FontSize  = 14,
@@ -572,7 +570,6 @@ public unsafe partial class AutoShowItemNPCShopInfo
         {
             row.NPCNameNode.String   = GetExchangeNPCDisplayText(npcInfo);
             row.NPCNameNode.FontSize = 14;
-            row.NPCNameNode.AutoAdjustTextSize();
 
             row.MapButton.OnClick = () => OpenMap(npcInfo.Location, npcInfo.Name);
 
