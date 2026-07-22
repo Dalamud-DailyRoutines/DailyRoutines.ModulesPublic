@@ -20,6 +20,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
+// TODO: 用 FFCS 的 Achievement 里的 RequestFateProgressTab
 public class BetterFateProgressUI : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
