@@ -12,12 +12,12 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoHummer : ModuleBase
+public class AutoUFOCatcher : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("AutoHummerTitle"),
-        Description = Lang.Get("AutoHummerDescription"),
+        Title       = Lang.Get("AutoUFOCatcherTitle"),
+        Description = Lang.Get("AutoUFOCatcherDescription"),
         Category    = ModuleCategory.GoldSaucer
     };
 
@@ -25,14 +25,14 @@ public class AutoHummer : ModuleBase
     {
         TaskHelper = new();
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "Hummer", OnAddonSetup);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "UfoCatcher", OnAddonSetup);
     }
 
     protected override unsafe void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddonSetup);
 
-        if (Hummer->IsAddonAndNodesReady())
+        if (UFOCatcher->IsAddonAndNodesReady())
             SendRoundEnd();
     }
 
@@ -73,7 +73,7 @@ public class AutoHummer : ModuleBase
         TaskHelper.Enqueue
         (() =>
             {
-                UpdateSelectStringInfo(Lang.Get("AutoHummer-StartingRound"));
+                UpdateSelectStringInfo(Lang.Get("AutoUFOCatcher-StartingRound"));
 
                 currentMGP = InventoryManager.Instance()->GetInventoryItemCount(29);
                 SendNewRound();
@@ -84,7 +84,7 @@ public class AutoHummer : ModuleBase
         TaskHelper.Enqueue
         (() =>
             {
-                UpdateSelectStringInfo($"{Lang.Get("AutoHummer-WaitingForResult")}......");
+                UpdateSelectStringInfo($"{Lang.Get("AutoUFOCatcher-WaitingForResult")}......");
                 SendPlayGame();
             }
         );
@@ -95,7 +95,7 @@ public class AutoHummer : ModuleBase
     }
 
     private static unsafe bool WaitSelectStringAddon() =>
-        SelectString->IsAddonAndNodesReady() && Hummer->IsAddonAndNodesReady();
+        SelectString->IsAddonAndNodesReady() && UFOCatcher->IsAddonAndNodesReady();
 
     private static void SendInteractWithMachine() =>
         new EventStartPackt(LocalPlayerState.EntityID, EVENT_ID).Send();
@@ -112,7 +112,7 @@ public class AutoHummer : ModuleBase
     private static unsafe void UpdateSelectStringInfo(string info)
     {
         if (!SelectString->IsAddonAndNodesReady() ||
-            !Hummer->IsAddonAndNodesReady())
+            !UFOCatcher->IsAddonAndNodesReady())
             return;
 
         var list = SelectString->GetComponentListById(3);
@@ -129,7 +129,7 @@ public class AutoHummer : ModuleBase
 
         var builder = rented.Builder;
         builder.PushColorType(28)
-               .Append($"[{Lang.Get("AutoHummerTitle")}]")
+               .Append($"[{Lang.Get("AutoUFOCatcherTitle")}]")
                .PopColorType()
                .AppendNewLine()
                .Append(info);
@@ -140,7 +140,7 @@ public class AutoHummer : ModuleBase
 
     #region Constants
 
-    private const uint EVENT_ID = 0x240003;
+    private const uint EVENT_ID = 0x240002;
 
     private const uint ROUND_START_CATEGORY = 0x107000E;
 
