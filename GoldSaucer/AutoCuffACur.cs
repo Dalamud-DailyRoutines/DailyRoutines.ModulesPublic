@@ -4,8 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Info.Game.Packets.Upstream;
@@ -24,17 +23,17 @@ public class AutoCuffACur : ModuleBase
 
     protected override void Init()
     {
-        TaskHelper ??= new();
+        TaskHelper = new();
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "PunchingMachine", OnAddonSetup);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "PunchingMachine", OnAddonSetup);
     }
     
     protected override unsafe void Uninit()
     {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddonSetup);
 
         if (PunchingMachine->IsAddonAndNodesReady())
-            new EventCompletePackt(2359300, 14).Send();
+            SendRoundEnd();
     }
 
     protected override void ConfigUI()
@@ -43,10 +42,15 @@ public class AutoCuffACur : ModuleBase
 
         ImGui.NewLine();
 
-        using (ImRaii.Disabled(GameState.TerritoryType != 144 || TaskHelper.IsBusy || DService.Instance().Condition.IsOccupiedInEvent))
+        using (ImRaii.Disabled
+               (
+                   GameState.TerritoryType != 144 ||
+                   TaskHelper.IsBusy              ||
+                   ICondition.Instance().IsOccupiedInEvent
+               ))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
-                EnqueueNewRound();
+                SendInteractWithMachine();
         }
 
         ImGui.SameLine();
@@ -54,7 +58,7 @@ public class AutoCuffACur : ModuleBase
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, Lang.Get("Stop")))
         {
             TaskHelper.Abort();
-            new EventCompletePackt(2359300, 14).Send();
+            SendRoundEnd();
         }
     }
 
@@ -72,7 +76,7 @@ public class AutoCuffACur : ModuleBase
                 UpdateSelectStringInfo(Lang.Get("AutoCuffACur-StartingRound"));
 
                 currentMGP = InventoryManager.Instance()->GetInventoryItemCount(29);
-                new EventActionPacket(2359300, 17235982).Send();
+                SendNewRound();
             }
         );
         TaskHelper.Enqueue(() => InventoryManager.Instance()->GetInventoryItemCount(29) != currentMGP);
@@ -80,30 +84,36 @@ public class AutoCuffACur : ModuleBase
         TaskHelper.Enqueue
         (() =>
             {
-                new EventActionPacket(2359300, 17301518, 3).Send();
                 UpdateSelectStringInfo($"{Lang.Get("AutoCuffACur-WaitingForResult")}......");
+                SendPlayGame();
             }
         );
         TaskHelper.DelayNext(3000);
-        TaskHelper.Enqueue(() => new EventCompletePackt(2359300, 14).Send());
-        TaskHelper.Enqueue(EnqueueNewRound);
+        TaskHelper.Enqueue(SendRoundEnd);
+        TaskHelper.Enqueue(() => !ICondition.Instance().IsOccupiedInEvent);
+        TaskHelper.Enqueue(SendInteractWithMachine);
     }
 
     private static unsafe bool WaitSelectStringAddon() =>
         SelectString->IsAddonAndNodesReady() && PunchingMachine->IsAddonAndNodesReady();
 
-    private bool EnqueueNewRound()
-    {
-        if (TaskHelper.AbortByConflictKey(this)) return true;
-        if (DService.Instance().Condition.IsOccupiedInEvent) return false;
+    private static void SendInteractWithMachine() =>
+        new EventStartPackt(LocalPlayerState.EntityID, EVENT_ID).Send();
 
-        new EventStartPackt(LocalPlayerState.EntityID, 2359300).Send();
-        return true;
-    }
+    private static void SendNewRound() =>
+        new EventActionPacket(EVENT_ID, ROUND_START_CATEGORY).Send();
+
+    private static void SendPlayGame() =>
+        new EventActionPacket(EVENT_ID, PLAY_GAME_CATEGORY, 3).Send();
+    
+    private static void SendRoundEnd() =>
+        new EventCompletePackt(EVENT_ID, 14).Send();
 
     private static unsafe void UpdateSelectStringInfo(string info)
     {
-        if (!SelectString->IsAddonAndNodesReady() || !PunchingMachine->IsAddonAndNodesReady()) return;
+        if (!SelectString->IsAddonAndNodesReady() ||
+            !PunchingMachine->IsAddonAndNodesReady())
+            return;
 
         var list = SelectString->GetComponentListById(3);
         var text = SelectString->GetTextNodeById(2);
@@ -115,14 +125,26 @@ public class AutoCuffACur : ModuleBase
         text->FontSize      = 18;
         text->AlignmentType = AlignmentType.Center;
 
-        var builder = new SeStringBuilder();
-        builder.AddUiForeground(28);
-        builder.AddText($"[{Lang.Get("AutoCuffACurTitle")}]");
-        builder.AddUiForegroundOff();
-        builder.Add(NewLinePayload.Payload);
-        builder.AddText(info);
+        using var rented = new RentedSeStringBuilder();
+        
+        var builder = rented.Builder;
+        builder.PushColorType(28)
+               .Append($"[{Lang.Get("AutoCuffACurTitle")}]")
+               .PopColorType()
+               .AppendNewLine()
+               .Append(info);
 
-        text->SetText(builder.Build().EncodeWithNullTerminator());
+        text->SetText(builder.GetViewAsSpan());
         text->SetPositionFloat(20, 60);
     }
+
+    #region 常量
+
+    private const uint EVENT_ID = 0x240004;
+    
+    private const uint ROUND_START_CATEGORY = 0x107000E;
+    
+    private const uint PLAY_GAME_CATEGORY = 0x108000E;
+
+    #endregion
 }
