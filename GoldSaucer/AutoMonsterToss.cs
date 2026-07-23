@@ -4,8 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Info.Game.Packets.Upstream;
@@ -24,17 +23,17 @@ public class AutoMonsterToss : ModuleBase
 
     protected override void Init()
     {
-        TaskHelper ??= new();
+        TaskHelper = new();
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "BasketBall", OnAddonSetup);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "BasketBall", OnAddonSetup);
     }
-    
+
     protected override unsafe void Uninit()
     {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddonSetup);
 
         if (BasketBall->IsAddonAndNodesReady())
-            new EventCompletePackt(0x240001, 14).Send();
+            SendRoundEnd();
     }
 
     protected override void ConfigUI()
@@ -43,10 +42,15 @@ public class AutoMonsterToss : ModuleBase
 
         ImGui.NewLine();
 
-        using (ImRaii.Disabled(GameState.TerritoryType != 144 || TaskHelper.IsBusy || DService.Instance().Condition.IsOccupiedInEvent))
+        using (ImRaii.Disabled
+               (
+                   GameState.TerritoryType != 144 ||
+                   TaskHelper.IsBusy              ||
+                   ICondition.Instance().IsOccupiedInEvent
+               ))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
-                EnqueueNewRound();
+                SendInteractWithMachine();
         }
 
         ImGui.SameLine();
@@ -54,7 +58,7 @@ public class AutoMonsterToss : ModuleBase
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, Lang.Get("Stop")))
         {
             TaskHelper.Abort();
-            new EventCompletePackt(0x240001, 14).Send();
+            SendRoundEnd();
         }
     }
 
@@ -72,50 +76,52 @@ public class AutoMonsterToss : ModuleBase
                 UpdateSelectStringInfo(Lang.Get("AutoMonsterToss-StartingGame"));
 
                 currentMGP = InventoryManager.Instance()->GetInventoryItemCount(29);
-                new EventActionPacket(0x240001, 0x107000E).Send();
+                SendNewRound();
             }
         );
         TaskHelper.Enqueue(() => InventoryManager.Instance()->GetInventoryItemCount(29) != currentMGP);
         TaskHelper.DelayNext(1000);
-        TaskHelper.Enqueue
-        (() =>
-            {
-                new EventActionPacket(0x240001, 0x108000E, 1).Send();
-                new EventActionPacket(0x240001, 0x108000E, 1).Send();
-                new EventActionPacket(0x240001, 0x108000E, 1).Send();
-                new EventActionPacket(0x240001, 0x108000E, 1).Send();
-                new EventActionPacket(0x240001, 0x108000E, 1).Send();
-            }
-        );
+        TaskHelper.Enqueue(SendPlayGame);
 
-        const int maxTime = 25;
-
-        for (var i = 0; i < maxTime; i++)
+        for (var i = 0; i < GAME_TIME_SECONDS; i++)
         {
             var second = i;
             TaskHelper.DelayNext(1000);
-            TaskHelper.Enqueue(() => UpdateSelectStringInfo(Lang.Get("AutoMonsterToss-WaitingForResult", maxTime - second)));
+            TaskHelper.Enqueue
+            (() => UpdateSelectStringInfo(Lang.Get("AutoMonsterToss-WaitingForResult", GAME_TIME_SECONDS - second)));
         }
 
-        TaskHelper.Enqueue(() => new EventCompletePackt(0x240001, 14).Send());
-        TaskHelper.Enqueue(EnqueueNewRound);
-    }
-
-    private bool EnqueueNewRound()
-    {
-        if (TaskHelper.AbortByConflictKey(this)) return true;
-        if (DService.Instance().Condition.IsOccupiedInEvent) return false;
-
-        new EventStartPackt(LocalPlayerState.EntityID, 0x240001).Send();
-        return true;
+        TaskHelper.Enqueue(SendRoundEnd);
+        TaskHelper.Enqueue(() => !ICondition.Instance().IsOccupiedInEvent);
+        TaskHelper.Enqueue(SendInteractWithMachine);
     }
 
     private static unsafe bool WaitSelectStringAddon() =>
         SelectString->IsAddonAndNodesReady() && BasketBall->IsAddonAndNodesReady();
 
+    private static void SendInteractWithMachine() =>
+        new EventStartPackt(LocalPlayerState.EntityID, EVENT_ID).Send();
+
+    private static void SendNewRound() =>
+        new EventActionPacket(EVENT_ID, ROUND_START_CATEGORY).Send();
+
+    private static void SendPlayGame()
+    {
+        new EventActionPacket(EVENT_ID, PLAY_GAME_CATEGORY, 1).Send();
+        new EventActionPacket(EVENT_ID, PLAY_GAME_CATEGORY, 1).Send();
+        new EventActionPacket(EVENT_ID, PLAY_GAME_CATEGORY, 1).Send();
+        new EventActionPacket(EVENT_ID, PLAY_GAME_CATEGORY, 1).Send();
+        new EventActionPacket(EVENT_ID, PLAY_GAME_CATEGORY, 1).Send();
+    }
+
+    private static void SendRoundEnd() =>
+        new EventCompletePackt(EVENT_ID, 14).Send();
+
     private static unsafe void UpdateSelectStringInfo(string info)
     {
-        if (!SelectString->IsAddonAndNodesReady() || !BasketBall->IsAddonAndNodesReady()) return;
+        if (!SelectString->IsAddonAndNodesReady() ||
+            !BasketBall->IsAddonAndNodesReady())
+            return;
 
         var list = SelectString->GetComponentListById(3);
         var text = SelectString->GetTextNodeById(2);
@@ -127,14 +133,28 @@ public class AutoMonsterToss : ModuleBase
         text->FontSize      = 18;
         text->AlignmentType = AlignmentType.Center;
 
-        var builder = new SeStringBuilder();
-        builder.AddUiForeground(28);
-        builder.AddText($"[{Lang.Get("AutoMonsterTossTitle")}]");
-        builder.AddUiForegroundOff();
-        builder.Add(NewLinePayload.Payload);
-        builder.AddText(info);
+        using var rented = new RentedSeStringBuilder();
 
-        text->SetText(builder.Encode());
+        var builder = rented.Builder;
+        builder.PushColorType(28)
+               .Append($"[{Lang.Get("AutoMonsterTossTitle")}]")
+               .PopColorType()
+               .AppendNewLine()
+               .Append(info);
+
+        text->SetText(builder.GetViewAsSpan());
         text->SetPositionFloat(20, 60);
     }
+
+    #region Constants
+
+    private const uint EVENT_ID = 0x240001;
+
+    private const uint ROUND_START_CATEGORY = 0x107000E;
+
+    private const uint PLAY_GAME_CATEGORY = 0x108000E;
+
+    private const int GAME_TIME_SECONDS = 25;
+
+    #endregion
 }
