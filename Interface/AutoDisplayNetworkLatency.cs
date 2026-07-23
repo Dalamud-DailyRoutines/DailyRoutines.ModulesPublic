@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -475,6 +476,12 @@ public class AutoDisplayNetworkLatency : ModuleBase
         private void RefreshIPInfo(IPAddress address)
         {
             ResetAddressInfo();
+
+            // The optional public IP/ISP lookup is not reliable under Wine and
+            // can enter a native TLS/certificate path that terminates CoreCLR.
+            // The in-game socket latency measurement remains available.
+            if (RuntimeInformation.IsWine()) return;
+
             ipInfoCancelSource = new();
 
             var token = ipInfoCancelSource.Token;
