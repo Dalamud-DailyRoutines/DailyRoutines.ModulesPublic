@@ -21,6 +21,8 @@ public partial class CustomizeMapMarker
         public string   Description     { get; set; } = string.Empty;
         public uint     IconID          { get; set; } = DEFAULT_ICON_ID;
         public DateTime CreatedAt       { get; set; } = DateTime.UtcNow;
+
+        public MarkerRecord Clone() => (MarkerRecord)MemberwiseClone();
     }
 
     private sealed class MarkerPackage

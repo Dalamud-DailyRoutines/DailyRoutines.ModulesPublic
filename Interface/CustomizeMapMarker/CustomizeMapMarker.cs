@@ -27,6 +27,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
     };
 
     private Config config = null!;
+    private readonly Dictionary<Guid, MarkerRecord> markerIndex = [];
 
     private AddonController<AddonAreaMap>? areaMapController;
     private MapOverlayController?          mapOverlayController;
@@ -89,6 +90,8 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
 
         markerListAddon?.Dispose();
         markerListAddon = null;
+
+        markerIndex.Clear();
     }
 
     private void OnCommand(string command, string arguments) =>
@@ -140,7 +143,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
 
     private void TogglePlacementMode()
     {
-        isPlacingMarker ^= true;
+        isPlacingMarker = !isPlacingMarker;
         UpdatePlacementButton();
 
         if (isPlacingMarker)
@@ -181,20 +184,20 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
         };
 
         config.Markers.Add(marker);
+        markerIndex.Add(marker.ID, marker);
         SaveAndRefresh();
         markerDetailsAddon?.OpenMarker(marker.ID);
     }
 
-    private void OpenMarkerDetails(Guid markerID) =>
-        markerDetailsAddon?.OpenMarker(markerID);
-
     private MarkerRecord? FindMarker(Guid markerID) =>
-        config.Markers.FirstOrDefault(x => x.ID == markerID);
+        markerIndex.GetValueOrDefault(markerID);
 
     private void DeleteMarker(Guid markerID)
     {
-        if (config.Markers.RemoveAll(x => x.ID == markerID) is > 0)
-            SaveAndRefresh();
+        if (!markerIndex.Remove(markerID, out var marker)) return;
+
+        config.Markers.Remove(marker);
+        SaveAndRefresh();
     }
 
     private static void SetGameFlag(MarkerRecord marker) =>
@@ -219,11 +222,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
             return $"Map {marker.MapID}";
 
         var mapPosition = PositionHelper.WorldToMap(marker.TexturePosition, map);
-        var mapName     = map.PlaceName.ValueNullable?.Name.ToString();
-        if (string.IsNullOrWhiteSpace(mapName))
-            mapName = $"Map {marker.MapID}";
-
-        return $"{mapName}  X: {mapPosition.X:F1}  Y: {mapPosition.Y:F1}";
+        return $"{GetMapName(map, marker.MapID)}  X: {mapPosition.X:F1}  Y: {mapPosition.Y:F1}";
     }
 
     private static string FormatMapName(uint mapID)
@@ -231,6 +230,11 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
         if (!LuminaGetter.TryGetRow<Map>(mapID, out var map))
             return $"Map {mapID}";
 
+        return GetMapName(map, mapID);
+    }
+
+    private static string GetMapName(Map map, uint mapID)
+    {
         var mapName = map.PlaceName.ValueNullable?.Name.ToString();
         return string.IsNullOrWhiteSpace(mapName) ? $"Map {mapID}" : mapName;
     }
@@ -241,7 +245,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
         {
             var package = new MarkerPackage
             {
-                Markers = [.. markers.Select(CloneMarker)]
+                Markers = [.. markers.Select(marker => marker.Clone())]
             };
             ImGui.SetClipboardText(package.ToJSONBase64());
             NotifyHelper.ToastQuest
@@ -283,14 +287,17 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
                     !LuminaGetter.TryGetRow<Map>(importedMarker.MapID, out _))
                     continue;
 
-                var normalizedMarker = CloneMarker(importedMarker);
+                var normalizedMarker = importedMarker.Clone();
                 if (normalizedMarker.ID == Guid.Empty)
                     normalizedMarker.ID = Guid.NewGuid();
 
-                if (config.Markers.FirstOrDefault(x => x.ID == normalizedMarker.ID) is { } existingMarker)
+                if (markerIndex.TryGetValue(normalizedMarker.ID, out var existingMarker))
                     CopyMarker(normalizedMarker, existingMarker);
                 else
+                {
                     config.Markers.Add(normalizedMarker);
+                    markerIndex.Add(normalizedMarker.ID, normalizedMarker);
+                }
 
                 importedCount++;
             }
@@ -313,19 +320,6 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
             NotifyHelper.ToastError(Lang.Get("CustomizeMapMarker-ImportFailed"));
         }
     }
-
-    private static MarkerRecord CloneMarker(MarkerRecord marker) => new()
-    {
-        ID              = marker.ID,
-        TerritoryID     = marker.TerritoryID,
-        MapID           = marker.MapID,
-        TexturePosition = marker.TexturePosition,
-        Name            = marker.Name,
-        Group           = marker.Group,
-        Description     = marker.Description,
-        IconID          = marker.IconID,
-        CreatedAt       = marker.CreatedAt
-    };
 
     private static void CopyMarker(MarkerRecord source, MarkerRecord destination)
     {
@@ -360,7 +354,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
                     IconId         = marker.IconID,
                     Size           = new(32),
                     TextTooltip    = $"{marker.Name} [{marker.Group}]\n{marker.Description}".Trim(),
-                    OnClick        = () => OpenMarkerDetails(markerID)
+                    OnClick        = () => markerDetailsAddon?.OpenMarker(markerID)
                 }
             );
         }
@@ -369,15 +363,12 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
     private void NormalizeConfig()
     {
         config.Markers ??= [];
-        HashSet<Guid> markerIDs = [];
+        markerIndex.Clear();
 
         foreach (var marker in config.Markers)
         {
-            if (marker.ID == Guid.Empty || !markerIDs.Add(marker.ID))
-            {
+            while (marker.ID == Guid.Empty || !markerIndex.TryAdd(marker.ID, marker))
                 marker.ID = Guid.NewGuid();
-                markerIDs.Add(marker.ID);
-            }
 
             if (string.IsNullOrWhiteSpace(marker.Name))
                 marker.Name = Lang.Get("CustomizeMapMarker-Untitled");
@@ -387,6 +378,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
 
             if (marker.IconID is 0 or > int.MaxValue)
                 marker.IconID = DEFAULT_ICON_ID;
+
         }
     }
 
@@ -395,7 +387,6 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
     private const string COMMAND          = "mapmarker";
     private const uint   DEFAULT_ICON_ID  = 60561;
     private const int    MAX_IMPORT_COUNT = 5000;
-    private const uint   FLAG_ICON_ID     = 60561;
 
     #endregion
 }

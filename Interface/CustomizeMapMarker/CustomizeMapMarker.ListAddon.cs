@@ -68,29 +68,13 @@ public unsafe partial class CustomizeMapMarker
             };
             paginationBar.AttachNode(this);
 
-            previousPageButton = new TextButtonNode
-            {
-                String  = "<",
-                Size    = new(36, 24),
-                OnClick = () => ShowPage(currentPage - 1)
-            };
+            previousPageButton = CreatePageButton("<", () => ShowPage(currentPage - 1));
             paginationBar.AddNode(previousPageButton);
 
-            pageIndicator = new TextNode
-            {
-                TextFlags     = TextFlags.AutoAdjustNodeSize,
-                String        = "1 / 1",
-                Position      = new(0, 3),
-                AlignmentType = AlignmentType.Left
-            };
+            pageIndicator = CreatePageIndicator();
             paginationBar.AddNode(pageIndicator);
 
-            nextPageButton = new TextButtonNode
-            {
-                String  = ">",
-                Size    = new(36, 24),
-                OnClick = () => ShowPage(currentPage + 1)
-            };
+            nextPageButton = CreatePageButton(">", () => ShowPage(currentPage + 1));
             paginationBar.AddNode(nextPageButton);
 
             scrollArea = new ScrollingNode<VerticalListNode>
@@ -174,18 +158,18 @@ public unsafe partial class CustomizeMapMarker
                                    .ThenBy(marker => marker.Name)
                                    .GroupBy(marker => marker.Group)
                                    .ToList();
-                totalPages  = Math.Max(1, (int)Math.Ceiling(groups.Count / (double)GROUPS_PER_PAGE));
+                totalPages  = Math.Max(1, (groups.Count + GROUPS_PER_PAGE - 1) / GROUPS_PER_PAGE);
                 currentPage = Math.Clamp(currentPage, 0, totalPages - 1);
 
                 mapNameText.String      = FormatMapName(currentMapID);
                 paginationBar.IsVisible = totalPages > 1;
                 UpdatePaginationState();
 
-                var options = new Dictionary<ReadOnlySeString, List<MarkerListEntry>>();
+                var options = new Dictionary<ReadOnlySeString, List<MarkerListEntry>>(GROUPS_PER_PAGE);
 
                 foreach (var group in groups.Skip(currentPage * GROUPS_PER_PAGE).Take(GROUPS_PER_PAGE))
                 {
-                    var groupPageCount = Math.Max(1, (int)Math.Ceiling(group.Count() / (double)MARKERS_PER_PAGE));
+                    var groupPageCount = Math.Max(1, (group.Count() + MARKERS_PER_PAGE - 1) / MARKERS_PER_PAGE);
                     var groupPage = groupPages.TryGetValue(group.Key, out var savedPage) ?
                                         Math.Clamp(savedPage, 0, groupPageCount - 1) :
                                         0;
@@ -237,8 +221,23 @@ public unsafe partial class CustomizeMapMarker
         private MarkerListEntry CreateMarkerEntry(MarkerRecord marker) => new()
         {
             Marker      = marker,
-            OpenMarker  = () => module.OpenMarkerDetails(marker.ID),
+            OpenMarker  = () => module.markerDetailsAddon?.OpenMarker(marker.ID),
             SetGameFlag = () => SetGameFlag(marker)
+        };
+
+        private static TextButtonNode CreatePageButton(string text, Action? onClick = null) => new()
+        {
+            String  = text,
+            Size    = new(36, 24),
+            OnClick = onClick
+        };
+
+        private static TextNode CreatePageIndicator() => new()
+        {
+            TextFlags     = TextFlags.AutoAdjustNodeSize,
+            String        = "1 / 1",
+            Position      = new(0, 3),
+            AlignmentType = AlignmentType.Left
         };
 
         private void ShowPage(int page)
@@ -267,10 +266,10 @@ public unsafe partial class CustomizeMapMarker
 
         private void ExportGroup(string group)
         {
-            var markers = module.config.Markers
-                                .Where(marker => marker.MapID == currentMapID && marker.Group == group)
-                                .ToList();
-            ExportMarkers(markers);
+            ExportMarkers
+            (
+                module.config.Markers.Where(marker => marker.MapID == currentMapID && marker.Group == group)
+            );
         }
 
         private sealed class MarkerListEntry
@@ -315,7 +314,7 @@ public unsafe partial class CustomizeMapMarker
 
                 flagButton = new IconButtonNode
                 {
-                    IconId      = FLAG_ICON_ID,
+                    IconId      = DEFAULT_ICON_ID,
                     Size        = new(32),
                     Position    = new(0, -2),
                     TextTooltip = Lang.Get("CustomizeMapMarker-SetFlag")
@@ -338,27 +337,13 @@ public unsafe partial class CustomizeMapMarker
                 };
                 row.AddNode(exportButton);
 
-                previousPageButton = new()
-                {
-                    String = "<",
-                    Size   = new(36, 24)
-                };
+                previousPageButton = CreatePageButton("<");
                 row.AddNode(previousPageButton);
 
-                pageIndicator = new TextNode
-                {
-                    TextFlags     = TextFlags.AutoAdjustNodeSize,
-                    String        = "1 / 1",
-                    Position      = new(0, 3),
-                    AlignmentType = AlignmentType.Left
-                };
+                pageIndicator = CreatePageIndicator();
                 row.AddNode(pageIndicator);
 
-                nextPageButton = new()
-                {
-                    String = ">",
-                    Size   = new(36, 24)
-                };
+                nextPageButton = CreatePageButton(">");
                 row.AddNode(nextPageButton);
             }
 
@@ -372,30 +357,33 @@ public unsafe partial class CustomizeMapMarker
 
             protected override void SetNodeData(MarkerListEntry itemData)
             {
+                var isExport     = itemData.IsExport;
+                var isPagination = itemData.IsPagination;
+
                 row.Alignment                = HorizontalListAnchor.Left;
                 markerButton.IsVisible       = itemData.Marker is not null;
                 flagButton.IsVisible         = itemData.Marker is not null;
-                groupCountText.IsVisible     = itemData.IsExport;
-                exportButton.IsVisible       = itemData.IsExport;
-                previousPageButton.IsVisible = itemData.IsPagination;
-                pageIndicator.IsVisible      = itemData.IsPagination;
-                nextPageButton.IsVisible     = itemData.IsPagination;
+                groupCountText.IsVisible     = isExport;
+                exportButton.IsVisible       = isExport;
+                previousPageButton.IsVisible = isPagination;
+                pageIndicator.IsVisible      = isPagination;
+                nextPageButton.IsVisible     = isPagination;
 
                 if (itemData.Marker is { } marker)
                 {
-                    markerButton.String  = $"{marker.Name}";
-                    markerButton.OnClick = () => itemData.OpenMarker?.Invoke();
-                    flagButton.OnClick   = () => itemData.SetGameFlag?.Invoke();
+                    markerButton.String  = marker.Name;
+                    markerButton.OnClick = itemData.OpenMarker;
+                    flagButton.OnClick   = itemData.SetGameFlag;
                 }
-                else if (itemData.IsExport)
+                else if (isExport)
                 {
                     groupCountText.String = Lang.Get("CustomizeMapMarker-MarkerCount", itemData.MarkerCount);
-                    exportButton.OnClick  = () => itemData.Export?.Invoke();
+                    exportButton.OnClick  = itemData.Export;
                 }
                 else
                 {
-                    previousPageButton.OnClick = () => itemData.PreviousPage?.Invoke();
-                    nextPageButton.OnClick     = () => itemData.NextPage?.Invoke();
+                    previousPageButton.OnClick = itemData.PreviousPage;
+                    nextPageButton.OnClick     = itemData.NextPage;
                     pageIndicator.String       = $"{itemData.Page + 1} / {itemData.TotalPages}";
                 }
 
