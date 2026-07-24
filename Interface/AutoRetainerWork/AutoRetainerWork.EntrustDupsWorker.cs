@@ -39,7 +39,7 @@ public unsafe partial class AutoRetainerWork
             taskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 Lang.Get("AutoRetainerWork-EntrustDups-Title"),

@@ -303,13 +303,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public abstract void Init();
 
-        public virtual TreeListCategoryNode? CreateOverlayCategory(float width) => null;
+        public virtual CollaspingCategoryNode? CreateOverlayCategory(float width) => null;
 
         public virtual void DrawConfig() { }
 
         public abstract void Uninit();
 
-        protected static TreeListCategoryNode CreateOverlayCategory(string title, float width, params NodeBase[] nodes)
+        protected static CollaspingCategoryNode CreateOverlayCategory(string title, float width, params NodeBase[] nodes)
         {
             var contentNode = new VerticalListNode
             {
@@ -322,7 +322,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             };
             contentNode.AddNode(nodes);
 
-            var categoryNode = new TreeListCategoryNode
+            var categoryNode = new CollaspingCategoryNode
             {
                 IsVisible = true,
                 Size      = new(width, 28f),

@@ -912,7 +912,7 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var contentWidth = contentList.ContentNode.Width - 12f;
 
-            TreeListNode? tree = null;
+            CollaspingNode? tree = null;
             tree = new()
             {
                 IsVisible               = true,
@@ -979,7 +979,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
             tree.AddCategoryNode
             (
-                new TreeListCategoryNode
+                new CollaspingCategoryNode
                 {
                     IsVisible = true,
                     Size      = new(contentWidth, 28f),
@@ -1077,7 +1077,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
             tree.AddCategoryNode
             (
-                new TreeListCategoryNode
+                new CollaspingCategoryNode
                 {
                     IsVisible   = true,
                     Size        = new(contentWidth, 28f),
@@ -1134,7 +1134,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
             tree.AddCategoryNode
             (
-                new TreeListCategoryNode
+                new CollaspingCategoryNode
                 {
                     IsVisible   = true,
                     Size        = new(contentWidth, 28f),
@@ -1192,7 +1192,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
             tree.AddCategoryNode
             (
-                new TreeListCategoryNode
+                new CollaspingCategoryNode
                 {
                     IsVisible   = true,
                     Size        = new(contentWidth, 28f),

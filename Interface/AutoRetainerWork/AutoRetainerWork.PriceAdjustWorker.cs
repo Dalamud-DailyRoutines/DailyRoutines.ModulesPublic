@@ -95,7 +95,7 @@ public unsafe partial class AutoRetainerWork
             ItemConfigEditor();
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 Lang.Get("AutoRetainerWork-PriceAdjust-Title"),

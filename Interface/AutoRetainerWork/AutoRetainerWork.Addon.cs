@@ -14,7 +14,7 @@ public unsafe partial class AutoRetainerWork
         AutoRetainerWork module
     ) : AttachedAddon("RetainerList")
     {
-        private TreeListNode? treeListNode;
+        private CollaspingNode? treeListNode;
 
         protected override Vector2 PositionOffset =>
             new(0f, 6f);
