@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.OmenService;
 
@@ -59,6 +60,7 @@ public class AutoUseEarthsReply : ModuleBase
         (
             () =>
             {
+                if (DService.Instance().Condition[ConditionFlag.Mounted]) return;
                 if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
                 if (!config.UseWhenSprint && localPlayer.StatusList.HasStatus(SPRINT_STATUS)) return;
