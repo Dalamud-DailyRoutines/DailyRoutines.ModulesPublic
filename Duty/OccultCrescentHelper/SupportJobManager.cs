@@ -1,18 +1,15 @@
 using System.Numerics;
-using System.Text;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Client.UI.Misc;
-using Lumina.Excel.Sheets;
 using OmenTools.Info.Game;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
+using Action = Lumina.Excel.Sheets.Action;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic.Duty;
@@ -24,21 +21,34 @@ public partial class OccultCrescentHelper
         OccultCrescentHelper mainModule
     ) : BaseIslandModule(mainModule)
     {
-        private const string COMMAND_SWITCH_JOB     = "pjob";
-        private const string COMMAND_BUFF           = "pbuff";
-        private const uint   ACTION_FREELANCER_BUFF = 46606;
+        private const string COMMAND_BUFF = "pbuff";
+        private const uint   ACTION_FREELANCER_BUFF           = 46606;
+        private const uint   ACTION_OFFENSIVE_ARIA            = 41608;
+        private const uint   STATUS_OFFENSIVE_ARIA            = 4247;
+        private const float  OFFENSIVE_ARIA_REFRESH_THRESHOLD = 20f;
+        private const int    RECAST_TIME_WINDOW               = 500;
+        private const int    ANIMATION_LOCK                   = 100;
 
         private static TaskHelper? SupportJobTaskHelper;
+        private static TaskHelper? ActionInsertionTaskHelper;
+
+        private ActionInsertionRule[] actionInsertionRules = [];
 
         public override void Init()
         {
-            SupportJobTaskHelper ??= new();
-
-            CommandManager.Instance().AddSubCommand
-            (
-                COMMAND_SWITCH_JOB,
-                new(OnCommandSwitchJob) { HelpMessage = $"{Lang.Get("OccultCrescentHelper-Command-PJob-Help")}" }
-            );
+            SupportJobTaskHelper      ??= new();
+            ActionInsertionTaskHelper ??= new() { TimeoutMS = 60_000 };
+            
+            actionInsertionRules =
+            [
+                new
+                (
+                    CrescentSupportJob.Bard,
+                    ACTION_OFFENSIVE_ARIA,
+                    () => MainModule.config.IsEnabledBardOffensiveAria,
+                    ShouldUseOffensiveAria
+                )
+            ];
 
             CommandManager.Instance().AddSubCommand
             (
@@ -48,24 +58,47 @@ public partial class OccultCrescentHelper
 
             UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
             UseActionManager.Instance().RegPreCharacterCompleteCast(OnCompleteCast);
+            UseActionManager.Instance().RegPostCharacterCompleteCast(OnPostCompleteCast);
+            UseActionManager.Instance().RegPostUseActionLocation(OnPostUseAction);
         }
 
         public override void Uninit()
         {
-            CommandManager.Instance().RemoveSubCommand(COMMAND_SWITCH_JOB);
             CommandManager.Instance().RemoveSubCommand(COMMAND_BUFF);
 
             SupportJobTaskHelper?.Abort();
             SupportJobTaskHelper?.Dispose();
             SupportJobTaskHelper = null;
 
+            ActionInsertionTaskHelper?.Abort();
+            ActionInsertionTaskHelper?.Dispose();
+            ActionInsertionTaskHelper = null;
+            actionInsertionRules      = [];
+
             UseActionManager.Instance().Unreg(OnPreUseAction);
             UseActionManager.Instance().Unreg(OnCompleteCast);
+            UseActionManager.Instance().Unreg(OnPostCompleteCast);
+            UseActionManager.Instance().Unreg(OnPostUseAction);
         }
 
         public override void DrawConfig()
         {
             using var id = ImRaii.PushId("SupportJobManager");
+
+            ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetMKDSupportJobName(6));
+
+            using (ImRaii.PushIndent())
+            {
+                if (ImGui.Checkbox
+                    (
+                        $"{Lang.Get("OccultCrescentHelper-SupportJobManager-Bard-OffensiveAria")}##BardOffensiveAria",
+                        ref MainModule.config.IsEnabledBardOffensiveAria
+                    ))
+                    MainModule.config.Save(MainModule);
+                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Bard-OffensiveAria-Help"), 20f * GlobalUIScale);
+            }
+
+            ImGui.NewLine();
 
             ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), LuminaWrapper.GetMKDSupportJobName(3));
 
@@ -109,17 +142,173 @@ public partial class OccultCrescentHelper
 
             using (ImRaii.PushIndent())
             {
-                ImGui.TextWrapped($"/pdr {COMMAND_SWITCH_JOB} {Lang.Get("OccultCrescentHelper-Command-PJob-Help")}");
-
-                var builder = new StringBuilder();
-                builder.Append("ID:\n");
-                foreach (var data in LuminaGetter.Get<MKDSupportJob>())
-                    builder.Append($"\t{data.RowId} - {data.Name}\t{data.NameFemale}\t{data.NameEnglish}\n");
-                ImGuiOm.HelpMarker(builder.ToString().TrimEnd('\n'), 100f * GlobalUIScale);
-
                 ImGui.TextWrapped($"/pdr {COMMAND_BUFF} {Lang.Get("OccultCrescentHelper-Command-PBuff-Help")}");
             }
         }
+
+        private unsafe void OnPostCompleteCast
+        (
+            bool         result,
+            IBattleChara player,
+            ActionType   actionType,
+            uint         actionID,
+            uint         spellID,
+            GameObjectId animationTargetID,
+            Vector3      location,
+            float        rotation,
+            short        lastUsedActionSequence,
+            int          animationVariation,
+            int          ballistaEntityID
+        )
+        {
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
+                return;
+            
+            if (!result || player.EntityID != LocalPlayerState.EntityID)
+                return;
+
+            if (!LuminaGetter.TryGetRow(actionID, out Action actionRow) || actionRow.Recast100ms == 0)
+                return;
+
+            var manager = ActionManager.Instance();
+            if (manager == null) return;
+
+            var insertionRule = actionInsertionRules.FirstOrDefault(x => IsActionInsertionReady(x, player, manager));
+            if (insertionRule == null) return;
+
+            var recastGroupTypeOne  = manager->GetRecastGroup((int)ActionType.Action, actionID);
+            var recastDetailTypeOne = recastGroupTypeOne == -1 ?
+                                          null :
+                                          manager->GetRecastGroupDetail(recastGroupTypeOne);
+
+            var recastGroupTypeTwo  = manager->GetAdditionalRecastGroup(ActionType.Action, actionID);
+            var recastDetailTypeTwo = recastGroupTypeTwo == -1 ?
+                                          null :
+                                          manager->GetRecastGroupDetail(recastGroupTypeTwo);
+
+            if (recastDetailTypeOne != null)
+            {
+                if (!recastDetailTypeOne->IsActive ||
+                    (recastDetailTypeOne->Total - recastDetailTypeOne->Elapsed) * 1000 < RECAST_TIME_WINDOW)
+                    return;
+            }
+            else if (recastDetailTypeTwo != null)
+            {
+                if (!recastDetailTypeTwo->IsActive ||
+                    (recastDetailTypeTwo->Total - recastDetailTypeTwo->Elapsed) * 1000 < RECAST_TIME_WINDOW)
+                    return;
+            }
+
+            if (manager->QueuedActionId != 0)
+            {
+                if (manager->QueuedActionType != ActionType.Action)
+                    return;
+
+                if (!LuminaGetter.TryGetRow(manager->QueuedActionId, out Action nextActionRow) ||
+                    nextActionRow.Recast100ms == 0)
+                    return;
+            }
+
+            EnqueueActionInsertion(insertionRule);
+        }
+
+        private static void OnPostUseAction
+        (
+            bool       result,
+            ActionType actionType,
+            uint       actionID,
+            ulong      targetID,
+            Vector3    location,
+            uint       extraParam,
+            byte       a7
+        )
+        {
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
+                return;
+            
+            if (!result) return;
+
+            if (actionType == ActionType.Action                        &&
+                LuminaGetter.TryGetRow(actionID, out Action actionRow) &&
+                actionRow.Recast100ms != 0)
+                return;
+
+            ActionInsertionTaskHelper.Abort();
+        }
+
+        private static unsafe void EnqueueActionInsertion
+        (
+            ActionInsertionRule insertionRule
+        )
+        {
+            ActionInsertionTaskHelper.Abort();
+
+            var manager = ActionManager.Instance();
+            if (manager == null) return;
+
+            ActionInsertionTaskHelper.DelayNext((int)MathF.Max(ANIMATION_LOCK, manager->AnimationLock * 1000), "等待动画锁结束");
+            ActionInsertionTaskHelper.Enqueue
+            (() =>
+                {
+                    if (manager->QueuedActionId == 0) return;
+
+                    if (manager->QueuedActionType != ActionType.Action)
+                    {
+                        ActionInsertionTaskHelper.Abort();
+                        return;
+                    }
+
+                    if (!LuminaGetter.TryGetRow(manager->QueuedActionId, out Action nextActionRow) ||
+                        nextActionRow.Recast100ms == 0)
+                        ActionInsertionTaskHelper.Abort();
+                },
+                "检查当前状态是否合法"
+            );
+            ActionInsertionTaskHelper.Enqueue
+            (() =>
+                {
+                    if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer ||
+                        !IsActionInsertionReady(insertionRule, localPlayer, manager))
+                    {
+                        ActionInsertionTaskHelper.Abort();
+                        return true;
+                    }
+
+                    return UseActionManager.Instance().UseAction(ActionType.Action, insertionRule.ActionID);
+                },
+                $"UseAction_{insertionRule.ActionID}"
+            );
+        }
+
+        private static unsafe bool IsActionInsertionReady
+        (
+            ActionInsertionRule insertionRule,
+            IBattleChara        player,
+            ActionManager*      manager
+        ) =>
+            insertionRule.EnabledCondition()                                  &&
+            insertionRule.SupportJob.IsThisJob()                              &&
+            insertionRule.SupportJob.IsActionUnlocked(insertionRule.ActionID) &&
+            insertionRule.UseCondition(player)                                &&
+            manager->IsActionOffCooldown(ActionType.Action, insertionRule.ActionID);
+
+        private static unsafe bool ShouldUseOffensiveAria
+        (
+            IBattleChara player
+        )
+        {
+            var statusManager = player.ToStruct()->StatusManager;
+            var statusIndex   = statusManager.GetStatusIndex(STATUS_OFFENSIVE_ARIA);
+            return statusIndex == -1 || statusManager.GetRemainingTime(statusIndex) <= OFFENSIVE_ARIA_REFRESH_THRESHOLD;
+        }
+
+        private sealed record ActionInsertionRule
+        (
+            CrescentSupportJob      SupportJob,
+            uint                    ActionID,
+            Func<bool>              EnabledCondition,
+            Func<IBattleChara, bool> UseCondition
+        );
 
         private void OnPreUseAction
         (
@@ -132,6 +321,9 @@ public partial class OccultCrescentHelper
             ref uint                        comboRouteID
         )
         {
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
+                return;
+            
             // 狂战士自动面向
             if (MainModule.config.IsEnabledBerserkerRageAutoFace)
             {
@@ -158,6 +350,9 @@ public partial class OccultCrescentHelper
             ref int          ballistaEntityID
         )
         {
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
+                return;
+            
             if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
             if (battleChara.Address != localPlayer.Address) return;
 
@@ -174,53 +369,6 @@ public partial class OccultCrescentHelper
                 if (actionType == ActionType.Action && actionID == 41593)
                     actionID = spellID = 3549;
             }
-        }
-
-        private unsafe void OnCommandSwitchJob
-        (
-            string command,
-            string args
-        )
-        {
-            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
-            {
-                RaptureLogModule.Instance()->ShowLogMessage(10970);
-                return;
-            }
-
-            args = args.Trim().ToLowerInvariant();
-
-            if (string.IsNullOrWhiteSpace(args))
-            {
-                MainModule.othersModule.SupportJobChangeAddon.Toggle();
-                return;
-            }
-
-            if (byte.TryParse(args, out var parsedJobID))
-            {
-                AgentMKDSupportJobList.Instance()->ChangeSupportJob(parsedJobID);
-                return;
-            }
-
-            var matchingJob = LuminaGetter.Get<MKDSupportJob>()
-                                          .Select
-                                          (data => new
-                                              {
-                                                  Data        = data,
-                                                  NameMale    = data.Name.ToString(),
-                                                  NameFemale  = data.NameFemale.ToString(),
-                                                  NameEnglish = data.NameEnglish.ToString()
-                                              }
-                                          )
-                                          .Where
-                                          (x => x.NameMale.Contains(args, StringComparison.OrdinalIgnoreCase)   ||
-                                                x.NameFemale.Contains(args, StringComparison.OrdinalIgnoreCase) ||
-                                                x.NameEnglish.Contains(args, StringComparison.OrdinalIgnoreCase)
-                                          )
-                                          .OrderBy(x => Math.Min(Math.Min(x.NameMale.Length, x.NameFemale.Length), x.NameEnglish.Length))
-                                          .FirstOrDefault();
-            if (matchingJob != null)
-                AgentMKDSupportJobList.Instance()->ChangeSupportJob((byte)matchingJob.Data.RowId);
         }
 
         private static void OnCommandBuff

@@ -8,6 +8,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.InstanceContent;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
@@ -157,7 +158,7 @@ public partial class OccultCrescentHelper
 
             if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
             {
-                if (ImGui.CollapsingHeader($"{Lang.Get("OccultCrescentHelper-CEManager-CEHistory")} ({MainModule.GetIslandID()})###CEHistory"))
+                if (ImGui.CollapsingHeader($"{Lang.Get("OccultCrescentHelper-CEManager-CEHistory")} ({GameState.ZoneServerID})###CEHistory"))
                 {
                     using (var table = ImRaii.Table("###CEHistoryTable", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
                     {
@@ -181,7 +182,7 @@ public partial class OccultCrescentHelper
 
                                 ImGui.TableNextColumn();
 
-                                if (MainModule.config.CEHistory.TryGetValue(MainModule.GetIslandID(), out var history) &&
+                                if (MainModule.config.CEHistory.TryGetValue(GameState.ZoneServerID, out var history) &&
                                     history.TryGetValue(ceID, out var time))
                                 {
                                     var dateTime = localTimes.GetOrAdd(time, _ => time.ToUTCDateTimeFromUnixSeconds().ToLocalTime());
@@ -414,7 +415,7 @@ public partial class OccultCrescentHelper
             var publicInstance = PublicContentOccultCrescent.GetInstance();
             if (publicInstance == null) return;
 
-            var islandID = MainModule.GetIslandID();
+            var islandID = GameState.ZoneServerID;
             MainModule.config.CEHistory.TryAdd(islandID, []);
 
             var currentCENames = new HashSet<string>();
@@ -611,9 +612,7 @@ public partial class OccultCrescentHelper
                 }
                 else
                 {
-                    var returnPosition = GameState.TerritoryType == 1252 ?
-                                             MainModule.config.DefaultPositionEnterZoneSouthHorn :
-                                             MainModule.config.DefaultPositionEnterZoneNorthHorn;
+                    var demiReturnStartPosition = localPlayer.Position;
 
                     session.TravelStage = PathfindingTravelStage.DemiReturn;
 
@@ -634,6 +633,9 @@ public partial class OccultCrescentHelper
                             if (ActionManager.Instance()->GetActionStatus(ActionType.Action, DEMI_RETURN_ACTION_ID) != 0)
                                 return false;
 
+                            if (DService.Instance().ObjectTable.LocalPlayer is not { } player) return false;
+
+                            demiReturnStartPosition = player.Position;
                             return UseActionManager.Instance().UseAction(ActionType.Action, DEMI_RETURN_ACTION_ID);
                         },
                         timeoutMS: 5_000,
@@ -650,7 +652,22 @@ public partial class OccultCrescentHelper
                                 return true;
 
                             return DService.Instance().ObjectTable.LocalPlayer is { } player &&
-                                   Vector3.DistanceSquared(player.Position, returnPosition) <= 30f * 30f;
+                                   player.Position != demiReturnStartPosition;
+                        },
+                        timeoutMS: 30_000,
+                        timeoutBehaviour: TaskAbortBehaviour.AbortCurrent,
+                        timeoutAction: () => session.TravelStage = PathfindingTravelStage.Pathfinding
+                    );
+
+                    taskHelper.Enqueue
+                    (
+                        () =>
+                        {
+                            if (pathfindingSession  != session ||
+                                session.TravelStage != PathfindingTravelStage.DemiReturn)
+                                return true;
+
+                            return UIModule.IsScreenReady();
                         },
                         timeoutMS: 30_000,
                         timeoutBehaviour: TaskAbortBehaviour.AbortCurrent,
@@ -802,7 +819,7 @@ public partial class OccultCrescentHelper
 
             var playerPosition = localPlayer.Position.ToVector2();
             var eventRadius = session.Data.Event.Type == CrescentEventType.CE ?
-                                  40f :
+                                  25f :
                                   session.Data.Event.Radius;
 
             if ((eventRadius                                                                      > 0f &&
@@ -870,25 +887,97 @@ public partial class OccultCrescentHelper
         {
             if (path.Count == 0) return;
 
-            var drawList               = ImGui.GetForegroundDrawList();
-            var hasPreviousScreenPoint = false;
-            var previousScreenPoint    = default(Vector2);
+            var drawList           = ImGui.GetForegroundDrawList();
+            var gameGUI            = DService.Instance().GameGUI;
+            var previousWorldPoint = path[0];
+            var previousInFront    = gameGUI.WorldToScreen
+            (
+                previousWorldPoint,
+                out var previousScreenPoint,
+                out var previousInView
+            );
 
-            foreach (var pathPoint in path)
+            for (var i = 1; i < path.Count; i++)
             {
-                if (!DService.Instance().GameGUI.WorldToScreen(pathPoint, out var screenPoint))
-                {
-                    hasPreviousScreenPoint = false;
-                    continue;
-                }
+                var worldPoint = path[i];
+                var isInFront  = gameGUI.WorldToScreen(worldPoint, out var screenPoint, out var isInView);
 
-                if (hasPreviousScreenPoint)
-                    drawList.AddLine(previousScreenPoint, screenPoint, PathLineColor, PATH_LINE_THICKNESS * GlobalUIScale);
+                DrawPathSegment
+                (
+                    drawList,
+                    gameGUI,
+                    previousWorldPoint,
+                    worldPoint,
+                    previousInFront ? previousScreenPoint : null,
+                    isInFront ? screenPoint : null
+                );
 
-                drawList.AddCircleFilled(screenPoint, PATH_POINT_RADIUS * GlobalUIScale, PathPointColor);
-                previousScreenPoint    = screenPoint;
-                hasPreviousScreenPoint = true;
+                if (previousInView)
+                    drawList.AddCircleFilled(previousScreenPoint, PATH_POINT_RADIUS * GlobalUIScale, PathPointColor);
+
+                previousWorldPoint  = worldPoint;
+                previousScreenPoint = screenPoint;
+                previousInFront     = isInFront;
+                previousInView      = isInView;
             }
+
+            if (previousInView)
+                drawList.AddCircleFilled(previousScreenPoint, PATH_POINT_RADIUS * GlobalUIScale, PathPointColor);
+        }
+
+        private static void DrawPathSegment
+        (
+            ImDrawListPtr drawList,
+            IGameGui      gameGUI,
+            Vector3       worldStart,
+            Vector3       worldEnd,
+            Vector2?      screenStart,
+            Vector2?      screenEnd
+        )
+        {
+            if (screenStart is { } start && screenEnd is { } end)
+            {
+                drawList.AddLine(start, end, PathLineColor, PATH_LINE_THICKNESS * GlobalUIScale);
+                return;
+            }
+
+            if (screenStart is null && screenEnd is null) return;
+
+            var inFrontWorldPoint  = screenStart is not null ? worldStart : worldEnd;
+            var behindWorldPoint   = screenStart is null ? worldStart : worldEnd;
+            var inFrontScreenPoint = screenStart ?? screenEnd!.Value;
+
+            if (TryClipPathSegmentToNearPlane(gameGUI, inFrontWorldPoint, behindWorldPoint, out var clippedScreenPoint))
+                drawList.AddLine(inFrontScreenPoint, clippedScreenPoint, PathLineColor, PATH_LINE_THICKNESS * GlobalUIScale);
+        }
+
+        private static bool TryClipPathSegmentToNearPlane
+        (
+            IGameGui gameGUI,
+            Vector3  inFrontWorldPoint,
+            Vector3  behindWorldPoint,
+            out Vector2 clippedScreenPoint
+        )
+        {
+            var inFrontRatio = 0f;
+            var behindRatio  = 1f;
+
+            for (var i = 0; i < 8; i++)
+            {
+                var ratio = (inFrontRatio + behindRatio) * 0.5f;
+
+                if (gameGUI.WorldToScreen(Vector3.Lerp(inFrontWorldPoint, behindWorldPoint, ratio), out _, out _))
+                    inFrontRatio = ratio;
+                else
+                    behindRatio = ratio;
+            }
+
+            return gameGUI.WorldToScreen
+            (
+                Vector3.Lerp(inFrontWorldPoint, behindWorldPoint, inFrontRatio),
+                out clippedScreenPoint,
+                out _
+            );
         }
 
         private void CompletePathfinding
@@ -980,12 +1069,12 @@ public partial class OccultCrescentHelper
                           .AddText($"{Lang.Get("Position")}: ")
                           .Append(SeString.CreateMapLink(GameState.TerritoryTypeData.ExtractPlaceName(), mapPos.X, mapPos.Y));
 
-            if (ce.Event.DemiatmaID != 0)
+            if (ce.Event.SpecialWeaponMaterialID != 0)
             {
                 message.Add(NewLinePayload.Payload)
                        .AddText($"{Lang.Get("Item")}: ")
-                       .AddItemLink(ce.Event.DemiatmaID, false)
-                       .AddText($" ({LuminaWrapper.GetAddonText(358)}: {LocalPlayerState.GetItemCount(ce.Event.DemiatmaID)})");
+                       .AddItemLink(ce.Event.SpecialWeaponMaterialID, false)
+                       .AddText($" ({LuminaWrapper.GetAddonText(358)}: {LocalPlayerState.GetItemCount(ce.Event.SpecialWeaponMaterialID)})");
             }
 
             if (ce.Event.SpecialRewards is { Count: > 0 } specialRewards)

@@ -37,9 +37,6 @@ public partial class OccultCrescentHelper : ModuleBase
 
     private List<BaseIslandModule> modules = [];
 
-    private static readonly CompSig IslandIDInstanceOffsetSig = new("48 8D 8F ?? ?? ?? ?? 40 0F B6 D5 E8 ?? ?? ?? ?? 8B D3");
-    private                 nint    islandIDInstanceOffset;
-
     public OccultCrescentHelper()
     {
         aetheryteModule  = new(this);
@@ -52,11 +49,6 @@ public partial class OccultCrescentHelper : ModuleBase
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-
-        // lea     rcx, [rdi+XXXX], 因为是四字节所以用 uint
-        if (islandIDInstanceOffset == nint.Zero)
-            islandIDInstanceOffset = IslandIDInstanceOffsetSig.GetStatic();
-        DLog.Debug($"[{nameof(OccultCrescentHelper)}] 岛 ID 存储实例偏移量: {islandIDInstanceOffset}");
 
         Overlay       ??= new(this);
         Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
@@ -157,20 +149,15 @@ public partial class OccultCrescentHelper : ModuleBase
 
     protected override void OverlayPostDraw() => FontManager.Instance().UIFont80.Pop();
 
-    private unsafe uint GetIslandID() =>
-        (uint)*(ulong*)((byte*)GameMain.Instance() + islandIDInstanceOffset + 1488);
-
     private class Config : ModuleConfig
     {
         // 辅助职业技能是否为真
         public bool AddonIsDragRealAction = true;
 
-        // 辅助职业排序
-        public List<uint> AddonSupportJobOrder     = [];
-        public string     AutoEnableDisablePlugins = string.Empty;
+        public string AutoEnableDisablePlugins = string.Empty;
 
         // CE 历史记录
-        // 岛 ID - CE ID - 刷新时间秒级时间戳
+        // 副本 ID - CE ID - 刷新时间秒级时间戳
         public Dictionary<uint, Dictionary<uint, long>> CEHistory = [];
 
         public Vector3 DefaultPositionEnterZoneNorthHorn = new(882.2f, 258.5f, 882.0f);
@@ -183,6 +170,9 @@ public partial class OccultCrescentHelper : ModuleBase
 
         // 自动开箱
         public bool IsEnabledAutoOpenTreasure;
+
+        // 辅助吟游诗人
+        public bool IsEnabledBardOffensiveAria = true;
 
         // 辅助狂战士
         public bool IsEnabledBerserkerRageAutoFace = true;
@@ -198,14 +188,11 @@ public partial class OccultCrescentHelper : ModuleBase
         // 隐藏任务指令
         public bool IsEnabledHideDutyCommand;
 
-        // 岛 ID
-        public bool IsEnabledIslandIDChat = true;
+        // 修改 HUD
+        public bool IsEnabledModifyInfoHUD = true;
 
         // 显示知见水晶
         public bool IsEnabledKnowledgeCrystalFastUse = true;
-
-        // 修改 HUD
-        public bool IsEnabledModifyInfoHUD = true;
 
         // 辅助武僧
         public bool IsEnabledMonkKickNoMove = true;

@@ -67,11 +67,10 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
 
                 checkboxNode ??= new()
                 {
-                    IsVisible   = true,
-                    Position    = new(50, -2),
-                    Size        = new(25, 28),
-                    IsChecked   = config.SkipWhenHQ,
-                    TextTooltip = Lang.Get("AutoDesynthesizeItems-SkipHQ"),
+                    Position  = new(50, -2),
+                    Size      = new(25, 28),
+                    IsChecked = config.SkipWhenHQ,
+                    String    = Lang.Get("AutoDesynthesizeItems-SkipHQ"),
                     OnClick = newState =>
                     {
                         config.SkipWhenHQ = newState;
@@ -81,7 +80,6 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
 
                 buttonNode ??= new()
                 {
-                    IsVisible = true,
                     Size      = new(200, 28),
                     String    = $"{Info.Title}",
                     OnClick   = StartDesynthesizeAll
@@ -91,9 +89,8 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
                 {
                     layoutNode = new()
                     {
-                        IsVisible = true,
                         Size      = new(SalvageItemSelector->WindowNode->Width, 28),
-                        Position  = new(-33, 8),
+                        Position  = new(SalvageItemSelector->WindowNode->Width - 10, 8),
                         Alignment = HorizontalListAnchor.Right
                     };
 
