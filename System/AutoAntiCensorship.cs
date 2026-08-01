@@ -32,13 +32,11 @@ public unsafe class AutoAntiCensorship : ModuleBase
     public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
 
     private static readonly CompSig GetFilteredUtf8StringSig = new("48 89 74 24 ?? 57 48 83 EC ?? 48 83 79 ?? ?? 48 8B FA 48 8B F1 0F 84 ?? ?? ?? ?? 48 89 5C 24");
-
     private delegate void GetFilteredUtf8StringDelegate
     (
         nint        vulgarInstance,
         Utf8String* str
     );
-
     private GetFilteredUtf8StringDelegate? GetFilteredUtf8String;
 
     private static readonly CompSig VulgarInstanceOffsetBaseSig = new("48 8B 81 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B D3");
@@ -48,41 +46,34 @@ public unsafe class AutoAntiCensorship : ModuleBase
     private                 nint    PartyFinderOriginalMessageOffset;
 
     private static readonly CompSig LocalMessageDisplaySig = new("40 53 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 8B 0D");
-
     private delegate Utf8String* LocalMessageDisplayDelegate
     (
         nint        a1,
         Utf8String* source
     );
-
     private Hook<LocalMessageDisplayDelegate>? LocalMessageDisplayHook;
 
     private static readonly CompSig PartyFinderMessageDisplaySig = new("48 89 5C 24 ?? 57 48 83 EC ?? 48 8D 99 ?? ?? ?? ?? 48 8B F9 48 8B CB E8");
-
     private delegate Utf8String* PartyFinderMessageDisplayDelegate
     (
         nint        a1,
         Utf8String* source
     );
-
     private Hook<PartyFinderMessageDisplayDelegate>? PartyFinderMessageDisplayHook;
 
     private static readonly CompSig LookingForGroupConditionReceiveEventSig = new
     (
         "E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 45 8B C2 48 8B D6 48 8B CB E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 45 8B C2 48 8B D6 48 8B CB E8 ?? ?? ?? ?? 0F B6 F8 E9 ?? ?? ?? ?? 48 8B CE"
     );
-
     private delegate byte LookingForGroupConditionReceiveEventDelegate
     (
         nint      a1,
         AtkValue* a2
     );
-
     private Hook<LookingForGroupConditionReceiveEventDelegate>? LookingForGroupConditionReceiveEventHook;
 
     private static readonly CompSig TextInputReceiveEventSig =
         new("4C 8B DC 55 53 57 41 54 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B 9D");
-
     private delegate void TextInputReceiveDelegate
     (
         AtkComponentTextInput* textInput,
@@ -91,7 +82,6 @@ public unsafe class AutoAntiCensorship : ModuleBase
         AtkEvent*              atkEvent,
         AtkEventData*          atkEventData
     );
-
     private Hook<TextInputReceiveDelegate>? TextInputReceiveEventHook;
 
     private Config config = null!;
@@ -458,7 +448,13 @@ public unsafe class AutoAntiCensorship : ModuleBase
             // payload.ToString() 返回宏字符串格式（\< 代替 <），会导致反斜杠累积
             // 需通过原始字节构造临时 ReadOnlySeString 来获取无转义的原始文本
             var payloadText = new ReadOnlySeString(payload.AsSpan().Body).ToString();
-            if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim())) continue;
+
+            // 纯星号内容不可能是屏蔽产物, 原样保留
+            if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim()))
+            {
+                builder.Append(payload);
+                continue;
+            }
 
             builder.Append(BypassCensorship(payloadText));
         }
@@ -662,7 +658,13 @@ public unsafe class AutoAntiCensorship : ModuleBase
 
             // payload.ToString() 返回宏字符串格式（\< 代替 <），会导致反斜杠累积
             var payloadText = new ReadOnlySeString(payload.AsSpan().Body).ToString();
-            if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim())) continue;
+
+            // 纯星号内容不可能是屏蔽产物, 原样保留
+            if (string.IsNullOrEmpty(payloadText.Replace('*', ' ').Trim()))
+            {
+                builder.Append(payload);
+                continue;
+            }
 
             builder.Append(HighlightCensorship(payloadText));
         }

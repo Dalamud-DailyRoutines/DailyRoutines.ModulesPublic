@@ -222,11 +222,27 @@ public unsafe class AutoCountPlayers : ModuleBase
                         NotifyHelper.Instance().Chat(message.Encode());
                     }
 
-                    if (DService.Instance().GameGUI.WorldToScreen(playerAround.Position,            out var screenPos) &&
-                        DService.Instance().GameGUI.WorldToScreen(LocalPlayerState.Object.Position, out var localScreenPos))
+                    var gameGUI  = DService.Instance().GameGUI;
+                    var viewport = ImGui.GetMainViewport();
+
+                    gameGUI.WorldToScreen(playerAround.Position, out var screenPos, out var isInView);
+
+                    if (!gameGUI.WorldToScreen(LocalPlayerState.Object.Position, out var localScreenPos, out _))
+                        localScreenPos = viewport.Pos + new Vector2(viewport.Size.X * 0.5f, viewport.Size.Y);
+
+                    if (!ImGui.IsAnyItemHovered() || ImGui.IsItemHovered())
                     {
-                        if (!ImGui.IsAnyItemHovered() || ImGui.IsItemHovered())
-                            DrawLine(localScreenPos, screenPos, playerAround);
+                        var linePositions = GetLinePositions
+                        (
+                            screenPos,
+                            isInView,
+                            viewport.Pos,
+                            viewport.Size,
+                            OFFSCREEN_MARKER_INSET * GlobalUIScale,
+                            OFFSCREEN_LINE_OVERFLOW * GlobalUIScale
+                        );
+
+                        DrawLine(localScreenPos, linePositions.LineEnd, linePositions.Marker, playerAround, isInView);
                     }
 
                     if (DService.Instance().Texture.TryGetFromGameIcon(playerAround.ClassJob.Value.GetIcon(), out var texture))
@@ -360,14 +376,36 @@ public unsafe class AutoCountPlayers : ModuleBase
             }
         }
 
-        var currentWindowSize = ImGui.GetMainViewport().Size;
-        if (!DService.Instance().GameGUI.WorldToScreen(localPlayer->Position, out var localScreenPos))
-            localScreenPos = currentWindowSize with { X = currentWindowSize.X / 2 };
+        var gameGUI  = DService.Instance().GameGUI;
+        var viewport = ImGui.GetMainViewport();
+
+        if (!gameGUI.WorldToScreen(localPlayer->Position, out var localScreenPos, out _))
+            localScreenPos = viewport.Pos + new Vector2(viewport.Size.X * 0.5f, viewport.Size.Y);
 
         foreach (var playerInfo in PlayersManager.Instance().PlayersTargetingMe)
         {
-            if (DService.Instance().GameGUI.WorldToScreen(playerInfo.Player.Position, out var screenPos))
-                DrawLine(localScreenPos, screenPos, playerInfo.Player, LineColorRed, $" [{TimeSpan.FromSeconds(playerInfo.TargetingDurationSeconds)}]");
+            gameGUI.WorldToScreen(playerInfo.Player.Position, out var screenPos, out var isInView);
+
+            var linePositions = GetLinePositions
+            (
+                screenPos,
+                isInView,
+                viewport.Pos,
+                viewport.Size,
+                OFFSCREEN_MARKER_INSET * GlobalUIScale,
+                OFFSCREEN_LINE_OVERFLOW * GlobalUIScale
+            );
+
+            DrawLine
+            (
+                localScreenPos,
+                linePositions.LineEnd,
+                linePositions.Marker,
+                playerInfo.Player,
+                isInView,
+                true,
+                $" [{TimeSpan.FromSeconds(playerInfo.TargetingDurationSeconds)}]"
+            );
         }
     }
 
@@ -624,23 +662,41 @@ public unsafe class AutoCountPlayers : ModuleBase
     private void DrawLine
     (
         Vector2    startPos,
-        Vector2    endPos,
+        Vector2    lineEndPos,
+        Vector2    markerPos,
         ICharacter chara,
-        uint       lineColor = 0,
+        bool       isMarkerVisible,
+        bool       isAlert = false,
         string?    extraInfo = null
     )
     {
-        lineColor = lineColor == 0 ?
-                        LineColorBlue :
-                        lineColor;
+        var drawList     = ImGui.GetForegroundDrawList();
+        var lineColor    = isAlert ? AlertLineColor : InfoLineColor;
+        var labelColor   = isAlert ? AlertLabelColor : InfoLabelColor;
+        var startRadius  = START_MARKER_RADIUS * GlobalUIScale;
+        var markerRadius = TARGET_MARKER_RADIUS * GlobalUIScale;
 
-        var drawList = ImGui.GetForegroundDrawList();
+        drawList.AddLine(startPos, lineEndPos, LineOutlineColor, LINE_OUTLINE_THICKNESS * GlobalUIScale);
+        drawList.AddLine(startPos, lineEndPos, lineColor, LINE_THICKNESS * GlobalUIScale);
 
-        drawList.AddLine(startPos, endPos, lineColor, 8f);
-        drawList.AddCircleFilled(startPos, 12f, DotColor);
-        drawList.AddCircleFilled(endPos,   12f, DotColor);
+        drawList.AddCircleFilled(startPos, startRadius + (START_MARKER_OUTLINE_SIZE * GlobalUIScale), LineOutlineColor);
+        drawList.AddCircleFilled(startPos, startRadius, lineColor);
 
-        ImGui.SetNextWindowPos(endPos);
+        if (isMarkerVisible)
+        {
+            drawList.AddCircleFilled(markerPos, markerRadius + (TARGET_MARKER_OUTLINE_SIZE * GlobalUIScale), LineOutlineColor);
+            drawList.AddCircle(markerPos, markerRadius, lineColor, TARGET_MARKER_SEGMENTS, TARGET_MARKER_THICKNESS * GlobalUIScale);
+            drawList.AddCircleFilled(markerPos, TARGET_MARKER_CORE_RADIUS * GlobalUIScale, MarkerCoreColor);
+        }
+
+        var viewportCenter = ImGui.GetMainViewport().GetCenter();
+        var labelPivot = new Vector2
+        (
+            markerPos.X >= viewportCenter.X ? 1f : 0f,
+            markerPos.Y >= viewportCenter.Y ? 1f : 0f
+        );
+
+        ImGui.SetNextWindowPos(markerPos, ImGuiCond.Always, labelPivot);
 
         if (ImGui.Begin($"AutoCountPlayers-{chara.EntityID}", WINDOW_FLAGS))
         {
@@ -657,11 +713,45 @@ public unsafe class AutoCountPlayers : ModuleBase
                 ImGuiHelpers.SeStringWrapped(icon);
 
                 ImGui.SameLine();
-                ImGuiOm.TextOutlined(KnownColor.Orange.ToUInt(), $"{chara.Name}" + (extraInfo ?? string.Empty));
+                ImGuiOm.TextOutlined(labelColor, $"{chara.Name}" + (extraInfo ?? string.Empty));
             }
 
             ImGui.End();
         }
+    }
+
+    private static (Vector2 LineEnd, Vector2 Marker) GetLinePositions
+    (
+        Vector2 projectedPosition,
+        bool    isInView,
+        Vector2 viewportPosition,
+        Vector2 viewportSize,
+        float   markerInset,
+        float   lineOverflow
+    )
+    {
+        if (isInView) return (projectedPosition, projectedPosition);
+
+        var viewportCenter = viewportPosition + (viewportSize * 0.5f);
+        var direction      = projectedPosition - viewportCenter;
+
+        if (!float.IsFinite(direction.X) ||
+            !float.IsFinite(direction.Y) ||
+            direction.LengthSquared() < MIN_DIRECTION_LENGTH_SQUARED)
+            direction = Vector2.UnitY;
+
+        var halfWidth           = Math.Max(viewportSize.X * 0.5f, 1f);
+        var halfHeight          = Math.Max(viewportSize.Y * 0.5f, 1f);
+        var horizontalT         = MathF.Abs(direction.X) > float.Epsilon ? halfWidth / MathF.Abs(direction.X) : float.MaxValue;
+        var verticalT           = MathF.Abs(direction.Y) > float.Epsilon ? halfHeight / MathF.Abs(direction.Y) : float.MaxValue;
+        var edgePosition        = viewportCenter + (direction * MathF.Min(horizontalT, verticalT));
+        var normalizedDirection = Vector2.Normalize(direction);
+
+        return
+        (
+            edgePosition + (normalizedDirection * lineOverflow),
+            edgePosition - (normalizedDirection * markerInset)
+        );
     }
 
     private void EnsureOverlay()
@@ -715,9 +805,43 @@ public unsafe class AutoCountPlayers : ModuleBase
         ImGuiWindowFlags.NoInputs              |
         ImGuiWindowFlags.NoSavedSettings;
 
-    private static readonly uint LineColorBlue = KnownColor.LightSkyBlue.ToUInt();
-    private static readonly uint LineColorRed  = KnownColor.Red.ToUInt();
-    private static readonly uint DotColor      = KnownColor.RoyalBlue.ToUInt();
+    private const float LINE_THICKNESS               = 3f;
+    private const float LINE_OUTLINE_THICKNESS       = 5f;
+    private const float START_MARKER_RADIUS          = 2.25f;
+    private const float START_MARKER_OUTLINE_SIZE    = 1.25f;
+    private const float TARGET_MARKER_RADIUS         = 4f;
+    private const float TARGET_MARKER_OUTLINE_SIZE   = 1.5f;
+    private const float TARGET_MARKER_THICKNESS      = 1.5f;
+    private const float TARGET_MARKER_CORE_RADIUS    = 1.25f;
+    private const int   TARGET_MARKER_SEGMENTS       = 16;
+    private const float OFFSCREEN_MARKER_INSET       = 14f;
+    private const float OFFSCREEN_LINE_OVERFLOW      = 32f;
+    private const float MIN_DIRECTION_LENGTH_SQUARED = 0.001f;
+
+    private const float INFO_LINE_OPACITY    = 0.78f;
+    private const float ALERT_LINE_OPACITY   = 0.88f;
+    private const float INFO_LABEL_OPACITY   = 0.96f;
+    private const float ALERT_LABEL_OPACITY  = 0.98f;
+    private const float LINE_OUTLINE_OPACITY = 0.4f;
+    private const float MARKER_CORE_OPACITY  = 0.88f;
+
+    private static readonly uint InfoLineColor =
+        (KnownColor.DeepSkyBlue.ToVector4() with { W = INFO_LINE_OPACITY }).ToUInt();
+
+    private static readonly uint AlertLineColor =
+        (KnownColor.IndianRed.ToVector4() with { W = ALERT_LINE_OPACITY }).ToUInt();
+
+    private static readonly uint InfoLabelColor =
+        (KnownColor.LightSkyBlue.ToVector4() with { W = INFO_LABEL_OPACITY }).ToUInt();
+
+    private static readonly uint AlertLabelColor =
+        (KnownColor.LightCoral.ToVector4() with { W = ALERT_LABEL_OPACITY }).ToUInt();
+
+    private static readonly uint LineOutlineColor =
+        (KnownColor.Black.ToVector4() with { W = LINE_OUTLINE_OPACITY }).ToUInt();
+
+    private static readonly uint MarkerCoreColor =
+        (KnownColor.WhiteSmoke.ToVector4() with { W = MARKER_CORE_OPACITY }).ToUInt();
 
     private static readonly FrozenSet<TerritoryIntendedUse> ContentMemberListValidZones =
     [

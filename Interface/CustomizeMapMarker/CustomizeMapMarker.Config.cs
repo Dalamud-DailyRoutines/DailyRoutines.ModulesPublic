@@ -1,5 +1,6 @@
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface.CustomizeMapMarker;
 
@@ -23,7 +24,7 @@ public partial class CustomizeMapMarker
         public float    Scale           { get; set; } = 1f;
         public bool     AutoSetFlag     { get; set; }
         public string   ExtraCommands   { get; set; } = string.Empty;
-        public DateTime CreatedAt       { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt       { get; set; } = StandardTimeManager.Instance().UTCNow;
 
         public MarkerRecord Clone() => (MarkerRecord)MemberwiseClone();
     }

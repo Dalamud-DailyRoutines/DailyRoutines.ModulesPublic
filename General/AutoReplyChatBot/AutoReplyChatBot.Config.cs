@@ -239,7 +239,7 @@ public partial class AutoReplyChatBot
             if (conv.RecentTurns.Count > HOT_TURN_LIMIT * 2)
                 ArchiveOldestTurns(conv);
 
-            conv.LastMessageAt = DateTime.UtcNow;
+            conv.LastMessageAt = StandardTimeManager.Instance().UTCNow;
             RequestSave(id);
         }
 
@@ -253,7 +253,7 @@ public partial class AutoReplyChatBot
             var conv = GetOrLoad(id);
             conv.CompressedSummary = summary;
             conv.SummaryVersion    = version;
-            conv.LastCompressedAt  = DateTime.UtcNow;
+            conv.LastCompressedAt  = StandardTimeManager.Instance().UTCNow;
             RequestSave(id);
         }
 
@@ -289,7 +289,7 @@ public partial class AutoReplyChatBot
 
         public Task PruneAsync()
         {
-            var cutoff   = DateTime.UtcNow.AddDays(-PRUNE_DAYS);
+            var cutoff   = StandardTimeManager.Instance().UTCNow.AddDays(-PRUNE_DAYS);
             var allFiles = LoadAllIds();
 
             foreach (var id in allFiles)
@@ -545,7 +545,7 @@ public partial class AutoReplyChatBot
             public int SummaryVersion { get; set; }
 
             [JsonProperty("lastMessageAt")]
-            public DateTime LastMessageAt { get; set; } = DateTime.UtcNow;
+            public DateTime LastMessageAt { get; set; } = StandardTimeManager.Instance().UTCNow;
 
             [JsonProperty("lastCompressedAt")]
             public DateTime? LastCompressedAt { get; set; }
