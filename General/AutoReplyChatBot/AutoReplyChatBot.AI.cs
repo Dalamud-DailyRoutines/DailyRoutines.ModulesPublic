@@ -12,7 +12,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoReplyChatBot
 {
-    private static void SendReply
+    private static async Task SendReply
     (
         XivChatType originalType,
         string      target,
@@ -21,11 +21,15 @@ public partial class AutoReplyChatBot
     {
         if (originalType == XivChatType.TellIncoming || !ChatTypeToCommand.TryGetValue(originalType, out var command))
         {
-            ChatManager.Instance().SendMessage($"/tell {target} {reply}");
+            await DService.Instance().Framework.RunOnFrameworkThread
+            (() => ChatManager.Instance().SendMessage($"/tell {target} {reply}"))
+            .ConfigureAwait(false);
             return;
         }
 
-        ChatManager.Instance().SendMessage($"{command} {reply}");
+        await DService.Instance().Framework.RunOnFrameworkThread
+        (() => ChatManager.Instance().SendMessage($"{command} {reply}"))
+        .ConfigureAwait(false);
     }
 
     private async Task<string?> GenerateReplyAsync

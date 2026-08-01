@@ -163,7 +163,7 @@ public partial class AutoReplyChatBot
             }
             else if (!string.IsNullOrWhiteSpace(reply))
             {
-                SendReply(chatType, target, reply);
+                await SendReply(chatType, target, reply).ConfigureAwait(false);
                 NotifyHelper.Instance().NotificationInfo(reply, $"{Lang.Get("AutoReplyChatBot-AutoRepliedTo")}{target}");
                 module.AppendHistory(target, "assistant", reply);
             }

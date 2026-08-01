@@ -1262,7 +1262,7 @@ public partial class AutoReplyChatBot
                     return "错误: /tell 格式应为 /tell 玩家名@服务器 内容 或 /tell 玩家名 内容";
 
                 context.SendMessageCalled = true;
-                SendReply(context.ReplyContext.OriginalType, target, content);
+                await SendReply(context.ReplyContext.OriginalType, target, content).ConfigureAwait(false);
                 context.ReplyContext.SentMessage = content;
                 return $"已回复 {target}";
             }
