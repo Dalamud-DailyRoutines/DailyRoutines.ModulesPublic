@@ -34,10 +34,7 @@ public partial class OccultCrescentHelper
     {
         private const string COMMAND_FATE = "pfate";
         private const string COMMAND_CE   = "pce";
-
-        private const float FATE_MINIMUM_REMAINING_SECONDS  = 60f;
-        private const byte  FATE_MAXIMUM_PROGRESS           = 80;
-        private const long  CE_MINIMUM_REMAINING_SECONDS    = 20;
+        
         private const float MOUNT_MINIMUM_DISTANCE          = 50f;
         private const float PATHFINDING_COMPLETION_DISTANCE = 5f;
         private const float PATH_POINT_RADIUS               = 4f;

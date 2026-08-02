@@ -225,7 +225,9 @@ public partial class OccultCrescentHelper : ModuleBase
 
     #region 常量
 
-    private const uint DEMI_RETURN_ACTION_ID = 41343;
+    private const uint DEMI_RETURN_ACTION_ID   = 41343;
+    private const uint SOUTH_HORN_TERRITORY_ID = 1252;
+    private const uint NORTH_HORN_TERRITORY_ID = 1346;
 
     #endregion
 }

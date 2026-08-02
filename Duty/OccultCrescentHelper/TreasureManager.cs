@@ -25,6 +25,10 @@ public partial class OccultCrescentHelper
         OccultCrescentHelper mainModule
     ) : BaseIslandModule(mainModule)
     {
+        private static float MinHeight => GameState.TerritoryType == SOUTH_HORN_TERRITORY_ID ?
+                                              -5 :
+                                              -160;
+        
         private TaskHelper? treasureTaskHelper;
 
         private Queue<TreasureHuntPoint> queuedGatheringList = [];
@@ -123,14 +127,17 @@ public partial class OccultCrescentHelper
 
                     var isFirst = true;
 
-                    foreach (var (routeName, routeData) in Routes)
+                    using (ImRaii.Disabled(treasureTaskHelper.IsBusy))
                     {
-                        if (!isFirst)
-                            ImGui.SameLine();
-                        isFirst = false;
+                        foreach (var (routeName, routeData) in Routes)
+                        {
+                            if (!isFirst)
+                                ImGui.SameLine();
+                            isFirst = false;
 
-                        if (ImGui.Button(routeName))
-                            EnqueueAutoTreasureHunt(routeData);
+                            if (ImGui.Button(routeName))
+                                EnqueueAutoTreasureHunt(routeData);
+                        }
                     }
 
                     if (ImGui.Button(Lang.Get("Stop")))
@@ -196,7 +203,7 @@ public partial class OccultCrescentHelper
                                     ICondition.Instance()[ConditionFlag.Mounted] ?
                                         24 :
                                         12,
-                                    -20,
+                                    MinHeight,
                                     ct
                                 );
 
@@ -245,7 +252,7 @@ public partial class OccultCrescentHelper
                                     ICondition.Instance()[ConditionFlag.Mounted] ?
                                         24 :
                                         12,
-                                    -20,
+                                    MinHeight,
                                     ct
                                 );
 
@@ -417,14 +424,18 @@ public partial class OccultCrescentHelper
             treasureTaskHelper.Abort();
             queuedGatheringList.Clear();
 
-            if (LocalPlayerState.DistanceTo2D(CrescentAetheryte.ExpeditionBaseCamp.Position.ToVector2()) <= 50)
+            var startPosition = GameState.TerritoryType == SOUTH_HORN_TERRITORY_ID ?
+                                    CrescentAetheryte.ExpeditionBaseCamp.Position :
+                                    CrescentAetheryte.NorthHornBaseCamp.Position;
+            
+            if (LocalPlayerState.DistanceTo2D(startPosition.ToVector2()) <= 50)
             {
                 NotifyHelper.Instance().NotificationError(Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-Notification-Danger"));
                 return;
             }
 
             queuedGatheringList = PathPlanner.PlanShortestPath(LocalPlayerState.Object.Position, routeData);
-            currentRoute        = new(queuedGatheringList);
+            currentRoute        = [.. queuedGatheringList];
             MoveToNextTreasurePoint();
         }
 
@@ -439,6 +450,13 @@ public partial class OccultCrescentHelper
 
         private unsafe void MoveToNextTreasurePoint()
         {
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent ||
+                !GameState.IsLoggedIn)
+            {
+                StopAutoTreasureHunt();
+                return;
+            }
+            
             treasureTaskHelper.Abort();
 
             if (queuedGatheringList.Count == 0)
@@ -481,7 +499,7 @@ public partial class OccultCrescentHelper
             (() =>
                 {
                     PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = true;
-                    MovementManager.Instance().TPSmooth(position, 24, -20);
+                    MovementManager.Instance().TPSmooth(position, 24, MinHeight);
 
                     if (!Throttler.Shared.Throttle("OccultCrescentHelper-TreasureManager-Pathfind-Check"))
                         return false;
@@ -688,17 +706,20 @@ public partial class OccultCrescentHelper
             carrotPositions      = carrots;
         }
 
-        private static unsafe void InteractWithTreasure
+        private unsafe void InteractWithTreasure
         (
             Treasure* treasure
         )
         {
             if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
 
-            var moveType = MovementManager.Instance().GetInstanceMoveType(PositionUpdateInstancePacket.MoveType.NormalMove0);
-            new PositionUpdateInstancePacket(localPlayer.Rotation, treasure->Position, moveType).Send();
+            var moveType         = MovementManager.Instance().GetInstanceMoveType(PositionUpdateInstancePacket.MoveType.NormalMove0);
+            var origPosition     = localPlayer.Position;
+            var treasurePosition = (Vector3)treasure->Position - (treasureTaskHelper.IsBusy ? new Vector3(0, 20, 0) : Vector3.Zero);
+            
+            new PositionUpdateInstancePacket(localPlayer.Rotation, treasurePosition, moveType).Send();
             new TreasureOpenPacket(treasure->EntityId).Send();
-            new PositionUpdateInstancePacket(localPlayer.Rotation, localPlayer.Position, moveType).Send();
+            new PositionUpdateInstancePacket(localPlayer.Rotation, origPosition, moveType).Send();
         }
 
         public class TreasureHuntPoint
