@@ -21,13 +21,13 @@ public partial class AutoReplyChatBot
     {
         if (originalType == XivChatType.TellIncoming || !ChatTypeToCommand.TryGetValue(originalType, out var command))
         {
-            await DService.Instance().Framework.RunOnFrameworkThread
+            await IFramework.Instance().RunOnFrameworkThread
             (() => ChatManager.Instance().SendMessage($"/tell {target} {reply}"))
             .ConfigureAwait(false);
             return;
         }
 
-        await DService.Instance().Framework.RunOnFrameworkThread
+        await IFramework.Instance().RunOnFrameworkThread
         (() => ChatManager.Instance().SendMessage($"{command} {reply}"))
         .ConfigureAwait(false);
     }
