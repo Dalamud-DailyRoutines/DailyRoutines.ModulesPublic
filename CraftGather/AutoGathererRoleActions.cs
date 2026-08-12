@@ -47,6 +47,8 @@ public class AutoGathererRoleActions : ModuleBase
                 foreach (var (action, status) in Actions)
                 {
                     if (localPlayer->StatusManager.HasStatus(status)) continue;
+                    if (localPlayer->HomeWorld != localPlayer->CurrentWorld && action is 238 or 221)
+                        continue; // 不在原服务器无法使用这两个技能
 
                     TaskHelper.Enqueue
                     (() =>
