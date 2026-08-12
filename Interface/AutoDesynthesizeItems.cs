@@ -90,7 +90,7 @@ public unsafe class AutoDesynthesizeItems : ModuleBase
                     layoutNode = new()
                     {
                         Size      = new(SalvageItemSelector->WindowNode->Width, 28),
-                        Position  = new(SalvageItemSelector->WindowNode->Width - 10, 8),
+                        Position  = new(SalvageItemSelector->WindowNode->Width - 30, 8),
                         Alignment = HorizontalListAnchor.Right
                     };
 
