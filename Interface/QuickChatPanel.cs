@@ -52,7 +52,7 @@ public unsafe class QuickChatPanel : ModuleBase
     // Chat 2 (ChatTwoCN) 兼容：面板改为忽略宿主可见性并按 Chat 2 窗口位置跟随
     //（ChatTwoCN 每帧隐藏原生 ChatLog）。IPC 契约为 ChatTwoCN 独有，provider 不存在时
     // IPCSubscriber.Value 回退默认值，CalculateCustomPosition 返回 null 自动回退宿主跟随。
-    [IPCSubscriber("ChatTwo.GetChatWindowRect")]
+    [IPCSubscriber("ChatTwoCN.GetChatWindowRect")]
     private IPCSubscriber<(float X, float Y, float W, float H)> chatTwoWindowRect;
 
     [IPCProvider("DailyRoutines.Modules.QuickChatPanel.Toggle")]
