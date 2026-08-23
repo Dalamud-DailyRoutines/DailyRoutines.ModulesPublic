@@ -23,6 +23,8 @@ using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
+using OmenTools.Dalamud.Abstractions;
+using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
@@ -46,6 +48,15 @@ public unsafe class QuickChatPanel : ModuleBase
 
     private TextButtonNode?      sendButton;
     private QuickChatPanelAddon? chatPanelAddon;
+
+    // Chat 2 (ChatTwoCN) 兼容：面板改为忽略宿主可见性并按 Chat 2 窗口位置跟随
+    //（ChatTwoCN 每帧隐藏原生 ChatLog）。IPC 契约为 ChatTwoCN 独有，provider 不存在时
+    // IPCSubscriber.Value 回退默认值，CalculateCustomPosition 返回 null 自动回退宿主跟随。
+    [IPCSubscriber("ChatTwo.GetChatWindowRect")]
+    private IPCSubscriber<(float X, float Y, float W, float H)> chatTwoWindowRect;
+
+    [IPCProvider("DailyRoutines.Modules.QuickChatPanel.Toggle")]
+    private void TogglePanelIPC() => chatPanelAddon?.TogglePanel();
 
     protected override void Init()
     {
@@ -412,6 +423,27 @@ public unsafe class QuickChatPanel : ModuleBase
 
         protected override Vector2 PositionOffset =>
             instance.config.OverlayOffset + new Vector2(0, -28f);
+
+        // Chat 2 会隐藏宿主 ChatLog（IsVisible=false），忽略可见性使面板保持附着
+        protected override bool IgnoreHostVisibility =>
+            true;
+
+        // Chat 2：宿主被隐藏/可能移出屏幕，改用 Chat 2 窗口位置跟随（RightBottom 语义 + 屏幕内 clamp）
+        protected override Vector2? CalculateCustomPosition(AtkUnitBase* addon)
+        {
+            var rect = instance.chatTwoWindowRect.Value;   // 无 Chat 2 时为 default，回退宿主跟随
+            if (rect.W <= 0 || rect.H <= 0) return null;
+
+            var panelSize = new Vector2(addon->GetScaledWidth(true), addon->GetScaledHeight(true));
+            var pos       = new Vector2(rect.X + rect.W, rect.Y + rect.H - panelSize.Y);
+
+            var viewport = ImGui.GetMainViewport();
+            var min      = viewport.WorkPos;
+            var max      = viewport.WorkPos + viewport.WorkSize - panelSize;
+            pos.X = Math.Clamp(pos.X, min.X, Math.Max(min.X, max.X));
+            pos.Y = Math.Clamp(pos.Y, min.Y, Math.Max(min.Y, max.Y));
+            return pos;
+        }
 
         protected override bool CanOpenAddon =>
             false;
