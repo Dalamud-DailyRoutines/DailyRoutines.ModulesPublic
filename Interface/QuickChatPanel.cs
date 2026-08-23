@@ -56,7 +56,11 @@ public unsafe class QuickChatPanel : ModuleBase
     private IPCSubscriber<(float X, float Y, float W, float H)> chatTwoWindowRect;
 
     [IPCProvider("DailyRoutines.Modules.QuickChatPanel.Toggle")]
-    private void TogglePanelIPC() => chatPanelAddon?.TogglePanel();
+    private bool TogglePanelIPC()
+    {
+        chatPanelAddon?.TogglePanel();
+        return true;
+    }
 
     protected override void Init()
     {
