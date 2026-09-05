@@ -256,10 +256,10 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     private void UpdateNodes()
     {
-        var enemyListArray = EnemyListNumberArray.Instance();
-        if (enemyListArray == null) return;
+        var enemyListNumberArray = EnemyListNumberArray.Instance();
+        if (enemyListNumberArray == null) return;
 
-        if (enemyListArray->EnemyCount == 0) return;
+        if (enemyListNumberArray->EnemyCount == 0) return;
 
         if (nodes is not { Count: > 0 })
         {
@@ -267,9 +267,9 @@ public unsafe class OptimizedEnemyList : ModuleBase
             return;
         }
 
-        for (var i = 0; i < MathF.Min(enemyListArray->EnemyCount, nodes.Count); i++)
+        for (var i = 0; i < MathF.Min(enemyListNumberArray->EnemyCount, nodes.Count); i++)
         {
-            var info = enemyListArray->Enemies[i];
+            var info = enemyListNumberArray->Enemies[i];
 
             nodes[i].Deconstruct
             (
@@ -293,7 +293,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var gameObj = CharacterManager.Instance()->LookupBattleCharaByEntityId(entityID);
-
             if (gameObj == null)
             {
                 HideNodes();
@@ -303,7 +302,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
             #region 原生节点隐藏
 
             var componentNode = EnemyList->GetComponentNodeById(componentNodeID);
-
             if (componentNode == null)
             {
                 HideNodes();
@@ -311,7 +309,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var nativeCastNode = componentNode->Component->UldManager.SearchNodeById(4)->GetAsAtkTextNode();
-
             if (nativeCastNode == null)
             {
                 HideNodes();
@@ -319,7 +316,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var nativeTargetNameNode = componentNode->Component->UldManager.SearchNodeById(6)->GetAsAtkTextNode();
-
             if (nativeTargetNameNode == null)
             {
                 HideNodes();
@@ -328,7 +324,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             var nativeCastBarNode         = componentNode->Component->UldManager.SearchNodeById(7);
             var nativeCastBarProgressNode = componentNode->Component->UldManager.SearchNodeById(8);
-
             if (nativeCastBarNode == null || nativeCastBarProgressNode == null)
             {
                 HideNodes();
@@ -336,7 +331,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var nativeCastBackgroundNode = componentNode->Component->UldManager.SearchNodeById(5);
-
             if (nativeCastBackgroundNode == null)
             {
                 HideNodes();
@@ -482,7 +476,16 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 // 因为等于 0 的时候算出来的宽度有很不太好看的的变化
                 if (leftCastTime != 0)
                 {
-                    var castTextWidth = castNode.GetTextDrawSize(false).X + 1f;
+                    var orig = IGameConfig.Instance().System.GetUInt("UiHighScale");
+                    var offset = orig switch
+                    {
+                        0 => 3f,
+                        1 => 0f,
+                        2 => -3f,
+                        3 => -6f
+                    };
+                    
+                    var castTextWidth = castNode.GetTextDrawSize(false).X + offset;
 
                     castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f };
                     castBackgroundNode.Width    = castTextWidth + (CAST_TEXT_BACKGROUND_PADDING * (config.TextSize / 10f));
@@ -884,7 +887,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
     private static readonly Vector2 StatusComponentOffset             = new(12, -1);
 
     private const float HEALTH_TEXT_MARKER_PADDING   = 1f;
-    private const float CAST_TEXT_BACKGROUND_PADDING = 7f;
+    private const float CAST_TEXT_BACKGROUND_PADDING = 5f;
 
     #endregion
 }
