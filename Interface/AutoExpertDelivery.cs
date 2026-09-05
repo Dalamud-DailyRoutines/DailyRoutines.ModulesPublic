@@ -609,7 +609,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
         28633, // 机神城图腾
         36810, // 龙诗图腾
         38951, // 欧米茄图腾
-        44743  // 巫女图腾
+        44743, // 巫女图腾
+        52321  // 小丑图腾
     }.ToFrozenSet();
 
     private static FrozenSet<uint> UltimateTotemExchangeItemIDs
