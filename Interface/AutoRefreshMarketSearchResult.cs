@@ -41,7 +41,7 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
     )
     {
         TaskHelper.Abort();
-        TaskHelper.DelayNext(500);
+        TaskHelper.DelayNext(500, 1000);
         TaskHelper.Enqueue(() => InfoProxyItemSearch.Instance()->RequestData());
     }
 }
