@@ -33,6 +33,7 @@ public unsafe class AutoSplitStacks : ModuleBase
     private int  splitAmountInput = 1;
     private uint fastSplitItemID;
     private bool isNeedToOpen;
+    private bool isOpen;
 
     protected override void Init()
     {
@@ -68,25 +69,27 @@ public unsafe class AutoSplitStacks : ModuleBase
 
         fastSplitItemID = 0;
         isNeedToOpen    = false;
+        isOpen          = false;
     }
 
     private void OnDraw()
     {
         var popupName = $"{Lang.Get("AutoSplitStacks-FastSplit")}###FastSplitPopup";
 
-        if (isNeedToOpen && !ImGui.IsPopupOpen(popupName))
-            ImGui.OpenPopup(popupName);
+        if (isNeedToOpen && !isOpen)
+        {
+            isOpen       = true;
+            isNeedToOpen = false;
+        }
 
-        var isOpen = true;
-
-        using var popup = ImRaii.PopupModal
+        using var popup = ImGuiOm.PopupModal
         (
             popupName,
             ref isOpen,
             ImGuiWindowFlags.AlwaysAutoResize
         );
         if (!popup) return;
-        
+
         ImGui.TextUnformatted($"{Lang.Get("AutoSplitStacks-PleaseInputSplitAmount")}:");
 
         ImGui.SetNextItemWidth(150f * GlobalUIScale);
@@ -98,14 +101,14 @@ public unsafe class AutoSplitStacks : ModuleBase
         {
             EnqueueSplit(fastSplitItemID, splitAmountInput);
 
-            ImGui.CloseCurrentPopup();
+            isOpen       = false;
             isNeedToOpen = false;
         }
 
         ImGui.SameLine();
         if (ImGui.Button(Lang.Get("Cancel")))
         {
-            ImGui.CloseCurrentPopup();
+            isOpen       = false;
             isNeedToOpen = false;
         }
 

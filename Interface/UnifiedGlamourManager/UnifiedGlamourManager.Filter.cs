@@ -18,6 +18,7 @@ public unsafe partial class UnifiedGlamourManager
     private int               maxEquipLevel = DEFAULT_MAX_EQUIP_LEVEL;
     private int               selectedJobFilterIndex;
     private bool              requestClearFavoritesConfirm;
+    private bool              favoritesConfirmPopupOpen;
     private bool              filteredItemsDirty = true;
 
     private uint lastFilterPlateSlot = uint.MaxValue;

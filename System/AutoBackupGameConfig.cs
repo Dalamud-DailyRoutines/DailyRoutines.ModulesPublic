@@ -28,6 +28,7 @@ public class AutoBackupGameConfig : ModuleBase
 
     // 界面
     private bool isConflictPending;
+    private bool isPopupOpen;
 
     protected override void Init()
     {
@@ -109,12 +110,11 @@ public class AutoBackupGameConfig : ModuleBase
     {
         if (isConflictPending)
         {
-            ImGui.OpenPopup(Lang.Get("AutoBackupGameConfig-Conflict-Title"));
+            isPopupOpen       = true;
             isConflictPending = false;
         }
 
-        var isPopupOpen = true;
-        using var popup = ImRaii.PopupModal
+        using var popup = ImGuiOm.PopupModal
         (
             Lang.Get("AutoBackupGameConfig-Conflict-Title"),
             ref isPopupOpen
@@ -126,20 +126,20 @@ public class AutoBackupGameConfig : ModuleBase
 
         if (ImGui.Button(Lang.Get("AutoBackupGameConfig-Backup")))
         {
-            ImGui.CloseCurrentPopup();
+            isPopupOpen = false;
             EnqueueUpload();
         }
 
         ImGui.SameLine();
         if (ImGui.Button(Lang.Get("AutoBackupGameConfig-Restore")))
         {
-            ImGui.CloseCurrentPopup();
+            isPopupOpen = false;
             EnqueueRestore();
         }
 
         ImGui.SameLine();
         if (ImGui.Button(Lang.Get("Cancel")))
-            ImGui.CloseCurrentPopup();
+            isPopupOpen = false;
     }
 
     private void OnLogin()

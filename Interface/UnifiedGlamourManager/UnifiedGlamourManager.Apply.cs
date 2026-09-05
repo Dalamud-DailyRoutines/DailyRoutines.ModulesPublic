@@ -17,6 +17,7 @@ public unsafe partial class UnifiedGlamourManager
     private readonly List<PlateItemInfo> missingApplyItems = [];
 
     private bool openMissingApplyItemsPopup;
+    private bool missingApplyItemsPopupOpen;
 
     private void ApplySelectedItemToCurrentPlateSlot
     (

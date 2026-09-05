@@ -722,15 +722,14 @@ public unsafe partial class UnifiedGlamourManager
     {
         if (requestClearFavoritesConfirm)
         {
-            ImGui.OpenPopup($"{Lang.Get("Clear")}###ClearFavoritesConfirm");
+            favoritesConfirmPopupOpen = true;
             requestClearFavoritesConfirm = false;
         }
 
-        var popupOpen = true;
-        using var popup = ImRaii.PopupModal
+        using var popup = ImGuiOm.PopupModal
         (
             $"{Lang.Get("Clear")}###ClearFavoritesConfirm",
-            ref popupOpen
+            ref favoritesConfirmPopupOpen
         );
         if (!popup) return;
 
@@ -742,13 +741,13 @@ public unsafe partial class UnifiedGlamourManager
             var ids = filteredItems.Select(static x => x.ItemID).ToHashSet();
             config.Favorites.RemoveAll(x => ids.Contains(x.ItemID));
             SaveConfig();
-            ImGui.CloseCurrentPopup();
+            favoritesConfirmPopupOpen = false;
         }
 
         ImGui.SameLine();
 
         if (ImGui.Button(Lang.Get("Cancel")))
-            ImGui.CloseCurrentPopup();
+            favoritesConfirmPopupOpen = false;
     }
 
     private static void DrawGridTooltip
@@ -1191,11 +1190,11 @@ public unsafe partial class UnifiedGlamourManager
     {
         if (openMissingApplyItemsPopup)
         {
-            ImGui.OpenPopup("##MissingApplyItemsPopup");
+            missingApplyItemsPopupOpen = true;
             openMissingApplyItemsPopup = false;
         }
 
-        using var popup = ImRaii.PopupModal("##MissingApplyItemsPopup", ImGuiWindowFlags.AlwaysAutoResize);
+        using var popup = ImGuiOm.PopupModal("##MissingApplyItemsPopup", ref missingApplyItemsPopupOpen, ImGuiWindowFlags.AlwaysAutoResize);
         if (!popup) return;
 
         ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Preset-MissingItemsText"));
@@ -1212,7 +1211,7 @@ public unsafe partial class UnifiedGlamourManager
         ImGui.Separator();
 
         if (ImGui.Button(LuminaWrapper.GetAddonText(1219), new Vector2(-1f, 0f)))
-            ImGui.CloseCurrentPopup();
+            missingApplyItemsPopupOpen = false;
     }
 
     #region 工具
