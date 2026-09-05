@@ -30,10 +30,9 @@ public unsafe class AutoSplitStacks : ModuleBase
     private ItemSelectCombo    itemSelectCombo        = null!;
     private FastSplitItemStack fastSplitItemStackMenu = null!;
 
-    private string itemSearchInput  = string.Empty;
-    private int    splitAmountInput = 1;
-    private uint   fastSplitItemID;
-    private bool   isNeedToOpen;
+    private int  splitAmountInput = 1;
+    private uint fastSplitItemID;
+    private bool isNeedToOpen;
 
     protected override void Init()
     {
@@ -80,34 +79,36 @@ public unsafe class AutoSplitStacks : ModuleBase
 
         var isOpen = true;
 
-        if (ImGui.BeginPopupModal(popupName, ref isOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar))
+        using var popup = ImRaii.PopupModal
+        (
+            popupName,
+            ref isOpen,
+            ImGuiWindowFlags.AlwaysAutoResize
+        );
+        if (!popup) return;
+        
+        ImGui.TextUnformatted($"{Lang.Get("AutoSplitStacks-PleaseInputSplitAmount")}:");
+
+        ImGui.SetNextItemWidth(150f * GlobalUIScale);
+        if (ImGui.InputInt("###FastSplitAmountInput", ref splitAmountInput))
+            splitAmountInput = Math.Clamp(splitAmountInput, 1, 998);
+
+        ImGui.SameLine();
+        if (ImGui.Button(Lang.Get("Confirm")))
         {
-            ImGui.TextUnformatted($"{Lang.Get("AutoSplitStacks-PleaseInputSplitAmount")}:");
+            EnqueueSplit(fastSplitItemID, splitAmountInput);
 
-            ImGui.SetNextItemWidth(150f * GlobalUIScale);
-            if (ImGui.InputInt("###FastSplitAmountInput", ref splitAmountInput))
-                splitAmountInput = Math.Clamp(splitAmountInput, 1, 998);
-
-            ImGui.SameLine();
-
-            if (ImGui.Button(Lang.Get("Confirm")))
-            {
-                EnqueueSplit(fastSplitItemID, splitAmountInput);
-
-                ImGui.CloseCurrentPopup();
-                isNeedToOpen = false;
-            }
-
-            ImGui.SameLine();
-
-            if (ImGui.Button(Lang.Get("Cancel")))
-            {
-                ImGui.CloseCurrentPopup();
-                isNeedToOpen = false;
-            }
-
-            ImGui.EndPopup();
+            ImGui.CloseCurrentPopup();
+            isNeedToOpen = false;
         }
+
+        ImGui.SameLine();
+        if (ImGui.Button(Lang.Get("Cancel")))
+        {
+            ImGui.CloseCurrentPopup();
+            isNeedToOpen = false;
+        }
+
     }
 
     protected override void ConfigUI()
