@@ -21,16 +21,15 @@ public class AutoReuseEmote : ModuleBase
         Author      = ["Xww"]
     };
 
-    private CancellationTokenSource? cancelSource;
-
-    protected override void Init() =>
-        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoReuseEmote-CommandHelp") });
-
-    protected override void Uninit()
+    protected override void Init()
     {
-        CommandManager.Instance().RemoveSubCommand(COMMAND);
-        CancelTokenAndNullify();
+        TaskHelper = new();
+
+        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoReuseEmote-CommandHelp") });
     }
+
+    protected override void Uninit() =>
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
 
     private void OnCommand
     (
@@ -38,7 +37,7 @@ public class AutoReuseEmote : ModuleBase
         string args
     )
     {
-        CancelTokenAndNullify();
+        TaskHelper.Abort();
 
         args = args.Trim();
         if (string.IsNullOrWhiteSpace(args)) return;
@@ -52,8 +51,7 @@ public class AutoReuseEmote : ModuleBase
                                  2000;
         if (!TryParseEmoteByName(emoteName, out var emoteID)) return;
 
-        cancelSource = new();
-        IFramework.Instance().Run(() => UseEmoteByID(emoteID, repeatInterval, cancelSource), cancelSource.Token);
+        UseEmoteByID(emoteID, repeatInterval);
     }
 
     private static unsafe bool TryParseEmoteByName
@@ -73,7 +71,7 @@ public class AutoReuseEmote : ModuleBase
                           x.TextCommand.ValueNullable != null
                     )
                     .FirstOrDefault
-                    (x => x.Name.ToString().ToLowerInvariant() == name ||
+                    (x => x.Name.ToString().Equals(name, StringComparison.InvariantCultureIgnoreCase) ||
                           x.TextCommand.Value.Command.ToString().ToLowerInvariant().Trim('/') ==
                           name
                     );
@@ -86,49 +84,31 @@ public class AutoReuseEmote : ModuleBase
         return true;
     }
 
-    private void CancelTokenAndNullify()
-    {
-        if (cancelSource == null) return;
-
-        cancelSource.Cancel();
-        cancelSource.Dispose();
-        cancelSource = null;
-    }
-
-    private async Task UseEmoteByID
+    private unsafe void UseEmoteByID
     (
-        ushort                  id,
-        int                     interval,
-        CancellationTokenSource cts
+        ushort id,
+        int    interval
     )
     {
-        while (!cts.Token.IsCancellationRequested)
-        {
-            unsafe
+        TaskHelper.Enqueue
+        (() =>
             {
-                if (AgentMap.Instance()->IsPlayerMoving)
+                if (AgentMap.Instance()->IsPlayerMoving     ||
+                    LocalPlayerState.Object == null         ||
+                    ICondition.Instance().IsBetweenAreas    ||
+                    ICondition.Instance().IsOccupiedInEvent ||
+                    ICondition.Instance()[ConditionFlag.InCombat])
                 {
-                    CancelTokenAndNullify();
+                    TaskHelper.Abort();
                     return;
                 }
-            }
 
-            if (IObjectTable.Instance().LocalPlayer == null ||
-                ICondition.Instance().IsBetweenAreas        ||
-                ICondition.Instance().IsOccupiedInEvent     ||
-                ICondition.Instance()[ConditionFlag.InCombat])
-            {
-                CancelTokenAndNullify();
-                return;
-            }
-
-            unsafe
-            {
                 AgentEmote.Instance()->ExecuteEmote(id, null, false, false);
             }
+        );
 
-            await Task.Delay(interval, cts.Token);
-        }
+        TaskHelper.DelayNext(interval);
+        TaskHelper.Enqueue(() => UseEmoteByID(id, interval));
     }
 
     #region 常量
