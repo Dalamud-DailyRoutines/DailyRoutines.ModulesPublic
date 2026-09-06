@@ -1,17 +1,16 @@
-using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.KamiToolKit.Addons.InputNumeric;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Game.Gui.ContextMenu;
+using Dalamud.Game.Text;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
-using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -29,12 +28,10 @@ public unsafe class AutoSplitStacks : ModuleBase
 
     private ItemSelectCombo    itemSelectCombo        = null!;
     private FastSplitItemStack fastSplitItemStackMenu = null!;
-
-    private int  splitAmountInput = 1;
-    private uint fastSplitItemID;
-    private bool isNeedToOpen;
-    private bool isOpen;
-
+    private DRInputNumeric?    drInputNumeric;
+    
+    private int splitAmountInput = 1;
+    
     protected override void Init()
     {
         itemSelectCombo = new
@@ -55,63 +52,16 @@ public unsafe class AutoSplitStacks : ModuleBase
         config     = Config.Load(this) ?? new();
 
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoSplitStacks-CommandHelp") });
-        IContextMenu.Instance().OnMenuOpened += OnMenuOpened;
-
-        WindowManager.Instance().PostDraw += OnDraw;
+        ContextMenuManager.Instance().Reg(fastSplitItemStackMenu);
     }
 
     protected override void Uninit()
     {
-        WindowManager.Instance().PostDraw -= OnDraw;
-
         CommandManager.Instance().RemoveCommand(COMMAND);
-        IContextMenu.Instance().OnMenuOpened -= OnMenuOpened;
+        ContextMenuManager.Instance().Unreg(fastSplitItemStackMenu);
 
-        fastSplitItemID = 0;
-        isNeedToOpen    = false;
-        isOpen          = false;
-    }
-
-    private void OnDraw()
-    {
-        var popupName = $"{Lang.Get("AutoSplitStacks-FastSplit")}###FastSplitPopup";
-
-        if (isNeedToOpen && !isOpen)
-        {
-            isOpen       = true;
-            isNeedToOpen = false;
-        }
-
-        using var popup = ImGuiOm.PopupModal
-        (
-            popupName,
-            ref isOpen,
-            ImGuiWindowFlags.AlwaysAutoResize
-        );
-        if (!popup) return;
-
-        ImGui.TextUnformatted($"{Lang.Get("AutoSplitStacks-PleaseInputSplitAmount")}:");
-
-        ImGui.SetNextItemWidth(150f * GlobalUIScale);
-        if (ImGui.InputInt("###FastSplitAmountInput", ref splitAmountInput))
-            splitAmountInput = Math.Clamp(splitAmountInput, 1, 998);
-
-        ImGui.SameLine();
-        if (ImGui.Button(Lang.Get("Confirm")))
-        {
-            EnqueueSplit(fastSplitItemID, splitAmountInput);
-
-            isOpen       = false;
-            isNeedToOpen = false;
-        }
-
-        ImGui.SameLine();
-        if (ImGui.Button(Lang.Get("Cancel")))
-        {
-            isOpen       = false;
-            isNeedToOpen = false;
-        }
-
+        drInputNumeric?.Dispose();
+        drInputNumeric = null;
     }
 
     protected override void ConfigUI()
@@ -239,7 +189,7 @@ public unsafe class AutoSplitStacks : ModuleBase
                     FontAwesomeIcon.Play,
                     Lang.Get("Execute")
                 ))
-                EnqueueSplit(group);
+                EnqueueSplitByInfo(group);
 
             ImGui.SameLine();
 
@@ -268,7 +218,7 @@ public unsafe class AutoSplitStacks : ModuleBase
             var group = config.SplitGroups.FirstOrDefault(x => x.ItemID == itemID);
             if (group == null) return;
 
-            EnqueueSplit(group);
+            EnqueueSplitByInfo(group);
             return;
         }
 
@@ -281,146 +231,93 @@ public unsafe class AutoSplitStacks : ModuleBase
             var group = config.SplitGroups.FirstOrDefault(x => x.ItemID == item.RowId);
             if (group == null) return;
 
-            EnqueueSplit(group);
+            EnqueueSplitByInfo(group);
         }
     }
 
-    private void OnMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        if (args.Target is not MenuTargetInventory { TargetItem: not null } iTarget) return;
-        if (iTarget.TargetItem.Value.Quantity <= 1) return;
-
-        args.AddMenuItem(fastSplitItemStackMenu.Get());
-    }
-
-    private void EnqueueSplit
+    private void EnqueueSplitByInfo
     (
         SplitGroup group
     ) =>
-        EnqueueSplit(group.ItemID, group.Amount);
+        EnqueueSplitByInfo(group.ItemID, group.Amount);
 
-    private void EnqueueSplit
+    private void EnqueueSplitByInfo
     (
         uint itemID,
-        int  amount
-    )
-    {
-        TaskHelper.Enqueue(() => ClickItemToSplit(itemID, amount));
-        TaskHelper.DelayNext(100, $"SplitRound_{itemID}_{amount}");
-        TaskHelper.Enqueue(() => EnqueueSplit(itemID, amount));
-    }
+        int  count
+    ) =>
+        TaskHelper.Enqueue(() => EnqueueSplit(itemID, count, 0));
 
-    private bool ClickItemToSplit
+    private bool EnqueueSplit
     (
         uint itemID,
-        int  amount
+        int  count,
+        int  finishRound
     )
     {
-        if (InputNumeric != null || itemID == 0 || amount == 0)
-        {
-            TaskHelper.Abort();
-            return true;
-        }
+        if (itemID == 0 || count == 0) return true;
 
-        var agent          = AgentInventoryContext.Instance();
-        var manager        = InventoryManager.Instance();
-        var agentInventory = AgentModule.Instance()->GetAgentByInternalId(AgentId.Inventory);
-        var addon          = RaptureAtkUnitManager.Instance()->GetAddonById((ushort)agentInventory->AddonId);
-
-        if (agent == null || manager == null || agentInventory == null || addon == null || !addon->IsVisible)
-        {
-            addon->Open(1);
-            return false;
-        }
+        var manager = InventoryManager.Instance();
 
         if (Inventories.Player.IsFull())
         {
-            TaskHelper.Abort();
-            NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoSplitStacks-Notification-FullInventory"));
+            var fullMessage = Lang.Get("AutoSplitStacks-Notification-FullInventory");
+            NotifyHelper.ToastError(fullMessage);
+            NotifyHelper.Chat
+            (
+                new XivChatEntry
+                {
+                    Type    = XivChatType.ErrorMessage,
+                    Message = fullMessage
+                }
+            );
+            
             return true;
         }
 
-        var foundTypes = Inventories.Player.Where
-                                    (type => manager->GetInventoryContainer(type) != null   &&
-                                             manager->GetInventoryContainer(type)->IsLoaded &&
-                                             manager->GetItemCountInContainer(itemID, type) +
-                                             manager->GetItemCountInContainer(itemID, type, true) >
-                                             amount
-                                    )
-                                    .ToList();
-
-        if (foundTypes.Count <= 0)
-        {
-            TaskHelper.Abort();
-            NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoSplitStacks-Notification-ItemNoFound"));
-            return true;
-        }
-
-        foreach (var type in foundTypes)
+        foreach (var type in Inventories.Player)
         {
             var  container = manager->GetInventoryContainer(type);
-            int? foundSlot = null;
+            if (container == null) continue;
 
             for (var i = 0; i < container->Size; i++)
             {
                 var slot = container->GetInventorySlot(i);
+                if (slot == null) continue;
 
                 if (slot->GetBaseItemId() == itemID)
                 {
-                    if (slot->GetQuantity() > amount)
+                    if (slot->GetQuantity() > count)
                     {
-                        foundSlot = i;
-                        break;
+                        manager->SplitItem(container->Type, (ushort)slot->Slot, count);
+                        TaskHelper.Enqueue(() => EnqueueSplit(itemID, count, finishRound + 1));
+                        return true;
                     }
                 }
             }
-
-            if (foundSlot == null) continue;
-
-            agent->OpenForItemSlot(type, (int)foundSlot, 0, agentInventory->AddonId);
-            EnqueueOperations(itemID, type, (int)foundSlot, amount);
-            return true;
         }
-
-        TaskHelper.Abort();
-        NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoSplitStacks-Notification-ItemNoFound"));
+        
+        if (finishRound == 0)
+        {
+            var noFoundMessage = Lang.Get("AutoSplitStacks-Notification-ItemNoFound");
+            NotifyHelper.ToastError(noFoundMessage);
+            NotifyHelper.Chat
+            (
+                new XivChatEntry
+                {
+                    Type    = XivChatType.ErrorMessage,
+                    Message = noFoundMessage
+                }
+            );
+        }
+        else
+        {
+            var finishMessage = Lang.Get("AutoSplitStacks-Notification-Finished", finishRound, count);
+            NotifyHelper.Toast(finishMessage);
+            NotifyHelper.Chat(finishMessage);
+        }
+        
         return true;
-    }
-
-    private void EnqueueOperations
-    (
-        uint          itemID,
-        InventoryType foundType,
-        int           foundSlot,
-        int           amount
-    )
-    {
-        TaskHelper.DelayNext(20, $"ContextMenu_{itemID}_{foundType}_{foundSlot}", 2);
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                AddonContextMenuEvent.Select(LuminaWrapper.GetAddonText(92));
-                return true;
-            },
-            weight: 2
-        );
-
-        TaskHelper.DelayNext(20, $"InputNumeric_{itemID}_{foundType}_{foundSlot}", 2);
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (InputNumeric == null || !InputNumeric->IsAddonAndNodesReady()) return false;
-
-                InputNumeric->Callback(amount);
-                return true;
-            },
-            weight: 2
-        );
     }
 
     private class Config : ModuleConfig
@@ -471,26 +368,72 @@ public unsafe class AutoSplitStacks : ModuleBase
         public override int GetHashCode() => (int)ItemID;
     }
 
-    private class FastSplitItemStack
+    private sealed class FastSplitItemStack
     (
         AutoSplitStacks module
-    ) : MenuItemBase
+    ) : ContextMenuEntry
     {
-        public override string Name       { get; protected set; } = Lang.Get("AutoSplitStacks-FastSplit");
-        public override string Identifier { get; protected set; } = nameof(AutoSplitStacks);
+        public override string Identifier =>
+            nameof(AutoSplitStacks);
 
-        protected override bool WithDRPrefix { get; set; } = true;
-
-        protected override void OnClicked
+        public override ContextMenuItem? Create
         (
-            IMenuItemClickedArgs args
+            ContextMenuOpenedArgs args
         )
         {
-            if (args.Target is not MenuTargetInventory { TargetItem: not null } iTarget) return;
-            if (iTarget.TargetItem.Value.Quantity <= 1) return;
+            if (args.TargetItem is not { } item) return null;
 
-            module.fastSplitItemID = iTarget.TargetItem.Value.ItemId;
-            module.isNeedToOpen    = true;
+            var quantity = item.GetQuantity();
+            if (quantity < 2) return null;
+
+            return new()
+            {
+                Name = Lang.Get("AutoSplitStacks-ContextMenu-Split"),
+                OnClicked = clickedArgs =>
+                {
+                    if (module.drInputNumeric != null &&
+                        !AddonHelper.TryGetPtrByName("DRInputNumeric", out _))
+                    {
+                        try
+                        {
+                            module.drInputNumeric?.Dispose();
+                            module.drInputNumeric = null;
+                        }
+                        catch
+                        {
+                            // 谁敢猜这个时候会发生什么
+                        }
+                    }
+
+                    if (module.drInputNumeric != null)
+                        return;
+                    
+                    module.drInputNumeric = DRInputNumeric.Open
+                    (
+                        new()
+                        {
+                            Prompt = Lang.Get("AutoSplitStacks-Popup-PleaseInput"),
+                            Value  = 1,
+                            Min    = 1,
+                            Max    = (int)Math.Min(998, quantity),
+                            Callback = (addon, result) =>
+                            {
+                                module.drInputNumeric = null;
+
+                                if (result != DRInputNumericResult.Confirmed)
+                                    return;
+
+                                module.EnqueueSplitByInfo(args.TargetItemID, addon.Value);
+                            },
+                            Position = new
+                            (
+                                args.Addon->RootNode->GetNodeState().Center,
+                                AddonPositionAlignment.TopCenter
+                            ),
+                        }
+                    );
+                }
+            };
         }
     }
 
