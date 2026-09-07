@@ -1,15 +1,15 @@
 using System.Reflection;
-using DailyRoutines.Common.Info.Abstractions;
+using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Utility;
 using Lumina.Data;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud;
 using OmenTools.OmenService;
-using MenuItem = Dalamud.Game.Gui.ContextMenu.MenuItem;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -31,181 +31,192 @@ public class ExpandItemMenuSearch : ModuleBase
         {
             if (field is { Length: > 0 }) return field;
 
-            return field = typeof(ExpandItemMenuSearch)
-                           .GetNestedTypes(BindingFlags.NonPublic)
-                           .Where(type => !type.IsAbstract && typeof(SearchMenuItemBase).IsAssignableFrom(type))
-                           .Select
-                           (type => Activator.CreateInstance
-                                    (
-                                        type,
-                                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                                        null,
-                                        [this],
-                                        null
-                                    ) as SearchMenuItemBase
-                           )
-                           .OrderBy(searchMenuItem => searchMenuItem.Order)
-                           .ThenBy(searchMenuItem => searchMenuItem.ConfigKey, StringComparer.Ordinal)
-                           .ToArray()!;
+            return field =
+            [
+                .. typeof(ExpandItemMenuSearch)
+                   .GetNestedTypes(BindingFlags.NonPublic)
+                   .Where(type => !type.IsAbstract && typeof(SearchMenuItemBase).IsAssignableFrom(type))
+                   .Select
+                   (type => (SearchMenuItemBase)Activator.CreateInstance
+                    (
+                        type,
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                        null,
+                        [this],
+                        null
+                    )
+                   )
+            ];
         }
     }
 
     private Config config = null!;
 
     private readonly UpperContainerItem menu;
+    private readonly ClickAllItem       clickAllMenu;
 
-    public ExpandItemMenuSearch() =>
-        menu = new(this);
+    public ExpandItemMenuSearch()
+    {
+        menu         = new(this);
+        clickAllMenu = new(this);
+    }
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
 
-        IContextMenu.Instance().OnMenuOpened += OnMenuOpened;
+        ContextMenuManager.Instance().Reg(menu);
     }
 
     protected override void Uninit() =>
-        IContextMenu.Instance().OnMenuOpened -= OnMenuOpened;
+        ContextMenuManager.Instance().Unreg(menu);
 
     protected override void ConfigUI()
     {
+        using var heading = ImRaii.Heading1(Lang.Get("SearchPlatform"));
+
         foreach (var searchMenuItem in SearchMenuItems)
         {
             var value = config.SearchMenuEnabledStates
                               .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled);
-            if (!ImGui.Checkbox(Lang.Get(searchMenuItem.LocKey), ref value)) continue;
 
-            config.SearchMenuEnabledStates[searchMenuItem.ConfigKey] = value;
-            config.Save(this);
+            if (ImGui.Checkbox(searchMenuItem.PlatformName, ref value))
+            {
+                config.SearchMenuEnabledStates[searchMenuItem.ConfigKey] = value;
+                config.Save(this);
+            }
+
         }
 
-        ImGui.Separator();
-        RenderCheckbox
-        (
-            Lang.Get("ExpandItemMenuSearch-GlamourTakesPriority"),
-            ref config.GlamourPrioritize
-        );
-    }
-
-    private void RenderCheckbox
-    (
-        string   label,
-        ref bool value
-    )
-    {
-        if (ImGui.Checkbox(label, ref value))
+        ImGui.NewLine();
+        
+        if (ImGui.Checkbox(Lang.Get("ExpandItemMenuSearch-GlamourTakesPriority"), ref config.GlamourPrioritize))
             config.Save(this);
     }
 
-    #region 右键菜单处理
-
-    private void OnMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        // 检查是否有有效的物品ID
-        if (!ContextMenuItemManager.Instance().IsValidItem) return;
-
-        // 添加菜单项
-        AddContextMenuItemsByConfig(args);
-    }
-
-    private void AddContextMenuItemsByConfig
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        var shouldProcess = SearchMenuItems.Any
-        (searchMenuItem => config.SearchMenuEnabledStates
-                                 .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled)
-        );
-
-        if (shouldProcess)
-            args.AddMenuItem(menu.Get());
-    }
-
-    #endregion
-
-    private class Config : ModuleConfig
+    private sealed class Config : ModuleConfig
     {
         public bool                     GlamourPrioritize       = true;
         public Dictionary<string, bool> SearchMenuEnabledStates = [];
     }
 
-    private abstract class SearchMenuItemBase : MenuItemBase
-    {
-        protected readonly ExpandItemMenuSearch module;
-
-        protected SearchMenuItemBase
-        (
-            ExpandItemMenuSearch module
-        )
-        {
-            this.module = module;
-            Name        = Lang.Get(LocKey);
-        }
-
-        public sealed override string Name       { get; protected set; }
-        public sealed override string Identifier { get; protected set; } = nameof(ExpandItemMenuSearch);
-
-        public abstract string LocKey         { get; }
-        public abstract string ConfigKey      { get; }
-        public virtual  bool   DefaultEnabled => false;
-        public virtual  int    Order          => 0;
-    }
-
-    private class UpperContainerItem
+    private abstract class SearchMenuItemBase
     (
         ExpandItemMenuSearch module
-    ) : MenuItemBase
+    ) : ContextMenuEntry
     {
-        public override string Name       { get; protected set; } = Lang.Get("ExpandItemMenuSearch-SearchTitle");
-        public override string Identifier { get; protected set; } = nameof(ExpandItemMenuSearch);
+        protected readonly ExpandItemMenuSearch module = module;
 
-        protected override bool WithDRPrefix { get; set; } = true;
-        protected override bool IsSubmenu    { get; set; } = true;
+        public override string Identifier => nameof(ExpandItemMenuSearch);
 
-        protected override void OnClicked
+        public override bool OmitPrefix => true;
+
+        public abstract string PlatformName  { get; }
+        public abstract string ConfigKey      { get; }
+        public virtual  bool   DefaultEnabled => false;
+
+        public abstract void OnClicked();
+
+        public override ContextMenuItem Create
         (
-            IMenuItemClickedArgs args
+            ContextMenuOpenedArgs args
         ) =>
-            args.OpenSubmenu(Name, ProcessMenuItems());
-
-        private List<MenuItem> ProcessMenuItems()
-        {
-            var list = new List<MenuItem>();
-
-            foreach (var searchMenuItem in module.SearchMenuItems)
+            new()
             {
-                if (!module.config.SearchMenuEnabledStates
-                           .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled))
-                    continue;
+                Name      = Lang.Get("ExpandItemMenuSearch-ContextMenu-Search", PlatformName),
+                OnClicked = _ => OnClicked(),
+            };
+    }
 
-                list.Add(searchMenuItem.Get());
-            }
+    private sealed class UpperContainerItem
+    (
+        ExpandItemMenuSearch module
+    ) : ContextMenuEntry
+    {
+        public override string Identifier => nameof(ExpandItemMenuSearch);
 
-            return list;
+        public override ContextMenuItem? Create
+        (
+            ContextMenuOpenedArgs args
+        )
+        {
+            if (!ContextMenuItemManager.Instance().IsValidItem) return null;
+
+            var searchItems = module.SearchMenuItems
+                                    .Where
+                                    (searchMenuItem => module.config.SearchMenuEnabledStates
+                                                             .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled)
+                                    )
+                                    .ToArray();
+            if (searchItems.Length == 0) return null;
+
+            return new()
+            {
+                Name = Lang.Get("ExpandItemMenuSearch-ContextMenu-Name"),
+                Submenu = new()
+                {
+                    Title = Lang.Get("ExpandItemMenuSearch-ContextMenu-Name"),
+                    Entries = searchItems.Length == 1 ?
+                                  searchItems :
+                                  [.. searchItems, module.clickAllMenu]
+                }
+            };
         }
     }
 
-    // 光之收藏家
-    private class FFXIVSCItem
+    private sealed class ClickAllItem
+    (
+        ExpandItemMenuSearch module
+    ) : ContextMenuEntry
+    {
+        public override string Identifier => nameof(ExpandItemMenuSearch);
+
+        public override int? Priority => 1000;
+
+        public override bool OmitPrefix => true;
+
+        public override ContextMenuItem Create
+        (
+            ContextMenuOpenedArgs args
+        )
+        {
+            using var rented  = new RentedSeStringBuilder();
+            var       builder = rented.Builder;
+
+            builder.PushEdgeColorType(AtkColors.ValueEmphasize.EdgeColor)
+                   .PushColorType(AtkColors.ValueEmphasize.TextColor)
+                   .Append(Lang.Get("ExpandItemMenuSearch-ContextMenu-SearchAll"))
+                   .PopColorType()
+                   .PopEdgeColorType();
+
+            return new ContextMenuItem
+            {
+                Name = builder.ToReadOnlySeString(),
+                OnClicked = _ =>
+                {
+                    foreach (var searchMenuItem in module.SearchMenuItems)
+                    {
+                        if (!module.config.SearchMenuEnabledStates
+                                   .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled))
+                            continue;
+
+                        searchMenuItem.OnClicked();
+                    }
+                }
+            };
+        }
+    }
+
+    private sealed class RisingStonesItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL = "https://ff14risingstones.web.sdo.com/pc/index.html#/search?equipmentid={0}&section=glamour";
+        public override string PlatformName   => "石之家";
+        public override string ConfigKey      => nameof(RisingStonesItem);
+        public override bool   DefaultEnabled => GameState.IsCN;
 
-        public override string LocKey         => "ExpandItemMenuSearch-SearchFFXIVSC";
-        public override string ConfigKey      => nameof(FFXIVSCItem);
-        public override bool   DefaultEnabled => GameState.IsCN || GameState.IsTC;
-        public override int    Order          => 100;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             var itemID = 0U;
 
@@ -218,25 +229,25 @@ public class ExpandItemMenuSearch : ModuleBase
             if (itemID != 0)
                 Util.OpenLink(string.Format(URL, itemID));
         }
+
+        #region 常量
+
+        private const string URL = 
+            "https://ff14risingstones.web.sdo.com/pc/index.html#/search?equipmentid={0}&section=glamour";
+
+        #endregion
     }
 
-    // 最终幻想 14 中文维基
-    private class HuijiWikiItem
+    private sealed class HuijiWikiItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL = "https://ff14.huijiwiki.com/wiki/%E7%89%A9%E5%93%81:{0}";
-
-        public override string LocKey         => "ExpandItemMenuSearch-SearchHuijiWiki";
+        public override string PlatformName   => "最终幻想 XIV 中文维基";
         public override string ConfigKey      => nameof(HuijiWikiItem);
         public override bool   DefaultEnabled => GameState.IsCN || GameState.IsTC;
-        public override int    Order          => 10;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             var itemName = string.Empty;
 
@@ -249,58 +260,163 @@ public class ExpandItemMenuSearch : ModuleBase
             if (!string.IsNullOrWhiteSpace(itemName))
                 Util.OpenLink(string.Format(URL, itemName));
         }
-    }
 
-    // Console Games Wiki
-    private class ConsoleGameWikiItem
+        #region 常量
+
+        private const string URL = 
+            "https://ff14.huijiwiki.com/wiki/%E7%89%A9%E5%93%81:{0}";
+
+        #endregion
+    }
+    
+    private sealed class UniversalisItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
+        public override string PlatformName   => "Universalis";
+        public override string ConfigKey      => nameof(UniversalisItem);
+        public override bool   DefaultEnabled => true;
+
+        public override void OnClicked()
+        {
+            var itemID = 0U;
+
+            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
+            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
+                itemID = ContextMenuItemManager.Instance().CurrentGlamourItem?.RowId ?? 0;
+            else
+                itemID = ContextMenuItemManager.Instance().CurrentItem?.RowId ?? 0;
+
+            if (itemID != 0)
+                Util.OpenLink(string.Format(URL, itemID));
+        }
+
+        #region 常量
+
+        private const string URL = 
+            "https://universalis.app/market/{0}";
+
+        #endregion
+    }
+    
+    private sealed class TeamCraftItem
+    (
+        ExpandItemMenuSearch module
+    ) : SearchMenuItemBase(module)
+    {
+        public override string PlatformName   => "TeamCraft";
+        public override string ConfigKey      => nameof(TeamCraftItem);
+        public override bool   DefaultEnabled => true;
+
+        public override void OnClicked()
+        {
+            var itemID = 0U;
+
+            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
+            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
+                itemID = ContextMenuItemManager.Instance().CurrentGlamourItem?.RowId ?? 0;
+            else
+                itemID = ContextMenuItemManager.Instance().CurrentItem?.RowId ?? 0;
+
+            if (itemID != 0)
+                Util.OpenLink(string.Format(URL, GetVariant(), itemID));
+        }
+
+        private static string GetVariant() =>
+            GameState.ClientLanguge switch
+            {
+                Language.Japanese           => "ja",
+                Language.English            => "en",
+                Language.French             => "fr",
+                Language.German             => "de",
+                Language.ChineseSimplified  => "zh",
+                Language.ChineseTraditional => "zh",
+                Language.TraditionalChinese => "tw",
+                Language.Korean             => "ko",
+                _                           => "en",
+            };
+
+        #region 常量
+
+        private const string URL = 
+            "https://ffxivteamcraft.com/db/{0}/item/{1}";
+
+        #endregion
+    }
+
+    private sealed class ConsoleGameWikiItem
+    (
+        ExpandItemMenuSearch module
+    ) : SearchMenuItemBase(module)
+    {
+        public override string PlatformName   => "Console Games Wiki";
+        public override string ConfigKey      => nameof(ConsoleGameWikiItem);
+        public override bool   DefaultEnabled => GameState.IsGL;
+
+        public override void OnClicked()
+        {
+            var itemName = string.Empty;
+
+            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
+            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
+                itemName = ContextMenuItemManager.Instance().CurrentGlamourItem?.Name.ToString();
+            else
+                itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
+
+            if (!string.IsNullOrWhiteSpace(itemName))
+                Util.OpenLink(string.Format(URL, Uri.EscapeDataString(itemName)));
+        }
+
+        #region 常量
+
         private const string URL =
             "https://ffxiv.consolegameswiki.com/mediawiki/index.php?search={0}&title=Special%3ASearch&go=%E5%89%8D%E5%BE%80";
 
-        public override string LocKey         => "ExpandItemMenuSearch-SearchConsoleGamesWiki";
-        public override string ConfigKey      => nameof(ConsoleGameWikiItem);
-        public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 20;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
-        {
-            var itemName = string.Empty;
-
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemName = ContextMenuItemManager.Instance().CurrentGlamourItem?.Name.ToString();
-            else
-                itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
-
-            if (!string.IsNullOrWhiteSpace(itemName))
-                Util.OpenLink(string.Format(URL, Uri.EscapeDataString(itemName)));
-        }
+        #endregion
     }
 
-    // Garland Tools DB (国服)
-    private class GarlandToolsDBCNItem
+    private sealed class GarlandToolsCNItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
+        public override string PlatformName   => "Garland Tools 国服站";
+        public override string ConfigKey      => nameof(GarlandToolsCNItem);
+        public override bool   DefaultEnabled => GameState.IsCN || GameState.IsTC;
+
+        public override void OnClicked()
+        {
+            var itemID = 0U;
+
+            // 优先使用幻化物品ID（如果配置了优先幻化且有幻化物品）
+            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
+                itemID = ContextMenuItemManager.Instance().CurrentGlamourID;
+            else
+                itemID = ContextMenuItemManager.Instance().CurrentItemID;
+
+            if (itemID != 0)
+                Util.OpenLink(string.Format(URL, itemID));
+        }
+        
+        #region 常量
+
         private const string URL =
             "https://www.garlandtools.cn/db/#item/{0}";
 
-        public override string LocKey         => "ExpandItemMenuSearch-SearchGarlandToolsDBCN";
-        public override string ConfigKey      => nameof(GarlandToolsDBCNItem);
-        public override bool   DefaultEnabled => GameState.IsCN || GameState.IsTC;
-        public override int    Order          => 30;
+        #endregion
+    }
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+    private sealed class GarlandToolsItem
+    (
+        ExpandItemMenuSearch module
+    ) : SearchMenuItemBase(module)
+    {
+        public override string PlatformName   => "Garland Tools";
+        public override string ConfigKey      => nameof(GarlandToolsItem);
+        public override bool   DefaultEnabled => GameState.IsGL;
+
+        public override void OnClicked()
         {
             var itemID = 0U;
 
@@ -313,58 +429,25 @@ public class ExpandItemMenuSearch : ModuleBase
             if (itemID != 0)
                 Util.OpenLink(string.Format(URL, itemID));
         }
-    }
 
-    // Garland Tools DB (国服)
-    private class GarlandToolsDBItem
-    (
-        ExpandItemMenuSearch module
-    ) : SearchMenuItemBase(module)
-    {
+        #region 常量
+
         private const string URL =
             "https://www.garlandtools.org/db/#item/{0}";
 
-        public override string LocKey         => "ExpandItemMenuSearch-SearchGarlandToolsDB";
-        public override string ConfigKey      => nameof(GarlandToolsDBItem);
-        public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 40;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
-        {
-            var itemID = 0U;
-
-            // 优先使用幻化物品ID（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemID = ContextMenuItemManager.Instance().CurrentGlamourID;
-            else
-                itemID = ContextMenuItemManager.Instance().CurrentItemID;
-
-            if (itemID != 0)
-                Util.OpenLink(string.Format(URL, itemID));
-        }
+        #endregion
     }
 
-    // Lodestone DB
-    private class LodestoneDBItem
+    private sealed class LodestoneItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL =
-            "https://na.finalfantasyxiv.com/lodestone/playguide/db//search/?patch=&db_search_category=&q={0}";
-
-        public override string LocKey         => "ExpandItemMenuSearch-SearchLodestoneDB";
-        public override string ConfigKey      => nameof(LodestoneDBItem);
+        public override string PlatformName   => "Lodestone";
+        public override string ConfigKey      => nameof(LodestoneItem);
         public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 110;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             var itemName = string.Empty;
 
@@ -375,28 +458,36 @@ public class ExpandItemMenuSearch : ModuleBase
                 itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
 
             if (!string.IsNullOrWhiteSpace(itemName))
-                Util.OpenLink(string.Format(URL, itemName));
+                Util.OpenLink(string.Format(URL, itemName, GetPrefix()));
         }
+
+        private static string GetPrefix() =>
+            GameState.ClientLanguge switch
+            {
+                Language.Japanese => "jp",
+                Language.French   => "fr",
+                Language.German   => "de",
+                _                 => "na",
+            };
+        
+        #region 常量
+
+        private const string URL =
+            "https://{1}.finalfantasyxiv.com/lodestone/playguide/db//search/?patch=&db_search_category=&q={0}";
+
+        #endregion
     }
 
-    // Gamer Escape Wiki
-    private class GamerEscapeWikiItem
+    private sealed class GamerEscapeItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL =
-            "https://ffxiv.gamerescape.com/?search={0}";
-
-        public override string LocKey         => "ExpandItemMenuSearch-SearchGamerEscapeWiki";
-        public override string ConfigKey      => nameof(GamerEscapeWikiItem);
+        public override string PlatformName   => "Gamer Escape";
+        public override string ConfigKey      => nameof(GamerEscapeItem);
         public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 120;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             var itemName = string.Empty;
 
@@ -409,25 +500,25 @@ public class ExpandItemMenuSearch : ModuleBase
             if (!string.IsNullOrWhiteSpace(itemName))
                 Util.OpenLink(string.Format(URL, Uri.EscapeDataString(itemName)));
         }
+        
+        #region 常量
+
+        private const string URL =
+            "https://ffxiv.gamerescape.com/?search={0}";
+
+        #endregion
     }
 
-    // ERIONES DB
-    private class ERIONESItem
+    private sealed class ERIONESItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL = "https://{0}eriones.com/search?i={1}";
-
-        public override string LocKey         => "ExpandItemMenuSearch-SearchERIONES";
+        public override string PlatformName   => "ERIONES";
         public override string ConfigKey      => nameof(ERIONESItem);
         public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 130;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             var itemName = string.Empty;
 
@@ -452,29 +543,30 @@ public class ExpandItemMenuSearch : ModuleBase
                 Language.French             => "fr.",
                 Language.German             => "de.",
                 Language.ChineseSimplified  => "cn.",
-                Language.ChineseTraditional => "cn.", // 因为也是国服客户端的代码
+                Language.ChineseTraditional => "cn.",
+                Language.TraditionalChinese => "cn.",
                 Language.Korean             => "ko.",
                 _                           => string.Empty
             };
+
+        #region 常量
+
+        private const string URL = 
+            "https://{0}eriones.com/search?i={1}";
+
+        #endregion
     }
 
-    // 繁中工具箱
-    private class TCToolboxItem
+    private sealed class FFXIVItemSearchTCItem
     (
         ExpandItemMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL = "https://cycleapple.github.io/ffxiv-item-search-tc?selected={0}&q={1}";
-
-        public override string LocKey         => "ExpandItemMenuSearch-SearchTCToolbox";
-        public override string ConfigKey      => nameof(TCToolboxItem);
+        public override string PlatformName   => "FFXIV 繁中物品搜尋站";
+        public override string ConfigKey      => nameof(FFXIVItemSearchTCItem);
         public override bool   DefaultEnabled => GameState.IsTC;
-        public override int    Order          => 130;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             Item? itemToSearch = null;
 
@@ -488,5 +580,12 @@ public class ExpandItemMenuSearch : ModuleBase
 
             Util.OpenLink(string.Format(URL, itemToSearch?.RowId, Uri.EscapeDataString(itemToSearch?.Name.ToString() ?? string.Empty)));
         }
+
+        #region 常量
+
+        private const string URL = 
+            "https://cycleapple.github.io/ffxiv-item-search-tc?selected={0}&q={1}";
+
+        #endregion
     }
 }
