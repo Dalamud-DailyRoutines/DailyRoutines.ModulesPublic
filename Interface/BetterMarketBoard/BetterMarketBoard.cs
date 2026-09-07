@@ -300,9 +300,18 @@ public unsafe partial class BetterMarketBoard : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            var itemID = ContextMenuItemManager.Instance().CurrentItemID;
-            if (!LuminaGetter.TryGetRow(itemID, out Item itemRow) ||
-                itemRow.ItemSearchCategory.RowId == 0)
+            var itemID = args.TargetItemID;
+            if (!LuminaGetter.TryGetRow(itemID, out Item itemRow))
+            {
+                if (args.TargetItem is not { } targetItem)
+                    return null;
+
+                itemID = targetItem.GetBaseItemId();
+                if (!LuminaGetter.TryGetRow(itemID, out itemRow))
+                    return null;
+            }
+            
+            if (itemRow.ItemSearchCategory.RowId == 0)
                 return null;
 
             return new()
