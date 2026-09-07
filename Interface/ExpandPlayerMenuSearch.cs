@@ -1,4 +1,5 @@
 using System.Reflection;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -87,6 +88,8 @@ public class ExpandPlayerMenuSearch : ModuleBase
 
     protected override void ConfigUI()
     {
+        using var heading = ImRaii.Heading1(Lang.Get("SearchPlatform"));
+        
         foreach (var searchMenuItem in SearchMenuItems)
         {
             var value = config.SearchMenuEnabledStates
@@ -298,7 +301,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
         ) =>
             new()
             {
-                Name      = PlatformName,
+                Name      = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-Search", PlatformName),
                 OnClicked = _ => OnClicked(),
             };
     }
@@ -334,8 +337,10 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 Name = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-Name"),
                 Submenu = new()
                 {
-                    Title   = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-Name"),
-                    Entries = [module.clickAllMenu, .. searchItems]
+                    Title = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-Name"),
+                    Entries = searchItems.Length == 1 ?
+                                  searchItems :
+                                  [.. searchItems, module.clickAllMenu]
                 }
             };
         }
