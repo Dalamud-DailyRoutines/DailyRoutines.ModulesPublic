@@ -1,4 +1,5 @@
 using System.Reflection;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -336,7 +337,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 Name = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-Name"),
                 Submenu = new()
                 {
-                    Title   = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-SubTitle"),
+                    Title   = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-Name"),
                     Entries = [module.clickAllMenu, .. searchItems]
                 }
             };
@@ -357,10 +358,20 @@ public class ExpandPlayerMenuSearch : ModuleBase
         public override ContextMenuItem Create
         (
             ContextMenuOpenedArgs args
-        ) =>
-            new()
+        )
+        {
+            using var rented  = new RentedSeStringBuilder();
+            var       builder = rented.Builder;
+
+            builder.PushEdgeColorType(AtkColors.ValueEmphasize.EdgeColor)
+                   .PushColorType(AtkColors.ValueEmphasize.TextColor)
+                   .Append(Lang.Get("ExpandPlayerMenuSearch-ContextMenu-SearchAll"))
+                   .PopColorType()
+                   .PopEdgeColorType();
+            
+            return new ContextMenuItem
             {
-                Name = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-SearchAll"),
+                Name = builder.ToReadOnlySeString(),
                 OnClicked = _ =>
                 {
                     foreach (var searchMenuItem in module.SearchMenuItems)
@@ -373,6 +384,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
                     }
                 }
             };
+        }
     }
 
     private sealed class RisingStoneItem
