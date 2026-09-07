@@ -4,9 +4,9 @@
     "net10.0-windows7.0": {
       "DailyRoutines.CodeAnalysis": {
         "type": "Direct",
-        "requested": "[2.4.0, )",
-        "resolved": "2.4.0",
-        "contentHash": "+G2MANDREROWvWMFQ3Ft+G0/zoDsNh3sQ4etCNysvC73JctGos6Wn4fvB//ZLCXOmxTsFDFD4q59yjSG28RvQA=="
+        "requested": "[2.6.0, )",
+        "resolved": "2.6.0",
+        "contentHash": "14sYsFdtHB1Dm++alMmm8K5QM2LsXg3EvcveXgiDxBt0TmQ1eRDOkpiZ5Hz9GYuNqg6A108ljVaDS31YegnZ8Q=="
       },
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
@@ -26,6 +26,11 @@
         "resolved": "1.1.0",
         "contentHash": "pwe99NXsWkSeJdOwzcweorlyoB2frOlTU37QwzmnnxfRT5vRENXm4UOl5g4Nxq5V9lYOBWK1mZIozFfIlDVjYA=="
       },
+      "AngleSharp": {
+        "type": "Transitive",
+        "resolved": "1.8.0",
+        "contentHash": "vRW/0M11Jlfd7WkT5Kr0tXXmnWNVdxyII2S2b6AsgZCJEBGaXCUnti6nKIJTvAjmnmKcQbvn+SJ3lpt8dqoLIA=="
+      },
       "DalamudPackager": {
         "type": "Transitive",
         "resolved": "15.0.0",
@@ -38,24 +43,24 @@
       },
       "Microsoft.CodeAnalysis.Analyzers": {
         "type": "Transitive",
-        "resolved": "3.11.0",
-        "contentHash": "v/EW3UE8/lbEYHoC2Qq7AR/DnmvpgdtAMndfQNmpuIMx/Mto8L5JnuCfdBYtgvalQOtfNCnxFejxuRrryvUTsg=="
+        "resolved": "5.9.0-1.26328.17",
+        "contentHash": "HP9NNk8ZjOSI2hgOyXnQg+kv7/X837Vr2nAlXiGAtqtYnYKjRRa1UmQFr8KFs5ynGYKqfbb8zB9APoWjiAGdMg=="
       },
       "Microsoft.CodeAnalysis.Common": {
         "type": "Transitive",
-        "resolved": "5.0.0",
-        "contentHash": "ZXRAdvH6GiDeHRyd3q/km8Z44RoM6FBWHd+gen/la81mVnAdHTEsEkO5J0TCNXBymAcx5UYKt5TvgKBhaLJEow==",
+        "resolved": "5.9.0",
+        "contentHash": "IYaIaUWdIx539AReKZOBEqTskFusZfCh/wFSPilDvCn5Say8MegLw2LONcSIcVy+v3Gzv53qYBspgvBGSErfbQ==",
         "dependencies": {
-          "Microsoft.CodeAnalysis.Analyzers": "3.11.0"
+          "Microsoft.CodeAnalysis.Analyzers": "5.9.0-1.26328.17"
         }
       },
       "Microsoft.CodeAnalysis.CSharp": {
         "type": "Transitive",
-        "resolved": "5.0.0",
-        "contentHash": "5DSyJ9bk+ATuDy7fp2Zt0mJStDVKbBoiz1DyfAwSa+k4H4IwykAUcV3URelw5b8/iVbfSaOwkwmPUZH6opZKCw==",
+        "resolved": "5.9.0",
+        "contentHash": "7JGDA0UT1+h7k9ZcA3rF4eFC8+QPq1xyYaXxag4p8r/zzPurEJxvdi7aM+MRL/SfP7XADXpWF/pl/eUYXOq/ww==",
         "dependencies": {
-          "Microsoft.CodeAnalysis.Analyzers": "3.11.0",
-          "Microsoft.CodeAnalysis.Common": "[5.0.0]"
+          "Microsoft.CodeAnalysis.Analyzers": "5.9.0-1.26328.17",
+          "Microsoft.CodeAnalysis.Common": "[5.9.0]"
         }
       },
       "Otp.NET": {
@@ -65,8 +70,8 @@
       },
       "System.Management": {
         "type": "Transitive",
-        "resolved": "10.0.1",
-        "contentHash": "/mywt9LtfYM+QbnIPPqdES/qWWU3tkorSDHPX99KYhCTtxdjGFmLcz7QwpAAeBKU0o+rZzEcpKZlrtEr1Xq39g=="
+        "resolved": "10.0.11",
+        "contentHash": "xyNn8KGbWI88LoUwg3rB8qcpFFST6dr8Ro/qS8GBu2GOwR0v7J82kVFHTiiPtvEKS79VbMTxs/sIKQ+Cq1Zs1g=="
       },
       "dailyroutines": {
         "type": "Project",
@@ -74,11 +79,11 @@
           "DailyRoutines.Common": "[1.0.0, )",
           "DalamudPackager": "[15.0.0, )",
           "KamiToolKit": "[1.0.0, )",
-          "Microsoft.CodeAnalysis.CSharp": "[5.0.0, )",
+          "Microsoft.CodeAnalysis.CSharp": "[5.9.0, )",
           "OmenTools": "[1.0.0, )",
           "Otp.NET": "[1.4.1, )",
           "RSASharp": "[1.0.0, )",
-          "System.Management": "[10.0.1, )",
+          "System.Management": "[10.0.11, )",
           "TimeAgo.Core": "[1.1.0, )",
           "TinyPinyin": "[1.1.0, )"
         }
@@ -87,7 +92,7 @@
         "type": "Project",
         "dependencies": {
           "KamiToolKit": "[1.0.0, )",
-          "Microsoft.CodeAnalysis.CSharp": "[5.0.0, )",
+          "Microsoft.CodeAnalysis.CSharp": "[5.9.0, )",
           "OmenTools": "[1.0.0, )",
           "TimeAgo.Core": "[1.1.0, )",
           "TinyPinyin": "[1.1.0, )"
@@ -99,6 +104,7 @@
       "omentools": {
         "type": "Project",
         "dependencies": {
+          "AngleSharp": "[1.8.0, )",
           "GuerrillaNtp": "[3.1.0, )",
           "TinyPinyin": "[1.1.0, )"
         }
