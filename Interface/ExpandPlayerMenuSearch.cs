@@ -10,10 +10,11 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Data;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
-using OmenTools.Info.DTOs.Lalachievements;
+using OmenTools.Dalamud;
 using OmenTools.Info.DTOs.RisingStone;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using OmenTools.Utils;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -54,9 +55,10 @@ public class ExpandPlayerMenuSearch : ModuleBase
         }
     }
 
-    private          Config                  config       = null!;
-    private readonly CancellationTokenSource cancelSource = new();
+    private          Config                  config          = null!;
+    private readonly CancellationTokenSource cancelSource    = new();
     private          CharacterSearchInfo?    targetChara;
+    private          LodestoneSearcher       lodestoneSearch = null!;
 
     private readonly UpperContainerItem menu;
     private readonly ClickAllItem       clickAllMenu;
@@ -69,7 +71,8 @@ public class ExpandPlayerMenuSearch : ModuleBase
 
     protected override void Init()
     {
-        config = Config.Load(this) ?? new();
+        config          = Config.Load(this) ?? new();
+        lodestoneSearch = new(HTTPClientHelper.Instance().Get(), cancelSource.Token);
 
         ContextMenuManager.Instance().Reg(menu);
     }
@@ -507,22 +510,56 @@ public class ExpandPlayerMenuSearch : ModuleBase
         #endregion
     }
 
-    private sealed class LodestoneItem
+    private abstract class LodestoneSearchMenuItemBase
     (
         ExpandPlayerMenuSearch module
     ) : SearchMenuItemBase(module)
+    {
+        protected abstract string GetPlayerURL(string characterID, CharacterSearchInfo targetChara);
+
+        public override void OnClicked() =>
+            RunOnTickImmediately
+            (async targetChara =>
+                {
+                    var cancellationToken = module.cancelSource.Token;
+
+                    try
+                    {
+                        var characterID = await module.lodestoneSearch.GetCharacterIDAsync(targetChara.Name, targetChara.World);
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        if (characterID == null)
+                        {
+                            NotifyPlayerNotFound();
+                            return;
+                        }
+
+                        Util.OpenLink(GetPlayerURL(characterID, targetChara));
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        // ignored
+                    }
+                    catch (Exception exception)
+                    {
+                        DLog.Error($"[{nameof(ExpandPlayerMenuSearch)}] Lodestone: {targetChara.Name}@{targetChara.World}", exception);
+                        NotifyHelper.ToastError($"Lodestone {Lang.Get("Error")}: {exception.Message}");
+                    }
+                }
+            );
+    }
+
+    private sealed class LodestoneItem
+    (
+        ExpandPlayerMenuSearch module
+    ) : LodestoneSearchMenuItemBase(module)
     {
         public override string PlatformName   => "Lodestone";
         public override string ConfigKey      => nameof(LodestoneItem);
         public override bool   DefaultEnabled => GameState.IsGL;
 
-        public override void OnClicked()
-        {
-            if (TargetChara == null) return;
-
-            var dcName = LuminaWrapper.GetWorldDCName(TargetChara.WorldID);
-            Util.OpenLink(string.Format(URL, TargetChara.Name.Replace(' ', '+'), dcName, GetPrefix()));
-        }
+        protected override string GetPlayerURL(string characterID, CharacterSearchInfo targetChara) =>
+            $"https://{GetPrefix()}.finalfantasyxiv.com/lodestone/character/{characterID}/";
 
         private static string GetPrefix() =>
             GameState.ClientLanguge switch
@@ -532,48 +569,19 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 Language.German   => "de",
                 _                 => "na",
             };
-
-        #region 常量
-
-        private const string URL =
-            "https://{2}.finalfantasyxiv.com/lodestone/character/?q={0}&worldname=_dc_{1}&classjob=&race_tribe=&blog_lang=ja&blog_lang=en&blog_lang=de&blog_lang=fr&order=";
-
-        #endregion
     }
 
     private sealed class LalachievementsItem
     (
         ExpandPlayerMenuSearch module
-    ) : SearchMenuItemBase(module)
+    ) : LodestoneSearchMenuItemBase(module)
     {
         public override string PlatformName   => "Lalachievements";
         public override string ConfigKey      => nameof(LalachievementsItem);
         public override bool   DefaultEnabled => GameState.IsGL;
         
-        public override void OnClicked() =>
-            RunOnTickImmediately
-            (async targetChara =>
-                {
-                    var url      = string.Format(SEARCH_API, targetChara.Name);
-                    var response = await HTTPClientHelper.Instance().Get().GetStringAsync(url);
-                    var result   = JsonConvert.DeserializeObject<LLAPlayerSearchResult>(response);
-
-                    if (result?.Data == null || result.Data.Count == 0)
-                    {
-                        NotifyPlayerNotFound();
-                        return;
-                    }
-
-                    foreach (var player in result.Data)
-                    {
-                        if (player.CharacterName != targetChara.Name || player.WorldID != targetChara.WorldID)
-                            continue;
-
-                        Util.OpenLink(string.Format(PLAYER_INFO_URL, player.CharacterID, GetVariant()));
-                        break;
-                    }
-                }
-            );
+        protected override string GetPlayerURL(string characterID, CharacterSearchInfo targetChara) =>
+            $"https://www.lalachievements.com{GetVariant()}/char/{characterID}/";
         
         private static string GetVariant() =>
             GameState.ClientLanguge switch
@@ -583,64 +591,18 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 Language.German   => "/de",
                 _                 => string.Empty,
             };
-
-        #region 常量
-
-        // TODO：有 Cloudflare Turnstile 验证
-        private const string SEARCH_API      = "https://www.lalachievements.com/api/charsearch/{0}/";
-        private const string PLAYER_INFO_URL = "https://www.lalachievements.com{1}/char/{0}/";
-
-        #endregion
     }
 
     private sealed class TomestoneItem
     (
         ExpandPlayerMenuSearch module
-    ) : SearchMenuItemBase(module)
+    ) : LodestoneSearchMenuItemBase(module)
     {
         public override string PlatformName   => "Tomestone";
         public override string ConfigKey      => nameof(TomestoneItem);
         public override bool   DefaultEnabled => GameState.IsGL;
 
-        public override void OnClicked() =>
-            RunOnTickImmediately
-            (async targetChara =>
-                {
-                    var      url      = string.Format(SEARCH_API, targetChara.Name.Replace(" ", "%20"));
-                    var      response = await HTTPClientHelper.Instance().Get().GetStringAsync(url);
-                    dynamic? result   = JsonConvert.DeserializeObject(response);
-                    if (result?.characters == null) return;
-
-                    if (result.characters.Count == 0)
-                    {
-                        NotifyPlayerNotFound();
-                        return;
-                    }
-
-                    foreach (var player in result.characters)
-                    {
-                        string? refLink = player.href;
-                        if (string.IsNullOrEmpty(refLink)) continue;
-
-                        var     info   = player.item;
-                        string? name   = info.name;
-                        string? server = info.serverName;
-
-                        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(server))
-                            continue;
-                        if (name != targetChara.Name || !server.Contains(targetChara.World, StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        Util.OpenLink($"https://tomestone.gg{refLink}");
-                        break;
-                    }
-                }
-            );
-
-        #region 常量
-
-        private const string SEARCH_API = "https://tomestone.gg/search/autocomplete?term={0}";
-
-        #endregion
+        protected override string GetPlayerURL(string characterID, CharacterSearchInfo targetChara) =>
+            $"https://tomestone.gg/character/{characterID}/{Uri.EscapeDataString(targetChara.Name.ToLowerInvariant().Replace(' ', '-'))}";
     }
 }
