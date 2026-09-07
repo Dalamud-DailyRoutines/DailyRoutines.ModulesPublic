@@ -300,18 +300,8 @@ public unsafe partial class BetterMarketBoard : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            var itemID = args.TargetItemID;
-            if (!LuminaGetter.TryGetRow(itemID, out Item itemRow))
-            {
-                if (args.TargetItem is not { } targetItem)
-                    return null;
-
-                itemID = targetItem.GetBaseItemId();
-                if (!LuminaGetter.TryGetRow(itemID, out itemRow))
-                    return null;
-            }
-            
-            if (itemRow.ItemSearchCategory.RowId == 0)
+            if (args.TargetItemID == 0 ||
+                args.TargetItemRow.Value.ItemSearchCategory.RowId == 0)
                 return null;
 
             return new()
@@ -320,7 +310,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
                 OnClicked = _ =>
                 {
                     module.ToggleOverlay(true);
-                    module.provider.SelectItem(itemID);
+                    module.provider.SelectItem(args.TargetItemID);
                 }
             };
         }
