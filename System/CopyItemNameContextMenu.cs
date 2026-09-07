@@ -1,9 +1,6 @@
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Game.Gui.ContextMenu;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
@@ -28,126 +25,75 @@ public class CopyItemNameContextMenu : ModuleBase
 
     protected override void Init()
     {
-        CopyItemNameString = LuminaWrapper.GetAddonText(159);
-        GlamoursString     = LuminaGetter.GetRowOrDefault<CircleActivity>(18).Name.ToString();
-        menuItem           = new(CopyItemNameString);
-        glamourMenuItem    = new($"{CopyItemNameString} ({GlamoursString})");
+        var name        = LuminaWrapper.GetAddonText(159);
+        var glamourName = LuminaGetter.GetRowOrDefault<CircleActivity>(18).Name.ToString();
+        menuItem        = new(name, name, false);
+        glamourMenuItem = new($"{name} ({glamourName})", name, true);
 
-        IContextMenu.Instance().OnMenuOpened += OnContextMenuOpened;
+        ContextMenuManager.Instance().Reg(menuItem);
+        ContextMenuManager.Instance().Reg(glamourMenuItem);
     }
 
-    protected override void Uninit() =>
-        IContextMenu.Instance().OnMenuOpened -= OnContextMenuOpened;
-
-    private unsafe void OnContextMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
+    protected override void Uninit()
     {
-        var type = args.MenuType;
-
-        if (type == ContextMenuType.Inventory)
-        {
-            if (args.Target is MenuTargetInventory { TargetItem: { ItemId: > 0 } item })
-            {
-                menuItem.SetRawItemID(item.ItemId);
-
-                args.AddMenuItem(menuItem.Get());
-
-                if (item.GlamourId == 0)
-                    return;
-
-                glamourMenuItem.SetRawItemID(item.GlamourId);
-                args.AddMenuItem(glamourMenuItem.Get());
-            }
-
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(args.AddonName) || args.AddonName == "FreeCompanyExchange")
-            return;
-
-        var agent = (AgentContext*)args.AgentPtr;
-
-        var contextMenu = agent->CurrentContextMenu;
-
-        var contextMenuCounts = contextMenu->EventParams[0].Int;
-
-        const int START = 8;
-        var       end   = START + contextMenuCounts;
-
-        for (var i = START; i < end; i++)
-        {
-            var param = contextMenu->EventParams[i];
-            var str   = param.GetValueAsString();
-
-            if (str.Equals(CopyItemNameString, StringComparison.OrdinalIgnoreCase))
-                return;
-        }
-
-        var prismBoxItem = ContextMenuItemManager.Instance().GetPrismBoxItem(args);
-
-        var itemID = prismBoxItem?.RowId ?? ContextMenuItemManager.Instance().CurrentItemID;
-        if (itemID == 0) return;
-
-        menuItem.SetRawItemID(itemID);
-        args.AddMenuItem(menuItem.Get());
-
-        var glamourID = ContextMenuItemManager.Instance().CurrentGlamourID;
-        if (glamourID == 0) return;
-
-        glamourMenuItem.SetRawItemID(glamourID);
-        args.AddMenuItem(glamourMenuItem.Get());
+        ContextMenuManager.Instance().Unreg(menuItem);
+        ContextMenuManager.Instance().Unreg(glamourMenuItem);
     }
 
     private sealed class CopyItemNameMenuItem
     (
-        string name
-    ) : MenuItemBase
+        string name,
+        string nativeName,
+        bool   glamour
+    ) : ContextMenuEntry
     {
-        private         uint   itemID;
-        public override string Name       { get; protected set; } = name;
-        public override string Identifier { get; protected set; } = nameof(CopyItemNameContextMenu);
+        public override string Identifier => nameof(CopyItemNameContextMenu);
 
-        protected override bool WithDRPrefix { get; set; } = true;
+        public override bool OmitPrefix => true;
 
-        protected override unsafe void OnClicked
+        public override unsafe ContextMenuItem? Create
         (
-            IMenuItemClickedArgs args
+            ContextMenuOpenedArgs args
         )
         {
-            var itemName = string.Empty;
-
-            if (itemID >= 2000000 && LuminaGetter.TryGetRow<EventItem>(itemID, out var eventItem))
-                itemName = eventItem.Singular.ToString();
-            else
+            if (args.InventoryAgentContext == null)
             {
-                itemID %= 500000;
+                if (string.IsNullOrWhiteSpace(args.AddonName) || args.AddonName == "FreeCompanyExchange")
+                    return null;
 
-                if (LuminaGetter.TryGetRow<Item>(itemID, out var item))
-                    itemName = item.Name.ToString();
+                var agent = args.DefaultAgentContext;
+
+                if (agent != null && agent->CurrentContextMenu != null)
+                {
+                    var values = agent->CurrentContextMenu->EventParams;
+                    var count  = Math.Clamp(values[0].Int, 0, values.Length - 8);
+                    for (var i = 8; i < 8 + count; i++)
+                        if (string.Equals(values[i].GetValueAsString(), nativeName, StringComparison.OrdinalIgnoreCase))
+                            return null;
+                }
             }
 
+            var item = glamour ?
+                           args.TargetGlamourRow :
+                           args.TargetItemRow;
+            if (item.RowId == 0)
+                return null;
+
+            var itemName = !glamour && item.RowId >= 2_000_000 ?
+                               item.RowId.ToLuminaRowRef<EventItem>().ValueNullable?.Singular.ToString() :
+                               item.ValueNullable?.Name.ToString();
             if (string.IsNullOrWhiteSpace(itemName))
-                return;
+                return null;
 
-            RaptureLogModule.Instance()->ShowLogMessageUInt(1632, itemID);
-
-            ImGui.SetClipboardText(itemName);
-            itemID = 0;
+            return new()
+            {
+                Name = name,
+                OnClicked = _ =>
+                {
+                    RaptureLogModule.Instance()->ShowLogMessageUInt(1632, item.RowId);
+                    ImGui.SetClipboardText(itemName);
+                }
+            };
         }
-
-        public void SetRawItemID
-        (
-            uint id
-        ) =>
-            itemID = id;
     }
-
-    #region 常量
-
-    private static string CopyItemNameString = null!;
-    private static string GlamoursString     = null!;
-
-    #endregion
 }
