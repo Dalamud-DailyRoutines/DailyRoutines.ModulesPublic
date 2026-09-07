@@ -61,17 +61,14 @@ public class ExpandPlayerMenuSearch : ModuleBase
     private          CharacterSearchInfo?    targetChara;
     private          LodestoneSearcher       lodestoneSearch = null!;
 
-    private readonly UpperContainerItem menu;
-    private readonly ClickAllItem       clickAllMenu;
-
-    public ExpandPlayerMenuSearch()
-    {
-        menu         = new(this);
-        clickAllMenu = new(this);
-    }
+    private UpperContainerItem menu         = null!;
+    private ClickAllItem       clickAllMenu = null!;
 
     protected override void Init()
     {
+        menu         = new(this);
+        clickAllMenu = new(this);
+        
         config          = Config.Load(this) ?? new();
         lodestoneSearch = new(HTTPClientHelper.Instance().Get(), cancelSource.Token);
 
