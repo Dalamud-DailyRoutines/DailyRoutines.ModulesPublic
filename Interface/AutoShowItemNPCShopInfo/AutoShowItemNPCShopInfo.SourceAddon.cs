@@ -77,7 +77,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     Addon ??= new(sourceInfo)
                     {
                         InternalName = "DRNPCShopsSource",
-                        Title        = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Source"),
+                        Title        = Lang.Get("AutoShowItemNPCShopInfo-Addon-Source"),
                         Size         = new(760f, 540f)
                     };
                     Addon.Open();

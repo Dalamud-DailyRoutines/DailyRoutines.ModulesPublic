@@ -1,5 +1,3 @@
-﻿using DailyRoutines.Common.Info.Abstractions;
-using Dalamud.Game.Gui.ContextMenu;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.OmenService;
@@ -11,57 +9,39 @@ public partial class AutoShowItemNPCShopInfo
     private SourceContextMenu      sourceContextMenu      = null!;
     private DestinationContextMenu destinationContextMenu = null!;
 
-    private void OnMenuOpen
-    (
-        IMenuOpenedArgs args
-    )
+    private sealed class SourceContextMenu : ContextMenuEntry
     {
-        if (sourceContextMenu.IsDisplay(args))
-            args.AddMenuItem(sourceContextMenu.Get());
+        public override string Identifier => nameof(AutoShowItemNPCShopInfo);
 
-        if (destinationContextMenu.IsDisplay(args))
-            args.AddMenuItem(destinationContextMenu.Get());
+        public override ContextMenuItem? Create(ContextMenuOpenedArgs args)
+        {
+            if (!args.TargetItemRow.IsValid ||
+                ItemSourceInfo.Query(args.TargetItemRow.RowId).State != ItemSourceQueryState.Ready)
+                return null;
+
+            return new()
+            {
+                Name = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Source"),
+                OnClicked = clicked => OpenShopInfoByItemID(clicked.Source.TargetItemRow.RowId)
+            };
+        }
     }
 
-    private class SourceContextMenu : MenuItemBase
+    private sealed class DestinationContextMenu : ContextMenuEntry
     {
-        public override string Name { get; protected set; } = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Source");
+        public override string Identifier => $"{nameof(AutoShowItemNPCShopInfo)}_Exchange";
 
-        public override string Identifier { get; protected set; } = nameof(AutoShowItemNPCShopInfo);
+        public override ContextMenuItem? Create(ContextMenuOpenedArgs args)
+        {
+            if (!args.TargetItemRow.IsValid ||
+                ItemSourceInfo.QueryExchangeItems(args.TargetItemRow.RowId).State != ItemSourceQueryState.Ready)
+                return null;
 
-        protected override bool WithDRPrefix { get; set; } = true;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
-            OpenShopInfoByItemID(ContextMenuItemManager.Instance().CurrentItemID);
-
-        public override bool IsDisplay
-        (
-            IMenuOpenedArgs args
-        ) =>
-            ItemSourceInfo.Query(ContextMenuItemManager.Instance().CurrentItemID).State == ItemSourceQueryState.Ready;
-    }
-
-    private class DestinationContextMenu : MenuItemBase
-    {
-        public override string Name { get; protected set; } = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Destination");
-
-        public override string Identifier { get; protected set; } = $"{nameof(AutoShowItemNPCShopInfo)}_Exchange";
-
-        protected override bool WithDRPrefix { get; set; } = true;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
-            OpenExchangeInfoByItemID(ContextMenuItemManager.Instance().CurrentItemID);
-
-        public override bool IsDisplay
-        (
-            IMenuOpenedArgs args
-        ) =>
-            ItemSourceInfo.QueryExchangeItems(ContextMenuItemManager.Instance().CurrentItemID).State == ItemSourceQueryState.Ready;
+            return new()
+            {
+                Name = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Destination"),
+                OnClicked = clicked => OpenExchangeInfoByItemID(clicked.Source.TargetItemRow.RowId)
+            };
+        }
     }
 }
