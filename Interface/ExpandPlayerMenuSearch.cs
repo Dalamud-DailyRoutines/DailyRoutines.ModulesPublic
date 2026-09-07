@@ -1,20 +1,19 @@
 using System.Reflection;
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Game.Gui.ContextMenu;
+using Dalamud.Game.Text;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Lumina.Data;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using OmenTools.Info.DTOs.Lalachievements;
 using OmenTools.Info.DTOs.RisingStone;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using MenuItem = Dalamud.Game.Gui.ContextMenu.MenuItem;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -36,22 +35,22 @@ public class ExpandPlayerMenuSearch : ModuleBase
         {
             if (field is { Length: > 0 }) return field;
 
-            return field = typeof(ExpandPlayerMenuSearch)
-                           .GetNestedTypes(BindingFlags.NonPublic)
-                           .Where(type => !type.IsAbstract && typeof(SearchMenuItemBase).IsAssignableFrom(type))
-                           .Select
-                           (type => (SearchMenuItemBase)Activator.CreateInstance
-                            (
-                                type,
-                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                                null,
-                                [this],
-                                null
-                            )!
-                           )
-                           .OrderBy(searchMenuItem => searchMenuItem.Order)
-                           .ThenBy(searchMenuItem => searchMenuItem.ConfigKey, StringComparer.Ordinal)
-                           .ToArray();
+            return field =
+            [
+                .. typeof(ExpandPlayerMenuSearch)
+                   .GetNestedTypes(BindingFlags.NonPublic)
+                   .Where(type => !type.IsAbstract && typeof(SearchMenuItemBase).IsAssignableFrom(type))
+                   .Select
+                   (type => (SearchMenuItemBase)Activator.CreateInstance
+                    (
+                        type,
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                        null,
+                        [this],
+                        null
+                    )
+                   )
+            ];
         }
     }
 
@@ -72,12 +71,12 @@ public class ExpandPlayerMenuSearch : ModuleBase
     {
         config = Config.Load(this) ?? new();
 
-        IContextMenu.Instance().OnMenuOpened += OnMenuOpened;
+        ContextMenuManager.Instance().Reg(menu);
     }
 
     protected override void Uninit()
     {
-        IContextMenu.Instance().OnMenuOpened -= OnMenuOpened;
+        ContextMenuManager.Instance().Unreg(menu);
 
         cancelSource.Cancel();
         cancelSource.Dispose();
@@ -91,55 +90,31 @@ public class ExpandPlayerMenuSearch : ModuleBase
         {
             var value = config.SearchMenuEnabledStates
                               .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled);
-            if (!ImGui.Checkbox(Lang.Get(searchMenuItem.LocKey), ref value)) continue;
+            if (!ImGui.Checkbox(searchMenuItem.PlatformName, ref value)) continue;
 
             config.SearchMenuEnabledStates[searchMenuItem.ConfigKey] = value;
-            SaveConfig();
+            config.Save(this);
         }
-    }
-
-    private void SaveConfig() =>
-        config.Save(this);
-
-    private void OnMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        targetChara = null;
-
-        if (args.MenuType != ContextMenuType.Default) return;
-        if (!TryResolveTargetChara(args, out targetChara)) return;
-
-        var shouldAddMenu = SearchMenuItems.Any
-        (searchMenuItem => config.SearchMenuEnabledStates
-                                 .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled)
-        );
-
-        if (shouldAddMenu)
-            args.AddMenuItem(menu.Get());
     }
 
     private static unsafe bool TryResolveTargetChara
     (
-        IMenuArgs                args,
+        ContextMenuOpenedArgs    args,
         out CharacterSearchInfo? resolvedTarget
     )
     {
         resolvedTarget = null;
 
-        if (args.Target is MenuTargetInventory) return false;
-        if (args.Target is not MenuTargetDefault menuTarget) return false;
+        if (args.InventoryAgentContext != null) return false;
 
         var agent = IGameGui.Instance().FindAgentInterface("ChatLog");
-        if (agent != nint.Zero && *(uint*)(agent + 0x948 + 8) == 3) return false;
+        if (agent != nint.Zero && *(uint*)(agent + 0x948 + 0x8) == 3) return false;
 
-        var hasTargetCharacter = menuTarget.TargetCharacter != null;
-        var hasTargetNameAndWorld = !string.IsNullOrWhiteSpace(menuTarget.TargetName) &&
-                                    menuTarget.TargetHomeWorld.ValueNullable != null  &&
-                                    menuTarget.TargetHomeWorld.Value.RowId   != 0;
-        var hasTargetObjectCharacter = menuTarget.TargetObject != null                                   &&
-                                       IGameObject.Create(menuTarget.TargetObject.Address) is ICharacter &&
+        var hasTargetCharacter = args.TargetCharacter != null;
+        var hasTargetNameAndWorld = !string.IsNullOrWhiteSpace(args.TargetName) &&
+                                    args.TargetHomeWorldID > 0;
+        var hasTargetObjectCharacter = args.TargetObjectID != 0                                              &&
+                                       IObjectTable.Instance().SearchByID(args.TargetObjectID) is ICharacter &&
                                        hasTargetNameAndWorld;
 
         switch (args.AddonName)
@@ -168,19 +143,19 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 };
                 return true;
             case "FreeCompany":
-                if (menuTarget.TargetContentId == 0) return false;
+                if (args.TargetContentID == 0) return false;
 
                 resolvedTarget = new()
                 {
-                    Name    = menuTarget.TargetName,
-                    World   = menuTarget.TargetHomeWorld.ValueNullable?.Name.ToString() ?? string.Empty,
-                    WorldID = menuTarget.TargetHomeWorld.RowId
+                    Name    = args.TargetName                                                           ?? string.Empty,
+                    World   = LuminaGetter.GetRow<World>((uint)args.TargetHomeWorldID)?.Name.ToString() ?? string.Empty,
+                    WorldID = (uint)args.TargetHomeWorldID
                 };
                 return true;
             case "LinkShell":
             case "CrossWorldLinkshell":
-                return menuTarget.TargetContentId != 0 &&
-                       TryResolveGeneralTarget(menuTarget, hasTargetCharacter, hasTargetObjectCharacter, hasTargetNameAndWorld, out resolvedTarget);
+                return args.TargetContentID != 0 &&
+                       TryResolveGeneralTarget(args, hasTargetCharacter, hasTargetObjectCharacter, hasTargetNameAndWorld, out resolvedTarget);
             case null:
             case "ChatLog":
             case "LookingForGroup":
@@ -191,13 +166,13 @@ public class ExpandPlayerMenuSearch : ModuleBase
             case "_PartyList":
             case "BeginnerChatList":
             case "ContentMemberList":
-                return TryResolveGeneralTarget(menuTarget, hasTargetCharacter, hasTargetObjectCharacter, hasTargetNameAndWorld, out resolvedTarget);
+                return TryResolveGeneralTarget(args, hasTargetCharacter, hasTargetObjectCharacter, hasTargetNameAndWorld, out resolvedTarget);
         }
     }
 
     private static unsafe bool TryResolveGeneralTarget
     (
-        MenuTargetDefault        menuTarget,
+        ContextMenuOpenedArgs    args,
         bool                     hasTargetCharacter,
         bool                     hasTargetObjectCharacter,
         bool                     hasTargetNameAndWorld,
@@ -208,15 +183,15 @@ public class ExpandPlayerMenuSearch : ModuleBase
 
         if (hasTargetCharacter)
         {
+            var targetCharacter = args.TargetCharacter!;
             resolvedTarget = new()
             {
-                Name    = menuTarget.TargetCharacter!.Name,
-                World   = menuTarget.TargetCharacter.HomeWorld.ValueNullable?.Name.ToString() ?? string.Empty,
-                WorldID = menuTarget.TargetCharacter.HomeWorld.RowId
+                Name    = targetCharacter->NameString,
+                World   = LuminaGetter.GetRow<World>(targetCharacter->HomeWorld)?.Name.ToString() ?? string.Empty,
+                WorldID = targetCharacter->HomeWorld
             };
         }
-        else if (menuTarget.TargetObject != null                                         &&
-                 IGameObject.Create(menuTarget.TargetObject.Address) is ICharacter chara &&
+        else if (IObjectTable.Instance().SearchByID(args.TargetObjectID) is ICharacter chara &&
                  hasTargetNameAndWorld)
         {
             resolvedTarget = new()
@@ -230,9 +205,9 @@ public class ExpandPlayerMenuSearch : ModuleBase
         {
             resolvedTarget = new()
             {
-                Name    = menuTarget.TargetName,
-                World   = menuTarget.TargetHomeWorld.ValueNullable?.Name.ToString() ?? string.Empty,
-                WorldID = menuTarget.TargetHomeWorld.RowId
+                Name    = args.TargetName                                                           ?? string.Empty,
+                World   = LuminaGetter.GetRow<World>((uint)args.TargetHomeWorldID)?.Name.ToString() ?? string.Empty,
+                WorldID = (uint)args.TargetHomeWorldID
             };
         }
 
@@ -251,31 +226,36 @@ public class ExpandPlayerMenuSearch : ModuleBase
         public Dictionary<string, bool> SearchMenuEnabledStates = [];
     }
 
-    private abstract class SearchMenuItemBase : MenuItemBase
+    private abstract class SearchMenuItemBase
+    (
+        ExpandPlayerMenuSearch module
+    ) : ContextMenuEntry
     {
-        protected readonly ExpandPlayerMenuSearch module;
+        protected readonly ExpandPlayerMenuSearch module = module;
 
-        protected SearchMenuItemBase
-        (
-            ExpandPlayerMenuSearch module
-        )
-        {
-            this.module = module;
-            Name        = Lang.Get(LocKey);
-        }
+        public override string Identifier => nameof(ExpandPlayerMenuSearch);
 
-        public sealed override string Name       { get; protected set; }
-        public sealed override string Identifier { get; protected set; } = nameof(ExpandPlayerMenuSearch);
+        public override bool OmitPrefix => true;
 
-        public abstract string LocKey         { get; }
+        public abstract string PlatformName   { get; }
         public abstract string ConfigKey      { get; }
         public virtual  bool   DefaultEnabled => false;
-        public virtual  int    Order          => 0;
 
         protected CharacterSearchInfo? TargetChara => module.targetChara;
 
-        protected static void NotifyPlayerNotFound() =>
-            NotifyHelper.Instance().NotificationError(Lang.Get("ExpandPlayerMenuSearch-PlayerInfoNotFound"));
+        protected static void NotifyPlayerNotFound()
+        {
+            var message = Lang.Get("ExpandPlayerMenuSearch-Notification-PlayerInfoNotFound");
+            NotifyHelper.ToastError(message);
+            NotifyHelper.Chat
+            (
+                new XivChatEntry
+                {
+                    Type    = XivChatType.ErrorMessage,
+                    Message = message
+                }
+            );
+        }
 
         protected void RunOnTick
         (
@@ -308,64 +288,88 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 module.cancelSource.Token
             );
         }
+
+        public abstract void OnClicked();
+
+        public override ContextMenuItem Create
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            new()
+            {
+                Name      = PlatformName,
+                OnClicked = _ => OnClicked(),
+            };
     }
 
     private sealed class UpperContainerItem
     (
         ExpandPlayerMenuSearch module
-    ) : MenuItemBase
+    ) : ContextMenuEntry
     {
-        public override string Name       { get; protected set; } = Lang.Get("ExpandPlayerMenuSearch-SearchTitle");
-        public override string Identifier { get; protected set; } = nameof(ExpandPlayerMenuSearch);
-
-        protected override bool WithDRPrefix { get; set; } = true;
-        protected override bool IsSubmenu    { get; set; } = true;
-
-        protected override void OnClicked
+        public override string Identifier => nameof(ExpandPlayerMenuSearch);
+        
+        public override ContextMenuItem? Create
         (
-            IMenuItemClickedArgs args
-        ) =>
-            args.OpenSubmenu(Name, ProcessMenuItems());
-
-        private List<MenuItem> ProcessMenuItems()
+            ContextMenuOpenedArgs args
+        )
         {
-            var list = new List<MenuItem> { module.clickAllMenu.Get() };
+            module.targetChara = null;
 
-            foreach (var searchMenuItem in module.SearchMenuItems)
+            if (!TryResolveTargetChara(args, out var targetChara)) return null;
+
+            var searchItems = module.SearchMenuItems
+                                    .Where
+                                    (searchMenuItem => module.config.SearchMenuEnabledStates
+                                                             .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled)
+                                    )
+                                    .ToArray();
+            if (searchItems.Length == 0) return null;
+
+            module.targetChara = targetChara;
+
+            return new()
             {
-                if (!module.config.SearchMenuEnabledStates
-                           .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled))
-                    continue;
-
-                list.Add(searchMenuItem.Get());
-            }
-
-            return list;
+                Name = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-Name"),
+                Submenu = new()
+                {
+                    Title   = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-SubTitle"),
+                    Entries = [module.clickAllMenu, .. searchItems]
+                }
+            };
         }
     }
 
     private sealed class ClickAllItem
     (
         ExpandPlayerMenuSearch module
-    ) : MenuItemBase
+    ) : ContextMenuEntry
     {
-        public override string Name       { get; protected set; } = Lang.Get("ExpandPlayerMenuSearch-SearchInAllPlatforms");
-        public override string Identifier { get; protected set; } = nameof(ExpandPlayerMenuSearch);
+        public override string Identifier => nameof(ExpandPlayerMenuSearch);
 
-        protected override void OnClicked
+        public override int? Priority => 1000;
+
+        public override bool OmitPrefix => true;
+
+        public override ContextMenuItem Create
         (
-            IMenuItemClickedArgs args
-        )
-        {
-            foreach (var searchMenuItem in module.SearchMenuItems)
+            ContextMenuOpenedArgs args
+        ) =>
+            new()
             {
-                if (!module.config.SearchMenuEnabledStates
-                           .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled))
-                    continue;
+                Name = Lang.Get("ExpandPlayerMenuSearch-ContextMenu-SearchAll"),
+                OnClicked = _ =>
+                {
+                    foreach (var searchMenuItem in module.SearchMenuItems)
+                    {
+                        if (!module.config.SearchMenuEnabledStates
+                                   .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled))
+                            continue;
 
-                searchMenuItem.Click(args);
-            }
-        }
+                        searchMenuItem.OnClicked();
+                    }
+                }
+            };
     }
 
     private sealed class RisingStoneItem
@@ -373,20 +377,11 @@ public class ExpandPlayerMenuSearch : ModuleBase
         ExpandPlayerMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string SearchAPI =
-            "https://apiff14risingstones.web.sdo.com/api/common/search?type=6&keywords={0}&page={1}&limit=50";
-
-        private const string PlayerInfoURL = "https://ff14risingstones.web.sdo.com/pc/index.html#/me/info?uuid={0}";
-
-        public override string LocKey         => "ExpandPlayerMenuSearch-SearchRisingStone";
+        public override string PlatformName   => "石之家";
         public override string ConfigKey      => nameof(RisingStoneItem);
         public override bool   DefaultEnabled => GameState.IsCN;
-        public override int    Order          => 10;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
+        public override void OnClicked() =>
             RunOnTick
             (async targetChara =>
                 {
@@ -422,6 +417,16 @@ public class ExpandPlayerMenuSearch : ModuleBase
                     }
                 }
             );
+
+        #region 常量
+
+        private const string SearchAPI =
+            "https://apiff14risingstones.web.sdo.com/api/common/search?type=6&keywords={0}&page={1}&limit=50";
+
+        private const string PlayerInfoURL = 
+            "https://ff14risingstones.web.sdo.com/pc/index.html#/me/info?uuid={0}";
+
+        #endregion
     }
 
     private sealed class TiebaItem
@@ -429,23 +434,24 @@ public class ExpandPlayerMenuSearch : ModuleBase
         ExpandPlayerMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL = "https://tieba.baidu.com/f/search/res?ie=utf-8&kw=ff14&qw={0}";
-
-        public override string LocKey         => "ExpandPlayerMenuSearch-SearchTieba";
+        public override string PlatformName   => "百度贴吧";
         public override string ConfigKey      => nameof(TiebaItem);
         public override bool   DefaultEnabled => GameState.IsCN;
-        public override int    Order          => 20;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             var targetChara = TargetChara;
             if (targetChara == null) return;
 
             Util.OpenLink(string.Format(URL, $"{targetChara.Name}@{targetChara.World}"));
         }
+
+        #region 常量
+
+        private const string URL = 
+            "https://tieba.baidu.com/f/search/res?ie=utf-8&kw=ff14&qw={0}";
+
+        #endregion
     }
 
     private sealed class FFLogsItem
@@ -453,23 +459,17 @@ public class ExpandPlayerMenuSearch : ModuleBase
         ExpandPlayerMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL = "https://cn.fflogs.com/character/{0}/{1}/{2}";
-
-        public override string LocKey         => "ExpandPlayerMenuSearch-SearchFFLogs";
+        public override string PlatformName   => "FF Logs";
         public override string ConfigKey      => nameof(FFLogsItem);
         public override bool   DefaultEnabled => true;
-        public override int    Order          => 30;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
             var targetChara = TargetChara;
             if (targetChara == null) return;
 
-            var region = LuminaGetter.GetRow<World>(targetChara.WorldID)?.DataCenter.ValueNullable?.Region.RowId ?? 0;
-            Util.OpenLink(string.Format(URL, RegionToFFLogsAbbvr(region), targetChara.World, targetChara.Name));
+            var region = LuminaGetter.GetRowOrDefault<World>(targetChara.WorldID).DataCenter.Value.Region.RowId;
+            Util.OpenLink(string.Format(URL, RegionToFFLogsAbbvr(region), targetChara.World, targetChara.Name, GetPrefix()));
         }
 
         private static string RegionToFFLogsAbbvr
@@ -486,6 +486,25 @@ public class ExpandPlayerMenuSearch : ModuleBase
                 6 => "KR",
                 _ => "CN"
             };
+
+        private static string GetPrefix() =>
+            GameState.ClientLanguge switch
+            {
+                Language.Japanese           => "ja",
+                Language.French             => "fr",
+                Language.German             => "de",
+                Language.Korean             => "ko",
+                Language.ChineseSimplified  => "cn",
+                Language.ChineseTraditional => "cn",
+                _                           => "www",
+            };
+
+        #region 常量
+
+        private const string URL = 
+            "https://{3}.fflogs.com/character/{0}/{1}/{2}";
+
+        #endregion
     }
 
     private sealed class LodestoneItem
@@ -493,25 +512,33 @@ public class ExpandPlayerMenuSearch : ModuleBase
         ExpandPlayerMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string URL =
-            "https://na.finalfantasyxiv.com/lodestone/character/?q={0}&worldname=_dc_{1}&classjob=&race_tribe=&blog_lang=ja&blog_lang=en&blog_lang=de&blog_lang=fr&order=";
-
-        public override string LocKey         => "ExpandPlayerMenuSearch-SearchLodestone";
+        public override string PlatformName   => "Lodestone";
         public override string ConfigKey      => nameof(LodestoneItem);
         public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 40;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
+        public override void OnClicked()
         {
-            var targetChara = TargetChara;
-            if (targetChara == null) return;
+            if (TargetChara == null) return;
 
-            var dcName = LuminaGetter.GetRow<World>(targetChara.WorldID)?.DataCenter.ValueNullable?.Name.ToString() ?? string.Empty;
-            Util.OpenLink(string.Format(URL, targetChara.Name.Replace(' ', '+'), dcName));
+            var dcName = LuminaWrapper.GetWorldDCName(TargetChara.WorldID);
+            Util.OpenLink(string.Format(URL, TargetChara.Name.Replace(' ', '+'), dcName, GetPrefix()));
         }
+
+        private static string GetPrefix() =>
+            GameState.ClientLanguge switch
+            {
+                Language.Japanese => "jp",
+                Language.French   => "fr",
+                Language.German   => "de",
+                _                 => "na",
+            };
+
+        #region 常量
+
+        private const string URL =
+            "https://{2}.finalfantasyxiv.com/lodestone/character/?q={0}&worldname=_dc_{1}&classjob=&race_tribe=&blog_lang=ja&blog_lang=en&blog_lang=de&blog_lang=fr&order=";
+
+        #endregion
     }
 
     private sealed class LalachievementsItem
@@ -519,18 +546,11 @@ public class ExpandPlayerMenuSearch : ModuleBase
         ExpandPlayerMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string SEARCH_API      = "https://www.lalachievements.com/api/charsearch/{0}/";
-        private const string PLAYER_INFO_URL = "https://www.lalachievements.com/char/{0}/";
-
-        public override string LocKey         => "ExpandPlayerMenuSearch-SearchLalachievements";
+        public override string PlatformName   => "Lalachievements";
         public override string ConfigKey      => nameof(LalachievementsItem);
         public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 50;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
+        
+        public override void OnClicked() =>
             RunOnTickImmediately
             (async targetChara =>
                 {
@@ -549,11 +569,28 @@ public class ExpandPlayerMenuSearch : ModuleBase
                         if (player.CharacterName != targetChara.Name || player.WorldID != targetChara.WorldID)
                             continue;
 
-                        Util.OpenLink(string.Format(PLAYER_INFO_URL, player.CharacterID));
+                        Util.OpenLink(string.Format(PLAYER_INFO_URL, player.CharacterID, GetVariant()));
                         break;
                     }
                 }
             );
+        
+        private static string GetVariant() =>
+            GameState.ClientLanguge switch
+            {
+                Language.Japanese => "/ja",
+                Language.French   => "/fr",
+                Language.German   => "/de",
+                _                 => string.Empty,
+            };
+
+        #region 常量
+
+        // TODO：有 Cloudflare Turnstile 验证
+        private const string SEARCH_API      = "https://www.lalachievements.com/api/charsearch/{0}/";
+        private const string PLAYER_INFO_URL = "https://www.lalachievements.com{1}/char/{0}/";
+
+        #endregion
     }
 
     private sealed class TomestoneItem
@@ -561,17 +598,11 @@ public class ExpandPlayerMenuSearch : ModuleBase
         ExpandPlayerMenuSearch module
     ) : SearchMenuItemBase(module)
     {
-        private const string SEARCH_API = "https://tomestone.gg/search/autocomplete?term={0}";
-
-        public override string LocKey         => "ExpandPlayerMenuSearch-SearchTomestone";
+        public override string PlatformName   => "Tomestone";
         public override string ConfigKey      => nameof(TomestoneItem);
         public override bool   DefaultEnabled => GameState.IsGL;
-        public override int    Order          => 60;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
+        public override void OnClicked() =>
             RunOnTickImmediately
             (async targetChara =>
                 {
@@ -605,29 +636,11 @@ public class ExpandPlayerMenuSearch : ModuleBase
                     }
                 }
             );
-    }
 
-    private sealed class SuMemoItem
-    (
-        ExpandPlayerMenuSearch module
-    ) : SearchMenuItemBase(module)
-    {
-        private const string URL = "https://sumemo.dev/member/{0}@{1}";
+        #region 常量
 
-        public override string LocKey         => "ExpandPlayerMenuSearch-SearchSuMemo";
-        public override string ConfigKey      => nameof(SuMemoItem);
-        public override bool   DefaultEnabled => true;
-        public override int    Order          => 70;
+        private const string SEARCH_API = "https://tomestone.gg/search/autocomplete?term={0}";
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
-        {
-            var targetChara = TargetChara;
-            if (targetChara == null) return;
-
-            Util.OpenLink(string.Format(URL, targetChara.Name, targetChara.World));
-        }
+        #endregion
     }
 }
