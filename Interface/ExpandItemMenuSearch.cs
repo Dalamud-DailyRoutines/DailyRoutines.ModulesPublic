@@ -8,7 +8,6 @@ using DailyRoutines.Extensions;
 using Dalamud.Utility;
 using Lumina.Data;
 using Lumina.Excel.Sheets;
-using OmenTools.Dalamud;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -89,7 +88,7 @@ public class ExpandItemMenuSearch : ModuleBase
         }
 
         ImGui.NewLine();
-        
+
         if (ImGui.Checkbox(Lang.Get("ExpandItemMenuSearch-GlamourTakesPriority"), ref config.GlamourPrioritize))
             config.Save(this);
     }
@@ -98,34 +97,6 @@ public class ExpandItemMenuSearch : ModuleBase
     {
         public bool                     GlamourPrioritize       = true;
         public Dictionary<string, bool> SearchMenuEnabledStates = [];
-    }
-
-    private abstract class SearchMenuItemBase
-    (
-        ExpandItemMenuSearch module
-    ) : ContextMenuEntry
-    {
-        protected readonly ExpandItemMenuSearch module = module;
-
-        public override string Identifier => nameof(ExpandItemMenuSearch);
-
-        public override bool OmitPrefix => true;
-
-        public abstract string PlatformName  { get; }
-        public abstract string ConfigKey      { get; }
-        public virtual  bool   DefaultEnabled => false;
-
-        public abstract void OnClicked();
-
-        public override ContextMenuItem Create
-        (
-            ContextMenuOpenedArgs args
-        ) =>
-            new()
-            {
-                Name      = Lang.Get("ExpandItemMenuSearch-ContextMenu-Search", PlatformName),
-                OnClicked = _ => OnClicked(),
-            };
     }
 
     private sealed class UpperContainerItem
@@ -140,15 +111,23 @@ public class ExpandItemMenuSearch : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (!ContextMenuItemManager.Instance().IsValidItem) return null;
+            if (!args.TargetItemRow.IsValid)
+                return null;
 
-            var searchItems = module.SearchMenuItems
-                                    .Where
-                                    (searchMenuItem => module.config.SearchMenuEnabledStates
-                                                             .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled)
-                                    )
-                                    .ToArray();
-            if (searchItems.Length == 0) return null;
+            List<SearchMenuItemBase> searchItems = [];
+
+            foreach (var searchMenuItem in module.SearchMenuItems)
+            {
+                if (!module.config.SearchMenuEnabledStates.GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled))
+                    continue;
+
+                if (!searchMenuItem.IsDisplay(args))
+                    continue;
+
+                searchItems.Add(searchMenuItem);
+            }
+
+            if (searchItems.Count == 0) return null;
 
             return new()
             {
@@ -156,7 +135,7 @@ public class ExpandItemMenuSearch : ModuleBase
                 Submenu = new()
                 {
                     Title = Lang.Get("ExpandItemMenuSearch-ContextMenu-Name"),
-                    Entries = searchItems.Length == 1 ?
+                    Entries = searchItems.Count == 1 ?
                                   searchItems :
                                   [.. searchItems, module.clickAllMenu]
                 }
@@ -189,7 +168,7 @@ public class ExpandItemMenuSearch : ModuleBase
                    .PopColorType()
                    .PopEdgeColorType();
 
-            return new ContextMenuItem
+            return new()
             {
                 Name = builder.ToReadOnlySeString(),
                 OnClicked = _ =>
@@ -200,11 +179,56 @@ public class ExpandItemMenuSearch : ModuleBase
                                    .GetValueOrDefault(searchMenuItem.ConfigKey, searchMenuItem.DefaultEnabled))
                             continue;
 
-                        searchMenuItem.OnClicked();
+                        if (searchMenuItem.IsDisplay(args))
+                            searchMenuItem.OnClicked(args);
                     }
                 }
             };
         }
+    }
+
+    private abstract class SearchMenuItemBase
+    (
+        ExpandItemMenuSearch module
+    ) : ContextMenuEntry
+    {
+        protected readonly ExpandItemMenuSearch module = module;
+
+        public override string Identifier => nameof(ExpandItemMenuSearch);
+
+        public override bool OmitPrefix => true;
+
+        public abstract string PlatformName   { get; }
+        public abstract string ConfigKey      { get; }
+        public virtual  bool   DefaultEnabled => false;
+
+        protected Item GetSearchItem
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            module.config.GlamourPrioritize && args.TargetGlamourRow is { RowId: > 0, IsValid: true } glamour ?
+                glamour.Value :
+                args.TargetItemRow.Value;
+
+        public abstract void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        );
+
+        public abstract bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        );
+
+        public override ContextMenuItem Create
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            new()
+            {
+                Name      = Lang.Get("ExpandItemMenuSearch-ContextMenu-Search", PlatformName),
+                OnClicked = clicked => OnClicked(clicked.Source)
+            };
     }
 
     private sealed class RisingStonesItem
@@ -216,23 +240,21 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(RisingStonesItem);
         public override bool   DefaultEnabled => GameState.IsCN;
 
-        public override void OnClicked()
-        {
-            var itemID = 0U;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, GetSearchItem(args).RowId));
 
-            // 优先使用幻化物品 (如果配置了优先幻化且有幻化物品)
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemID = ContextMenuItemManager.Instance().CurrentGlamourItem?.RowId ?? 0;
-            else
-                itemID = ContextMenuItemManager.Instance().CurrentItem?.RowId ?? 0;
-
-            if (itemID != 0)
-                Util.OpenLink(string.Format(URL, itemID));
-        }
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            GetSearchItem(args).EquipSlotCategory.RowId > 0;
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://ff14risingstones.web.sdo.com/pc/index.html#/search?equipmentid={0}&section=glamour";
 
         #endregion
@@ -247,28 +269,26 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(HuijiWikiItem);
         public override bool   DefaultEnabled => GameState.IsCN || GameState.IsTC;
 
-        public override void OnClicked()
-        {
-            var itemName = string.Empty;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, GetSearchItem(args).Name));
 
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemName = ContextMenuItemManager.Instance().CurrentGlamourItem?.Name.ToString();
-            else
-                itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
-
-            if (!string.IsNullOrWhiteSpace(itemName))
-                Util.OpenLink(string.Format(URL, itemName));
-        }
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            true;
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://ff14.huijiwiki.com/wiki/%E7%89%A9%E5%93%81:{0}";
 
         #endregion
     }
-    
+
     private sealed class UniversalisItem
     (
         ExpandItemMenuSearch module
@@ -278,28 +298,26 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(UniversalisItem);
         public override bool   DefaultEnabled => true;
 
-        public override void OnClicked()
-        {
-            var itemID = 0U;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, GetSearchItem(args).RowId));
 
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemID = ContextMenuItemManager.Instance().CurrentGlamourItem?.RowId ?? 0;
-            else
-                itemID = ContextMenuItemManager.Instance().CurrentItem?.RowId ?? 0;
-
-            if (itemID != 0)
-                Util.OpenLink(string.Format(URL, itemID));
-        }
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            GetSearchItem(args).ItemSearchCategory.RowId > 0;
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://universalis.app/market/{0}";
 
         #endregion
     }
-    
+
     private sealed class TeamCraftItem
     (
         ExpandItemMenuSearch module
@@ -309,19 +327,16 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(TeamCraftItem);
         public override bool   DefaultEnabled => true;
 
-        public override void OnClicked()
-        {
-            var itemID = 0U;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, GetVariant(), GetSearchItem(args).RowId));
 
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemID = ContextMenuItemManager.Instance().CurrentGlamourItem?.RowId ?? 0;
-            else
-                itemID = ContextMenuItemManager.Instance().CurrentItem?.RowId ?? 0;
-
-            if (itemID != 0)
-                Util.OpenLink(string.Format(URL, GetVariant(), itemID));
-        }
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
         private static string GetVariant() =>
             GameState.ClientLanguge switch
@@ -334,12 +349,12 @@ public class ExpandItemMenuSearch : ModuleBase
                 Language.ChineseTraditional => "zh",
                 Language.TraditionalChinese => "tw",
                 Language.Korean             => "ko",
-                _                           => "en",
+                _                           => "en"
             };
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://ffxivteamcraft.com/db/{0}/item/{1}";
 
         #endregion
@@ -354,19 +369,16 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(ConsoleGameWikiItem);
         public override bool   DefaultEnabled => GameState.IsGL;
 
-        public override void OnClicked()
-        {
-            var itemName = string.Empty;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, Uri.EscapeDataString(GetSearchItem(args).Name.ToString())));
 
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemName = ContextMenuItemManager.Instance().CurrentGlamourItem?.Name.ToString();
-            else
-                itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
-
-            if (!string.IsNullOrWhiteSpace(itemName))
-                Util.OpenLink(string.Format(URL, Uri.EscapeDataString(itemName)));
-        }
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
         #region 常量
 
@@ -385,20 +397,17 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(GarlandToolsCNItem);
         public override bool   DefaultEnabled => GameState.IsCN || GameState.IsTC;
 
-        public override void OnClicked()
-        {
-            var itemID = 0U;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, GetSearchItem(args).RowId));
 
-            // 优先使用幻化物品ID（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemID = ContextMenuItemManager.Instance().CurrentGlamourID;
-            else
-                itemID = ContextMenuItemManager.Instance().CurrentItemID;
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
-            if (itemID != 0)
-                Util.OpenLink(string.Format(URL, itemID));
-        }
-        
         #region 常量
 
         private const string URL =
@@ -416,19 +425,16 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(GarlandToolsItem);
         public override bool   DefaultEnabled => GameState.IsGL;
 
-        public override void OnClicked()
-        {
-            var itemID = 0U;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, GetSearchItem(args).RowId));
 
-            // 优先使用幻化物品ID（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemID = ContextMenuItemManager.Instance().CurrentGlamourID;
-            else
-                itemID = ContextMenuItemManager.Instance().CurrentItemID;
-
-            if (itemID != 0)
-                Util.OpenLink(string.Format(URL, itemID));
-        }
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
         #region 常量
 
@@ -447,19 +453,16 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(LodestoneItem);
         public override bool   DefaultEnabled => GameState.IsGL;
 
-        public override void OnClicked()
-        {
-            var itemName = string.Empty;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, GetSearchItem(args).Name, GetPrefix()));
 
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemName = ContextMenuItemManager.Instance().CurrentGlamourItem?.Name.ToString();
-            else
-                itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
-
-            if (!string.IsNullOrWhiteSpace(itemName))
-                Util.OpenLink(string.Format(URL, itemName, GetPrefix()));
-        }
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
         private static string GetPrefix() =>
             GameState.ClientLanguge switch
@@ -467,9 +470,9 @@ public class ExpandItemMenuSearch : ModuleBase
                 Language.Japanese => "jp",
                 Language.French   => "fr",
                 Language.German   => "de",
-                _                 => "na",
+                _                 => "na"
             };
-        
+
         #region 常量
 
         private const string URL =
@@ -487,20 +490,17 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(GamerEscapeItem);
         public override bool   DefaultEnabled => GameState.IsGL;
 
-        public override void OnClicked()
-        {
-            var itemName = string.Empty;
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            Util.OpenLink(string.Format(URL, Uri.EscapeDataString(GetSearchItem(args).Name.ToString())));
 
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemName = ContextMenuItemManager.Instance().CurrentGlamourItem?.Name.ToString();
-            else
-                itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
-            if (!string.IsNullOrWhiteSpace(itemName))
-                Util.OpenLink(string.Format(URL, Uri.EscapeDataString(itemName)));
-        }
-        
         #region 常量
 
         private const string URL =
@@ -518,23 +518,26 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(ERIONESItem);
         public override bool   DefaultEnabled => GameState.IsGL;
 
-        public override void OnClicked()
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        )
         {
-            var itemName = string.Empty;
-
-            // 优先使用幻化物品名称（如果配置了优先幻化且有幻化物品）
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemName = ContextMenuItemManager.Instance().CurrentGlamourItem?.Name.ToString();
-            else
-                itemName = ContextMenuItemManager.Instance().CurrentItem?.Name.ToString();
+            var itemName = GetSearchItem(args).Name.ToString();
 
             if (!string.IsNullOrWhiteSpace(itemName))
             {
                 if (itemName.Length > 25)
                     itemName = itemName[..25];
+
                 Util.OpenLink(string.Format(URL, GetPrefixByLang(), Uri.EscapeDataString(itemName)));
             }
         }
+
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
         private static string GetPrefixByLang() =>
             GameState.ClientLanguge switch
@@ -551,7 +554,7 @@ public class ExpandItemMenuSearch : ModuleBase
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://{0}eriones.com/search?i={1}";
 
         #endregion
@@ -566,24 +569,23 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string ConfigKey      => nameof(FFXIVItemSearchTCItem);
         public override bool   DefaultEnabled => GameState.IsTC;
 
-        public override void OnClicked()
+        public override void OnClicked
+        (
+            ContextMenuOpenedArgs args
+        )
         {
-            Item? itemToSearch = null;
-
-            // 优先使用幻化
-            if (module.config.GlamourPrioritize && ContextMenuItemManager.Instance().CurrentGlamourID > 0)
-                itemToSearch = ContextMenuItemManager.Instance().CurrentGlamourItem;
-            else
-                itemToSearch = ContextMenuItemManager.Instance().CurrentItem;
-
-            if (itemToSearch == null) return;
-
-            Util.OpenLink(string.Format(URL, itemToSearch?.RowId, Uri.EscapeDataString(itemToSearch?.Name.ToString() ?? string.Empty)));
+            var item = GetSearchItem(args);
+            Util.OpenLink(string.Format(URL, item.RowId, Uri.EscapeDataString(item.Name.ToString())));
         }
+
+        public override bool IsDisplay
+        (
+            ContextMenuOpenedArgs args
+        ) => true;
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://cycleapple.github.io/ffxiv-item-search-tc?selected={0}&q={1}";
 
         #endregion
