@@ -3,7 +3,6 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.RemoteInteraction.Universalis;
-using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Abstractions;
@@ -33,13 +32,11 @@ public unsafe partial class BetterMarketBoard : ModuleBase
 
     private static InfoProxyItemSearch* InfoProxy => InfoProxyItemSearch.Instance();
 
-    private MarketDataProvider provider = null!;
-
+    private MarketDataProvider   provider        = null!;
     private PriceMonitorProvider monitorProvider = null!;
-
-    private Config config = null!;
-
-    private LuminaSearcher<Item> searcher = null!;
+    private Config               config          = null!;
+    private LuminaSearcher<Item> searcher        = null!;
+    private SearchInMarketMenu   contextMenu     = null!;
 
     // Region Name - DC Name - World ID - World Name
     private Dictionary<string, Dictionary<string, Dictionary<uint, string>>> allWorlds = [];
@@ -47,8 +44,8 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     private readonly Dictionary<uint, List<Item>> searchCategoryToItems = [];
 
     private readonly Dictionary<uint, uint> itemIDToPayloadID = [];
-
-    private uint  lastWorldID;
+    
+    private uint lastWorldID;
 
     protected override void Init()
     {
@@ -172,14 +169,16 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         FrameworkManager.Instance().Reg(OnMonitorUpdate, 60_000);
         FrameworkManager.Instance().Reg(OnWorldWatch,    1_000);
 
-        IContextMenu.Instance().OnMenuOpened += OnMenuOpened;
         TooltipManager.Instance().RegItem(OnItemTooltipUpdate);
+
+        contextMenu = new(this);
+        ContextMenuManager.Instance().Reg(contextMenu);
     }
 
     protected override void Uninit()
     {
+        ContextMenuManager.Instance().Unreg(contextMenu);
         TooltipManager.Instance().Unreg(OnItemTooltipUpdate);
-        IContextMenu.Instance().OnMenuOpened -= OnMenuOpened;
         FrameworkManager.Instance().Unreg(OnMonitorUpdate, OnWorldWatch);
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
@@ -225,17 +224,6 @@ public unsafe partial class BetterMarketBoard : ModuleBase
             ExecuteOverlaySearch(firstFound.Name.ToString());
             Overlay.IsOpen = true;
         }
-    }
-
-    private void OnMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        if (!ContextMenuItemManager.Instance().IsValidItem || ContextMenuItemManager.Instance().CurrentItem is not { ItemSearchCategory.RowId: > 0 })
-            return;
-
-        args.AddMenuItem(new SearchInMarketMenu(this, ContextMenuItemManager.Instance().CurrentItemID).Get());
     }
 
     private void OnWorldWatch
@@ -299,6 +287,35 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     }
 
     #endregion
+    
+    private class SearchInMarketMenu
+    (
+        BetterMarketBoard module
+    ) : ContextMenuEntry
+    {
+        public override string Identifier => nameof(BetterMarketBoard);
+
+        public override ContextMenuItem? Create
+        (
+            ContextMenuOpenedArgs args
+        )
+        {
+            var itemID = ContextMenuItemManager.Instance().CurrentItemID;
+            if (!LuminaGetter.TryGetRow(itemID, out Item itemRow) ||
+                itemRow.ItemSearchCategory.RowId == 0)
+                return null;
+
+            return new()
+            {
+                Name = Lang.Get("BetterMarketBoard-SearchInMarket"),
+                OnClicked = _ =>
+                {
+                    module.ToggleOverlay(true);
+                    module.provider.SelectItem(itemID);
+                }
+            };
+        }
+    }
 
     #region 预置数据
 

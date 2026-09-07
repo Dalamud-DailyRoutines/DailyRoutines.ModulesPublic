@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using Dalamud.Game.Gui.ContextMenu;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -89,25 +90,5 @@ public partial class BetterMarketBoard
 
         public Item GetData() =>
             LuminaGetter.GetRow<Item>(ItemID).GetValueOrDefault();
-    }
-
-    private class SearchInMarketMenu
-    (
-        BetterMarketBoard module,
-        uint              itemID
-    ) : MenuItemBase
-    {
-        public override    string Name         { get; protected set; } = Lang.Get("BetterMarketBoard-SearchInMarket");
-        public override    string Identifier   { get; protected set; } = nameof(BetterMarketBoard);
-        protected override bool   WithDRPrefix { get; set; }           = true;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
-        {
-            module.ToggleOverlay(true);
-            module.provider.SelectItem(itemID);
-        }
     }
 }
