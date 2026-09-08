@@ -64,7 +64,7 @@ public unsafe class PetSizeContextMenu : ModuleBase
             if (args.TargetObjectID == (ulong)pet->GetGameObjectId())
                 name = Lang.Get("PetSizeContextMenu-ContextMenu-Pet");
 
-            if (args.TargetObjectID == LocalPlayerState.EntityID)
+            if (args.TargetContentID == LocalPlayerState.ContentID)
                 name = Lang.Get("PetSizeContextMenu-ContextMenu-Self");
 
             if (!string.IsNullOrEmpty(name))
@@ -74,7 +74,7 @@ public unsafe class PetSizeContextMenu : ModuleBase
                     Name = name,
                     Submenu = new()
                     {
-                        Title   = Lang.Get("PetSizeContextMenu-ContextMenu"),
+                        Title   = name,
                         Entries = subMenuItems
                     }
                 };
@@ -99,7 +99,7 @@ public unsafe class PetSizeContextMenu : ModuleBase
         ) =>
             new()
             {
-                Name      = LuminaWrapper.GetAddonText(AddonTextID),
+                Name      = Lang.Get("PetSizeContextMenu-ContextMenu-Sub", LuminaWrapper.GetAddonText(AddonTextID)),
                 OnClicked = _ => ChatManager.Instance().SendMessage($"/petsize all {TextCommandParam}")
             };
     }
