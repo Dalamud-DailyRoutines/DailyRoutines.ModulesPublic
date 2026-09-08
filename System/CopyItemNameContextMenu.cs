@@ -48,9 +48,7 @@ public class CopyItemNameContextMenu : ModuleBase
     ) : ContextMenuEntry
     {
         public override string Identifier => nameof(CopyItemNameContextMenu);
-
-        public override bool OmitPrefix => true;
-
+        
         public override unsafe ContextMenuItem? Create
         (
             ContextMenuOpenedArgs args
