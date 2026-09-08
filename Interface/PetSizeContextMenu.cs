@@ -1,15 +1,14 @@
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using MenuItem = Dalamud.Game.Gui.ContextMenu.MenuItem;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
+// TODO: 支持驯兽师的魔物调整（/beastsize）
 public unsafe class PetSizeContextMenu : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -25,66 +24,101 @@ public unsafe class PetSizeContextMenu : ModuleBase
 
     protected override void Init()
     {
-        containerItem                                =  new();
-        IContextMenu.Instance().OnMenuOpened += OnMenuOpened;
+        containerItem = new();
+        ContextMenuManager.Instance().Reg(containerItem);
     }
 
     protected override void Uninit() =>
-        IContextMenu.Instance().OnMenuOpened -= OnMenuOpened;
+        ContextMenuManager.Instance().Unreg(containerItem);
 
-    private void OnMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
+    private sealed class UpperContainerItem : ContextMenuEntry
     {
-        if (!containerItem.IsDisplay(args)) return;
-        args.AddMenuItem(containerItem.Get());
-    }
+        public override string Identifier =>
+            nameof(PetSizeContextMenu);
 
-    private class UpperContainerItem : MenuItemBase
-    {
-        public override string Name       { get; protected set; } = Lang.Get("PetSizeContextMenu-MenuName");
-        public override string Identifier { get; protected set; } = nameof(PetSizeContextMenu);
-
-        protected override bool IsSubmenu { get; set; } = true;
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
-            args.OpenSubmenu(Name, ProcessMenuItems());
-
-        private static List<MenuItem> ProcessMenuItems() =>
+        private readonly PetSizeAdjustItem[] subMenuItems =
         [
-            new()
-            {
-                Name      = $"{Lang.Get("Adjust")}: {LuminaWrapper.GetAddonText(6371)}",
-                OnClicked = _ => ChatManager.Instance().SendMessage("/petsize all large")
-            },
-            new()
-            {
-                Name      = $"{Lang.Get("Adjust")}: {LuminaWrapper.GetAddonText(6372)}",
-                OnClicked = _ => ChatManager.Instance().SendMessage("/petsize all medium")
-            },
-            new()
-            {
-                Name      = $"{Lang.Get("Adjust")}: {LuminaWrapper.GetAddonText(6373)}",
-                OnClicked = _ => ChatManager.Instance().SendMessage("/petsize all small")
-            }
+            new PetSizeSmallItem(),
+            new PetSizeMediumItem(),
+            new PetSizeLargeItem()
         ];
 
-        public override bool IsDisplay
+        public override ContextMenuItem? Create
         (
-            IMenuOpenedArgs args
+            ContextMenuOpenedArgs args
         )
         {
-            if (args.Target is not MenuTargetDefault defautTarget) return false;
-            if (IObjectTable.Instance().LocalPlayer is not { } localPlayer) return false;
+            var localPlayer = Control.GetLocalPlayer();
+            if (localPlayer == null) 
+                return null;
+            
+            if (localPlayer->ClassJob is not (26 or 27))
+                return null;
 
-            var pet = CharacterManager.Instance()->LookupPetByOwnerObject(localPlayer.ToStruct());
-            if (pet == null || defautTarget.TargetObjectId != pet->GetGameObjectId()) return false;
+            var pet = CharacterManager.Instance()->LookupPetByOwnerObject(localPlayer);
+            if (pet == null) 
+                return null;
 
-            return true;
+            string? name = null;
+            
+            if (args.TargetObjectID == (ulong)pet->GetGameObjectId())
+                name = Lang.Get("PetSizeContextMenu-ContextMenu-Pet");
+
+            if (args.TargetObjectID == LocalPlayerState.EntityID)
+                name = Lang.Get("PetSizeContextMenu-ContextMenu-Self");
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                return new()
+                {
+                    Name = name,
+                    Submenu = new()
+                    {
+                        Title   = Lang.Get("PetSizeContextMenu-ContextMenu"),
+                        Entries = subMenuItems
+                    }
+                };
+            }
+
+            return null;
         }
+    }
+
+    private abstract class PetSizeAdjustItem : ContextMenuEntry
+    {
+        public override string Identifier => 
+            nameof(PetSizeContextMenu);
+
+        protected abstract uint AddonTextID { get; }
+
+        protected abstract string TextCommandParam { get; }
+
+        public override ContextMenuItem Create
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+            new()
+            {
+                Name      = LuminaWrapper.GetAddonText(AddonTextID),
+                OnClicked = _ => ChatManager.Instance().SendMessage($"/petsize all {TextCommandParam}")
+            };
+    }
+    
+    private sealed class PetSizeSmallItem : PetSizeAdjustItem
+    {
+        protected override uint   AddonTextID      => 6373;
+        protected override string TextCommandParam => "small";
+    }
+    
+    private sealed class PetSizeMediumItem : PetSizeAdjustItem
+    {
+        protected override uint   AddonTextID      => 6372;
+        protected override string TextCommandParam => "medium";
+    }
+    
+    private sealed class PetSizeLargeItem : PetSizeAdjustItem
+    {
+        protected override uint   AddonTextID      => 6371;
+        protected override string TextCommandParam => "large";
     }
 }
