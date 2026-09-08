@@ -314,7 +314,7 @@ public unsafe class AutoSplitStacks : ModuleBase
         {
             var finishMessage = Lang.Get("AutoSplitStacks-Notification-Finished", finishRound, count);
             NotifyHelper.Toast(finishMessage);
-            NotifyHelper.Chat(finishMessage);
+            NotifyHelper.Instance().Chat(finishMessage);
         }
         
         return true;
