@@ -105,7 +105,8 @@ public unsafe class AutoUseItemStacks : ModuleBase
                     return true;
 
                 return false;
-            }
+            },
+            timeoutAction: NotifyFinished
         );
         TaskHelper.Enqueue(() => EnqueueOpenCoffers(itemID, inventoryType, inventorySlot, leftCount, finishRound + 1));
 
