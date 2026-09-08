@@ -8,7 +8,6 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
-// TODO: 支持驯兽师的魔物调整（/beastsize）
 public unsafe class PetSizeContextMenu : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -52,7 +51,7 @@ public unsafe class PetSizeContextMenu : ModuleBase
             if (localPlayer == null) 
                 return null;
             
-            if (localPlayer->ClassJob is not (26 or 27))
+            if (localPlayer->ClassJob is not (26 or 27 or 43))
                 return null;
 
             var pet = CharacterManager.Instance()->LookupPetByOwnerObject(localPlayer);
@@ -100,7 +99,16 @@ public unsafe class PetSizeContextMenu : ModuleBase
             new()
             {
                 Name      = Lang.Get("PetSizeContextMenu-ContextMenu-Sub", LuminaWrapper.GetAddonText(AddonTextID)),
-                OnClicked = _ => ChatManager.Instance().SendMessage($"/petsize all {TextCommandParam}")
+                OnClicked = _ =>
+                {
+                    if (LocalPlayerState.ClassJob == 43)
+                    {
+                        ChatManager.Instance().SendMessage($"/beastsize all {TextCommandParam}");
+                        return;
+                    }
+                    
+                    ChatManager.Instance().SendMessage($"/petsize all {TextCommandParam}");
+                }
             };
     }
     
