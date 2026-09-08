@@ -61,10 +61,17 @@ public unsafe class PetSizeContextMenu : ModuleBase
             string? name = null;
             
             if (args.TargetObjectID == (ulong)pet->GetGameObjectId())
-                name = Lang.Get("PetSizeContextMenu-ContextMenu-Pet");
+                name = LuminaWrapper.GetAddonText(17709);
 
             if (args.TargetContentID == LocalPlayerState.ContentID)
-                name = Lang.Get("PetSizeContextMenu-ContextMenu-Self");
+            {
+                name = Lang.Get
+                (
+                    LocalPlayerState.ClassJob == 43 ?
+                        "PetSizeContextMenu-ContextMenu-Self-Beast" :
+                        "PetSizeContextMenu-ContextMenu-Self-Pet"
+                );
+            }
 
             if (!string.IsNullOrEmpty(name))
             {
@@ -89,16 +96,23 @@ public unsafe class PetSizeContextMenu : ModuleBase
             nameof(PetSizeContextMenu);
 
         protected abstract uint AddonTextID { get; }
+        
+        protected abstract uint BeastMasterAddonTextID { get; }
 
         protected abstract string TextCommandParam { get; }
 
         public override ContextMenuItem Create
         (
             ContextMenuOpenedArgs args
-        ) =>
-            new()
+        )
+        {
+            var isBeastMaster = LocalPlayerState.ClassJob == 43;
+
+            return new ContextMenuItem
             {
-                Name      = Lang.Get("PetSizeContextMenu-ContextMenu-Sub", LuminaWrapper.GetAddonText(AddonTextID)),
+                Name = isBeastMaster ?
+                           LuminaWrapper.GetAddonText(BeastMasterAddonTextID) :
+                           Lang.Get("PetSizeContextMenu-ContextMenu-Sub-Pet", LuminaWrapper.GetAddonText(AddonTextID)),
                 OnClicked = _ =>
                 {
                     if (LocalPlayerState.ClassJob == 43)
@@ -106,27 +120,31 @@ public unsafe class PetSizeContextMenu : ModuleBase
                         ChatManager.Instance().SendMessage($"/beastsize all {TextCommandParam}");
                         return;
                     }
-                    
+
                     ChatManager.Instance().SendMessage($"/petsize all {TextCommandParam}");
                 }
             };
+        }
     }
     
     private sealed class PetSizeSmallItem : PetSizeAdjustItem
     {
-        protected override uint   AddonTextID      => 6373;
-        protected override string TextCommandParam => "small";
+        protected override uint   AddonTextID            => 6373;
+        protected override uint   BeastMasterAddonTextID => 17689;
+        protected override string TextCommandParam       => "small";
     }
     
     private sealed class PetSizeMediumItem : PetSizeAdjustItem
     {
-        protected override uint   AddonTextID      => 6372;
-        protected override string TextCommandParam => "medium";
+        protected override uint   AddonTextID            => 6372;
+        protected override uint   BeastMasterAddonTextID => 17690;
+        protected override string TextCommandParam       => "medium";
     }
     
     private sealed class PetSizeLargeItem : PetSizeAdjustItem
     {
-        protected override uint   AddonTextID      => 6371;
-        protected override string TextCommandParam => "large";
+        protected override uint   AddonTextID            => 6371;
+        protected override uint   BeastMasterAddonTextID => 17691;
+        protected override string TextCommandParam       => "large";
     }
 }
