@@ -1,11 +1,8 @@
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.DutyState;
-using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -52,15 +49,17 @@ public unsafe class AutoPlayerCommend : ModuleBase
         contentSelectCombo.SelectedIDs = config.BlacklistContents;
 
         IClientState.Instance().TerritoryChanged += OnZoneChanged;
-        IContextMenu.Instance().OnMenuOpened     += OnMenuOpen;
         IDutyState.Instance().DutyCompleted      += OnDutyComplete;
+
+        ContextMenuManager.Instance().Reg(menuItem);
     }
 
     protected override void Uninit()
     {
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
-        IContextMenu.Instance().OnMenuOpened     -= OnMenuOpen;
         IDutyState.Instance().DutyCompleted      -= OnDutyComplete;
+
+        ContextMenuManager.Instance().Unreg(menuItem);
 
         assignedContentID = 0;
     }
@@ -91,15 +90,6 @@ public unsafe class AutoPlayerCommend : ModuleBase
         uint u
     ) =>
         assignedContentID = 0;
-
-    private void OnMenuOpen
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        if (!menuItem.IsDisplay(args)) return;
-        args.AddMenuItem(menuItem.Get());
-    }
 
     private void OnDutyComplete
     (
@@ -270,20 +260,22 @@ public unsafe class AutoPlayerCommend : ModuleBase
             if (!LuminaGetter.TryGetRow<ClassJob>(memberInfo.ClassJob, out var job)) continue;
 
             AgentId.ContentsMvp.SendEvent(0, 0, playerIndex);
-            NotifyHelper.Instance().Chat
+
+            var message = Lang.GetSe
             (
-                Lang.GetSe
-                (
-                    "AutoPlayerCommend-Notification-Given",
-                    new PlayerPayload(memberInfo.Name, memberInfo.HomeWorld),
-                    job.ToBitmapFontIcon(),
-                    job.Name.ToString()
-                )
+                "AutoPlayerCommend-Notification-Given",
+                job.ToBitmapFontIcon(),
+                new PlayerPayload(memberInfo.Name, memberInfo.HomeWorld)
             );
+            
+            NotifyHelper.Instance().Chat(message);
+            NotifyHelper.Toast(message);
             return true;
         }
 
-        NotifyHelper.Instance().ChatError(Lang.Get("AutoPlayerCommend-Notification-ErrorWhenGave"));
+        var failMessage = Lang.Get("AutoPlayerCommend-Notification-ErrorWhenGave");
+        NotifyHelper.Instance().ChatError(failMessage);
+        NotifyHelper.ToastError(failMessage);
         return true;
 
         bool TryFindPlayerIndex
@@ -347,65 +339,81 @@ public unsafe class AutoPlayerCommend : ModuleBase
         public HashSet<uint> BlacklistContents          = [];
     }
 
-    private class AssignPlayerCommendationMenu
+    private sealed class AssignPlayerCommendationMenu
     (
         AutoPlayerCommend module
-    ) : MenuItemBase
+    ) : ContextMenuEntry
     {
-        public override string Name       { get; protected set; } = Lang.Get("AutoPlayerCommend-ContextMenu-AssignPlayer");
-        public override string Identifier { get; protected set; } = nameof(AutoPlayerCommend);
+        public override string Identifier =>
+            nameof(AutoPlayerCommend);
 
-        public override bool IsDisplay
+        public override unsafe ContextMenuItem? Create
         (
-            IMenuOpenedArgs args
+            ContextMenuOpenedArgs args
         )
         {
-            if (!ICondition.Instance()[ConditionFlag.BoundByDuty]) 
-                return false;
+            if (GameState.ContentFinderCondition      == 0 ||
+                AgentHUD.Instance()->PartyMemberCount < 2)
+                return null;
 
-            if (args.MenuType != ContextMenuType.Default                                          ||
-                args.Target is not MenuTargetDefault { TargetCharacter.ContentId: var contentID } ||
-                contentID == 0)
-                return false;
+            var targetCharacter = args.TargetCharacter;
+            if (targetCharacter == null || targetCharacter->ContentId == 0)
+                return null;
 
-            Name = Lang.Get
-            (
-                LocalPlayerState.ContentID != contentID ?
-                    "AutoPlayerCommend-ContextMenu-AssignPlayer" :
-                    "AutoPlayerCommend-ContextMenu-AssignNobody"
-            );
+            var contentID    = targetCharacter->ContentId;
+            var isTargetSelf = contentID == LocalPlayerState.ContentID;
+            var isTargetSame = module.assignedContentID == contentID;
 
-            return true;
-        }
+            if (isTargetSame)
+            {
+                return new()
+                {
+                    Name      = Lang.Get("AutoPlayerCommend-ContextMenu-Auto"),
+                    OnClicked = _ =>
+                    {
+                        module.assignedContentID = 0;
+                        
+                        var message = Lang.Get("AutoPlayerCommend-Notification-Auto");
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Toast(message);
+                    }
+                };
+            }
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
-        {
-            if (args.Target is not MenuTargetDefault { TargetCharacter: { ContentId: var contentID } targetCharacter } ||
-                contentID == 0)
-                return;
-            
-            var playerName  = targetCharacter.Name;
-            var playerWorld = targetCharacter.HomeWorld.Value;
-            var playerJob   = targetCharacter.ClassJob.Value;
+            if (isTargetSelf)
+            {
+                return new()
+                {
+                    Name      = Lang.Get("AutoPlayerCommend-ContextMenu-AssignNobody"),
+                    OnClicked = _ =>
+                    {
+                        module.assignedContentID = LocalPlayerState.ContentID;
+                        
+                        var message = Lang.Get("AutoPlayerCommend-Notification-AssignedNobody");
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Toast(message);
+                    }
+                };
+            }
 
-            if (contentID == LocalPlayerState.ContentID)
-                NotifyHelper.Instance().Chat(Lang.Get("AutoPlayerCommend-Notification-AssignedNobody"));
-            else
-                NotifyHelper.Instance().Chat
-                (
-                    Lang.GetSe
+            return new()
+            {
+                Name = Lang.Get("AutoPlayerCommend-ContextMenu-AssignPlayer"),
+                OnClicked = _ =>
+                {
+                    module.assignedContentID = contentID;
+
+                    var message = Lang.GetSe
                     (
                         "AutoPlayerCommend-Notification-AssignedPlayer",
-                        new PlayerPayload(playerName, playerWorld.RowId),
-                        playerJob.ToBitmapFontIcon(),
-                        playerJob.Name.ToString()
-                    )
-                );
+                        LuminaGetter.GetRowOrDefault<ClassJob>(targetCharacter->Job).ToBitmapFontIcon(),
+                        new PlayerPayload(targetCharacter->NameString, targetCharacter->HomeWorld)
+                    );
 
-            module.assignedContentID = contentID;
+                    NotifyHelper.Instance().Chat(message);
+                    NotifyHelper.Toast(message);
+                }
+            };
         }
     }
 }
