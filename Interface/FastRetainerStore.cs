@@ -1,14 +1,12 @@
 using System.Collections.Frozen;
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
-using Dalamud.Game.Gui.ContextMenu;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -22,51 +20,18 @@ public unsafe class FastRetainerStore : ModuleBase
         Author      = ["YLCHEN"]
     };
 
+    private ItemMoveMenu menuItem = null!;
+
     protected override void Init()
     {
         TaskHelper ??= new();
 
-        IContextMenu.Instance().OnMenuOpened += OnContextMenuOpened;
+        menuItem = new(this);
+        ContextMenuManager.Instance().Reg(menuItem);
     }
 
     protected override void Uninit() =>
-        IContextMenu.Instance().OnMenuOpened -= OnContextMenuOpened;
-
-    private void OnContextMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        if (args is not { MenuType: ContextMenuType.Inventory, Target: MenuTargetInventory { TargetItem: { } item }, AddonName: { } addonName })
-            return;
-        if (!LuminaGetter.TryGetRow<Item>(item.ItemId, out _)) return;
-
-        var playerOpen   = IsPlayerInventoryOpen();
-        var retainerOpen = IsRetainerInventoryOpen();
-        if (!playerOpen || !retainerOpen) return;
-
-        if (PlayerAddonNames.Contains(addonName))
-        {
-            if (TryFindTargetSlot(Inventories.Retainer, item.ItemId, item.IsHq, item.IsCollectable, out _))
-                args.AddMenuItem(new ItemMoveMenu(item.ItemId, item.IsHq, item.IsCollectable, true).Get());
-        }
-        else if (RetainerAddonNames.Contains(addonName))
-        {
-            if (TryFindTargetSlot(Inventories.Player, item.ItemId, item.IsHq, item.IsCollectable, out _))
-                args.AddMenuItem(new ItemMoveMenu(item.ItemId, item.IsHq, item.IsCollectable, false).Get());
-        }
-
-        return;
-
-        bool IsRetainerInventoryOpen() =>
-            InventoryRetainer->IsAddonAndNodesReady() ||
-            InventoryRetainerLarge->IsAddonAndNodesReady();
-
-        bool IsPlayerInventoryOpen() =>
-            Inventory->IsAddonAndNodesReady()      ||
-            InventoryLarge->IsAddonAndNodesReady() ||
-            InventoryExpansion->IsAddonAndNodesReady();
-    }
+        ContextMenuManager.Instance().Unreg(menuItem);
 
     private void ExecuteMoveAll
     (
@@ -105,7 +70,14 @@ public unsafe class FastRetainerStore : ModuleBase
                         if (!TryFindTargetSlot(targetInvs, itemID, isHQ, isCollectable, out var targetSlot))
                             return true;
 
-                        manager->MoveItemSlot(sourceInv, (ushort)slot->Slot, targetSlot.Inventory, (ushort)targetSlot.Slot, true);
+                        manager->MoveItemSlot
+                        (
+                            sourceInv,
+                            (ushort)slot->Slot,
+                            targetSlot.Inventory,
+                            (ushort)targetSlot.Slot,
+                            true
+                        );
                     }
                 }
 
@@ -125,19 +97,15 @@ public unsafe class FastRetainerStore : ModuleBase
         bool           isCollectable
     )
     {
-        var rawID = slot->GetItemId();
+        var rawID = slot->GetBaseItemId();
         if (rawID == 0) return false;
 
         var currentIsHQ          = slot->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
         var currentIsCollectable = slot->Flags.HasFlag(InventoryItem.ItemFlags.Collectable);
 
-        var baseItemID = rawID;
-        if (currentIsCollectable)
-            baseItemID %= 500000;
-        else if (currentIsHQ)
-            baseItemID %= 1000000;
-
-        return baseItemID == itemID && currentIsHQ == isHQ && currentIsCollectable == isCollectable;
+        return rawID                == itemID &&
+               currentIsHQ          == isHQ   &&
+               currentIsCollectable == isCollectable;
     }
 
     private static bool TryFindTargetSlot
@@ -197,36 +165,90 @@ public unsafe class FastRetainerStore : ModuleBase
         return false;
     }
 
-    private class ItemMoveMenu
+    private sealed class ItemMoveMenu
     (
-        uint ItemID,
-        bool IsHQ,
-        bool IsCollectable,
-        bool IsStoreToRetainer
-    ) : MenuItemBase
+        FastRetainerStore module
+    ) : ContextMenuEntry
     {
-        public override string Name { get; protected set; } = Lang.Get
+        public override string Identifier =>
+            nameof(FastRetainerStore);
+
+        public override ContextMenuItem? Create
         (
-            IsStoreToRetainer ?
-                "FastRetainerStore-SaveAll" :
-                "FastRetainerStore-RetrieveAll"
-        );
+            ContextMenuOpenedArgs args
+        )
+        {
+            if (args.TargetInventoryItem is not { } item || args.AddonName is not { } addonName)
+                return null;
 
-        public override string Identifier { get; protected set; } = nameof(FastRetainerStore);
+            var itemID = item.GetBaseItemId();
+            if (!LuminaGetter.TryGetRow<Item>(itemID, out _)) return null;
 
-        protected override bool WithDRPrefix { get; set; } = true;
+            var playerOpen   = IsPlayerInventoryOpen();
+            var retainerOpen = IsRetainerInventoryOpen();
+            if (!playerOpen || !retainerOpen) return null;
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
-            ModuleManager.Instance().GetModule<FastRetainerStore>().ExecuteMoveAll(ItemID, IsHQ, IsCollectable, IsStoreToRetainer);
+            var isHQ          = item.Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
+            var isCollectable = item.Flags.HasFlag(InventoryItem.ItemFlags.Collectable);
+
+            if (PlayerAddonNames.Contains(addonName))
+            {
+                if (!TryFindTargetSlot(Inventories.Retainer, itemID, isHQ, isCollectable, out _))
+                    return null;
+
+                return CreateItem(true);
+            }
+
+            if (RetainerAddonNames.Contains(addonName))
+            {
+                if (!TryFindTargetSlot(Inventories.Player, itemID, isHQ, isCollectable, out _))
+                    return null;
+
+                return CreateItem(false);
+            }
+
+            return null;
+
+            ContextMenuItem CreateItem
+            (
+                bool storeToRetainer
+            ) =>
+                new()
+                {
+                    Name = Lang.Get
+                    (
+                        storeToRetainer ?
+                            "FastRetainerStore-SaveAll" :
+                            "FastRetainerStore-RetrieveAll"
+                    ),
+                    OnClicked = _ => module.ExecuteMoveAll(itemID, isHQ, isCollectable, storeToRetainer)
+                };
+
+            bool IsRetainerInventoryOpen() =>
+                InventoryRetainer->IsAddonAndNodesReady() ||
+                InventoryRetainerLarge->IsAddonAndNodesReady();
+
+            bool IsPlayerInventoryOpen() =>
+                Inventory->IsAddonAndNodesReady()      ||
+                InventoryLarge->IsAddonAndNodesReady() ||
+                InventoryExpansion->IsAddonAndNodesReady();
+        }
     }
 
     #region 常量
 
-    private static readonly FrozenSet<string> PlayerAddonNames   = ["Inventory", "InventoryLarge", "InventoryExpansion"];
-    private static readonly FrozenSet<string> RetainerAddonNames = ["InventoryRetainer", "InventoryRetainerLarge"];
+    private static readonly string[] PlayerAddonNames =
+    [
+        "Inventory",
+        "InventoryLarge",
+        "InventoryExpansion"
+    ];
+
+    private static readonly string[] RetainerAddonNames =
+    [
+        "InventoryRetainer",
+        "InventoryRetainerLarge"
+    ];
 
     #endregion
 }
