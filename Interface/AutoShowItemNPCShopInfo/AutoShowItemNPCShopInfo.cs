@@ -64,28 +64,41 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
         if (kind is not ItemKind.Normal)
             return;
 
+        const int    MAX_DISPLAY_COUNT = 5;
+        const string SPACING           = "    ";
+        
         using var builder = new RentedSeStringBuilder();
-        builder.Builder
-               .AppendNewLine()
-               .Append($"[{Lang.Get("AutoShowItemNPCShopInfo-TooltipTitle")}]");
 
         var isAnyValid = false;
 
         var sourceResult = ItemSourceInfo.Query(itemID);
-
         if (sourceResult is { State: ItemSourceQueryState.Ready, Data: { } sourceInfo })
         {
             isAnyValid = true;
 
+            builder.Builder
+                   .AppendNewLine()
+                   .Append($"[{Lang.Get("AutoShowItemNPCShopInfo-Tooltip-Source")}]");
+
             var shopInfo = sourceInfo.NPCInfos
                                      .SelectMany(x => x.CostInfos)
-                                     .DistinctBy(x => x.ItemID);
-
-            foreach (var costInfo in shopInfo)
+                                     .DistinctBy(x => x.ItemID)
+                                     .ToList();
+            
+            for (var i = 0; i < shopInfo.Count; i++)
             {
+                if (i >= MAX_DISPLAY_COUNT)
+                {
+                    builder.Builder
+                           .AppendNewLine()
+                           .Append($"{SPACING}{Lang.Get("AutoShowItemNPCShopInfo-Tooltip-Source-More", shopInfo.Count - MAX_DISPLAY_COUNT)}");
+                    break;
+                }
+                
+                var costInfo = shopInfo[i];
                 builder.Builder
                        .AppendNewLine()
-                       .Append($"    {LuminaWrapper.GetItemName(costInfo.ItemID)} ")
+                       .Append($"{SPACING}{LuminaWrapper.GetItemName(costInfo.ItemID)}")
                        .PushColorType(32)
                        .Append($"x{costInfo.Cost}")
                        .PopColorType();
@@ -114,17 +127,20 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
         }
 
         var destinationResult = ItemSourceInfo.QueryExchangeItems(itemID);
-
         if (destinationResult is { State: ItemSourceQueryState.Ready, Data: { } destinationInfo })
         {
-            if (isAnyValid)
-                builder.Builder.AppendNewLine();
-
+            builder.Builder.AppendNewLine();
+            
+            var message = Lang.Get
+            (
+                isAnyValid ?
+                    "AutoShowItemNPCShopInfo-Tooltip-Destination-More" :
+                    "AutoShowItemNPCShopInfo-Tooltip-Destination",
+                destinationInfo.Items.Count
+            );
+            builder.Builder.Append($"{(isAnyValid ? SPACING : string.Empty)}{message}");
+            
             isAnyValid = true;
-
-            builder.Builder
-                   .AppendNewLine()
-                   .Append($"    {Lang.Get("AutoShowItemNPCShopInfo-ExchangeItemCount", destinationInfo.Items.Count)} ");
         }
 
         if (isAnyValid)
@@ -155,16 +171,11 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
             LuminaWrapper.GetAddonText(8495) :
             location.GetTerritory().ExtractPlaceName();
 
-    private static int GetOwnedItemCount
+    private static uint GetOwnedItemCount
     (
         uint itemID
-    )
-    {
-        if (CurrencyManager.Instance()->HasItem(itemID))
-            return (int)CurrencyManager.Instance()->GetItemCount(itemID);
-
-        return (int)LocalPlayerState.GetItemCount(itemID);
-    }
+    ) =>
+        CurrencyManager.Instance()->HasItem(itemID) ? CurrencyManager.Instance()->GetItemCount(itemID) : LocalPlayerState.GetItemCount(itemID);
 
     private static void OpenMarket
     (

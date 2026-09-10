@@ -1,4 +1,5 @@
-﻿using OmenTools.Dalamud.Attributes;
+﻿using Dalamud.Game.Text.SeStringHandling;
+using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Info.Game.ItemSource.Models;
@@ -35,7 +36,13 @@ public partial class AutoShowItemNPCShopInfo
         if (hasPendingQuery)
             return false;
 
-        NotifyHelper.Instance().ChatError(Lang.Get("AutoShowItemNPCShopInfo-Notification-InfoNotFound", itemID));
+        var message = Lang.GetSe
+        (
+            "AutoShowItemNPCShopInfo-Notification-InfoNotFound",
+            SeString.CreateItemLink(itemID)
+        );
+        NotifyHelper.Instance().ChatError(message);
+        NotifyHelper.Toast(message);
         return false;
     }
 
@@ -74,7 +81,15 @@ public partial class AutoShowItemNPCShopInfo
         }
 
         if (showError && result.State == ItemSourceQueryState.NotFound)
-            NotifyHelper.Instance().ChatError(Lang.Get("AutoShowItemNPCShopInfo-Notification-InfoNotFound", itemID));
+        {
+            var message = Lang.GetSe
+            (
+                "AutoShowItemNPCShopInfo-Notification-InfoNotFound",
+                SeString.CreateItemLink(itemID)
+            );
+            NotifyHelper.Instance().ChatError(message);
+            NotifyHelper.Toast(message);
+        }
 
         return false;
     }
@@ -100,7 +115,15 @@ public partial class AutoShowItemNPCShopInfo
         }
 
         if (showError && result.State == ItemSourceQueryState.NotFound)
-            NotifyHelper.Instance().ChatError(Lang.Get("AutoShowItemNPCShopInfo-Notification-InfoNotFound", itemID));
+        {
+            var message = Lang.GetSe
+            (
+                "AutoShowItemNPCShopInfo-Notification-InfoNotFound",
+                SeString.CreateItemLink(itemID)
+            );
+            NotifyHelper.Instance().ChatError(message);
+            NotifyHelper.Toast(message);
+        }
 
         return false;
     }
