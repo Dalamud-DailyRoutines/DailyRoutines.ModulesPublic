@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -12,8 +11,8 @@ using DailyRoutines.RemoteInteraction.PlayerInfo;
 using DailyRoutines.RemoteInteraction.UsedNames;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.String;
@@ -93,12 +92,16 @@ public unsafe class OptimizedFriendList : ModuleBase
         if (FriendList->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null);
 
-        IContextMenu.Instance().OnMenuOpened += OnContextMenu;
+        ContextMenuManager.Instance().Reg(modifyInfoItem);
+        ContextMenuManager.Instance().Reg(teleportZoneItem);
+        ContextMenuManager.Instance().Reg(teleportWorldItem);
     }
 
     protected override void Uninit()
     {
-        IContextMenu.Instance().OnMenuOpened -= OnContextMenu;
+        ContextMenuManager.Instance().Unreg(modifyInfoItem);
+        ContextMenuManager.Instance().Unreg(teleportZoneItem);
+        ContextMenuManager.Instance().Unreg(teleportWorldItem);
 
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
 
@@ -364,21 +367,6 @@ public unsafe class OptimizedFriendList : ModuleBase
     }
 
     #region 事件
-
-    private void OnContextMenu
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        if (modifyInfoItem.IsDisplay(args))
-            args.AddMenuItem(modifyInfoItem.Get());
-
-        if (teleportZoneItem.IsDisplay(args))
-            args.AddMenuItem(teleportZoneItem.Get());
-
-        if (teleportWorldItem.IsDisplay(args))
-            args.AddMenuItem(teleportWorldItem.Get());
-    }
 
     private void OnAddon
     (
@@ -655,8 +643,7 @@ public unsafe class OptimizedFriendList : ModuleBase
                 {
                     var contentID = ContentID;
                     var name      = Name;
-                    var region    = WorldRegionResolver.Resolve(GameState.HomeWorld);
-                    _ = OptimizedFriendListAsyncHelper.QueryUsedNamesAsync(contentID, name, region);
+                    _ = OptimizedFriendListAsyncHelper.QueryUsedNamesAsync(contentID, name, GameState.HomeWorld);
                 }
             };
             quertUsedNameButtonNode.AttachNode(this);
@@ -702,9 +689,9 @@ public unsafe class OptimizedFriendList : ModuleBase
         (
             ulong       contentID,
             string      name,
-            WorldRegion region
+            uint homeWorldID
         ) =>
-            RemoteUsedNames.GetFreshAsync(contentID, region).AsTask().ContinueWith
+            RemoteUsedNames.GetFreshAsync(contentID, WorldRegionResolver.Resolve(GameState.HomeWorld)).AsTask().ContinueWith
             (
                 task =>
                 {
@@ -723,10 +710,13 @@ public unsafe class OptimizedFriendList : ModuleBase
                         {
                             if (data.Count == 0)
                             {
-                                NotifyHelper.Instance().Chat(Lang.Get("OptimizedFriendList-FriendUseNamesNotFound", name));
+                                var message = Lang.GetSe("OptimizedFriendList-FriendUseNamesNotFound", new PlayerPayload(name, homeWorldID));
+                                NotifyHelper.ToastError(message);
+                                NotifyHelper.Instance().ChatError(message);
                                 return;
                             }
 
+                            // TODO：准备改成一个单独的 Addon 显示
                             NotifyHelper.Instance().Chat($"{Lang.Get("OptimizedFriendList-FriendUseNamesFound", name)}:");
                             var counter = 1;
 
@@ -877,66 +867,75 @@ public unsafe class OptimizedFriendList : ModuleBase
         }
     }
 
-    private class ModifyInfoMenuItem
+    private sealed class ModifyInfoMenuItem
     (
         OptimizedFriendList instance,
         TaskHelper          taskHelper
-    ) : MenuItemBase
+    ) : ContextMenuEntry
     {
-        public override string Name       { get; protected set; } = Lang.Get("OptimizedFriendList-ContextMenu-NicknameAndRemark");
-        public override string Identifier { get; protected set; } = nameof(OptimizedFriendList);
+        public override string Identifier =>
+            nameof(OptimizedFriendList);
 
-        public override bool IsDisplay
+        public override ContextMenuItem? Create
         (
-            IMenuOpenedArgs args
-        ) =>
-            args is { AddonName: "FriendList", Target: MenuTargetDefault target } &&
-            target.TargetContentId != 0                                           &&
-            !string.IsNullOrWhiteSpace(target.TargetName);
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
+            ContextMenuOpenedArgs args
         )
         {
-            if (args.Target is not MenuTargetDefault target) return;
+            if (args.AddonName != "FriendList") return null;
 
-            if (instance.remarkEditAddon.IsOpen)
+            var contentID = args.TargetContentID;
+            if (contentID == 0 || string.IsNullOrWhiteSpace(args.TargetName)) return null;
+
+            return new()
             {
-                instance.remarkEditAddon.Close();
+                Name = Lang.Get("OptimizedFriendList-ContextMenu-NicknameAndRemark"),
+                OnClicked = _ =>
+                {
+                    var targetName    = args.TargetName;
+                    var targetWorldID = (uint)args.TargetHomeWorldID;
 
-                taskHelper.DelayNext(100);
-                taskHelper.Enqueue(() => !instance.remarkEditAddon.IsOpen);
-                taskHelper.Enqueue
-                    (() => instance.remarkEditAddon.OpenWithData(target.TargetContentId, target.TargetName, target.TargetHomeWorld.Value.Name.ToString()));
-            }
-            else
-                instance.remarkEditAddon.OpenWithData(target.TargetContentId, target.TargetName, target.TargetHomeWorld.Value.Name.ToString());
+                    if (instance.remarkEditAddon.IsOpen)
+                    {
+                        instance.remarkEditAddon.Close();
 
-            instance.ApplySearchFilter(instance.searchString, taskHelper);
+                        taskHelper.DelayNext(100);
+                        taskHelper.Enqueue(() => !instance.remarkEditAddon.IsOpen);
+                        taskHelper.Enqueue(() => instance.remarkEditAddon.OpenWithData(contentID, targetName, LuminaWrapper.GetWorldName(targetWorldID)));
+                    }
+                    else
+                        instance.remarkEditAddon.OpenWithData(contentID, targetName, LuminaWrapper.GetWorldName(targetWorldID));
+
+                    instance.ApplySearchFilter(instance.searchString, taskHelper);
+                }
+            };
         }
     }
 
-    private class TeleportFriendZoneMenuItem : MenuItemBase
+    private sealed class TeleportFriendZoneMenuItem : ContextMenuEntry
     {
-        private         uint   aetheryteID;
-        public override string Name       { get; protected set; } = Lang.Get("OptimizedFriendList-ContextMenu-TeleportToFriendZone");
-        public override string Identifier { get; protected set; } = nameof(OptimizedFriendList);
+        public override string Identifier =>
+            nameof(OptimizedFriendList);
 
-        protected override void OnClicked
+        public override ContextMenuItem? Create
         (
-            IMenuItemClickedArgs args
-        ) =>
-            Telepo.Instance()->Teleport(aetheryteID, 0);
+            ContextMenuOpenedArgs args
+        )
+        {
+            if (args.AddonName != "FriendList") return null;
 
-        public override bool IsDisplay
-        (
-            IMenuOpenedArgs args
-        ) =>
-            args is { AddonName : "FriendList", Target: MenuTargetDefault { TargetCharacter: not null } target } &&
-            GetAetheryteID(target.TargetCharacter.Location.RowId, out aetheryteID);
+            var targetCharacter = args.TargetCharacter;
+            if (targetCharacter == null) return null;
 
-        private static bool GetAetheryteID
+            if (!TryGetAetheryteID(targetCharacter->Location, out var aetheryteID)) return null;
+
+            return new()
+            {
+                Name      = Lang.Get("OptimizedFriendList-ContextMenu-TeleportToFriendZone"),
+                OnClicked = _ => Telepo.Instance()->Teleport(aetheryteID, 0)
+            };
+        }
+
+        private static bool TryGetAetheryteID
         (
             uint     zoneID,
             out uint aetheryteID
@@ -956,41 +955,39 @@ public unsafe class OptimizedFriendList : ModuleBase
             if (zoneID == GameState.TerritoryType) return false;
 
             aetheryteID = IAetheryteList.Instance()
-                                  .Where(aetheryte => aetheryte.TerritoryID == zoneID)
-                                  .Select(aetheryte => aetheryte.AetheryteID)
-                                  .FirstOrDefault();
+                                        .Where(aetheryte => aetheryte.TerritoryID == zoneID)
+                                        .Select(aetheryte => aetheryte.AetheryteID)
+                                        .FirstOrDefault();
 
             return aetheryteID > 0;
         }
     }
 
-    private class TeleportFriendWorldMenuItem : MenuItemBase
+    private sealed class TeleportFriendWorldMenuItem : ContextMenuEntry
     {
-        private         uint   friendWorldID;
-        public override string Name       { get; protected set; } = Lang.Get("OptimizedFriendList-ContextMenu-TeleportToFriendWorld");
-        public override string Identifier { get; protected set; } = nameof(OptimizedFriendList);
+        public override string Identifier =>
+            nameof(OptimizedFriendList);
 
-        public override bool IsDisplay
+        public override ContextMenuItem? Create
         (
-            IMenuOpenedArgs args
+            ContextMenuOpenedArgs args
         )
         {
-            if ((ModuleManager.Instance().IsModuleEnabled("FastWorldTravel") ?? false)                                                   &&
-                args is { AddonName: "FriendList", Target: MenuTargetDefault { TargetCharacter.CurrentWorld.RowId: var targetWorldID } } &&
-                targetWorldID != GameState.CurrentWorld)
+            if (!(ModuleManager.Instance().IsModuleEnabled("FastWorldTravel") ?? false)) return null;
+            if (args.AddonName != "FriendList") return null;
+
+            var targetCharacter = args.TargetCharacter;
+            if (targetCharacter == null) return null;
+
+            var targetWorldID = (uint)targetCharacter->CurrentWorld;
+            if (targetWorldID == GameState.CurrentWorld) return null;
+
+            return new()
             {
-                friendWorldID = targetWorldID;
-                return true;
-            }
-
-            return false;
+                Name      = Lang.Get("OptimizedFriendList-ContextMenu-TeleportToFriendWorld"),
+                OnClicked = _ => ChatManager.Instance().SendMessage($"/pdr worldtravel {LuminaWrapper.GetWorldName(targetWorldID)}")
+            };
         }
-
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        ) =>
-            ChatManager.Instance().SendMessage($"/pdr worldtravel {LuminaWrapper.GetWorldName(friendWorldID)}");
     }
 
     private class PlayerInfo
