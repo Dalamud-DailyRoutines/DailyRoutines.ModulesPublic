@@ -27,7 +27,6 @@ public unsafe partial class OptimizedFriendList
         private TextNode nicknameNode;
 
         private TextNode               playerNameNode;
-        private TextButtonNode         quertUsedNameButtonNode;
         private TextMultiLineInputNode remarkInputNode;
 
         private TextNode remarkNode;
@@ -120,7 +119,7 @@ public unsafe partial class OptimizedFriendList
 
             confirmButtonNode = new()
             {
-                Position = new(10, 264),
+                Position = new(90, 264),
                 Size     = new(140, 28),
                 String   = Lang.Get("Confirm"),
                 OnClick = () =>
@@ -142,7 +141,7 @@ public unsafe partial class OptimizedFriendList
 
             clearButtonNode = new()
             {
-                Position = new(160, 264),
+                Position = new(240, 264),
                 Size     = new(140, 28),
                 String   = Lang.Get("Clear"),
                 OnClick = () =>
@@ -155,20 +154,6 @@ public unsafe partial class OptimizedFriendList
                 }
             };
             clearButtonNode.AttachNode(this);
-
-            quertUsedNameButtonNode = new()
-            {
-                Position = new(310, 264),
-                Size     = new(140, 28),
-                String   = Lang.Get("OptimizedFriendList-ObtainUsedNames"),
-                OnClick = () =>
-                {
-                    var contentID = ContentID;
-                    var name      = Name;
-                    _ = OptimizedFriendListAsyncHelper.QueryUsedNamesAsync(contentID, name, GameState.HomeWorld);
-                }
-            };
-            quertUsedNameButtonNode.AttachNode(this);
         }
 
         protected override void OnUpdate
