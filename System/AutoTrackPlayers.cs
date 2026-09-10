@@ -1,16 +1,16 @@
 using System.Numerics;
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
-using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
+using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -29,18 +29,17 @@ public class AutoTrackPlayers : ModuleBase
 
     private readonly Dictionary<ulong, (FieldMarkerPoint? Marker, string Name, uint World)> trackedPlayers = [];
 
-    private readonly ContextMenuItem contextMenuItem;
-
-    private AddonDRAutoTrackPlayers? trackAddon;
-
-    public AutoTrackPlayers() =>
-        contextMenuItem = new(this);
+    private TrackPlayerMenuItem     trackPlayerMenuItem = null!;
+    private AddonDRAutoTrackPlayers trackAddon          = null!;
 
     protected override void Init()
     {
+        trackPlayerMenuItem = new(this);
+        
         PlayersManager.Instance().ReceivePlayersAround   += OnReceivePlayers;
-        IClientState.Instance().TerritoryChanged += OnZoneChanged;
-        IContextMenu.Instance().OnMenuOpened     += OnMenuOpen;
+        IClientState.Instance().TerritoryChanged         += OnZoneChanged;
+
+        ContextMenuManager.Instance().Reg(trackPlayerMenuItem);
 
         trackAddon = new(this)
         {
@@ -52,7 +51,10 @@ public class AutoTrackPlayers : ModuleBase
         CommandManager.Instance().AddCommand
         (
             COMMAND,
-            new(OnCommand) { HelpMessage = Lang.Get("AutoTrackPlayers-CommandHelp") }
+            new(OnCommand)
+            {
+                HelpMessage = Lang.Get("AutoTrackPlayers-CommandHelp")
+            }
         );
     }
 
@@ -61,8 +63,9 @@ public class AutoTrackPlayers : ModuleBase
         PlayersManager.Instance().ReceivePlayersAround -= OnReceivePlayers;
         FrameworkManager.Instance().Unreg(OnUpdate);
 
-        IContextMenu.Instance().OnMenuOpened     -= OnMenuOpen;
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
+
+        ContextMenuManager.Instance().Unreg(trackPlayerMenuItem);
 
         CommandManager.Instance().RemoveCommand(COMMAND);
 
@@ -86,15 +89,6 @@ public class AutoTrackPlayers : ModuleBase
         string arguments
     ) =>
         trackAddon.Toggle();
-
-    private void OnMenuOpen
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        if (!contextMenuItem.IsDisplay(args)) return;
-        args.AddMenuItem(contextMenuItem.Get());
-    }
 
     private void OnZoneChanged
     (
@@ -147,45 +141,83 @@ public class AutoTrackPlayers : ModuleBase
             MarkingController.Instance()->PlaceFieldMarkerLocal(found.Marker, found.Position);
     }
 
-    private class ContextMenuItem
+    private sealed class TrackPlayerMenuItem
     (
         AutoTrackPlayers module
-    ) : MenuItemBase
+    ) : ContextMenuEntry
     {
-        public override string Name { get; protected set; } = Lang.Get("AutoTrackPlayers-Track");
+        public override string Identifier =>
+            nameof(AutoTrackPlayers);
 
-        public override string Identifier { get; protected set; } = nameof(AutoTrackPlayers);
-
-        public override bool IsDisplay
+        public override unsafe ContextMenuItem? Create
         (
-            IMenuOpenedArgs args
+            ContextMenuOpenedArgs args
         )
         {
-            if (args.Target is not MenuTargetDefault target) return false;
+            if (args.DefaultAgentContext == null) return null;
 
-            var isTracked = module.trackedPlayers.ContainsKey(target.TargetContentId);
-            Name = isTracked ?
-                       $"{Lang.Get("AutoTrackPlayers-Track")}: {Lang.Get("Delete")}" :
-                       $"{Lang.Get("AutoTrackPlayers-Track")}: {Lang.Get("Add")}";
+            var contentID   = args.TargetContentID;
+            var playerName  = args.TargetName;
+            var homeWorldID = (uint)args.TargetHomeWorldID;
+            if (contentID == 0                          ||
+                string.IsNullOrEmpty(playerName)        ||
+                !Sheets.Worlds.ContainsKey(homeWorldID) ||
+                contentID == LocalPlayerState.ContentID)
+                return null;
 
-            return target.TargetContentId != 0 &&
-                   target.TargetContentId != LocalPlayerState.ContentID;
-        }
+            var isTracked     = module.trackedPlayers.ContainsKey(contentID);
+            var playerPayload = new PlayerPayload(playerName, homeWorldID);
 
-        protected override void OnClicked
-        (
-            IMenuItemClickedArgs args
-        )
-        {
-            if (args.Target is not MenuTargetDefault target) return;
+            if (isTracked)
+            {
+                return new()
+                {
+                    Name = Lang.Get("AutoTrackPlayers-ContextMenu-NotToTrack"),
+                    OnClicked = _ =>
+                    {
+                        if (!module.trackedPlayers.Remove(contentID))
+                            return;
 
-            if (!module.trackedPlayers.Remove(target.TargetContentId))
-                module.trackedPlayers.Add(target.TargetContentId, (null, target.TargetName, target.TargetHomeWorld.RowId));
+                        if (!module.trackAddon.IsOpen)
+                            module.trackAddon.Open();
+                        else
+                            module.trackAddon.RebuildList();
 
-            if (!module.trackAddon.IsOpen)
-                module.trackAddon.Open();
-            else
-                module.trackAddon.RebuildList();
+                        var message = Lang.GetSe
+                        (
+                            "AutoTrackPlayers-Notification-NotToTrack",
+                            playerPayload
+                        );
+                        
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Toast(message);
+                    }
+                };
+            }
+
+            return new()
+            {
+                Name = Lang.Get("AutoTrackPlayers-ContextMenu-ToTrack"),
+                OnClicked = _ =>
+                {
+                    module.trackedPlayers.Add(contentID, (null, playerName, homeWorldID));
+                        
+                    if (!module.trackAddon.IsOpen)
+                        module.trackAddon.Open();
+                    else
+                        module.trackAddon.RebuildList();
+
+                    var message = Lang.GetSe
+                    (
+                        "AutoTrackPlayers-Notification-ToTrack",
+                        playerPayload,
+                        COMMAND
+                    );
+                        
+                    NotifyHelper.Instance().Chat(message);
+                    NotifyHelper.Toast(message);
+                }
+            };
         }
     }
 
@@ -260,8 +292,19 @@ public class AutoTrackPlayers : ModuleBase
                         x => module.trackedPlayers[contentID] = new(x, name, world),
                         () =>
                         {
-                            module.trackedPlayers.Remove(contentID);
+                            if (!module.trackedPlayers.Remove(contentID))
+                                return;
+                            
                             RebuildList();
+                            
+                            var message = Lang.GetSe
+                            (
+                                "AutoTrackPlayers-Notification-NotToTrack",
+                                new PlayerPayload(name, world)
+                            );
+                        
+                            NotifyHelper.Instance().Chat(message);
+                            NotifyHelper.Toast(message);
                         },
                         GetAvailableMarkers(contentID)
                     );
