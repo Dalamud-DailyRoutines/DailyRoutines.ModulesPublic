@@ -1,11 +1,14 @@
 ﻿using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.RemoteInteraction.PlayerInfo;
+using DailyRoutines.RemoteInteraction.UsedNames;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Text.ReadOnly;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
@@ -14,6 +17,70 @@ namespace DailyRoutines.ModulesPublic.Interface;
 
 public unsafe partial class OptimizedFriendList
 {
+    public Task QueryUsedNamesAsync
+    (
+        ulong  contentID,
+        string name,
+        uint   homeWorldID
+    )
+    {
+        var token = cancelSource.Token;
+        return RemoteUsedNames.GetFreshAsync
+                              (
+                                  contentID,
+                                  WorldRegionResolver.Resolve(GameState.HomeWorld),
+                                  token
+                              )
+                              .AsTask()
+                              .ContinueWith
+                              (
+                                  task =>
+                                  {
+                                      if (task.IsFaulted)
+                                      {
+                                          DLog.Error
+                                          (
+                                              "获取好友曾用名时发生错误",
+                                              task.Exception?.GetBaseException() ??
+                                              new InvalidOperationException("未提供异常信息")
+                                          );
+                                          return Task.CompletedTask;
+                                      }
+
+                                      if (task.IsCanceled)
+                                          return Task.CompletedTask;
+
+                                      var data = task.Result;
+                                      return IFramework.Instance().RunOnTick
+                                      (
+                                          () =>
+                                          {
+                                              if (data.Count == 0)
+                                              {
+                                                  var message = Lang.GetSe("OptimizedFriendList-FriendUseNamesNotFound", new PlayerPayload(name, homeWorldID));
+                                                  NotifyHelper.ToastError(message);
+                                                  NotifyHelper.Instance().ChatError(message);
+                                                  return;
+                                              }
+
+                                              // TODO：准备改成一个单独的 Addon 显示
+                                              NotifyHelper.Instance().Chat($"{Lang.Get("OptimizedFriendList-FriendUseNamesFound", name)}:");
+                                              var counter = 1;
+
+                                              foreach (var nameChange in data)
+                                              {
+                                                  NotifyHelper.Instance().Chat($"{counter}. {nameChange.ChangedTime}:");
+                                                  NotifyHelper.Instance().Chat($"     {nameChange.BeforeName} -> {nameChange.AfterName}:");
+                                                  counter++;
+                                              }
+                                          },
+                                          cancellationToken: token
+                                      );
+                                  },
+                                  TaskScheduler.Default
+                              ).Unwrap();
+    }
+
     private static void ReplaceAtkString
     (
         int              index,

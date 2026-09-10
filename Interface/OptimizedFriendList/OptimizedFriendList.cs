@@ -2,21 +2,14 @@ using System.Collections.Concurrent;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
-using DailyRoutines.RemoteInteraction.UsedNames;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
-using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.BaseTypes;
-using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using OmenTools.Dalamud;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -50,17 +43,21 @@ public unsafe partial class OptimizedFriendList : ModuleBase
     private DRFriendlistRemarkEdit?    remarkEditAddon;
     private DRFriendlistSearchSetting? searchSettingAddon;
 
+    private CancellationTokenSource? cancelSource;
+
     private string searchString = string.Empty;
 
     private readonly List<IDisposable> infoTokens = [];
     
     protected override void Init()
     {
-        config     =   Config.Load(this) ?? new();
-        TaskHelper ??= new();
+        config       =   Config.Load(this) ?? new();
+        TaskHelper   ??= new();
+
+        cancelSource = new();
         
         modifyInfoItem        = new(this, TaskHelper);
-        queryUsedNameMenuItem = new();
+        queryUsedNameMenuItem = new(this);
         teleportZoneItem      = new();
         teleportWorldItem     = new();
 
@@ -114,6 +111,10 @@ public unsafe partial class OptimizedFriendList : ModuleBase
 
         searchSettingAddon?.Dispose();
         searchSettingAddon = null;
+        
+        cancelSource?.Cancel();
+        cancelSource?.Dispose();
+        cancelSource = null;
 
         if (FriendList->IsAddonAndNodesReady())
             InfoProxyFriendList.Instance()->RequestData();
@@ -241,191 +242,11 @@ public unsafe partial class OptimizedFriendList : ModuleBase
         public bool SearchRemark   = true;
     }
 
-    private static class OptimizedFriendListAsyncHelper
-    {
-        public static Task QueryUsedNamesAsync
-        (
-            ulong       contentID,
-            string      name,
-            uint homeWorldID
-        ) =>
-            RemoteUsedNames.GetFreshAsync(contentID, WorldRegionResolver.Resolve(GameState.HomeWorld)).AsTask().ContinueWith
-            (
-                task =>
-                {
-                    if (task.IsFaulted)
-                    {
-                        DLog.Error("获取好友曾用名时发生错误", task.Exception?.GetBaseException() ?? new InvalidOperationException("未提供异常信息"));
-                        return Task.CompletedTask;
-                    }
 
-                    if (task.IsCanceled)
-                        return Task.CompletedTask;
-
-                    var data = task.Result;
-                    return IFramework.Instance().RunOnTick
-                    (() =>
-                        {
-                            if (data.Count == 0)
-                            {
-                                var message = Lang.GetSe("OptimizedFriendList-FriendUseNamesNotFound", new PlayerPayload(name, homeWorldID));
-                                NotifyHelper.ToastError(message);
-                                NotifyHelper.Instance().ChatError(message);
-                                return;
-                            }
-
-                            // TODO：准备改成一个单独的 Addon 显示
-                            NotifyHelper.Instance().Chat($"{Lang.Get("OptimizedFriendList-FriendUseNamesFound", name)}:");
-                            var counter = 1;
-
-                            foreach (var nameChange in data)
-                            {
-                                NotifyHelper.Instance().Chat($"{counter}. {nameChange.ChangedTime}:");
-                                NotifyHelper.Instance().Chat($"     {nameChange.BeforeName} -> {nameChange.AfterName}:");
-                                counter++;
-                            }
-                        }
-                    );
-                },
-                TaskScheduler.Default
-            ).Unwrap();
-    }
-
-    private class DRFriendlistSearchSetting
+    private sealed class QueryUsedNameMenuItem
     (
-        OptimizedFriendList instance,
-        TaskHelper          taskHelper
-    ) : NativeAddon
-    {
-        private OptimizedFriendList Instance   { get; init; } = instance;
-        private TaskHelper          TaskHelper { get; init; } = taskHelper;
-
-        protected override void OnSetup
-        (
-            AtkUnitBase*   addon,
-            Span<AtkValue> atkValues
-        )
-        {
-            var searchTypeTitleNode = new TextNode
-            {
-                String    = Lang.Get("OptimizedFriendList-SearchType"),
-                FontSize  = 16,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                Position  = new(10f, 42f)
-            };
-            searchTypeTitleNode.AttachNode(this);
-
-            var searchTypeLayoutNode = new VerticalListNode
-            {
-                Position  = new(20f, searchTypeTitleNode.Position.Y + 28f),
-                Alignment = VerticalListAlignment.Left
-            };
-
-            var nameCheckboxNode = new CheckboxNode
-            {
-                Size      = new(80f, 20f),
-                IsChecked = Instance.config.SearchName,
-                IsEnabled = true,
-                String    = Lang.Get("Name"),
-                OnClick = newState =>
-                {
-                    Instance.config.SearchName = newState;
-                    Instance.config.Save(Instance);
-
-                    Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
-                }
-            };
-            searchTypeLayoutNode.Height += searchTypeTitleNode.Height;
-
-            var nicknameCheckboxNode = new CheckboxNode
-            {
-                Size      = new(80f, 20f),
-                IsChecked = Instance.config.SearchNickname,
-                IsEnabled = true,
-                String    = LuminaWrapper.GetAddonText(15207),
-                OnClick = newState =>
-                {
-                    Instance.config.SearchNickname = newState;
-                    Instance.config.Save(Instance);
-
-                    Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
-                }
-            };
-            searchTypeLayoutNode.Height += nicknameCheckboxNode.Height;
-
-            var remarkCheckboxNode = new CheckboxNode
-            {
-                Size      = new(80f, 20f),
-                IsChecked = Instance.config.SearchRemark,
-                IsEnabled = true,
-                String    = LuminaWrapper.GetAddonText(13294).TrimEnd(':'),
-                OnClick = newState =>
-                {
-                    Instance.config.SearchRemark = newState;
-                    Instance.config.Save(Instance);
-
-                    Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
-                }
-            };
-            searchTypeLayoutNode.Height += remarkCheckboxNode.Height;
-
-            searchTypeLayoutNode.AddNode([nameCheckboxNode, nicknameCheckboxNode, remarkCheckboxNode]);
-            searchTypeLayoutNode.AttachNode(this);
-
-            var searchGroupIgnoreTitleNode = new TextNode
-            {
-                String    = Lang.Get("OptimizedFriendList-SearchIgnoreGroup"),
-                FontSize  = 16,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                Position  = new(10f, searchTypeLayoutNode.Position.Y + searchTypeLayoutNode.Height + 12f)
-            };
-            searchGroupIgnoreTitleNode.AttachNode(this);
-
-            var searchGroupIgnoreLayoutNode = new VerticalListNode
-            {
-                Position  = new(20f, searchGroupIgnoreTitleNode.Position.Y + 28f),
-                Alignment = VerticalListAlignment.Left
-            };
-
-
-            for (var i = 0; i < 8; i++)
-            {
-                var index = i;
-
-                var groupFormatText = ISeStringEvaluator.Instance().EvaluateFromAddon(12925, [index + 1]);
-                var groupCheckboxNode = new CheckboxNode
-                {
-                    Size      = new(80f, 20f),
-                    IsChecked = Instance.config.IgnoredGroup[i],
-                    IsEnabled = true,
-                    String    = groupFormatText,
-                    OnClick = newState =>
-                    {
-                        Instance.config.IgnoredGroup[index] = newState;
-                        Instance.config.Save(Instance);
-
-                        Instance.ApplySearchFilter(Instance.searchString, TaskHelper);
-                    }
-                };
-
-                searchGroupIgnoreLayoutNode.Height += groupCheckboxNode.Height;
-                searchGroupIgnoreLayoutNode.AddNode(groupCheckboxNode);
-            }
-
-            searchGroupIgnoreLayoutNode.AttachNode(this);
-        }
-
-        protected override void OnUpdate
-        (
-            AtkUnitBase* addon
-        )
-        {
-            if (FriendList == null)
-                Close();
-        }
-    }
-
-    private sealed class QueryUsedNameMenuItem : ContextMenuEntry
+        OptimizedFriendList module
+    ) : ContextMenuEntry
     {
         public override string Identifier =>
             nameof(OptimizedFriendList);
@@ -448,12 +269,12 @@ public unsafe partial class OptimizedFriendList : ModuleBase
                     var targetName    = args.TargetName;
                     var targetWorldID = (uint)args.TargetHomeWorldID;
 
-                    OptimizedFriendListAsyncHelper.QueryUsedNamesAsync(contentID, targetName, targetWorldID);
+                    module.QueryUsedNamesAsync(contentID, targetName, targetWorldID);
                 }
             };
         }
     }
-    
+
     private sealed class ModifyInfoMenuItem
     (
         OptimizedFriendList instance,
