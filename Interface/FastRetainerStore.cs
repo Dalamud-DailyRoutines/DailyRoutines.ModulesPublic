@@ -218,8 +218,8 @@ public unsafe class FastRetainerStore : ModuleBase
                     Name = Lang.Get
                     (
                         storeToRetainer ?
-                            "FastRetainerStore-SaveAll" :
-                            "FastRetainerStore-RetrieveAll"
+                            "FastRetainerStore-ContextMenu-SaveAll" :
+                            "FastRetainerStore-ContextMenu-RetrieveAll"
                     ),
                     OnClicked = _ => module.ExecuteMoveAll(itemID, isHQ, isCollectable, storeToRetainer)
                 };
