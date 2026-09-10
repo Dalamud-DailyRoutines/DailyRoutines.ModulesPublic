@@ -35,31 +35,24 @@ public unsafe class PetSizeContextMenu : ModuleBase
         public override string Identifier =>
             nameof(PetSizeContextMenu);
 
-        private readonly PetSizeAdjustItem[] subMenuItems =
-        [
-            new PetSizeSmallItem(),
-            new PetSizeMediumItem(),
-            new PetSizeLargeItem()
-        ];
-
         public override ContextMenuItem? Create
         (
             ContextMenuOpenedArgs args
         )
         {
             var localPlayer = Control.GetLocalPlayer();
-            if (localPlayer == null) 
+            if (localPlayer == null)
                 return null;
-            
+
             if (localPlayer->ClassJob is not (26 or 27 or 43))
                 return null;
 
             var pet = CharacterManager.Instance()->LookupPetByOwnerObject(localPlayer);
-            if (pet == null) 
+            if (pet == null)
                 return null;
 
             string? name = null;
-            
+
             if (args.TargetObjectID == (ulong)pet->GetGameObjectId())
                 name = LuminaWrapper.GetAddonText(17709);
 
@@ -80,8 +73,13 @@ public unsafe class PetSizeContextMenu : ModuleBase
                     Name = name,
                     Submenu = new()
                     {
-                        Title   = name,
-                        Entries = subMenuItems
+                        Title = name,
+                        Entries =
+                        [
+                            new PetSizeSmallItem(pet->NameString),
+                            new PetSizeMediumItem(pet->NameString),
+                            new PetSizeLargeItem(pet->NameString)
+                        ]
                     }
                 };
             }
@@ -90,13 +88,16 @@ public unsafe class PetSizeContextMenu : ModuleBase
         }
     }
 
-    private abstract class PetSizeAdjustItem : ContextMenuEntry
+    private abstract class PetSizeAdjustItem
+    (
+        string petName
+    ) : ContextMenuEntry
     {
-        public override string Identifier => 
+        public override string Identifier =>
             nameof(PetSizeContextMenu);
 
         protected abstract uint AddonTextID { get; }
-        
+
         protected abstract uint BeastMasterAddonTextID { get; }
 
         protected abstract string TextCommandParam { get; }
@@ -108,7 +109,7 @@ public unsafe class PetSizeContextMenu : ModuleBase
         {
             var isBeastMaster = LocalPlayerState.ClassJob == 43;
 
-            return new ContextMenuItem
+            return new()
             {
                 Name = isBeastMaster ?
                            LuminaWrapper.GetAddonText(BeastMasterAddonTextID) :
@@ -117,7 +118,7 @@ public unsafe class PetSizeContextMenu : ModuleBase
                 {
                     if (LocalPlayerState.ClassJob == 43)
                     {
-                        ChatManager.Instance().SendMessage($"/beastsize all {TextCommandParam}");
+                        ChatManager.Instance().SendMessage($"/beastsize {petName} {TextCommandParam}");
                         return;
                     }
 
@@ -126,22 +127,31 @@ public unsafe class PetSizeContextMenu : ModuleBase
             };
         }
     }
-    
-    private sealed class PetSizeSmallItem : PetSizeAdjustItem
+
+    private sealed class PetSizeSmallItem
+    (
+        string petName
+    ) : PetSizeAdjustItem(petName)
     {
         protected override uint   AddonTextID            => 6373;
         protected override uint   BeastMasterAddonTextID => 17689;
         protected override string TextCommandParam       => "small";
     }
-    
-    private sealed class PetSizeMediumItem : PetSizeAdjustItem
+
+    private sealed class PetSizeMediumItem
+    (
+        string petName
+    ) : PetSizeAdjustItem(petName)
     {
         protected override uint   AddonTextID            => 6372;
         protected override uint   BeastMasterAddonTextID => 17690;
         protected override string TextCommandParam       => "medium";
     }
-    
-    private sealed class PetSizeLargeItem : PetSizeAdjustItem
+
+    private sealed class PetSizeLargeItem
+    (
+        string petName
+    ) : PetSizeAdjustItem(petName)
     {
         protected override uint   AddonTextID            => 6371;
         protected override uint   BeastMasterAddonTextID => 17691;
