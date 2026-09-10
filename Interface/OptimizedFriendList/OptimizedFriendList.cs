@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
@@ -42,8 +43,7 @@ public unsafe partial class OptimizedFriendList : ModuleBase
 
     private DRFriendlistRemarkEdit?    remarkEditAddon;
     private DRFriendlistSearchSetting? searchSettingAddon;
-
-    private CancellationTokenSource? cancelSource;
+    private DRFriendlistUsedNames?     usedNamesAddon;
 
     private string searchString = string.Empty;
 
@@ -53,8 +53,6 @@ public unsafe partial class OptimizedFriendList : ModuleBase
     {
         config       =   Config.Load(this) ?? new();
         TaskHelper   ??= new();
-
-        cancelSource = new();
         
         modifyInfoItem        = new(this, TaskHelper);
         queryUsedNameMenuItem = new(this);
@@ -73,6 +71,13 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             InternalName = "DRFriendlistSearchSetting",
             Title        = Lang.Get("OptimizedFriendList-Addon-SearchSetting"),
             Size         = new(230f, 350f)
+        };
+
+        usedNamesAddon ??= new(WorldRegionResolver.Resolve(GameState.HomeWorld))
+        {
+            InternalName = "DRFriendlistUsedNames",
+            Title        = Lang.Get("OptimizedFriendList-Addon-UsedNames"),
+            Size         = new(DRFriendlistUsedNames.WINDOW_WIDTH, DRFriendlistUsedNames.WINDOW_HEIGHT)
         };
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,          "FriendList", OnAddon);
@@ -111,10 +116,9 @@ public unsafe partial class OptimizedFriendList : ModuleBase
 
         searchSettingAddon?.Dispose();
         searchSettingAddon = null;
-        
-        cancelSource?.Cancel();
-        cancelSource?.Dispose();
-        cancelSource = null;
+
+        usedNamesAddon?.Dispose();
+        usedNamesAddon = null;
 
         if (FriendList->IsAddonAndNodesReady())
             InfoProxyFriendList.Instance()->RequestData();
@@ -269,7 +273,24 @@ public unsafe partial class OptimizedFriendList : ModuleBase
                     var targetName    = args.TargetName;
                     var targetWorldID = (uint)args.TargetHomeWorldID;
 
-                    module.QueryUsedNamesAsync(contentID, targetName, targetWorldID);
+                    if (module.usedNamesAddon.IsOpen)
+                    {
+                        module.usedNamesAddon.Close();
+
+                        module.TaskHelper.DelayNext(100);
+                        module.TaskHelper.Enqueue(() => !module.usedNamesAddon.IsOpen);
+                        module.TaskHelper.Enqueue
+                        (
+                            () => module.usedNamesAddon.OpenWithData
+                            (
+                                contentID,
+                                targetName,
+                                LuminaWrapper.GetWorldName(targetWorldID)
+                            )
+                        );
+                    }
+                    else
+                        module.usedNamesAddon.OpenWithData(contentID, targetName, LuminaWrapper.GetWorldName(targetWorldID));
                 }
             };
         }
