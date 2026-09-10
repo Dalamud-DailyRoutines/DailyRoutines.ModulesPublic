@@ -238,9 +238,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
         protected readonly ExpandPlayerMenuSearch module = module;
 
         public override string Identifier => nameof(ExpandPlayerMenuSearch);
-
-        public override bool OmitPrefix => true;
-
+        
         public abstract string PlatformName   { get; }
         public abstract string ConfigKey      { get; }
         public virtual  bool   DefaultEnabled => false;
@@ -354,9 +352,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
         public override string Identifier => nameof(ExpandPlayerMenuSearch);
 
         public override int? Priority => 1000;
-
-        public override bool OmitPrefix => true;
-
+        
         public override ContextMenuItem Create
         (
             ContextMenuOpenedArgs args
