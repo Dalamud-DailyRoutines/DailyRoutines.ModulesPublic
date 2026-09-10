@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -18,22 +17,17 @@ public unsafe class AutoHideExpBar : ModuleBase
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
-    private static readonly CompSig UpdateExpSig = new("48 8B C4 4C 89 48 20 4C 89 40 18 53");
-
-    private delegate void UpdateExpDelegate
-    (
-        AgentHUD*        agent,
-        NumberArrayData* expNumberArray,
-        StringArrayData* expStringArray,
-        StringArrayData* characterStringArray
-    );
-
-    private Hook<UpdateExpDelegate>? UpdateExpHook;
+    
+    private Hook<AgentHUD.Delegates.UpdateExp>? UpdateExpHook;
 
     protected override void Init()
     {
-        UpdateExpHook = UpdateExpSig.GetHook<UpdateExpDelegate>(UpdateExpDetour);
+        UpdateExpHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentHUD.MemberFunctionPointers),
+            "UpdateExp",
+            (AgentHUD.Delegates.UpdateExp)UpdateExpDetour
+        );
         UpdateExpHook.Enable();
     }
 
