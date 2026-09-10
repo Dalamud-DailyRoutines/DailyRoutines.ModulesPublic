@@ -1,4 +1,5 @@
 using System.Numerics;
+using DailyRoutines.Common.Info;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
@@ -19,8 +20,6 @@ public unsafe partial class AutoShowItemNPCShopInfo
         private const int   SECTIONS_PER_PAGE = 10;
         private const int   NPCS_PER_PAGE     = 5;
         private const int   MAX_COSTS         = 4;
-        private const float NPC_COL_WIDTH     = 320f;
-        private const float LOC_COL_WIDTH     = 300f;
         private const float MAP_BTN_WIDTH     = 28f;
         private const float ROW_SPACING_X     = 6f;
         private const float COST_ROW_HEIGHT   = 36f;
@@ -78,7 +77,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     {
                         InternalName = "DRNPCShopsSource",
                         Title        = Lang.Get("AutoShowItemNPCShopInfo-Addon-Source"),
-                        Size         = new(760f, 540f)
+                        Size         = new(700f, 540f)
                     };
                     Addon.Open();
                 },
@@ -107,10 +106,12 @@ public unsafe partial class AutoShowItemNPCShopInfo
                                        .ThenBy(x => x.Name)
                                        .ToList();
 
-            costGroups = sortedNPCs
-                         .GroupBy(x => GetCostKey(x.CostInfos))
-                         .Select(g => new CostGroup { CostInfos = g.First().CostInfos, NPCInfos = g.ToList() })
-                         .ToList();
+            costGroups =
+            [
+                .. sortedNPCs
+                   .GroupBy(x => GetCostKey(x.CostInfos))
+                   .Select(g => new CostGroup { CostInfos = g.First().CostInfos, NPCInfos = [.. g] })
+            ];
 
             totalPages  = Math.Max(1, (int)Math.Ceiling(costGroups.Count / (double)SECTIONS_PER_PAGE));
             currentPage = 0;
@@ -159,10 +160,9 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 String           = LuminaWrapper.GetItemName(SourceInfo.ItemID),
                 FontSize         = 24,
                 Position         = new(0, 3),
-                AlignmentType    = AlignmentType.TopLeft,
-                TextColor        = ColorHelper.GetColor(8),
-                TextOutlineColor = ColorHelper.GetColor(7)
+                AlignmentType    = AlignmentType.TopLeft
             };
+            AtkColors.Label.ApplyTo(ref itemNameNode);
             itemInfoRow.AddNode(itemNameNode);
 
             if (item.ItemSearchCategory.RowId > 0)
@@ -188,22 +188,26 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             prevButton = new TextButtonNode
             {
-                String  = "<", Size = new(40, 24),
+                String  = "<",
+                Size    = new(40, 24),
                 OnClick = () => ShowPage(currentPage - 1)
             };
             paginationBar.AddNode(prevButton);
 
             pageIndicator = new TextNode
             {
-                TextFlags = TextFlags.AutoAdjustNodeSize, String = $"1 / {totalPages}",
-                Position  = new(0, 3), AlignmentType             = AlignmentType.Left,
-                TextColor = ColorHelper.GetColor(2)
+                TextFlags     = TextFlags.AutoAdjustNodeSize,
+                String        = $"1 / {totalPages}",
+                Position      = new(0, 3),
+                AlignmentType = AlignmentType.Left,
             };
+            AtkColors.Text.ApplyTo(ref pageIndicator);
             paginationBar.AddNode(pageIndicator);
 
             nextButton = new TextButtonNode
             {
-                String  = ">", Size = new(40, 24),
+                String  = ">",
+                Size    = new(40, 24),
                 OnClick = () => ShowPage(currentPage + 1)
             };
             paginationBar.AddNode(nextButton);
@@ -293,9 +297,10 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     slot.CostTooltipOverlays[i].ItemTooltip = costInfo.ItemID;
                     slot.CostIcons[i].IconId                = LuminaWrapper.GetItemIconID(costInfo.ItemID);
                     slot.CostNames[i].String                = costInfo.GetItemName();
-                    slot.CostQuantities[i].String = costInfo.Collectablity != null ?
-                                                        $"\ue03d ({costInfo.Collectablity.Value}~)" :
-                                                        $"x{costInfo.Cost.ToChineseString()}";
+                    slot.CostQuantities[i].String =
+                        costInfo.Collectablity != null ?
+                            $"\ue03d ({costInfo.Collectablity.Value}~)" :
+                            $"x{costInfo.Cost.ToChineseString()}";
                 }
                 else
                     slot.CostRows[i].IsVisible = false;
@@ -420,22 +425,23 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 slot.CostNames[i] = new TextNode
                 {
                     TextFlags        = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
-                    FontSize         = 16,
-                    Position         = new(slot.CostIcons[i].Width + 4f, 5),
+                    FontSize         = 18,
+                    Position         = new(slot.CostIcons[i].Width + 4f, 0),
                     AlignmentType    = AlignmentType.Left,
-                    TextColor        = ColorHelper.GetColor(8),
-                    TextOutlineColor = ColorHelper.GetColor(7)
+                    Size             = new(70, 36),
                 };
+                AtkColors.Label.ApplyTo(ref slot.CostNames[i]);
                 slot.CostNames[i].AttachNode(slot.CostRows[i]);
 
                 slot.CostQuantities[i] = new TextNode
                 {
-                    TextFlags     = TextFlags.AutoAdjustNodeSize,
-                    FontSize      = 14,
-                    Position      = new(contentWidth - 80, 5),
+                    TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
+                    FontSize      = 16,
+                    Position      = new(contentWidth - 10, 5),
                     Size          = new(70, 20),
                     AlignmentType = AlignmentType.Right
                 };
+                AtkColors.ValueEmphasize.ApplyTo(ref slot.CostQuantities[i]);
                 slot.CostQuantities[i].AttachNode(slot.CostRows[i]);
             }
 
@@ -453,7 +459,8 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.NPCPrevButton = new TextButtonNode
             {
-                String = "<", Size = new(36, 22),
+                String = "<",
+                Size   = new(36, 22),
                 OnClick = () =>
                 {
                     slot.NPCCurrentPage--;
@@ -464,16 +471,18 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.NPCPageIndicator = new TextNode
             {
-                TextFlags     = TextFlags.AutoAdjustNodeSize, String = "1 / 1",
+                TextFlags     = TextFlags.AutoAdjustNodeSize,
+                String        = "1 / 1",
                 Position      = new(0, 2),
                 AlignmentType = AlignmentType.Left,
-                TextColor     = ColorHelper.GetColor(2)
             };
+            AtkColors.Text.ApplyTo(ref slot.NPCPageIndicator);
             slot.NPCPaginationBar.AddNode(slot.NPCPageIndicator);
 
             slot.NPCNextButton = new TextButtonNode
             {
-                String = ">", Size = new(36, 22),
+                String = ">",
+                Size   = new(36, 22),
                 OnClick = () =>
                 {
                     slot.NPCCurrentPage++;
@@ -506,10 +515,10 @@ public unsafe partial class AutoShowItemNPCShopInfo
             {
                 String    = "",
                 Position  = new(0, 4),
-                Size      = new(NPC_COL_WIDTH, 28f),
+                Size      = new(contentWidth - (3 * ROW_SPACING) - (2 * MAP_BTN_WIDTH), 28f),
                 FontSize  = 14,
-                TextColor = ColorHelper.GetColor(2)
             };
+            AtkColors.Text.ApplyTo(ref slot.NPCNameNode);
             slot.Row.AddNode(slot.NPCNameNode);
 
             slot.MapButton = new IconButtonNode
@@ -521,10 +530,12 @@ public unsafe partial class AutoShowItemNPCShopInfo
             };
             slot.Row.AddNode(slot.MapButton);
 
-            slot.LocationButton = new TextButtonNode
+            slot.LocationButton = new IconButtonNode
             {
-                Size        = new(LOC_COL_WIDTH, 28),
-                TextTooltip = LuminaWrapper.GetAddonText(1806)
+                IconId      = 60453,
+                Size        = new(MAP_BTN_WIDTH),
+                TextTooltip = LuminaWrapper.GetAddonText(1806),
+                Position    = new(0, -1)
             };
             slot.Row.AddNode(slot.LocationButton);
 
@@ -537,11 +548,11 @@ public unsafe partial class AutoShowItemNPCShopInfo
             ShopNPCInfos npcInfo
         )
         {
-            row.NPCNameNode.String = npcInfo.Name;
+            row.NPCNameNode.String      = $"{npcInfo.Name}（{npcInfo.Location.GetTerritory().ExtractPlaceName()}）";
+            row.NPCNameNode.TextTooltip = $"{npcInfo.Name}\n（{npcInfo.Location.GetTerritory().ExtractPlaceName()}）";
 
             row.MapButton.OnClick = () => OpenMap(npcInfo.Location, npcInfo.Name);
 
-            row.LocationButton.String    = GetLocationName(npcInfo.Location);
             row.LocationButton.IsEnabled = npcInfo.Location.TerritoryID != 282;
             row.LocationButton.OnClick   = () => TeleportToLocation(npcInfo.Location);
         }
@@ -604,7 +615,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             public HorizontalListNode Row            = null!;
             public TextNode           NPCNameNode    = null!;
             public IconButtonNode     MapButton      = null!;
-            public TextButtonNode     LocationButton = null!;
+            public IconButtonNode     LocationButton = null!;
         }
     }
 }
