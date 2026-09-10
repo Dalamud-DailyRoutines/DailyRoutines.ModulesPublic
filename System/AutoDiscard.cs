@@ -1,13 +1,12 @@
 using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Common.Info.Abstractions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Gui.ContextMenu;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -18,7 +17,6 @@ using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
-using MenuItem = Dalamud.Game.Gui.ContextMenu.MenuItem;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -35,6 +33,8 @@ public unsafe class AutoDiscard : ModuleBase
 
     private Config                moduleConfig = null!;
     private LuminaSearcher<Item>? itemSearcher;
+
+    private SettingMenuItem settingMenuItem = null!;
 
     private string     newGroupNameInput        = string.Empty;
     private string     editGroupNameInput       = string.Empty;
@@ -63,7 +63,8 @@ public unsafe class AutoDiscard : ModuleBase
 
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoDiscard-CommandHelp") });
 
-        IContextMenu.Instance().OnMenuOpened += OnContextMenuOpened;
+        settingMenuItem = new(this);
+        ContextMenuManager.Instance().Reg(settingMenuItem);
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreSetup, "SelectYesno", OnAddon);
     }
@@ -71,7 +72,7 @@ public unsafe class AutoDiscard : ModuleBase
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
-        IContextMenu.Instance().OnMenuOpened -= OnContextMenuOpened;
+        ContextMenuManager.Instance().Unreg(settingMenuItem);
 
         CommandManager.Instance().RemoveCommand(COMMAND);
         itemSearcher = null;
@@ -315,13 +316,23 @@ public unsafe class AutoDiscard : ModuleBase
                     {
                         if (ImGui.Button($"{Lang.Get("Add")}##AddItemByName"))
                         {
-                            lastAddedItemsByName = itemSearcher.Data
-                                                               .Where(x => x.Name.ToString().Contains(addItemsByNameInput, StringComparison.OrdinalIgnoreCase))
-                                                               .ToList();
+                            lastAddedItemsByName =
+                            [
+                                .. itemSearcher.Data
+                                               .Where(x => x.Name.ToString().Contains(addItemsByNameInput, StringComparison.OrdinalIgnoreCase))
+                            ];
                             lastAddedItemsByName.ForEach(x => group.Items.Add(x.RowId));
                             moduleConfig.Save(this);
-
-                            NotifyHelper.Instance().NotificationSuccess(Lang.Get("AutoDiscard-Notification-ItemsAdded", lastAddedItemsByName.Count));
+                            
+                            NotifyHelper.Instance().Chat
+                            (
+                                Lang.Get
+                                (
+                                    "AutoDiscard-Notification-BatchAdded",
+                                    group.Items.Count,
+                                    lastAddedItemsByName.Count
+                                )
+                            );
                         }
                     }
 
@@ -351,13 +362,23 @@ public unsafe class AutoDiscard : ModuleBase
                     {
                         if (ImGui.Button($"{Lang.Get("Add")}##AddItemByCategory"))
                         {
-                            lastAddedItemsByCategory = itemSearcher.Data
-                                                                   .Where(x => x.ItemUICategory.RowId == addItemsByCategoryInput)
-                                                                   .ToList();
+                            lastAddedItemsByCategory =
+                            [
+                                .. itemSearcher.Data
+                                               .Where(x => x.ItemUICategory.RowId == addItemsByCategoryInput)
+                            ];
                             lastAddedItemsByCategory.ForEach(x => group.Items.Add(x.RowId));
                             moduleConfig.Save(this);
 
-                            NotifyHelper.Instance().NotificationSuccess(Lang.Get("AutoDiscard-Notification-ItemsAdded", lastAddedItemsByCategory.Count));
+                            NotifyHelper.Instance().Chat
+                            (
+                                Lang.Get
+                                (
+                                    "AutoDiscard-Notification-BatchAdded",
+                                    group.Items.Count,
+                                    lastAddedItemsByName.Count
+                                )
+                            );
                         }
                     }
 
@@ -589,18 +610,6 @@ public unsafe class AutoDiscard : ModuleBase
     ) =>
         EnqueueDiscardGroup(arguments.Trim());
 
-    private void OnContextMenuOpened
-    (
-        IMenuOpenedArgs args
-    )
-    {
-        if (args is not { MenuType: ContextMenuType.Inventory, Target: MenuTargetInventory { TargetItem: { } item } }) return;
-        if (!LuminaGetter.TryGetRow<Item>(item.BaseItemId, out _)) return;
-        if (moduleConfig.DiscardGroups.Count == 0) return;
-
-        args.AddMenuItem(new AddItemToGroupMenuItem(this, item.ItemId).Get());
-    }
-
     private void OnAddon
     (
         AddonEvent type,
@@ -671,54 +680,102 @@ public unsafe class AutoDiscard : ModuleBase
         }
     }
 
-    private class AddItemToGroupMenuItem
+    private sealed class SettingMenuItem
     (
-        AutoDiscard module,
-        uint        itemID
-    ) : MenuItemBase
+        AutoDiscard module
+    ) : ContextMenuEntry
     {
-        public override string Name       { get; protected set; } = Lang.Get("AutoDiscard-AddToGroupMenu");
-        public override string Identifier { get; protected set; } = nameof(AutoDiscard);
+        public override string Identifier =>
+            nameof(AutoDiscard);
 
-        protected override bool WithDRPrefix { get; set; } = true;
-        protected override bool IsSubmenu    { get; set; } = true;
-
-        protected override void OnClicked
+        public override ContextMenuItem? Create
         (
-            IMenuItemClickedArgs args
-        ) =>
-            args.OpenSubmenu(Name, ProcessMenuItems());
-
-        private List<MenuItem> ProcessMenuItems()
+            ContextMenuOpenedArgs args
+        )
         {
-            var list = new List<MenuItem>();
+            if (module.moduleConfig.DiscardGroups.Count == 0)
+                return null;
+            
+            if (args.TargetInventoryItem is not { } item) 
+                return null;
+            
+            var itemID = item.GetBaseItemId();
+            if (!LuminaGetter.TryGetRow<Item>(itemID, out _))
+                return null;
 
-            foreach (var group in module.moduleConfig.DiscardGroups)
+            var name = Lang.Get("AutoDiscard-ContextMenu");
+
+            return new()
             {
-                list.Add
-                (
-                    new()
-                    {
-                        Name = group.UniqueName,
-                        OnClicked = _ =>
-                        {
-                            group.Items.Add(itemID);
-                            module.moduleConfig.Save(module);
+                Name = name,
+                Submenu = new()
+                {
+                    Title = name,
+                    Entries = [.. module.moduleConfig.DiscardGroups.Select(group => new DiscardGroupMenuItem(module, group, itemID))]
+                }
+            };
+        }
+    }
 
-                            NotifyHelper.ToastQuest
+    private sealed class DiscardGroupMenuItem
+    (
+        AutoDiscard        module,
+        DiscardItemsGroup  group,
+        uint               itemID
+    ) : ContextMenuEntry
+    {
+        public override string Identifier =>
+            nameof(AutoDiscard);
+
+        public override ContextMenuItem Create
+        (
+            ContextMenuOpenedArgs args
+        )
+        {
+            var isInGroup = group.Items.Contains(itemID);
+
+            if (!isInGroup)
+            {
+                return new()
+                {
+                    Name = Lang.Get("AutoDiscard-ContextMenu-Sub-Add", group.UniqueName),
+                    OnClicked = _ =>
+                    {
+                        group.Items.Add(itemID);
+                        module.moduleConfig.Save(module);
+
+                        NotifyHelper.Instance().Chat
+                        (
+                            Lang.GetSe
                             (
-                                Lang.Get("AutoDiscard-Notification-AddedToGroup", group.UniqueName),
-                                new()
-                                {
-                                    DisplayCheckmark = true
-                                }
-                            );
-                        }
+                                "AutoDiscard-Notification-Added",
+                                SeString.CreateItemLink(itemID),
+                                group.UniqueName
+                            )
+                        );
                     }
-                );
+                };
             }
 
-            return list;
+            return new()
+            {
+                Name = Lang.Get("AutoDiscard-ContextMenu-Sub-Remove", group.UniqueName),
+                OnClicked = _ =>
+                {
+                    group.Items.Remove(itemID);
+                    module.moduleConfig.Save(module);
+
+                    NotifyHelper.Instance().Chat
+                    (
+                        Lang.GetSe
+                        (
+                            "AutoDiscard-Notification-Removed",
+                            group.UniqueName,
+                            SeString.CreateItemLink(itemID)
+                        )
+                    );
+                }
+            };
         }
     }
 
