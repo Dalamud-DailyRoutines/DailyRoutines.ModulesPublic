@@ -56,12 +56,10 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     (
         "40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3 48 8D 48 ?? 48 83 C4 ?? 5B E9 ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3"
     );
-
     private delegate nint SubmarineReturnTimeDelegate
     (
         SubmarineReturnTimePacket* packet
     );
-
     private Hook<SubmarineReturnTimeDelegate>? SubmarineReturnTimeHook;
 
     private Config config = null!;
@@ -71,9 +69,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private          VerticalListNode?     itemListLayout;
     private readonly List<ItemDisplayNode> itemRenderers = [];
     private          TextButtonNode?       autoCollectNode;
-
-    private bool isJustLogin;
-
+    
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -121,9 +117,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         FrameworkManager.Instance().Unreg(OnUpdate);
         GameState.Instance().Login -= OnLogin;
-
-        isJustLogin = false;
-
+        
         if (collectSubmarinePayload != null)
             LinkPayloadManager.Instance().Unreg(collectSubmarinePayload.CommandId);
         collectSubmarinePayload = null;
@@ -136,9 +130,6 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("AutoSubmarineCollect-CommandHelp")}");
 
         ImGui.NewLine();
-
-        if (ImGui.Checkbox(Lang.Get("AutoSubmarineCollect-NotifyWhenLogin"), ref config.NotifyWhenLogin))
-            config.Save(this);
 
         using (ImRaii.ItemWidth(100f * GlobalUIScale))
         {
@@ -477,11 +468,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     }
 
     // 登陆后就发一次包吧
-    private void OnLogin()
-    {
-        isJustLogin = true;
+    private static void OnLogin() =>
         SendRefreshSubmarineInfo();
-    }
 
     private static void OnClickCollectSubmarinePayload
     (
@@ -623,7 +611,14 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         if (itemLacked != 0)
         {
-            NotifyHelper.Instance().Chat(Lang.GetSe("AutoSubmarineCollect-LackSpecificItems", SeString.CreateItemLink(itemLacked)));
+            var message = Lang.GetSe
+            (
+                "AutoSubmarineCollect-LackSpecificItems",
+                SeString.CreateItemLink(itemLacked)
+            );
+            
+            NotifyHelper.Instance().Chat(message);
+            NotifyHelper.ToastError(message);
             return true;
         }
 
@@ -679,53 +674,77 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         SubmarineReturnTimePacket* packet
     )
     {
-        if (packet->GetAvailableCount() == 0)
-        {
-            isJustLogin = false;
-            return;
-        }
-
         var maxCount      = packet->GetAvailableCount();
         var finishedCount = packet->GetFinishCount();
-
-        if ((config.NotifyWhenLogin && isJustLogin) ||
-            (config.NotifyCount > 0 && finishedCount >= Math.Min(maxCount, config.NotifyCount)))
-        {
-            isJustLogin = false;
-
-            var messageBuilder = new SeStringBuilder();
-            messageBuilder.AddText(Lang.Get("AutoSubmarineCollect-Notification-SubmarineInfo", maxCount - finishedCount, finishedCount));
-
-            messageBuilder.Add(NewLinePayload.Payload)
-                          .AddText($"{Lang.Get("AutoSubmarineCollect-Notification-LatestReturnTime")}: {packet->GetLatestReturnTime()}");
-            if (finishedCount == maxCount)
-                messageBuilder.AddText($" ({packet->GetLatestReturnTime().TimeAgo()})");
-
-            if (finishedCount > 0)
-            {
-                messageBuilder.Add(NewLinePayload.Payload)
-                              .Add(RawPayload.LinkTerminator)
-                              .Add(collectSubmarinePayload)
-                              .AddText("[")
-                              .AddUiForeground(35)
-                              .AddText($"{Lang.Get("AutoSubmarineCollect-Payload-TeleportAndCollect")}")
-                              .AddUiForegroundOff()
-                              .AddText("]")
-                              .Add(RawPayload.LinkTerminator);
-            }
-
-            // TODO: 改成 ReadOnlyString
-            NotifyHelper.Instance().Chat(messageBuilder.Build().Encode());
-        }
-
+        
+        if (maxCount == 0)
+            return;
+        
         if (config.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, config.AutoCollectCount))
             ChatManager.Instance().SendMessage("/pdr submarine");
+
+        if (config.NotifyCount <= 0 || finishedCount < Math.Min(maxCount, config.NotifyCount))
+            return;
+
+        if (config.LastNotifyContentID == LocalPlayerState.ContentID)
+        {
+            if (maxCount != finishedCount &&
+                StandardTimeManager.Instance().UTCNowOffset - config.LastNotifyTime < TimeSpan.FromHours(4))
+                return;
+        }
+        
+        config.LastNotifyContentID = LocalPlayerState.ContentID;
+        config.LastNotifyTime      = StandardTimeManager.Instance().UTCNowOffset;
+        config.Save(this);
+        
+        var returnTime = packet->GetLatestReturnTime();
+            
+        using var rented  = new RentedSeStringBuilder();
+        var       builder = rented.Builder;
+            
+        if (maxCount == finishedCount)
+        {
+            var message = ISeStringEvaluator.Instance().EvaluateFromAddon
+            (
+                371,
+                [
+                    Lang.Get
+                    (
+                        "AutoSubmarineCollect-Notification-AllReturned",
+                        returnTime.ToString("yyyy/MM/dd HH:mm:ss"),
+                        returnTime.TimeAgo()
+                    )
+                ]
+            );
+                
+            builder
+                .AppendDalamudSeString(collectSubmarinePayload)
+                .Append(message)
+                .AppendDalamudSeString(RawPayload.LinkTerminator);
+                
+            NotifyHelper.Instance().Chat(builder.ToReadOnlySeString());
+        }
+        else
+        {
+            var message = Lang.Get
+            (
+                "AutoSubmarineCollect-Notification-SomeExploring",
+                maxCount - finishedCount,
+                returnTime.ToString("yyyy/MM/dd HH:mm:ss")
+            );
+                
+            NotifyHelper.Instance().Chat(message);
+        }
     }
 
     // 发包获取情报
     private static void SendRefreshSubmarineInfo()
     {
-        if (!GameState.IsLoggedIn) return;
+        if (LocalPlayerState.ContentID                                   == 0 ||
+            GameState.ContentFinderCondition                             == 0 ||
+            HousingManager.GetOwnedHouseId(EstateType.FreeCompanyEstate) == INVALID_HOUSE_ID)
+            return;
+        
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestSubmarine, 1);
     }
 
@@ -744,7 +763,9 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     {
         public uint AutoCollectCount;
         public uint NotifyCount     = 4;
-        public bool NotifyWhenLogin = true;
+
+        public DateTimeOffset LastNotifyTime = DateTimeOffset.MinValue;
+        public ulong          LastNotifyContentID;
     }
 
     private class ItemDisplayNode : HorizontalListNode
@@ -934,6 +955,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     #region 常量
 
     private const string COMMAND = "submarine";
+    
+    private const ulong INVALID_HOUSE_ID = 0xFFFFFFFFFFFFFFFF;
 
     // 桶装青磷水和魔导机械修理材料
     private static readonly uint[] SubmarineItems = [10155, 10373];
