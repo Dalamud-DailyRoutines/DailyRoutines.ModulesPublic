@@ -50,7 +50,9 @@ public class FasterTerritoryTransport : ModuleBase
         WarpType.Resurrection,
         WarpType.HousingTeleport,
         WarpType.TownTranslate,
-        WarpType.WorldTransfer
+        WarpType.WorldTransfer,
+        WarpType.EnterInstanceContent,
+        WarpType.LeaveInstanceContent
     ];
 
     #endregion
