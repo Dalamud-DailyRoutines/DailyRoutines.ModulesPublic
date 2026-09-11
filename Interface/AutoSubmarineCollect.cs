@@ -741,7 +741,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private static void SendRefreshSubmarineInfo()
     {
         if (LocalPlayerState.ContentID                                   == 0 ||
-            GameState.ContentFinderCondition                             == 0 ||
+            GameState.ContentFinderCondition                             != 0 ||
             HousingManager.GetOwnedHouseId(EstateType.FreeCompanyEstate) == INVALID_HOUSE_ID)
             return;
         
