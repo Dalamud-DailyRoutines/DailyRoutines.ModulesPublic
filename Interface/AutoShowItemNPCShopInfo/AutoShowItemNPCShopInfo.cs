@@ -100,7 +100,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
                        .AppendNewLine()
                        .Append($"{SPACING}{LuminaWrapper.GetItemName(costInfo.ItemID)}")
                        .PushColorType(32)
-                       .Append($"x{costInfo.Cost}")
+                       .Append($"x{costInfo.Cost.ToChineseString()}")
                        .PopColorType();
 
                 var itemCount = -1;
@@ -112,14 +112,14 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
                 if (itemCount > -1)
                 {
                     builder.Builder
-                           .Append($"  ({Lang.Get("Current")}: ")
+                           .Append($"  ({Lang.Get("Current")}：")
                            .PushColorType
                            (
                                itemCount >= costInfo.Cost ?
                                    67U :
                                    17
                            )
-                           .Append($"{itemCount}")
+                           .Append($"{itemCount.ToChineseString()}")
                            .PopColorType()
                            .Append(")");
                 }
