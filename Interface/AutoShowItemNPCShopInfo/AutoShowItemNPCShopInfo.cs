@@ -112,7 +112,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
                 if (itemCount > -1)
                 {
                     builder.Builder
-                           .Append($"  ({Lang.Get("Current")}：")
+                           .Append($"（{Lang.Get("Current")}：")
                            .PushColorType
                            (
                                itemCount >= costInfo.Cost ?
@@ -121,7 +121,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
                            )
                            .Append($"{itemCount.ToChineseString()}")
                            .PopColorType()
-                           .Append(")");
+                           .Append("）");
                 }
             }
         }
