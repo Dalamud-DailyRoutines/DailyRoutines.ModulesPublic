@@ -2,6 +2,7 @@ using System.Numerics;
 using DailyRoutines.Common.Info;
 using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.RemoteInteraction.Enums;
+using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.Common.RemoteInteraction.Models;
 using DailyRoutines.RemoteInteraction.UsedNames;
 using DailyRoutines.RemoteInteraction.UsedNames.Models;
@@ -13,16 +14,14 @@ using KamiToolKit.Enums;
 using KamiToolKit.Interfaces;
 using KamiToolKit.Nodes;
 using OmenTools.Dalamud;
+using OmenTools.OmenService;
 using TimeAgo;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
 public unsafe partial class OptimizedFriendList
 {
-    private sealed class DRFriendlistUsedNames
-    (
-        WorldRegion region
-    ) : NativeAddon
+    private sealed class DRFriendlistUsedNames : NativeAddon
     {
         public const float WINDOW_WIDTH  = 560f;
         public const float WINDOW_HEIGHT = 480f;
@@ -133,6 +132,7 @@ public unsafe partial class OptimizedFriendList
             windowNode.ShowConfigButton = false;
             windowNode.ShowHelpButton   = false;
 
+            var region = WorldRegionResolver.Resolve(GameState.HomeWorld);
             observation = RemoteUsedNames.Observe(ContentID, region, BuildEntries);
             RemoteUsedNames.GetOrRequest(ContentID, region);
 
@@ -180,6 +180,7 @@ public unsafe partial class OptimizedFriendList
 
         private void Refresh()
         {
+            var region = WorldRegionResolver.Resolve(GameState.HomeWorld);
             RemoteUsedNames.Invalidate(ContentID, region);
             RemoteUsedNames.GetOrRequest(ContentID, region);
         }

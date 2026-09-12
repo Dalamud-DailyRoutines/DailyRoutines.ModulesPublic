@@ -73,7 +73,7 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             Size         = new(230f, 350f)
         };
 
-        usedNamesAddon ??= new(WorldRegionResolver.Resolve(GameState.HomeWorld))
+        usedNamesAddon ??= new()
         {
             InternalName = "DRFriendlistUsedNames",
             Title        = Lang.Get("OptimizedFriendList-Addon-UsedNames"),
