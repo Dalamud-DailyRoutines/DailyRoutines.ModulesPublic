@@ -210,6 +210,8 @@ public unsafe class BetterBlueSetLoad : ModuleBase
         for (var i = 0; i < 24; i++)
             if (final[i] != 0)
                 manager->AssignBlueMageActionToSlot(i, final[i]);
+        
+        AozNoteModule.Instance()->LoadActiveSetHotBars((int)index);
 
         using var utf8String = new Utf8String(setName);
         RaptureLogModule.Instance()->ShowLogMessageString(9472, &utf8String);
