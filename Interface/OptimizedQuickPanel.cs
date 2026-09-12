@@ -138,7 +138,6 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         {
             case AddonEvent.PreFinalize:
                 lockCheckBoxNode = null;
-                config.Save(this);
                 break;
             
             case AddonEvent.PreUpdate:
@@ -153,14 +152,9 @@ public unsafe class OptimizedQuickPanel : ModuleBase
                 {
                     lockCheckBoxNode = new()
                     {
-                        Position = new(8, 34),
-                        TextTooltip = LuminaWrapper.GetAddonText
-                        (
-                            config.IsLock ?
-                                3061U :
-                                3060
-                        ),
+                        Position  = new(238, 34),
                         Size      = new(20, 24),
+                        Scale     = new(0.9f),
                         IsChecked = config.IsLock
                     };
 
@@ -169,13 +163,6 @@ public unsafe class OptimizedQuickPanel : ModuleBase
                         config.IsLock = x;
                         config.Save(this);
 
-                        lockCheckBoxNode.TextTooltip = LuminaWrapper.GetAddonText
-                        (
-                            config.IsLock ?
-                                3061U :
-                                3060
-                        );
-                        lockCheckBoxNode.ShowTooltip();
                         UpdateAddonFlags();
                         UpdateSlotLockState();
                     };
