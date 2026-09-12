@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -6,7 +7,6 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.System.Input;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -17,8 +17,8 @@ using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
-using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -33,15 +33,49 @@ public unsafe class OptimizedQuickPanel : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private Hook<UIModule.Delegates.ToggleUi>? ToggleUIHook;
+    private static readonly CompSig AddonControlReceiveEventSig = new("40 53 56 41 56 48 81 EC ?? ?? ?? ?? 48 8B F1");
+    private delegate void AddonControlReceiveEventDelegate
+    (
+        AtkAddonControl* control,
+        ushort           eventType,
+        int              eventParam,
+        AtkEvent*        atkEvent,
+        AtkEventData*    atkEventData
+    );
+    private Hook<AddonControlReceiveEventDelegate>? AddonControlReceiveEventHook;
+    
+    private static readonly CompSig IsMoveHandleNodeSig = new("48 3B 91 ?? ?? ?? ?? 74 ?? 45 33 C0");
+    [return: MarshalAs(UnmanagedType.U1)]
+    private delegate bool IsMoveHandleNodeDelegate
+    (
+        AtkUnitBase* addon,
+        AtkResNode*  node
+    );
+    private Hook<IsMoveHandleNodeDelegate>? IsMoveHandleNodeHook;
 
-    private Hook<AgentShowDelegate>? AgentQuickPanelShowHook;
+    private static readonly CompSig StartDraggingAddonSig = new("40 53 48 83 EC 20 80 A2 A1 01 00 00 EF");
+    private delegate void StartDraggingAddonDelegate
+    (
+        AtkUnitManager* manager,
+        AtkUnitBase*    addon
+    );
+    private Hook<StartDraggingAddonDelegate>? StartDraggingAddonHook;
 
+    private static readonly CompSig QuickPanelReceiveEventSig = 
+        new("40 55 53 56 57 41 56 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 48 8B 7D");
+    private delegate void QuickPanelReceiveEventDelegate
+    (
+        AtkUnitBase*  addon,
+        ushort        eventType,
+        int           eventParam,
+        AtkEvent*     atkEvent,
+        AtkEventData* atkEventData
+    );
+    private Hook<QuickPanelReceiveEventDelegate>? QuickPanelReceiveEventHook;
+    
     private Config config = null!;
 
     private CheckboxNode? lockCheckBoxNode;
-
-    private bool isLastQuickPanelEnabled;
 
     protected override void Init()
     {
@@ -49,24 +83,23 @@ public unsafe class OptimizedQuickPanel : ModuleBase
 
         ChatManager.Instance().RegPreExecuteCommandInner(OnPreExecuteCommandInner);
 
-        AgentQuickPanelShowHook = IGameInteropProvider.Instance().HookFromAddress<AgentShowDelegate>
-        (
-            AgentQuickPanel.Instance()->VirtualTable->GetVFuncByName("Show"),
-            AgentQuickPanelShowDetour
-        );
-        AgentQuickPanelShowHook.Enable();
+        StartDraggingAddonHook = StartDraggingAddonSig.GetHook<StartDraggingAddonDelegate>(StartDraggingAddonDetour);
+        StartDraggingAddonHook.Enable();
 
-        ToggleUIHook = IGameInteropProvider.Instance().HookFromAddress<UIModule.Delegates.ToggleUi>
-        (
-            UIModule.Instance()->VirtualTable->GetVFuncByName("ToggleUi"),
-            ToggleUIDetour
-        );
-        ToggleUIHook.Enable();
+        AddonControlReceiveEventHook = AddonControlReceiveEventSig.GetHook<AddonControlReceiveEventDelegate>(AddonControlReceiveEventDetour);
+        AddonControlReceiveEventHook.Enable();
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "QuickPanel", OnAddon);
+        IsMoveHandleNodeHook = IsMoveHandleNodeSig.GetHook<IsMoveHandleNodeDelegate>(IsMoveHandleNodeDetour);
+        IsMoveHandleNodeHook.Enable();
+
+        QuickPanelReceiveEventHook = QuickPanelReceiveEventSig.GetHook<QuickPanelReceiveEventDelegate>(QuickPanelReceiveEventDetour);
+        QuickPanelReceiveEventHook.Enable();
+
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw, "QuickPanel", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw, "QuickPanel", OnAddon);
+
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreUpdate,   "QuickPanel", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "QuickPanel", OnAddon);
-
-        UpdateAddonFlags();
     }
 
     protected override void Uninit()
@@ -107,21 +140,15 @@ public unsafe class OptimizedQuickPanel : ModuleBase
                 lockCheckBoxNode = null;
                 config.Save(this);
                 break;
+            
+            case AddonEvent.PreUpdate:
+                UpdateAddonFlags();
+                UpdateSlotLockState();
+                break;
 
             case AddonEvent.PostDraw:
                 if (QuickPanel == null) return;
-
-                if (config.IsLock && config.LastPosition != Vector2.Zero)
-                    QuickPanel->SetPosition((short)config.LastPosition.X, (short)config.LastPosition.Y);
-                config.LastPosition = new(QuickPanel->RootNode->GetXFloat(), QuickPanel->RootNode->GetYFloat());
-
-                // 正常比较高帧率状态下应该是没问题的
-                if (config.IsLock                                         &&
-                    UIInputData.Instance()->IsInputIdPressed(InputId.ESC) &&
-                    AtkStage.Instance()->GetFocus() == null               &&
-                    SystemMenu                      == null)
-                    AgentHUD.Instance()->HandleMainCommandOperation(MainCommandOperation.OpenSystemMenu, 0);
-
+                
                 if (lockCheckBoxNode == null)
                 {
                     lockCheckBoxNode = new()
@@ -150,6 +177,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
                         );
                         lockCheckBoxNode.ShowTooltip();
                         UpdateAddonFlags();
+                        UpdateSlotLockState();
                     };
 
                     lockCheckBoxNode.BoxBackground.IsVisible = false;
@@ -260,16 +288,6 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         }
     }
 
-    // 给 Addon 上 Flag 处理锁定
-    private void AgentQuickPanelShowDetour
-    (
-        AgentInterface* agent
-    )
-    {
-        AgentQuickPanelShowHook.Original(agent);
-        UpdateAddonFlags();
-    }
-
     // 让快捷面板支持打开面板参数
     private static void OnPreExecuteCommandInner
     (
@@ -297,62 +315,97 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         isPrevented = true;
     }
 
-    // 随着 ActionBar 隐藏一并隐藏, 和 ActionBar 逻辑保持一致
-    private void ToggleUIDetour
+    private void StartDraggingAddonDetour
     (
-        UIModule* module,
-        UiFlags   flags,
-        bool      enable,
-        bool      unknown
+        AtkUnitManager* manager,
+        AtkUnitBase*    addon
     )
     {
-        ToggleUIHook.Original(module, flags, enable, unknown);
+        if (addon == QuickPanel && config.IsLock) return;
 
-        if (flags.IsSetAny(UiFlags.ActionBars))
-        {
-            // 隐藏
-            if (!enable)
-            {
-                isLastQuickPanelEnabled = QuickPanel != null;
-                AgentQuickPanel.Instance()->Hide();
-            }
-            else
-            {
-                if (isLastQuickPanelEnabled && QuickPanel == null)
-                    AgentQuickPanel.Instance()->OpenPanel(AgentQuickPanel.Instance()->ActivePanel);
+        StartDraggingAddonHook.Original(manager, addon);
+    }
 
-                isLastQuickPanelEnabled = false;
-            }
-        }
+    private void AddonControlReceiveEventDetour
+    (
+        AtkAddonControl* control,
+        ushort           eventType,
+        int              eventParam,
+        AtkEvent*        atkEvent,
+        AtkEventData*    atkEventData
+    )
+    {
+        if (eventType == ATK_EVENT_TYPE_MOUSE_MOVE && control->ParentAddon == QuickPanel && config.IsLock) return;
+
+        AddonControlReceiveEventHook.Original(control, eventType, eventParam, atkEvent, atkEventData);
+    }
+    
+    private bool IsMoveHandleNodeDetour
+    (
+        AtkUnitBase* addon,
+        AtkResNode*  node
+    )
+    {
+        if (addon == QuickPanel && config.IsLock) return false;
+
+        return IsMoveHandleNodeHook.Original(addon, node);
+    }
+
+    private void QuickPanelReceiveEventDetour
+    (
+        AtkUnitBase*  addon,
+        ushort        eventType,
+        int           eventParam,
+        AtkEvent*     atkEvent,
+        AtkEventData* atkEventData
+    )
+    {
+        if (eventType == (ushort)AtkEventType.DragDropClick && atkEventData->DragDropData.MouseButtonId != 0 && config.IsLock) return;
+
+        QuickPanelReceiveEventHook.Original(addon, eventType, eventParam, atkEvent, atkEventData);
     }
 
     private void UpdateAddonFlags()
     {
         if (QuickPanel == null) return;
 
-        // 禁止 ESC 键关闭
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A1, 0x4, config.IsLock);
+        QuickPanel->DisableFocusability = config.IsLock;
 
-        // 禁止聚焦
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A0, 0x80, config.IsLock);
+        if (config.IsLock)
+            QuickPanel->Flags1B4 |= (uint)UiFlags.ActionBars;
+        else
+            QuickPanel->Flags1B4 &= ~(uint)UiFlags.ActionBars;
+    }
 
-        // 禁止自动聚焦
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A1, 0x40, config.IsLock);
+    private void UpdateSlotLockState()
+    {
+        if (QuickPanel == null) return;
 
-        // 禁止右键菜单
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A3, 0x1, config.IsLock);
+        var slot = (byte*)QuickPanel + QUICK_PANEL_SLOT_ARRAY_OFFSET;
+        for (var i = 0; i < QUICK_PANEL_SLOT_ARRAY_COUNT; i++, slot += QUICK_PANEL_SLOT_SIZE)
+        {
+            var dragDrop = *(AtkComponentDragDrop**)slot;
+            if (dragDrop == null) continue;
 
-        // 禁止交互
-        FlagHelper.UpdateFlag(ref QuickPanel->Flags1A3, 0x40, !config.IsLock);
+            if (config.IsLock)
+                dragDrop->Flags |= DragDropFlag.Locked;
+            else
+                dragDrop->Flags &= ~DragDropFlag.Locked;
+        }
     }
 
     private class Config : ModuleConfig
     {
-        public bool    IsLock = true;
-        public Vector2 LastPosition;
+        public bool IsLock = true;
     }
 
     #region 常量
+
+    private const ushort ATK_EVENT_TYPE_MOUSE_MOVE = 5;
+
+    private const int QUICK_PANEL_SLOT_ARRAY_OFFSET = 576;
+    private const int QUICK_PANEL_SLOT_ARRAY_COUNT  = 25;
+    private const int QUICK_PANEL_SLOT_SIZE         = 48;
 
     private static readonly TextCommand QuickPanelLine = LuminaGetter.GetRowOrDefault<TextCommand>(50);
 
