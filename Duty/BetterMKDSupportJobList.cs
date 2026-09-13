@@ -47,7 +47,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
 
     private Config config = null!;
 
-    private Hook<AgentShowDelegate>? agentMKDSupportJobShowHook;
+    private Hook<AgentShowDelegate>? AgentMKDSupportJobShowHook;
 
     private TextButtonNode?    jobChangeButton;
     private AddonDRMKDJobList? mkdJobListAddon;
@@ -82,12 +82,12 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             RememberClosePosition = true
         };
 
-        agentMKDSupportJobShowHook ??= IGameInteropProvider.Instance().HookFromAddress<AgentShowDelegate>
+        AgentMKDSupportJobShowHook ??= IGameInteropProvider.Instance().HookFromAddress<AgentShowDelegate>
         (
             AgentMKDSupportJob.Instance()->VirtualTable->GetVFuncByName("Show"),
             AgentMKDSupportJobShowDetour
         );
-        agentMKDSupportJobShowHook.Enable();
+        AgentMKDSupportJobShowHook.Enable();
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterMKDSupportJobList-CommandHelp") });
     }
@@ -95,9 +95,6 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
     protected override void Uninit()
     {
         CommandManager.Instance().RemoveSubCommand(COMMAND);
-
-        agentMKDSupportJobShowHook?.Dispose();
-        agentMKDSupportJobShowHook = null;
 
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
 
@@ -113,7 +110,6 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToUInt(), Lang.Get("Command"));
         using (ImRaii.PushIndent())
             ImGui.TextUnformatted($"/pdr {COMMAND} → Lang.Get(\"BetterMKDSupportJobList-CommandHelp\")");
-        
         
         ImGui.NewLine();
         
