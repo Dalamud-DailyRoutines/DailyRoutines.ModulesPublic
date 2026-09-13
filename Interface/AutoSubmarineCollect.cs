@@ -69,6 +69,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private          VerticalListNode?     itemListLayout;
     private readonly List<ItemDisplayNode> itemRenderers = [];
     private          TextButtonNode?       autoCollectNode;
+
+    private bool isNextNotifyIgnoreTime;
     
     protected override void Init()
     {
@@ -468,8 +470,11 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     }
 
     // 登陆后就发一次包吧
-    private static void OnLogin() =>
+    private void OnLogin()
+    {
+        isNextNotifyIgnoreTime = true;
         SendRefreshSubmarineInfo();
+    }
 
     private static void OnClickCollectSubmarinePayload
     (
@@ -683,15 +688,19 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         if (config.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, config.AutoCollectCount))
             ChatManager.Instance().SendMessage("/pdr submarine");
 
-        if (config.NotifyCount <= 0 || finishedCount < Math.Min(maxCount, config.NotifyCount))
+        if (config.NotifyCount > 0 && finishedCount <= config.NotifyCount)
             return;
 
         if (config.LastNotifyContentID == LocalPlayerState.ContentID)
         {
-            if (maxCount != finishedCount &&
-                StandardTimeManager.Instance().UTCNowOffset - config.LastNotifyTime < TimeSpan.FromHours(4))
+            var timeInterval = StandardTimeManager.Instance().UTCNowOffset - config.LastNotifyTime;
+            if (!isNextNotifyIgnoreTime       &&
+                maxCount     != finishedCount &&
+                timeInterval < TimeSpan.FromHours(4))
                 return;
         }
+
+        isNextNotifyIgnoreTime = false;
         
         config.LastNotifyContentID = LocalPlayerState.ContentID;
         config.LastNotifyTime      = StandardTimeManager.Instance().UTCNowOffset;
