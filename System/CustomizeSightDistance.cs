@@ -22,18 +22,15 @@ public unsafe class CustomizeSightDistance : ModuleBase
     };
 
     private static readonly CompSig SetActiveCameraSig = new("40 57 41 54 41 57 48 83 EC ?? 4C 63 FA");
-
     private delegate void SetActiveCameraDelegate
     (
         CameraManager* manager,
         int            cameraIndex,
         void*          a3
     );
-
     private Hook<SetActiveCameraDelegate> SetActiveCameraHook;
 
     private static readonly CompSig CameraCurrentSightDistanceSig = new("40 53 48 83 EC ?? 48 8B 15 ?? ?? ?? ?? 48 8B D9 0F 29 74 24");
-
     private delegate float CameraCurrentSightDistanceDelegate
     (
         nint  a1,
@@ -45,11 +42,20 @@ public unsafe class CustomizeSightDistance : ModuleBase
         float currentValue,
         float targetValue
     );
-
     private Hook<CameraCurrentSightDistanceDelegate>? CameraCurrentSightDistanceHook;
 
     private static readonly CompSig     CameraCollisionBaseSig = new("84 C0 0F 84 ?? ?? ?? ?? F3 0F 10 44 24 ?? 41 B7");
     private                 MemoryPatch cameraCollisionPatch   = null!;
+
+    private static readonly CompSig SetCameraDistanceLimitSig = new("48 8D 81 2C 01 00 00 F3 0F 11 4C 24 10 0F 2F D9");
+    private delegate void SetCameraDistanceLimitDelegate
+    (
+        Camera* camera,
+        float   distance,
+        float   minDistance,
+        float   maxDistance
+    );
+    private Hook<SetCameraDistanceLimitDelegate> SetCameraDistanceLimitHook = null!;
 
     private Config config = null!;
 
@@ -64,25 +70,19 @@ public unsafe class CustomizeSightDistance : ModuleBase
         CameraCurrentSightDistanceHook ??= CameraCurrentSightDistanceSig.GetHook<CameraCurrentSightDistanceDelegate>(CameraCurrentSightDistanceDetour);
         CameraCurrentSightDistanceHook.Enable();
 
+        SetCameraDistanceLimitHook = SetCameraDistanceLimitSig.GetHook<SetCameraDistanceLimitDelegate>(SetCameraDistanceLimitDetour);
+        SetCameraDistanceLimitHook.Enable();
+
         if (config.IgnoreCollision)
             cameraCollisionPatch.Enable();
 
-        UpdateCamera
-        (
-            CameraManager.Instance()->Camera,
-            config.MaxDistance,
-            config.MinDistance,
-            config.MaxRotation,
-            config.MinRotation,
-            config.MaxFoV,
-            config.MinFoV,
-            config.FoV
-        );
+        UpdateCameraByConfig();
     }
 
     protected override void Uninit()
     {
         if (!IsEnabled) return;
+
         UpdateCamera(CameraManager.Instance()->Camera, 20f, 1.5f, 0.785398f, -1.483530f, 0.78f, 0.69f, 0.78f);
     }
 
@@ -179,6 +179,16 @@ public unsafe class CustomizeSightDistance : ModuleBase
             );
         }
     }
+    
+    // 斗兽奇弈会借该函数把视距上限压回 20 (非战斗) 或 50 (战斗), 并用内部缓存值覆盖当前视距
+    private void SetCameraDistanceLimitDetour
+    (
+        Camera* camera,
+        float   distance,
+        float   minDistance,
+        float   maxDistance
+    ) =>
+        SetCameraDistanceLimitHook.Original(camera, camera->Distance, config.MinDistance, config.MaxDistance);
 
     private void SetActiveCameraDetour
     (
@@ -247,6 +257,19 @@ public unsafe class CustomizeSightDistance : ModuleBase
         }
     }
 
+    private void UpdateCameraByConfig() =>
+        UpdateCamera
+        (
+            CameraManager.Instance()->Camera,
+            config.MaxDistance,
+            config.MinDistance,
+            config.MaxRotation,
+            config.MinRotation,
+            config.MaxFoV,
+            config.MinFoV,
+            config.FoV
+        );
+    
     private static void UpdateCamera
     (
         Camera* camera,
