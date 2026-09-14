@@ -44,6 +44,7 @@ public class FasterTerritoryTransport : ModuleBase
 
     private static readonly FrozenSet<WarpType> InvalidWarpTypes =
     [
+        WarpType.None,
         WarpType.Login,
         WarpType.Teleport,
         WarpType.Return,
