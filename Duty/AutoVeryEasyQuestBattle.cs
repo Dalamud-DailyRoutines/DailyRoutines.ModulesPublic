@@ -23,7 +23,7 @@ public class AutoVeryEasyQuestBattle : ModuleBase
     protected override void Uninit() =>
         ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
 
-    private static unsafe void OnPreUseCommand
+    private static void OnPreUseCommand
     (
         ref bool               isPrevented,
         ref ExecuteCommandFlag command,
@@ -35,12 +35,16 @@ public class AutoVeryEasyQuestBattle : ModuleBase
     {
         if (command != ExecuteCommandFlag.StartSoloQuestBattle) return;
 
+        // 客户端会发送两次该命令: 一次为难度数据设置, 一次是让服务端响应确认, 后者参数全为 0
+        var isRequest = (param1 | param2) != 0;
+
         param1 = 2;
 
-        if (!SelectString->IsAddonAndNodesReady())
-        {
-            NotifyHelper.Instance().Chat(Lang.Get("AutoVeryEasyQuestBattle-Notification"));
-            NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoVeryEasyQuestBattle-Notification"));
-        }
+        if (!isRequest) return;
+
+        var message = Lang.Get("AutoVeryEasyQuestBattle-Notification");
+        
+        NotifyHelper.Instance().Chat(message);
+        NotifyHelper.Toast(message);
     }
 }
