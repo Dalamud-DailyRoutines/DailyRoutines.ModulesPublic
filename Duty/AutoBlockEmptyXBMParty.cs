@@ -59,7 +59,7 @@ public unsafe class AutoBlockEmptyXBMParty : ModuleBase
         {
             0 when GetElementCount(agentPetPartyPtr, PARTY_LIST_BEGIN_OFFSET, PARTY_LIST_END_OFFSET) < 3 =>
                 "AutoBlockEmptyXBMParty-Notification-EmptyParty",
-            2 when GetElementCount(agentPetPartyPtr, FLUTE_LIST_BEGIN_OFFSET, FLUTE_LIST_END_OFFSET) < 3 =>
+            2 when IsFluteAssignmentInsufficient(agentPetPartyPtr) =>
                 "AutoBlockEmptyXBMParty-Notification-InsufficiantAssignment",
             _ => null
         };
@@ -83,8 +83,27 @@ public unsafe class AutoBlockEmptyXBMParty : ModuleBase
     ) =>
         (*(nint*)(agent + endOffset) - *(nint*)(agent + beginOffset)) >> 3;
 
+    // 存活魔兽不足三只时, 兽笛无法全部指派, 此时按存活数量放行
+    private static bool IsFluteAssignmentInsufficient(nint agent)
+    {
+        var assignedCount = GetElementCount(agent, FLUTE_LIST_BEGIN_OFFSET, FLUTE_LIST_END_OFFSET);
+        if (assignedCount >= 3)
+            return false;
+
+        var aliveCount = 0;
+        for (var i = 0; i < PET_CURRENT_HEALTH_COUNT; i++)
+        {
+            if (*(uint*)(agent + PET_CURRENT_HEALTH_OFFSET + (i * sizeof(uint))) != 0)
+                aliveCount++;
+        }
+
+        return assignedCount < aliveCount;
+    }
+
     #region 常量
 
+    // TODO：等待 FFCS 合并
+    
     // AgentXBMStageDetailList: 当前所处阶段, 0 为调整编队, 2 为开始战斗
     private const int STAGE_MODE_OFFSET = 0x3C;
 
@@ -95,6 +114,10 @@ public unsafe class AutoBlockEmptyXBMParty : ModuleBase
     // AgentXBMPetParty: 兽笛列表, 元素为 8 字节的 ID 记录
     private const int FLUTE_LIST_BEGIN_OFFSET = 0x90;
     private const int FLUTE_LIST_END_OFFSET   = 0x98;
+
+    // AgentXBMPetParty: 各魔兽当前生命值, 为 0 表示已阵亡
+    private const int PET_CURRENT_HEALTH_OFFSET = 0xC0;
+    private const int PET_CURRENT_HEALTH_COUNT  = 15;
 
     #endregion
 }
