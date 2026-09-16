@@ -11,7 +11,8 @@ public class OptimizedPVPProfileAction : ModuleBase
     {
         Title       = Lang.Get("OptimizedPVPProfileActionTitle"),
         Description = Lang.Get("OptimizedPVPProfileActionDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        ModulesPair = ["BetterPVPACCommand"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

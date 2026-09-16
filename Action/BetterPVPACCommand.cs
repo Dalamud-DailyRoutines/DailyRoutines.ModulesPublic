@@ -14,7 +14,8 @@ public unsafe class BetterPVPACCommand : ModuleBase
     {
         Title       = Lang.Get("BetterPVPACCommandTitle"),
         Description = Lang.Get("BetterPVPACCommandDescription"),
-        Category    = ModuleCategory.Action
+        Category    = ModuleCategory.Action,
+        ModulesPair = ["OptimizedPVPProfileAction"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
