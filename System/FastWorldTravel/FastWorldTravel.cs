@@ -37,7 +37,7 @@ public partial class FastWorldTravel : ModuleBase
                            string.Empty :
                            "\n支持快捷超域旅行并实时显示各服务器超域旅行拥挤度 [国服特供]"),
         Category            = ModuleCategory.System,
-        ModulesRecommend    = ["InstantReturn", "InstantTeleport"],
+        ModulesPair    = ["InstantReturn", "InstantTeleport"],
         ModulesPrerequisite = ["InstantLogout"]
     };
 

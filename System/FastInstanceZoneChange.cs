@@ -33,7 +33,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
         Description      = Lang.Get("FastInstanceZoneChangeDescription", COMMAND),
         Category         = ModuleCategory.System,
         Author           = ["AtmoOmen", "KirisameVanilla"],
-        ModulesRecommend = ["InstantTeleport"]
+        ModulesPair = ["InstantTeleport"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

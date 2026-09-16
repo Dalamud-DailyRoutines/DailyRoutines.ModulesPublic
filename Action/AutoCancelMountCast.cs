@@ -18,7 +18,7 @@ public class AutoCancelMountCast : ModuleBase
         Description      = Lang.Get("AutoCancelMountCastDescription"),
         Category         = ModuleCategory.Action,
         Author           = ["Bill"],
-        ModulesRecommend = ["BetterMountRoulette"]
+        ModulesPair = ["BetterMountRoulette"]
     };
 
     private Config config = null!;

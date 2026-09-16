@@ -29,7 +29,7 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         Title            = Lang.Get("AutoFaceCameraDirectionTitle"),
         Description      = Lang.Get("AutoFaceCameraDirectionDescription"),
         Category         = ModuleCategory.System,
-        ModulesRecommend = ["DisableGroundActionAutoFace", "IgnoreActionTargetBlocked"]
+        ModulesPair = ["DisableGroundActionAutoFace", "IgnoreActionTargetBlocked"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

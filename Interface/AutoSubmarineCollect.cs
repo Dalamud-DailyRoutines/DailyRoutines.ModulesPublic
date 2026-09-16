@@ -45,7 +45,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         Description         = Lang.Get("AutoSubmarineCollectDescription"),
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoCutsceneSkip"],
-        ModulesRecommend    = ["OptimizedInteraction"]
+        ModulesPair    = ["OptimizedInteraction"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

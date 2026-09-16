@@ -36,7 +36,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         [
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedEnemyList/preview-1.png"
         ],
-        ModulesRecommend = ["AutoDisplayHiddenCast"]
+        ModulesPair = ["AutoDisplayHiddenCast"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

@@ -16,7 +16,7 @@ public class FasterTerritoryTransport : ModuleBase
         Title            = Lang.Get("FasterTerritoryTransportTitle"),
         Description      = Lang.Get("FasterTerritoryTransportDescription"),
         Category         = ModuleCategory.System,
-        ModulesRecommend = ["NoUIFade"]
+        ModulesPair = ["NoUIFade"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };

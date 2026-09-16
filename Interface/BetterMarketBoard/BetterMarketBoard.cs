@@ -21,7 +21,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         Category            = ModuleCategory.Interface,
         Author              = ["Fragile"],
         ModulesPrerequisite = ["FastWorldTravel", "AutoShowItemNPCShopInfo"],
-        ModulesRecommend    = ["AutoRefreshMarketSearchResult"],
+        ModulesPair    = ["AutoRefreshMarketSearchResult"],
         PreviewImageURL =
         [
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterMarketBoard/preview-1.png"
