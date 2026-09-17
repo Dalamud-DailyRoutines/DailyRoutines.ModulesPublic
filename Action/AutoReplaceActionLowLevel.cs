@@ -22,33 +22,27 @@ public unsafe class AutoReplaceActionLowLevel : ModuleBase
 
     private static readonly CompSig IsActionReplaceableSig =
         new("40 53 48 83 EC ?? 8B D9 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 10 48 8B C8 FF 92 ?? ?? ?? ?? 8B D3");
-
     private delegate bool IsActionReplaceableDelegate
     (
         uint actionID
     );
-
     private Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
 
     private static readonly CompSig GetAdjustedActionIDSig = new("E8 ?? ?? ?? ?? 89 03 8B 03");
-
     private delegate uint GetAdjustedActionIDDelegate
     (
         ActionManager* manager,
         uint           actionID
     );
-
     private Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
 
     private static readonly CompSig GetIconIDForSlotSig = new("E8 ?? ?? ?? ?? 85 C0 89 83 ?? ?? ?? ?? 0F 94 C0");
-
     private delegate uint GetIconIDForSlotDelegate
     (
         RaptureHotbarModule.HotbarSlot*    slot,
         RaptureHotbarModule.HotbarSlotType type,
         uint                               actionID
     );
-
     private Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
 
     protected override void Init()
@@ -65,13 +59,19 @@ public unsafe class AutoReplaceActionLowLevel : ModuleBase
 
     protected override void ConfigUI()
     {
-        using var table = ImRaii.Table("ActionReplacementDisplayTable", 3, ImGuiTableFlags.None, new(ImGui.GetContentRegionAvail().X / 2, 0));
+        using var table = ImRaii.Table
+        (
+            "ActionReplacementDisplayTable",
+            3,
+            ImGuiTableFlags.SizingStretchProp,
+            new(ImGui.GetContentRegionAvail().X / 2, 0)
+        );
         if (!table) return;
 
         // 让它们在视觉上看起来更平均
-        ImGui.TableSetupColumn("技能1", ImGuiTableColumnFlags.None, 40);
-        ImGui.TableSetupColumn("箭头",  ImGuiTableColumnFlags.None, 10);
-        ImGui.TableSetupColumn("技能2", ImGuiTableColumnFlags.None, 40);
+        ImGui.TableSetupColumn("技能1", ImGuiTableColumnFlags.WidthStretch, 4);
+        ImGui.TableSetupColumn("箭头",  ImGuiTableColumnFlags.WidthStretch, 1);
+        ImGui.TableSetupColumn("技能2", ImGuiTableColumnFlags.WidthStretch, 4);
 
         foreach (var (action0, action1) in ActionReplacements)
         {
@@ -174,7 +174,11 @@ public unsafe class AutoReplaceActionLowLevel : ModuleBase
         // 核爆 - 烈炎
         [162]   = 147,
         // 玄冰 - 冰冻
-        [159]   = 25793
+        [159]   = 25793,
+        // 炽炎 - 火炎
+        [3577]  = 141,
+        // 冰澈 - 冰结
+        [3576]  = 142
     }.ToFrozenDictionary();
 
     #endregion
