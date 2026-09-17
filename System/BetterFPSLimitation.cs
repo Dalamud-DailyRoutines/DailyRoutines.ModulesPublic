@@ -1,4 +1,5 @@
 using System.Numerics;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -6,15 +7,12 @@ using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
-using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -61,8 +59,7 @@ public class BetterFPSLimitation : ModuleBase
             switch (param.ClickType)
             {
                 case MouseClickType.Left:
-                    EnsureAddon();
-                    addon.Toggle();
+                    ToggleAddon();
                     break;
                 case MouseClickType.Right:
                     EnsureOverlay();
@@ -97,9 +94,8 @@ public class BetterFPSLimitation : ModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Command"));
-
-        ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("BetterFPSLimitation-CommandHelp")}");
+        using (ImRaii.Heading1(Lang.Get("Command")))
+            ImGui.TextUnformatted($"/pdr {COMMAND} {Lang.Get("BetterFPSLimitation-CommandHelp")}");
 
         ImGui.NewLine();
 
@@ -212,11 +208,8 @@ public class BetterFPSLimitation : ModuleBase
     (
         string command,
         string args
-    )
-    {
-        EnsureAddon();
-        addon.Toggle();
-    }
+    ) =>
+        ToggleAddon();
 
     private unsafe void OnUpdate
     (
@@ -263,24 +256,24 @@ public class BetterFPSLimitation : ModuleBase
         };
     }
 
-    private void EnsureAddon()
+    private void ToggleAddon()
     {
-        if (addon != null)
+        if (addon is { IsOpen: true })
+        {
+            addon.Dispose();
+            addon = null;
             return;
-
-        var thresholdGroups = config.Thresholds
-                                    .Select((value, index) => new { value, index })
-                                    .GroupBy(x => x.index / 3)
-                                    .Select(g => g.Select(x => x.value).ToList())
-                                    .ToList();
-
+        }
+        
+        addon?.Dispose();
         addon = new(this)
         {
-            InternalName = "DRBetterFPSLimitation",
-            Title        = LuminaWrapper.GetAddonText(4032),
-            Size         = new(250f, 208f + (32f * thresholdGroups.Count))
+            InternalName          = "DRBetterFPSLimitation",
+            Title                 = LuminaWrapper.GetAddonText(4032),
+            Size                  = new(220f, 240f),
+            RememberClosePosition = true
         };
-        addon.SetWindowPosition(config.AddonPosition);
+        addon.Open();
     }
 
     private void ResetHistory()
@@ -382,7 +375,6 @@ public class BetterFPSLimitation : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public Vector2 AddonPosition = new(800f, 350f);
         public bool    IsEnabled;
         public short   Limitation = 60;
 
@@ -394,11 +386,11 @@ public class BetterFPSLimitation : ModuleBase
         BetterFPSLimitation module
     ) : NativeAddon
     {
-        public static NodeBase FPSWidget;
+        public VerticalListNode? FPSWidget;
 
-        private static TextNode         FPSDisplayNumberNode;
-        private static NumericInputNode FPSInputNode;
-        private static CheckboxNode     IsEnabledNode;
+        private TextNode?         FPSDisplayNumberNode;
+        private NumericInputNode? FPSInputNode;
+        private CheckboxNode?     IsEnabledNode;
 
         protected override unsafe void OnSetup
         (
@@ -406,60 +398,16 @@ public class BetterFPSLimitation : ModuleBase
             Span<AtkValue> atkValues
         )
         {
-            FPSWidget          = CreateFPSWidget();
-            FPSWidget.Position = ContentStartPosition;
-
-            FPSWidget.AttachNode(this);
-
-            Size = Size with { Y = FPSWidget.Height + 65 };
-        }
-
-        protected override unsafe void OnUpdate
-        (
-            AtkUnitBase* addon
-        )
-        {
-            if (FPSDisplayNumberNode != null)
+            FPSWidget = new VerticalListNode
             {
-                var text = LuminaGetter.GetRow<Addon>(4002).GetValueOrDefault().Text.ToDalamudString();
-                text.Payloads[0]            = new TextPayload($"{Framework.Instance()->FrameRate:F0}");
-                FPSDisplayNumberNode.String = text.Encode();
-            }
-
-            if (IsEnabledNode != null)
-                IsEnabledNode.IsChecked = module.config.IsEnabled;
-
-            if (FPSInputNode != null)
-                FPSInputNode.Value = module.config.Limitation;
-
-            base.OnUpdate(addon);
-        }
-
-        protected override unsafe void OnFinalize
-        (
-            AtkUnitBase* addon
-        )
-        {
-            module.config.AddonPosition = RootNode.Position;
-            module.config.Save(ModuleManager.Instance().GetModule<BetterFPSLimitation>());
-
-            base.OnFinalize(addon);
-        }
-
-        public NodeBase CreateFPSWidget()
-        {
-            var column = new VerticalListNode
-            {
-                IsVisible = true
+                FitContents = true,
+                Position    = ContentStartPosition
             };
-            var totalHeight = 0f;
-
+            
             IsEnabledNode = new CheckboxNode
             {
-                Size      = new Vector2(150.0f, 20.0f),
-                IsVisible = true,
+                Size      = new(200f, 20f),
                 IsChecked = module.config.IsEnabled,
-                IsEnabled = true,
                 String    = Lang.Get("Enable"),
                 OnClick = newState =>
                 {
@@ -469,28 +417,21 @@ public class BetterFPSLimitation : ModuleBase
                     module.Update();
                 }
             };
-            column.AddNode(IsEnabledNode);
-            totalHeight += IsEnabledNode.Size.Y;
+            FPSWidget.AddNode(IsEnabledNode);
 
-            var spacer0 = new ResNode { Size = new(0, 8), IsVisible = true };
-            column.AddNode(spacer0);
-            totalHeight += spacer0.Size.Y;
+            FPSWidget.AddDummy(8f);
 
             var fpsLimitationTextNode = new TextNode
             {
-                String        = Lang.Get("BetterFPSLimitation-MaxFPS"),
-                FontSize      = 14,
-                IsVisible     = true,
-                Size          = new(150f, 25f),
-                AlignmentType = AlignmentType.Left
+                String   = Lang.Get("BetterFPSLimitation-MaxFPS"),
+                FontSize = 14,
+                Size     = new(200f, 28f),
             };
-            column.AddNode(fpsLimitationTextNode);
-            totalHeight += fpsLimitationTextNode.Size.Y;
+            FPSWidget.AddNode(fpsLimitationTextNode);
 
             FPSInputNode = new NumericInputNode
             {
-                Size      = new(200.0f, 28.0f),
-                IsVisible = true,
+                Size      = new(200f, 28f),
                 Min       = 1,
                 Max       = short.MaxValue,
                 Step      = 10,
@@ -506,59 +447,48 @@ public class BetterFPSLimitation : ModuleBase
 
             FPSInputNode.Value = module.config.Limitation;
             FPSInputNode.ValueTextNode.SetNumber(module.config.Limitation);
-            column.AddNode(FPSInputNode);
-            totalHeight += FPSInputNode.Size.Y;
-
-            var fpsDisplayColumn = new HorizontalFlexNode
+            FPSWidget.AddNode(FPSInputNode);
+            
+            var fpsDisplayColumn = new ResNode
             {
-                Width          = module.addon.Size.X,
-                IsVisible      = true,
-                AlignmentFlags = FlexFlags.FitContentHeight
+                Width  = 200f,
+                Height = 28f,
             };
 
             var fpsDisplayTextNode = new TextNode
             {
                 String        = Lang.Get("BetterFPSLimitation-CurrentFPS"),
                 FontSize      = 12,
-                IsVisible     = true,
                 Size          = new(20f, 25f),
                 AlignmentType = AlignmentType.Left
             };
-            fpsDisplayColumn.AddNode(fpsDisplayTextNode);
+            fpsDisplayTextNode.AttachNode(fpsDisplayColumn);
 
             FPSDisplayNumberNode = new TextNode
             {
                 String        = "0",
                 FontSize      = 12,
-                IsVisible     = true,
                 Size          = new(30f, 25f),
-                AlignmentType = AlignmentType.Center,
+                X             = 180f,
+                AlignmentType = AlignmentType.Right,
                 TextFlags     = TextFlags.AutoAdjustNodeSize
             };
-            fpsDisplayColumn.AddNode(FPSDisplayNumberNode);
+            FPSDisplayNumberNode.AttachNode(fpsDisplayColumn);
 
-            column.AddNode(fpsDisplayColumn);
-            totalHeight += fpsDisplayColumn.Size.Y;
+            FPSWidget.AddDummy(8f);
+            FPSWidget.AddNode(fpsDisplayColumn);
 
-            var spacer1 = new ResNode { Size = new(0, 8), IsVisible = true };
-            column.AddNode(spacer1);
-            totalHeight += spacer1.Size.Y;
+            FPSWidget.AddDummy(8f);
 
             var fastSetTextNode = new TextNode
             {
                 String        = Lang.Get("BetterFPSLimitation-FastSetFPSLimitation"),
                 FontSize      = 14,
-                IsVisible     = true,
-                Size          = new(150f, 20f),
+                Size          = new(200f, 20f),
                 AlignmentType = AlignmentType.Left
             };
-            column.AddNode(fastSetTextNode);
-            totalHeight += fastSetTextNode.Size.Y;
-
-            var spacer2 = new ResNode { Size = new(0, 8), IsVisible = true };
-            column.AddNode(spacer2);
-            totalHeight += spacer2.Size.Y;
-
+            FPSWidget.AddNode(fastSetTextNode);
+            
             var thresholdGroups = module.config.Thresholds
                                         .Select((value, index) => new { value, index })
                                         .GroupBy(x => x.index / 3)
@@ -567,11 +497,12 @@ public class BetterFPSLimitation : ModuleBase
 
             foreach (var thresholds in thresholdGroups)
             {
+                FPSWidget.AddDummy(8f);
+
                 var fpsSetTable = new HorizontalFlexNode
                 {
-                    Width          = module.addon.Size.X,
-                    IsVisible      = true,
-                    AlignmentFlags = FlexFlags.FitContentHeight
+                    Width  = 200f,
+                    Height = 28f,
                 };
 
                 foreach (var threshold in thresholds)
@@ -597,17 +528,27 @@ public class BetterFPSLimitation : ModuleBase
                     fpsSetTable.AddNode(button);
                 }
 
-                column.AddNode(fpsSetTable);
-                totalHeight += fpsSetTable.Size.Y;
-
-                var spacerFastSet = new ResNode { Size = new(0, 8), IsVisible = true };
-
-                column.AddNode(spacerFastSet);
-                totalHeight += spacerFastSet.Size.Y;
+                FPSWidget.AddNode(fpsSetTable);
             }
 
-            column.Size = new(150f, totalHeight);
-            return column;
+            FPSWidget.RecalculateLayout();
+
+            FPSWidget.AttachNode(this);
+            
+            SetWindowSize(Size.X, FPSWidget.Height + ContentStartPosition.Y + 24f);
+        }
+
+        protected override unsafe void OnUpdate
+        (
+            AtkUnitBase* addon
+        )
+        {
+            FPSDisplayNumberNode?.String = ISeStringEvaluator.Instance().EvaluateFromAddon(4002, [(int)Framework.Instance()->FrameRate]);
+            FPSDisplayNumberNode.Width   = FPSDisplayNumberNode.GetTextDrawSize(false).X;
+            FPSDisplayNumberNode.X       = 200f - 6f - FPSDisplayNumberNode.Width;
+            
+            IsEnabledNode?.IsChecked = module.config.IsEnabled;
+            FPSInputNode?.Value = module.config.Limitation;
         }
     }
 
