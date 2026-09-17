@@ -158,8 +158,11 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
     private void OnAreaMapUpdate
     (
         AddonAreaMap* addon
-    ) =>
-        mapButtonContainer?.X = addon->RootNode->GetWidth() - 24;
+    )
+    {
+        mapButtonContainer?.X = addon->RootNode->GetWidth()  - 24;
+        mapButtonContainer?.Y = addon->RootNode->GetHeight() - 52;
+    }
 
     private void OnAreaMapFinalize
     (
