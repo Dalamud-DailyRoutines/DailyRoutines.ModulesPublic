@@ -33,6 +33,8 @@ public class SoundEffectThrottler : ModuleBase
 
     private long lastPlayTick;
 
+    private readonly Throttler<uint> soundEffectThrottler = new();
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -75,7 +77,7 @@ public class SoundEffectThrottler : ModuleBase
                     return;
                 }
 
-                if (Throttler.Shared.Throttle($"SoundEffectThrottler.SoundEffect{se}", config.Throttle))
+                if (soundEffectThrottler.Throttle(se, config.Throttle))
                 {
                     PlaySoundEffectHook.Original(sound, a2, a3, a4);
                     lastPlayTick = Environment.TickCount64;

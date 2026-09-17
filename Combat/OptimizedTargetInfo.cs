@@ -47,6 +47,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
     private int currentSecondRowOffset = 41;
 
+    private static readonly Throttler<nint> AddonThrottler = new();
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -614,7 +616,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
 
             case AddonEvent.PostDraw:
                 if (!ICondition.Instance()[ConditionFlag.InCombat] ||
-                    !Throttler.Shared.Throttle($"OptimizedTargetInfo-{addon->NameString}", 10))
+                    !AddonThrottler.Throttle((nint)addon, 10))
                     return;
 
                 HandleAddonEventTargetStatus(AddonEvent.PostRequestedUpdate, addon, statusNodeStartIndex);
@@ -783,7 +785,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                 if (!addon->IsAddonAndNodesReady()) return;
 
                 if (!ICondition.Instance()[ConditionFlag.InCombat] ||
-                    !Throttler.Shared.Throttle($"OptimizedTargetInfo-{addon->NameString}", 10))
+                    !AddonThrottler.Throttle((nint)addon, 10))
                     return;
 
                 HandleAddonEventTargetInfo
@@ -908,7 +910,7 @@ public unsafe class OptimizedTargetInfo : ModuleBase
                 if (!addon->IsAddonAndNodesReady()) return;
 
                 if (!ICondition.Instance()[ConditionFlag.InCombat] ||
-                    !Throttler.Shared.Throttle($"OptimizedTargetInfo-{addon->NameString}", 10))
+                    !AddonThrottler.Throttle((nint)addon, 10))
                     return;
 
                 HandleAddonEventCastBar

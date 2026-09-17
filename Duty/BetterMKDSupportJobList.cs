@@ -332,7 +332,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             windowNode.BackgroundImageNode.Position = new(0);
             windowNode.BackgroundImageNode.Size     = new(windowNode.Width - 2f, windowNode.Height - 12f);
 
-            if (!Throttler.Shared.Throttle("OccultCrescentHelper-OthersManager-UpdateAddon", 10)) return;
+            if (!Throttler.Shared.Throttle("BetterMKDSupportJobList-UpdateAddon", 10)) return;
 
             foreach (var node in jobActionNodes.Values)
             {
