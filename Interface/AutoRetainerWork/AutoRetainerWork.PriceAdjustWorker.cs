@@ -1,9 +1,7 @@
 using System.Numerics;
-using System.Reflection;
 using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
@@ -79,6 +77,12 @@ public unsafe partial class AutoRetainerWork
 
             taskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
             taskHelper.EnterBusyAction = () => ToggleOverlayIPC.TryInvokeFunc(true);
+            taskHelper.LeaveBusyAction = () =>
+            {
+                if (RetainerSellList->IsAddonAndNodesReady())
+                    return;
+                ToggleOverlayIPC.TryInvokeFunc(false);
+            };
 
             IMarketBoard.Instance().HistoryReceived   += OnHistoryReceived;
             IMarketBoard.Instance().OfferingsReceived += OnOfferingReceived;
@@ -1487,6 +1491,9 @@ public unsafe partial class AutoRetainerWork
                     break;
                 case AddonEvent.PreFinalize:
                     isNeedToDrawMarketListWindow = false;
+
+                    if (!taskHelper.IsBusy)
+                        ToggleOverlayIPC.TryInvokeFunc(false);
 
                     isDisplayingTooltip = false;
                     AtkStage.Instance()->HideTooltip(ScreenText->Id);
