@@ -365,24 +365,42 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
     private void RenderInstanceZoneChangeButtons()
     {
-        for (var i = 1; i <= InstancesManager.Instance().GetInstancesCount(); i++)
+        var currentPosX = ImGui.GetCursorPosX();
+
+        if (ImGui.CollapsingHeader(Lang.Get("InstancedArea")))
         {
-            if (i == InstancesManager.CurrentInstance) continue;
-            if (ButtonCenterText($"InstanceChangeWidget_{i}", Lang.Get("FastObjectInteract-InstanceAreaChange", i)))
-                ChatManager.Instance().SendMessage($"/pdr insc {i}");
+            for (var i = 1; i <= InstancesManager.Instance().GetInstancesCount(); i++)
+            {
+                if (i == InstancesManager.CurrentInstance) continue;
+                if (ButtonCenterText($"InstanceChangeWidget_{i}", Lang.Get("FastObjectInteract-InstanceAreaChange", i)))
+                    ChatManager.Instance().SendMessage($"/pdr insc {i}");
+            }
         }
+        
+        ImGui.SameLine();
+        ImGui.SetCursorPosX(currentPosX);
+        ImGui.InvisibleButton("副本区", new(windowWidth, ImGui.GetFrameHeight()));
     }
 
     private void RenderWorldChangeButtons()
     {
         using var disabled = ImRaii.Disabled(isOnWorldTraveling);
 
-        foreach (var worldPair in dcWorlds)
+        var currentPosX = ImGui.GetCursorPosX();
+        
+        if (ImGui.CollapsingHeader(LuminaWrapper.GetAddonText(12510)))
         {
-            if (worldPair.Key == GameState.CurrentWorld) continue;
-            if (ButtonCenterText($"WorldTravelWidget_{worldPair.Key}", $"{worldPair.Value}{(worldPair.Key == GameState.HomeWorld ? " (★)" : "")}"))
-                ChatManager.Instance().SendMessage($"/pdr worldtravel {worldPair.Key}");
+            foreach (var worldPair in dcWorlds)
+            {
+                if (worldPair.Key == GameState.CurrentWorld) continue;
+                if (ButtonCenterText($"WorldTravelWidget_{worldPair.Key}", $"{worldPair.Value}{(worldPair.Key == GameState.HomeWorld ? " (★)" : "")}"))
+                    ChatManager.Instance().SendMessage($"/pdr worldtravel {worldPair.Key}");
+            }
         }
+        
+        ImGui.SameLine();
+        ImGui.SetCursorPosX(currentPosX);
+        ImGui.InvisibleButton("跨界传送", new(windowWidth, ImGui.GetFrameHeight()));
     }
 
     private void RenderAethernetShardButtons
@@ -390,13 +408,22 @@ public unsafe partial class FastObjectInteract : ModuleBase
         uint aetheryteID
     )
     {
-        foreach (var shard in currentAethernetShards)
-        {
-            if (shard.RowID == aetheryteID) continue;
+        var currentPosX = ImGui.GetCursorPosX();
 
-            if (ButtonCenterText($"AethernetShard_{shard.RowID}_{shard.SubIndex}", shard.Name))
-                shard.TeleportTo();
+        if (ImGui.CollapsingHeader(LuminaWrapper.GetEObjName(2000151)))
+        {
+            foreach (var shard in currentAethernetShards)
+            {
+                if (shard.RowID == aetheryteID) continue;
+
+                if (ButtonCenterText($"AethernetShard_{shard.RowID}_{shard.SubIndex}", shard.Name))
+                    shard.TeleportTo();
+            }
         }
+        
+        ImGui.SameLine();
+        ImGui.SetCursorPosX(currentPosX);
+        ImGui.InvisibleButton("城内以太之晶", new(windowWidth, ImGui.GetFrameHeight()));
     }
 
     public bool ButtonCenterText
