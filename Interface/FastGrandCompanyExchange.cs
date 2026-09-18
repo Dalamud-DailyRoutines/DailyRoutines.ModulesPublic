@@ -1,26 +1,25 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud.Attributes;
-using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
-public class FastGrandCompanyExchange : ModuleBase
+public unsafe class FastGrandCompanyExchange : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,8 +28,29 @@ public class FastGrandCompanyExchange : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    private bool IsExchanging => TaskHelper?.IsBusy ?? false;
+    private static readonly CompSig GCShopHandlerSig =
+        new("48 8B 05 ?? ?? ?? ?? 33 C9 40 84 FF 48 0F 45 C1 48 89 05");
+    private GCShopEventHandler** GCShopHandlerPtr;
 
+    private static readonly CompSig GCShopExchangeSig =
+        new("84 D2 0F 84 ?? ?? ?? ?? 4C 8B DC 49 89 7B");
+    private delegate void GCShopExchangeDelegate
+    (
+        nint                               purchaseInterface,
+        [MarshalAs(UnmanagedType.U1)] bool send
+    );
+    private GCShopExchangeDelegate? GCShopExchange;
+
+    private static readonly CompSig GCShopReloadSig =
+        new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0");
+    private delegate void GCShopReloadDelegate
+    (
+        GCShopEventHandler* handler
+    );
+    private GCShopReloadDelegate? GCShopReload;
+
+    private (uint ItemID, int Count, byte SubCategory, byte Tier) pendingExchange;
+    
     private Config config = null!;
 
     private DRFastGCExchange? addon;
@@ -40,6 +60,10 @@ public class FastGrandCompanyExchange : ModuleBase
         config = Config.Load(this) ?? new();
 
         TaskHelper ??= new();
+
+        GCShopHandlerPtr = (GCShopEventHandler**)GCShopHandlerSig.GetStatic();
+        GCShopExchange   = GCShopExchangeSig.GetDelegate<GCShopExchangeDelegate>();
+        GCShopReload     = GCShopReloadSig.GetDelegate<GCShopReloadDelegate>();
 
         addon ??= new(this)
         {
@@ -99,17 +123,26 @@ public class FastGrandCompanyExchange : ModuleBase
     )
     {
         TaskHelper.DelayNext(500);
-        TaskHelper.Enqueue(() => EnqueueByNameInternal(itemName, itemCount));
+        TaskHelper.Enqueue(() => PrepareExchange(itemName, itemCount), "军票兑换准备");
+        TaskHelper.Enqueue
+        (
+            ExecuteExchange,
+            "军票兑换",
+            timeoutMS: 10000,
+            timeoutBehaviour: TaskAbortBehaviour.AbortCurrent
+        );
         return true;
     }
 
-    private unsafe bool EnqueueByNameInternal
+    private bool PrepareExchange
     (
         string itemName,
         int    itemCount = -1
     )
     {
-        if (!GrandCompanyExchange->IsAddonAndNodesReady()) return false;
+        pendingExchange = default;
+
+        if (GCShopHandlerPtr == null || GCShopExchange == null || GCShopReload == null) return true;
 
         if (itemName == "default")
         {
@@ -152,97 +185,105 @@ public class FastGrandCompanyExchange : ModuleBase
 
         if (exchangeCount == 0)
         {
-            // 不管怎么说 Delay 一下方便其他模块控制
             TaskHelper.DelayNext(100);
             return true;
         }
 
-        var categoryData = LuminaGetter.GetRow<GCScripShopCategory>(result.RowId)!.Value;
-        var tier         = categoryData.Tier;
-        var subCategory  = categoryData.SubCategory;
-
-        if (GrandCompanyExchange->AtkValues[2].UInt != (uint)tier - 1)
-        {
-            TaskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (!GrandCompanyExchange->IsAddonAndNodesReady()) return false;
-                    GrandCompanyExchange->Callback(1, tier - 1);
-                    return true;
-                },
-                "点击军衔类别"
-            );
-        }
-
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (!GrandCompanyExchange->IsAddonAndNodesReady()) return false;
-                GrandCompanyExchange->Callback(2, (int)subCategory);
-                return true;
-            },
-            "点击道具类别"
-        );
-
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (!GrandCompanyExchange->IsAddonAndNodesReady()) return false;
-
-                var listNode = GrandCompanyExchange->GetComponentListById(57);
-                if (listNode == null) return false;
-
-                for (var i = 0; i < 40; i++)
-                    try
-                    {
-                        var offset   = 17 + i;
-                        var atkValue = GrandCompanyExchange->AtkValues[offset];
-                        if (atkValue.Type == 0 || !atkValue.String.HasValue) continue;
-
-                        var name = atkValue.String.ExtractText();
-                        if (string.IsNullOrWhiteSpace(name) || name != result.Item.Value.Name.ToString()) continue;
-
-                        AgentId.GrandCompanyExchange.SendEvent(0, 0, i, exchangeCount, 0, true, false);
-
-                        TaskHelper.Enqueue
-                        (
-                            () => SelectYesno != null,
-                            timeoutBehaviour: TaskAbortBehaviour.AbortCurrent,
-                            timeoutMS: 2000
-                        );
-                        TaskHelper.Enqueue
-                        (
-                            () =>
-                            {
-                                if (!GrandCompanyExchange->IsAddonAndNodesReady()) return false;
-                                if (SelectYesno == null) return true;
-
-                                AddonSelectYesnoEvent.ClickYes();
-                                return false;
-                            },
-                            timeoutBehaviour: TaskAbortBehaviour.AbortCurrent,
-                            timeoutMS: 2000
-                        );
-
-                        break;
-                    }
-                    catch
-                    {
-                        // ignored
-                    }
-
-                return true;
-            },
-            "点击道具"
-        );
-
+        var categoryData = LuminaGetter.GetRowOrDefault<GCScripShopCategory>(result.RowId);
+        pendingExchange = (result.Item.RowId, exchangeCount, (byte)categoryData.SubCategory, (byte)(categoryData.Tier - 1));
         return true;
     }
 
-    private unsafe class DRFastGCExchange
+    private bool ExecuteExchange()
+    {
+        if (pendingExchange.Count <= 0) return true;
+
+        var handler = *GCShopHandlerPtr;
+        if (handler == null) return true;
+
+        var displayIndex = FindDisplayIndex(handler, pendingExchange.ItemID);
+
+        if (displayIndex >= 0)
+        {
+            handler->SelectedDisplayIndex = (uint)displayIndex;
+            handler->ExchangeCount        = (uint)pendingExchange.Count;
+            GCShopExchange((nint)(&handler->PurchaseInterface), true);
+            pendingExchange = default;
+            return true;
+        }
+
+        if (handler->SubCategory != pendingExchange.SubCategory ||
+            handler->Tier        != pendingExchange.Tier)
+        {
+            handler->SubCategory = pendingExchange.SubCategory;
+            handler->Tier        = pendingExchange.Tier;
+            GCShopReload(handler);
+        }
+
+        return false;
+    }
+
+    private static int FindDisplayIndex
+    (
+        GCShopEventHandler* handler,
+        uint                itemID
+    )
+    {
+        var slots = &handler->Slots;
+
+        for (var i = 0; i < SLOT_COUNT; i++)
+        {
+            var slot = slots + i;
+            if (slot->IsValid == 0) break;
+            if (slot->ItemID == itemID && slot->CostGCSeals > 0 && slot->DisplayIndex != uint.MaxValue)
+                return (int)slot->DisplayIndex;
+        }
+
+        return -1;
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 15712)]
+    private struct GCShopEventHandler
+    {
+        [FieldOffset(448)]
+        public nint PurchaseInterface;
+
+        [FieldOffset(456)]
+        public GCShopItemSlot Slots;
+
+        [FieldOffset(15656)]
+        public byte GrandCompany;
+
+        [FieldOffset(15657)]
+        public byte SubCategory;
+
+        [FieldOffset(15658)]
+        public byte Tier;
+
+        [FieldOffset(15700)]
+        public uint SelectedDisplayIndex;
+
+        [FieldOffset(15704)]
+        public uint ExchangeCount;
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 304)]
+    private struct GCShopItemSlot
+    {
+        [FieldOffset(4)]
+        public uint ItemID;
+
+        [FieldOffset(12)]
+        public uint CostGCSeals;
+
+        [FieldOffset(16)]
+        public uint IsValid;
+
+        [FieldOffset(20)]
+        public uint DisplayIndex;
+    }
+
+    private class DRFastGCExchange
     (
         FastGrandCompanyExchange instance
     ) : AttachedAddon("GrandCompanyExchange")
@@ -383,7 +424,7 @@ public class FastGrandCompanyExchange : ModuleBase
     #region IPC
 
     [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.IsBusy")]
-    private bool IsCurrentlyBusy => IsExchanging;
+    private bool IsCurrentlyBusy => TaskHelper?.IsBusy ?? false;
 
     [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.EnqueueByName")]
     private bool EnqueueByNameIPC
@@ -397,6 +438,8 @@ public class FastGrandCompanyExchange : ModuleBase
     #region 常量
 
     private const string COMMAND = "gce";
+
+    private const int SLOT_COUNT = 50;
 
     #endregion
 }
