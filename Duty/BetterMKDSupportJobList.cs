@@ -24,7 +24,6 @@ using Lumina.Excel.Sheets;
 using OmenTools.Info.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 using Action = Lumina.Excel.Sheets.Action;
 using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
 using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
@@ -111,9 +110,9 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
         ImGui.TextColored(KnownColor.LightSkyBlue.ToUInt(), Lang.Get("Command"));
         using (ImRaii.PushIndent())
             ImGui.TextUnformatted($"/pdr {COMMAND} → Lang.Get(\"BetterMKDSupportJobList-CommandHelp\")");
-        
+
         ImGui.NewLine();
-        
+
         if (ImGui.CollapsingHeader(Lang.Get("BetterMKDSupportJobList-ModifySupportJobOrder")))
         {
             if (ImGui.SmallButton(Lang.Get("Save")))
@@ -243,7 +242,10 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
         private const float ROW_SPACING        = 21f;
         private const float MIN_HEIGHT         = 450f;
         private const float BOTTOM_PADDING     = 30f;
-        private const float LERP_SPEED         = 0.2f;
+
+        // 窗口未聚焦与已聚焦动画的标签编号, 与原生 Window 组件一致
+        private const int LABEL_UNFOCUSED = 17;
+        private const int LABEL_FOCUSED   = 18;
 
         private readonly Dictionary<uint, TextureButtonNode> supportJobButtons = [];
 
@@ -278,18 +280,20 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             foreach (var data in CrescentSupportJob.AllJobs)
                 supportJobs.Add((data.GetData(), data));
 
-            supportJobs = supportJobs
-                          .OrderBy
-                          (x =>
-                              {
-                                  var index = module.config.AddonSupportJobOrder.IndexOf(x.Data.RowId);
-                                  return index < 0 ?
-                                             int.MaxValue :
-                                             index;
-                              }
-                          )
-                          .ThenBy(x => x.Data.RowId)
-                          .ToList();
+            supportJobs =
+            [
+                .. supportJobs
+                   .OrderBy
+                   (x =>
+                       {
+                           var index = module.config.AddonSupportJobOrder.IndexOf(x.Data.RowId);
+                           return index < 0 ?
+                                      int.MaxValue :
+                                      index;
+                       }
+                   )
+                   .ThenBy(x => x.Data.RowId)
+            ];
 
             var rowCount = Math.Max(1, (supportJobs.Count + MAX_ITEMS_PER_ROW - 1) / MAX_ITEMS_PER_ROW);
             var contentHeight = HEADER_HEIGHT                             +
@@ -301,6 +305,16 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             PressedButtonOnce = false;
             SetWindowSize(WINDOW_WIDTH, windowHeight);
             RootNode.Size = Size + new Vector2(ACTION_PANEL_WIDTH, 0);
+
+            RootNode.AddTimeline
+            (
+                new TimelineBuilder()
+                    .BeginFrameSet(1, 19)
+                    .AddLabelPair(1,  9,  LABEL_UNFOCUSED)
+                    .AddLabelPair(10, 19, LABEL_FOCUSED)
+                    .EndFrameSet()
+                    .Build()
+            );
 
             var windowNode = (WindowNode)WindowNode;
 
@@ -329,82 +343,20 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 return;
             }
 
-            var windowNode = (WindowNode)WindowNode;
+            var focused = ((WindowNode)WindowNode).Focused;
+            if (focused == isFocused) return;
 
-            isFocused                               = windowNode.BorderTextureNode.IsVisible;
-            windowNode.BackgroundImageNode.Position = new(0);
-            windowNode.BackgroundImageNode.Size     = new(windowNode.Width - 2f, windowNode.Height - 12f);
-
-            if (!Throttler.Shared.Throttle("BetterMKDSupportJobList-UpdateAddon", 10)) return;
+            isFocused = focused;
+            RootNode.Timeline?.PlayAnimation
+            (
+                isFocused ?
+                    LABEL_FOCUSED :
+                    LABEL_UNFOCUSED,
+                true
+            );
 
             foreach (var node in jobActionNodes.Values)
-            {
-                if (!node.IsVisible) continue;
-
-                if (node.BorderNode != null)
-                {
-                    Vector3 targetColor = isFocused ?
-                                              new(0.19607843f) :
-                                              new(-0.19607843f);
-                    node.BorderNode.AddColor = Vector3.Lerp(node.BorderNode.AddColor, targetColor, LERP_SPEED);
-                }
-
-                if (node.BackgroundNode != null)
-                {
-                    var targetAlpha = isFocused ?
-                                          0.9f :
-                                          0.7f;
-                    node.BackgroundNode.Alpha = float.Lerp(node.BackgroundNode.Alpha / 255f, targetAlpha, LERP_SPEED);
-                }
-            }
-
-            if (borderNode != null)
-            {
-                Vector3 targetColor = isFocused ?
-                                          new(0.19607843f) :
-                                          new(-0.19607843f);
-                borderNode.AddColor = Vector3.Lerp(borderNode.AddColor, targetColor, LERP_SPEED);
-            }
-
-            if (backgroundNode != null)
-            {
-                var targetAlpha = isFocused ?
-                                      0.9f :
-                                      0.7f;
-                backgroundNode.Alpha = float.Lerp(backgroundNode.Alpha / 255f, targetAlpha, LERP_SPEED);
-            }
-
-            if (moonPatternNode != null)
-            {
-                var targetAlpha = isFocused ?
-                                      0.9f :
-                                      0.7f;
-                moonPatternNode.Alpha = float.Lerp(moonPatternNode.Alpha / 255f, targetAlpha, LERP_SPEED);
-            }
-
-            if (patternLeftNode != null)
-            {
-                var targetAlpha = isFocused ?
-                                      0.3f :
-                                      0.2f;
-                patternLeftNode.Alpha = float.Lerp(patternLeftNode.Alpha / 255f, targetAlpha, LERP_SPEED);
-            }
-
-            if (patternLeftCornerNode != null)
-            {
-                var targetAlpha = isFocused ?
-                                      0.3f :
-                                      0.2f;
-                patternLeftCornerNode.Alpha = float.Lerp(patternLeftCornerNode.Alpha / 255f, targetAlpha, LERP_SPEED);
-            }
-
-            if (patternRightNode != null)
-            {
-                var targetAlpha = isFocused ?
-                                      0.3f :
-                                      0.2f;
-                patternRightNode.Alpha = float.Lerp(patternRightNode.Alpha / 255f, targetAlpha, LERP_SPEED);
-            }
+                node.OnFocusChanged(isFocused);
         }
 
         private void CreateJobContainer
@@ -474,11 +426,11 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                         if (ICondition.Instance()[ConditionFlag.InCombat] &&
                             CrescentSupportJob.Freelancer.CurrentLevel < 24)
                             return;
-                        
+
                         if (presetJob.IsThisJob() ||
                             presetJob.CurrentLevel == 0)
                             return;
-                        
+
                         presetJob.ChangeTo();
                         Close();
                     },
@@ -745,6 +697,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 Position           = new(-2),
                 Alpha              = 0.9f
             };
+            backgroundNode.AddTimeline(CreateFocusAlphaTimeline(178, 229));
             backgroundNode.AttachNode(this);
 
             headerBackgroundNode = new()
@@ -782,6 +735,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 Position           = new(WINDOW_WIDTH - 190f, Size.Y - 205f),
                 Alpha              = 0.9f
             };
+            moonPatternNode.AddTimeline(CreateFocusAlphaTimeline(178, 229));
             moonPatternNode.AttachNode(this);
 
             patternLeftNode = new()
@@ -794,6 +748,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 Position           = new(0, 40),
                 Alpha              = 0.3f
             };
+            patternLeftNode.AddTimeline(CreateFocusAlphaTimeline(51, 76));
             patternLeftNode.AttachNode(this);
 
             patternLeftCornerNode = new()
@@ -806,6 +761,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 Position           = new(0, Size.Y - 190f),
                 Alpha              = 0.3f
             };
+            patternLeftCornerNode.AddTimeline(CreateFocusAlphaTimeline(51, 76));
             patternLeftCornerNode.AttachNode(this);
 
             patternRightNode = new SimpleNineGridNode
@@ -818,6 +774,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 Position           = new(WINDOW_WIDTH - 240f, 5),
                 Alpha              = 0.3f
             };
+            patternRightNode.AddTimeline(CreateFocusAlphaTimeline(51, 76));
             patternRightNode.AttachNode(this);
 
             var anotherWindowTitleNode = new TextNode
@@ -848,8 +805,39 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 Offsets            = new(24),
                 AddColor           = new(0.19607843f)
             };
+            borderNode.AddTimeline(CreateFocusAddColorTimeline(-50, 50));
             borderNode.AttachNode(this);
         }
+
+        private static Timeline CreateFocusAlphaTimeline
+        (
+            byte unfocusedAlpha,
+            byte focusedAlpha
+        ) =>
+            new TimelineBuilder()
+                .BeginFrameSet(1, 9)
+                .AddFrame(1, alpha: unfocusedAlpha)
+                .EndFrameSet()
+                .BeginFrameSet(10, 19)
+                .AddFrame(10, alpha: unfocusedAlpha)
+                .AddFrame(13, alpha: focusedAlpha)
+                .EndFrameSet()
+                .Build();
+
+        private static Timeline CreateFocusAddColorTimeline
+        (
+            int unfocusedColor,
+            int focusedColor
+        ) =>
+            new TimelineBuilder()
+                .BeginFrameSet(1, 9)
+                .AddFrame(1, addColor: new Vector3(unfocusedColor))
+                .EndFrameSet()
+                .BeginFrameSet(10, 19)
+                .AddFrame(10, addColor: new Vector3(unfocusedColor))
+                .AddFrame(13, addColor: new Vector3(focusedColor))
+                .EndFrameSet()
+                .Build();
 
         private void CreateWindowControll()
         {
@@ -907,8 +895,14 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
 
                 for (var index = 0; index < rowButtons.Count; index++)
                 {
-                    rowButtons[index].NavLeft  = rowStart + (index == 0 ? rowButtons.Count : index);
-                    rowButtons[index].NavRight = rowStart + (index == rowButtons.Count - 1 ? 1 : index + 2);
+                    rowButtons[index].NavLeft = rowStart +
+                                                (index == 0 ?
+                                                     rowButtons.Count :
+                                                     index);
+                    rowButtons[index].NavRight = rowStart +
+                                                 (index == rowButtons.Count - 1 ?
+                                                      1 :
+                                                      index + 2);
                 }
             }
 
@@ -925,9 +919,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     actionContainer.CloseButtonNode.NavIndex   = 0;
 
                     foreach (var actionNode in actionContainer.ActionDragDropNodes)
-                    {
                         actionNode.NavIndex = 0;
-                    }
 
                     continue;
                 }
@@ -937,16 +929,18 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 navigationNodes.Add(actionContainer.CloseButtonNode);
 
                 foreach (var actionNode in actionContainer.ActionDragDropNodes)
-                {
                     navigationNodes.Add(actionNode);
-                }
             }
 
             for (var index = 0; index < navigationNodes.Count; index++)
             {
                 navigationNodes[index].NavIndex = index + 1;
-                navigationNodes[index].NavUp    = index == 0 ? navigationNodes.Count : index;
-                navigationNodes[index].NavDown  = index == navigationNodes.Count - 1 ? 1 : index + 2;
+                navigationNodes[index].NavUp = index == 0 ?
+                                                   navigationNodes.Count :
+                                                   index;
+                navigationNodes[index].NavDown = index == navigationNodes.Count - 1 ?
+                                                     1 :
+                                                     index + 2;
             }
 
             return navigationNodes[0];
@@ -986,6 +980,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                                 0.9f :
                                 0.6f
                 };
+                BackgroundNode.AddTimeline(CreateFocusAlphaTimeline(153, 229));
                 BackgroundNode.AttachNode(this);
 
                 HeaderBackgroundNode = new()
@@ -1027,6 +1022,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                                    new(0.19607843f) :
                                    new(-0.19607843f)
                 };
+                BorderNode.AddTimeline(CreateFocusAddColorTimeline(-50, 50));
                 BorderNode.AttachNode(this);
 
                 ActionListNode = new VerticalListNode
@@ -1171,7 +1167,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     TextureSize        = new(28),
                     OnClick = () =>
                     {
-                        IsVisible                                      = false;
+                        IsVisible                                = false;
                         module.mkdJobListAddon.PressedButtonOnce = false;
 
                         module.mkdJobListAddon.WindowNode.CollisionNode.Size =
@@ -1279,7 +1275,31 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 IsRealActionNode.Label.TextOutlineColor =  ColorHelper.GetColor(502);
 
                 IsRealActionNode.AttachNode(this);
+
+                AddTimeline
+                (
+                    new TimelineBuilder()
+                        .BeginFrameSet(1, 19)
+                        .AddLabelPair(1,  9,  LABEL_UNFOCUSED)
+                        .AddLabelPair(10, 19, LABEL_FOCUSED)
+                        .EndFrameSet()
+                        .Build()
+                );
+
+                OnFocusChanged(isCurrentFoucused);
             }
+
+            public void OnFocusChanged
+            (
+                bool isFocusedNow
+            ) =>
+                Timeline?.PlayAnimation
+                (
+                    isFocusedNow ?
+                        LABEL_FOCUSED :
+                        LABEL_UNFOCUSED,
+                    true
+                );
 
             public class SupportActionNode : DragDropNode
             {
@@ -1295,12 +1315,12 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
 
                 public SupportActionNode
                 (
-                    AddonDRMKDJobList addon,
-                    CrescentSupportJob         job,
-                    SupportJobActionListNode   list,
-                    uint                       actionID,
-                    int                        actionIndex,
-                    bool                       isRealAction = false
+                    AddonDRMKDJobList        addon,
+                    CrescentSupportJob       job,
+                    SupportJobActionListNode list,
+                    uint                     actionID,
+                    int                      actionIndex,
+                    bool                     isRealAction = false
                 )
                 {
                     Job   = job;
@@ -1336,9 +1356,9 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     Toggle(IsRealAction);
                 }
 
-                public CrescentSupportJob         Job   { get; private set; }
-                public SupportJobActionListNode   List  { get; private set; }
-                public AddonDRMKDJobList Addon { get; private set; }
+                public CrescentSupportJob       Job   { get; private set; }
+                public SupportJobActionListNode List  { get; private set; }
+                public AddonDRMKDJobList        Addon { get; private set; }
 
                 public bool IsRealAction { get; private set; }
                 public int  ActionIndex  { get; private set; }
