@@ -14,6 +14,7 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
+using KamiToolKit.BaseTypes.ComponentNode;
 using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
@@ -313,6 +314,8 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             CreateJobContainer(supportJobs, rowCount);
 
             CreateWindowControll();
+
+            addon->FocusNode = ApplyControllerNavigation();
         }
 
         protected override void OnUpdate
@@ -621,16 +624,8 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     );
                 }
 
-                iconButton.AddEvent
-                (
-                    AtkEventType.MouseOver,
-                    () =>
-                    {
-                        if (PressedButtonOnce) return;
-
-                        ShowJobActions();
-                    }
-                );
+                iconButton.AddEvent(AtkEventType.MouseOver,     ShowJobActionsOnHover);
+                iconButton.AddEvent(AtkEventType.InputReceived, ShowJobActionsOnHover);
 
                 iconButton.AddEvent
                 (
@@ -710,6 +705,13 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 rows[rowIndex].AddNode(iconButton);
                 continue;
 
+                void ShowJobActionsOnHover()
+                {
+                    if (PressedButtonOnce) return;
+
+                    ShowJobActions();
+                }
+
                 void ShowJobActions()
                 {
                     foreach (var (jobID, node) in jobActionNodes)
@@ -721,6 +723,8 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
 
                     WindowNode.CollisionNode.Size = WindowNode.CollisionNode.Size with { X = EXPANDED_WIDTH };
                     WindowNode.Size               = WindowNode.Size with { X = EXPANDED_WIDTH };
+
+                    ApplyControllerNavigation();
                 }
             }
 
@@ -888,6 +892,64 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     .Build()
             );
             closeButtonNode.AttachNode(this);
+        }
+
+        private ComponentNode ApplyControllerNavigation()
+        {
+            List<ComponentNode> navigationNodes = [];
+
+            foreach (var row in jobContainer.Nodes.OfType<HorizontalFlexNode>())
+            {
+                var rowButtons = row.Nodes.OfType<TextureButtonNode>().ToList();
+                var rowStart   = navigationNodes.Count;
+
+                navigationNodes.AddRange(rowButtons);
+
+                for (var index = 0; index < rowButtons.Count; index++)
+                {
+                    rowButtons[index].NavLeft  = rowStart + (index == 0 ? rowButtons.Count : index);
+                    rowButtons[index].NavRight = rowStart + (index == rowButtons.Count - 1 ? 1 : index + 2);
+                }
+            }
+
+            navigationNodes.Add(closeButtonNode);
+
+            foreach (var actionContainer in jobActionNodes.Values)
+            {
+                if (actionContainer.BackgroundNode == null) continue;
+
+                if (!actionContainer.IsVisible)
+                {
+                    actionContainer.IsRealActionNode.NavIndex  = 0;
+                    actionContainer.SettingButtonNode.NavIndex = 0;
+                    actionContainer.CloseButtonNode.NavIndex   = 0;
+
+                    foreach (var actionNode in actionContainer.ActionDragDropNodes)
+                    {
+                        actionNode.NavIndex = 0;
+                    }
+
+                    continue;
+                }
+
+                navigationNodes.Add(actionContainer.IsRealActionNode);
+                navigationNodes.Add(actionContainer.SettingButtonNode);
+                navigationNodes.Add(actionContainer.CloseButtonNode);
+
+                foreach (var actionNode in actionContainer.ActionDragDropNodes)
+                {
+                    navigationNodes.Add(actionNode);
+                }
+            }
+
+            for (var index = 0; index < navigationNodes.Count; index++)
+            {
+                navigationNodes[index].NavIndex = index + 1;
+                navigationNodes[index].NavUp    = index == 0 ? navigationNodes.Count : index;
+                navigationNodes[index].NavDown  = index == navigationNodes.Count - 1 ? 1 : index + 2;
+            }
+
+            return navigationNodes[0];
         }
 
         private class SupportJobActionListNode
@@ -1116,6 +1178,8 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                             module.mkdJobListAddon.WindowNode.CollisionNode.Size with { X = 500 };
                         module.mkdJobListAddon.WindowNode.Size =
                             module.mkdJobListAddon.WindowNode.Size with { X = 500 };
+
+                        addon.ApplyControllerNavigation();
                     }
                 };
 
