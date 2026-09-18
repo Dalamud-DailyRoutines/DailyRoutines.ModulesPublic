@@ -1,7 +1,8 @@
-﻿using System.Numerics;
+using System.Numerics;
 using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.KamiToolKit.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.BaseTypes.ComponentNode;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 
@@ -61,6 +62,8 @@ public unsafe partial class AutoRetainerWork
             treeListNode.AttachNode(addon);
 
             treeListNode.RefreshLayout();
+
+            ApplyControllerNavigation(addon);
         }
 
         protected override bool CanCloseHostAddon
@@ -69,5 +72,64 @@ public unsafe partial class AutoRetainerWork
         ) => false;
 
         protected override bool CanOpenAddon => !module.IsAnyWorkerBusy();
+
+        private void ApplyControllerNavigation
+        (
+            AtkUnitBase* addon
+        )
+        {
+            if (treeListNode == null) return;
+
+            List<ComponentNode> navigationNodes = [];
+
+            foreach (var categoryNode in treeListNode.CategoryNodes)
+            {
+                var headerNode = new NavFocusNode
+                {
+                    Position     = new(2f, 14f),
+                    OnSelected   = () => categoryNode.IsCollapsed = !categoryNode.IsCollapsed,
+                    OnHoverStart = () => categoryNode.Timeline?.PlayAnimation(categoryNode.IsCollapsed ? 2 : 9),
+                    OnHoverEnd   = () => categoryNode.Timeline?.PlayAnimation(categoryNode.IsCollapsed ? 1 : 8)
+                };
+                headerNode.AttachNode(categoryNode);
+                navigationNodes.Add(headerNode);
+
+                foreach (var contentNode in categoryNode.Children.OfType<VerticalListNode>().SelectMany(x => x.Nodes))
+                {
+                    switch (contentNode)
+                    {
+                        case CheckboxNode checkboxNode:
+                            navigationNodes.Add(checkboxNode);
+                            break;
+                        case HorizontalFlexNode flexNode:
+                        {
+                            var buttonNodes = flexNode.Nodes.OfType<TextButtonNode>().ToList();
+                            var rowStart    = navigationNodes.Count;
+
+                            navigationNodes.AddRange(buttonNodes);
+
+                            for (var index = 0; index < buttonNodes.Count; index++)
+                            {
+                                buttonNodes[index].NavLeft  = rowStart + (index == 0 ? buttonNodes.Count : index);
+                                buttonNodes[index].NavRight = rowStart + (index == buttonNodes.Count - 1 ? 1 : index + 2);
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (navigationNodes.Count == 0) return;
+
+            for (var index = 0; index < navigationNodes.Count; index++)
+            {
+                navigationNodes[index].NavIndex = index + 1;
+                navigationNodes[index].NavUp    = index == 0 ? navigationNodes.Count : index;
+                navigationNodes[index].NavDown  = index == navigationNodes.Count - 1 ? 1 : index + 2;
+            }
+
+            addon->FocusNode = navigationNodes[0];
+        }
     }
 }
