@@ -479,7 +479,6 @@ public unsafe partial class BetterTeleport
                 iconStr = HomeChar;
                 break;
             case AetheryteRecordState.Free:
-            case AetheryteRecordState.FreePS:
                 iconStr = FreeChar;
                 break;
             case AetheryteRecordState.Favorite:

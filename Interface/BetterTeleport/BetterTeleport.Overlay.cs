@@ -362,12 +362,7 @@ public unsafe partial class BetterTeleport
         }
 
         var freePoints = AetheryteRecordManager.Instance().AllRecords
-                                               .Where
-                                               (x => x.State is
-                                                         AetheryteRecordState.Free or
-                                                         AetheryteRecordState.FreePS or
-                                                         AetheryteRecordState.FreeNSO
-                                               )
+                                               .Where(x => x.State is AetheryteRecordState.Free)
                                                .ToList();
         var freeCountAdded = 0;
 
