@@ -1,4 +1,4 @@
-﻿using System.Collections.Frozen;
+using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.KamiToolKit.Addons;
@@ -16,6 +16,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.BaseTypes.ComponentNode;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
@@ -280,7 +281,9 @@ public unsafe class AutoExpertDelivery : ModuleBase
             {
                 IsVisible = true,
                 Size      = new(275, 28),
-                Position  = ContentStartPosition
+                Position  = ContentStartPosition,
+                NavIndex  = 1,
+                NavDown   = 3
             };
 
             var tabContentPosition = tabNode.Position + new Vector2(0, tabNode.Size.Y + 5f);
@@ -292,6 +295,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                 {
                     ControlTabLayout.IsVisible = true;
                     SettingTabLayout.IsVisible = false;
+                    ApplyControllerNavigation(tabNode);
                 }
             );
 
@@ -302,6 +306,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                 {
                     ControlTabLayout.IsVisible = false;
                     SettingTabLayout.IsVisible = true;
+                    ApplyControllerNavigation(tabNode);
                 }
             );
 
@@ -487,6 +492,47 @@ public unsafe class AutoExpertDelivery : ModuleBase
             }
 
             SettingTabLayout.AttachNode(this);
+
+            ApplyControllerNavigation(tabNode);
+
+            addon->FocusNode = tabNode.TabButtons[0];
+        }
+
+        private void ApplyControllerNavigation
+        (
+            TabBarNode tabBarNode
+        )
+        {
+            var activeLayout = ControlTabLayout.IsVisible ? ControlTabLayout : SettingTabLayout;
+            var idleLayout   = ControlTabLayout.IsVisible ? SettingTabLayout : ControlTabLayout;
+
+            foreach (var node in idleLayout.Nodes.OfType<ComponentNode>())
+            {
+                node.NavIndex = 0;
+            }
+
+            List<ComponentNode> navigationNodes = [];
+            navigationNodes.AddRange(tabBarNode.TabButtons);
+
+            foreach (var node in activeLayout.Nodes)
+            {
+                switch (node)
+                {
+                    case TextButtonNode buttonNode:
+                        navigationNodes.Add(buttonNode);
+                        break;
+                    case CheckboxNode checkboxNode:
+                        navigationNodes.Add(checkboxNode);
+                        break;
+                }
+            }
+
+            for (var index = 0; index < navigationNodes.Count; index++)
+            {
+                navigationNodes[index].NavIndex = index + 1;
+                navigationNodes[index].NavUp    = index == 0 ? navigationNodes.Count : index;
+                navigationNodes[index].NavDown  = index == navigationNodes.Count - 1 ? 1 : index + 2;
+            }
         }
 
         protected override bool CanCloseHostAddon
