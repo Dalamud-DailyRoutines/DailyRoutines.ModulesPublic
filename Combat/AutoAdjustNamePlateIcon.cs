@@ -20,9 +20,7 @@ public unsafe class AutoAdjustNamePlateIcon : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Marsh"]
     };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     private static readonly CompSig AtkUldManagerUpdateFromParentNodeSig = new("48 89 5C 24 ?? 55 56 57 48 83 EC ?? 41 0F B6 F1");
     private delegate void AtkUldManagerUpdateFromParentNodeDelegate
     (
