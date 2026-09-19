@@ -9,7 +9,7 @@ using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
-public class AutoVeryEasyQuestBattle : ModuleBase
+public unsafe class AutoVeryEasyQuestBattle : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
