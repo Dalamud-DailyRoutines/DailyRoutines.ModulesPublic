@@ -1,8 +1,11 @@
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using OmenTools.Info.Game.Enums;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
+using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
@@ -17,13 +20,40 @@ public class AutoVeryEasyQuestBattle : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
 
-    protected override void Init() =>
+    private static readonly CompSig HandleStartOrEndCommandSig =
+        new("4C 8B DC 55 57 41 56 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B F9");
+    private delegate void HandleStartOrEndCommandDelegate
+    (
+        QuestEventHandler* thisPtr,
+        uint               command
+    );
+    private Hook<HandleStartOrEndCommandDelegate>? HandleStartOrEndCommandHook;
+    
+    private bool needToNotifyThisTime;
+
+    protected override void Init()
+    {
+        HandleStartOrEndCommandHook = HandleStartOrEndCommandSig.GetHook<HandleStartOrEndCommandDelegate>(HandleStartOrEndCommandDetour);
+        HandleStartOrEndCommandHook.Enable();
+        
         ExecuteCommandManager.Instance().RegPre(OnPreUseCommand);
+    }
 
     protected override void Uninit() =>
         ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
+    
+    private unsafe void HandleStartOrEndCommandDetour
+    (
+        QuestEventHandler* thisPtr,
+        uint               command
+    )
+    {
+        needToNotifyThisTime = true;
+        HandleStartOrEndCommandHook.Original(thisPtr, command);
+        needToNotifyThisTime = false;
+    }
 
-    private static void OnPreUseCommand
+    private void OnPreUseCommand
     (
         ref bool               isPrevented,
         ref ExecuteCommandFlag command,
@@ -35,12 +65,9 @@ public class AutoVeryEasyQuestBattle : ModuleBase
     {
         if (command != ExecuteCommandFlag.StartSoloQuestBattle) return;
 
-        // 客户端会发送两次该命令: 一次为难度数据设置, 一次是让服务端响应确认, 后者参数全为 0
-        var isRequest = (param1 | param2) != 0;
-
         param1 = 2;
 
-        if (!isRequest) return;
+        if (!needToNotifyThisTime) return;
 
         var message = Lang.Get("AutoVeryEasyQuestBattle-Notification");
         
