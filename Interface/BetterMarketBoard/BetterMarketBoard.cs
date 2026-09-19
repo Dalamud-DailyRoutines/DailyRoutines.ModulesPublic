@@ -21,7 +21,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         Category            = ModuleCategory.Interface,
         Author              = ["Fragile"],
         ModulesPrerequisite = ["FastWorldTravel", "AutoShowItemNPCShopInfo"],
-        ModulesPair    = ["AutoRefreshMarketSearchResult"],
+        ModulesPair         = ["AutoRefreshMarketSearchResult"],
         PreviewImageURL =
         [
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterMarketBoard/preview-1.png"
@@ -44,12 +44,13 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     private readonly Dictionary<uint, List<Item>> searchCategoryToItems = [];
 
     private readonly Dictionary<uint, uint> itemIDToPayloadID = [];
-    
+
     private uint lastWorldID;
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
+
         if (config is { CurrentMonitorItem: not null })
         {
             var item = config.CurrentMonitorItem;
@@ -65,7 +66,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
                 config.Save(this);
             }
         }
-        
+
         if (config.AllWorlds is { Count: > 0 })
             allWorlds = config.AllWorlds;
 
@@ -77,7 +78,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
             MaximumSize = new(float.MaxValue),
             MinimumSize = ScaledVector2(300f, 200f)
         };
-        
+
         var itemsWithCategory =
             LuminaGetter.Get<Item>()
                         .Where(x => !string.IsNullOrEmpty(x.Name.ToString()) && x.ItemSearchCategory.RowId > 0)
@@ -89,10 +90,10 @@ public unsafe partial class BetterMarketBoard : ModuleBase
                         );
         foreach (var (catID, itemList) in itemsWithCategory)
             searchCategoryToItems[catID] = itemList;
-        
+
         provider        = new(this);
         monitorProvider = new(this);
-        
+
         provider.AnchorWorld();
         lastWorldID = GameState.CurrentWorld;
 
@@ -154,7 +155,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         );
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterMarketBoard-CommandHelp") });
-        
+
         if (IsAbleToSearchMarket()                                              &&
             InfoProxy               != null                                     &&
             InfoProxy->SearchItemId != 0                                        &&
@@ -235,7 +236,8 @@ public unsafe partial class BetterMarketBoard : ModuleBase
             return;
 
         var worldID = GameState.CurrentWorld;
-        if (worldID != lastWorldID )
+
+        if (worldID != lastWorldID)
         {
             lastWorldID = worldID;
 
@@ -253,7 +255,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     {
         if (!IsAbleToSearchMarket())
             return;
-        
+
         monitorProvider.Update();
     }
 
@@ -287,7 +289,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     }
 
     #endregion
-    
+
     private class SearchInMarketMenu
     (
         BetterMarketBoard module
@@ -300,7 +302,8 @@ public unsafe partial class BetterMarketBoard : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.TargetItemID == 0 ||
+            if (args.TargetItemID == 0      ||
+                !args.TargetItemRow.IsValid ||
                 args.TargetItemRow.Value.ItemSearchCategory.RowId == 0)
                 return null;
 
@@ -349,10 +352,13 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     }
 
     [IPCProvider("DailyRoutines.Modules.BetterMarketBoard.ToggleOverlay")]
-    private bool ToggleOverlayIPC(bool? isOpen)
+    private bool ToggleOverlayIPC
+    (
+        bool? isOpen
+    )
     {
         if (Overlay == null) return false;
-        
+
         ToggleOverlay(isOpen);
         return true;
     }
