@@ -33,7 +33,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static readonly CompSig PlayWeatherSoundSig = 
+    private static readonly CompSig PlayWeatherSoundSig =
         new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC ?? 45 33 F6 0F 29 74 24");
     private delegate void* PlayWeatherSoundDelegate
     (
@@ -44,7 +44,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
     );
     private Hook<PlayWeatherSoundDelegate> PlayWeatherSoundHook;
 
-    private static readonly CompSig UpdateBgmSituationSig = 
+    private static readonly CompSig UpdateBgmSituationSig =
         new("48 89 5C 24 ?? 57 48 83 EC 20 B8 ?? ?? ?? ?? 49 8B F9 41 8B D8");
     private delegate void* UpdateBgmSituationDelegate
     (
@@ -56,7 +56,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
     );
     private Hook<UpdateBgmSituationDelegate> UpdateBgmSituationHook;
 
-    
+
     private MemoryPatchWithPointer<uint> renderSunlightShadowPatch = null!;
     private MemoryPatchWithPointer<byte> renderWeatherPatch        = null!;
     private MemoryPatchWithPointer<uint> renderTimePatch           = null!;
@@ -113,7 +113,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
             0x55,
             1
         );
-        
+
         PlayWeatherSoundHook ??= PlayWeatherSoundSig.GetHook<PlayWeatherSoundDelegate>(PlayWeatherSoundDetour);
         PlayWeatherSoundHook.Enable();
 
