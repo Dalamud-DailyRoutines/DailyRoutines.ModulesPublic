@@ -17,10 +17,15 @@ public class BetterNameSort : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { CNOnly = true, TCOnly = true, TCDefaultEnabled = true, CNDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        CNOnly           = true,
+        TCOnly           = true,
+        TCDefaultEnabled = true,
+        CNDefaultEnabled = true
+    };
 
     private static readonly CompSig CompareStringByCodePointSig = new("48 89 5C 24 ?? 55 56 57 48 83 EC ?? 33 C0 48 8D 35");
-
     private delegate int CompareStringByCodePointDelegate
     (
         CStringPointer strA,
@@ -28,7 +33,6 @@ public class BetterNameSort : ModuleBase
         bool           useAsciiCaseMap,
         bool           foldKana
     );
-
     private Hook<CompareStringByCodePointDelegate> CompareStringByCodePointHook;
 
     protected override void Init()
