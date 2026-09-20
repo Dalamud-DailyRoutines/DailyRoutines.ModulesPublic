@@ -16,7 +16,7 @@ public class AutoDisplayMTQObject : ModuleBase
         Description = Lang.Get("AutoDisplayMTQObjectDescription"),
         Category    = ModuleCategory.Interface
     };
-    
+
     private static readonly List<IGameObject> QuestObjects = [];
 
     private ZoneIndicatorHandle? handle;
@@ -63,9 +63,9 @@ public class AutoDisplayMTQObject : ModuleBase
         QuestObjects.Clear();
 
         var questManager = QuestManager.Instance();
-        if (questManager == null) 
+        if (questManager == null)
             return QuestObjects;
-        
+
         if (ICondition.Instance().IsOccupiedInEvent)
             return QuestObjects;
 
@@ -74,20 +74,30 @@ public class AutoDisplayMTQObject : ModuleBase
         foreach (ref var pair in EventFramework.Instance()->EventHandlerModule.EventHandlerMap)
         {
             var eventHandler = pair.Item2.Value;
-            if (eventHandler == null) continue;
+            if (eventHandler == null)
+                continue;
 
-            if (eventHandler->Info.EventId.ContentId                           != EventHandlerContent.Quest) continue;
-            if (questManager->GetQuestById(eventHandler->Info.EventId.EntryId) == null) continue;
+            if (eventHandler->Info.EventId.ContentId != EventHandlerContent.Quest)
+                continue;
+            if (questManager->GetQuestById(eventHandler->Info.EventId.EntryId) == null)
+                continue;
 
             foreach (var eventObject in eventHandler->EventObjects)
             {
                 var gameObject = eventObject.Value;
-                if (gameObject == null) continue;
-                if (!gameObject->TargetableStatus.IsSet(ObjectTargetableFlags.ReadyToDraw)) continue;
-                if (!eventHandler->IsActive(gameObject)) continue;
+                if (gameObject == null)
+                    continue;
+                if (!gameObject->TargetableStatus.IsSet(ObjectTargetableFlags.ReadyToDraw))
+                    continue;
+                if (!eventHandler->IsActive(gameObject))
+                    continue;
+                if (!gameObject->IsMTQ())
+                    continue;
 
-                if (objectTable[gameObject->ObjectIndex] is not { } reference) continue;
-                if (reference.ToStruct() != gameObject || QuestObjects.Contains(reference)) continue;
+                if (objectTable[gameObject->ObjectIndex] is not { } reference)
+                    continue;
+                if (reference.ToStruct() != gameObject || QuestObjects.Contains(reference))
+                    continue;
 
                 QuestObjects.Add(reference);
             }
