@@ -26,10 +26,10 @@ public unsafe class AutoUseItemStacks : ModuleBase
 
     private OpenCofferMenuItem openCofferMenu = null!;
     private DRInputNumeric?    drInputNumeric;
-    
+
     protected override void Init()
     {
-        TaskHelper = new() { TimeoutMS = 5_000 };
+        TaskHelper = new() { TimeoutMS = 5_000, ShowDebug = true };
 
         openCofferMenu = new(this);
         ContextMenuManager.Instance().Reg(openCofferMenu);
@@ -62,6 +62,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
         }
 
         var manager = InventoryManager.Instance();
+
         if (manager == null)
         {
             NotifyFinished();
@@ -69,6 +70,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
         }
 
         var container = manager->GetInventoryContainer(inventoryType);
+
         if (container == null)
         {
             NotifyFinished();
@@ -76,6 +78,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
         }
 
         var slot = container->GetInventorySlot(inventorySlot);
+
         if (slot == null)
         {
             NotifyFinished();
@@ -83,6 +86,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
         }
 
         var currentQuantity = slot->GetQuantity();
+
         if (slot->GetBaseItemId() != itemID ||
             currentQuantity       <= leftCount)
         {
@@ -90,9 +94,14 @@ public unsafe class AutoUseItemStacks : ModuleBase
             return;
         }
 
-        TaskHelper.Enqueue(() => AgentInventoryContext.Instance()->UseItem(itemID, inventoryType, inventorySlot));
         TaskHelper.Enqueue
-        (() =>
+        (
+            () => AgentInventoryContext.Instance()->UseItem(itemID, inventoryType, inventorySlot) == 0,
+            "使用物品"
+        );
+        TaskHelper.Enqueue
+        (
+            () =>
             {
                 var containerInner = manager->GetInventoryContainer(inventoryType);
                 if (containerInner == null) return true;
@@ -106,9 +115,10 @@ public unsafe class AutoUseItemStacks : ModuleBase
 
                 return false;
             },
+            "等待物品使用判定",
             timeoutAction: NotifyFinished
         );
-        TaskHelper.Enqueue(() => EnqueueOpenCoffers(itemID, inventoryType, inventorySlot, leftCount, finishRound + 1));
+        TaskHelper.Enqueue(() => EnqueueOpenCoffers(itemID, inventoryType, inventorySlot, leftCount, finishRound + 1), "进入下一轮物品使用判定");
 
         return;
 
@@ -116,7 +126,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
         {
             if (finishRound == 0)
                 return;
-            
+
             var finishMessage = Lang.GetSe("AutoUseItemStacks-Notification-Finished", finishRound, SeString.CreateItemLink(itemID, false));
             NotifyHelper.Toast(finishMessage);
             NotifyHelper.Instance().Chat(finishMessage);
@@ -136,7 +146,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.TargetInventoryItem is not { } item) 
+            if (args.TargetInventoryItem is not { } item)
                 return null;
 
             var quantity = item.GetQuantity();
@@ -167,7 +177,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
 
                     if (module.drInputNumeric != null)
                         return;
-                    
+
                     module.drInputNumeric = DRInputNumeric.Open
                     (
                         new()
@@ -196,7 +206,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
                             (
                                 args.Addon->RootNode->GetNodeState().Center,
                                 AddonPositionAlignment.TopCenter
-                            ),
+                            )
                         }
                     );
                 }
