@@ -12,6 +12,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using Dalamud.Interface.Utility;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -97,12 +98,12 @@ public unsafe class AutoCountPlayers : ModuleBase
         FrameworkManager.Instance().Reg(OnUpdate, throttleMS: 1_000);
         OnUpdate(IFramework.Instance());
 
-        IClientState.Instance().TerritoryChanged += OnZoneChanged;
+        GameState.Instance().WarpComplete += OnWarpCompleted;
     }
 
     protected override void Uninit()
     {
-        IClientState.Instance().TerritoryChanged -= OnZoneChanged;
+        GameState.Instance().WarpComplete -= OnWarpCompleted;
 
         FrameworkManager.Instance().Unreg(OnUpdate);
         LogMessageManager.Instance().Unreg(OnLogMessage);
@@ -329,11 +330,12 @@ public unsafe class AutoCountPlayers : ModuleBase
 
     #region 事件
     
-    private static void OnZoneChanged
+    private static void OnWarpCompleted
     (
-        uint zone
+        WarpType warpType
     ) =>
         Throttler.Shared.Remove("AutoCountPlayers.Zone");
+
 
     private void OnDraw()
     {
