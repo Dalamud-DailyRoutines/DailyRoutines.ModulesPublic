@@ -246,8 +246,7 @@ public unsafe partial class BetterMarketBoard
                         $"{FontAwesomeIcon.ShoppingCart.ToIconString()}  {Lang.Get("BetterMarketBoard-BatchPurchase-Button")}",
                         null,
                         true,
-                        new(buttonWidth, cardHeight),
-                        2f
+                        new(buttonWidth, cardHeight)
                     ))
                 {
                     var listingsToBuy = provider.SelectedListings.Values.ToList();
