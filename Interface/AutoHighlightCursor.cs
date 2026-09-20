@@ -23,9 +23,7 @@ public class AutoHighlightCursor : ModuleBase
         Description = Lang.Get("AutoHighlightCursorDescription"),
         Category    = ModuleCategory.Interface
     };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     private Config             config = null!;
     private OverlayController? controller;
 
