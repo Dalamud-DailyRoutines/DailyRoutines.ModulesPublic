@@ -12,17 +12,13 @@ public partial class BetterFPSLimitation
         public float FPS { get; private set; }
 
         private readonly BetterFPSLimitation module;
-        
+
         private Hook<SwapChain.Delegates.Present>? SwapChainPresentHook;
 
         private long frameInterval;
         private long frameRemainder;
         private long nextTimestamp;
         private int  lastTargetFPS;
-
-        private long vblankInterval;
-        private long vblankPhase;
-        private long nextCalibration;
 
         private long timerOvershoot;
         private nint timer;
@@ -31,13 +27,16 @@ public partial class BetterFPSLimitation
         private long accumulatedTicks;
         private int  accumulatedFrames;
 
-        public unsafe FramePacer(BetterFPSLimitation inModule)
+        public unsafe FramePacer
+        (
+            BetterFPSLimitation inModule
+        )
         {
             module = inModule;
-            
+
             timer          = CreateWaitableTimerExW(0, 0, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
             timerOvershoot = Stopwatch.Frequency / 2000;
-            
+
             SwapChainPresentHook = IGameInteropProvider.Instance().HookFromMemberFunction
             (
                 typeof(SwapChain.MemberFunctionPointers),
@@ -46,7 +45,7 @@ public partial class BetterFPSLimitation
             );
             SwapChainPresentHook.Enable();
         }
-        
+
         public void Dispose()
         {
             if (SwapChainPresentHook != null)
@@ -54,14 +53,14 @@ public partial class BetterFPSLimitation
                 SwapChainPresentHook.Dispose();
                 SwapChainPresentHook = null;
             }
-            
+
             if (timer != 0)
             {
-                _ = CloseHandle(timer);
+                _     = CloseHandle(timer);
                 timer = 0;
             }
         }
-        
+
         private unsafe void SwapChainPresentDetour
         (
             SwapChain* thisPtr
@@ -88,15 +87,13 @@ public partial class BetterFPSLimitation
 
             if (targetFPS != lastTargetFPS)
             {
-                lastTargetFPS   = targetFPS;
-                frameRemainder  = 0;
-                nextTimestamp   = 0;
-                vblankInterval  = 0;
-                nextCalibration = 0;
+                lastTargetFPS  = targetFPS;
+                frameRemainder = 0;
+                nextTimestamp  = 0;
             }
 
             frameRemainder += frequency % targetFPS;
-            frameInterval   = frequency / targetFPS;
+            frameInterval  =  frequency / targetFPS;
 
             if (frameRemainder >= targetFPS)
             {
@@ -109,13 +106,10 @@ public partial class BetterFPSLimitation
 
             var now = Stopwatch.GetTimestamp();
 
-            if (nextCalibration <= now)
-                CalibrateVBlank(frequency, now);
-
-            if (now - nextTimestamp > frameInterval)
-                nextTimestamp = ResolveTimestamp(now, frequency);
-
-            WaitUntil(nextTimestamp, frequency);
+            if (nextTimestamp <= 0 || now - nextTimestamp > frameInterval * MAX_DRIFT_INTERVALS)
+                nextTimestamp = now;
+            else if (now < nextTimestamp)
+                WaitUntil(nextTimestamp, frequency);
 
             nextTimestamp += frameInterval;
         }
@@ -139,76 +133,6 @@ public partial class BetterFPSLimitation
             }
 
             lastPresentTimestamp = now;
-        }
-
-        private long ResolveTimestamp
-        (
-            long now,
-            long frequency
-        )
-        {
-            if (vblankInterval <= 0 || vblankPhase <= 0)
-                return now + frameInterval;
-
-            var cycles  = (double)frameInterval / vblankInterval;
-            var rounded = Math.Round(cycles);
-
-            if (rounded < 1 || Math.Abs(cycles - rounded) * 100 > PHASE_LOCK_PERCENT)
-                return now + frameInterval;
-
-            var elapsed = now - vblankPhase;
-
-            if (elapsed < 0 || elapsed > frequency * PHASE_STALE_SECONDS)
-                return now + frameInterval;
-
-            var steps = (long)Math.Ceiling(elapsed / (double)frameInterval);
-            if (steps < 1)
-                steps = 1;
-
-            return vblankPhase + steps * frameInterval;
-        }
-
-        private unsafe void CalibrateVBlank
-        (
-            long frequency,
-            long now
-        )
-        {
-            nextCalibration = now + frequency * CALIBRATION_INTERVAL_SECONDS;
-
-            var device = Device.Instance();
-            if (device == null)
-                return;
-
-            var output = device->DXGIOutput;
-            if (output == null)
-                return;
-
-            var waitForVBlank = (delegate* unmanaged<void*, int>)(*(nint**)output)[10];
-
-            if (waitForVBlank(output) < 0)
-                return;
-
-            var previous = Stopwatch.GetTimestamp();
-
-            if (vblankInterval <= 0)
-            {
-                var total = 0L;
-
-                for (var i = 0; i < VBLANK_CALIBRATION_SAMPLES; i++)
-                {
-                    if (waitForVBlank(output) < 0)
-                        return;
-
-                    var current = Stopwatch.GetTimestamp();
-                    total   += current - previous;
-                    previous = current;
-                }
-
-                vblankInterval = total / VBLANK_CALIBRATION_SAMPLES;
-            }
-
-            vblankPhase = previous;
         }
 
         private void WaitUntil
@@ -253,8 +177,8 @@ public partial class BetterFPSLimitation
             {
                 var dueTime = -(ticks * 10000000 / frequency);
 
-                SetWaitableTimer(timer, ref dueTime, 0, 0, 0, 0);
-                WaitForSingleObject(timer, INFINITE);
+                _ = SetWaitableTimer(timer, ref dueTime, 0, 0, 0, 0);
+                _ = WaitForSingleObject(timer, INFINITE);
             }
 
             var overshoot = Stopwatch.GetTimestamp() - expected;
@@ -267,20 +191,17 @@ public partial class BetterFPSLimitation
 
         #region 常量
 
-        private const int SPIN_WAIT_ITERATIONS         = 256;
-        private const int PHASE_LOCK_PERCENT           = 2;
-        private const int PHASE_STALE_SECONDS          = 2;
-        private const int CALIBRATION_INTERVAL_SECONDS = 30;
-        private const int VBLANK_CALIBRATION_SAMPLES   = 4;
-        private const int COOLDOWN_MARGIN_DIVISOR      = 10000;
-        private const int OVERSHOOT_DECAY_DIVISOR      = 16;
+        private const int SPIN_WAIT_ITERATIONS    = 256;
+        private const int MAX_DRIFT_INTERVALS     = 4;
+        private const int COOLDOWN_MARGIN_DIVISOR = 10000;
+        private const int OVERSHOOT_DECAY_DIVISOR = 16;
 
         private const uint CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x00000002;
         private const uint TIMER_ALL_ACCESS                      = 0x001F0003;
         private const uint INFINITE                              = 0xFFFFFFFF;
 
         #endregion
-        
+
         #region 原生
 
         [DllImport("kernel32.dll", SetLastError = true)]
