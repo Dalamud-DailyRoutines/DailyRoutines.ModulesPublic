@@ -688,7 +688,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         if (config.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, config.AutoCollectCount))
             ChatManager.Instance().SendMessage("/pdr submarine");
 
-        if (config.NotifyCount > 0 && finishedCount <= config.NotifyCount)
+        if (config.NotifyCount > 0 && finishedCount < config.NotifyCount)
             return;
 
         if (config.LastNotifyContentID == LocalPlayerState.ContentID)
