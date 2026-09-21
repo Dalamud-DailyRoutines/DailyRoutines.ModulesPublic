@@ -1,3 +1,4 @@
+using DailyRoutines.Common.KamiToolKit.Addons.SelectYesno;
 using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Text.SeStringHandling;
@@ -8,6 +9,7 @@ using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Data.Parsing.Uld;
+using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -36,7 +38,8 @@ public unsafe partial class OptimizedFriendList
         private string Name      { get; set; } = string.Empty;
         private string WorldName { get; set; } = string.Empty;
 
-        private OptimizedFriendList Instance { get; } = instance;
+        private OptimizedFriendList Instance                  { get; } = instance;
+        private DRSelectYesno?      ClearConfirmationInstance { get; set; }
 
         public static DRFriendlistRemarkEdit Open
         (
@@ -183,11 +186,35 @@ public unsafe partial class OptimizedFriendList
                 String   = Lang.Get("Clear"),
                 OnClick = () =>
                 {
-                    Instance.config.PlayerInfos.TryRemove(ContentID, out _);
-                    Instance.config.Save(Instance);
+                    ClearConfirmationInstance?.Dispose();
 
-                    InfoProxyFriendList.Instance()->RequestData();
-                    Close();
+                    ClearConfirmationInstance = DRSelectYesno.Open
+                    (
+                        new()
+                        {
+                            Prompt = Lang.GetSe("OptimizedFriendList-Addon-ConfirmClear"),
+                            Callback = (_, result) =>
+                            {
+                                ClearConfirmationInstance = null;
+
+                                if (result != DRSelectYesnoResult.Yes)
+                                    return;
+
+                                Instance.config.PlayerInfos.TryRemove(ContentID, out var _);
+                                Instance.config.Save(Instance);
+
+                                InfoProxyFriendList.Instance()->RequestData();
+                                Close();
+                            },
+                            Position = new
+                            (
+                                addon->RootNode->GetNodeState().Center,
+                                AddonPositionAlignment.TopCenter
+                            ),
+                            BlockedParentID = addon->Id,
+                            ParentID        = addon->Id
+                        }
+                    );
                 }
             };
             clearButtonNode.AttachNode(this);
@@ -210,6 +237,9 @@ public unsafe partial class OptimizedFriendList
             ContentID = 0;
             Name      = string.Empty;
             WorldName = string.Empty;
+            
+            ClearConfirmationInstance?.Dispose();
+            ClearConfirmationInstance = null;
         }
     }
 }
