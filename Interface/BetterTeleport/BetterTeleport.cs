@@ -71,6 +71,11 @@ public unsafe partial class BetterTeleport : ModuleBase
         MigrateConfig();
         config = Config.Load(this) ?? new();
 
+        AddonTeleportGetRegionIconID = AddonTeleportGetRegionIconIDSig.GetDelegate<AddonTeleportGetRegionIconIDDelegate>();
+
+        AgentTeleportGetRegion     = AgentTeleportGetRegionSig.GetDelegate<AgentTeleportGetRegionDelegate>();
+        AgentTeleportGetTimelineID = AgentTeleportGetTimelineIDSig.GetDelegate<AgentTeleportGetTimelineIDDelegate>();
+
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterTeleport-CommandHelp") });
 
         UseActionManager.Instance().RegPreUseAction(OnPostUseAction);

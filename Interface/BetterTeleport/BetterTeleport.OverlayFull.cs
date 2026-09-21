@@ -24,6 +24,39 @@ public unsafe partial class BetterTeleport
     private bool                  shouldScrollToSelected;
     private bool                  isJustOpened;
 
+    private void DrawAetheryteTabIcon
+    (
+        AetheryteRecord? aetheryte,
+        int              category = -1
+    )
+    {
+        if (category < 0 && aetheryte != null)
+            category = GetAetheryteCategory(aetheryte);
+
+        if (category < 0)
+            return;
+
+        var min  = ImGui.GetItemRectMin();
+        var max  = ImGui.GetItemRectMax();
+        var size = 20f * GlobalUIScale;
+        var pos  = new Vector2((min.X + max.X - size) / 2f, (min.Y + max.Y - size) / 2f);
+
+        DrawAetheryteTabRegionIcon(ImGui.GetWindowDrawList(), category, pos, size);
+    }
+
+    private static void PushTabIconPadding() =>
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(TAB_ICON_PADDING_X * GlobalUIScale, ImGui.GetStyle().FramePadding.Y));
+
+    private void DrawAetheryteSettingTabIcon()
+    {
+        var min  = ImGui.GetItemRectMin();
+        var max  = ImGui.GetItemRectMax();
+        var size = 20f * GlobalUIScale;
+        var pos  = new Vector2((min.X + max.X - size) / 2f, (min.Y + max.Y - size) / 2f);
+
+        DrawAetheryteSettingIcon(ImGui.GetWindowDrawList(), pos, size);
+    }
+
     public void DrawFullWindowUI()
     {
         var isWindowAppearing = ImGui.IsWindowAppearing() || isJustOpened;
@@ -270,7 +303,15 @@ public unsafe partial class BetterTeleport
                     var tabFlags                            = ImGuiTabItemFlags.None;
                     if (tabToSelect == "Favorite") tabFlags |= ImGuiTabItemFlags.SetSelected;
 
-                    using var tabItem = ImRaii.TabItem($"{Lang.Get("Favorite")}##TabItemFull", tabFlags);
+                    PushTabIconPadding();
+
+                    using var tabItem = ImRaii.TabItem("##TabItemFullFavorite", tabFlags);
+
+                    ImGui.PopStyleVar();
+
+                    DrawAetheryteTabIcon(null, TELEPORT_FAVOURITE_CATEGORY);
+
+                    ImGuiOm.TooltipHover(Lang.Get("Favorite"));
 
                     if (tabItem)
                     {
@@ -305,7 +346,21 @@ public unsafe partial class BetterTeleport
                         if (tabToSelect == name)
                             tabFlags |= ImGuiTabItemFlags.SetSelected;
 
-                        using var tabItem = ImRaii.TabItem($"{name}##TabItemFull", tabFlags);
+                        PushTabIconPadding();
+
+                        using var tabItem = ImRaii.TabItem($"##TabItemFull{name}", tabFlags);
+
+                        ImGui.PopStyleVar();
+
+                        var firstRecord = aetherytes.FirstOrDefault(x => x.IsUnlocked());
+
+                        DrawAetheryteTabIcon(firstRecord);
+
+                        if (firstRecord != null)
+                            ImGuiOm.TooltipHover(GetAetheryteTabLabel(firstRecord, name));
+                        else
+                            ImGuiOm.TooltipHover(name);
+
                         if (!tabItem) continue;
 
                         activeTabName = name;
@@ -378,8 +433,14 @@ public unsafe partial class BetterTeleport
                 if (tabToSelect == "Setting")
                     settingTabFlags |= ImGuiTabItemFlags.SetSelected;
 
-                using (var settingTab = ImRaii.TabItem(FontAwesomeIcon.Cog.ToIconString(), settingTabFlags))
+                PushTabIconPadding();
+
+                using (var settingTab = ImRaii.TabItem("##TabItemFullSetting", settingTabFlags))
                 {
+                    ImGui.PopStyleVar();
+
+                    DrawAetheryteSettingTabIcon();
+
                     if (settingTab)
                     {
                         activeTabName = "Setting";
@@ -455,4 +516,10 @@ public unsafe partial class BetterTeleport
         public override void OnClose() =>
             module.config.Save(module);
     }
+
+    #region 常量
+
+    private const float TAB_ICON_PADDING_X = 14f;
+
+    #endregion
 }

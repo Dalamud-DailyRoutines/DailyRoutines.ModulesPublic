@@ -6,11 +6,17 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Lumina.Data.Files;
+using Lumina.Data.Parsing.Uld;
 using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.MapRenderer;
 using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Game.AetheryteRecord.Enums;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Utils.FuzzyMatcher;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -19,6 +25,31 @@ namespace DailyRoutines.ModulesPublic.Interface.BetterTeleport;
 
 public unsafe partial class BetterTeleport
 {
+    private static readonly CompSig AddonTeleportGetRegionIconIDSig = new("40 55 48 8B EC 48 83 EC ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 83 FA");
+    private delegate int AddonTeleportGetRegionIconIDDelegate
+    (
+        AddonTeleport* addon,
+        int            category
+    );
+    private AddonTeleportGetRegionIconIDDelegate AddonTeleportGetRegionIconID = null!;
+
+    private static readonly CompSig AgentTeleportGetRegionSig = new("48 83 EC ?? 0F B7 4A ?? E8 ?? ?? ?? ?? 48 85 C0 0F 84");
+    private delegate int AgentTeleportGetRegionDelegate
+    (
+        AgentTeleport* agent,
+        TeleportInfo*  teleportInfo
+    );
+    private AgentTeleportGetRegionDelegate AgentTeleportGetRegion = null!;
+
+    private static readonly CompSig AgentTeleportGetTimelineIDSig = new("41 81 F8 ?? 03 00 00 75 ?? B8 08 00 00 00 C3 41 81 F8 ?? 03 00 00 75 ?? B8 09 00 00 00 C3");
+    private delegate int AgentTeleportGetTimelineIDDelegate
+    (
+        AgentTeleport* agent,
+        int            region,
+        int            territoryTypeID
+    );
+    private AgentTeleportGetTimelineIDDelegate AgentTeleportGetTimelineID = null!;
+
     private FuzzyMatcher<AetheryteRecord>? recordMatcher;
 
     private List<AetheryteRecord> favorites = [];
@@ -39,6 +70,11 @@ public unsafe partial class BetterTeleport
         EnableDefaultMarkers = true,
         DefaultMarkerFilter  = marker => marker.DataType is not (3 or 4)
     };
+
+    private readonly Dictionary<int, (string Path, Vector2 UV0, Vector2 UV1)> aetheryteRegionIcons = [];
+    private readonly Dictionary<int, (string Path, Vector2 UV0, Vector2 UV1)> aetheryteTabIcons    = [];
+
+    private (string Path, Vector2 UV0, Vector2 UV1)? aetheryteSettingIcon;
 
     protected override void ConfigUI()
     {
@@ -204,6 +240,168 @@ public unsafe partial class BetterTeleport
                 ImGui.OpenPopup("BetterTeleport_Map_ContextMenu");
             }
         };
+    }
+
+    private void EnsureAetheryteRegionIconsLoaded()
+    {
+        if (aetheryteRegionIcons.Count > 0 && aetheryteTabIcons.Count > 0 && aetheryteSettingIcon != null)
+            return;
+
+        var uld = IDataManager.Instance().GetFile<UldFile>(TELEPORT_ULD_PATH);
+        if (uld == null)
+            return;
+
+        var settingParts = LoadUldPartIcons(uld, TELEPORT_SETTING_ICON_PART_LIST_ID);
+
+        if (settingParts is [{ Path: not null } settingPart, ..])
+            aetheryteSettingIcon = settingPart;
+
+        if (aetheryteRegionIcons.Count > 0 && aetheryteTabIcons.Count > 0)
+            return;
+
+        var regionParts = LoadUldPartIcons(uld, TELEPORT_REGION_ICON_PART_LIST_ID);
+        if (regionParts == null)
+            return;
+
+        // 时间轴的帧号即客户端返回的时间轴 ID, 每帧记录对应的部件索引
+        var timeline = uld.Timelines.FirstOrDefault(x => x.Id == TELEPORT_REGION_ICON_TIMELINE_ID);
+        if (timeline.FrameData == null)
+            return;
+
+        for (var index = 0; index < timeline.FrameData.Length; index++)
+        {
+            var keyGroup = timeline.FrameData[index].KeyGroups.FirstOrDefault(x => x.Usage == UldRoot.KeyUsage.TextColor);
+
+            if (keyGroup.Frames is not [Keyframes.UShort1Keyframe keyframe, ..])
+                continue;
+
+            if (keyframe.Value >= regionParts.Length)
+                continue;
+
+            var part = regionParts[keyframe.Value];
+            if (part.Path == null)
+                continue;
+
+            aetheryteRegionIcons[index] = part;
+        }
+
+        var tabParts = LoadUldPartIcons(uld, TELEPORT_TAB_ICON_PART_LIST_ID);
+        if (tabParts == null)
+            return;
+
+        for (var index = 0; index < tabParts.Length; index++)
+        {
+            var part = tabParts[index];
+            if (part.Path == null)
+                continue;
+
+            aetheryteTabIcons[index] = part;
+        }
+    }
+
+    private static (string Path, Vector2 UV0, Vector2 UV1)[]? LoadUldPartIcons
+    (
+        UldFile uld,
+        uint    partListID
+    )
+    {
+        var partList = uld.Parts.FirstOrDefault(x => x.Id == partListID);
+        if (partList.Parts == null)
+            return null;
+
+        var parts = new (string Path, Vector2 UV0, Vector2 UV1)[partList.Parts.Length];
+
+        for (var index = 0; index < partList.Parts.Length; index++)
+        {
+            var part  = partList.Parts[index];
+            var asset = uld.AssetData.FirstOrDefault(x => x.Id == part.TextureId);
+
+            if (asset.Path == null)
+                continue;
+
+            var path = new string(asset.Path).TrimEnd('\0');
+            if (string.IsNullOrEmpty(path))
+                continue;
+
+            var texture = ITextureProvider.Instance().GetFromGame(path).GetWrapOrDefault();
+            if (texture == null)
+                return null;
+
+            var textureSize = new Vector2(texture.Width, texture.Height);
+
+            parts[index] = (path, new Vector2(part.U, part.V) / textureSize, new Vector2(part.U + part.W, part.V + part.H) / textureSize);
+        }
+
+        return parts;
+    }
+
+    private int GetAetheryteRegionTimelineID
+    (
+        AetheryteRecord aetheryte
+    )
+    {
+        var teleportInfo = new TeleportInfo { TerritoryId = (ushort)aetheryte.ZoneID };
+        var agent        = AgentTeleport.Instance();
+
+        var region     = AgentTeleportGetRegion(agent, &teleportInfo);
+        var timelineID = AgentTeleportGetTimelineID(agent, region, (int)aetheryte.ZoneID);
+
+        // 与丧灵钟共用的图标不显示
+        return timelineID == MOR_DHONA_TIMELINE_ID ?
+                   -1 :
+                   timelineID;
+    }
+
+    private int GetAetheryteTabIconPartID
+    (
+        int category
+    )
+    {
+        var addon = (AddonTeleport*)RaptureAtkUnitManager.Instance()->GetAddonByName("Teleport");
+
+        var placeholder = default(AddonTeleport);
+        if (addon == null)
+            addon = &placeholder;
+
+        var iconID = AddonTeleportGetRegionIconID(addon, category);
+
+        // 客户端图标编号中版本段自 115 起, 与自 101 起的其余段相差 1
+        return iconID >= TELEPORT_VERSION_ICON_ID ?
+                   iconID - 100 :
+                   iconID - 99;
+    }
+
+    // 住宅区在客户端固定使用 2
+    private static int GetAetheryteCategory
+    (
+        AetheryteRecord aetheryte
+    ) =>
+        aetheryte.GetZone().TerritoryIntendedUse.RowId == 13 ?
+            2 :
+            aetheryte.GetData().Unknown2;
+
+    private string GetAetheryteTabLabel
+    (
+        AetheryteRecord aetheryte,
+        string          tabName
+    )
+    {
+        // 资料片分类用 ExVersion 名称
+        if (aetheryte.Version > 0)
+        {
+            var versionName = LuminaGetter.GetRow<ExVersion>(aetheryte.Version)?.Name.ToString();
+
+            return string.IsNullOrEmpty(versionName) ?
+                       tabName :
+                       versionName;
+        }
+
+        // 拉诺西亚 / 黑衣森林 / 萨纳兰
+        var region = aetheryte.GetZone().PlaceNameRegion.Value;
+
+        return region.RowId is 22 or 23 or 24 ?
+                   region.Name.ToString() :
+                   tabName;
     }
 
     private void DrawHoveredTooltip()
@@ -403,7 +601,7 @@ public unsafe partial class BetterTeleport
         ImGui.SetCursorScreenPos(startPos + new Vector2(0, height + (4f * GlobalUIScale)));
     }
 
-    private static float DrawAetheryteIcon
+    private float DrawAetheryteIcon
     (
         ImDrawListPtr   drawList,
         AetheryteRecord aetheryte,
@@ -429,7 +627,71 @@ public unsafe partial class BetterTeleport
         if (texWrap.Handle != nint.Zero)
             drawList.AddImage(texWrap.Handle, new Vector2(contentStartX, iconY), new Vector2(contentStartX + iconSize, iconY + iconSize));
 
-        return contentStartX + iconSize + padding + 4f;
+        contentStartX += iconSize + (4f * GlobalUIScale);
+
+        var regionIconSize = 20f * GlobalUIScale;
+        var regionIconY    = startPos.Y + ((itemHeight - regionIconSize) / 2f);
+
+        if (DrawAetheryteRegionIcon(drawList, aetheryte, new Vector2(contentStartX, regionIconY), regionIconSize))
+            contentStartX += regionIconSize + (4f * GlobalUIScale);
+
+        return contentStartX + padding + 4f;
+    }
+
+    private bool DrawAetheryteRegionIcon
+    (
+        ImDrawListPtr   drawList,
+        AetheryteRecord aetheryte,
+        Vector2         position,
+        float           size
+    )
+    {
+        EnsureAetheryteRegionIconsLoaded();
+
+        return aetheryteRegionIcons.TryGetValue(GetAetheryteRegionTimelineID(aetheryte), out var part) &&
+               DrawAetheryteIconPart(drawList, part, position, size);
+    }
+
+    private bool DrawAetheryteTabRegionIcon
+    (
+        ImDrawListPtr drawList,
+        int           category,
+        Vector2       position,
+        float         size
+    )
+    {
+        EnsureAetheryteRegionIconsLoaded();
+
+        return aetheryteTabIcons.TryGetValue(GetAetheryteTabIconPartID(category), out var part) &&
+               DrawAetheryteIconPart(drawList, part, position, size);
+    }
+
+    private bool DrawAetheryteSettingIcon
+    (
+        ImDrawListPtr drawList,
+        Vector2       position,
+        float         size
+    )
+    {
+        EnsureAetheryteRegionIconsLoaded();
+
+        return aetheryteSettingIcon is { } icon && DrawAetheryteIconPart(drawList, icon, position, size);
+    }
+
+    private static bool DrawAetheryteIconPart
+    (
+        ImDrawListPtr                           drawList,
+        (string Path, Vector2 UV0, Vector2 UV1) part,
+        Vector2                                 position,
+        float                                   size
+    )
+    {
+        var texture = ITextureProvider.Instance().GetFromGame(part.Path).GetWrapOrDefault();
+        if (texture == null)
+            return false;
+
+        drawList.AddImage(texture.Handle, position, position + new Vector2(size), part.UV0, part.UV1);
+        return true;
     }
 
     private float DrawAetheryteIndicators
@@ -795,6 +1057,15 @@ public unsafe partial class BetterTeleport
     }
 
     #region 常量
+
+    private const string TELEPORT_ULD_PATH                  = "ui/uld/Teleport.uld";
+    private const uint   TELEPORT_REGION_ICON_PART_LIST_ID  = 16;
+    private const uint   TELEPORT_REGION_ICON_TIMELINE_ID   = 18;
+    private const int    MOR_DHONA_TIMELINE_ID              = 4;
+    private const uint   TELEPORT_TAB_ICON_PART_LIST_ID     = 14;
+    private const uint   TELEPORT_SETTING_ICON_PART_LIST_ID = 7;
+    private const int    TELEPORT_VERSION_ICON_ID           = 115;
+    private const int    TELEPORT_FAVOURITE_CATEGORY        = 200;
 
     private const uint GIL_ITEM_ID             = 1;
     private const uint TELEPORT_TICKET_ITEM_ID = 7569;
