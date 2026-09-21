@@ -100,7 +100,6 @@ public unsafe class BetterBlueSetLoad : ModuleBase
             return InvokeOriginal();
 
         addon->IsVisible = false;
-        AOZNotebook->NumBlockingAddons += 2; // 因为 AOZNotebookPresetList 是 AOZNotebook 的 Popup，隐藏前者的时候会自动把 NumBlockingAddons 减一
         drSelectYesno = DRSelectYesno.Open
         (
             new()
@@ -116,9 +115,6 @@ public unsafe class BetterBlueSetLoad : ModuleBase
                 {
                     if (addon != null && !addon->IsVisible)
                         addon->IsVisible = true;
-                    
-                    if (AOZNotebook->NumBlockingAddons > 0)
-                        AOZNotebook->NumBlockingAddons--;
 
                     drSelectYesno = null;
 

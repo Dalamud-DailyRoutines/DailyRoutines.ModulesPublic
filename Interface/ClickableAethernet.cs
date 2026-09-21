@@ -158,7 +158,6 @@ public unsafe class ClickableAethernet : ModuleBase
                             if (drSelectYesno != null)
                                 return;
 
-                            addon->NumBlockingAddons++;
                             drSelectYesno = DRSelectYesno.Open
                             (
                                 new()
@@ -173,9 +172,6 @@ public unsafe class ClickableAethernet : ModuleBase
                                     ),
                                     Callback = (_, result) =>
                                     {
-                                        if (addon->NumBlockingAddons > 0)
-                                            addon->NumBlockingAddons--;
-
                                         drSelectYesno = null;
 
                                         if (result != DRSelectYesnoResult.Yes)
