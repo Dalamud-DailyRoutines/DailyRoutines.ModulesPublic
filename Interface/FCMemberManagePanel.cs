@@ -414,11 +414,14 @@ public unsafe class FCMemberManagePanel : ModuleBase
         AddonArgs? args
     )
     {
-        if (type == AddonEvent.PostSetup)
-            Overlay.IsOpen = true;
+        ResetMembers();
 
-        if (type is AddonEvent.PostSetup or AddonEvent.PreFinalize)
-            ResetMembers();
+        Overlay.IsOpen = type switch
+        {
+            AddonEvent.PostSetup   => true,
+            AddonEvent.PreFinalize => false,
+            _                      => Overlay.IsOpen
+        };
     }
 
     private void SyncMembers()
