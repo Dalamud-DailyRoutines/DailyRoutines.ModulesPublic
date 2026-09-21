@@ -1,22 +1,18 @@
-using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Interface.Colors;
 using Dalamud.Interface.Textures;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
-using OmenTools.Interop.Game.AddonEvent;
-using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
+using AgentFreeCompany = OmenTools.Interop.Game.Models.Native.AgentFreeCompany;
+using AgentFreeCompanyProfile = OmenTools.Interop.Game.Models.Native.AgentFreeCompanyProfile;
+using InfoProxyFreeCompany = OmenTools.Interop.Game.Models.Native.InfoProxyFreeCompany;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -29,33 +25,21 @@ public unsafe class FCMemberManagePanel : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    private static readonly CompSig AgentFCReceiveEventInternalSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 41 56 48 83 EC ?? 48 8B F1 48 8B DA");
+    private readonly Dictionary<ulong, MemberRecord> members            = [];
+    private readonly HashSet<ulong>                  selectedContentIDs = [];
 
-    private delegate nint AgentFCReceiveEventInternalDelegate
-    (
-        AgentFreeCompany* agent,
-        nint              a2
-    );
+    private uint totalMemberCount;
+    private int  currentPage;
 
-    private static AgentFCReceiveEventInternalDelegate? AgentFCReceiveEventInternal;
+    private bool   isDescending;
+    private string nameFilter = string.Empty;
 
-    private readonly Dictionary<ulong, FreeCompanyMemberInfo> characterDataDict = [];
-    private readonly HashSet<FreeCompanyMemberInfo>           selectedMembers   = [];
-
-    private uint fcTotalMembersCount;
-    private int  currentFCMemberPage;
-
-    private bool   isReverse;
-    private string filterMemberName = string.Empty;
-
-    private List<FreeCompanyMemberInfo> characterDataDisplay = [];
+    private ulong[]? pendingTargets;
+    private bool     requestConfirmPopup;
 
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 3000 };
-
-        AgentFCReceiveEventInternal ??=
-            Marshal.GetDelegateForFunctionPointer<AgentFCReceiveEventInternalDelegate>(AgentFCReceiveEventInternalSig.ScanText());
 
         Overlay            ??= new(this);
         Overlay.Flags      &=  ~ImGuiWindowFlags.NoTitleBar;
@@ -63,178 +47,118 @@ public unsafe class FCMemberManagePanel : ModuleBase
         Overlay.Flags      &=  ~ImGuiWindowFlags.NoResize;
         Overlay.WindowName =   Lang.Get("FCMemberManagePanelTitle");
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "FreeCompanyMember", OnAddonMember);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "FreeCompanyMember", OnAddonMember);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "FreeCompanyMember", OnFreeCompanyMemberAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "FreeCompanyMember", OnFreeCompanyMemberAddon);
+
         if (FreeCompanyMember != null && FreeCompanyMember->IsAddonAndNodesReady())
-            OnAddonMember(AddonEvent.PostSetup, null);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonYesno);
+            OnFreeCompanyMemberAddon(AddonEvent.PostSetup, null);
     }
 
     protected override void Uninit()
     {
-        IAddonLifecycle.Instance().UnregisterListener(OnAddonMember);
-        IAddonLifecycle.Instance().UnregisterListener(OnAddonYesno);
-
-        ResetAllExistedData();
+        IAddonLifecycle.Instance().UnregisterListener(OnFreeCompanyMemberAddon);
+        ResetMembers();
     }
 
     protected override void OverlayPreDraw()
     {
         if (!IClientState.Instance().IsLoggedIn) return;
+        if (!Throttler.Shared.Throttle("FCMemberManagePanel-SyncMembers", 1_000)) return;
 
-        if (fcTotalMembersCount == 0 && Throttler.Shared.Throttle("FCMemberManagePanel-GetFCTotalMembersCount", 1_000))
-        {
-            var instance = InfoProxyFreeCompany.Instance();
-            instance->RequestData();
-            fcTotalMembersCount = instance->TotalMembers;
-        }
-
-        if (fcTotalMembersCount != 0 && Throttler.Shared.Throttle("FCMemberManagePanel-SubstituteFCMembersData", 1_000))
-        {
-            var agent          = AgentFreeCompany.Instance();
-            var memberInstance = agent->InfoProxyFreeCompanyMember;
-
-            currentFCMemberPage = agent->CurrentMemberPageIndex;
-
-            if (Throttler.Shared.Throttle("FCMemberManagePanel-RerequestMembersInfo", 3_000))
-            {
-                var source = memberInstance->CharDataSpan;
-
-                for (var i = 0; i < source.Length; i++)
-                {
-                    var newData = FreeCompanyMemberInfo.Parse(source[i], i);
-                    if (string.IsNullOrWhiteSpace(newData.Name)) continue;
-
-                    if (characterDataDict.TryGetValue(newData.ContentID, out var existingData))
-                    {
-                        var changes = existingData.UpdateFrom(newData);
-
-                        if (changes != FreeCompanyMemberInfo.ChangeFlags.None)
-                        {
-                            existingData.Index        = newData.Index;
-                            existingData.OnlineStatus = newData.OnlineStatus;
-                            existingData.Name         = newData.Name;
-                            existingData.JobIcon      = newData.JobIcon;
-                            existingData.Job          = newData.Job;
-                            existingData.Location     = newData.Location;
-                        }
-                    }
-                    else
-                        characterDataDict[newData.ContentID] = newData;
-                }
-
-                characterDataDisplay = FilterAndSortCharacterData();
-            }
-        }
+        SyncMembers();
     }
 
     protected override void OverlayUI()
     {
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("FCMemberManagePanel-CurrentPage")}:");
+        var pageCount = GetPageCount();
 
-        var pageAmount = ((int)fcTotalMembersCount + 199) / 200;
-
-        for (var i = 0; i < pageAmount; i++)
+        using (ImRaii.Disabled(currentPage <= 0))
         {
-            ImGui.SameLine();
-
-            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.TankBlue, i == currentFCMemberPage))
-            {
-                using (ImRaii.Disabled(i == currentFCMemberPage))
-                {
-                    if (ImGui.Button(Lang.Get("FCMemberManagePanel-PageDisplay", i + 1)))
-                        SwitchFreeCompanyMemberListPage(i);
-                }
-            }
+            if (ImGuiOm.ButtonIcon("MemberPagePrev", FontAwesomeIcon.AngleLeft, string.Empty, true))
+                SwitchPage(currentPage - 1);
         }
 
+        ImGui.SameLine();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted($"{currentPage + 1} / {pageCount}");
+
+        ImGui.SameLine();
+
+        using (ImRaii.Disabled(currentPage >= pageCount - 1))
+        {
+            if (ImGuiOm.ButtonIcon("MemberPageNext", FontAwesomeIcon.AngleRight, string.Empty, true))
+                SwitchPage(currentPage + 1);
+        }
+
+        var       list      = FilteredMembers();
         var       tableSize = ImGui.GetContentRegionAvail() with { Y = 0 };
-        using var table     = ImRaii.Table("FCMembersTable", 5, ImGuiTableFlags.Borders, tableSize);
+        using var table     = ImRaii.Table("FCMembersTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable, tableSize);
+
         if (!table) return;
 
-        ImGui.TableSetupColumn("序号",  ImGuiTableColumnFlags.WidthFixed,   ImGui.GetTextLineHeightWithSpacing());
+        var columWidth = ImGui.GetFrameHeight();
+        
+        ImGui.TableSetupColumn("序号",  ImGuiTableColumnFlags.WidthFixed,   columWidth);
         ImGui.TableSetupColumn("名称",  ImGuiTableColumnFlags.WidthStretch, 30);
-        ImGui.TableSetupColumn("职业",  ImGuiTableColumnFlags.WidthFixed,   ImGui.CalcTextSize("测试测试测").X);
+        ImGui.TableSetupColumn("阶级",  ImGuiTableColumnFlags.WidthStretch, 25);
+        ImGui.TableSetupColumn("职业",  ImGuiTableColumnFlags.WidthStretch, 25);
         ImGui.TableSetupColumn("位置",  ImGuiTableColumnFlags.WidthStretch, 25);
-        ImGui.TableSetupColumn("勾选框", ImGuiTableColumnFlags.WidthFixed,   ImGui.GetTextLineHeight());
-
-        if (GameState.IsCN || GameState.IsTC)
-            ImGui.TableSetColumnEnabled(5, false);
+        ImGui.TableSetupColumn("勾选框", ImGuiTableColumnFlags.WidthFixed,   columWidth);
 
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         DrawHeaderRow();
 
-        foreach (var data in characterDataDisplay)
+        foreach (var member in list)
         {
-            using var id       = ImRaii.PushId(data.ContentID.ToString());
-            var       selected = selectedMembers.Contains(data);
+            if (member.ContentID == LocalPlayerState.ContentID) continue;
+            
+            using var id       = ImRaii.PushId(member.ContentID.ToString());
+            var       selected = selectedContentIDs.Contains(member.ContentID);
 
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
 
-            if (ImGui.Selectable($"{data.Index}", selected, ImGuiSelectableFlags.SpanAllColumns))
+            if (ImGui.Selectable($"{member.Index}", selected, ImGuiSelectableFlags.SpanAllColumns))
             {
-                if (!selectedMembers.Remove(data))
-                    selectedMembers.Add(data);
+                if (!selectedContentIDs.Remove(member.ContentID))
+                    selectedContentIDs.Add(member.ContentID);
             }
 
-            DrawSingleContextMenu(data);
+            DrawMemberContextMenu(member);
 
             ImGui.TableNextColumn();
-            LuminaGetter.TryGetRow<OnlineStatus>(data.OnlineStatus, out var onlineStatusRow);
-
-            if (data.OnlineStatus != 0)
-            {
-                var onlineStatusIcon = ITextureProvider.Instance().GetFromGameIcon(new(onlineStatusRow.Icon)).GetWrapOrDefault();
-
-                if (onlineStatusIcon != null)
-                {
-                    var origPosY = ImGui.GetCursorPosY();
-                    ImGui.SetCursorPosY(origPosY + (2f * GlobalUIScale));
-                    ImGui.Image(onlineStatusIcon.Handle, new(ImGui.GetTextLineHeight()));
-                    ImGui.SetCursorPosY(origPosY);
-                    ImGui.SameLine();
-                }
-            }
-
-            ImGui.TextUnformatted($"{data.Name}");
+            DrawOnlineStatus(member);
+            ImGui.TextUnformatted(member.Name);
 
             ImGui.TableNextColumn();
-
-            if (data.JobIcon != null)
-            {
-                var origPosY = ImGui.GetCursorPosY();
-                ImGui.SetCursorPosY(origPosY + (2f * GlobalUIScale));
-                ImGui.Image(data.JobIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
-                ImGui.SetCursorPosY(origPosY);
-                ImGui.SameLine();
-            }
-
-            ImGui.TextUnformatted(data.Job);
+            ImGui.TextUnformatted(member.RankText);
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(data.Location);
+            DrawJob(member);
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(member.LocationText);
 
             ImGui.TableNextColumn();
             using (ImRaii.Disabled())
-                ImGui.Checkbox($"{data.ContentID}_Checkbox", ref selected);
+                ImGui.Checkbox($"##{member.ContentID}_Checkbox", ref selected);
         }
+
+        DrawConfirmPopup();
     }
 
     private void DrawHeaderRow()
     {
         ImGui.TableNextColumn();
-        var arrowButton = isReverse ?
-                              ImGui.Button(FontAwesomeIcon.ArrowUp.ToIconString()) :
-                              ImGui.Button(FontAwesomeIcon.ArrowDown.ToIconString());
 
-        if (arrowButton)
-        {
-            isReverse            ^= true;
-            characterDataDisplay =  FilterAndSortCharacterData();
-        }
+        if (ImGui.Button
+            (
+                isDescending ?
+                    FontAwesomeIcon.ArrowUp.ToIconString() :
+                    FontAwesomeIcon.ArrowDown.ToIconString()
+            ))
+            isDescending ^= true;
 
         ImGui.TableNextColumn();
         ImGui.Selectable(Lang.Get("Name"));
@@ -248,14 +172,14 @@ public unsafe class FCMemberManagePanel : ModuleBase
                 (
                     "###NameSearchInput",
                     Lang.Get("PleaseSearch"),
-                    ref filterMemberName,
+                    ref nameFilter,
                     128
                 );
-
-                if (ImGui.IsItemDeactivatedAfterEdit())
-                    characterDataDisplay = FilterAndSortCharacterData();
             }
         }
+
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted("阶级");
 
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("Job"));
@@ -270,446 +194,380 @@ public unsafe class FCMemberManagePanel : ModuleBase
         DrawMultiContextMenu();
     }
 
-    // 不能用 ImRaii - 会导致延迟执行产生的数据错误
-    private void DrawSingleContextMenu
+    private static void DrawOnlineStatus
     (
-        FreeCompanyMemberInfo data
+        MemberRecord member
     )
     {
-        if (ImGui.BeginPopupContextItem($"{data.ContentID}_Popup"))
+        if (member.OnlineStatus == 0) return;
+        if (!LuminaGetter.TryGetRow<OnlineStatus>(member.OnlineStatus, out var row)) return;
+
+        var icon = ITextureProvider.Instance().GetFromGameIcon(new(row.Icon)).GetWrapOrDefault();
+        if (icon == null) return;
+
+        var originY = ImGui.GetCursorPosY();
+        ImGui.SetCursorPosY(originY + (2f * GlobalUIScale));
+        ImGui.Image(icon.Handle, new(ImGui.GetTextLineHeight()));
+        ImGui.SetCursorPosY(originY);
+        ImGui.SameLine();
+    }
+
+    private static void DrawJob
+    (
+        MemberRecord member
+    )
+    {
+        if (member.JobIcon != null)
         {
-            ImGui.TextUnformatted($"{data.Name}");
-
-            ImGui.Separator();
-            ImGui.Spacing();
-
-            // 冒险者铭牌
-            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
-                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(15083));
-
-            // 个人信息
-            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
-                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(51));
-
-            // 部队信息
-            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
-                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2807));
-
-            // 任命
-            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2656)))
-                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2656));
-
-            // 除名
-            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
-                OpenContextMenuAndClick(data.Index, LuminaWrapper.GetAddonText(2801));
-
-            ImGui.EndPopup();
+            var originY = ImGui.GetCursorPosY();
+            ImGui.SetCursorPosY(originY + (2f * GlobalUIScale));
+            ImGui.Image(member.JobIcon.GetWrapOrEmpty().Handle, new(ImGui.GetTextLineHeight()));
+            ImGui.SetCursorPosY(originY);
+            ImGui.SameLine();
         }
+
+        ImGui.TextUnformatted(member.JobText);
+    }
+
+    private void DrawMemberContextMenu
+    (
+        MemberRecord member
+    )
+    {
+        using var context = ImRaii.ContextPopupItem($"{member.ContentID}_Popup");
+        if (!context) return;
+        
+        ImGui.TextUnformatted(member.Name);
+        
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
+            OpenCharaCard(member.ContentID);
+
+        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
+            OpenCharacterDetail(member.ContentID);
+
+        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
+            OpenFreeCompanyProfile(member.ContentID);
+
+        DrawRankMenu([member.ContentID]);
+
+        if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
+            RequestConfirm([member.ContentID]);
     }
 
     private void DrawMultiContextMenu()
     {
-        if (ImGui.BeginPopupContextItem("Multi_Popup"))
+        using var popup = ImRaii.ContextPopupItem("Multi_Popup");
+        if (!popup) return;
+        
+        ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-SelectedMembers", selectedContentIDs.Count));
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        using (ImRaii.Disabled(selectedContentIDs.Count == 0))
         {
-            ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-SelectedMembers", selectedMembers.Count));
+            var targets = selectedContentIDs.ToArray();
 
-            ImGui.Separator();
-            ImGui.Spacing();
+            DrawRankMenu(targets);
 
-            using (ImRaii.Disabled(selectedMembers.Count == 0))
-            {
-                // 清除已选
-                if (ImGui.MenuItem(Lang.Get("Clear")))
-                    selectedMembers.Clear();
-
-                // 冒险者铭牌
-                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(15083)))
-                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(15083));
-
-                // 个人信息
-                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(51)))
-                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(51), "SocialDetailB");
-
-                // 部队信息
-                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2807)))
-                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(2807));
-
-                // 任命
-                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2656)))
-                    EnqueueContentMenuClicks(selectedMembers, LuminaWrapper.GetAddonText(2656));
-
-                // 除名
-                if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
-                {
-                    EnqueueContentMenuClicks
-                    (
-                        selectedMembers,
-                        LuminaWrapper.GetAddonText(2801),
-                        "SelectYesno",
-                        () =>
-                        {
-                            TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes(), weight: 1);
-                            return true;
-                        }
-                    );
-                }
-            }
-
-            ImGui.EndPopup();
+            if (ImGui.MenuItem(LuminaWrapper.GetAddonText(2801)))
+                RequestConfirm(targets);
         }
     }
 
-    private void OnAddonMember
+    private void DrawRankMenu
+    (
+        ulong[] targets
+    )
+    {
+        using var menu = ImRaii.Menu(LuminaWrapper.GetAddonText(2656));
+        if (!menu) return;
+        
+        var infoProxy = InfoProxyFreeCompany.Instance();
+
+        if (infoProxy != null)
+        {
+            foreach (var (rankIndex, name) in infoProxy->GetAssignableRanks())
+            {
+                if (ImGui.MenuItem($"{name}##Rank{rankIndex}"))
+                    EnqueueMemberAction(targets, AgentFreeCompany.MemberActionType.Promote, rankIndex);
+            }
+        }
+    }
+
+    private void DrawConfirmPopup()
+    {
+        if (pendingTargets == null) return;
+
+        using var modal = ImGuiOm.PopupModal
+        (
+            $"{Info.Title}##ConfirmKickPopup",
+            ref requestConfirmPopup,
+            ImGuiWindowFlags.AlwaysAutoResize
+        );
+        if (!modal) return;
+        
+        ImGui.TextUnformatted
+        (
+            pendingTargets.Length == 1 ?
+                Lang.Get("FCMemberManagePanel-ConfirmKick", GetMemberName(pendingTargets[0])) :
+                Lang.Get("FCMemberManagePanel-ConfirmKickMulti", pendingTargets.Length)
+        );
+
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        if (ImGui.Button(LuminaWrapper.GetAddonText(1), new(120f * GlobalUIScale, 0f)))
+        {
+            EnqueueMemberAction(pendingTargets, AgentFreeCompany.MemberActionType.Dismiss, 0);
+            pendingTargets      = null;
+            requestConfirmPopup = false;
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button(LuminaWrapper.GetAddonText(2), new(120f * GlobalUIScale, 0f)))
+        {
+            pendingTargets      = null;
+            requestConfirmPopup = false;
+        }
+    }
+
+    private void OnFreeCompanyMemberAddon
     (
         AddonEvent type,
         AddonArgs? args
     )
     {
-        Overlay.IsOpen = type switch
-        {
-            AddonEvent.PostSetup => true,
-            _                    => Overlay.IsOpen
-        };
+        if (type == AddonEvent.PostSetup)
+            Overlay.IsOpen = true;
 
-        switch (type)
-        {
-            case AddonEvent.PostSetup:
-                ResetAllExistedData();
-                break;
-            case AddonEvent.PreFinalize:
-                var instance = InfoProxyFreeCompany.Instance();
-                instance->RequestData();
-                break;
-        }
+        if (type is AddonEvent.PostSetup or AddonEvent.PreFinalize)
+            ResetMembers();
     }
 
-    private void OnAddonYesno
-    (
-        AddonEvent type,
-        AddonArgs  args
-    )
-    {
-        if (!TaskHelper.IsBusy || args.Addon == nint.Zero) return;
-
-        var addon = args.Addon.ToStruct();
-        addon->Callback(0);
-    }
-
-    private void EnqueueContentMenuClicks
-    (
-        IEnumerable<FreeCompanyMemberInfo> datas,
-        string                             text,
-        string?                            waitAddon   = null,
-        Func<bool>?                        extraAction = null
-    )
-    {
-        TaskHelper.Abort();
-
-        foreach (var data in datas)
-        {
-            TaskHelper.Enqueue(() => OpenContextMenuAndClick(data.Index, text));
-            if (waitAddon != null)
-                TaskHelper.Enqueue(() => AddonHelper.TryGetByName<AtkUnitBase>(waitAddon, out var addon) && addon->IsAddonAndNodesReady());
-
-            if (extraAction != null)
-                TaskHelper.Enqueue(extraAction);
-
-            TaskHelper.DelayNext(500);
-        }
-    }
-
-    private void OpenContextMenuAndClick
-    (
-        int    dataIndex,
-        string menuText
-    )
-    {
-        AgentFreeCompany.Instance()->OpenContextMenuForMember((byte)dataIndex);
-        TaskHelper.Enqueue
-        (
-            () =>
-            {
-                if (ContextMenuAddon == null || !ContextMenuAddon->IsAddonAndNodesReady()) return false;
-
-                if (!AddonContextMenuEvent.Select(menuText))
-                {
-                    ContextMenuAddon->Close(true);
-                    NotifyHelper.Instance().NotificationError
-                    (
-                        $"{Lang.Get("FCMemberManagePanel-ContextMenuItemNoFound")}: {menuText}"
-                    );
-                }
-
-                return true;
-            },
-            weight: 2
-        );
-    }
-
-    private void SwitchFreeCompanyMemberListPage
-    (
-        int page
-    )
-    {
-        var memoryBlock = Marshal.AllocHGlobal(32);
-        var agent       = AgentFreeCompany.Instance();
-
-        try
-        {
-            var value1 = (AtkValue*)memoryBlock;
-            value1->Type = AtkValueType.Int;
-            value1->SetInt(1);
-
-            var value2 = (AtkValue*)(memoryBlock + 16);
-            value2->Type = AtkValueType.UInt;
-            value2->SetUInt((uint)page);
-
-            AgentFCReceiveEventInternal(agent, memoryBlock);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(memoryBlock);
-        }
-
-        characterDataDict.Clear();
-        selectedMembers.Clear();
-    }
-
-    private void ResetAllExistedData()
+    private void SyncMembers()
     {
         var agent = AgentFreeCompany.Instance();
         if (agent == null) return;
 
-        var info = agent->InfoProxyFreeCompanyMember;
-        if (info == null) return;
+        var memberProxy = agent->InfoProxyFreeCompanyMember;
+        if (memberProxy == null) return;
 
-        info->ClearData();
+        currentPage = agent->CurrentMemberPageIndex;
 
-        characterDataDict.Clear();
-        selectedMembers.Clear();
-    }
+        var infoProxy = InfoProxyFreeCompany.Instance();
 
-    private List<FreeCompanyMemberInfo> FilterAndSortCharacterData()
-    {
-        var filteredList = string.IsNullOrWhiteSpace(filterMemberName) ?
-                               characterDataDict.Values.ToList() :
-                               characterDataDict.Values
-                                                .Where(member => member.Name.Contains(filterMemberName, StringComparison.OrdinalIgnoreCase))
-                                                .ToList();
+        if (infoProxy != null)
+            totalMemberCount = infoProxy->TotalMembers;
 
-        filteredList.Sort
-        ((a, b) =>
-            {
-                var comparison = a.Index.CompareTo(b.Index);
-                return isReverse ?
-                           -comparison :
-                           comparison;
-            }
-        );
+        var source = memberProxy->CharDataSpan;
 
-        return filteredList;
-    }
-
-
-    private class FreeCompanyMemberInfo : IEquatable<FreeCompanyMemberInfo>, IComparable<FreeCompanyMemberInfo>
-    {
-        [Flags]
-        public enum ChangeFlags
+        if (source.Length == 0)
         {
-            None         = 0,
-            Index        = 1 << 0,
-            OnlineStatus = 1 << 1,
-            Name         = 1 << 2,
-            JobIcon      = 1 << 3,
-            Job          = 1 << 4,
-            Location     = 1 << 5
+            members.Clear();
+            return;
         }
 
-        public ulong                    ContentID    { get; set; }
+        for (var i = 0; i < source.Length; i++)
+        {
+            var data = source[i];
+
+            if (string.IsNullOrWhiteSpace(data.NameString)) continue;
+
+            var contentID = data.ContentId;
+            var record = members.TryGetValue(contentID, out var existed) ?
+                             existed :
+                             new() { ContentID = contentID };
+
+            record.Index        = i;
+            record.OnlineStatus = GetOnlineStatusIconID(data.State);
+            record.Name         = data.NameString;
+            record.RankText = infoProxy == null ?
+                                  string.Empty :
+                                  infoProxy->GetMemberRankNameText(data.ExtraFlags);
+            record.JobIcon = data.Job == 0 ?
+                                 null :
+                                 ITextureProvider.Instance().GetFromGameIcon(new(62100U + data.Job));
+            record.JobText = data.Job == 0 ?
+                                 string.Empty :
+                                 LuminaGetter.GetRowOrDefault<ClassJob>(data.Job).Name.ToString() ?? string.Empty;
+            record.LocationText = agent->GetMemberLocationText(i);
+
+            members[contentID] = record;
+        }
+    }
+
+    private void ResetMembers()
+    {
+        members.Clear();
+        selectedContentIDs.Clear();
+        pendingTargets      = null;
+        requestConfirmPopup = false;
+    }
+
+    private int GetPageCount()
+        => Math.Min(PAGE_LIMIT, Math.Max(1, ((int)totalMemberCount + ((int)PAGE_SIZE - 1)) / (int)PAGE_SIZE));
+
+    private List<MemberRecord> FilteredMembers()
+    {
+        var query = string.IsNullOrWhiteSpace(nameFilter) ?
+                        members.Values :
+                        members.Values.Where(x => x.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+
+        var list = query.ToList();
+        list.Sort
+        ((a, b) => isDescending ?
+                       b.Index.CompareTo(a.Index) :
+                       a.Index.CompareTo(b.Index)
+        );
+        return list;
+    }
+
+    private void SwitchPage
+    (
+        int page
+    )
+    {
+        var agent = AgentFreeCompany.Instance();
+        if (agent == null) return;
+
+        agent->SwitchMemberPage(page);
+
+        currentPage = page;
+
+        members.Clear();
+        selectedContentIDs.Clear();
+    }
+
+    private void EnqueueMemberAction
+    (
+        ulong[]                           targets,
+        AgentFreeCompany.MemberActionType action,
+        byte                              rank
+    )
+    {
+        TaskHelper?.Abort();
+
+        foreach (var target in targets)
+        {
+            TaskHelper?.Enqueue
+            (() =>
+                {
+                    var agent = AgentFreeCompany.Instance();
+                    if (agent == null) return true;
+
+                    agent->ExecuteMemberAction(target, action, rank);
+                    return true;
+                }
+            );
+
+            TaskHelper?.DelayNext(300);
+        }
+    }
+
+    private void RequestConfirm
+    (
+        ulong[] targets
+    )
+    {
+        if (targets.Length == 0) return;
+
+        pendingTargets      = targets;
+        requestConfirmPopup = true;
+    }
+
+    private static void OpenCharaCard
+    (
+        ulong contentID
+    )
+    {
+        var agent = AgentCharaCard.Instance();
+        if (agent == null) return;
+
+        agent->OpenCharaCard(contentID);
+    }
+
+    private static void OpenCharacterDetail
+    (
+        ulong contentID
+    )
+    {
+        var agent = AgentFreeCompany.Instance();
+        if (agent == null) return;
+
+        var memberProxy = agent->InfoProxyFreeCompanyMember;
+        if (memberProxy == null) return;
+
+        var entry = memberProxy->GetEntryByContentId(contentID);
+        if (entry == null) return;
+
+        var detail = AgentDetail.Instance();
+        if (detail == null) return;
+
+        detail->OpenForCharacterData(entry);
+    }
+
+    private static void OpenFreeCompanyProfile
+    (
+        ulong contentID
+    )
+    {
+        var agent = AgentFreeCompanyProfile.Instance();
+        if (agent == null) return;
+
+        agent->ShowProfile(contentID);
+    }
+
+    private string GetMemberName
+    (
+        ulong contentID
+    )
+        => members.TryGetValue(contentID, out var member) ?
+               member.Name :
+               contentID.ToString();
+
+    private static uint GetOnlineStatusIconID
+    (
+        InfoProxyCommonList.CharacterData.OnlineStatus status
+    )
+    {
+        // 默认的 0 无法获取图标
+        if (status == InfoProxyCommonList.CharacterData.OnlineStatus.Offline)
+            return 10;
+
+        var value = (ulong)status;
+
+        var lowestBit = value & (~value + 1);
+
+        uint position = 0;
+
+        while (lowestBit > 1UL)
+        {
+            lowestBit >>= 1;
+            position++;
+        }
+
+        return position;
+    }
+
+    private sealed class MemberRecord
+    {
+        public ulong                    ContentID    { get; init; }
         public int                      Index        { get; set; }
         public uint                     OnlineStatus { get; set; }
-        public string                   Name         { get; set; }
+        public string                   Name         { get; set; } = string.Empty;
+        public string                   RankText     { get; set; } = string.Empty;
         public ISharedImmediateTexture? JobIcon      { get; set; }
-        public string                   Job          { get; set; }
-        public string                   Location     { get; set; }
-
-        public int CompareTo
-        (
-            FreeCompanyMemberInfo? other
-        )
-            => other is null ?
-                   1 :
-                   Index.CompareTo(other.Index);
-
-        public bool Equals
-        (
-            FreeCompanyMemberInfo? other
-        )
-            => other is not null && ContentID == other.ContentID;
-
-        public ChangeFlags UpdateFrom
-        (
-            FreeCompanyMemberInfo other
-        )
-        {
-            var changes = ChangeFlags.None;
-
-            if (Index != other.Index)
-            {
-                Index   =  other.Index;
-                changes |= ChangeFlags.Index;
-            }
-
-            if (OnlineStatus != other.OnlineStatus)
-            {
-                OnlineStatus =  other.OnlineStatus;
-                changes      |= ChangeFlags.OnlineStatus;
-            }
-
-            if (Name != other.Name)
-            {
-                Name    =  other.Name;
-                changes |= ChangeFlags.Name;
-            }
-
-            if (JobIcon != other.JobIcon)
-            {
-                JobIcon =  other.JobIcon;
-                changes |= ChangeFlags.JobIcon;
-            }
-
-            if (Job != other.Job)
-            {
-                Job     =  other.Job;
-                changes |= ChangeFlags.Job;
-            }
-
-            if (Location != other.Location)
-            {
-                Location =  other.Location;
-                changes  |= ChangeFlags.Location;
-            }
-
-            return changes;
-        }
-
-        public static FreeCompanyMemberInfo Parse
-        (
-            InfoProxyCommonList.CharacterData data,
-            int                               index
-        )
-        {
-            var stringArray    = AtkStage.Instance()->GetStringArrayData()[36]->StringArray;
-            var lastOnlineTime = string.Empty;
-
-            try
-            {
-                lastOnlineTime = SeString.Parse(stringArray[1 + (index * 5)].Value).TextValue;
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-
-            return new FreeCompanyMemberInfo
-            {
-                ContentID    = data.ContentId,
-                Index        = index,
-                OnlineStatus = (uint)GetOrigOnlineStatusID(data.State),
-                Name = string.IsNullOrWhiteSpace(data.NameString) ?
-                           LuminaWrapper.GetAddonText(964) :
-                           data.NameString,
-                JobIcon = data.Job == 0 ?
-                              null :
-                              ITextureProvider.Instance().GetFromGameIcon(new(62100U + data.Job)),
-                Job = data.Job == 0 ?
-                          string.Empty :
-                          LuminaGetter.GetRow<ClassJob>(data.Job)?.Abbreviation.ToString(),
-                Location = data.Location != 0 ?
-                               LuminaGetter.TryGetRow<TerritoryType>(data.Location, out var zone) ?
-                                   zone.PlaceName.Value.Name.ToString() :
-                                   lastOnlineTime :
-                               lastOnlineTime
-            };
-        }
-
-        public static int GetOrigOnlineStatusID
-        (
-            InfoProxyCommonList.CharacterData.OnlineStatus status
-        )
-        {
-            // 默认的 0 无法获取图标
-            if (status == InfoProxyCommonList.CharacterData.OnlineStatus.Offline)
-                return 10;
-
-            var value = (ulong)status;
-
-            var lowestBit = value & (~value + 1);
-
-            var position = 0;
-
-            while (lowestBit > 1UL)
-            {
-                lowestBit >>= 1;
-                position++;
-            }
-
-            return position;
-        }
-
-        public override bool Equals
-        (
-            object? obj
-        )
-            => Equals(obj as FreeCompanyMemberInfo);
-
-        public override int GetHashCode()
-            => ContentID.GetHashCode();
-
-        public static bool operator ==
-        (
-            FreeCompanyMemberInfo? left,
-            FreeCompanyMemberInfo? right
-        )
-            => left?.Equals(right) ?? ReferenceEquals(right, null);
-
-        public static bool operator !=
-        (
-            FreeCompanyMemberInfo left,
-            FreeCompanyMemberInfo right
-        )
-            => !(left == right);
-
-        public static bool operator <
-        (
-            FreeCompanyMemberInfo  left,
-            FreeCompanyMemberInfo? right
-        )
-            => ReferenceEquals(left, null) ?
-                   !ReferenceEquals(right, null) :
-                   left.CompareTo(right) < 0;
-
-        public static bool operator <=
-        (
-            FreeCompanyMemberInfo  left,
-            FreeCompanyMemberInfo? right
-        )
-            => ReferenceEquals(left, null) || left.CompareTo(right) <= 0;
-
-        public static bool operator >
-        (
-            FreeCompanyMemberInfo  left,
-            FreeCompanyMemberInfo? right
-        )
-            => !ReferenceEquals(left, null) && left.CompareTo(right) > 0;
-
-        public static bool operator >=
-        (
-            FreeCompanyMemberInfo  left,
-            FreeCompanyMemberInfo? right
-        )
-            => ReferenceEquals(left,      null) ?
-                   ReferenceEquals(right, null) :
-                   left.CompareTo(right) >= 0;
+        public string                   JobText      { get; set; } = string.Empty;
+        public string                   LocationText { get; set; } = string.Empty;
     }
+    
+    #region 常量
+    
+    private const uint PAGE_SIZE  = 200;
+    private const int  PAGE_LIMIT = 3;
+    
+    #endregion
 }
