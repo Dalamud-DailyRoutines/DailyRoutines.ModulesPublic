@@ -135,7 +135,7 @@ public unsafe partial class OptimizedFriendList
             {
                 Position      = new(12, 132),
                 Size          = new(100, 20),
-                String        = Lang.Get("Note"),
+                String        = Lang.Get("Remark"),
                 FontSize      = 14,
                 AlignmentType = AlignmentType.Left,
                 TextFlags     = TextFlags.Bold

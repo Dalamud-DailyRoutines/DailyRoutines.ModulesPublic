@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
@@ -12,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using KamiToolKit.Nodes;
 using OmenTools.Dalamud.Attributes;
+using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
@@ -256,32 +256,36 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName != "FriendList") return null;
+            if (args.AddonName != "FriendList") 
+                return null;
+            
+            var contentID = AgentFriendlist.Instance()->SelectedContentId;
+            if (contentID == 0) 
+                return null;
+            
+            var name    = args.TargetName;
+            var worldID = (uint)args.TargetHomeWorldID;
+            if (string.IsNullOrEmpty(name) ||
+                !Sheets.Worlds.ContainsKey(worldID))
+            {
+                if (!TryGetPlayerInfoByContentID(contentID, out var playerInfo))
+                    return null;
 
-            var contentID = args.TargetContentID;
-            if (contentID == 0 || string.IsNullOrEmpty(args.TargetName)) return null;
+                name    = playerInfo.Name;
+                worldID = playerInfo.WorldID;
+            }
 
             return new()
             {
                 Name = Lang.Get("OptimizedFriendList-ContextMenu-QueryUsedNames"),
                 OnClicked = _ =>
                 {
-                    var targetName    = args.TargetName;
-                    var targetWorldID = (uint)args.TargetHomeWorldID;
-
-                    var previousAddon = module.usedNamesAddon;
-
-                    if (previousAddon is not null)
-                    {
-                        previousAddon.Dispose();
-                        module.usedNamesAddon = null;
-                    }
-
+                    module.usedNamesAddon?.Dispose();
                     module.usedNamesAddon = DRFriendlistUsedNames.Open
                     (
                         contentID,
-                        targetName,
-                        LuminaWrapper.GetWorldName(targetWorldID)
+                        name,
+                        LuminaWrapper.GetWorldName(worldID)
                     );
                 }
             };
@@ -302,33 +306,37 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName != "FriendList") return null;
+            if (args.AddonName != "FriendList") 
+                return null;
 
-            var contentID = args.TargetContentID;
-            if (contentID == 0 || string.IsNullOrWhiteSpace(args.TargetName)) return null;
+            var contentID = AgentFriendlist.Instance()->SelectedContentId;
+            if (contentID == 0) 
+                return null;
+            
+            var name    = args.TargetName;
+            var worldID = (uint)args.TargetHomeWorldID;
+            if (string.IsNullOrEmpty(name) ||
+                !Sheets.Worlds.ContainsKey(worldID))
+            {
+                if (!TryGetPlayerInfoByContentID(contentID, out var playerInfo))
+                    return null;
+
+                name    = playerInfo.Name;
+                worldID = playerInfo.WorldID;
+            }
 
             return new()
             {
                 Name = Lang.Get("OptimizedFriendList-ContextMenu-NicknameAndRemark"),
                 OnClicked = _ =>
                 {
-                    var targetName    = args.TargetName;
-                    var targetWorldID = (uint)args.TargetHomeWorldID;
-
-                    var previousAddon = instance.remarkEditAddon;
-
-                    if (previousAddon is not null)
-                    {
-                        previousAddon.Dispose();
-                        instance.remarkEditAddon = null;
-                    }
-
+                    instance.remarkEditAddon?.Dispose();
                     instance.remarkEditAddon = DRFriendlistRemarkEdit.Open
                     (
                         instance,
                         contentID,
-                        targetName,
-                        LuminaWrapper.GetWorldName(targetWorldID)
+                        name,
+                        LuminaWrapper.GetWorldName(worldID)
                     );
                     instance.ApplySearchFilter(instance.searchString, taskHelper);
                 }
@@ -346,12 +354,15 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName != "FriendList") return null;
+            if (args.AddonName != "FriendList")
+                return null;
 
             var targetCharacter = args.TargetCharacter;
-            if (targetCharacter == null) return null;
+            if (targetCharacter == null)
+                return null;
 
-            if (!TryGetAetheryteID(targetCharacter->Location, out var aetheryteID)) return null;
+            if (!TryGetAetheryteID(targetCharacter->Location, out var aetheryteID)) 
+                return null;
 
             return new()
             {

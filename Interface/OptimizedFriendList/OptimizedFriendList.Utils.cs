@@ -1,5 +1,7 @@
-﻿using DailyRoutines.Common.RemoteInteraction.Helpers;
+﻿using System.Diagnostics.CodeAnalysis;
+using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.RemoteInteraction.PlayerInfo;
+using DailyRoutines.RemoteInteraction.PlayerInfo.Models;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.System.String;
@@ -68,7 +70,7 @@ public unsafe partial class OptimizedFriendList
 
             if (!string.IsNullOrWhiteSpace(configInfo.Remark))
             {
-                var remarkText = $"{LuminaWrapper.GetAddonText(13294).TrimEnd(':')}: {configInfo.Remark}" +
+                var remarkText = $"{Lang.Get("Remark")}: {configInfo.Remark}" +
                                  (string.IsNullOrWhiteSpace(configInfo.Nickname) ?
                                       string.Empty :
                                       $"\n{LuminaWrapper.GetAddonText(9818)}: {data.NameString}");
@@ -204,6 +206,18 @@ public unsafe partial class OptimizedFriendList
             var entry = info->GetEntryByContentId(pair.Key);
             entry->ExtraFlags = pair.Value;
         }
+    }
+
+    private static bool TryGetPlayerInfoByContentID
+    (
+        ulong                                    contentID,
+        [NotNullWhen(true)] out PlayerInfoValue? playerInfo
+    )
+    {
+        playerInfo = null;
+
+        var region = WorldRegionResolver.Resolve(GameState.HomeWorld);
+        return RemotePlayerInfo.TryGet(contentID, region, out playerInfo);
     }
 
     private void RestoreEntryData
