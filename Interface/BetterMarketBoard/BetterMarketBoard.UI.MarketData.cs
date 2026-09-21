@@ -602,8 +602,8 @@ public unsafe partial class BetterMarketBoard
             using var id = ImRaii.PushId(listing.ListingId.ToString());
             ImGui.TableNextRow();
 
-            var isOwnRetainer = IsOwnRetainer(listing.RetainerId);
-            using var rowColor = ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), isOwnRetainer);
+            var       isOwnRetainer = IsOwnRetainer(listing.RetainerId);
+            using var rowColor      = ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled), isOwnRetainer);
 
             ImGui.TableNextColumn();
             var isSelected = provider.SelectedListings.ContainsKey(listing.ListingId);
@@ -641,7 +641,7 @@ public unsafe partial class BetterMarketBoard
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted
                 (
-                    listing.IsMannequin ?
+                    listing.IsSellingAsSet ?
                         "\u221a" :
                         string.Empty
                 );

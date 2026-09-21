@@ -719,15 +719,15 @@ public unsafe partial class BetterMarketBoard
 
         public HistoryDataSet? GetHistoryDataSet
         (
-            uint itemID,
+            uint  itemID,
             bool? hqOnly = null
         )
         {
             if (itemID == 0) return null;
 
             var targetHQOnly = hqOnly ?? HQOnly;
-            var key  = (ItemID: itemID, WorldID: SelectedWorldID, HQOnly: targetHQOnly);
-            var slot = historyDataCache.GetOrAdd(key, static _ => new());
+            var key          = (ItemID: itemID, WorldID: SelectedWorldID, HQOnly: targetHQOnly);
+            var slot         = historyDataCache.GetOrAdd(key, static _ => new());
 
             return GetOrBuild
             (
@@ -1018,7 +1018,8 @@ public unsafe partial class BetterMarketBoard
             if (!info->IsFullyReceived())
                 return EmptyLocalListings();
 
-            var sourceListings = info->Listings.ToArray();
+            var validCount     = (int)Math.Min(info->EntryCount, info->ListingCount);
+            var sourceListings = info->Listings.ToArray()[..validCount];
             var contentHash    = CalculateLocalListingsHash(sourceListings);
             var fingerprint    = (itemEpoch, info->SearchItemId, HQOnly, info->ListingCount, contentHash);
             if (localListingsData != null && localListingsFingerprint == fingerprint)
@@ -1049,7 +1050,7 @@ public unsafe partial class BetterMarketBoard
                 hash.Add(listing.UnitPrice);
                 hash.Add(listing.Quantity);
                 hash.Add(listing.IsHqItem);
-                hash.Add(listing.IsMannequin);
+                hash.Add(listing.IsSellingAsSet);
                 hash.Add(listing.MateriaCount);
                 hash.Add(listing.TotalTax);
             }
@@ -1095,7 +1096,7 @@ public unsafe partial class BetterMarketBoard
                                 .ToArray();
 
             var isAnyHQ          = listingsArray.Any(x => x.IsHqItem);
-            var isAnyOnMannequin = listingsArray.Any(x => x.IsMannequin);
+            var isAnyOnMannequin = listingsArray.Any(x => x.IsSellingAsSet);
             var isAnyMateria = LuminaGetter.TryGetRow<Item>(itemID, out var itemData) &&
                                itemData.MateriaSlotCount > 0                          &&
                                listingsArray.Any(x => x.MateriaCount > 0);
@@ -1338,26 +1339,31 @@ public unsafe partial class BetterMarketBoard
         )
         {
             if (SelectedWorldID == GameState.CurrentWorld &&
-                IsAbleToSearchLocalMarket()                         &&
-                InfoProxy != null                                      &&
-                InfoProxy->SearchItemId == itemID                    &&
+                IsAbleToSearchLocalMarket()               &&
+                InfoProxy               != null           &&
+                InfoProxy->SearchItemId == itemID         &&
                 InfoProxy->IsFullyReceived(itemID))
             {
                 var localMinPrice = InfoProxy->Listings.ToArray()
-                                                   .Where
-                                                   (x => x.ItemId    == itemID &&
-                                                         x.UnitPrice > 0       &&
-                                                         (x.IsHqItem || !hqOnly))
-                                                   .Select(x => x.UnitPrice)
-                                                   .DefaultIfEmpty()
-                                                   .Min();
-                return localMinPrice > 0 ? localMinPrice : null;
+                                                       .Where
+                                                       (x => x.ItemId    == itemID &&
+                                                             x.UnitPrice > 0       &&
+                                                             (x.IsHqItem || !hqOnly)
+                                                       )
+                                                       .Select(x => x.UnitPrice)
+                                                       .DefaultIfEmpty()
+                                                       .Min();
+                return localMinPrice > 0 ?
+                           localMinPrice :
+                           null;
             }
 
             if (onlineAggregatedCache.TryGetValue((itemID, SelectedWorldID), out var response))
             {
                 var result = response.Results.FirstOrDefault(x => x.ItemID == itemID);
-                var price = result == null ? null : GetAggregatedMarketScope(result, hqOnly).MinListing.World.Price;
+                var price = result == null ?
+                                null :
+                                GetAggregatedMarketScope(result, hqOnly).MinListing.World.Price;
                 if (price is > 0)
                     return (ulong)Math.Round(price.Value);
             }
@@ -1367,11 +1373,14 @@ public unsafe partial class BetterMarketBoard
                 return null;
 
             var onlineMinPrice = itemData.Listings?
-                                           .Where(x => x.PricePerUnit > 0 && (x.HQ || !hqOnly))
-                                           .Select(x => x.PricePerUnit)
-                                           .DefaultIfEmpty()
-                                           .Min() ?? 0;
-            return onlineMinPrice > 0 ? onlineMinPrice : null;
+                                         .Where(x => x.PricePerUnit > 0 && (x.HQ || !hqOnly))
+                                         .Select(x => x.PricePerUnit)
+                                         .DefaultIfEmpty()
+                                         .Min() ??
+                                 0;
+            return onlineMinPrice > 0 ?
+                       onlineMinPrice :
+                       null;
         }
 
         public ulong? GetRegionMinPrice
@@ -1384,13 +1393,16 @@ public unsafe partial class BetterMarketBoard
                 return null;
 
             ulong? minPrice = null;
+
             foreach (var worldID in region.Values.SelectMany(static worlds => worlds.Keys))
             {
                 if (!onlineAggregatedCache.TryGetValue((itemID, worldID), out var response))
                     continue;
 
                 var result = response.Results.FirstOrDefault(x => x.ItemID == itemID);
-                var price = result == null ? null : GetAggregatedMarketScope(result, hqOnly).MinListing.World.Price;
+                var price = result == null ?
+                                null :
+                                GetAggregatedMarketScope(result, hqOnly).MinListing.World.Price;
                 if (price is not > 0)
                     continue;
 
@@ -1414,8 +1426,10 @@ public unsafe partial class BetterMarketBoard
                 return null;
 
             var prices = entries.Select(x => x.PricePerUnit).OrderBy(x => x).ToArray();
-            var index = (int)Math.Round((prices.Length - 1) * percentile, MidpointRounding.AwayFromZero);
-            return prices[index] > 0 ? prices[index] : null;
+            var index  = (int)Math.Round((prices.Length - 1) * percentile, MidpointRounding.AwayFromZero);
+            return prices[index] > 0 ?
+                       prices[index] :
+                       null;
         }
 
         public UniversalisAggregatedMarketDataResponse? GetAggregatedResponse
