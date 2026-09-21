@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -27,12 +28,14 @@ public unsafe class FCMemberManagePanel : ModuleBase
 
     private readonly Dictionary<ulong, MemberRecord> members            = [];
     private readonly HashSet<ulong>                  selectedContentIDs = [];
+    private readonly HashSet<byte>                   rankFilter         = [];
 
     private uint totalMemberCount;
     private int  currentPage;
 
-    private bool   isDescending;
-    private string nameFilter = string.Empty;
+    private bool            isDescending;
+    private string          nameFilter       = string.Empty;
+    private LastOnlineRange lastOnlineFilter = LastOnlineRange.All;
 
     private ulong[]? pendingTargets;
     private bool     requestConfirmPopup;
@@ -90,6 +93,10 @@ public unsafe class FCMemberManagePanel : ModuleBase
                 SwitchPage(currentPage + 1);
         }
 
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+        ImGui.InputTextWithHint("###MemberSearchInput", Lang.Get("PleaseSearch"), ref nameFilter, 128);
+
         var       list      = FilteredMembers();
         var       tableSize = ImGui.GetContentRegionAvail() with { Y = 0 };
         using var table     = ImRaii.Table("FCMembersTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable, tableSize);
@@ -97,7 +104,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
         if (!table) return;
 
         var columWidth = ImGui.GetFrameHeight();
-        
+
         ImGui.TableSetupColumn("序号",  ImGuiTableColumnFlags.WidthFixed,   columWidth);
         ImGui.TableSetupColumn("名称",  ImGuiTableColumnFlags.WidthStretch, 30);
         ImGui.TableSetupColumn("阶级",  ImGuiTableColumnFlags.WidthStretch, 25);
@@ -111,7 +118,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
         foreach (var member in list)
         {
             if (member.ContentID == LocalPlayerState.ContentID) continue;
-            
+
             using var id       = ImRaii.PushId(member.ContentID.ToString());
             var       selected = selectedContentIDs.Contains(member.ContentID);
 
@@ -161,31 +168,24 @@ public unsafe class FCMemberManagePanel : ModuleBase
             isDescending ^= true;
 
         ImGui.TableNextColumn();
-        ImGui.Selectable(Lang.Get("Name"));
-
-        using (var context = ImRaii.ContextPopupItem("NameSearch_Popup"))
-        {
-            if (context)
-            {
-                ImGui.SetNextItemWidth(200f * GlobalUIScale);
-                ImGui.InputTextWithHint
-                (
-                    "###NameSearchInput",
-                    Lang.Get("PleaseSearch"),
-                    ref nameFilter,
-                    128
-                );
-            }
-        }
+        ImGui.TextUnformatted(Lang.Get("Name"));
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted("阶级");
+
+        if (ImGui.Selectable(Lang.Get("FCMemberManagePanel-Rank"), rankFilter.Count > 0))
+            ImGui.OpenPopup(RANK_FILTER_POPUP_ID);
+
+        DrawRankFilterPopup();
 
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(Lang.Get("Job"));
 
         ImGui.TableNextColumn();
-        ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-PositionLastTime"));
+
+        if (ImGui.Selectable(Lang.Get("FCMemberManagePanel-PositionLastTime"), lastOnlineFilter != LastOnlineRange.All))
+            ImGui.OpenPopup(LAST_ONLINE_FILTER_POPUP_ID);
+
+        DrawLastOnlineFilterPopup();
 
         ImGui.TableNextColumn();
         if (ImGuiOm.ButtonIcon("OpenMultiPopup", FontAwesomeIcon.EllipsisH, string.Empty, true))
@@ -193,6 +193,79 @@ public unsafe class FCMemberManagePanel : ModuleBase
 
         DrawMultiContextMenu();
     }
+
+    private void DrawRankFilterPopup()
+    {
+        using var popup = ImRaii.ContextPopupItem(RANK_FILTER_POPUP_ID);
+        if (!popup) return;
+
+        foreach (var (rankIndex, name) in GetRankOptions())
+        {
+            var selected = rankFilter.Contains(rankIndex);
+
+            if (ImGui.Checkbox($"{name}##FilterRank{rankIndex}", ref selected))
+            {
+                if (!rankFilter.Remove(rankIndex))
+                    rankFilter.Add(rankIndex);
+            }
+        }
+
+        ImGui.Spacing();
+
+        if (ImGui.Button(Lang.Get("Reset"), new(-1f, 0f)))
+            rankFilter.Clear();
+    }
+
+    private void DrawLastOnlineFilterPopup()
+    {
+        using var popup = ImRaii.ContextPopupItem(LAST_ONLINE_FILTER_POPUP_ID);
+        if (!popup) return;
+
+        foreach (var range in LastOnlineRanges)
+        {
+            if (ImGui.RadioButton($"{GetLastOnlineRangeName(range)}##FilterLastOnline", lastOnlineFilter == range))
+                lastOnlineFilter = range;
+        }
+
+        ImGui.Spacing();
+
+        if (ImGui.Button(Lang.Get("Reset"), new(-1f, 0f)))
+            lastOnlineFilter = LastOnlineRange.All;
+    }
+
+    private static List<(byte RankIndex, string Name)> GetRankOptions()
+    {
+        List<(byte, string)> ranks = [];
+
+        var infoProxy = InfoProxyFreeCompany.Instance();
+        if (infoProxy == null) return ranks;
+
+        for (byte rankIndex = 0; rankIndex < FC_RANK_COUNT; rankIndex++)
+        {
+            var name = infoProxy->GetRankNameText(rankIndex);
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            ranks.Add((rankIndex, name));
+        }
+
+        return ranks;
+    }
+
+    private static string GetLastOnlineRangeName
+    (
+        LastOnlineRange range
+    )
+        => range switch
+        {
+            LastOnlineRange.Online      => Lang.Get("FCMemberManagePanel-LastOnline-Online"),
+            LastOnlineRange.WithinHour  => Lang.Get("FCMemberManagePanel-LastOnline-WithinHour"),
+            LastOnlineRange.WithinDay   => Lang.Get("FCMemberManagePanel-LastOnline-WithinDay"),
+            LastOnlineRange.WithinWeek  => Lang.Get("FCMemberManagePanel-LastOnline-WithinWeek"),
+            LastOnlineRange.WithinMonth => Lang.Get("FCMemberManagePanel-LastOnline-WithinMonth"),
+            LastOnlineRange.BeyondMonth => Lang.Get("FCMemberManagePanel-LastOnline-BeyondMonth"),
+            LastOnlineRange.Unknown     => Lang.Get("Unknown"),
+            _                           => Lang.Get("All")
+        };
 
     private static void DrawOnlineStatus
     (
@@ -236,9 +309,9 @@ public unsafe class FCMemberManagePanel : ModuleBase
     {
         using var context = ImRaii.ContextPopupItem($"{member.ContentID}_Popup");
         if (!context) return;
-        
+
         ImGui.TextUnformatted(member.Name);
-        
+
         ImGui.Separator();
         ImGui.Spacing();
 
@@ -261,7 +334,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
     {
         using var popup = ImRaii.ContextPopupItem("Multi_Popup");
         if (!popup) return;
-        
+
         ImGui.TextUnformatted(Lang.Get("FCMemberManagePanel-SelectedMembers", selectedContentIDs.Count));
         ImGui.Separator();
         ImGui.Spacing();
@@ -284,7 +357,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
     {
         using var menu = ImRaii.Menu(LuminaWrapper.GetAddonText(2656));
         if (!menu) return;
-        
+
         var infoProxy = InfoProxyFreeCompany.Instance();
 
         if (infoProxy != null)
@@ -308,11 +381,11 @@ public unsafe class FCMemberManagePanel : ModuleBase
             ImGuiWindowFlags.AlwaysAutoResize
         );
         if (!modal) return;
-        
+
         ImGui.TextUnformatted
         (
             pendingTargets.Length == 1 ?
-                Lang.Get("FCMemberManagePanel-ConfirmKick", GetMemberName(pendingTargets[0])) :
+                Lang.Get("FCMemberManagePanel-ConfirmKick",      GetMemberName(pendingTargets[0])) :
                 Lang.Get("FCMemberManagePanel-ConfirmKickMulti", pendingTargets.Length)
         );
 
@@ -327,6 +400,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
         }
 
         ImGui.SameLine();
+
         if (ImGui.Button(LuminaWrapper.GetAddonText(2), new(120f * GlobalUIScale, 0f)))
         {
             pendingTargets      = null;
@@ -387,13 +461,24 @@ public unsafe class FCMemberManagePanel : ModuleBase
             record.RankText = infoProxy == null ?
                                   string.Empty :
                                   infoProxy->GetMemberRankNameText(data.ExtraFlags);
+            record.RankIndex = (byte)(data.ExtraFlags >> MEMBER_RANK_INDEX_SHIFT);
+            record.IsOnline  = ((ulong)data.State & ONLINE_STATE_MASK) != 0;
             record.JobIcon = data.Job == 0 ?
                                  null :
                                  ITextureProvider.Instance().GetFromGameIcon(new(62100U + data.Job));
             record.JobText = data.Job == 0 ?
                                  string.Empty :
                                  LuminaGetter.GetRowOrDefault<ClassJob>(data.Job).Name.ToString() ?? string.Empty;
-            record.LocationText = agent->GetMemberLocationText(i);
+
+            var locationText = agent->GetMemberLocationText(i);
+
+            if (record.LocationText != locationText)
+            {
+                record.LocationText = locationText;
+                record.OfflineMinutes = record.IsOnline ?
+                                            0 :
+                                            ParseOfflineMinutes(locationText);
+            }
 
             members[contentID] = record;
         }
@@ -412,9 +497,16 @@ public unsafe class FCMemberManagePanel : ModuleBase
 
     private List<MemberRecord> FilteredMembers()
     {
-        var query = string.IsNullOrWhiteSpace(nameFilter) ?
-                        members.Values :
-                        members.Values.Where(x => x.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+        var query = members.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(nameFilter))
+            query = query.Where(x => x.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (rankFilter.Count > 0)
+            query = query.Where(x => rankFilter.Contains(x.RankIndex));
+
+        if (lastOnlineFilter != LastOnlineRange.All)
+            query = query.Where(MatchesLastOnlineFilter);
 
         var list = query.ToList();
         list.Sort
@@ -424,6 +516,36 @@ public unsafe class FCMemberManagePanel : ModuleBase
         );
         return list;
     }
+
+    private bool MatchesLastOnlineFilter
+    (
+        MemberRecord member
+    )
+        => lastOnlineFilter switch
+        {
+            LastOnlineRange.Online      => member.IsOnline,
+            LastOnlineRange.Unknown     => member is { IsOnline: false, OfflineMinutes: null },
+            LastOnlineRange.WithinHour  => IsWithinOfflineMinutes(member, 60),
+            LastOnlineRange.WithinDay   => IsWithinOfflineMinutes(member, 1440),
+            LastOnlineRange.WithinWeek  => IsWithinOfflineMinutes(member, 10080),
+            LastOnlineRange.WithinMonth => IsWithinOfflineMinutes(member, 43200),
+            LastOnlineRange.BeyondMonth => IsBeyondOfflineMinutes(member, 43200),
+            _                           => true
+        };
+
+    private static bool IsWithinOfflineMinutes
+    (
+        MemberRecord member,
+        int          limit
+    )
+        => member.IsOnline || member.OfflineMinutes <= limit;
+
+    private static bool IsBeyondOfflineMinutes
+    (
+        MemberRecord member,
+        int          limit
+    )
+        => !member.IsOnline && member.OfflineMinutes > limit;
 
     private void SwitchPage
     (
@@ -552,22 +674,113 @@ public unsafe class FCMemberManagePanel : ModuleBase
         return position;
     }
 
+    private static int? ParseOfflineMinutes
+    (
+        string locationText
+    )
+    {
+        if (string.IsNullOrWhiteSpace(locationText)) return null;
+
+        foreach (var (pattern, unitMinutes) in GetOfflineTimePatterns())
+        {
+            var match = pattern.Match(locationText);
+            if (!match.Success) continue;
+
+            if (match.Groups.Count < 2) return unitMinutes;
+
+            return int.TryParse(match.Groups[1].Value, out var value) ?
+                       value * unitMinutes :
+                       null;
+        }
+
+        return null;
+    }
+
+    // 客户端使用 Addon 39 - 42 的文本渲染最后上线时间, 模板中的数字槽位由游戏填充
+    private static List<(Regex Pattern, int UnitMinutes)> GetOfflineTimePatterns()
+    {
+        if (OfflineTimePatterns != null) return OfflineTimePatterns;
+
+        List<(Regex, int)> patterns = [];
+
+        foreach (var (rowID, unitMinutes) in OfflineTimeAddons)
+        {
+            var template = LuminaWrapper.GetAddonTextSeString(rowID).ExtractText(false, DIGIT_PLACEHOLDER);
+            if (string.IsNullOrWhiteSpace(template)) continue;
+
+            var source = Regex.Escape(template).Replace(DIGIT_PLACEHOLDER, "([0-9]+)");
+            patterns.Add((new Regex($"^{source}$", RegexOptions.Compiled), unitMinutes));
+        }
+
+        return OfflineTimePatterns = patterns;
+    }
+
     private sealed class MemberRecord
     {
-        public ulong                    ContentID    { get; init; }
-        public int                      Index        { get; set; }
-        public uint                     OnlineStatus { get; set; }
-        public string                   Name         { get; set; } = string.Empty;
-        public string                   RankText     { get; set; } = string.Empty;
-        public ISharedImmediateTexture? JobIcon      { get; set; }
-        public string                   JobText      { get; set; } = string.Empty;
-        public string                   LocationText { get; set; } = string.Empty;
+        public ulong                    ContentID      { get; init; }
+        public int                      Index          { get; set; }
+        public uint                     OnlineStatus   { get; set; }
+        public string                   Name           { get; set; } = string.Empty;
+        public string                   RankText       { get; set; } = string.Empty;
+        public byte                     RankIndex      { get; set; }
+        public bool                     IsOnline       { get; set; }
+        public int?                     OfflineMinutes { get; set; }
+        public ISharedImmediateTexture? JobIcon        { get; set; }
+        public string                   JobText        { get; set; } = string.Empty;
+        public string                   LocationText   { get; set; } = string.Empty;
     }
-    
+
+    private enum LastOnlineRange
+    {
+        All,
+        Online,
+        WithinHour,
+        WithinDay,
+        WithinWeek,
+        WithinMonth,
+        BeyondMonth,
+        Unknown
+    }
+
     #region 常量
-    
+
     private const uint PAGE_SIZE  = 200;
     private const int  PAGE_LIMIT = 3;
-    
+
+    private const string RANK_FILTER_POPUP_ID        = "MemberRankFilter_Popup";
+    private const string LAST_ONLINE_FILTER_POPUP_ID = "MemberLastOnlineFilter_Popup";
+
+    // InfoProxyFreeCompany.Ranks 的容量
+    private const byte FC_RANK_COUNT = 16;
+
+    private const int MEMBER_RANK_INDEX_SHIFT = 12;
+
+    // 客户端判断成员是否在线的掩码: Online | AnotherWorld
+    private const ulong ONLINE_STATE_MASK = 0x810000000000UL;
+
+    private const string DIGIT_PLACEHOLDER = "@@NUM@@";
+
     #endregion
+
+    private static readonly LastOnlineRange[] LastOnlineRanges =
+    [
+        LastOnlineRange.All,
+        LastOnlineRange.Online,
+        LastOnlineRange.WithinHour,
+        LastOnlineRange.WithinDay,
+        LastOnlineRange.WithinWeek,
+        LastOnlineRange.WithinMonth,
+        LastOnlineRange.BeyondMonth,
+        LastOnlineRange.Unknown
+    ];
+
+    private static readonly (uint RowID, int UnitMinutes)[] OfflineTimeAddons =
+    [
+        (39, 5),
+        (40, 1),
+        (41, 60),
+        (42, 1440)
+    ];
+
+    private static List<(Regex Pattern, int UnitMinutes)>? OfflineTimePatterns;
 }
