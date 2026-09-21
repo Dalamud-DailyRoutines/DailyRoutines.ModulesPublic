@@ -53,6 +53,33 @@ public unsafe partial class OptimizedFriendList
 
         private ulong ContentID { get; set; }
 
+        public static DRFriendlistUsedNames Open
+        (
+            ulong  contentID,
+            string playerName,
+            string worldName
+        )
+        {
+            var parentAddonID = FriendList is null ?
+                                    0 :
+                                    FriendList->Id;
+
+            var addon = new DRFriendlistUsedNames
+            {
+                InternalName         = "DRFriendlistUsedNames",
+                Title                = Lang.Get("OptimizedFriendList-Addon-UsedNames"),
+                Size                 = new(WINDOW_WIDTH, WINDOW_HEIGHT),
+                ContentID            = contentID,
+                PlayerName           = playerName,
+                WorldName            = worldName,
+                ParentAddonId        = parentAddonID,
+                BlockedParentAddonId = parentAddonID
+            };
+
+            addon.Open();
+            return addon;
+        }
+
         protected override void OnSetup
         (
             AtkUnitBase*   addon,
@@ -164,20 +191,6 @@ public unsafe partial class OptimizedFriendList
             WorldName  = string.Empty;
         }
 
-        public void OpenWithData
-        (
-            ulong  contentID,
-            string playerName,
-            string worldName
-        )
-        {
-            ContentID  = contentID;
-            PlayerName = playerName;
-            WorldName  = worldName;
-
-            Open();
-        }
-
         private void Refresh()
         {
             var region = WorldRegionResolver.Resolve(GameState.HomeWorld);
@@ -236,7 +249,8 @@ public unsafe partial class OptimizedFriendList
                 change.ChangedTime.Hour,
                 change.ChangedTime.Minute
             )
-            { }
+            {
+            }
 
             public string ChangedTimeText { get; } = new DateTime(year, month, day, hour, minute, 0).ToString("yyyy/MM/dd HH:mm");
 

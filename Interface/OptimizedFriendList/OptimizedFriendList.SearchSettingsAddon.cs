@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Extensions;
+using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
@@ -18,6 +18,29 @@ public unsafe partial class OptimizedFriendList
     {
         private OptimizedFriendList Instance   { get; init; } = instance;
         private TaskHelper          TaskHelper { get; init; } = taskHelper;
+
+        public static DRFriendlistSearchSetting Open
+        (
+            OptimizedFriendList owner,
+            TaskHelper          taskHelper
+        )
+        {
+            var parentAddonID = FriendList is null ?
+                                    0 :
+                                    FriendList->Id;
+
+            var addon = new DRFriendlistSearchSetting(owner, taskHelper)
+            {
+                InternalName         = "DRFriendlistSearchSetting",
+                Title                = Lang.Get("OptimizedFriendList-Addon-SearchSetting"),
+                Size                 = new(230f, 350f),
+                ParentAddonId        = parentAddonID,
+                BlockedParentAddonId = parentAddonID
+            };
+
+            addon.Open();
+            return addon;
+        }
 
         protected override void OnSetup
         (

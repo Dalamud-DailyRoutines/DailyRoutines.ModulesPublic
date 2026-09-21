@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.KamiToolKit.Nodes;
+using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
@@ -7,8 +7,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
+using Lumina.Data.Parsing.Uld;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -24,17 +23,48 @@ public unsafe partial class OptimizedFriendList
         private TextButtonNode confirmButtonNode;
         private TextInputNode  nicknameInputNode;
 
+        private HorizontalLineNode headerLineNode;
+
         private TextNode nicknameNode;
 
         private TextNode               playerNameNode;
         private TextMultiLineInputNode remarkInputNode;
 
         private TextNode remarkNode;
-        public  ulong    ContentID { get; private set; }
-        public  string   Name      { get; private set; } = string.Empty;
-        public  string   WorldName { get; private set; } = string.Empty;
+        
+        private ulong  ContentID { get; set; }
+        private string Name      { get; set; } = string.Empty;
+        private string WorldName { get; set; } = string.Empty;
 
-        private OptimizedFriendList Instance { get; init; } = instance;
+        private OptimizedFriendList Instance { get; } = instance;
+
+        public static DRFriendlistRemarkEdit Open
+        (
+            OptimizedFriendList owner,
+            ulong               contentID,
+            string              name,
+            string              worldName
+        )
+        {
+            var parentAddonID = FriendList is null ?
+                                    0 :
+                                    FriendList->Id;
+
+            var addon = new DRFriendlistRemarkEdit(owner)
+            {
+                InternalName         = "DRFriendlistRemarkEdit",
+                Title                = Lang.Get("OptimizedFriendList-Addon-Title"),
+                Size                 = new(460f, 304f),
+                ContentID            = contentID,
+                Name                 = name,
+                WorldName            = worldName,
+                ParentAddonId        = parentAddonID,
+                BlockedParentAddonId = parentAddonID
+            };
+
+            addon.Open();
+            return addon;
+        }
 
         protected override void OnSetup
         (
@@ -59,20 +89,28 @@ public unsafe partial class OptimizedFriendList
 
             playerNameNode = new()
             {
-                Position      = new(10, 36),
-                Size          = new(100, 48),
+                Position      = new(12, 42),
+                Size          = new(436, 26),
                 String        = rented.Builder.ToReadOnlySeString(),
-                FontSize      = 24,
+                FontSize      = 20,
                 AlignmentType = AlignmentType.Left,
                 TextFlags     = TextFlags.Bold
             };
             playerNameNode.AttachNode(this);
 
+            headerLineNode = new()
+            {
+                Position = new(12, 72),
+                Size     = new(436, 2)
+            };
+            headerLineNode.AttachNode(this);
+
             nicknameNode = new()
             {
-                Position      = new(10, 80),
-                Size          = new(100, 28),
-                String        = $"{LuminaWrapper.GetAddonText(15207)}",
+                Position      = new(12, 78),
+                Size          = new(100, 20),
+                TextId        = 15207,
+                SheetType     = NodeData.SheetType.Addon,
                 FontSize      = 14,
                 AlignmentType = AlignmentType.Left,
                 TextFlags     = TextFlags.Bold
@@ -81,8 +119,8 @@ public unsafe partial class OptimizedFriendList
 
             nicknameInputNode = new()
             {
-                Position      = new(10, 108),
-                Size          = new(440, 28),
+                Position      = new(12, 100),
+                Size          = new(436, 26),
                 MaxCharacters = 64,
                 ShowLimitText = true,
                 AutoSelectAll = false,
@@ -92,19 +130,18 @@ public unsafe partial class OptimizedFriendList
 
             remarkNode = new()
             {
-                Position      = new(10, 140),
-                Size          = new(100, 28),
-                String        = $"{LuminaWrapper.GetAddonText(13294).TrimEnd(':')}",
+                Position      = new(12, 132),
+                Size          = new(100, 20),
+                String        = Lang.Get("Note"),
                 FontSize      = 14,
                 AlignmentType = AlignmentType.Left,
                 TextFlags     = TextFlags.Bold
             };
-
             remarkNode.AttachNode(this);
 
             remarkInputNode = new()
             {
-                Position      = new(10, 168),
+                Position      = new(12, 154),
                 MaxCharacters = 1024,
                 MaxLines      = 5,
                 ShowLimitText = true,
@@ -112,16 +149,16 @@ public unsafe partial class OptimizedFriendList
                 String        = existedRemark
             };
             remarkInputNode.Flags |= TextInputFlags.MultiLine;
-
-            remarkInputNode.Size = new(440, (remarkInputNode.CurrentTextNode.LineSpacing * 5) + 20);
+            remarkInputNode.Size  =  new(436, (remarkInputNode.CurrentTextNode.LineSpacing * 5) + 26);
 
             remarkInputNode.AttachNode(this);
 
             confirmButtonNode = new()
             {
-                Position = new(90, 264),
-                Size     = new(140, 28),
-                String   = Lang.Get("Confirm"),
+                Position    = new(308, 254),
+                Size        = new(140, 36),
+                TextureType = ButtonTextureType.ButtonB,
+                String      = Lang.Get("Confirm"),
                 OnClick = () =>
                 {
                     Instance.config.PlayerInfos[ContentID] = new()
@@ -141,8 +178,8 @@ public unsafe partial class OptimizedFriendList
 
             clearButtonNode = new()
             {
-                Position = new(240, 264),
-                Size     = new(140, 28),
+                Position = new(180, 258),
+                Size     = new(120, 28),
                 String   = Lang.Get("Clear"),
                 OnClick = () =>
                 {
@@ -173,20 +210,6 @@ public unsafe partial class OptimizedFriendList
             ContentID = 0;
             Name      = string.Empty;
             WorldName = string.Empty;
-        }
-
-        public void OpenWithData
-        (
-            ulong  contentID,
-            string name,
-            string worldName
-        )
-        {
-            ContentID = contentID;
-            Name      = name;
-            WorldName = worldName;
-
-            Open();
         }
     }
 }

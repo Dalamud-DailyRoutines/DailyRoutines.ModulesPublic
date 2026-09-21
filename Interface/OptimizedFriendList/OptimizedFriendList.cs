@@ -48,37 +48,16 @@ public unsafe partial class OptimizedFriendList : ModuleBase
     private string searchString = string.Empty;
 
     private readonly List<IDisposable> infoTokens = [];
-    
+
     protected override void Init()
     {
-        config       =   Config.Load(this) ?? new();
-        TaskHelper   ??= new();
-        
+        config     =   Config.Load(this) ?? new();
+        TaskHelper ??= new();
+
         modifyInfoItem        = new(this, TaskHelper);
         queryUsedNameMenuItem = new(this);
         teleportZoneItem      = new();
         teleportWorldItem     = new();
-
-        remarkEditAddon ??= new(this)
-        {
-            InternalName = "DRFriendlistRemarkEdit",
-            Title        = Lang.Get("OptimizedFriendList-Addon-Title"),
-            Size         = new(460f, 310f)
-        };
-
-        searchSettingAddon ??= new(this, TaskHelper)
-        {
-            InternalName = "DRFriendlistSearchSetting",
-            Title        = Lang.Get("OptimizedFriendList-Addon-SearchSetting"),
-            Size         = new(230f, 350f)
-        };
-
-        usedNamesAddon ??= new()
-        {
-            InternalName = "DRFriendlistUsedNames",
-            Title        = Lang.Get("OptimizedFriendList-Addon-UsedNames"),
-            Size         = new(DRFriendlistUsedNames.WINDOW_WIDTH, DRFriendlistUsedNames.WINDOW_HEIGHT)
-        };
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,          "FriendList", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRequestedUpdate, "FriendList", OnAddon);
@@ -167,7 +146,24 @@ public unsafe partial class OptimizedFriendList : ModuleBase
                         IsEnabled   = true,
                         TexturePath = "ui/uld/CircleButtons_hr1.tex",
                         TextureSize = new(28, 28),
-                        OnClick     = () => searchSettingAddon.Toggle()
+                        OnClick = () =>
+                        {
+                            if (searchSettingAddon is { IsOpen: true } openedAddon)
+                            {
+                                openedAddon.Close();
+                                return;
+                            }
+
+                            var previousAddon = searchSettingAddon;
+
+                            if (previousAddon is not null)
+                            {
+                                previousAddon.Dispose();
+                                searchSettingAddon = null;
+                            }
+
+                            searchSettingAddon = DRFriendlistSearchSetting.Open(this, TaskHelper);
+                        }
                     };
 
                     searchSettingButtonNode.AttachNode(FriendList->GetNodeById(20));
@@ -273,24 +269,20 @@ public unsafe partial class OptimizedFriendList : ModuleBase
                     var targetName    = args.TargetName;
                     var targetWorldID = (uint)args.TargetHomeWorldID;
 
-                    if (module.usedNamesAddon.IsOpen)
-                    {
-                        module.usedNamesAddon.Close();
+                    var previousAddon = module.usedNamesAddon;
 
-                        module.TaskHelper.DelayNext(100);
-                        module.TaskHelper.Enqueue(() => !module.usedNamesAddon.IsOpen);
-                        module.TaskHelper.Enqueue
-                        (
-                            () => module.usedNamesAddon.OpenWithData
-                            (
-                                contentID,
-                                targetName,
-                                LuminaWrapper.GetWorldName(targetWorldID)
-                            )
-                        );
+                    if (previousAddon is not null)
+                    {
+                        previousAddon.Dispose();
+                        module.usedNamesAddon = null;
                     }
-                    else
-                        module.usedNamesAddon.OpenWithData(contentID, targetName, LuminaWrapper.GetWorldName(targetWorldID));
+
+                    module.usedNamesAddon = DRFriendlistUsedNames.Open
+                    (
+                        contentID,
+                        targetName,
+                        LuminaWrapper.GetWorldName(targetWorldID)
+                    );
                 }
             };
         }
@@ -323,17 +315,21 @@ public unsafe partial class OptimizedFriendList : ModuleBase
                     var targetName    = args.TargetName;
                     var targetWorldID = (uint)args.TargetHomeWorldID;
 
-                    if (instance.remarkEditAddon.IsOpen)
+                    var previousAddon = instance.remarkEditAddon;
+
+                    if (previousAddon is not null)
                     {
-                        instance.remarkEditAddon.Close();
-
-                        taskHelper.DelayNext(100);
-                        taskHelper.Enqueue(() => !instance.remarkEditAddon.IsOpen);
-                        taskHelper.Enqueue(() => instance.remarkEditAddon.OpenWithData(contentID, targetName, LuminaWrapper.GetWorldName(targetWorldID)));
+                        previousAddon.Dispose();
+                        instance.remarkEditAddon = null;
                     }
-                    else
-                        instance.remarkEditAddon.OpenWithData(contentID, targetName, LuminaWrapper.GetWorldName(targetWorldID));
 
+                    instance.remarkEditAddon = DRFriendlistRemarkEdit.Open
+                    (
+                        instance,
+                        contentID,
+                        targetName,
+                        LuminaWrapper.GetWorldName(targetWorldID)
+                    );
                     instance.ApplySearchFilter(instance.searchString, taskHelper);
                 }
             };
