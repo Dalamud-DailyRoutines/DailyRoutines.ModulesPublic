@@ -6,7 +6,7 @@ using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRefreshMarketSearchResult : ModuleBase
 {
@@ -14,7 +14,7 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
     {
         Title       = Lang.Get("AutoRefreshMarketSearchResultTitle"),
         Description = Lang.Get("AutoRefreshMarketSearchResultDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.System
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
