@@ -87,7 +87,7 @@ public class AutoDisplayMTQObject : ModuleBase
                 var gameObject = eventObject.Value;
                 if (gameObject == null)
                     continue;
-                if (!gameObject->TargetableStatus.IsSet(ObjectTargetableFlags.ReadyToDraw))
+                if (!gameObject->GetIsTargetable())
                     continue;
                 if (!eventHandler->IsActive(gameObject))
                     continue;
