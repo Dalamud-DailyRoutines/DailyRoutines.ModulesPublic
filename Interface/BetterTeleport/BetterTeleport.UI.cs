@@ -501,7 +501,14 @@ public unsafe partial class BetterTeleport
                 (() =>
                     {
                         if (!ICondition.Instance().IsBetweenAreas) return true;
-                        MovementManager.Instance().TPSmart_InZone(contextMenuTargetPos, false);
+                        MovementManager.Instance().TPSmart_InZone
+                        (
+                            contextMenuTargetPos,
+                            new TPSmartParams
+                            {
+                                CancelAnimation = false
+                            }
+                        );
                         return false;
                     }
                 );

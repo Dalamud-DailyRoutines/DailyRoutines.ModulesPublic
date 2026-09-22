@@ -5,6 +5,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
 using Dalamud.Hooking;
 using OmenTools.Interop.Game.Models;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
