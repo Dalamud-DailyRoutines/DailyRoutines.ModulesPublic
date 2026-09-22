@@ -5,11 +5,10 @@ using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Native;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -27,36 +26,30 @@ public unsafe class RealQueuePosition : ModuleBase
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private static readonly CompSig AgentWorldTravelUpdaterSig = new("E8 ?? ?? ?? ?? 40 0A F8 B9 ?? ?? ?? ??");
-
     private delegate bool AgentWorldTravelUpdateDelegate
     (
-        nint             a1,
-        NumberArrayData* a2,
-        StringArrayData* a3,
-        bool             a4
+        AgentWorldTravel* agent,
+        NumberArrayData*  numberArray,
+        StringArrayData*  stringArray,
+        bool              a4
     );
-
     private Hook<AgentWorldTravelUpdateDelegate> AgentWorldTravelUpdateHook;
 
     private static readonly CompSig UpdateWorldTravelDataSig = new("48 89 5C 24 ?? 57 48 83 EC 20 48 8B D9 48 8B FA 0F B6 4A 10");
-
     private delegate void UpdateWorldTravelDataDelegate
     (
         nint a1,
         nint a2
     );
-
     private Hook<UpdateWorldTravelDataDelegate> UpdateWorldTravelDataHook;
 
     private static readonly CompSig ContentFinderQueuePositionDataSig = new("40 53 56 57 41 57 48 83 EC ?? 0F B6 41");
-
     private delegate void ContentFinderQueuePositionDataDelegate
     (
         ContentsFinderQueueInfo* info,
         ContentsFinderQueueState state,
         QueueInfoState*          infoState
     );
-
     private Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
 
     private DateTime eta = StandardTimeManager.Instance().Now;
@@ -91,34 +84,37 @@ public unsafe class RealQueuePosition : ModuleBase
         UpdateWorldTravelDataHook.Original(a1, a2);
     }
 
+    // TODO: FFCS
     private bool AgentWorldTravelUpdaterDetour
     (
-        nint             a1,
-        NumberArrayData* a2,
-        StringArrayData* a3,
-        bool             a4
+        AgentWorldTravel* agent,
+        NumberArrayData*  numberArray,
+        StringArrayData*  stringArray,
+        bool              a4
     )
     {
-        var agentData = (nint)AgentWorldTravel.Instance();
-        if (agentData == nint.Zero || !(*(bool*)(agentData + 0x120)))
-            return AgentWorldTravelUpdateHook.Original(a1, a2, a3, a4);
+        var agentData      = (nint)AgentWorldTravel.Instance();
+        var transportFlags = *(ushort*)(agentData + 0x120);
+        if (transportFlags == 0)
+            return AgentWorldTravelUpdateHook.Original(agent, numberArray, stringArray, a4);
 
-        var result = AgentWorldTravelUpdateHook.Original(a1, a2, a3, a4);
-        if (!result) return false;
+        var result = AgentWorldTravelUpdateHook.Original(agent, numberArray, stringArray, a4);
+        if (!result) 
+            return false;
 
         var index = 5;
 
-        if (a2->IntArray[5] > 0)
+        if (numberArray->IntArray[5] > 0)
             index = 6;
 
         var       position    = *(uint*)(agentData + 0x12C);
-        var       positionStr = ISeStringEvaluator.Instance().Evaluate(LuminaGetter.GetRowOrDefault<Addon>(10039).Text, [position]);
+        var       positionStr = ISeStringEvaluator.Instance().EvaluateFromAddon(10039, [position]);
         using var builder     = new RentedSeStringBuilder();
-        a3->SetValue(index, builder.Builder.Append(LuminaWrapper.GetAddonText(12522)).Append(positionStr).GetViewAsSpan());
+        stringArray->SetValue(index, builder.Builder.Append(LuminaWrapper.GetAddonText(12522)).Append(positionStr).GetViewAsSpan());
 
         var queueTime = TimeSpan.FromSeconds(*(int*)(agentData + 0x128));
         var info      = Lang.Get("RealQueuePosition-ETA", @$"{queueTime:mm\:ss}", @$"{eta - StandardTimeManager.Instance().Now:mm\:ss}");
-        a3->SetValue(index + 1, info);
+        stringArray->SetValue(index + 1, info);
 
         return true;
     }
