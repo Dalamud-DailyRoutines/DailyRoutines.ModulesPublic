@@ -13,6 +13,7 @@ using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
@@ -23,7 +24,6 @@ using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using AgentWorldTravel = OmenTools.Interop.Game.Models.Native.AgentWorldTravel;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -45,16 +45,12 @@ public partial class FastWorldTravel : ModuleBase
 
     private Config?        config;
     private IDtrBarEntry?  entry;
-    private WorldMonitor?  worldStatusMonitor;
     private DRSelectYesno? selectYesnoAddon;
 
     protected override unsafe void Init()
     {
         config     =   Config.Load(this) ?? new();
         TaskHelper ??= new() { TimeoutMS = int.MaxValue, ShowDebug = true };
-
-        if (GameState.IsCN)
-            worldStatusMonitor = new(CheckCNDataCenterStatus);
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("FastWorldTravel-CommandHelp") });
 
@@ -78,9 +74,6 @@ public partial class FastWorldTravel : ModuleBase
 
         AddonDRFastWorldTravel.Addon?.Dispose();
         AddonDRFastWorldTravel.Addon = null;
-
-        worldStatusMonitor?.Dispose();
-        worldStatusMonitor = null;
         
         selectYesnoAddon?.Dispose();
         selectYesnoAddon = null;

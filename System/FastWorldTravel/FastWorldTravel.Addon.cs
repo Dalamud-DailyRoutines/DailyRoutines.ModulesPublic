@@ -3,7 +3,6 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Classes;
-using KamiToolKit.ContextMenu;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
@@ -12,7 +11,6 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
-using ContextMenu = KamiToolKit.ContextMenu.ContextMenu;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -20,17 +18,14 @@ public partial class FastWorldTravel
 {
     private class AddonDRFastWorldTravel
     (
-        FastWorldTravel module,
-        TaskHelper      taskHelper
+        TaskHelper taskHelper
     ) : NativeAddon
     {
         public static AddonDRFastWorldTravel? Addon { get; set; }
-        
+
         private static readonly Version MinDCTravelerXVersion = new("0.2.3.0");
-        
+
         private static NodeBase TeleportWidget;
-        
-        private static ContextMenu? ContextMenuService;
 
         private static bool LastOpenPluginState;
 
@@ -52,7 +47,7 @@ public partial class FastWorldTravel
             EnsureAddon(module);
             Addon.Open();
         }
-        
+
         public static void Toggle
         (
             FastWorldTravel module
@@ -66,7 +61,7 @@ public partial class FastWorldTravel
         (
             FastWorldTravel module
         ) =>
-            Addon ??= new(module, module.TaskHelper)
+            Addon ??= new(module.TaskHelper)
             {
                 InternalName = "DRFastWorldTravel",
                 Title = GameState.IsCN ?
@@ -87,8 +82,6 @@ public partial class FastWorldTravel
             Span<AtkValue> atkValues
         )
         {
-            ContextMenuService = new();
-
             LastOpenPluginState = IsPluginValid;
             WorldToButtons.Clear();
 
@@ -183,15 +176,6 @@ public partial class FastWorldTravel
 
             if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate-UpdateQueueTime", 1_000))
                 UpdateWaitTimeInfo();
-        }
-
-        protected override unsafe void OnFinalize
-        (
-            AtkUnitBase* addon
-        )
-        {
-            ContextMenuService?.Dispose();
-            ContextMenuService = null;
         }
 
         private void RequestWaitTimeInfoUpdate() =>
@@ -341,107 +325,6 @@ public partial class FastWorldTravel
                 Position  = new((COLUMN_WIDTH - SEPARATOR_WIDTH) / 2f, header.Position.Y + HEADER_HEIGHT + 4f)
             };
             separator.AttachNode(column);
-
-            if (dcID != GameState.CurrentDataCenter)
-            {
-                header.AddEvent
-                (
-                    AtkEventType.MouseClick,
-                    (_, _, _, _, _) =>
-                    {
-                        ContextMenuService.Clear();
-
-                        ContextMenuService.AddItem
-                        (
-                            new()
-                            {
-                                IsEnabled = false,
-                                Name      = $"{dcName}大区",
-                                OnClick   = () => { }
-                            }
-                        );
-
-                        ContextMenuService.AddItem
-                        (
-                            new()
-                            {
-                                IsEnabled = false,
-                                Name = $"当前监控: " +
-                                       $"{(module.worldStatusMonitor.GetActiveMonitors().ToList() is { Count: > 0 } list ?
-                                               LuminaWrapper.GetDataCenterName(list.First()) :
-                                               "(无)")}",
-                                OnClick = () => { }
-                            }
-                        );
-
-                        var subMenu = new ContextMenuSubItem
-                        {
-                            OnClick   = () => { },
-                            Name      = "监控通行状态",
-                            IsEnabled = true
-                        };
-
-                        if (module.worldStatusMonitor.GetActiveMonitors().Contains(dcID))
-                        {
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    Name    = "移除监控",
-                                    OnClick = () => module.worldStatusMonitor.RemoveMonitor(dcID)
-                                }
-                            );
-                        }
-                        else
-                        {
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    IsEnabled = false,
-                                    Name      = "(当目标大区可通行时)",
-                                    OnClick   = () => { }
-                                }
-                            );
-
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    Name = "自动前往",
-                                    OnClick = () =>
-                                    {
-                                        module.worldStatusMonitor.Clear();
-
-                                        module.worldStatusMonitor.JustGo = true;
-                                        module.worldStatusMonitor.AddMonitor(dcID);
-                                    }
-                                }
-                            );
-
-                            subMenu.AddItem
-                            (
-                                new()
-                                {
-                                    Name = "发送通知",
-                                    OnClick = () =>
-                                    {
-                                        module.worldStatusMonitor.Clear();
-
-                                        module.worldStatusMonitor.JustGo = false;
-                                        module.worldStatusMonitor.AddMonitor(dcID);
-                                    }
-                                }
-                            );
-                        }
-
-
-                        ContextMenuService.AddItem(subMenu);
-
-                        ContextMenuService.Open();
-                    }
-                );
-            }
 
             var buttonPanel = new SimpleComponentNode
             {
