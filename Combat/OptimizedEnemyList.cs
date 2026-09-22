@@ -617,7 +617,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                 AlignmentType = AlignmentType.Center
             };
-            AtkColors.Value.ApplyTo(ref enemityNode);
+            AtkColors.Value.ApplyTo(enemityNode);
 
             castBackgroundNode.AttachNode(node);
             castNode.AttachNode(node);

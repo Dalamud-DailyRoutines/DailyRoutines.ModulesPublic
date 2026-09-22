@@ -123,7 +123,7 @@ public unsafe partial class OptimizedFriendList
                     AlignmentType = alignment,
                     TextFlags     = TextFlags.None
                 };
-                AtkColors.ListHeader.ApplyTo(ref columnNode);
+                AtkColors.ListHeader.ApplyTo(columnNode);
                 columnNode.AttachNode(this);
             }
 
@@ -280,7 +280,7 @@ public unsafe partial class OptimizedFriendList
                     FontSize  = 14,
                     TextFlags = TextFlags.None
                 };
-                AtkColors.ListRow.ApplyTo(ref oldNameNode);
+                AtkColors.ListRow.ApplyTo(oldNameNode);
                 oldNameNode.AttachNode(this);
 
                 newNameNode = new()
@@ -290,7 +290,7 @@ public unsafe partial class OptimizedFriendList
                     FontSize  = 14,
                     TextFlags = TextFlags.None
                 };
-                AtkColors.ListRow.ApplyTo(ref newNameNode);
+                AtkColors.ListRow.ApplyTo(newNameNode);
                 newNameNode.AttachNode(this);
 
                 timeNode = new()
@@ -300,7 +300,7 @@ public unsafe partial class OptimizedFriendList
                     FontSize  = 14,
                     TextFlags = TextFlags.None
                 };
-                AtkColors.ListRow.ApplyTo(ref timeNode);
+                AtkColors.ListRow.ApplyTo(timeNode);
                 timeNode.AttachNode(this);
 
                 EnableSelection = false;

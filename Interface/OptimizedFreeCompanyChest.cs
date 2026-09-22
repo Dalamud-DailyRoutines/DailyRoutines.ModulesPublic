@@ -230,7 +230,7 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                         AlignmentType = AlignmentType.Right,
                         TextTooltip   = Lang.Get("OptimizedFreeCompanyChest-ExchangableItemsTotalValue")
                     };
-                    AtkColors.Value.ApplyTo(ref gilItemsValueCountNode);
+                    AtkColors.Value.ApplyTo(gilItemsValueCountNode);
 
                     componentNode.AddNode([gilIconNode, gilItemsValueCountNode]);
                     componentNode.RecalculateLayout();

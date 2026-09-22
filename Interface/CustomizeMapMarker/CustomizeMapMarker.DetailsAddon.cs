@@ -88,7 +88,7 @@ public unsafe partial class CustomizeMapMarker
                 FontSize  = 18,
                 TextFlags = TextFlags.Edge | TextFlags.Ellipsis
             };
-            AtkColors.Label.ApplyTo(ref locationText);
+            AtkColors.Label.ApplyTo(locationText);
             containerNode.AddNode(locationText);
 
             var nameLable = CreateLabel(Lang.Get("Name"));

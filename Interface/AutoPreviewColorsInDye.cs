@@ -741,7 +741,7 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
                 AlignmentType = AlignmentType.Left,
                 String        = value
             };
-            AtkColors.Label.ApplyTo(ref valueNode);
+            AtkColors.Label.ApplyTo(valueNode);
 
             valueNode.AttachNode(row);
             dynamicNodes.Add(valueNode);

@@ -49,7 +49,7 @@ public unsafe partial class CustomizeMapMarker
                 FontSize  = 18,
                 TextFlags = TextFlags.Edge | TextFlags.Ellipsis
             };
-            AtkColors.Label.ApplyTo(ref mapNameText);
+            AtkColors.Label.ApplyTo(mapNameText);
             mapNameText.AttachNode(this);
 
             importButton = new CircleButtonNode
@@ -351,7 +351,7 @@ public unsafe partial class CustomizeMapMarker
                     TextFlags     = TextFlags.Edge,
                     AlignmentType = AlignmentType.Left
                 };
-                AtkColors.Value.ApplyTo(ref groupCountText);
+                AtkColors.Value.ApplyTo(groupCountText);
                 row.AddNode(groupCountText);
 
                 exportButton = new CircleButtonNode

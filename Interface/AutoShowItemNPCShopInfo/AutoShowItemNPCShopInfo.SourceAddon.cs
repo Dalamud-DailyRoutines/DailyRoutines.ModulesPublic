@@ -162,7 +162,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Position         = new(0, 3),
                 AlignmentType    = AlignmentType.TopLeft
             };
-            AtkColors.Label.ApplyTo(ref itemNameNode);
+            AtkColors.Label.ApplyTo(itemNameNode);
             itemInfoRow.AddNode(itemNameNode);
 
             if (item.ItemSearchCategory.RowId > 0)
@@ -201,7 +201,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Position      = new(0, 3),
                 AlignmentType = AlignmentType.Left,
             };
-            AtkColors.Text.ApplyTo(ref pageIndicator);
+            AtkColors.Text.ApplyTo(pageIndicator);
             paginationBar.AddNode(pageIndicator);
 
             nextButton = new TextButtonNode
@@ -430,7 +430,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     AlignmentType    = AlignmentType.Left,
                     Size             = new(70, 36),
                 };
-                AtkColors.Label.ApplyTo(ref slot.CostNames[i]);
+                AtkColors.Label.ApplyTo(slot.CostNames[i]);
                 slot.CostNames[i].AttachNode(slot.CostRows[i]);
 
                 slot.CostQuantities[i] = new TextNode
@@ -441,7 +441,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     Size          = new(70, 20),
                     AlignmentType = AlignmentType.Right
                 };
-                AtkColors.ValueEmphasize.ApplyTo(ref slot.CostQuantities[i]);
+                AtkColors.ValueEmphasize.ApplyTo(slot.CostQuantities[i]);
                 slot.CostQuantities[i].AttachNode(slot.CostRows[i]);
             }
 
@@ -476,7 +476,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Position      = new(0, 2),
                 AlignmentType = AlignmentType.Left,
             };
-            AtkColors.Text.ApplyTo(ref slot.NPCPageIndicator);
+            AtkColors.Text.ApplyTo(slot.NPCPageIndicator);
             slot.NPCPaginationBar.AddNode(slot.NPCPageIndicator);
 
             slot.NPCNextButton = new TextButtonNode
@@ -518,7 +518,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Size      = new(contentWidth - (3 * ROW_SPACING) - (2 * MAP_BTN_WIDTH), 28f),
                 FontSize  = 14,
             };
-            AtkColors.Text.ApplyTo(ref slot.NPCNameNode);
+            AtkColors.Text.ApplyTo(slot.NPCNameNode);
             slot.Row.AddNode(slot.NPCNameNode);
 
             slot.MapButton = new IconButtonNode

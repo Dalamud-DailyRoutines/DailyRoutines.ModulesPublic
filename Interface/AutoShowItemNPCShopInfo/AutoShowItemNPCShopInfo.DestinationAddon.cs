@@ -134,7 +134,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Position      = new(iconNode.Position.X + iconNode.Width + 6f, 3),
                 AlignmentType = AlignmentType.TopLeft
             };
-            AtkColors.Label.ApplyTo(ref nameNode);
+            AtkColors.Label.ApplyTo(nameNode);
             nameNode.AttachNode(itemInfoRow);
 
             if (costItem.ItemSearchCategory.RowId > 0)
@@ -203,7 +203,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Position      = new(0, 3),
                 AlignmentType = AlignmentType.Left,
             };
-            AtkColors.Text.ApplyTo(ref pageIndicator);
+            AtkColors.Text.ApplyTo(pageIndicator);
             paginationBar.AddNode(pageIndicator);
 
             nextButton = new TextButtonNode
@@ -549,7 +549,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Position      = new(0, 2),
                 AlignmentType = AlignmentType.Left,
             };
-            AtkColors.Text.ApplyTo(ref slot.NPCPageIndicator);
+            AtkColors.Text.ApplyTo(slot.NPCPageIndicator);
             slot.NPCPaginationBar.AddNode(slot.NPCPageIndicator);
 
             slot.NPCNextButton = new TextButtonNode
@@ -591,7 +591,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 Size      = new(contentWidth - (3 * ROW_SPACING) - (2 * MAP_BTN_WIDTH), 28f),
                 FontSize  = 14,
             };
-            AtkColors.Text.ApplyTo(ref slot.NPCNameNode);
+            AtkColors.Text.ApplyTo(slot.NPCNameNode);
             slot.Row.AddNode(slot.NPCNameNode);
 
             slot.MapButton = new IconButtonNode
