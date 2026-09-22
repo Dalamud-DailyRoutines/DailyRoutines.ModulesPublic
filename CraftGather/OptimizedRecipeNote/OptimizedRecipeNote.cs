@@ -35,7 +35,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.Interface.OptimizedRecipeNote;
+namespace DailyRoutines.ModulesPublic.CraftGather;
 
 public partial class OptimizedRecipeNote : ModuleBase
 {
@@ -43,36 +43,34 @@ public partial class OptimizedRecipeNote : ModuleBase
     {
         Title               = Lang.Get("OptimizedRecipeNoteTitle"),
         Description         = Lang.Get("OptimizedRecipeNoteDescription"),
-        Category            = ModuleCategory.Interface,
+        Category            = ModuleCategory.CraftGather,
         ModulesPrerequisite = ["AutoShowItemNPCShopInfo"]
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private CompSig simpleCraftGetAmountUpperLimitSig = null!;
-
+    private static readonly CompSig SimpleCraftGetAmountUpperLimitSig = 
+        new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
     private delegate int SimpleCraftGetAmountUpperLimitDelegate
     (
         nint agent,
         bool eventCase
     );
-
     private Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
 
-    private CompSig simpleCraftAmountJudgeSig = null!;
+    private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
+    private MemoryPatch SimpleCraftAmountJudgePatch = null!;
 
-    // ja → nop
-    private MemoryPatch simpleCraftAmountJudgePatch = null!;
-
-    private CompSig recipeNotePraticeSettingSetupSig = null!;
-
+    private static readonly CompSig RecipeNotePraticeSettingSetupSig = new
+    (
+        "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? BA ?? ?? ?? ?? 49 8B F0 48 8B E9 E8 ?? ?? ?? ?? 48 8D 4E ?? 48 8B D8 E8 ?? ?? ?? ?? 48 8B D0 48 8B CB E8 ?? ?? ?? ?? 48 8D 4E"
+    );
     private unsafe delegate AtkValue* RecipeNotePraticeSettingSetupDelegate
     (
         AtkEventListener* listener,
         AtkValue*         returnValue,
         AtkValue*         values
     );
-
     private Hook<RecipeNotePraticeSettingSetupDelegate>? RecipeNotePraticeSettingSetupHook;
 
     private Config config = null!;
@@ -104,27 +102,26 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     protected override unsafe void Init()
     {
-        simpleCraftGetAmountUpperLimitSig = new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
-        simpleCraftAmountJudgeSig         = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
-        recipeNotePraticeSettingSetupSig = new
+        // ja → nop
+        SimpleCraftAmountJudgePatch = new
         (
-            "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? BA ?? ?? ?? ?? 49 8B F0 48 8B E9 E8 ?? ?? ?? ?? 48 8D 4E ?? 48 8B D8 E8 ?? ?? ?? ?? 48 8B D0 48 8B CB E8 ?? ?? ?? ?? 48 8D 4E"
+            SimpleCraftAmountJudgeSig.Get(),
+            [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]
         );
-        simpleCraftAmountJudgePatch = new(simpleCraftAmountJudgeSig.Get(), [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]);
 
         TaskHelper ??= new() { TimeoutMS = 15_000 };
 
         config = Config.Load(this) ?? new();
 
         SimpleCraftGetAmountUpperLimitHook =
-            simpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
+            SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
         RecipeNotePraticeSettingSetupHook =
-            recipeNotePraticeSettingSetupSig.GetHook<RecipeNotePraticeSettingSetupDelegate>(RecipeNotePraticeSettingSetupDetour);
+            RecipeNotePraticeSettingSetupSig.GetHook<RecipeNotePraticeSettingSetupDelegate>(RecipeNotePraticeSettingSetupDetour);
 
         if (config.IsQuickSynthesisMore)
         {
-            simpleCraftAmountJudgePatch.Enable();
+            SimpleCraftAmountJudgePatch.Enable();
             SimpleCraftGetAmountUpperLimitHook.Enable();
             IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreReceiveEvent, AgentId.RecipeNote, OnAgentRecipeNote);
             IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "SynthesisSimple", OnSynthesisSimple);
@@ -133,7 +130,6 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (config.IsMorePraticeQuality)
             RecipeNotePraticeSettingSetupHook.Enable();
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,           "RecipeNote", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,            "RecipeNote", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "RecipeNote", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "RecipeNote", OnAddon);
@@ -217,7 +213,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         {
             config.Save(this);
 
-            simpleCraftAmountJudgePatch.Set(config.IsQuickSynthesisMore);
+            SimpleCraftAmountJudgePatch.Set(config.IsQuickSynthesisMore);
             SimpleCraftGetAmountUpperLimitHook.Toggle(config.IsQuickSynthesisMore);
         }
 
@@ -309,12 +305,6 @@ public partial class OptimizedRecipeNote : ModuleBase
 
                 materialSourceButtons.Clear();
                 displayOthersJobButtons.Clear();
-                break;
-
-            case AddonEvent.PostSetup:
-                if (AddonActionsPreview.Addon?.Nodes is not { Count: > 0 } nodes) return;
-                foreach (var node in nodes)
-                    node.Alpha = 1;
                 break;
 
             case AddonEvent.PostRequestedUpdate:

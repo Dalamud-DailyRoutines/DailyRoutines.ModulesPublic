@@ -1,5 +1,6 @@
 using System.Text;
-using DailyRoutines.Extensions;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text.SeStringHandling;
@@ -13,27 +14,26 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 
-namespace DailyRoutines.ModulesPublic.Interface.OptimizedRecipeNote;
+namespace DailyRoutines.ModulesPublic.CraftGather;
 
 public partial class OptimizedRecipeNote
 {
     private class AddonActionsPreview
     (
-        TaskHelper       taskHelper,
+        TaskHelper       inTaskHelper,
         CaculationResult result
     ) : NativeAddon
     {
-        private static Task?                OpenAddonTask;
-        public static  AddonActionsPreview? Addon  { get; set; }
-        public         CaculationResult     Result { get; private set; } = result;
-        public         List<DragDropNode>   Nodes  { get; set; }         = [];
+        public static AddonActionsPreview? Addon { get; set; }
 
-        public WeakReference<TaskHelper> TaskHelper { get; private set; } = new(taskHelper);
+        public CaculationResult Result     { get; private set; } = result;
+        public TaskHelper       TaskHelper { get; init; }        = inTaskHelper;
 
-        public TextButtonNode   CraftOnceButton     { get; private set; }
-        public TextButtonNode   CraftMultipleButton { get; private set; }
-        public NumericInputNode CraftCountInput     { get; private set; }
-        public TextNode         CraftProgressText   { get; private set; }
+        public List<DragDropNode> Nodes               { get; private set; } = [];
+        public TextButtonNode     CraftOnceButton     { get; private set; }
+        public TextButtonNode     CraftMultipleButton { get; private set; }
+        public NumericInputNode   CraftCountInput     { get; private set; }
+        public TextNode           CraftProgressText   { get; private set; }
 
         private int currentCraftRound;
         private int totalCraftRounds;
@@ -44,38 +44,40 @@ public partial class OptimizedRecipeNote
             CaculationResult result
         )
         {
-            if (OpenAddonTask != null) return;
+            if (result.Actions.Count == 0) return;
+            
+            Addon?.Dispose();
 
-            var isAddonExisted = Addon?.IsOpen ?? false;
-
-            if (Addon != null)
+            var rowCount = MathF.Ceiling(result.Actions.Count / 10f);
+            Addon = new(taskHelper, result)
             {
-                Addon.Dispose();
-                Addon = null;
-            }
-
-            OpenAddonTask = IFramework.Instance().RunOnTick
-            (
-                () =>
-                {
-                    var rowCount = MathF.Ceiling(result.Actions.Count / 10f);
-                    Addon ??= new(taskHelper, result)
-                    {
-                        InternalName = "DRRecipeNoteActionsPreview",
-                        Title        = $"{Lang.Get("OptimizedRecipeNote-AddonTitle")}",
-                        Subtitle     = $"{Lang.Get("OptimizedRecipeNote-Message-StepsInfo", result.Actions.Count, result.Actions.Count * 3)}",
-                        Size         = new(500f, 192f + (50f                                                                           * (rowCount - 1)))
-                    };
-                    Addon.Open();
-                },
-                TimeSpan.FromMilliseconds
-                (
-                    isAddonExisted ?
-                        500 :
-                        0
-                )
-            ).ContinueWith(_ => OpenAddonTask = null);
+                InternalName          = "DRRecipeNoteActionsPreview",
+                Title                 = Lang.Get("OptimizedRecipeNote-AddonTitle"),
+                Subtitle              = Lang.Get("OptimizedRecipeNote-Message-StepsInfo", result.Actions.Count, result.Actions.Count * 3),
+                Size                  = new(500f, 192f + (50f * (rowCount - 1))),
+                RememberClosePosition = true,
+            };
+            Addon.Open();
         }
+
+        #region 事件
+
+        private void OnRecipeNote
+        (
+            AddonEvent type,
+            AddonArgs  args
+        )
+        {
+            // 重置已用过的技能界面
+            foreach (var node in Nodes)
+                node.Alpha = 1;
+        }
+
+        protected override unsafe void OnFinalize
+        (
+            AtkUnitBase* addon
+        ) =>
+            IAddonLifecycle.Instance().UnregisterListener(OnRecipeNote);
 
         protected override unsafe void OnSetup
         (
@@ -83,8 +85,9 @@ public partial class OptimizedRecipeNote
             Span<AtkValue> atkValues
         )
         {
-            if (Result.Actions.Count == 0) return;
-
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "RecipeNote", OnRecipeNote);
+            
+            
             // Row 1: 职业 + 三维数据
             var statsRow = new HorizontalListNode
             {
@@ -202,10 +205,9 @@ public partial class OptimizedRecipeNote
                 String    = Lang.Get("Execute"),
                 OnClick = () =>
                 {
-                    if (!TaskHelper.TryGetTarget(out var th)) return;
                     if (Result.Actions is not { Count: > 0 } actions) return;
 
-                    EnqueueActionSequence(th, actions);
+                    EnqueueActionSequence(TaskHelper, actions);
                 }
             };
             craftRow.AddNode(CraftOnceButton);
@@ -239,7 +241,6 @@ public partial class OptimizedRecipeNote
                 IsEnabled = false,
                 OnClick = () =>
                 {
-                    if (!TaskHelper.TryGetTarget(out var th)) return;
                     if (Result.Actions is not { Count: > 0 } actions) return;
                     if (CraftCountInput is not { Value: > 0 }) return;
 
@@ -256,7 +257,7 @@ public partial class OptimizedRecipeNote
                     {
                         var currentRound = round;
 
-                        th.Enqueue
+                        TaskHelper.Enqueue
                         (() =>
                             {
                                 currentCraftRound        = currentRound + 1;
@@ -267,20 +268,20 @@ public partial class OptimizedRecipeNote
                             }
                         );
 
-                        th.Enqueue(() => Synthesis != null);
+                        TaskHelper.Enqueue(() => Synthesis != null);
 
-                        th.DelayNext(500);
+                        TaskHelper.DelayNext(500);
 
-                        EnqueueActionSequence(th, actions);
+                        EnqueueActionSequence(TaskHelper, actions);
 
-                        th.Enqueue(() => Synthesis == null);
+                        TaskHelper.Enqueue(() => Synthesis == null);
 
-                        th.Enqueue(() => ICondition.Instance()[ConditionFlag.PreparingToCraft]);
+                        TaskHelper.Enqueue(() => ICondition.Instance()[ConditionFlag.PreparingToCraft]);
 
-                        th.DelayNext(300);
+                        TaskHelper.DelayNext(300);
                     }
 
-                    th.Enqueue(() => OnCraftingLoopFinished(totalCount));
+                    TaskHelper.Enqueue(() => OnCraftingLoopFinished(totalCount));
                 }
             };
             craftRow.AddNode(CraftMultipleButton);
@@ -366,7 +367,7 @@ public partial class OptimizedRecipeNote
                 dragDropNode.OnClicked = _ =>
                 {
                     if (ICondition.Instance()[ConditionFlag.ExecutingCraftingAction] ||
-                        (TaskHelper.TryGetTarget(out var th) && th.IsBusy))
+                        TaskHelper.IsBusy)
                         return;
 
                     if (Synthesis != null)
@@ -415,10 +416,11 @@ public partial class OptimizedRecipeNote
                 return;
             }
 
-            if (!TaskHelper.TryGetTarget(out var th)) return;
-
-            CraftOnceButton.IsEnabled     = Synthesis != null                 && !th.IsBusy;
-            CraftMultipleButton.IsEnabled = CraftCountInput is { Value: > 0 } && Synthesis == null && !th.IsBusy;
+            CraftOnceButton.IsEnabled = Synthesis != null &&
+                                        !TaskHelper.IsBusy;
+            CraftMultipleButton.IsEnabled = CraftCountInput is { Value: > 0 } &&
+                                            Synthesis == null                 &&
+                                            !TaskHelper.IsBusy;
 
             // 制作时不更新
             if (Synthesis == null)
@@ -429,6 +431,8 @@ public partial class OptimizedRecipeNote
                     CraftCountInput.Max = 0;
             }
         }
+
+        #endregion
 
         private void EnqueueActionSequence
         (
@@ -471,8 +475,7 @@ public partial class OptimizedRecipeNote
         )
         {
             LogMessageManager.Instance().Unreg(OnCraftLogMessage);
-            if (TaskHelper.TryGetTarget(out var th))
-                th.Abort();
+            TaskHelper.Abort();
 
             CraftProgressText.IsVisible = false;
             currentCraftRound           = 0;
