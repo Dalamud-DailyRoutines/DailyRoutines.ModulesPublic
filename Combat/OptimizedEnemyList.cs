@@ -293,6 +293,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var gameObj = CharacterManager.Instance()->LookupBattleCharaByEntityId(entityID);
+
             if (gameObj == null)
             {
                 HideNodes();
@@ -302,6 +303,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             #region 原生节点隐藏
 
             var componentNode = EnemyList->GetComponentNodeById(componentNodeID);
+
             if (componentNode == null)
             {
                 HideNodes();
@@ -309,6 +311,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var nativeCastNode = componentNode->Component->UldManager.SearchNodeById(4)->GetAsAtkTextNode();
+
             if (nativeCastNode == null)
             {
                 HideNodes();
@@ -316,6 +319,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var nativeTargetNameNode = componentNode->Component->UldManager.SearchNodeById(6)->GetAsAtkTextNode();
+
             if (nativeTargetNameNode == null)
             {
                 HideNodes();
@@ -324,6 +328,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             var nativeCastBarNode         = componentNode->Component->UldManager.SearchNodeById(7);
             var nativeCastBarProgressNode = componentNode->Component->UldManager.SearchNodeById(8);
+
             if (nativeCastBarNode == null || nativeCastBarProgressNode == null)
             {
                 HideNodes();
@@ -331,6 +336,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var nativeCastBackgroundNode = componentNode->Component->UldManager.SearchNodeById(5);
+
             if (nativeCastBackgroundNode == null)
             {
                 HideNodes();
@@ -456,14 +462,16 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 castBackgroundNode.IsVisible = true;
                 castBarNode.IsVisible        = true;
 
-                // 避免溢出所以手动进度控制
-                castBarNode.ProgressNode.Width = 105 * (gameObj->CastInfo.CurrentCastTime / gameObj->CastInfo.TotalCastTime);
+                castBarNode.Progress        = gameObj->CastInfo.CurrentCastTime / gameObj->CastInfo.TotalCastTime;
+                castBarNode.IsInterruptible = gameObj->CastInfo.Interruptible;
 
+                var interruptibleColor = gameObj->CastInfo.Interruptible ?
+                                             KnownColor.Red.ToVector4().ToVector3() :
+                                             Vector3.Zero;
+                
                 // 可打断边缘发红光
-                if (gameObj->CastInfo.Interruptible)
-                    castBarNode.AddColor = KnownColor.Red.ToVector4().ToVector3();
-                else
-                    castBarNode.AddColor = KnownColor.Yellow.ToVector4().ToVector3() / 255f;
+                castBarNode.AddColor = interruptibleColor;
+                castNode.AddColor    = interruptibleColor;
 
                 var castText = GetCastInfoText
                 (
@@ -473,23 +481,19 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 );
                 castNode.String = castText;
 
-                // 因为等于 0 的时候算出来的宽度有很不太好看的的变化
-                if (leftCastTime != 0)
+                var orig = IGameConfig.Instance().System.GetUInt("UiHighScale");
+                var offset = orig switch
                 {
-                    var orig = IGameConfig.Instance().System.GetUInt("UiHighScale");
-                    var offset = orig switch
-                    {
-                        0 => 3f,
-                        1 => 0f,
-                        2 => -3f,
-                        3 => -6f
-                    };
-                    
-                    var castTextWidth = castNode.GetTextDrawSize(false).X + offset;
+                    0 => 3f,
+                    1 => 0f,
+                    2 => -3f,
+                    3 => -6f
+                };
 
-                    castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f };
-                    castBackgroundNode.Width    = castTextWidth + (CAST_TEXT_BACKGROUND_PADDING * (config.TextSize / 10f));
-                }
+                var castTextWidth = castNode.GetTextDrawSize(false).X + offset;
+
+                castBackgroundNode.Position = CastBackgroundTextDefaultPosition with { X = castNode.Position.X - castTextWidth - 2f };
+                castBackgroundNode.Width    = castTextWidth + (CAST_TEXT_BACKGROUND_PADDING * (config.TextSize / 10f));
             }
 
             #endregion
@@ -567,23 +571,19 @@ public unsafe class OptimizedEnemyList : ModuleBase
             var castBarNode = new ProgressBarEnemyCastNode
             {
                 IsVisible = true,
-                Position  = new(90, 13.7f),
+                Position  = new(86, 16f),
                 Size      = new(120, 20)
             };
 
             var castBackgroundNode = new SimpleNineGridNode
             {
-                TexturePath        = "ui/uld/EnemyList_hr1.tex",
+                TexturePath        = "ui/uld/EnemyList.tex",
                 TextureCoordinates = new(96, 80),
                 TextureSize        = new(24, 20),
                 Size               = new(124, 24),
                 Offsets            = new(8),
                 Alpha              = 1f
             };
-
-            castBarNode.ProgressNode.Height   -= 12f;
-            castBarNode.ProgressNode.Position += new Vector2(7.7f, 6.5f);
-            castBarNode.ProgressNode.AddColor =  new(1);
 
             var healthNode = new TextNode
             {
@@ -601,7 +601,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             var healthBackgroundNode = new SimpleNineGridNode
             {
-                TexturePath        = "ui/uld/EnemyList_hr1.tex",
+                TexturePath        = "ui/uld/EnemyList.tex",
                 TextureCoordinates = new(96, 80),
                 TextureSize        = new(24, 20),
                 Size               = new(60, 24),
@@ -665,13 +665,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
         }
 
         if (string.IsNullOrEmpty(actionName))
-            actionName = $"{LuminaWrapper.GetAddonText(16482)}";
+            actionName = LuminaWrapper.GetAddonText(16482);
 
-        var timeText = remainingTime != 0 ?
-                           remainingTime.ToString("F1") :
-                           "\ue07f\ue07b";
+        var timeText = remainingTime.ToString("F1");
 
-        return $"{actionName}: {timeText}";
+        return $"{actionName}：{timeText}";
     }
 
     private static bool TryFindButtonNodes
@@ -704,13 +702,13 @@ public unsafe class OptimizedEnemyList : ModuleBase
         // 咏唱
         public byte    TextSize      = 10;
         public Vector4 TextColor     = Vector4.One;
-        public Vector4 TextEdgeColor = new(0, 0.372549f, 1, 1);
+        public Vector4 TextEdgeColor = new(0.6156863f, 0.5137255f, 0.3568628f, 1.0f);
         public Vector2 TextOffset    = Vector2.Zero;
 
         // 体力值
         public byte    HealthTextSize      = 16;
         public Vector4 HealthTextColor     = Vector4.One;
-        public Vector4 HealthTextEdgeColor = new(0, 0.372549f, 1, 1);
+        public Vector4 HealthTextEdgeColor = new(0.6156863f, 0.5137255f, 0.3568628f, 1.0f);
         public Vector2 HealthTextOffset    = Vector2.Zero;
 
         // 仇恨值
