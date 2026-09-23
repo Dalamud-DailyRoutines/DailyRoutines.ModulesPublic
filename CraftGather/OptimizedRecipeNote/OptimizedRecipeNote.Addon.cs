@@ -441,6 +441,11 @@ public partial class OptimizedRecipeNote
                     itemsInCurrentRow = 0;
                 }
 
+                var blockNode = new ResNode
+                {
+                    Size = new(ACTION_BLOCK_SIZE)
+                };
+                
                 var dragDropNode = new DragDropNode
                 {
                     Size         = new(ACTION_BLOCK_SIZE),
@@ -480,6 +485,7 @@ public partial class OptimizedRecipeNote
                     if (Synthesis != null)
                         dragDropNode.Alpha = ACTION_USED_ALPHA;
                 };
+                dragDropNode.AttachNode(blockNode);
                 ActionBlocks.Add(dragDropNode);
 
                 var actionIndexNode = new TextNode
@@ -490,9 +496,9 @@ public partial class OptimizedRecipeNote
                     TextFlags = TextFlags.Edge
                 };
                 AtkColors.Value.ApplyTo(actionIndexNode);
-                actionIndexNode.AttachNode(dragDropNode);
+                actionIndexNode.AttachNode(blockNode);
 
-                currentRow.AddNode(dragDropNode);
+                currentRow.AddNode(blockNode);
 
                 itemsInCurrentRow++;
             }
@@ -595,8 +601,8 @@ public partial class OptimizedRecipeNote
                         return false;
                     }
                 );
-                th.Enqueue(() => ActionBlocks[i].Alpha = 0.2f);
                 th.Enqueue(() => !ICondition.Instance()[ConditionFlag.ExecutingCraftingAction]);
+                th.Enqueue(() => ActionBlocks[i].Alpha = ACTION_USED_ALPHA);
             }
         }
 
@@ -643,7 +649,7 @@ public partial class OptimizedRecipeNote
             NotifyHelper.Speak(message);
 
             foreach (var node in ActionBlocks)
-                node.Alpha = 1;
+                node.Alpha = ACTION_NORMAL_ALPHA;
         }
     }
 }
