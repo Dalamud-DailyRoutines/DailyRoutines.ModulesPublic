@@ -41,6 +41,11 @@
         "resolved": "3.1.0",
         "contentHash": "KebM3/iZtZWgeFuGTQJyWu+VQKAeq1xXY9bkSSDv27hALxDtSdJAfPnT8dWpl7ti2B3ajnMj70/VLXY4D3bupg=="
       },
+      "MessageFormat": {
+        "type": "Transitive",
+        "resolved": "8.0.0",
+        "contentHash": "+nmYgGQVhGXmvQd+AMYILZGTxOP4J9tOR3KbjoxMDDICRrSzHYB9v1aRRVnXkD1ZeBapscFWIf5B/ck3p9R1mg=="
+      },
       "Microsoft.CodeAnalysis.Analyzers": {
         "type": "Transitive",
         "resolved": "5.9.0-1.26328.17",
@@ -106,6 +111,7 @@
         "dependencies": {
           "AngleSharp": "[1.8.0, )",
           "GuerrillaNtp": "[3.1.0, )",
+          "MessageFormat": "[8.0.0, )",
           "TinyPinyin": "[1.1.0, )"
         }
       },
