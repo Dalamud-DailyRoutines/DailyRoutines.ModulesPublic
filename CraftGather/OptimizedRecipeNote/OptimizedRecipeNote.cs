@@ -17,8 +17,10 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using InteropGenerator.Runtime;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.Timelines;
@@ -73,6 +75,20 @@ public partial class OptimizedRecipeNote : ModuleBase
     );
     private Hook<RecipeNotePraticeSettingSetupDelegate>? RecipeNotePraticeSettingSetupHook;
 
+    private static readonly CompSig OpenContextMenuForItemSig = 
+        new("40 53 55 56 57 41 54 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 44 8B B4 24");
+    private unsafe delegate void OpenContextMenuForItemDelegate
+    (
+        AgentRecipeNote* agent,
+        uint             itemID,
+        CStringPointer   itemName,
+        short            a4,
+        int              recipeID,
+        int              craftType,
+        short            a7
+    );
+    private OpenContextMenuForItemDelegate? OpenContextMenuForItem;
+
     private Config config = null!;
 
     private readonly Dictionary<uint, CaculationResult> caculationResults = [];
@@ -113,6 +129,8 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         config = Config.Load(this) ?? new();
 
+        OpenContextMenuForItem = OpenContextMenuForItemSig.GetDelegate<OpenContextMenuForItemDelegate>();
+        
         SimpleCraftGetAmountUpperLimitHook =
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
@@ -1034,7 +1052,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     {
         if (caculationResults.FirstOrDefault(x => x.Value.PreviewLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
 
-        AddonActionsPreview.OpenWithActions(TaskHelper, result.Value);
+        AddonActionsPreview.OpenWithActions(this, result.Value);
     }
 
     private void OnClickCopyPayload
@@ -1198,6 +1216,21 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     #region 工具
 
+    private unsafe void OpenItemContextMenu(uint itemID)
+    {
+        using var itemNameString = new Utf8String(LuminaWrapper.GetItemName(itemID));
+        OpenContextMenuForItem
+        (
+            AgentRecipeNote.Instance(),
+            itemID,
+            itemNameString.StringPtr,
+            0,
+            255,
+            0,
+            0
+        );
+    }
+    
     private static unsafe bool TryGetCurrentRecipe
     (
         out uint   recipeID,
@@ -1250,10 +1283,10 @@ public partial class OptimizedRecipeNote : ModuleBase
     )
     {
         public Recipe GetRecipe() =>
-            LuminaGetter.GetRow<Recipe>(RecipeID).GetValueOrDefault();
+            LuminaGetter.GetRowOrDefault<Recipe>(RecipeID);
 
         public ClassJob GetJob() =>
-            LuminaGetter.GetRow<ClassJob>(GetRecipe().CraftType.RowId + 8).GetValueOrDefault();
+            LuminaGetter.GetRowOrDefault<ClassJob>(GetRecipe().CraftType.RowId + 8);
     }
 
     private class Config : ModuleConfig

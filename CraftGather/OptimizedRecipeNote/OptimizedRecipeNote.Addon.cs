@@ -1,15 +1,17 @@
+using System.Numerics;
 using System.Text;
+using DailyRoutines.Common.Info;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Keys;
-using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
-using KamiToolKit.Classes;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
+using KamiToolKit.Nodes.Simplified;
+using Lumina.Data.Parsing.Uld;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
@@ -20,27 +22,79 @@ public partial class OptimizedRecipeNote
 {
     private class AddonActionsPreview
     (
+        OptimizedRecipeNote inModule,
         TaskHelper       inTaskHelper,
         CaculationResult result
     ) : NativeAddon
     {
         public static AddonActionsPreview? Addon { get; set; }
 
-        public CaculationResult Result     { get; private set; } = result;
-        public TaskHelper       TaskHelper { get; init; }        = inTaskHelper;
+        public CaculationResult    Result     { get; init; } = result;
+        public TaskHelper          TaskHelper { get; init; } = inTaskHelper;
+        public OptimizedRecipeNote Module     { get; init; } = inModule;
 
-        public List<DragDropNode> Nodes               { get; private set; } = [];
-        public TextButtonNode     CraftOnceButton     { get; private set; }
-        public TextButtonNode     CraftMultipleButton { get; private set; }
-        public NumericInputNode   CraftCountInput     { get; private set; }
-        public TextNode           CraftProgressText   { get; private set; }
+        public VerticalListNode RootContainer { get; private set; }
 
+        #region 基础数据
+
+        public const float STATS_CONTAINER_HEIGHT        = 70f;
+        public const float STATS_CONTAINER_INNER_PADDING = 15f;
+        public const float STATS_CLASS_JOB_COLUMN_WIDTH  = 180f;
+        public const float STATS_COLUMN_WIDTH            = 120F;
+        public const float STATS_COLUMN_DUMMY            = 18.5f;
+        
+        public SimpleNineGridNode StatsContainerBackground   { get; private set; }
+        public HorizontalListNode StatsContainer             { get; private set; }
+        public IconImageNode      ClassJobIcon               { get; private set; }
+        public VerticalListNode   ClassJobInfoContainer      { get; private set; }
+        public TextNode           ClassJobLable              { get; private set; }
+        public TextNode           ClassJobName               { get; private set; }
+        public VerticalListNode   CraftsmanshipInfoContainer { get; private set; }
+        public VerticalListNode   ControlInfoContainer       { get; private set; }
+        public VerticalListNode   CraftPointInfoContainer    { get; private set; }
+
+        #endregion
+
+        #region 执行行
+
+        public const float EXECUTION_CONTAINER_HEIGHT = 35f;
+
+        public HorizontalListNode ExecutionContainer { get; private set; }
+        public TextButtonNode     ExecuteButton      { get; private set; }
+        public NumericInputNode   CraftCountInput    { get; private set; }
+
+        #endregion
+
+        #region 宏复制行
+
+        public const float COPY_MACRO_CONTAINER_HEIGHT = 35f;
+        
+        public HorizontalListNode CopyMacroContainer { get; private set; }
+
+        #endregion
+
+        #region 技能
+
+        public const float ACTION_CONTAINER_INNER_PADDING = 12.5f;
+        public const float ACTION_BLOCK_SPACING           = 5f;
+        public const float ACTION_BLOCK_SIZE              = 50f;
+
+        public const float ACTION_USED_ALPHA   = 0.2f;
+        public const float ACTION_NORMAL_ALPHA = 1f;
+        
+        public SimpleNineGridNode ActionContainerBackground { get; private set; }
+        public VerticalListNode   ActionContainer           { get; private set; }
+        public IconButtonNode     ItemIcon                  { get; private set; }
+        public List<DragDropNode> ActionBlocks              { get; private set; } = [];
+
+        #endregion
+        
         private int currentCraftRound;
         private int totalCraftRounds;
 
         public static void OpenWithActions
         (
-            TaskHelper       taskHelper,
+            OptimizedRecipeNote       module,
             CaculationResult result
         )
         {
@@ -49,12 +103,12 @@ public partial class OptimizedRecipeNote
             Addon?.Dispose();
 
             var rowCount = MathF.Ceiling(result.Actions.Count / 10f);
-            Addon = new(taskHelper, result)
+            Addon = new(module, module.TaskHelper, result)
             {
                 InternalName          = "DRRecipeNoteActionsPreview",
                 Title                 = Lang.Get("OptimizedRecipeNote-AddonTitle"),
                 Subtitle              = Lang.Get("OptimizedRecipeNote-Message-StepsInfo", result.Actions.Count, result.Actions.Count * 3),
-                Size                  = new(500f, 192f + (50f * (rowCount - 1))),
+                Size                  = new(700f, 192f + (50f * (rowCount - 1))),
                 RememberClosePosition = true,
             };
             Addon.Open();
@@ -69,7 +123,7 @@ public partial class OptimizedRecipeNote
         )
         {
             // 重置已用过的技能界面
-            foreach (var node in Nodes)
+            foreach (var node in ActionBlocks)
                 node.Alpha = 1;
         }
 
@@ -86,170 +140,117 @@ public partial class OptimizedRecipeNote
         )
         {
             IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "RecipeNote", OnRecipeNote);
+
+            RootContainer = new()
+            {
+                FitContents      = true,
+                Width            = ContentSize.X,
+                Position         = ContentStartPosition,
+                ItemSpacing      = 5f,
+                FirstItemSpacing = 0f
+            };
+            RootContainer.AttachNode(this);
+
+            #region 基本信息
+
+            StatsContainerBackground = new()
+            {
+                TexturePath        = "ui/uld/img04/BgParts_hr1.tex",
+                TextureCoordinates = new(61, 37),
+                TextureSize        = new(16, 16),
+                Offsets            = new(7),
+                Size               = ContentSize with { Y = STATS_CONTAINER_HEIGHT }
+            };
+            RootContainer.AddNode(StatsContainerBackground);
+
+            StatsContainer = new()
+            {
+                FitToContentWidth = true,
+                Height            = STATS_CONTAINER_HEIGHT,
+                Position          = new(STATS_CONTAINER_INNER_PADDING)
+            };
+            StatsContainer.AttachNode(StatsContainerBackground);
+
+            ClassJobIcon = new()
+            {
+                IconId      = Result.GetJob().GetIcon(),
+                Size        = new(40, 40),
+                TextureSize = new(40, 40),
+                FitTexture  = true
+            };
+            StatsContainer.AddNode(ClassJobIcon);
+
+            StatsContainer.AddDummy(10f);
+
+            ClassJobInfoContainer = new()
+            {
+                FitContents = true,
+                Width       = STATS_CLASS_JOB_COLUMN_WIDTH
+            };
+            StatsContainer.AddNode(ClassJobInfoContainer);
             
+            ClassJobLable = new()
+            {
+                String    = Lang.Get("ClassJob"),
+                FontSize  = 12,
+                TextFlags = TextFlags.AutoAdjustNodeSize,
+            };
+            AtkColors.LabelLight.ApplyTo(ClassJobLable);
+            ClassJobInfoContainer.AddNode(ClassJobLable);
+
+            ClassJobName = new()
+            {
+                String    = Result.GetJob().Name,
+                FontSize  = 18,
+                Size      = new(STATS_CLASS_JOB_COLUMN_WIDTH, 24),
+                TextFlags = TextFlags.Ellipsis,
+            };
+            AtkColors.Label.ApplyTo(ClassJobName);
+            ClassJobInfoContainer.AddNode(ClassJobName);
             
-            // Row 1: 职业 + 三维数据
-            var statsRow = new HorizontalListNode
+            StatsContainer.AddNode(CreateStatsColumnSeperator());
+            
+            StatsContainer.AddDummy(STATS_COLUMN_DUMMY);
+            
+            CraftsmanshipInfoContainer = CreateStatsColumn(3261, Result.Craftmanship);
+            
+            StatsContainer.AddNode(CreateStatsColumnSeperator());
+            
+            StatsContainer.AddDummy(STATS_COLUMN_DUMMY);
+            
+            ControlInfoContainer = CreateStatsColumn(3262, Result.Control);
+            
+            StatsContainer.AddNode(CreateStatsColumnSeperator());
+            
+            StatsContainer.AddDummy(STATS_COLUMN_DUMMY);
+            
+            CraftPointInfoContainer = CreateStatsColumn(3223, Result.CraftPoint);
+            
+            #endregion
+
+            #region 执行
+
+            ExecutionContainer = new()
             {
-                IsVisible = true,
-                Position  = new(12, 40),
-                Size      = new(0, 44)
+                FitToContentWidth = true,
+                Height            = EXECUTION_CONTAINER_HEIGHT,
+                ItemSpacing       = 10
             };
+            RootContainer.AddNode(ExecutionContainer);
 
-            var jobTextNode = new TextNode
+            ExecuteButton = new()
             {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String = new SeStringBuilder()
-                         .AddText($"{LuminaWrapper.GetAddonText(294)}: ")
-                         .AddIcon(Result.GetJob().ToBitmapFontIcon())
-                         .AddText(Result.GetJob().Name.ToString())
-                         .Build()
-                         .Encode()
-            };
-            jobTextNode.Size =  jobTextNode.GetTextDrawSize($"{jobTextNode.String}123");
-            statsRow.Width   += jobTextNode.Width;
-            statsRow.AddNode(jobTextNode);
-
-            statsRow.Width += 12;
-            statsRow.AddDummy(12);
-
-            var craftmanshipTextNode = new TextNode
-            {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String    = $"{LuminaWrapper.GetAddonText(3261)}: {Result.Craftmanship}"
-            };
-            statsRow.Width += craftmanshipTextNode.Width;
-            statsRow.AddNode(craftmanshipTextNode);
-
-            statsRow.Width += 12;
-            statsRow.AddDummy(12);
-
-            var controlTextNode = new TextNode
-            {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String    = $"{LuminaWrapper.GetAddonText(3262)}: {Result.Control}"
-            };
-            statsRow.Width += controlTextNode.Width;
-            statsRow.AddNode(controlTextNode);
-
-            statsRow.Width += 12;
-            statsRow.AddDummy(12);
-
-            var craftPointTextNode = new TextNode
-            {
-                IsVisible = true,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                String    = $"{LuminaWrapper.GetAddonText(3223)}: {Result.CraftPoint}"
-            };
-            statsRow.Width += craftPointTextNode.Width;
-            statsRow.AddNode(craftPointTextNode);
-
-            statsRow.AttachNode(this);
-
-            // Row 2: 复制宏按钮
-            var macroRow = new HorizontalFlexNode
-            {
-                IsVisible = true,
-                Position  = new(8, 65),
-                Size      = new(0, 28)
-            };
-
-            var macroButtonCount = (int)Math.Ceiling(Result.Actions.Count / 15.0);
-
-            for (var i = 0; i < macroButtonCount; i++)
-            {
-                var macroIndex = i;
-                var copyMacroButton = new TextButtonNode
+                Size        = new(140, 32),
+                String      = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", 1),
+                TextureType = ButtonTextureType.ButtonB,
+                OnClick     = () =>
                 {
-                    IsVisible = true,
-                    Size      = new(120, 24),
-                    String    = Lang.Get("OptimizedRecipeNote-Button-CopyMacro", macroIndex + 1),
-                    OnClick = () =>
-                    {
-                        var startIndex      = macroIndex * 15;
-                        var endIndex        = Math.Min(startIndex                           + 15, Result.Actions.Count);
-                        var actionsForMacro = Result.Actions.Skip(startIndex).Take(endIndex - startIndex);
-
-                        var builder = new StringBuilder();
-                        foreach (var action in actionsForMacro)
-                            builder.AppendLine($"/ac {LuminaWrapper.GetActionName(action)} <wait.3>");
-                        ImGui.SetClipboardText(builder.ToString());
-
-                        NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}");
-                    }
-                };
-                macroRow.Width += copyMacroButton.Width;
-                macroRow.AddNode(copyMacroButton);
-
-                macroRow.Width += 4;
-                macroRow.AddDummy(4);
-            }
-
-            macroRow.AttachNode(this);
-
-            // Row 3: 制作按钮行
-            var craftRow = new HorizontalListNode
-            {
-                IsVisible = true,
-                Position  = new(8, 93),
-                Size      = new(120, 28)
-            };
-
-            CraftOnceButton = new TextButtonNode
-            {
-                IsVisible = true,
-                Size      = new(120, 28),
-                String    = Lang.Get("Execute"),
-                OnClick = () =>
-                {
-                    if (Result.Actions is not { Count: > 0 } actions) return;
-
-                    EnqueueActionSequence(TaskHelper, actions);
-                }
-            };
-            craftRow.AddNode(CraftOnceButton);
-
-            craftRow.AddDummy(16);
-
-            CraftCountInput = new NumericInputNode
-            {
-                IsVisible = true,
-                Size      = new(120, 28),
-                Position  = new(0, -2),
-                Min       = 0,
-                Max       = 0,
-                Step      = 1,
-                Value     = 0,
-                OnValueUpdate = _ =>
-                {
-                    CraftMultipleButton.String    = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", CraftCountInput.Value);
-                    CraftMultipleButton.IsEnabled = CraftCountInput.Value > 0;
-                }
-            };
-            craftRow.AddNode(CraftCountInput);
-
-            craftRow.AddDummy(2);
-
-            CraftMultipleButton = new TextButtonNode
-            {
-                IsVisible = true,
-                Size      = new(120, 28),
-                String    = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", 0),
-                IsEnabled = false,
-                OnClick = () =>
-                {
-                    if (Result.Actions is not { Count: > 0 } actions) return;
-                    if (CraftCountInput is not { Value: > 0 }) return;
-
                     var totalCount = CraftCountInput.Value;
                     currentCraftRound = 0;
                     totalCraftRounds  = totalCount;
 
-                    CraftProgressText.IsVisible = true;
-                    CraftProgressText.String    = $"{currentCraftRound}/{totalCraftRounds}";
+                    // CraftProgressText.IsVisible = true;
+                    // CraftProgressText.String    = $"{currentCraftRound}/{totalCraftRounds}";
 
                     LogMessageManager.Instance().RegPost(OnCraftLogMessage);
 
@@ -260,11 +261,12 @@ public partial class OptimizedRecipeNote
                         TaskHelper.Enqueue
                         (() =>
                             {
+                                if (Synthesis->IsAddonAndNodesReady()) return;
+                                
                                 currentCraftRound        = currentRound + 1;
-                                CraftProgressText.String = $"{currentCraftRound}/{totalCraftRounds}";
+                                // CraftProgressText.String = $"{currentCraftRound}/{totalCraftRounds}";
 
                                 RecipeNoteAddon->Callback(8);
-                                return true;
                             }
                         );
 
@@ -272,7 +274,7 @@ public partial class OptimizedRecipeNote
 
                         TaskHelper.DelayNext(500);
 
-                        EnqueueActionSequence(TaskHelper, actions);
+                        EnqueueActionSequence(TaskHelper, Result.Actions);
 
                         TaskHelper.Enqueue(() => Synthesis == null);
 
@@ -284,34 +286,94 @@ public partial class OptimizedRecipeNote
                     TaskHelper.Enqueue(() => OnCraftingLoopFinished(totalCount));
                 }
             };
-            craftRow.AddNode(CraftMultipleButton);
+            ExecutionContainer.AddNode(ExecuteButton);
 
-            craftRow.AddDummy(4f);
-
-            // 制作进度文本 (平时隐藏)
-            CraftProgressText = new TextNode
+            CraftCountInput = new NumericInputNode
             {
-                IsVisible = false,
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                TextColor = ColorHelper.GetColor(3),
-                FontSize  = 14
+                Size          = new(140, 32),
+                Min           = 1,
+                Max           = 99999,
+                Step          = 1,
+                Value         = 1,
+                OnValueUpdate = value => ExecuteButton.String = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", value)
             };
-            craftRow.AddNode(CraftProgressText);
+            ExecutionContainer.AddNode(CraftCountInput);
 
-            craftRow.AttachNode(this);
+            #endregion
 
-            // Row 4: 技能序列
-            var container = new VerticalListNode
+            #region 复制宏
+
+            CopyMacroContainer = new()
             {
-                IsVisible = true,
-                Position  = new(12, 125),
-                Size      = new(44)
+                FitToContentWidth = true,
+                Height            = COPY_MACRO_CONTAINER_HEIGHT,
+                ItemSpacing       = 5f
             };
-
-            var currentRow = new HorizontalFlexNode
+            RootContainer.AddNode(CopyMacroContainer);
+            
+            var macroButtonCount = (int)Math.Ceiling(Result.Actions.Count / 15f);
+            for (var i = 0; i < macroButtonCount; i++)
             {
-                IsVisible = true,
-                Size      = new(0, 44)
+                var macroIndex = i;
+                var button = new TextButtonNode
+                {
+                    Size      = new(140, 28f),
+                    String    = Lang.Get("OptimizedRecipeNote-Button-CopyMacro", macroIndex + 1),
+                    OnClick = () =>
+                    {
+                        var startIndex = macroIndex * 15;
+                        var endIndex   = Math.Min(startIndex + 15, Result.Actions.Count);
+                        
+                        var actionsForMacro = Result.Actions.Skip(startIndex).Take(endIndex - startIndex);
+
+                        var builder = new StringBuilder();
+                        foreach (var action in actionsForMacro)
+                            builder.AppendLine($"/ac {LuminaWrapper.GetActionName(action)} <wait.3>");
+                        ImGui.SetClipboardText(builder.ToString());
+
+                        var message = Lang.Get("OptimizedRecipeNote-Message-MacroCopied", macroIndex + 1);
+                        NotifyHelper.Toast(message);
+                    }
+                };
+                CopyMacroContainer.AddNode(button);
+            }
+
+            #endregion
+
+            #region 技能
+
+            ActionContainerBackground = new()
+            {
+                TexturePath        = "ui/uld/img04/BgParts_hr1.tex",
+                TextureCoordinates = new(61, 37),
+                TextureSize        = new(16, 16),
+                Offsets            = new(7),
+                Size               = ContentSize with { Y = STATS_CONTAINER_HEIGHT }
+            };
+            RootContainer.AddNode(ActionContainerBackground);
+
+            ActionContainer = new()
+            {
+                FitContents = true,
+                Width       = ActionContainerBackground.Width - (2 * ACTION_CONTAINER_INNER_PADDING),
+                Position    = new(ACTION_CONTAINER_INNER_PADDING),
+                ItemSpacing = ACTION_BLOCK_SPACING
+            };
+            ActionContainer.AttachNode(ActionContainerBackground);
+
+            ItemIcon = new()
+            {
+                IconId       = Result.GetRecipe().ItemResult.Value.Icon,
+                InnerPadding = Vector2.Zero,
+                Size         = new(32),
+                OnClick      = () => Module.OpenItemContextMenu(Result.GetRecipe().ItemResult.RowId)
+            };
+            ActionContainer.AddNode(ItemIcon);
+
+            var currentRow = new HorizontalListNode
+            {
+                Size        = new(ActionContainer.Width, ACTION_BLOCK_SIZE),
+                ItemSpacing = ACTION_BLOCK_SPACING
             };
 
             var itemsInCurrentRow = 0;
@@ -322,23 +384,22 @@ public partial class OptimizedRecipeNote
                 var iconID   = LuminaWrapper.GetActionIconID(actionID);
                 if (iconID == 0) continue;
 
-                if (itemsInCurrentRow >= 10)
+                if (itemsInCurrentRow > 1 &&
+                    (itemsInCurrentRow * ACTION_BLOCK_SIZE) + ((itemsInCurrentRow - 1) * ACTION_BLOCK_SPACING) > ActionContainer.Width)
                 {
-                    container.AddNode(currentRow);
-                    container.AddDummy(4f);
+                    ActionContainer.AddNode(currentRow);
 
-                    currentRow = new HorizontalFlexNode
+                    currentRow = new HorizontalListNode
                     {
-                        IsVisible = true,
-                        Size      = new(0, 44)
+                        Size        = new(ActionContainer.Width, ACTION_BLOCK_SIZE),
+                        ItemSpacing = ACTION_BLOCK_SPACING
                     };
                     itemsInCurrentRow = 0;
                 }
 
                 var dragDropNode = new DragDropNode
                 {
-                    Size         = new(44f),
-                    IsVisible    = true,
+                    Size         = new(ACTION_BLOCK_SIZE),
                     IconId       = iconID,
                     AcceptedType = DragDropType.Nothing,
                     IsDraggable  = true,
@@ -369,36 +430,77 @@ public partial class OptimizedRecipeNote
                     if (ICondition.Instance()[ConditionFlag.ExecutingCraftingAction] ||
                         TaskHelper.IsBusy)
                         return;
-
-                    if (Synthesis != null)
-                        dragDropNode.Alpha = 0.2f;
+                    
                     ChatManager.Instance().SendMessage($"/ac {LuminaWrapper.GetActionName(actionID)}");
+                    
+                    if (Synthesis != null)
+                        dragDropNode.Alpha = ACTION_USED_ALPHA;
                 };
-                Nodes.Add(dragDropNode);
+                ActionBlocks.Add(dragDropNode);
 
                 var actionIndexNode = new TextNode
                 {
-                    IsVisible        = true,
-                    Position         = new(-4),
-                    String           = $"{index + 1}",
-                    FontType         = FontType.MiedingerMed,
-                    TextFlags        = TextFlags.Edge | TextFlags.Emboss,
-                    TextColor        = ColorHelper.GetColor(50),
-                    TextOutlineColor = ColorHelper.GetColor(28)
+                    Position  = new(-4),
+                    String    = $"{index + 1}",
+                    FontType  = FontType.MiedingerMed,
+                    TextFlags = TextFlags.Edge
                 };
+                AtkColors.Value.ApplyTo(actionIndexNode);
                 actionIndexNode.AttachNode(dragDropNode);
 
                 currentRow.AddNode(dragDropNode);
-                currentRow.AddDummy(4);
-                currentRow.Width += dragDropNode.Size.X + 4;
 
                 itemsInCurrentRow++;
             }
 
             if (itemsInCurrentRow > 0)
-                container.AddNode(currentRow);
+                ActionContainer.AddNode(currentRow);
 
-            container.AttachNode(this);
+            ActionContainerBackground.Height = ActionContainer.Height + (2 * ACTION_CONTAINER_INNER_PADDING);
+
+            #endregion
+            
+            RootContainer.RecalculateLayout();
+            SetWindowSize(Size.X, RootContainer.Height + ContentStartPosition.Y + 32f);
+            
+            return;
+
+            VerticalListNode CreateStatsColumn
+            (
+                uint addonTextID,
+                int  number
+            )
+            {
+                var statsColumn = new VerticalListNode
+                {
+                    FitContents = true,
+                    Width       = STATS_COLUMN_WIDTH
+                };
+                StatsContainer.AddNode(statsColumn);
+
+                var lable = new TextNode
+                {
+                    SheetType = NodeData.SheetType.Addon,
+                    TextId    = addonTextID,
+                    FontSize  = 12,
+                    TextFlags = TextFlags.AutoAdjustNodeSize,
+                };
+                AtkColors.LabelLight.ApplyTo(lable);
+                statsColumn.AddNode(lable);
+
+                var name = new TextNode
+                {
+                    String    = number.ToString(),
+                    FontSize  = 20,
+                    Size      = new(STATS_COLUMN_WIDTH, 24),
+                    TextFlags = TextFlags.Ellipsis |TextFlags.Edge,
+                    FontType  = FontType.Miedinger
+                };
+                AtkColors.ValueEmphasize.ApplyTo(name);
+                statsColumn.AddNode(name);
+            
+                return statsColumn;
+            }
         }
 
         protected override unsafe void OnUpdate
@@ -406,33 +508,28 @@ public partial class OptimizedRecipeNote
             AtkUnitBase* addon
         )
         {
-            if (IKeyState.Instance()[VirtualKey.ESCAPE])
+            if (TaskHelper.IsBusy)
+                ExecuteButton.IsEnabled = false;
+            else
             {
-                Close();
-
-                if (SystemMenu != null)
-                    SystemMenu->Close(true);
-
-                return;
-            }
-
-            CraftOnceButton.IsEnabled = Synthesis != null &&
-                                        !TaskHelper.IsBusy;
-            CraftMultipleButton.IsEnabled = CraftCountInput is { Value: > 0 } &&
-                                            Synthesis == null                 &&
-                                            !TaskHelper.IsBusy;
-
-            // 制作时不更新
-            if (Synthesis == null)
-            {
-                if (TryGetCurrentRecipe(out var recipe, out _) && Result.RecipeID == recipe)
-                    CraftCountInput.Max = SimpleCraftGetAmountUpperLimitDetour(nint.Zero, false);
-                else
-                    CraftCountInput.Max = 0;
+                ExecuteButton.IsEnabled = CraftCountInput.Value switch
+                {
+                    0 => false,
+                    1 => true,
+                    _ => RecipeNoteAddon->IsAddonAndNodesReady()
+                };
             }
         }
 
         #endregion
+
+        private static VerticalLineNode CreateStatsColumnSeperator() =>
+            new()
+            {
+                Height = 45f,
+                Width  = 4f,
+                Y      = -2.5f
+            };
 
         private void EnqueueActionSequence
         (
@@ -453,7 +550,7 @@ public partial class OptimizedRecipeNote
                         return false;
                     }
                 );
-                th.Enqueue(() => Nodes[i].Alpha = 0.2f);
+                th.Enqueue(() => ActionBlocks[i].Alpha = 0.2f);
                 th.Enqueue(() => !ICondition.Instance()[ConditionFlag.ExecutingCraftingAction]);
             }
         }
@@ -477,7 +574,7 @@ public partial class OptimizedRecipeNote
             LogMessageManager.Instance().Unreg(OnCraftLogMessage);
             TaskHelper.Abort();
 
-            CraftProgressText.IsVisible = false;
+            // CraftProgressText.IsVisible = false;
             currentCraftRound           = 0;
             totalCraftRounds            = 0;
 
@@ -500,7 +597,7 @@ public partial class OptimizedRecipeNote
 
             NotifyHelper.Speak(message);
 
-            foreach (var node in Nodes)
+            foreach (var node in ActionBlocks)
                 node.Alpha = 1;
         }
     }
