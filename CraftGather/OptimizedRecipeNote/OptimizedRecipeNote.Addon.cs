@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text;
 using DailyRoutines.Common.Info;
+using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
@@ -57,7 +58,7 @@ public partial class OptimizedRecipeNote
 
         #region 执行行
 
-        public const float EXECUTION_CONTAINER_HEIGHT = 35f;
+        public const float EXECUTION_CONTAINER_HEIGHT = 40f;
 
         public HorizontalListNode ExecutionContainer { get; private set; }
         public TextButtonNode     ExecuteButton      { get; private set; }
@@ -78,13 +79,17 @@ public partial class OptimizedRecipeNote
         public const float ACTION_CONTAINER_INNER_PADDING = 12.5f;
         public const float ACTION_BLOCK_SPACING           = 5f;
         public const float ACTION_BLOCK_SIZE              = 50f;
+        public const float ITEM_INFO_SIZE                 = 48f;
 
         public const float ACTION_USED_ALPHA   = 0.2f;
         public const float ACTION_NORMAL_ALPHA = 1f;
         
         public SimpleNineGridNode ActionContainerBackground { get; private set; }
         public VerticalListNode   ActionContainer           { get; private set; }
-        public IconButtonNode     ItemIcon                  { get; private set; }
+        public HorizontalListNode ItemInfoContainer         { get; private set; }
+        public ItemIconNode       ItemIcon                  { get; private set; }
+        public TextNode           ItemName                  { get; private set; }
+        public TextNode           MacroStats                { get; private set; }
         public List<DragDropNode> ActionBlocks              { get; private set; } = [];
 
         #endregion
@@ -102,13 +107,11 @@ public partial class OptimizedRecipeNote
             
             Addon?.Dispose();
 
-            var rowCount = MathF.Ceiling(result.Actions.Count / 10f);
             Addon = new(module, module.TaskHelper, result)
             {
                 InternalName          = "DRRecipeNoteActionsPreview",
                 Title                 = Lang.Get("OptimizedRecipeNote-AddonTitle"),
-                Subtitle              = Lang.Get("OptimizedRecipeNote-Message-StepsInfo", result.Actions.Count, result.Actions.Count * 3),
-                Size                  = new(700f, 192f + (50f * (rowCount - 1))),
+                Size                  = new(700f, 200f),
                 RememberClosePosition = true,
             };
             Addon.Open();
@@ -124,7 +127,7 @@ public partial class OptimizedRecipeNote
         {
             // 重置已用过的技能界面
             foreach (var node in ActionBlocks)
-                node.Alpha = 1;
+                node.Alpha = ACTION_NORMAL_ALPHA;
         }
 
         protected override unsafe void OnFinalize
@@ -147,7 +150,6 @@ public partial class OptimizedRecipeNote
                 Width            = ContentSize.X,
                 Position         = ContentStartPosition,
                 ItemSpacing      = 5f,
-                FirstItemSpacing = 0f
             };
             RootContainer.AttachNode(this);
 
@@ -240,7 +242,7 @@ public partial class OptimizedRecipeNote
 
             ExecuteButton = new()
             {
-                Size        = new(140, 32),
+                Size        = new(140, EXECUTION_CONTAINER_HEIGHT),
                 String      = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", 1),
                 TextureType = ButtonTextureType.ButtonB,
                 OnClick     = () =>
@@ -290,7 +292,8 @@ public partial class OptimizedRecipeNote
 
             CraftCountInput = new NumericInputNode
             {
-                Size          = new(140, 32),
+                Size          = new(140, EXECUTION_CONTAINER_HEIGHT),
+                Y             = 4,
                 Min           = 1,
                 Max           = 99999,
                 Step          = 1,
@@ -361,15 +364,56 @@ public partial class OptimizedRecipeNote
             };
             ActionContainer.AttachNode(ActionContainerBackground);
 
+            ItemInfoContainer = new()
+            {
+                Size        = new(ActionContainer.Width, ITEM_INFO_SIZE),
+                ItemSpacing = ACTION_BLOCK_SPACING
+            };
+            ActionContainer.AddNode(ItemInfoContainer);
+
+            var resultItem = Result.GetRecipe().ItemResult.Value;
+            
             ItemIcon = new()
             {
-                IconId       = Result.GetRecipe().ItemResult.Value.Icon,
-                InnerPadding = Vector2.Zero,
-                Size         = new(32),
-                OnClick      = () => Module.OpenItemContextMenu(Result.GetRecipe().ItemResult.RowId)
+                IconId = resultItem.Icon,
+                Size   = new(ITEM_INFO_SIZE),
+                Scale  = new(ITEM_INFO_SIZE / 60f),
+                ItemID = resultItem.RowId,
+                OnClick = (_, _, _, _, atkEventData) =>
+                {
+                    if (!atkEventData->IsRightClick) return;
+                    Module.OpenItemContextMenu(resultItem.RowId);
+                }
             };
-            ActionContainer.AddNode(ItemIcon);
+            ItemInfoContainer.AddNode(ItemIcon);
 
+            ItemName = new()
+            {
+                String        = resultItem.Name,
+                Size          = new(400f, 40f),
+                FontSize      = 16,
+                AlignmentType = AlignmentType.Left,
+                TextFlags     = TextFlags.MultiLine | TextFlags.WordWrap
+            };
+            AtkColors.Hint.ApplyTo(ItemName);
+            ItemInfoContainer.AddNode(ItemName);
+
+            MacroStats = new()
+            {
+                Size          = new(0f, 40f),
+                AlignmentType = AlignmentType.Right,
+                String = Lang.Get
+                (
+                    "OptimizedRecipeNote-Text-MacroStats",
+                    Result.Actions.Count,
+                    Result.Actions.Count * 3
+                ),
+                FontSize = 14,
+                X        = ActionContainer.Width,
+            };
+            AtkColors.LabelLight.ApplyTo(MacroStats);
+            MacroStats.AttachNode(ActionContainer);
+            
             var currentRow = new HorizontalListNode
             {
                 Size        = new(ActionContainer.Width, ACTION_BLOCK_SIZE),
@@ -459,9 +503,10 @@ public partial class OptimizedRecipeNote
             ActionContainerBackground.Height = ActionContainer.Height + (2 * ACTION_CONTAINER_INNER_PADDING);
 
             #endregion
-            
+
             RootContainer.RecalculateLayout();
-            SetWindowSize(Size.X, RootContainer.Height + ContentStartPosition.Y + 32f);
+            SetWindowSize(Size.X, RootContainer.Height + ContentStartPosition.Y + 24f);
+            RootContainer.Position = ContentStartPosition;
             
             return;
 
