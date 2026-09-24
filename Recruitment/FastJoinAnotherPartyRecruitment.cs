@@ -30,7 +30,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
     private DRSelectYesno? confirmAddon;
-    
+
     private TextButtonNode? button;
 
     protected override void Init()
@@ -55,7 +55,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
 
         button?.Dispose();
         button = null;
-        
+
         confirmAddon?.Dispose();
         confirmAddon = null;
     }
@@ -103,9 +103,9 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         // 团队招募
         var partyCount = addon->AtkValues[19].UInt;
         if (partyCount != 1) return;
-        
+
         var agent = AgentLookingForGroup.Instance();
-        
+
         // 自己开的招募
         if (agent->ListingContentId == LocalPlayerState.ContentID) return;
 
@@ -120,7 +120,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
             IsVisible = false,
             IsEnabled = LocalPlayerState.IsInAnyParty,
             String    = Lang.Get("FastJoinAnotherPartyRecruitment-LeaveAndJoin"),
-            OnClick   = () =>
+            OnClick = () =>
             {
                 confirmAddon?.Dispose();
 
@@ -130,6 +130,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
                 var listing = agent->LastViewedListing;
 
                 builder.Append(listing.LeaderString);
+
                 if (listing.HomeWorld != GameState.HomeWorld)
                 {
                     builder.AppendIcon(BitmapFontIcon.CrossWorld)
@@ -155,7 +156,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
                         Callback = (_, result) =>
                         {
                             confirmAddon = null;
-                            
+
                             if (result != DRSelectYesnoResult.Yes)
                                 return;
 
@@ -184,38 +185,36 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         if (AgentLookingForGroup.Instance()->ListingContentId == LocalPlayerState.ContentID) return;
 
         var containerNode = addon->GetNodeById(108);
-        if (containerNode != null)
-            containerNode->SetPosition(35, 56);
+        if (containerNode == null) return;
 
         var button0 = addon->GetComponentButtonById(109);
-
-        if (button0 != null)
-        {
-            button0->OwnerNode->ToggleVisibility(button0->OwnerNode->X == -50);
-            button0->OwnerNode->SetPosition(-50, 0);
-        }
-
         var button1 = addon->GetComponentButtonById(110);
-
-        if (button1 != null)
-        {
-            button1->OwnerNode->ToggleVisibility(button1->OwnerNode->X == 250);
-            button1->OwnerNode->SetPosition(250, 0);
-        }
-
         var button2 = addon->GetComponentButtonById(111);
+        if (button0 == null || button1 == null || button2 == null) return;
 
-        if (button2 != null)
-        {
-            button2->OwnerNode->ToggleVisibility(button2->OwnerNode->X == 400);
-            button2->OwnerNode->SetPosition(400, 0);
-        }
+        // 在 ULD 中带有 Float2 Position 关键帧, 引擎每帧都会用关键帧插值回写节点坐标,
+        // 只有摘掉节点的 Timeline 才能让坐标立即生效
+        DetachTimelineAndSetPosition(containerNode,                   35,  56);
+        DetachTimelineAndSetPosition((AtkResNode*)button0->OwnerNode, -50, 0);
+        DetachTimelineAndSetPosition((AtkResNode*)button1->OwnerNode, 250, 0);
+        DetachTimelineAndSetPosition((AtkResNode*)button2->OwnerNode, 400, 0);
 
         if (button != null)
         {
             button.IsEnabled = LocalPlayerState.IsInAnyParty;
             button.IsVisible = button2->OwnerNode->IsVisible();
         }
+    }
+
+    private static void DetachTimelineAndSetPosition
+    (
+        AtkResNode* node,
+        float       x,
+        float       y
+    )
+    {
+        node->Timeline = null;
+        node->SetPositionFloat(x, y);
     }
 
     private static void Enqueue
