@@ -724,33 +724,32 @@ public unsafe partial class AutoRetainerWork
                             priceAdjustAllSameEvent.Add(RetainerSell, (AtkResNode*)confirmButton->OwnerNode, AtkEventType.ButtonClick);
                         }
                     }
-                    
+
                     if (Module.config.AutoPriceAdjustWhenNewOnSale)
                     {
                         var countInputComponent = (AtkComponentNumericInput*)RetainerSell->GetComponentByNodeId(14);
-                        if (countInputComponent == null) return;
-
                         var priceInputComponent = (AtkComponentNumericInput*)RetainerSell->GetComponentByNodeId(10);
-                        if (priceInputComponent == null) return;
 
-                        if (!countInputComponent->MinusButtonComponent->IsEnabled)
-                            return;
-
-                        priceInputComponent->SetEnabledState(false);
-
-                        var ownerNode = priceInputComponent->OwnerNode;
-                        if (ownerNode == null) return;
-                        
-                        var parentNode = ownerNode->ParentNode;
-                        if (parentNode == null) return;
-
-                        autoPriceAdjustWarningNode = new()
+                        if (countInputComponent                             != null &&
+                            priceInputComponent                             != null &&
+                            AgentRetainer.Instance()->SellItemInventoryType != InventoryType.RetainerMarket)
                         {
-                            Size        = new(ownerNode->Width, ownerNode->Height),
-                            Position    = new(ownerNode->X, ownerNode->Y),
-                            TextTooltip = Lang.Get("AutoRetainerWork-PriceAdjust-AutoAdjustWhenNewOnSale-Warning")
-                        };
-                        autoPriceAdjustWarningNode.AttachNode(parentNode);
+                            priceInputComponent->SetEnabledState(false);
+
+                            var ownerNode = priceInputComponent->OwnerNode;
+                            if (ownerNode == null) return;
+
+                            var parentNode = ownerNode->ParentNode;
+                            if (parentNode == null) return;
+
+                            autoPriceAdjustWarningNode = new()
+                            {
+                                Size        = new(ownerNode->Width, ownerNode->Height),
+                                Position    = new(ownerNode->X, ownerNode->Y),
+                                TextTooltip = Lang.Get("AutoRetainerWork-PriceAdjust-AutoAdjustWhenNewOnSale-Warning")
+                            };
+                            autoPriceAdjustWarningNode.AttachNode(parentNode);
+                        }
                     }
                     break;
                 
