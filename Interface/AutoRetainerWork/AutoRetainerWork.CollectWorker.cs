@@ -137,7 +137,7 @@ public unsafe partial class AutoRetainerWork
                                         if (!Module.config.AutoPriceAdjustAfterCollect) return;
 
                                         var priceAdjustWorker = Array.Find(Module.workers, w => w is PriceAdjustWorker) as PriceAdjustWorker;
-                                        priceAdjustWorker?.EnqueuePriceAdjustAll();
+                                        priceAdjustWorker?.EnqueuePriceAdjustAllRetainers();
                                     }
                                 );
                                 return true;

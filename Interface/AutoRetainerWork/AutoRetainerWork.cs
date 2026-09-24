@@ -61,10 +61,9 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         addon ??= new(this)
         {
-            InternalName          = "DRAutoRetainerWork",
-            Title                 = Info.Title,
-            Size                  = new(260f, 320f),
-            RememberClosePosition = true
+            InternalName = "DRAutoRetainerWork",
+            Title        = Info.Title,
+            Size         = new(260f, 320f),
         };
     }
 
