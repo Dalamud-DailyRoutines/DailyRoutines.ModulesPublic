@@ -878,8 +878,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     #region 常量
 
-    private static readonly Vector2 CastTextDefaultPosition           = new(203, 6);
-    private static readonly Vector2 CastBackgroundTextDefaultPosition = new(197, 2);
+    private static readonly Vector2 CastTextDefaultPosition           = new(203, 8);
+    private static readonly Vector2 CastBackgroundTextDefaultPosition = new(197, 4);
     private static readonly Vector2 HealthTextDefaultPosition         = new(-60, 8);
     private static readonly Vector2 EnemityTextDefaultPosition        = new(12, 21);
     private static readonly Vector2 StatusComponentOffset             = new(12, -1);
