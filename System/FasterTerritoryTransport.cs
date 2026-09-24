@@ -49,6 +49,7 @@ public class FasterTerritoryTransport : ModuleBase
         WarpType.Teleport,
         WarpType.Return,
         WarpType.Resurrection,
+        WarpType.Unk5, // 复活
         WarpType.HousingTeleport,
         WarpType.TownTranslate,
         WarpType.WorldTransfer,
