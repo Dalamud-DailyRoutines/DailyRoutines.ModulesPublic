@@ -410,14 +410,17 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (RecipeNoteAddon != null)
         {
             var resNode0 = RecipeNoteAddon->GetNodeById(95);
+            resNode0->Timeline = null;
             if (resNode0 != null)
                 resNode0->SetXFloat(46);
 
             var resNode1 = RecipeNoteAddon->GetNodeById(88);
+            resNode1->Timeline = null;
             if (resNode1 != null)
                 resNode1->SetXFloat(0);
 
             var resNode2 = RecipeNoteAddon->GetNodeById(84);
+            resNode2->Timeline = null;
             if (resNode2 != null)
                 resNode2->SetXFloat(0);
         }
@@ -770,14 +773,17 @@ public partial class OptimizedRecipeNote : ModuleBase
                                30 :
                                10;
         var resNode0 = RecipeNoteAddon->GetNodeById(95);
+        resNode0->Timeline = null;
         if (resNode0 != null)
             resNode0->SetXFloat(46 + appendOffset);
 
         var resNode1 = RecipeNoteAddon->GetNodeById(88);
+        resNode1->Timeline = null;
         if (resNode1 != null)
             resNode1->SetXFloat(0 + appendOffset);
 
         var resNode2 = RecipeNoteAddon->GetNodeById(84);
+        resNode2->Timeline = null;
         if (resNode2 != null)
             resNode2->SetXFloat(0 + appendOffset);
 
