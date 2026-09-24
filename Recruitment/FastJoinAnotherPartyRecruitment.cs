@@ -1,12 +1,17 @@
+using DailyRoutines.Common.KamiToolKit.Addons.SelectYesno;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
@@ -24,6 +29,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
+    private DRSelectYesno? confirmAddon;
+    
     private TextButtonNode? button;
 
     protected override void Init()
@@ -48,6 +55,9 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
 
         button?.Dispose();
         button = null;
+        
+        confirmAddon?.Dispose();
+        confirmAddon = null;
     }
 
     private void OnAddonYesno
@@ -93,9 +103,11 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         // 团队招募
         var partyCount = addon->AtkValues[19].UInt;
         if (partyCount != 1) return;
-
+        
+        var agent = AgentLookingForGroup.Instance();
+        
         // 自己开的招募
-        if (AgentLookingForGroup.Instance()->ListingContentId == LocalPlayerState.ContentID) return;
+        if (agent->ListingContentId == LocalPlayerState.ContentID) return;
 
         // 底部操作栏容器
         var containerNode = addon->GetNodeById(108);
@@ -108,7 +120,50 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
             IsVisible = false,
             IsEnabled = LocalPlayerState.IsInAnyParty,
             String    = Lang.Get("FastJoinAnotherPartyRecruitment-LeaveAndJoin"),
-            OnClick   = () => Enqueue(taskHelper)
+            OnClick   = () =>
+            {
+                confirmAddon?.Dispose();
+
+                using var rented  = new RentedSeStringBuilder();
+                var       builder = rented.Builder;
+
+                var listing = agent->LastViewedListing;
+
+                builder.Append(listing.LeaderString);
+                if (listing.HomeWorld != GameState.HomeWorld)
+                {
+                    builder.AppendIcon(BitmapFontIcon.CrossWorld)
+                           .Append(LuminaWrapper.GetWorldName(listing.HomeWorld));
+                }
+
+                confirmAddon = DRSelectYesno.Open
+                (
+                    new()
+                    {
+                        Prompt = ISeStringEvaluator.Instance().EvaluateFromAddon
+                        (
+                            120,
+                            [builder.ToReadOnlySeString()]
+                        ),
+                        BlockedParentID = addon->Id,
+                        ParentID        = addon->Id,
+                        Position = new
+                        (
+                            addon->RootNode->GetNodeState().Center,
+                            AddonPositionAlignment.TopCenter
+                        ),
+                        Callback = (_, result) =>
+                        {
+                            confirmAddon = null;
+                            
+                            if (result != DRSelectYesnoResult.Yes)
+                                return;
+
+                            Enqueue(taskHelper);
+                        }
+                    }
+                );
+            }
         };
 
         button.AttachNode(containerNode);
