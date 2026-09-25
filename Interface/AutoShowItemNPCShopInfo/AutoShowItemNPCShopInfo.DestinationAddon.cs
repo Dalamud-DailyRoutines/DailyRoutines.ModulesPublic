@@ -92,16 +92,15 @@ public unsafe partial class AutoShowItemNPCShopInfo
         )
         {
             var costItem  = LuminaGetter.GetRowOrDefault<Item>(SourceInfo.CostItemID);
-            var itemCount = GetOwnedItemCount(SourceInfo.CostItemID);
 
-            exchangeItems = SourceInfo.Items.OrderBy(x => x.GetItemName()).ToList();
+            exchangeItems = [.. SourceInfo.Items.OrderBy(x => x.GetItemName())];
             totalPages    = Math.Max(1, (int)Math.Ceiling(exchangeItems.Count / (double)ITEMS_PER_PAGE));
             currentPage   = 0;
 
             var hasPagination = totalPages > 1;
             var headerHeight = hasPagination ?
-                                   104f :
-                                   72f;
+                                   72f :
+                                   42f;
 
             var headerNode = new VerticalListNode
             {
@@ -149,36 +148,6 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 };
                 marketButton.AttachNode(itemInfoRow);
             }
-
-            var summaryRow = new HorizontalListNode
-            {
-                Size        = new(headerNode.Width, 26),
-                ItemSpacing = 16
-            };
-            headerNode.AddNode(summaryRow);
-
-            summaryRow.AddNode
-            (
-                new TextNode
-                {
-                    TextFlags        = TextFlags.AutoAdjustNodeSize,
-                    String           = $"{LuminaWrapper.GetAddonText(358)}: {itemCount}",
-                    Position         = new(0, 3),
-                    TextColor        = ColorHelper.GetColor(34),
-                    TextOutlineColor = ColorHelper.GetColor(7)
-                }
-            );
-            summaryRow.AddNode
-            (
-                new TextNode
-                {
-                    TextFlags        = TextFlags.AutoAdjustNodeSize,
-                    String           = Lang.Get("AutoShowItemNPCShopInfo-ExchangeItemCount", SourceInfo.Items.Count),
-                    Position         = new(0, 3),
-                    TextColor        = ColorHelper.GetColor(3),
-                    TextOutlineColor = ColorHelper.GetColor(7)
-                }
-            );
 
             paginationBar = new HorizontalListNode
             {
