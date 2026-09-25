@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
-using OmenTools.ImGuiOm;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 
