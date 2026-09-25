@@ -29,7 +29,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private DRSelectYesno? confirmAddon;
+    private SelectYesnoAddon? confirmAddon;
 
     private TextButtonNode? button;
 
@@ -137,7 +137,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
                            .Append(LuminaWrapper.GetWorldName(listing.HomeWorld));
                 }
 
-                confirmAddon = DRSelectYesno.Open
+                confirmAddon = SelectYesnoAddon.Open
                 (
                     new()
                     {
@@ -157,7 +157,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
                         {
                             confirmAddon = null;
 
-                            if (result != DRSelectYesnoResult.Yes)
+                            if (result != SelectYesnoAddonResult.Yes)
                                 return;
 
                             Enqueue(taskHelper);

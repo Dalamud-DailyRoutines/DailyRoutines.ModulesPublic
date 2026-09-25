@@ -28,7 +28,7 @@ public unsafe class AutoSplitStacks : ModuleBase
 
     private ItemSelectCombo    itemSelectCombo        = null!;
     private FastSplitItemStack fastSplitItemStackMenu = null!;
-    private DRInputNumeric?    drInputNumeric;
+    private InputNumericAddon?    drInputNumeric;
     
     private int splitAmountInput = 1;
     
@@ -409,7 +409,7 @@ public unsafe class AutoSplitStacks : ModuleBase
                     if (module.drInputNumeric != null)
                         return;
                     
-                    module.drInputNumeric = DRInputNumeric.Open
+                    module.drInputNumeric = InputNumericAddon.Open
                     (
                         new()
                         {
@@ -421,7 +421,7 @@ public unsafe class AutoSplitStacks : ModuleBase
                             {
                                 module.drInputNumeric = null;
 
-                                if (result != DRInputNumericResult.Confirmed)
+                                if (result != InputNumericAddonResult.Confirmed)
                                     return;
 
                                 module.EnqueueSplitByInfo(args.TargetItemID, addon.Value);

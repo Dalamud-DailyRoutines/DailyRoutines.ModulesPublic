@@ -30,7 +30,7 @@ public unsafe class ClickableAethernet : ModuleBase
     private AddonController<AddonAreaMap>? areaMapController;
     private MapOverlayController?          mapOverlayController;
 
-    private DRSelectYesno? drSelectYesno;
+    private SelectYesnoAddon? drSelectYesno;
 
     private uint lastMapID;
 
@@ -158,7 +158,7 @@ public unsafe class ClickableAethernet : ModuleBase
                             if (drSelectYesno != null)
                                 return;
 
-                            drSelectYesno = DRSelectYesno.Open
+                            drSelectYesno = SelectYesnoAddon.Open
                             (
                                 new()
                                 {
@@ -174,7 +174,7 @@ public unsafe class ClickableAethernet : ModuleBase
                                     {
                                         drSelectYesno = null;
 
-                                        if (result != DRSelectYesnoResult.Yes)
+                                        if (result != SelectYesnoAddonResult.Yes)
                                             return;
 
                                         aetheryteRecord.TeleportTo();

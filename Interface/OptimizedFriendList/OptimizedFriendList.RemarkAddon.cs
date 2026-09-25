@@ -39,7 +39,7 @@ public unsafe partial class OptimizedFriendList
         private string WorldName { get; set; } = string.Empty;
 
         private OptimizedFriendList Instance                  { get; } = instance;
-        private DRSelectYesno?      ClearConfirmationInstance { get; set; }
+        private SelectYesnoAddon?      ClearConfirmationInstance { get; set; }
 
         public static DRFriendlistRemarkEdit Open
         (
@@ -188,7 +188,7 @@ public unsafe partial class OptimizedFriendList
                 {
                     ClearConfirmationInstance?.Dispose();
 
-                    ClearConfirmationInstance = DRSelectYesno.Open
+                    ClearConfirmationInstance = SelectYesnoAddon.Open
                     (
                         new()
                         {
@@ -197,7 +197,7 @@ public unsafe partial class OptimizedFriendList
                             {
                                 ClearConfirmationInstance = null;
 
-                                if (result != DRSelectYesnoResult.Yes)
+                                if (result != SelectYesnoAddonResult.Yes)
                                     return;
 
                                 Instance.config.PlayerInfos.TryRemove(ContentID, out var _);

@@ -29,7 +29,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
     
     private Hook<AgentReceiveEventDelegate>? AgentAozNotebookReceiveEventHook;
     
-    private DRSelectYesno? drSelectYesno;
+    private SelectYesnoAddon? drSelectYesno;
 
     protected override void Init()
     {
@@ -100,7 +100,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
             return InvokeOriginal();
 
         addon->IsVisible = false;
-        drSelectYesno = DRSelectYesno.Open
+        drSelectYesno = SelectYesnoAddon.Open
         (
             new()
             {
@@ -118,7 +118,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
 
                     drSelectYesno = null;
 
-                    if (result != DRSelectYesnoResult.Yes)
+                    if (result != SelectYesnoAddonResult.Yes)
                         return;
 
                     ApplyByIndex(index);

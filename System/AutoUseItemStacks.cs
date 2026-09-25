@@ -25,7 +25,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
     };
 
     private OpenCofferMenuItem openCofferMenu = null!;
-    private DRInputNumeric?    drInputNumeric;
+    private InputNumericAddon?    drInputNumeric;
 
     protected override void Init()
     {
@@ -178,7 +178,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
                     if (module.drInputNumeric != null)
                         return;
 
-                    module.drInputNumeric = DRInputNumeric.Open
+                    module.drInputNumeric = InputNumericAddon.Open
                     (
                         new()
                         {
@@ -190,7 +190,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
                             {
                                 module.drInputNumeric = null;
 
-                                if (result != DRInputNumericResult.Confirmed)
+                                if (result != InputNumericAddonResult.Confirmed)
                                     return;
 
                                 module.EnqueueOpenCoffers

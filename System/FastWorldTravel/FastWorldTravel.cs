@@ -45,7 +45,7 @@ public partial class FastWorldTravel : ModuleBase
 
     private Config?        config;
     private IDtrBarEntry?  entry;
-    private DRSelectYesno? selectYesnoAddon;
+    private SelectYesnoAddon? selectYesnoAddon;
 
     protected override unsafe void Init()
     {
@@ -154,7 +154,7 @@ public partial class FastWorldTravel : ModuleBase
                        .Append(GameState.HomeDataCenterData.Name);
             }
 
-            selectYesnoAddon = DRSelectYesno.Open
+            selectYesnoAddon = SelectYesnoAddon.Open
             (
                 new()
                 {
@@ -167,7 +167,7 @@ public partial class FastWorldTravel : ModuleBase
                     {
                         selectYesnoAddon = null;
 
-                        if (result != DRSelectYesnoResult.Yes)
+                        if (result != SelectYesnoAddonResult.Yes)
                             return;
 
                         ChatManager.Instance().SendCommand($"/pdr worldtravel {GameState.HomeWorldData.Name}");
