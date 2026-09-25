@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Reflection;
 using DailyRoutines.Common.Extensions;
-using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -13,6 +12,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Addons;
 
 namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
 

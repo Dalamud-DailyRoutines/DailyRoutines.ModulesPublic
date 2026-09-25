@@ -1,5 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -10,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Text.ReadOnly;
+using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 

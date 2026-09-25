@@ -1,6 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Common.KamiToolKit.Addons;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
 using Dalamud.Game.Addon.Lifecycle;
@@ -22,6 +20,8 @@ using OmenTools.Dalamud.Attributes;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using Action = System.Action;

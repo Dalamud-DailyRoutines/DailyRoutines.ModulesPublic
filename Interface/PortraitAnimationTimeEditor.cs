@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -13,6 +12,7 @@ using FFXIVClientStructs.Havok.Animation.Playback.Control.Default;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Addons;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 

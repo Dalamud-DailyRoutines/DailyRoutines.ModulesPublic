@@ -1,5 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -10,6 +9,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using Lumina.Text.ReadOnly;
+using OmenTools.KamiToolKit.Addons;
 using ContextMenu = KamiToolKit.ContextMenu.ContextMenu;
 
 namespace DailyRoutines.ModulesPublic.AutoRecordPartyFinderSettings;

@@ -1,5 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -11,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
+using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;

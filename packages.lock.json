@@ -86,6 +86,7 @@
           "KamiToolKit": "[1.0.0, )",
           "Microsoft.CodeAnalysis.CSharp": "[5.9.0, )",
           "OmenTools": "[1.0.0, )",
+          "OmenTools.KamiToolKit": "[1.0.0, )",
           "Otp.NET": "[1.4.1, )",
           "RSASharp": "[1.0.0, )",
           "System.Management": "[10.0.11, )",
@@ -113,6 +114,13 @@
           "GuerrillaNtp": "[3.1.0, )",
           "MessageFormat": "[8.0.0, )",
           "TinyPinyin": "[1.1.0, )"
+        }
+      },
+      "omentools.kamitoolkit": {
+        "type": "Project",
+        "dependencies": {
+          "KamiToolKit": "[1.0.0, )",
+          "OmenTools": "[1.0.0, )"
         }
       },
       "rsasharp": {

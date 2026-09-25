@@ -1,6 +1,5 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -14,6 +13,7 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
+using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;
 

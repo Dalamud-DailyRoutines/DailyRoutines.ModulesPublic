@@ -1,6 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Common.KamiToolKit.Addons;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -13,6 +11,8 @@ using KamiToolKit.Nodes;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.AddonEvent;
+using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using TinyPinyin;

@@ -1,5 +1,3 @@
-using DailyRoutines.Common.KamiToolKit.Addons.SelectYesno;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
@@ -10,6 +8,8 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Data.Parsing.Uld;
 using OmenTools.Interop.Game.Models;
+using OmenTools.KamiToolKit.Addons.SelectYesno;
+using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 

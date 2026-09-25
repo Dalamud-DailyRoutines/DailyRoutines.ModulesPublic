@@ -1,4 +1,3 @@
-using DailyRoutines.Common.KamiToolKit.Addons.SelectYesno;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -12,6 +11,7 @@ using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
+using OmenTools.KamiToolKit.Addons.SelectYesno;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;

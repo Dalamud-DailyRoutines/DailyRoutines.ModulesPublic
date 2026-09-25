@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -11,6 +10,7 @@ using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Addons;
 using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
 
 namespace DailyRoutines.ModulesPublic.Interface;

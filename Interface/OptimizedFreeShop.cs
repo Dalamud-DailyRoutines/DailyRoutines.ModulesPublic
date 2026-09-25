@@ -1,5 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -18,6 +17,7 @@ using Lumina.Text.Payloads;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;

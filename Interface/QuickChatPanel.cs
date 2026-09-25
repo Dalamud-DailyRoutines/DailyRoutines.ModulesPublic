@@ -1,8 +1,6 @@
 using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
-using DailyRoutines.Common.KamiToolKit.Addons;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -24,6 +22,8 @@ using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using Action = System.Action;

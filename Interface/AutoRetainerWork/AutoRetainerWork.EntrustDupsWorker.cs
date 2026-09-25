@@ -1,10 +1,10 @@
-﻿using DailyRoutines.Common.KamiToolKit.Nodes;
-using DailyRoutines.Extensions;
+﻿using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;

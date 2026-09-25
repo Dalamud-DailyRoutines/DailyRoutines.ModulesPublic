@@ -58,6 +58,7 @@
                    Condition="!Exists('..\lib\KamiToolKit\KamiToolKit.csproj')">
             <HintPath>$(DailyRoutinesLibPath)KamiToolKit.dll</HintPath>
         </Reference>
+        <ProjectReference Include="..\lib\OmenTools.KamiToolKit\OmenTools.KamiToolKit.csproj" />
 
         <ProjectReference Include="..\lib\OmenTools\OmenTools.csproj"
                           Condition="Exists('..\lib\OmenTools\OmenTools.csproj')"/>

@@ -1,6 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Common.Info;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.Common.RemoteInteraction.Models;
@@ -14,6 +13,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Interfaces;
 using KamiToolKit.Nodes;
 using OmenTools.Dalamud;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 using TimeAgo;
 

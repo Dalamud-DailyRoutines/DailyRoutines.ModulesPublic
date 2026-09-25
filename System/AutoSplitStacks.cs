@@ -1,4 +1,3 @@
-using DailyRoutines.Common.KamiToolKit.Addons.InputNumeric;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -11,6 +10,7 @@ using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
+using OmenTools.KamiToolKit.Addons.InputNumeric;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;

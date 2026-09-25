@@ -1,10 +1,10 @@
 using System.Globalization;
 using DailyRoutines.Common.Info;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface.CustomizeMapMarker;

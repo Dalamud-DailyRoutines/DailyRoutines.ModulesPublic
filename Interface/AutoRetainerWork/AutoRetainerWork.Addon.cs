@@ -1,10 +1,10 @@
 using System.Numerics;
-using DailyRoutines.Common.KamiToolKit.Addons;
-using DailyRoutines.Common.KamiToolKit.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes.ComponentNode;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
