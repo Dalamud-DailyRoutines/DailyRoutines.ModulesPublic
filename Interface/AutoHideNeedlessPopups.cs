@@ -35,7 +35,10 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
         var addon = (AtkUnitBase*)args.Addon.Address;
         if (addon == null) return;
 
-        args.PreventOriginal();
+        if (type == AddonEvent.PreShow)
+            args.PreventOriginal();
+        else
+            addon->Hide(true, true, 1);
     }
 
     #region 常量
