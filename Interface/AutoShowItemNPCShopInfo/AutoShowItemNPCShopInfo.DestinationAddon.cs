@@ -91,7 +91,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             Span<AtkValue> atkValues
         )
         {
-            var costItem  = LuminaGetter.GetRowOrDefault<Item>(SourceInfo.CostItemID);
+            var costItem = LuminaGetter.GetRowOrDefault<Item>(SourceInfo.CostItemID);
 
             exchangeItems = [.. SourceInfo.Items.OrderBy(x => x.GetItemName())];
             totalPages    = Math.Max(1, (int)Math.Ceiling(exchangeItems.Count / (double)ITEMS_PER_PAGE));
@@ -423,6 +423,13 @@ public unsafe partial class AutoShowItemNPCShopInfo
             };
             slot.ItemHeader.AddNode(slot.ItemName);
 
+            slot.ItemTooltipOverlay = new ResNode
+            {
+                Size     = new(contentWidth, 36),
+                Position = new(0, 0)
+            };
+            slot.ItemTooltipOverlay.AttachNode(slot.Content);
+
             slot.MarketButton = new IconButtonNode
             {
                 IconId      = 60570,
@@ -432,13 +439,6 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 IsVisible   = false
             };
             slot.MarketButton.AttachNode(slot.Content);
-
-            slot.ItemTooltipOverlay = new ResNode
-            {
-                Size     = new(contentWidth, 36),
-                Position = new(0, 0)
-            };
-            slot.ItemTooltipOverlay.AttachNode(slot.Content);
 
             slot.DescriptionNode = new TextNode
             {
