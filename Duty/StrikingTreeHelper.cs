@@ -53,6 +53,8 @@ public unsafe class StrikingTreeHelper : ModuleBase
 
     protected override void Uninit()
     {
+        IClientState.Instance().TerritoryChanged -= OnZoneChanged;
+        
         handle?.Unreg();
         handle = null;
 
