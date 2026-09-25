@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
+using OmenTools.ImGuiOm;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 
@@ -26,7 +27,16 @@ public unsafe class AutoConstantlyClick : ModuleBase
         nint a1,
         byte a2
     );
-    private static Hook<CheckHotbarClickedDelegate>? CheckHotbarClickedHook;
+    private Hook<CheckHotbarClickedDelegate>? CheckHotbarClickedHook;
+
+    private static readonly CompSig CheckCrossHotbarClickedSig = 
+        new("89 54 24 ?? 48 89 4C 24 ?? 56 41 55");
+    private delegate void CheckCrossHotbarClickedDelegate
+    (
+        nint a1,
+        int  a2
+    );
+    private Hook<CheckCrossHotbarClickedDelegate>? CheckCrossHotbarClickedHook;
 
     private Config config = null!;
 
@@ -43,14 +53,21 @@ public unsafe class AutoConstantlyClick : ModuleBase
             inputIDInfos[i] = new HeldInfo();
 
         CheckHotbarClickedHook ??= CheckHotbarClickedSig.GetHook<CheckHotbarClickedDelegate>(CheckHotbarClickedDetour);
+        CheckCrossHotbarClickedHook ??= CheckCrossHotbarClickedSig.GetHook<CheckCrossHotbarClickedDelegate>(CheckCrossHotbarClickedDetour);
 
-        InputIDManager.Instance().RegPrePressed(OnPrePressed);
+        var inputIDManager = InputIDManager.Instance();
+        inputIDManager.RegPrePressed(OnPrePressed);
+        inputIDManager.RegPreHeld(OnPrePressed);
 
         UpdateHookState();
     }
 
-    protected override void Uninit() =>
-        InputIDManager.Instance().UnregPrePressed(OnPrePressed);
+    protected override void Uninit()
+    {
+        var inputIDManager = InputIDManager.Instance();
+        inputIDManager.UnregPrePressed(OnPrePressed);
+        inputIDManager.UnregPreHeld(OnPrePressed);
+    }
 
     protected override void ConfigUI()
     {
@@ -58,6 +75,12 @@ public unsafe class AutoConstantlyClick : ModuleBase
         ImGui.SliderInt($"{Lang.Get("Interval")}（ms）##Throttle Time", ref config.RepeatInterval, 100, 1000);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
+
+        ImGui.SetNextItemWidth(200f * GlobalUIScale);
+        ImGui.SliderInt($"{Lang.Get("AutoConstantlyClick-WaitTime")}（ms）##WaitTime", ref config.WaitTime, 0, 1000);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            config.Save(this);
+        ImGuiOm.HelpMarker(Lang.Get("AutoConstantlyClick-WaitTime-Help"));
 
         ImGui.NewLine();
 
@@ -76,9 +99,15 @@ public unsafe class AutoConstantlyClick : ModuleBase
     private void UpdateHookState()
     {
         if (config.MouseMode || config.GamepadMode)
+        {
             CheckHotbarClickedHook.Enable();
+            CheckCrossHotbarClickedHook.Enable();
+        }
         else
+        {
             CheckHotbarClickedHook.Disable();
+            CheckCrossHotbarClickedHook.Disable();
+        }
     }
 
     private void OnPrePressed
@@ -88,15 +117,25 @@ public unsafe class AutoConstantlyClick : ModuleBase
     )
     {
         if (!isHandlingHotbarClick) return;
-        if (key is not (>= InputId.HOTBAR_UP and <= InputId.HOTBAR_CONTENTS_ACT_R)) return;
+        if (key is not (>= InputId.HOTBAR_UP and <= InputId.HOTBAR_CONTENTS_ACT_R) and
+            not (>= InputId.HOT_PAD_CONTENT and <= InputId.HOT_PAD_TOPAGE8)) return;
 
         var info = inputIDInfos[(int)key];
 
         var isClicked = InputIDManager.Instance().IsInputIDPressed(key);
         var isPressed = InputIDManager.Instance().IsInputIDDown(key);
-        overrideResult = info.GetIsReady(this) ?
-                             isPressed :
-                             isClicked;
+
+        if (!info.IsWaiting && isPressed && !info.LastFrameHeld)
+        {
+            if (config.WaitTime > 0)
+                info.WaitLastPress(this);
+            else
+                info.RestartLastPress(this);
+        }
+
+        overrideResult = info.IsWaiting || !info.GetIsReady(this) ?
+                             isClicked :
+                             isPressed;
 
         if (overrideResult.Value)
             info.RestartLastPress(this);
@@ -130,17 +169,48 @@ public unsafe class AutoConstantlyClick : ModuleBase
         }
     }
 
+    private void CheckCrossHotbarClickedDetour
+    (
+        nint a1,
+        int  a2
+    )
+    {
+        isHandlingHotbarClick = true;
+
+        try
+        {
+            CheckCrossHotbarClickedHook.Original(a1, a2);
+        }
+        finally
+        {
+            isHandlingHotbarClick = false;
+        }
+    }
+
     private class HeldInfo
     {
         public SimpleTimer LastPress        { get; } = new();
+        public SimpleTimer WaitPress        { get; } = new();
         public bool        LastFramePressed { get; set; }
         public bool        LastFrameHeld    { get; set; }
+
+        public bool IsWaiting => WaitPress.IsRunning;
 
         public bool GetIsReady
         (
             AutoConstantlyClick module
         ) =>
             LastPress.IsRunning && LastPress.ElapsedMilliseconds >= module.config.RepeatInterval;
+
+        public void WaitLastPress
+        (
+            AutoConstantlyClick module
+        )
+        {
+            if (!WaitPress.IsRunning)
+                Interlocked.Increment(ref module.runningTimersCount);
+            WaitPress.Restart();
+        }
 
         public void RestartLastPress
         (
@@ -150,6 +220,10 @@ public unsafe class AutoConstantlyClick : ModuleBase
             if (!LastPress.IsRunning)
                 Interlocked.Increment(ref module.runningTimersCount);
             LastPress.Restart();
+
+            if (WaitPress.IsRunning)
+                Interlocked.Decrement(ref module.runningTimersCount);
+            WaitPress.Reset();
         }
 
         public void ResetLastPress
@@ -160,6 +234,10 @@ public unsafe class AutoConstantlyClick : ModuleBase
             if (LastPress.IsRunning)
                 Interlocked.Decrement(ref module.runningTimersCount);
             LastPress.Reset();
+
+            if (WaitPress.IsRunning)
+                Interlocked.Decrement(ref module.runningTimersCount);
+            WaitPress.Reset();
         }
     }
 
@@ -191,6 +269,7 @@ public unsafe class AutoConstantlyClick : ModuleBase
         public bool GamepadMode;
         public bool MouseMode      = true;
         public int  RepeatInterval = 200;
+        public int  WaitTime;
     }
 
     #region 常量
