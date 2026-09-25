@@ -71,12 +71,12 @@ public unsafe class AutoConstantlyClick : ModuleBase
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.SliderInt($"{Lang.Get("Interval")}（ms）##Throttle Time", ref config.RepeatInterval, 100, 1000);
+        ImGui.InputUInt($"{Lang.Get("Interval")}（ms）##Throttle Time", ref config.RepeatInterval, 100, 1000);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
 
         ImGui.SetNextItemWidth(200f * GlobalUIScale);
-        ImGui.SliderInt($"{Lang.Get("AutoConstantlyClick-WaitTime")}（ms）##WaitTime", ref config.WaitTime, 0, 1000);
+        ImGui.InputUInt($"{Lang.Get("AutoConstantlyClick-WaitTime")}（ms）##WaitTime", ref config.WaitTime, 100, 1000);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("AutoConstantlyClick-WaitTime-Help"));
@@ -124,7 +124,7 @@ public unsafe class AutoConstantlyClick : ModuleBase
         var isClicked = InputIDManager.Instance().IsInputIDPressed(key);
         var isPressed = InputIDManager.Instance().IsInputIDDown(key);
 
-        if (!info.IsWaiting && isPressed && !info.LastFrameHeld)
+        if (!info.IsWaiting(this) && isPressed && !info.LastFrameHeld)
         {
             if (config.WaitTime > 0)
                 info.WaitLastPress(this);
@@ -132,7 +132,7 @@ public unsafe class AutoConstantlyClick : ModuleBase
                 info.RestartLastPress(this);
         }
 
-        overrideResult = info.IsWaiting || !info.GetIsReady(this) ?
+        overrideResult = info.IsWaiting(this) || !info.GetIsReady(this) ?
                              isClicked :
                              isPressed;
 
@@ -193,7 +193,11 @@ public unsafe class AutoConstantlyClick : ModuleBase
         public bool        LastFramePressed { get; set; }
         public bool        LastFrameHeld    { get; set; }
 
-        public bool IsWaiting => WaitPress.IsRunning;
+        public bool IsWaiting
+        (
+            AutoConstantlyClick module
+        ) =>
+            WaitPress.IsRunning && WaitPress.ElapsedMilliseconds < module.config.WaitTime;
 
         public bool GetIsReady
         (
@@ -209,6 +213,10 @@ public unsafe class AutoConstantlyClick : ModuleBase
             if (!WaitPress.IsRunning)
                 Interlocked.Increment(ref module.runningTimersCount);
             WaitPress.Restart();
+
+            if (!LastPress.IsRunning)
+                Interlocked.Increment(ref module.runningTimersCount);
+            LastPress.Restart();
         }
 
         public void RestartLastPress
@@ -219,10 +227,6 @@ public unsafe class AutoConstantlyClick : ModuleBase
             if (!LastPress.IsRunning)
                 Interlocked.Increment(ref module.runningTimersCount);
             LastPress.Restart();
-
-            if (WaitPress.IsRunning)
-                Interlocked.Decrement(ref module.runningTimersCount);
-            WaitPress.Reset();
         }
 
         public void ResetLastPress
@@ -246,9 +250,10 @@ public unsafe class AutoConstantlyClick : ModuleBase
 
         public bool IsRunning { get; private set; }
 
-        public long ElapsedMilliseconds => IsRunning ?
-                                               Environment.TickCount64 - startTime :
-                                               0;
+        public long ElapsedMilliseconds =>
+            IsRunning ?
+                Environment.TickCount64 - startTime :
+                0;
 
         public void Restart()
         {
@@ -265,10 +270,10 @@ public unsafe class AutoConstantlyClick : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public bool GamepadMode;
+        public bool GamepadMode    = true;
         public bool MouseMode      = true;
-        public int  RepeatInterval = 200;
-        public int  WaitTime;
+        public uint RepeatInterval = 200;
+        public uint WaitTime;
     }
 
     #region 常量
