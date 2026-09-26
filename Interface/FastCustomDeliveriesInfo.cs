@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.Agent;
 using Dalamud.Game.Agent.AgentArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -12,7 +11,6 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
-using ContextMenu = KamiToolKit.ContextMenu.ContextMenu;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -27,84 +25,27 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private ContextMenu? contextMenu;
-
     protected override void Init() =>
         IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreReceiveEvent, AgentId.SatisfactionList, OnAgent);
 
-    protected override void Uninit()
-    {
+    protected override void Uninit() =>
         IAgentLifecycle.Instance().UnregisterListener(OnAgent);
 
-        contextMenu?.Dispose();
-        contextMenu = null;
-    }
-
-    private void ShowContextMenu
+    private static void ShowContextMenu
     (
         CustomDeliveryInfo? selectedInfo
     )
     {
         if (selectedInfo == null) return;
 
-        contextMenu?.Dispose();
-        contextMenu = new();
-
-        contextMenu.AddItem
+        ContextMenuManager.Instance().Open
         (
-            new()
-            {
-                Name    = Lang.Get("Teleport"),
-                OnClick = () => MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(selectedInfo.Map), selectedInfo.Position)
-            }
+            new ContextMenuOpenedArgs(),
+            [new CustomDeliveryContextMenu(selectedInfo)]
         );
-
-        contextMenu.AddItem
-        (
-            new()
-            {
-                Name = Lang.Get("FastCustomDeliveriesInfo-TeleportToZone"),
-                OnClick = () =>
-                {
-                    switch (selectedInfo.Index)
-                    {
-                        case 6 or 7:
-                            MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(selectedInfo.Map));
-                            break;
-                        default:
-                            AetheryteRecordManager.Instance().GetNearestAetheryte
-                            (
-                                LuminaWrapper.GetZoneFromMap(selectedInfo.Map),
-                                selectedInfo.Position
-                            )?.TeleportTo();
-                            break;
-                    }
-                }
-            }
-        );
-
-        contextMenu.AddItem
-        (
-            new()
-            {
-                Name = LuminaWrapper.GetAddonText(8887),
-                OnClick = () => IFramework.Instance().RunOnTick
-                (
-                    () => AgentMap.Instance()->SetMapFlagAndOpen
-                    (
-                        selectedInfo.Map,
-                        selectedInfo.Position,
-                        selectedInfo.Name
-                    ),
-                    delayTicks: 1
-                )
-            }
-        );
-
-        contextMenu.Open();
     }
 
-    private void OnAgent
+    private static void OnAgent
     (
         AgentEvent type,
         AgentArgs  args
@@ -137,6 +78,61 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         uint    Map,
         Vector3 Position
     );
+
+    private sealed class CustomDeliveryContextMenu
+    (
+        CustomDeliveryInfo info
+    ) : ContextMenuEntry
+    {
+        public override string Identifier =>
+            nameof(FastCustomDeliveriesInfo);
+
+        public override IReadOnlyList<ContextMenuItem> CreateMultiple
+        (
+            ContextMenuOpenedArgs args
+        ) =>
+        [
+            new()
+            {
+                Name      = Lang.Get("Teleport"),
+                OnClicked = _ => MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(info.Map), info.Position)
+            },
+            new()
+            {
+                Name = Lang.Get("FastCustomDeliveriesInfo-TeleportToZone"),
+                OnClicked = _ =>
+                {
+                    switch (info.Index)
+                    {
+                        case 6 or 7:
+                            MovementManager.Instance().TPSmart_BetweenZone(LuminaWrapper.GetZoneFromMap(info.Map));
+                            break;
+                        default:
+                            AetheryteRecordManager.Instance().GetNearestAetheryte
+                            (
+                                LuminaWrapper.GetZoneFromMap(info.Map),
+                                info.Position
+                            )?.TeleportTo();
+                            break;
+                    }
+                }
+            },
+            new()
+            {
+                Name = LuminaWrapper.GetAddonText(8887),
+                OnClicked = _ => IFramework.Instance().RunOnTick
+                (
+                    () => AgentMap.Instance()->SetMapFlagAndOpen
+                    (
+                        info.Map,
+                        info.Position,
+                        info.Name
+                    ),
+                    delayTicks: 1
+                )
+            }
+        ];
+    }
 
     #region 常量
 
