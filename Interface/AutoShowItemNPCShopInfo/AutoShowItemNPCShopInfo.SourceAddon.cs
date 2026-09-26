@@ -3,13 +3,13 @@ using DailyRoutines.Common.Info;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
-using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic.Interface.AutoShowItemNPCShopInfo;
 
@@ -26,6 +26,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
         private const float NPC_ROW_HEIGHT    = 32f;
         private const float ROW_SPACING       = 4f;
         private const float VERTICAL_PADDING  = 20f;
+        private const float HEADER_HEIGHT     = 42f;
 
         private static Task? OpenAddonTask;
 
@@ -45,10 +46,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
         private ScrollingNode<VerticalListNode>? scrollingAreaNode;
         private VerticalListNode?                contentNode;
-        private HorizontalListNode?              paginationBar;
-        private TextButtonNode?                  prevButton;
-        private TextNode?                        pageIndicator;
-        private TextButtonNode?                  nextButton;
+        private PaginationNode?                  paginationBar;
         private SectionSlot[]?                   sectionSlots;
 
         public static void CloseAndClear()
@@ -117,13 +115,10 @@ public unsafe partial class AutoShowItemNPCShopInfo
             currentPage = 0;
 
             var hasPagination = totalPages > 1;
-            var headerHeight = hasPagination ?
-                                   72f :
-                                   42f;
 
             var headerNode = new VerticalListNode
             {
-                Size        = new(ContentSize.X - 16, headerHeight),
+                Size        = new(ContentSize.X - 16, HEADER_HEIGHT),
                 Position    = ContentStartPosition + new Vector2(8, 2),
                 ItemSpacing = 8
             };
@@ -156,11 +151,11 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             var itemNameNode = new TextNode
             {
-                TextFlags        = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
-                String           = LuminaWrapper.GetItemName(SourceInfo.ItemID),
-                FontSize         = 24,
-                Position         = new(0, 3),
-                AlignmentType    = AlignmentType.TopLeft
+                TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
+                String        = LuminaWrapper.GetItemName(SourceInfo.ItemID),
+                FontSize      = 24,
+                Position      = new(0, 3),
+                AlignmentType = AlignmentType.TopLeft
             };
             AtkColors.Label.ApplyTo(itemNameNode);
             itemInfoRow.AddNode(itemNameNode);
@@ -178,39 +173,19 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 marketButtonNode.AttachNode(this);
             }
 
-            paginationBar = new HorizontalListNode
+            paginationBar = new PaginationNode
             {
-                Size        = new(headerNode.Width, 28),
-                ItemSpacing = 8,
-                IsVisible   = hasPagination
+                IsVisible              = hasPagination,
+                IsDisplayIndicatorText = true,
+                OnPreviousPage         = () => ShowPage(currentPage - 1),
+                OnNextPage             = () => ShowPage(currentPage + 1)
             };
-            headerNode.AddNode(paginationBar);
+            paginationBar.Position = new(0.0f, ContentStartPosition.Y + ContentSize.Y - paginationBar.Height);
+            paginationBar.AttachNode(this);
 
-            prevButton = new TextButtonNode
-            {
-                String  = "<",
-                Size    = new(40, 24),
-                OnClick = () => ShowPage(currentPage - 1)
-            };
-            paginationBar.AddNode(prevButton);
-
-            pageIndicator = new TextNode
-            {
-                TextFlags     = TextFlags.AutoAdjustNodeSize,
-                String        = $"1 / {totalPages}",
-                Position      = new(0, 3),
-                AlignmentType = AlignmentType.Left,
-            };
-            AtkColors.Text.ApplyTo(pageIndicator);
-            paginationBar.AddNode(pageIndicator);
-
-            nextButton = new TextButtonNode
-            {
-                String  = ">",
-                Size    = new(40, 24),
-                OnClick = () => ShowPage(currentPage + 1)
-            };
-            paginationBar.AddNode(nextButton);
+            var footerHeight = hasPagination ?
+                                   paginationBar.Height + 6.0f :
+                                   0.0f;
 
             scrollingAreaNode = new ScrollingNode<VerticalListNode>
             {
@@ -219,8 +194,8 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     FitContents = true,
                     ItemSpacing = 6
                 },
-                Position          = ContentStartPosition + new Vector2(6,  headerHeight + 6),
-                Size              = ContentSize          - new Vector2(12, headerHeight + 6),
+                Position          = ContentStartPosition + new Vector2(6,  HEADER_HEIGHT + 6),
+                Size              = ContentSize          - new Vector2(12, HEADER_HEIGHT + 6 + footerHeight),
                 ScrollSpeed       = 100,
                 AutoHideScrollBar = true
             };
@@ -248,6 +223,18 @@ public unsafe partial class AutoShowItemNPCShopInfo
             {
                 Close();
                 if (SystemMenu != null) SystemMenu->Close(true);
+            }
+
+            if (paginationBar is { IsVisible: true })
+                paginationBar.X = ContentStartPosition.X + ((ContentSize.X - paginationBar.Width) / 2.0f);
+
+            if (sectionSlots == null) return;
+
+            foreach (var slot in sectionSlots)
+            {
+                if (!slot.NPCPaginationBar.IsVisible) continue;
+
+                slot.NPCPaginationBar.X = (slot.Content.Width - slot.NPCPaginationBar.Width) / 2.0f;
             }
         }
 
@@ -277,10 +264,11 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
         private void UpdatePaginationState()
         {
-            if (prevButton                     == null || nextButton == null || pageIndicator == null) return;
-            prevButton.IsEnabled = currentPage > 0;
-            nextButton.IsEnabled = currentPage < totalPages - 1;
-            pageIndicator.String = $"{currentPage + 1} / {totalPages}";
+            if (paginationBar == null) return;
+
+            paginationBar.PreviousPageButtonNode.IsEnabled = currentPage > 0;
+            paginationBar.NextPageButtonNode.IsEnabled     = currentPage < totalPages - 1;
+            paginationBar.IndicatorTextNode.String         = $"{currentPage + 1} / {totalPages}";
         }
 
         private void UpdateSectionContent
@@ -336,9 +324,9 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             if (hasNPCPagination)
             {
-                slot.NPCPrevButton.IsEnabled = npcPage > 0;
-                slot.NPCNextButton.IsEnabled = npcPage < npcPages - 1;
-                slot.NPCPageIndicator.String = $"{npcPage + 1} / {npcPages}";
+                slot.NPCPaginationBar.PreviousPageButtonNode.IsEnabled = npcPage > 0;
+                slot.NPCPaginationBar.NextPageButtonNode.IsEnabled     = npcPage < npcPages - 1;
+                slot.NPCPaginationBar.IndicatorTextNode.String         = $"{npcPage + 1} / {npcPages}";
             }
 
             var visibleCostCount = Math.Min(slot.SortedNPCInfos.First().CostInfos.Count, MAX_COSTS);
@@ -424,11 +412,11 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
                 slot.CostNames[i] = new TextNode
                 {
-                    TextFlags        = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
-                    FontSize         = 18,
-                    Position         = new(slot.CostIcons[i].Width + 4f, 0),
-                    AlignmentType    = AlignmentType.Left,
-                    Size             = new(70, 36),
+                    TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
+                    FontSize      = 18,
+                    Position      = new(slot.CostIcons[i].Width + 4f, 0),
+                    AlignmentType = AlignmentType.Left,
+                    Size          = new(70, 36),
                 };
                 AtkColors.Label.ApplyTo(slot.CostNames[i]);
                 slot.CostNames[i].AttachNode(slot.CostRows[i]);
@@ -449,47 +437,22 @@ public unsafe partial class AutoShowItemNPCShopInfo
             for (var i = 0; i < NPCS_PER_PAGE; i++)
                 slot.NPCRows[i] = CreateNPCRowSlot(slot.Content, contentWidth);
 
-            slot.NPCPaginationBar = new HorizontalListNode
+            slot.NPCPaginationBar = new PaginationNode
             {
-                Size        = new(contentWidth, 28),
-                ItemSpacing = 8,
-                IsVisible   = false
-            };
-            slot.Content.AddNode(slot.NPCPaginationBar);
-
-            slot.NPCPrevButton = new TextButtonNode
-            {
-                String = "<",
-                Size   = new(36, 22),
-                OnClick = () =>
+                IsVisible              = false,
+                IsDisplayIndicatorText = true,
+                OnPreviousPage = () =>
                 {
                     slot.NPCCurrentPage--;
                     ShowNPCPage(slot, true);
-                }
-            };
-            slot.NPCPaginationBar.AddNode(slot.NPCPrevButton);
-
-            slot.NPCPageIndicator = new TextNode
-            {
-                TextFlags     = TextFlags.AutoAdjustNodeSize,
-                String        = "1 / 1",
-                Position      = new(0, 2),
-                AlignmentType = AlignmentType.Left,
-            };
-            AtkColors.Text.ApplyTo(slot.NPCPageIndicator);
-            slot.NPCPaginationBar.AddNode(slot.NPCPageIndicator);
-
-            slot.NPCNextButton = new TextButtonNode
-            {
-                String = ">",
-                Size   = new(36, 22),
-                OnClick = () =>
+                },
+                OnNextPage = () =>
                 {
                     slot.NPCCurrentPage++;
                     ShowNPCPage(slot, true);
                 }
             };
-            slot.NPCPaginationBar.AddNode(slot.NPCNextButton);
+            slot.Content.AddNode(slot.NPCPaginationBar);
 
             return slot;
         }
@@ -513,10 +476,10 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.NPCNameNode = new TextNode
             {
-                String    = "",
-                Position  = new(0, 4),
-                Size      = new(contentWidth - (3 * ROW_SPACING) - (2 * MAP_BTN_WIDTH), 28f),
-                FontSize  = 14,
+                String   = "",
+                Position = new(0, 4),
+                Size     = new(contentWidth - (3 * ROW_SPACING) - (2 * MAP_BTN_WIDTH), 28f),
+                FontSize = 14,
             };
             AtkColors.Text.ApplyTo(slot.NPCNameNode);
             slot.Row.AddNode(slot.NPCNameNode);
@@ -602,10 +565,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             public TextNode[]         CostNames           = null!;
             public TextNode[]         CostQuantities      = null!;
             public NPCRowSlot[]       NPCRows             = null!;
-            public HorizontalListNode NPCPaginationBar    = null!;
-            public TextButtonNode     NPCPrevButton       = null!;
-            public TextNode           NPCPageIndicator    = null!;
-            public TextButtonNode     NPCNextButton       = null!;
+            public PaginationNode     NPCPaginationBar    = null!;
             public int                NPCCurrentPage;
             public List<ShopNPCInfos> SortedNPCInfos = [];
         }
