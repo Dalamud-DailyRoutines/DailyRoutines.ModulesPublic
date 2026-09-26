@@ -2,13 +2,12 @@ using System.Numerics;
 using DailyRoutines.Common.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
-using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
-using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Nodes;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface.AutoShowItemNPCShopInfo;
 
@@ -98,7 +97,12 @@ public unsafe partial class AutoShowItemNPCShopInfo
             var iconNode = new ItemIconNode
             {
                 ItemID = SourceInfo.CostItemID,
-                Size   = new(50f)
+                Size   = new(50f),
+                OnClick = (_, _, _, _, data) =>
+                {
+                    if (!data->IsRightClick) return;
+                    ContextMenuManager.Instance().OpenItem(SourceInfo.CostItemID, AddonId);
+                }
             };
             itemInfoRow.AddNode(iconNode);
 
@@ -111,7 +115,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 AlignmentType = AlignmentType.Left
             };
             AtkColors.Label.ApplyTo(nameNode);
-            
+
             itemInfoRow.AddNode(nameNode);
 
             paginationBar = new()
@@ -214,14 +218,9 @@ public unsafe partial class AutoShowItemNPCShopInfo
             ExchangeItemInfo exchangeItem
         )
         {
-            var exchangeTargetItem = LuminaGetter.GetRowOrDefault<Item>(exchangeItem.ItemID);
-
             slot.ItemIcon.ItemID   = exchangeItem.ItemID;
             slot.ItemName.String   = exchangeItem.GetItemName();
             slot.ItemName.FontSize = 16;
-
-            slot.MarketButton.IsVisible = exchangeTargetItem.ItemSearchCategory.RowId > 0;
-            slot.MarketButton.OnClick   = () => OpenMarket(exchangeItem.ItemID);
 
             slot.SortedNPCInfos =
             [
@@ -237,6 +236,8 @@ public unsafe partial class AutoShowItemNPCShopInfo
             slot.CostRow.IsVisible = hasCost;
             if (hasCost)
                 UpdateCostRow(slot, firstNPC!.CostInfos);
+
+            LayoutCostRow(slot);
 
             slot.NPCCurrentPage = 0;
             ShowNPCPage(slot);
@@ -263,6 +264,22 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     slot.CostIcons[i].IsVisible = false;
                     slot.CostTexts[i].IsVisible = false;
                 }
+        }
+
+        private static void LayoutCostRow
+        (
+            SectionSlot slot
+        )
+        {
+            slot.CostRow.RecalculateLayout();
+            slot.CostRow.X = slot.ItemHeader.Width - slot.CostRow.Width;
+
+            var costWidth = slot.CostRow.IsVisible ?
+                                slot.CostRow.Width + slot.ItemHeader.ItemSpacing :
+                                0f;
+
+            slot.ItemName.Width = slot.ItemHeader.Width - slot.ItemIcon.Width - slot.ItemHeader.ItemSpacing - costWidth;
+            slot.ItemHeader.RecalculateLayout();
         }
 
         private void ShowNPCPage
@@ -297,7 +314,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             }
 
             var visibleNPCCount = Math.Min(pageNpcs.Count, NPCS_PER_PAGE);
-            var sectionHeight   = CalculateSectionHeight(visibleNPCCount, slot.CostRow.IsVisible, hasNPCPagination);
+            var sectionHeight   = CalculateSectionHeight(visibleNPCCount, hasNPCPagination);
             slot.Container.Size  = new(slot.Container.Width, sectionHeight);
             slot.Background.Size = slot.Container.Size;
             slot.Content.Size    = slot.Container.Size - new Vector2(20f, 20f);
@@ -355,7 +372,12 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.ItemIcon = new ItemIconNode
             {
-                Size = new(42),
+                Size = new(42)
+            };
+            slot.ItemIcon.OnClick = (_, _, _, _, data) =>
+            {
+                if (!data->IsRightClick) return;
+                ContextMenuManager.Instance().OpenItem(slot.ItemIcon.ItemID, AddonId);
             };
             slot.ItemHeader.AddNode(slot.ItemIcon);
 
@@ -364,29 +386,19 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
                 AlignmentType = AlignmentType.Left,
                 FontSize      = 16,
-                Size          = new(contentWidth - 32 - 6 - 38, 34),
+                Size          = new(contentWidth - slot.ItemIcon.Width - slot.ItemHeader.ItemSpacing, slot.ItemHeader.Height)
             };
             AtkColors.Label.ApplyTo(slot.ItemName);
             slot.ItemHeader.AddNode(slot.ItemName);
 
-            slot.MarketButton = new IconButtonNode
-            {
-                IconId      = 60570,
-                TextTooltip = LuminaWrapper.GetAddonText(548),
-                Size        = new(28),
-                Position    = new(contentWidth - 28, 0),
-                IsVisible   = false
-            };
-            slot.MarketButton.AttachNode(slot.Content);
-
             slot.CostRow = new HorizontalListNode
             {
-                Size               = new(contentWidth, 36),
                 ItemSpacing        = 4,
+                FitToContentWidth  = true,
                 FitToContentHeight = true,
                 IsVisible          = false
             };
-            slot.Content.AddNode(slot.CostRow);
+            slot.CostRow.AttachNode(slot.ItemHeader);
 
             slot.CostIcons = new ItemIconNode[MAX_COSTS];
             slot.CostTexts = new TextNode[MAX_COSTS];
@@ -395,21 +407,27 @@ public unsafe partial class AutoShowItemNPCShopInfo
             {
                 slot.CostIcons[i] = new ItemIconNode
                 {
-                    Size = new(36),
+                    Size = new(36)
+                };
+                var indexCopy = i;
+                slot.CostIcons[i].OnClick = (_, _, _, _, data) =>
+                {
+                    if (!data->IsRightClick) return;
+                    ContextMenuManager.Instance().OpenItem(slot.CostIcons[indexCopy].ItemID, AddonId);
                 };
                 slot.CostRow.AddNode(slot.CostIcons[i]);
-                
+
                 slot.CostRow.AddDummy();
 
                 slot.CostTexts[i] = new TextNode
                 {
-                    FontSize      = 12,
+                    FontSize      = 14,
                     TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                     AlignmentType = AlignmentType.Left,
-                    Height        = 26,
+                    Height        = 28
                 };
                 AtkColors.ValueEmphasize.ApplyTo(slot.CostTexts[i]);
-                
+
                 slot.CostRow.AddNode(slot.CostTexts[i]);
             }
 
@@ -461,7 +479,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 TextFlags = TextFlags.Ellipsis,
                 Position  = new(0, 4),
                 Size      = new(contentWidth - (3 * ROW_SPACING) - (2 * MAP_BTN_WIDTH), 28f),
-                FontSize  = 14,
+                FontSize  = 14
             };
             AtkColors.Text.ApplyTo(slot.NPCNameNode);
             slot.Row.AddNode(slot.NPCNameNode);
@@ -505,23 +523,18 @@ public unsafe partial class AutoShowItemNPCShopInfo
         private static float CalculateSectionHeight
         (
             int  visibleNPCCount,
-            bool hasCost,
             bool hasNPCPagination
         )
         {
             const float HEADER_HEIGHT    = 38f;
             const float ROW_HEIGHT       = 32f;
             const float VERTICAL_PADDING = 20f;
-            var costHeight = hasCost ?
-                                 36f :
-                                 0f;
             var paginationHeight = hasNPCPagination ?
                                        32f :
                                        0f;
 
             return VERTICAL_PADDING                                 +
                    HEADER_HEIGHT                                    +
-                   costHeight                                       +
                    (visibleNPCCount                  * ROW_HEIGHT)  +
                    (Math.Max(0, visibleNPCCount - 1) * ROW_SPACING) +
                    paginationHeight;
@@ -535,7 +548,6 @@ public unsafe partial class AutoShowItemNPCShopInfo
             public HorizontalListNode        ItemHeader       = null!;
             public ItemIconNode              ItemIcon         = null!;
             public TextNode                  ItemName         = null!;
-            public IconButtonNode            MarketButton     = null!;
             public HorizontalListNode        CostRow          = null!;
             public ItemIconNode[]            CostIcons        = null!;
             public TextNode[]                CostTexts        = null!;

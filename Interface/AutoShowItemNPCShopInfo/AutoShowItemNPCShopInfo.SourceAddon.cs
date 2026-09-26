@@ -9,6 +9,7 @@ using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Nodes;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface.AutoShowItemNPCShopInfo;
 
@@ -117,10 +118,15 @@ public unsafe partial class AutoShowItemNPCShopInfo
             var itemIconNode = new ItemIconNode
             {
                 ItemID = SourceInfo.ItemID,
-                Size   = new(50f)
+                Size   = new(50f),
+                OnClick = (_, _, _, _, data) =>
+                {
+                    if (!data->IsRightClick) return;
+                    ContextMenuManager.Instance().OpenItem(SourceInfo.ItemID, AddonId);
+                }
             };
             itemInfoRow.AddNode(itemIconNode);
-            
+
             var itemNameNode = new TextNode
             {
                 TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
@@ -130,7 +136,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 AlignmentType = AlignmentType.Left
             };
             AtkColors.Label.ApplyTo(itemNameNode);
-            
+
             itemInfoRow.AddNode(itemNameNode);
 
             paginationBar = new PaginationNode
@@ -347,7 +353,13 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
                 slot.CostIcons[i] = new ItemIconNode
                 {
-                    Size = new(42),
+                    Size = new(42)
+                };
+                var indexCopy = i;
+                slot.CostIcons[i].OnClick = (_, _, _, _, data) =>
+                {
+                    if (!data->IsRightClick) return;
+                    ContextMenuManager.Instance().OpenItem(slot.CostIcons[indexCopy].ItemID, AddonId);
                 };
                 slot.CostRows[i].AddNode(slot.CostIcons[i]);
 
@@ -356,7 +368,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
                     FontSize      = 16,
                     AlignmentType = AlignmentType.Left,
-                    Size          = new(contentWidth - 32 - 6 - 38, 34),
+                    Size          = new(contentWidth - 32 - 6 - 38, 34)
                 };
                 AtkColors.Label.ApplyTo(slot.CostNames[i]);
                 slot.CostRows[i].AddNode(slot.CostNames[i]);
@@ -420,7 +432,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 String   = "",
                 Position = new(0, 4),
                 Size     = new(contentWidth - (3 * ROW_SPACING) - (2 * MAP_BTN_WIDTH), 28f),
-                FontSize = 14,
+                FontSize = 14
             };
             AtkColors.Text.ApplyTo(slot.NPCNameNode);
             slot.Row.AddNode(slot.NPCNameNode);
