@@ -1,6 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Common.Info;
-using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
@@ -27,7 +26,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
         private const float ROW_SPACING       = 4f;
         private const float VERTICAL_PADDING  = 20f;
         private const float HEADER_HEIGHT     = 42f;
-        
+
         private AddonNPCShopsSource
         (
             ItemSourceInfo sourceInfo
@@ -110,53 +109,29 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             var itemInfoRow = new HorizontalListNode
             {
-                Size        = new(headerNode.Width, 36),
-                ItemSpacing = 0
+                Size        = new(headerNode.Width, 48f),
+                ItemSpacing = 4f
             };
             headerNode.AddNode(itemInfoRow);
 
-            var itemInfoTooltipOverlay = new ResNode
+            var itemIconNode = new ItemIconNode
             {
-                Size        = new(headerNode.Width, 36),
-                Position    = new(0, 0),
-                ItemTooltip = SourceInfo.ItemID
-            };
-            itemInfoTooltipOverlay.AttachNode(headerNode);
-
-            var itemIconNode = new IconImageNode
-            {
-                IconId     = LuminaWrapper.GetItemIconID(SourceInfo.ItemID),
-                Size       = new(36),
-                FitTexture = true
+                ItemID = SourceInfo.ItemID,
+                Size   = new(50f)
             };
             itemInfoRow.AddNode(itemIconNode);
-
-            itemInfoRow.AddDummy(6f);
-
+            
             var itemNameNode = new TextNode
             {
                 TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
                 String        = LuminaWrapper.GetItemName(SourceInfo.ItemID),
                 FontSize      = 24,
-                Position      = new(0, 3),
-                Size          = new(itemInfoRow.Width - 32 - 6 - 38, 32),
-                AlignmentType = AlignmentType.TopLeft
+                Height        = 42f,
+                AlignmentType = AlignmentType.Left
             };
             AtkColors.Label.ApplyTo(itemNameNode);
+            
             itemInfoRow.AddNode(itemNameNode);
-
-            if (item.ItemSearchCategory.RowId > 0)
-            {
-                var marketButtonNode = new IconButtonNode
-                {
-                    IconId      = 60570,
-                    TextTooltip = LuminaWrapper.GetAddonText(548),
-                    Size        = new(32),
-                    Position    = ContentStartPosition + new Vector2(ContentSize.X - 44, 2),
-                    OnClick     = () => OpenMarket(SourceInfo.ItemID)
-                };
-                marketButtonNode.AttachNode(this);
-            }
 
             paginationBar = new PaginationNode
             {
@@ -165,8 +140,11 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 OnPreviousPage         = () => ShowPage(currentPage - 1),
                 OnNextPage             = () => ShowPage(currentPage + 1)
             };
-            paginationBar.Position = new(0.0f, ContentStartPosition.Y + ContentSize.Y - paginationBar.Height);
+            paginationBar.Position      = new(0.0f, ContentStartPosition.Y + ContentSize.Y - paginationBar.Height);
+            paginationBar.OnSizeUpdated = CenterPaginationBar;
             paginationBar.AttachNode(this);
+
+            CenterPaginationBar();
 
             var footerHeight = hasPagination ?
                                    paginationBar.Height + 6.0f :
@@ -199,23 +177,18 @@ public unsafe partial class AutoShowItemNPCShopInfo
             ShowPage(0);
         }
 
-        protected override void OnUpdate
-        (
-            AtkUnitBase* addon
-        )
+        private void CenterPaginationBar()
         {
-            if (paginationBar is { IsVisible: true })
-                paginationBar.X = ContentStartPosition.X + ((ContentSize.X - paginationBar.Width) / 2.0f);
+            if (paginationBar is not { } bar) return;
 
-            if (sectionSlots == null) return;
-
-            foreach (var slot in sectionSlots)
-            {
-                if (!slot.NPCPaginationBar.IsVisible) continue;
-
-                slot.NPCPaginationBar.X = (slot.Content.Width - slot.NPCPaginationBar.Width) / 2.0f;
-            }
+            bar.X = ContentStartPosition.X + ((ContentSize.X - bar.Width) / 2.0f);
         }
+
+        private static void CenterNPCPaginationBar
+        (
+            SectionSlot slot
+        ) =>
+            slot.NPCPaginationBar.X = (slot.Content.Width - slot.NPCPaginationBar.Width) / 2.0f;
 
         private void ShowPage
         (
@@ -260,10 +233,9 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 if (i < group.CostInfos.Count)
                 {
                     var costInfo = group.CostInfos[i];
-                    slot.CostRows[i].IsVisible              = true;
-                    slot.CostTooltipOverlays[i].ItemTooltip = costInfo.ItemID;
-                    slot.CostIcons[i].IconId                = LuminaWrapper.GetItemIconID(costInfo.ItemID);
-                    slot.CostNames[i].String                = costInfo.GetItemName();
+                    slot.CostRows[i].IsVisible = true;
+                    slot.CostIcons[i].ItemID   = costInfo.ItemID;
+                    slot.CostNames[i].String   = costInfo.GetItemName();
                     slot.CostQuantities[i].String =
                         costInfo.Collectablity != null ?
                             $"\ue03d ({costInfo.Collectablity.Value}~)" :
@@ -316,6 +288,8 @@ public unsafe partial class AutoShowItemNPCShopInfo
             slot.Content.Size    = slot.Container.Size - new Vector2(20f, 20f);
             slot.Content.RecalculateLayout();
 
+            CenterNPCPaginationBar(slot);
+
             if (recalculateOuter && contentNode != null && scrollingAreaNode != null)
             {
                 contentNode.RecalculateLayout();
@@ -357,48 +331,35 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             var contentWidth = slot.Content.Width;
 
-            slot.CostRows            = new ResNode[MAX_COSTS];
-            slot.CostTooltipOverlays = new ResNode[MAX_COSTS];
-            slot.CostIcons           = new IconImageNode[MAX_COSTS];
-            slot.CostNames           = new TextNode[MAX_COSTS];
-            slot.CostQuantities      = new TextNode[MAX_COSTS];
+            slot.CostRows       = new HorizontalListNode[MAX_COSTS];
+            slot.CostIcons      = new ItemIconNode[MAX_COSTS];
+            slot.CostNames      = new TextNode[MAX_COSTS];
+            slot.CostQuantities = new TextNode[MAX_COSTS];
 
             for (var i = 0; i < MAX_COSTS; i++)
             {
-                slot.CostRows[i] = new ResNode
+                slot.CostRows[i] = new HorizontalListNode
                 {
-                    Size      = new(contentWidth, 36),
-                    IsVisible = false
+                    Size        = new(contentWidth, 36),
+                    ItemSpacing = 6f
                 };
                 slot.Content.AddNode(slot.CostRows[i]);
 
-                slot.CostTooltipOverlays[i] = new ResNode
+                slot.CostIcons[i] = new ItemIconNode
                 {
-                    Size     = new(contentWidth, 36),
-                    Position = new(0, 0)
+                    Size = new(42),
                 };
-                slot.CostTooltipOverlays[i].AttachNode(slot.CostRows[i]);
-
-                slot.CostIcons[i] = new IconImageNode
-                {
-                    Size           = new(32),
-                    TextureSize    = new(32),
-                    IconId         = 0,
-                    Position       = new(0, 2),
-                    ImageNodeFlags = ImageNodeFlags.AutoFit
-                };
-                slot.CostIcons[i].AttachNode(slot.CostRows[i]);
+                slot.CostRows[i].AddNode(slot.CostIcons[i]);
 
                 slot.CostNames[i] = new TextNode
                 {
-                    TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
-                    FontSize      = 18,
-                    Position      = new(slot.CostIcons[i].Width + 4f, 0),
+                    TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
+                    FontSize      = 16,
                     AlignmentType = AlignmentType.Left,
-                    Size          = new(70, 36),
+                    Size          = new(contentWidth - 32 - 6 - 38, 34),
                 };
                 AtkColors.Label.ApplyTo(slot.CostNames[i]);
-                slot.CostNames[i].AttachNode(slot.CostRows[i]);
+                slot.CostRows[i].AddNode(slot.CostNames[i]);
 
                 slot.CostQuantities[i] = new TextNode
                 {
@@ -429,7 +390,8 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 {
                     slot.NPCCurrentPage++;
                     ShowNPCPage(slot, true);
-                }
+                },
+                OnSizeUpdated = () => CenterNPCPaginationBar(slot)
             };
             slot.Content.AddNode(slot.NPCPaginationBar);
 
@@ -535,18 +497,17 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
         private class SectionSlot
         {
-            public ResNode            Container           = null!;
-            public SimpleNineGridNode Background          = null!;
-            public VerticalListNode   Content             = null!;
-            public ResNode[]          CostRows            = null!;
-            public ResNode[]          CostTooltipOverlays = null!;
-            public IconImageNode[]    CostIcons           = null!;
-            public TextNode[]         CostNames           = null!;
-            public TextNode[]         CostQuantities      = null!;
-            public NPCRowSlot[]       NPCRows             = null!;
-            public PaginationNode     NPCPaginationBar    = null!;
-            public int                NPCCurrentPage;
-            public List<ShopNPCInfos> SortedNPCInfos = [];
+            public ResNode              Container        = null!;
+            public SimpleNineGridNode   Background       = null!;
+            public VerticalListNode     Content          = null!;
+            public HorizontalListNode[] CostRows         = null!;
+            public ItemIconNode[]       CostIcons        = null!;
+            public TextNode[]           CostNames        = null!;
+            public TextNode[]           CostQuantities   = null!;
+            public NPCRowSlot[]         NPCRows          = null!;
+            public PaginationNode       NPCPaginationBar = null!;
+            public int                  NPCCurrentPage;
+            public List<ShopNPCInfos>   SortedNPCInfos = [];
         }
 
         private class NPCRowSlot
