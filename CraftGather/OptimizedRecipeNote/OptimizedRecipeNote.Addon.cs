@@ -13,6 +13,7 @@ using KamiToolKit.Nodes.Simplified;
 using Lumina.Data.Parsing.Uld;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 
