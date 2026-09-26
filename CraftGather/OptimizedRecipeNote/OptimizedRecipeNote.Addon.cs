@@ -457,7 +457,6 @@ public partial class OptimizedRecipeNote
             {
                 IconId = resultItem.Icon,
                 Size   = new(ITEM_INFO_SIZE),
-                Scale  = new(ITEM_INFO_SIZE / 60f),
                 ItemID = resultItem.RowId,
                 OnClick = (_, _, _, _, atkEventData) =>
                 {
