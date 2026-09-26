@@ -171,12 +171,6 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
             LuminaWrapper.GetAddonText(8495) :
             location.GetTerritory().ExtractPlaceName();
 
-    private static uint GetOwnedItemCount
-    (
-        uint itemID
-    ) =>
-        CurrencyManager.Instance()->HasItem(itemID) ? CurrencyManager.Instance()->GetItemCount(itemID) : LocalPlayerState.GetItemCount(itemID);
-
     private static void OpenMarket
     (
         uint itemID

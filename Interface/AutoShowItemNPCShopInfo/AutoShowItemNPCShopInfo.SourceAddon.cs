@@ -135,10 +135,11 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             var itemNameNode = new TextNode
             {
-                TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
+                TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
                 String        = LuminaWrapper.GetItemName(SourceInfo.ItemID),
                 FontSize      = 24,
                 Position      = new(0, 3),
+                Size          = new(itemInfoRow.Width - 32 - 6 - 38, 32),
                 AlignmentType = AlignmentType.TopLeft
             };
             AtkColors.Label.ApplyTo(itemNameNode);
@@ -203,12 +204,6 @@ public unsafe partial class AutoShowItemNPCShopInfo
             AtkUnitBase* addon
         )
         {
-            if (IKeyState.Instance()[VirtualKey.ESCAPE])
-            {
-                Close();
-                if (SystemMenu != null) SystemMenu->Close(true);
-            }
-
             if (paginationBar is { IsVisible: true })
                 paginationBar.X = ContentStartPosition.X + ((ContentSize.X - paginationBar.Width) / 2.0f);
 

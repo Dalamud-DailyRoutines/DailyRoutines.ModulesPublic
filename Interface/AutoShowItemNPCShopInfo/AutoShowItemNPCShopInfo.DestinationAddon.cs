@@ -176,12 +176,6 @@ public unsafe partial class AutoShowItemNPCShopInfo
             AtkUnitBase* addon
         )
         {
-            if (IKeyState.Instance()[VirtualKey.ESCAPE])
-            {
-                Close();
-                if (SystemMenu != null) SystemMenu->Close(true);
-            }
-
             if (paginationBar is { IsVisible: true })
                 paginationBar.X = ContentStartPosition.X + ((ContentSize.X - paginationBar.Width) / 2.0f);
 
@@ -387,14 +381,13 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.ItemName = new TextNode
             {
-                TextFlags        = TextFlags.Edge | TextFlags.Ellipsis,
-                AlignmentType    = AlignmentType.Left,
-                FontSize         = 16,
-                Size             = new(contentWidth - 32 - 6 - 38, 32),
-                Position         = new(0, 2),
-                TextColor        = ColorHelper.GetColor(28),
-                TextOutlineColor = ColorHelper.GetColor(509)
+                TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
+                AlignmentType = AlignmentType.Left,
+                FontSize      = 16,
+                Size          = new(contentWidth - 32 - 6 - 38, 32),
+                Position      = new(0, 2),
             };
+            AtkColors.Label.ApplyTo(slot.ItemName);
             slot.ItemHeader.AddNode(slot.ItemName);
 
             slot.ItemTooltipOverlay = new ResNode
