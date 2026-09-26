@@ -24,9 +24,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
         private const float ROW_SPACING_X  = 6f;
         private const float ROW_SPACING    = 4f;
         private const float HEADER_HEIGHT  = 42f;
-
-        private static Task? OpenAddonTask;
-
+        
         private AddonNPCShopsDestination
         (
             ExchangeItemsInfo sourceInfo
@@ -48,6 +46,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
         public static void CloseAndClear()
         {
             if (Addon == null) return;
+            
             Addon.Dispose();
             Addon = null;
         }
@@ -58,30 +57,16 @@ public unsafe partial class AutoShowItemNPCShopInfo
         )
         {
             if (sourceInfo is not { Items.Count: > 0 }) return;
-            if (OpenAddonTask != null) return;
-
-            var isAddonExisted = Addon?.IsOpen ?? false;
+            
             CloseAndClear();
 
-            OpenAddonTask = IFramework.Instance().RunOnTick
-            (
-                () =>
-                {
-                    Addon ??= new(sourceInfo)
-                    {
-                        InternalName = "DRNPCShopsDestinations",
-                        Title        = Lang.Get("AutoShowItemNPCShopInfo-Addon-Destination"),
-                        Size         = new(700f, 540f)
-                    };
-                    Addon.Open();
-                },
-                TimeSpan.FromMilliseconds
-                (
-                    isAddonExisted ?
-                        500 :
-                        0
-                )
-            ).ContinueWith(_ => OpenAddonTask = null);
+            Addon ??= new(sourceInfo)
+            {
+                InternalName = "DRNPCShopsDestinations",
+                Title        = Lang.Get("AutoShowItemNPCShopInfo-Addon-Destination"),
+                Size         = new(700f, 550f)
+            };
+            Addon.Open();
         }
 
         protected override void OnSetup
