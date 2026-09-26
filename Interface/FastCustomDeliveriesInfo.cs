@@ -40,7 +40,7 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
 
         ContextMenuManager.Instance().Open
         (
-            new ContextMenuOpenedArgs(),
+            new(),
             [new CustomDeliveryContextMenu(selectedInfo)]
         );
     }
