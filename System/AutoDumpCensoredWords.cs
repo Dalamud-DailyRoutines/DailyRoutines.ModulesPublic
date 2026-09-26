@@ -10,6 +10,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace DailyRoutines.ModulesPublic;
 
+// DumpCensorship
 public unsafe class AutoDumpCensoredWords : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -253,6 +254,7 @@ public unsafe class AutoDumpCensoredWords : ModuleBase
                         var ch = ReadU16(wordOff + (2 * i));
                         if (ch == 0) break;
 
+                        // 0x100002400
                         if (ch <= 0x20 && ((0x100002400L >> ch) & 1) != 0)
                         {
                             i++;
