@@ -556,9 +556,10 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var contentList = new ScrollingNode<VerticalListNode>
             {
-                Position    = new(9f),
-                Size        = tabContentSize - new Vector2(8f, 12f),
-                ScrollSpeed = 36
+                Position          = new(9f),
+                Size              = tabContentSize - new Vector2(8f, 12f),
+                ScrollSpeed       = 36,
+                AutoHideScrollBar = true,
             };
             contentList.ContentNode.ItemSpacing = 5f;
             contentList.ContentNode.FitWidth    = true;
