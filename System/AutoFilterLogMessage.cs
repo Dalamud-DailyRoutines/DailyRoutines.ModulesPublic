@@ -31,6 +31,9 @@ public class AutoFilterLogMessage : ModuleBase
         LogMessageManager.Instance().RegPre(OnLogMessage);
     }
 
+    protected override void Uninit() =>
+        LogMessageManager.Instance().Unreg(OnLogMessage);
+
     protected override void ConfigUI()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("AutoFilterLogMessage-MessageToFilter"));
