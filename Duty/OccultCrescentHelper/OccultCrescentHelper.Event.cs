@@ -47,7 +47,8 @@ public partial class OccultCrescentHelper
             ceTaskHelper ??= new() { TimeoutMS = 180_000 };
 
             IClientState.Instance().TerritoryChanged += OnZoneChanged;
-            OnZoneChanged(0);
+            if (GameState.TerritoryIntendedUse == TerritoryIntendedUse.OccultCrescent)
+                OnZoneChanged(0);
 
             ExecuteCommandManager.Instance().RegPost(OnPostReceivedCommand);
             LogMessageManager.Instance().RegPost(OnPostReceivedMessage);
@@ -267,7 +268,7 @@ public partial class OccultCrescentHelper
 
         private void OnZoneChanged
         (
-            uint u
+            uint zone
         )
         {
             fateHandle?.Unreg();
@@ -278,9 +279,11 @@ public partial class OccultCrescentHelper
 
             allIslandEvents.Clear();
             knownCENames.Clear();
+            
             StopPathfinding();
 
-            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) return;
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) 
+                return;
 
             fateHandle = ZoneIndicatorRenderer.Instance().RegTemporary
             (
@@ -1282,15 +1285,18 @@ public partial class OccultCrescentHelper
                               Interlocked.Exchange(ref pathfindingSession, null) :
                               Interlocked.CompareExchange(ref pathfindingSession, null, expectedSession);
 
-            if (expectedSession != null && !ReferenceEquals(session, expectedSession)) return false;
+            if (expectedSession != null && !ReferenceEquals(session, expectedSession)) 
+                return false;
 
             ceTaskHelper?.Abort();
+
+            if (session == null) 
+                return true;
+            
             vnavmeshIPC.StopPathfind();
-
-            if (session == null) return true;
-
+            
             session.StopAetherytePathfinding?.Invoke();
-
+            
             session.CancellationTokenSource.Cancel();
             session.AetheryteRouteCancellationTokenSource?.Dispose();
             session.CancellationTokenSource.Dispose();
