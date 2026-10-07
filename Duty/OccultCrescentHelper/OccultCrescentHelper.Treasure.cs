@@ -145,11 +145,7 @@ public partial class OccultCrescentHelper
                             ))
                             MainModule.config.Save(MainModule);
 
-                        ImGuiOm.HelpMarker
-                        (
-                            Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-Help"),
-                            20f * GlobalUIScale
-                        );
+                        ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-Help"));
 
                         if (MainModule.config.IsEnabledAutoOpenTreasure)
                         {
@@ -166,11 +162,7 @@ public partial class OccultCrescentHelper
                             if (ImGui.IsItemDeactivatedAfterEdit())
                                 MainModule.config.Save(MainModule);
 
-                            ImGuiOm.HelpMarker
-                            (
-                                $"{Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-DistanceTo-Help")}",
-                                20f * GlobalUIScale
-                            );
+                            ImGuiOm.HelpMarker($"{Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-DistanceTo-Help")}");
                         }
                     }
 

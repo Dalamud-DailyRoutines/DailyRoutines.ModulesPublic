@@ -160,11 +160,7 @@ public partial class OccultCrescentHelper
                         KnownColor.LightSkyBlue.ToUInt(),
                         Lang.Get("OccultCrescentHelper-OthersManager-AutoEnableDisablePlugins")
                     );
-                    ImGuiOm.HelpMarker
-                    (
-                        Lang.Get("OccultCrescentHelper-OthersManager-AutoEnableDisablePlugins-Help"),
-                        20f * GlobalUIScale
-                    );
+                    ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-AutoEnableDisablePlugins-Help"));
 
                     using (ImRaii.PushIndent())
                     {
@@ -208,11 +204,7 @@ public partial class OccultCrescentHelper
                             mapButton = null;
                         }
                     }
-                    ImGuiOm.HelpMarker
-                    (
-                        Lang.Get("OccultCrescentHelper-OthersManager-ModifyInfoHUD-Help"),
-                        20f * GlobalUIScale
-                    );
+                    ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-ModifyInfoHUD-Help"));
                     
                     if (ImGui.Checkbox
                         (
@@ -220,11 +212,7 @@ public partial class OccultCrescentHelper
                             ref MainModule.config.IsEnabledHideDutyCommand
                         ))
                         MainModule.config.Save(MainModule);
-                    ImGuiOm.HelpMarker
-                    (
-                        Lang.Get("OccultCrescentHelper-OthersManager-HideDutyCommand-Help"),
-                        20f * GlobalUIScale
-                    );
+                    ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-HideDutyCommand-Help"));
                     
                     if (ImGui.Checkbox
                         (
@@ -232,11 +220,7 @@ public partial class OccultCrescentHelper
                             ref MainModule.config.IsEnabledKnowledgeCrystalFastUse
                         ))
                         MainModule.config.Save(MainModule);
-                    ImGuiOm.HelpMarker
-                    (
-                        Lang.Get("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal-Help"),
-                        20f * GlobalUIScale
-                    );
+                    ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal-Help"));
                 }
             }
         }

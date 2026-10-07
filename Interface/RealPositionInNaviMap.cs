@@ -56,7 +56,7 @@ public unsafe class RealPositionInNaviMap : ModuleBase
     protected override void ConfigUI()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("RealPositionInNaviMap-CopyFormat"));
-        ImGuiOm.HelpMarker(Lang.Get("RealPositionInNaviMap-CopyFormatHelp"), 20f * GlobalUIScale);
+        ImGuiOm.HelpMarker(Lang.Get("RealPositionInNaviMap-CopyFormatHelp"));
 
         ImGui.InputText("###CopyFormat", ref config.CopyFormat, 256);
         if (ImGui.IsItemDeactivatedAfterEdit())

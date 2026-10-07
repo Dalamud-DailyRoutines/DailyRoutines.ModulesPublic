@@ -42,7 +42,7 @@ public unsafe class AutoDisableBattleBGM : ModuleBase
     {
         if (ImGui.Checkbox(Lang.Get("AutoDisableBattleBGM-EnableInDuty"), ref config.EnableInDuty))
             config.Save(this);
-        ImGuiOm.HelpMarker(Lang.Get("AutoDisableBattleBGM-EnableInDutyHelp"), 20f * GlobalUIScale);
+        ImGuiOm.HelpMarker(Lang.Get("AutoDisableBattleBGM-EnableInDutyHelp"));
     }
 
     private byte IsInBattleStateDetour

@@ -103,7 +103,7 @@ public unsafe class AutoNoviceNetwork : ModuleBase
         if (ImGui.Checkbox(Lang.Get("AutoNoviceNetwork-TryJoinWhenInactive"), ref config.IsTryJoinWhenInactive))
             config.Save(this);
 
-        ImGuiOm.HelpMarker(Lang.Get("AutoNoviceNetwork-TryJoinWhenInactiveHelp"), 20f * GlobalUIScale);
+        ImGuiOm.HelpMarker(Lang.Get("AutoNoviceNetwork-TryJoinWhenInactiveHelp"));
     }
 
     private void EnqueueARound()

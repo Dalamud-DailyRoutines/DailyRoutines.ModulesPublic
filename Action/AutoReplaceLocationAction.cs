@@ -97,7 +97,7 @@ public unsafe class AutoReplaceLocationAction : ModuleBase
         // 启用 <center> 命令参数
         if (ImGui.Checkbox(Lang.Get("AutoReplaceLocationAction-EnableCenterArg"), ref config.EnableCenterArgument))
             config.Save(this);
-        ImGuiOm.HelpMarker(Lang.Get("AutoReplaceLocationAction-EnableCenterArgHelp"), 20f * GlobalUIScale);
+        ImGuiOm.HelpMarker(Lang.Get("AutoReplaceLocationAction-EnableCenterArgHelp"));
 
         ImGui.Spacing();
         ImGui.Spacing();

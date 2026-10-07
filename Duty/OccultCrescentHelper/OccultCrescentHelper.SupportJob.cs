@@ -85,7 +85,7 @@ public partial class OccultCrescentHelper
                         ref MainModule.config.IsEnabledBardOffensiveAria
                     ))
                     MainModule.config.Save(MainModule);
-                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Bard-OffensiveAria-Help"), 20f * GlobalUIScale);
+                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Bard-OffensiveAria-Help"));
             }
 
             ImGui.NewLine();
@@ -100,7 +100,7 @@ public partial class OccultCrescentHelper
                         ref MainModule.config.IsEnabledMonkKickNoMove
                     ))
                     MainModule.config.Save(MainModule);
-                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Monk-PhantomKickNoMove-Help"), 20f * GlobalUIScale);
+                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Monk-PhantomKickNoMove-Help"));
             }
 
             ImGui.NewLine();
@@ -115,7 +115,7 @@ public partial class OccultCrescentHelper
                         ref MainModule.config.IsEnabledBerserkerRageAutoFace
                     ))
                     MainModule.config.Save(MainModule);
-                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageAutoFace-Help"), 20f * GlobalUIScale);
+                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageAutoFace-Help"));
 
                 if (ImGui.Checkbox
                     (
@@ -123,7 +123,7 @@ public partial class OccultCrescentHelper
                         ref MainModule.config.IsEnabledBerserkerRageReplace
                     ))
                     MainModule.config.Save(MainModule);
-                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageReplace-Help"), 20f * GlobalUIScale);
+                ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-SupportJobManager-Berserker-RageReplace-Help"));
             }
 
             ImGui.NewLine();
