@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -16,7 +15,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes.ComponentNode;
-using KamiToolKit.Classes;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Abstractions;
@@ -55,11 +54,17 @@ public unsafe class AutoExpertDelivery : ModuleBase
         {
             InternalName          = "DRAutoExpertDelivery",
             Title                 = Info.Title,
-            Size                  = new(300f, 280f),
+            Size                  = new(300f, 250f),
             RememberClosePosition = true
         };
 
         _ = UltimateTotemExchangeItemIDs;
+    }
+
+    protected override void Uninit()
+    {
+        addonExpertDelivery?.Dispose();
+        addonExpertDelivery = null;
     }
 
     private bool EnqueueDelivery()
@@ -173,8 +178,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
             TaskHelper.Enqueue(() => !GrandCompanyExchange->IsAddonAndNodesReady() && !ICondition.Instance().IsOccupiedInEvent);
             TaskHelper.Enqueue
             (() => IObjectTable.Instance()
-                           .FirstOrDefault(x => x.ObjectKind == ObjectKind.EventNpc && x.DataID == info.DataID)
-                           .TargetInteract()
+                               .FirstOrDefault(x => x.ObjectKind == ObjectKind.EventNpc && x.DataID == info.DataID)
+                               .TargetInteract()
             );
             TaskHelper.Enqueue(() => AddonSelectStringEvent.Select(0));
             if (isAutoExchange)
@@ -213,17 +218,18 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
         if (companySeals + (uint)(sealReward * buffMultiplier) > capAmount)
         {
-            NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoExpertDelivery-ReachdSealCap"));
+            var message = Lang.Get("AutoExpertDelivery-Notification-Message");
+            
+            NotifyHelper.Instance().Chat(message);
+            NotifyHelper.Instance().TrayWarning
+            (
+                message,
+                Lang.Get("AutoExpertDelivery-Notification-Title")
+            );
             return true;
         }
 
         return false;
-    }
-
-    protected override void Uninit()
-    {
-        addonExpertDelivery?.Dispose();
-        addonExpertDelivery = null;
     }
 
     private class Config : ModuleConfig
@@ -236,15 +242,18 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
     private class DRAutoExpertDelivery
     (
-        AutoExpertDelivery instance
+        AutoExpertDelivery module
     ) : AttachedAddon("GrandCompanySupplyList", AddonEvent.PostSetup)
     {
-        private static VerticalListNode ControlTabLayout;
-        private static VerticalListNode SettingTabLayout;
+        protected override bool CanOpenAddon =>
+            !module.TaskHelper.IsBusy            &&
+            HostAddon                    != null &&
+            HostAddon->AtkValues[5].UInt == 2;
+        
+        private VerticalListNode? ControlTabLayout;
+        private VerticalListNode? SettingTabLayout;
 
-        private static List<CheckboxNode> DefaultPageCheckboxes = [];
-
-        protected override bool CanOpenAddon => !instance.TaskHelper.IsBusy;
+        private TextButtonNode? OperateButtonNode;
 
         protected override void OnHostAddon
         (
@@ -254,8 +263,17 @@ public unsafe class AutoExpertDelivery : ModuleBase
         {
             if (type != AddonEvent.PostSetup || GrandCompanySupplyList == null) return;
 
-            GrandCompanySupplyList->Callback(0, instance.config.DefaultPage);
+            GrandCompanySupplyList->Callback(0, module.config.DefaultPage);
         }
+
+        protected override void OnAttachedAddonUpdate
+        (
+            AtkUnitBase* addon,
+            AtkUnitBase* hostAddon
+        ) =>
+            OperateButtonNode?.String = module.TaskHelper.IsBusy ?
+                                            Lang.Get("Stop") :
+                                            Lang.Get("AutoExpertDelivery-StartBatch");
 
         protected override void OnSetup
         (
@@ -263,30 +281,15 @@ public unsafe class AutoExpertDelivery : ModuleBase
             Span<AtkValue> atkValues
         )
         {
-            // 禁止 ESC 键关闭
-            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x4, true);
-
-            // 禁止聚焦
-            FlagHelper.UpdateFlag(ref addon->Flags1A0, 0x80, true);
-
-            // 禁止自动聚焦
-            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x40, true);
-
-            // 禁止右键菜单
-            FlagHelper.UpdateFlag(ref addon->Flags1A3, 0x1, true);
-
-            DefaultPageCheckboxes.Clear();
-
             var tabNode = new TabBarNode
             {
-                IsVisible = true,
-                Size      = new(275, 28),
-                Position  = ContentStartPosition,
-                NavIndex  = 1,
-                NavDown   = 3
+                Size     = ContentSize with { Y = 32 },
+                Position = ContentStartPosition,
+                NavIndex = 1,
+                NavDown  = 3
             };
 
-            var tabContentPosition = tabNode.Position + new Vector2(0, tabNode.Size.Y + 5f);
+            var tabContentPosition = tabNode.Position + new Vector2(0, tabNode.Size.Y);
 
             tabNode.AddTab
             (
@@ -296,6 +299,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
                     ControlTabLayout.IsVisible = true;
                     SettingTabLayout.IsVisible = false;
                     ApplyControllerNavigation(tabNode);
+                    
+                    SetWindowSize(Size with { Y = tabNode.Height + ControlTabLayout.Height + 28f });
                 }
             );
 
@@ -307,6 +312,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
                     ControlTabLayout.IsVisible = false;
                     SettingTabLayout.IsVisible = true;
                     ApplyControllerNavigation(tabNode);
+                    
+                    SetWindowSize(Size with { Y = tabNode.Height + SettingTabLayout.Height + 28f });
                 }
             );
 
@@ -314,188 +321,143 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
             ControlTabLayout = new()
             {
-                IsVisible   = true,
-                Position    = tabContentPosition + new Vector2(0, 5),
-                ItemSpacing = 4f
+                Position         = tabContentPosition,
+                FirstItemSpacing = 4f,
+                ItemSpacing      = 4f,
+                FitContents      = true
             };
 
-            var startNode = new TextButtonNode
+            OperateButtonNode = new TextButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(tabNode.Size.X - 10, 42),
-                String    = Lang.Get("Start"),
+                Size        = ContentSize with { Y = 42 },
+                String      = Lang.Get("Start"),
+                TextureType = ButtonTextureType.ButtonB,
                 OnClick = () =>
                 {
-                    if (instance.TaskHelper.IsBusy) return;
-                    instance.EnqueueDelivery();
-                }
-            };
-
-            var stopNode = new TextButtonNode
-            {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(tabNode.Size.X - 10, 42),
-                String    = Lang.Get("Stop"),
-                OnClick = () =>
-                {
-                    if (!instance.TaskHelper.IsBusy) return;
-                    instance.TaskHelper.Abort();
+                    if (module.TaskHelper.IsBusy)
+                    {
+                        module.TaskHelper.Abort();
+                        return;
+                    }
+                    module.EnqueueDelivery();
                 }
             };
 
             var exchangeShopNode = new TextButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(tabNode.Size.X - 10, 42),
-                String    = LuminaWrapper.GetAddonText(3280),
+                Size   = ContentSize with { Y = 42 },
+                String = Lang.Get("AutoExpertDelivery-OpenShop"),
                 OnClick = () =>
                 {
-                    if (instance.TaskHelper.IsBusy) return;
-                    instance.EnqueueGrandCompanyExchangeOpen(false);
+                    if (module.TaskHelper.IsBusy) return;
+                    module.EnqueueGrandCompanyExchangeOpen(false);
                 }
             };
 
             var exchangeShopAndExchangeNode = new TextButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(tabNode.Size.X - 5, 42),
-                String    = $"{LuminaWrapper.GetAddonText(3280)} [{Lang.Get("Exchange")}]",
+                Size      = ContentSize with { Y = 42 },
+                String    = Lang.Get("AutoExpertDelivery-OpenShopAndExchange"),
                 OnClick = () =>
                 {
-                    if (instance.TaskHelper.IsBusy) return;
-                    instance.EnqueueGrandCompanyExchangeOpen(true);
+                    if (module.TaskHelper.IsBusy) return;
+                    module.EnqueueGrandCompanyExchangeOpen(true);
                 }
             };
 
-            ControlTabLayout.AddNode([startNode, stopNode, exchangeShopNode, exchangeShopAndExchangeNode]);
+            ControlTabLayout.AddNode([OperateButtonNode, exchangeShopNode, exchangeShopAndExchangeNode]);
+            
             ControlTabLayout.AttachNode(this);
 
             SettingTabLayout = new()
             {
-                IsVisible   = false,
-                Position    = tabContentPosition + new Vector2(5, 3),
-                FitContents = true
+                IsVisible        = false,
+                Position         = tabContentPosition,
+                FitContents      = true,
+                FirstItemSpacing = 4f,
+                ItemSpacing      = 5f
             };
 
             var skipHQSettingNode = new CheckboxNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                IsChecked = instance.config.SkipWhenHQ,
-                Size      = new(100, 27),
+                IsChecked = module.config.SkipWhenHQ,
+                Size      = ContentSize with { Y = 28 },
                 String    = Lang.Get("SkipHQItem"),
                 OnClick = x =>
                 {
-                    instance.config.SkipWhenHQ = x;
-                    instance.config.Save(instance);
+                    module.config.SkipWhenHQ = x;
+                    module.config.Save(module);
                 }
             };
-
-            skipHQSettingNode.Label.Width = tabNode.Size.X - 20;
-            skipHQSettingNode.Label.AutoAdjustTextSize();
-            skipHQSettingNode.Height = skipHQSettingNode.Label.FontSize * 1.5f;
-
+            skipHQSettingNode.Label.TextFlags |= TextFlags.MultiLine | TextFlags.WordWrap;
             SettingTabLayout.AddNode(skipHQSettingNode);
 
             var skipMateriaSettingNode = new CheckboxNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                IsChecked = instance.config.SkipWhenMateria,
-                Size      = new(100, 27),
+                IsChecked = module.config.SkipWhenMateria,
+                Size      = ContentSize with { Y = 28 },
                 String    = Lang.Get("AutoExpertDelivery-SkipMaterias"),
                 OnClick = x =>
                 {
-                    instance.config.SkipWhenMateria = x;
-                    instance.config.Save(instance);
+                    module.config.SkipWhenMateria = x;
+                    module.config.Save(module);
                 }
             };
-
-            skipMateriaSettingNode.Label.Width = tabNode.Size.X - 20;
-            skipMateriaSettingNode.Label.AutoAdjustTextSize();
-            skipMateriaSettingNode.Height = skipMateriaSettingNode.Label.FontSize * 1.5f;
-
+            skipMateriaSettingNode.Label.TextFlags |= TextFlags.MultiLine | TextFlags.WordWrap;
             SettingTabLayout.AddNode(skipMateriaSettingNode);
 
             var skipUltimateTotemExchangeItemsNode = new CheckboxNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                IsChecked = instance.config.SkipUltimateTotemExchangeItems,
-                Size      = new(100, 27),
+                IsChecked = module.config.SkipUltimateTotemExchangeItems,
+                Size      = ContentSize with { Y = 28 },
                 String    = Lang.Get("AutoExpertDelivery-SkipUltimateWeapons"),
                 OnClick = x =>
                 {
-                    instance.config.SkipUltimateTotemExchangeItems = x;
-                    instance.config.Save(instance);
+                    module.config.SkipUltimateTotemExchangeItems = x;
+                    module.config.Save(module);
                 }
             };
-
-            skipUltimateTotemExchangeItemsNode.Label.Width = tabNode.Size.X - 20;
-            skipUltimateTotemExchangeItemsNode.Label.AutoAdjustTextSize();
-            skipUltimateTotemExchangeItemsNode.Height = skipUltimateTotemExchangeItemsNode.Label.FontSize * 1.5f;
-
+            skipUltimateTotemExchangeItemsNode.Label.TextFlags |= TextFlags.MultiLine | TextFlags.WordWrap;
             SettingTabLayout.AddNode(skipUltimateTotemExchangeItemsNode);
+            
             SettingTabLayout.AddDummy(5f);
 
             var defaultPageTitleNode = new TextNode
             {
-                IsVisible = true,
-                Size      = new(tabNode.Size.X - 20, 27),
-                FontSize  = 16,
-                String    = Lang.Get("AutoExpertDelivery-DefaultPage")
+                Size     = ContentSize with { Y = 32 },
+                FontSize = 16,
+                String   = Lang.Get("AutoExpertDelivery-DefaultPage")
             };
-
-            defaultPageTitleNode.AutoAdjustTextSize();
-            defaultPageTitleNode.Height = defaultPageTitleNode.FontSize * 1.5f;
-
             SettingTabLayout.AddNode(defaultPageTitleNode);
-            SettingTabLayout.AddDummy(3f);
+
+            var defaultPageGroupNode = new RadioButtonGroupNode();
+            defaultPageGroupNode.VerticalPadding = 5f;
 
             for (var i = 0U; i < 3; i++)
             {
                 var index = i;
 
-                var defaultPageNode = new CheckboxNode
-                {
-                    IsVisible = true,
-                    IsEnabled = true,
-                    IsChecked = instance.config.DefaultPage == i,
-                    Size      = new(100, 27),
-                    String    = LuminaWrapper.GetAddonText(4572 + i)
-                };
-
-                defaultPageNode.OnClick = x =>
-                {
-                    if (!x)
+                defaultPageGroupNode.AddButton
+                (
+                    LuminaWrapper.GetAddonTextSeString(4572 + i),
+                    () =>
                     {
-                        defaultPageNode.IsChecked = true;
-                        return;
+                        module.config.DefaultPage = (int)index;
+                        module.config.Save(module);
                     }
-
-                    instance.config.DefaultPage = (int)index;
-                    instance.config.Save(instance);
-
-                    for (var d = 0; d < DefaultPageCheckboxes.Count; d++)
-                    {
-                        var node = DefaultPageCheckboxes[d];
-                        node.IsChecked = instance.config.DefaultPage == d;
-                    }
-                };
-
-                DefaultPageCheckboxes.Add(defaultPageNode);
-                SettingTabLayout.AddNode(defaultPageNode);
+                );
             }
 
+            defaultPageGroupNode.SelectedOption = LuminaWrapper.GetAddonTextSeString(4572 + (uint)module.config.DefaultPage);
+            SettingTabLayout.AddNode(defaultPageGroupNode);
+            
             SettingTabLayout.AttachNode(this);
 
             ApplyControllerNavigation(tabNode);
 
             addon->FocusNode = tabNode.TabButtons[0];
+            
+            SetWindowSize(Size with { Y = tabNode.Height + ControlTabLayout.Height + 28f });
         }
 
         private void ApplyControllerNavigation
@@ -503,16 +465,19 @@ public unsafe class AutoExpertDelivery : ModuleBase
             TabBarNode tabBarNode
         )
         {
-            var activeLayout = ControlTabLayout.IsVisible ? ControlTabLayout : SettingTabLayout;
-            var idleLayout   = ControlTabLayout.IsVisible ? SettingTabLayout : ControlTabLayout;
+            var activeLayout = ControlTabLayout.IsVisible ?
+                                   ControlTabLayout :
+                                   SettingTabLayout;
+            var idleLayout = ControlTabLayout.IsVisible ?
+                                 SettingTabLayout :
+                                 ControlTabLayout;
 
             foreach (var node in idleLayout.Nodes.OfType<ComponentNode>())
             {
                 node.NavIndex = 0;
             }
 
-            List<ComponentNode> navigationNodes = [];
-            navigationNodes.AddRange(tabBarNode.TabButtons);
+            List<ComponentNode> navigationNodes = [.. tabBarNode.TabButtons];
 
             foreach (var node in activeLayout.Nodes)
             {
@@ -524,22 +489,23 @@ public unsafe class AutoExpertDelivery : ModuleBase
                     case CheckboxNode checkboxNode:
                         navigationNodes.Add(checkboxNode);
                         break;
+                    case RadioButtonGroupNode radioButtonGroupNode:
+                        navigationNodes.AddRange(radioButtonGroupNode.RadioButtons);
+                        break;
                 }
             }
 
             for (var index = 0; index < navigationNodes.Count; index++)
             {
                 navigationNodes[index].NavIndex = index + 1;
-                navigationNodes[index].NavUp    = index == 0 ? navigationNodes.Count : index;
-                navigationNodes[index].NavDown  = index == navigationNodes.Count - 1 ? 1 : index + 2;
+                navigationNodes[index].NavUp = index == 0 ?
+                                                   navigationNodes.Count :
+                                                   index;
+                navigationNodes[index].NavDown = index == navigationNodes.Count - 1 ?
+                                                     1 :
+                                                     index + 2;
             }
         }
-
-        protected override bool CanCloseHostAddon
-        (
-            AtkUnitBase* hostAddon
-        ) =>
-            base.CanCloseHostAddon(hostAddon) && !instance.TaskHelper.IsBusy;
     }
 
     private record ExpertDeliveryItem
@@ -560,7 +526,12 @@ public unsafe class AutoExpertDelivery : ModuleBase
             for (var i = 0U; i < agent->NumItems; i++)
             {
                 var item = agent->ItemArray[i];
-                if (item.ItemId == 0 || item.IsBonusReward || item.ExpReward > 0 || item.SealReward <= 0) continue;
+                if (item.ItemId == 0    ||
+                    item.IsBonusReward  ||
+                    item.ExpReward  > 0 ||
+                    item.SealReward <= 0)
+                    continue;
+                
                 returnValues.Add(new(item.ItemId, item.Inventory, item.Slot, (uint)item.SealReward));
             }
 
@@ -575,11 +546,9 @@ public unsafe class AutoExpertDelivery : ModuleBase
         )
         {
             if (GetSlot() == null) return true;
-            if (instance.config.SkipWhenHQ                     && IsHQ()) return true;
-            if (instance.config.SkipWhenMateria                && HasMateria()) return true;
-            if (instance.config.SkipUltimateTotemExchangeItems && IsUltimateTotemExchangeItem()) return true;
-
-            return false;
+            if (instance.config.SkipWhenHQ                        && IsHQ()) return true;
+            if (instance.config.SkipWhenMateria                   && HasMateria()) return true;
+            return instance.config.SkipUltimateTotemExchangeItems && IsUltimateTotemExchangeItem();
         }
 
         public int GetIndex()
