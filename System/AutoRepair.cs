@@ -55,7 +55,7 @@ public unsafe class AutoRepair : ModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(100f * GlobalUIScale);
+        ImGui.SetNextItemWidth(150f * GlobalUIScale);
         ImGui.InputFloat(Lang.Get("AutoRepair-RepairThreshold"), ref config.RepairThreshold, 0, 0, "%.1f");
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
@@ -64,13 +64,13 @@ public unsafe class AutoRepair : ModuleBase
 
         if (ImGui.Checkbox(Lang.Get("AutoRepair-AllowNPCRepair"), ref config.AllowNPCRepair))
             config.Save(this);
-        ImGuiOm.HelpMarker(Lang.Get("AutoRepair-AllowNPCRepairHelp"), 100f * GlobalUIScale);
+        ImGuiOm.HelpMarker(Lang.Get("AutoRepair-AllowNPCRepair-Help"));
 
         if (config.AllowNPCRepair)
         {
             if (ImGui.Checkbox(Lang.Get("AutoRepair-PrioritizeNPCRepair"), ref config.PrioritizeNPCRepair))
                 config.Save(this);
-            ImGuiOm.HelpMarker(Lang.Get("AutoRepair-PrioritizeNPCRepairHelp"), 100f * GlobalUIScale);
+            ImGuiOm.HelpMarker(Lang.Get("AutoRepair-PrioritizeNPCRepair-Help"));
         }
     }
 
@@ -241,23 +241,25 @@ public unsafe class AutoRepair : ModuleBase
         return (itemsUnableToRepair, isDMInsufficient);
     }
 
-    private static void NotifyStartRepair()
+    private void NotifyStartRepair()
     {
-        NotifyHelper.ToastQuest
+        var message = Lang.Get
         (
-            Lang.Get("AutoRepair-Notification-AutoStart"),
-            new()
+            "AutoRepair-Notification-AutoStart",
+            new Dictionary<string, object>
             {
-                IconId = 106
+                ["repairThreshold"] = config.RepairThreshold
             }
         );
-        NotifyHelper.Instance().Chat(Lang.Get("AutoRepair-Notification-AutoStart"));
+        
+        NotifyHelper.Instance().Chat(message);
+        NotifyHelper.Toast(message);
     }
 
     private static bool IsAbleToRepair() =>
-        UIModule.IsScreenReady()                         &&
+        UIModule.IsScreenReady()                 &&
         !ICondition.Instance().IsOccupiedInEvent &&
-        !GameState.IsInPVPInstance                       &&
+        !GameState.IsInPVPInstance               &&
         !ICondition.Instance().IsOnMount         &&
         !ICondition.Instance().IsCasting         &&
         ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 6) == 0;
