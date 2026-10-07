@@ -15,7 +15,6 @@ using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.Collasping;
 using OmenTools.Threading;
 using Action = System.Action;
@@ -26,10 +25,15 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = Lang.Get("AutoRetainerWorkTitle"),
-        Description         = Lang.Get("AutoRetainerWorkDescription"),
-        Category            = ModuleCategory.Interface,
-        ModulesPrerequisite = ["AutoTalkSkip", "AutoRefreshMarketSearchResult", "BetterMarketBoard"]
+        Title       = Lang.Get("AutoRetainerWorkTitle"),
+        Description = Lang.Get("AutoRetainerWorkDescription"),
+        Category    = ModuleCategory.Interface,
+        ModulesPrerequisite =
+        [
+            "AutoTalkSkip",
+            "AutoRefreshMarketSearchResult",
+            "BetterMarketBoard"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
