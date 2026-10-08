@@ -1,8 +1,7 @@
-﻿using DailyRoutines.Extensions;
+using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Interop.Game.AddonEvent;
-using OmenTools.KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.Collasping;
+using KamiToolKit.Nodes;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 
@@ -30,7 +29,7 @@ public unsafe partial class AutoRetainerWork
             taskHelper = null;
         }
 
-        public override CollaspingCategoryNode CreateOverlayCategory
+        public override CollapsingHeaderNode CreateOverlayCategory
         (
             float width
         ) =>
@@ -38,7 +37,7 @@ public unsafe partial class AutoRetainerWork
             (
                 Lang.Get("AutoRetainerWork-GilsShare-Title"),
                 width,
-                CreateOverlayButtonRow(EnqueueRetainersGilShare, () => taskHelper?.Abort(), width)
+                CreateOverlayActionButton(EnqueueRetainersGilShare, () => taskHelper?.Abort(), width)
             );
 
         private void EnqueueRetainersGilShare()
@@ -182,20 +181,12 @@ public unsafe partial class AutoRetainerWork
         {
             taskHelper.Enqueue
             (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(Module)) return true;
-                    return Module.EnterRetainer(index);
-                },
+                () => taskHelper.AbortByConflictKey(Module) || Module.EnterRetainer(index),
                 $"选择进入 {index} 号雇员"
             );
             taskHelper.Enqueue
             (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(Module)) return true;
-                    return AddonSelectStringEvent.Select(GilManageTexts);
-                },
+                () => taskHelper.AbortByConflictKey(Module) || AddonSelectStringEvent.Select(GilManageTexts),
                 "选择进入金币管理"
             );
             taskHelper.Enqueue
@@ -217,11 +208,7 @@ public unsafe partial class AutoRetainerWork
             );
             taskHelper.Enqueue
             (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(Module)) return true;
-                    return LeaveRetainer();
-                },
+                () => taskHelper.AbortByConflictKey(Module) || LeaveRetainer(),
                 "回到雇员列表"
             );
         }

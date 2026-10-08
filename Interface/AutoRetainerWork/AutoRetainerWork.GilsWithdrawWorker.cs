@@ -1,7 +1,6 @@
-﻿using DailyRoutines.Extensions;
+using DailyRoutines.Extensions;
 using OmenTools.Interop.Game.AddonEvent;
-using OmenTools.KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.Collasping;
+using KamiToolKit.Nodes;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -28,7 +27,7 @@ public unsafe partial class AutoRetainerWork
             TaskHelper = null;
         }
 
-        public override CollaspingCategoryNode CreateOverlayCategory
+        public override CollapsingHeaderNode CreateOverlayCategory
         (
             float width
         ) =>
@@ -36,7 +35,7 @@ public unsafe partial class AutoRetainerWork
             (
                 Lang.Get("AutoRetainerWork-GilsWithdraw-Title"),
                 width,
-                CreateOverlayButtonRow(EnqueueRetainersGilWithdraw, () => TaskHelper?.Abort(), width)
+                CreateOverlayActionButton(EnqueueRetainersGilWithdraw, () => TaskHelper?.Abort(), width)
             );
 
         private void EnqueueRetainersGilWithdraw()
@@ -52,20 +51,12 @@ public unsafe partial class AutoRetainerWork
                 {
                     TaskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
-                            return Module.EnterRetainer(index);
-                        },
+                        () => TaskHelper.AbortByConflictKey(Module) || Module.EnterRetainer(index),
                         $"选择进入 {index} 号雇员"
                     );
                     TaskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
-                            return AddonSelectStringEvent.Select(GilManageTexts);
-                        },
+                        () => TaskHelper.AbortByConflictKey(Module) || AddonSelectStringEvent.Select(GilManageTexts),
                         "选择进入金币管理"
                     );
                     TaskHelper.Enqueue
@@ -92,11 +83,7 @@ public unsafe partial class AutoRetainerWork
                     );
                     TaskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (TaskHelper.AbortByConflictKey(Module)) return true;
-                            return LeaveRetainer();
-                        },
+                        () => TaskHelper.AbortByConflictKey(Module) || LeaveRetainer(),
                         "回到雇员列表"
                     );
                 }

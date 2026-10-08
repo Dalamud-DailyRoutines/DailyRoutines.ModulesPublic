@@ -1,11 +1,10 @@
-﻿using DailyRoutines.Extensions;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
-using OmenTools.KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.Collasping;
+using KamiToolKit.Nodes;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -40,7 +39,7 @@ public unsafe partial class AutoRetainerWork
             taskHelper = null;
         }
 
-        public override CollaspingCategoryNode CreateOverlayCategory
+        public override CollapsingHeaderNode CreateOverlayCategory
         (
             float width
         ) =>
@@ -48,7 +47,7 @@ public unsafe partial class AutoRetainerWork
             (
                 Lang.Get("AutoRetainerWork-EntrustDups-Title"),
                 width,
-                CreateOverlayButtonRow(EnqueueRetainersEntrust, () => taskHelper?.Abort(), width)
+                CreateOverlayActionButton(EnqueueRetainersEntrust, () => taskHelper?.Abort(), width)
             );
 
         private void EnqueueRetainersEntrust()
@@ -64,20 +63,12 @@ public unsafe partial class AutoRetainerWork
                 {
                     taskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return Module.EnterRetainer(index);
-                        },
+                        () => taskHelper.AbortByConflictKey(Module) || Module.EnterRetainer(index),
                         $"选择进入 {index} 号雇员"
                     );
                     taskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return AddonSelectStringEvent.Select(ItemEntrustWithdrawTexts);
-                        },
+                        () => taskHelper.AbortByConflictKey(Module) || AddonSelectStringEvent.Select(ItemEntrustWithdrawTexts),
                         "选择道具管理"
                     );
                     taskHelper.Enqueue
@@ -97,20 +88,12 @@ public unsafe partial class AutoRetainerWork
                     taskHelper.DelayNext(500, "等待同类道具合并提交开始");
                     taskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return ExitRetainerInventory();
-                        },
+                        () => taskHelper.AbortByConflictKey(Module) || ExitRetainerInventory(),
                         "离开雇员背包界面"
                     );
                     taskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return LeaveRetainer();
-                        },
+                        () => taskHelper.AbortByConflictKey(Module) || LeaveRetainer(),
                         "回到雇员列表"
                     );
                 }
@@ -141,7 +124,7 @@ public unsafe partial class AutoRetainerWork
 
                             var progress = addon->AtkValues[2].Float;
 
-                            if (progress == 1)
+                            if (progress >= 1)
                             {
                                 addon->Callback(-2);
                                 addon->Close(true);

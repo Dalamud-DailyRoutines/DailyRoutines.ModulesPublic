@@ -15,7 +15,6 @@ using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.KamiToolKit.Nodes.Collasping;
 using OmenTools.Threading;
 using Action = System.Action;
 
@@ -68,7 +67,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         {
             InternalName = "DRAutoRetainerWork",
             Title        = Info.Title,
-            Size         = new(260f, 320f),
+            Size         = new(260f, 320f)
         };
     }
 
@@ -277,21 +276,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         return false;
     }
 
-    /// <summary>
-    ///     是否有 Worker 正在运行
-    /// </summary>
-    private bool IsAnyWorkerBusy()
-    {
-        foreach (var worker in workers)
-        {
-            if (!worker.IsWorkerBusy()) continue;
-
-            return true;
-        }
-
-        return false;
-    }
-
     #endregion
 
     #region 预定义
@@ -327,13 +311,6 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         改价至最高值
     }
 
-    private enum SortOrder
-    {
-        上架顺序,
-        物品ID,
-        物品类型
-    }
-
     private static readonly FrozenDictionary<AdjustBehavior, string> AdjustBehaviorLoc = new Dictionary<AdjustBehavior, string>
     {
         [AdjustBehavior.固定值] = Lang.Get("AutoRetainerWork-AdjustBehavior-FixedValue"),
@@ -342,31 +319,24 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
     private static readonly FrozenDictionary<AbortCondition, string> AbortConditionLoc = new Dictionary<AbortCondition, string>
     {
-        [AbortCondition.无]               = Lang.Get("None"),
-        [AbortCondition.低于最小值]       = Lang.Get("AutoRetainerWork-AbortCondition-BelowMinimum"),
-        [AbortCondition.低于预期值]       = Lang.Get("AutoRetainerWork-AbortCondition-BelowExpected"),
-        [AbortCondition.低于收购价]       = Lang.Get("AutoRetainerWork-AbortCondition-BelowVendorPrice"),
+        [AbortCondition.无]        = Lang.Get("None"),
+        [AbortCondition.低于最小值]    = Lang.Get("AutoRetainerWork-AbortCondition-BelowMinimum"),
+        [AbortCondition.低于预期值]    = Lang.Get("AutoRetainerWork-AbortCondition-BelowExpected"),
+        [AbortCondition.低于收购价]    = Lang.Get("AutoRetainerWork-AbortCondition-BelowVendorPrice"),
         [AbortCondition.大于可接受降价值] = Lang.Get("AutoRetainerWork-AbortCondition-ExceedsMaximumReduction"),
-        [AbortCondition.高于预期值]       = Lang.Get("AutoRetainerWork-AbortCondition-AboveExpected"),
-        [AbortCondition.高于最大值]       = Lang.Get("AutoRetainerWork-AbortCondition-AboveMaximum")
+        [AbortCondition.高于预期值]    = Lang.Get("AutoRetainerWork-AbortCondition-AboveExpected"),
+        [AbortCondition.高于最大值]    = Lang.Get("AutoRetainerWork-AbortCondition-AboveMaximum")
     }.ToFrozenDictionary();
 
     private static readonly FrozenDictionary<AbortBehavior, string> AbortBehaviorLoc = new Dictionary<AbortBehavior, string>
     {
-        [AbortBehavior.无]             = Lang.Get("None"),
-        [AbortBehavior.收回至雇员]     = Lang.Get("AutoRetainerWork-AbortBehavior-ReturnToRetainer"),
-        [AbortBehavior.收回至背包]     = Lang.Get("AutoRetainerWork-AbortBehavior-ReturnToInventory"),
+        [AbortBehavior.无]       = Lang.Get("None"),
+        [AbortBehavior.收回至雇员]   = Lang.Get("AutoRetainerWork-AbortBehavior-ReturnToRetainer"),
+        [AbortBehavior.收回至背包]   = Lang.Get("AutoRetainerWork-AbortBehavior-ReturnToInventory"),
         [AbortBehavior.出售至系统商店] = Lang.Get("AutoRetainerWork-AbortBehavior-SellToVendor"),
-        [AbortBehavior.改价至最小值]   = Lang.Get("AutoRetainerWork-AbortBehavior-AdjustToMinimum"),
-        [AbortBehavior.改价至预期值]   = Lang.Get("AutoRetainerWork-AbortBehavior-AdjustToExpected"),
-        [AbortBehavior.改价至最高值]   = Lang.Get("AutoRetainerWork-AbortBehavior-AdjustToMaximum")
-    }.ToFrozenDictionary();
-
-    private static readonly FrozenDictionary<SortOrder, string> SortOrderLoc = new Dictionary<SortOrder, string>
-    {
-        [SortOrder.上架顺序] = Lang.Get("AutoRetainerWork-SortOrder-Listing"),
-        [SortOrder.物品ID]   = Lang.Get("AutoRetainerWork-SortOrder-ItemID"),
-        [SortOrder.物品类型] = Lang.Get("AutoRetainerWork-SortOrder-ItemType")
+        [AbortBehavior.改价至最小值]  = Lang.Get("AutoRetainerWork-AbortBehavior-AdjustToMinimum"),
+        [AbortBehavior.改价至预期值]  = Lang.Get("AutoRetainerWork-AbortBehavior-AdjustToExpected"),
+        [AbortBehavior.改价至最高值]  = Lang.Get("AutoRetainerWork-AbortBehavior-AdjustToMaximum")
     }.ToFrozenDictionary();
 
     private abstract class RetainerWorkerBase
@@ -376,13 +346,15 @@ public unsafe partial class AutoRetainerWork : ModuleBase
     {
         protected AutoRetainerWork Module = module;
 
+        private TextButtonNode? overlayActionButton;
+
         public abstract bool IsWorkerBusy();
 
         public virtual bool DrawConfigCondition() => true;
 
         public abstract void Init();
 
-        public virtual CollaspingCategoryNode? CreateOverlayCategory
+        public virtual CollapsingHeaderNode? CreateOverlayCategory
         (
             float width
         ) => null;
@@ -391,74 +363,52 @@ public unsafe partial class AutoRetainerWork : ModuleBase
 
         public abstract void Uninit();
 
-        protected static CollaspingCategoryNode CreateOverlayCategory
+        protected static CollapsingHeaderNode CreateOverlayCategory
         (
             string            title,
             float             width,
             params NodeBase[] nodes
-        )
-        {
-            var contentNode = new VerticalListNode
+        ) =>
+            new()
             {
                 IsVisible        = true,
-                Size             = new(width, 0f),
-                FitContents      = true,
+                Size             = new(width, 28f),
+                String           = title,
+                IsCollapsed      = true,
                 FitWidth         = true,
                 FirstItemSpacing = 4f,
-                ItemSpacing      = 4f
+                ItemSpacing      = 4f,
+                InitialNodes     = nodes
             };
-            contentNode.AddNode(nodes);
 
-            var categoryNode = new CollaspingCategoryNode
-            {
-                IsVisible = true,
-                Size      = new(width, 28f),
-                String    = title
-            };
-            categoryNode.AddNode(contentNode);
-            categoryNode.IsCollapsed = true;
-
-            return categoryNode;
-        }
-
-        protected static HorizontalFlexNode CreateOverlayButtonRow
+        protected TextButtonNode CreateOverlayActionButton
         (
             Action startAction,
             Action stopAction,
             float  width
         )
         {
-            var row = new HorizontalFlexNode
+            overlayActionButton = new TextButtonNode
             {
-                IsVisible      = true,
-                Size           = new(width, 28f),
-                AlignmentFlags = FlexFlags.FitContentHeight | FlexFlags.FitWidth,
-                ItemSpacing    = 4
+                String      = Lang.Get("Start"),
+                Size        = new(width, 36f),
+                TextureType = ButtonTextureType.ButtonB,
+                OnClick = () =>
+                {
+                    if (IsWorkerBusy())
+                        stopAction();
+                    else
+                        startAction();
+                }
             };
-            row.AddNode
-            (
-                [
-                    new TextButtonNode
-                    {
-                        IsVisible = true,
-                        IsEnabled = true,
-                        Size      = new(100f, 28f),
-                        String    = Lang.Get("Start"),
-                        OnClick   = startAction
-                    },
-                    new TextButtonNode
-                    {
-                        IsVisible = true,
-                        IsEnabled = true,
-                        Size      = new(100f, 28f),
-                        String    = Lang.Get("Stop"),
-                        OnClick   = stopAction
-                    }
-                ]
-            );
 
-            return row;
+            return overlayActionButton;
         }
+
+        public void UpdateOverlayActionButton() =>
+            overlayActionButton?.String = IsWorkerBusy() ?
+                                              Lang.Get("Stop") :
+                                              Lang.Get("Start");
 
         protected static CheckboxNode CreateOverlayCheckbox
         (
@@ -569,22 +519,13 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         /// <summary>
         ///     获取所有价格检查条件
         /// </summary>
-        public static IEnumerable<PriceCheckCondition> GetAll() => Conditions;
-
-        /// <summary>
-        ///     根据条件类型获取特定的检查条件
-        /// </summary>
-        public static PriceCheckCondition Get
-        (
-            AbortCondition condition
-        ) =>
-            Conditions.FirstOrDefault(x => x.Condition == condition);
+        public static PriceCheckCondition[] GetAll() => Conditions;
     }
 
     private class Config : ModuleConfig
     {
         public bool AutoPriceAdjustWhenNewOnSale = true;
-        
+
         public bool AutoOnSale = true;
 
         public bool AutoRetainerCollect = true;
@@ -597,28 +538,19 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             { new ItemKey(0, true).ToString(), new ItemConfig(0,  true) }
         };
 
-        public SortOrder MarketItemsSortOrder       = SortOrder.上架顺序;
-        public float     MarketItemsWindowFontScale = 0.8f;
+        public float MarketItemsWindowFontScale = 0.8f;
 
         public bool SendPriceAdjustProcessMessage = true;
     }
 
-    private class ItemKey : IEquatable<ItemKey>
+    private class ItemKey
+    (
+        uint itemID,
+        bool isHQ
+    ) : IEquatable<ItemKey>
     {
-        public ItemKey() { }
-
-        public ItemKey
-        (
-            uint itemID,
-            bool isHQ
-        )
-        {
-            ItemID = itemID;
-            IsHQ   = isHQ;
-        }
-
-        public uint ItemID { get; set; }
-        public bool IsHQ   { get; set; }
+        public uint ItemID { get; } = itemID;
+        public bool IsHQ   { get; } = isHQ;
 
         public bool Equals
         (
@@ -674,9 +606,9 @@ public unsafe partial class AutoRetainerWork : ModuleBase
                            LuminaGetter.GetRow<Item>(ItemID)?.Name.ToString() ?? string.Empty;
         }
 
-        public uint   ItemID   { get; set; }
-        public bool   IsHQ     { get; set; }
-        public string ItemName { get; set; } = string.Empty;
+        public uint   ItemID   { get; init; }
+        public bool   IsHQ     { get; init; }
+        public string ItemName { get; init; } = string.Empty;
 
         /// <summary>
         ///     改价行为
@@ -686,7 +618,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         /// <summary>
         ///     改价具体值
         /// </summary>
-        public Dictionary<AdjustBehavior, int> AdjustValues { get; set; } = new()
+        public Dictionary<AdjustBehavior, int> AdjustValues { get; init; } = new()
         {
             { AdjustBehavior.固定值, 1 },
             { AdjustBehavior.百分比, 10 }
@@ -720,7 +652,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         /// <summary>
         ///     意外情况逻辑
         /// </summary>
-        public Dictionary<AbortCondition, AbortBehavior> AbortLogic { get; set; } = [];
+        public Dictionary<AbortCondition, AbortBehavior> AbortLogic { get; init; } = [];
 
         public bool Equals
         (

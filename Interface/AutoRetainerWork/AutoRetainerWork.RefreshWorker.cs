@@ -1,6 +1,5 @@
-﻿using DailyRoutines.Extensions;
-using OmenTools.KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.Collasping;
+using DailyRoutines.Extensions;
+using KamiToolKit.Nodes;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -27,7 +26,7 @@ public partial class AutoRetainerWork
             taskHelper = null;
         }
 
-        public override CollaspingCategoryNode CreateOverlayCategory
+        public override CollapsingHeaderNode CreateOverlayCategory
         (
             float width
         ) =>
@@ -35,7 +34,7 @@ public partial class AutoRetainerWork
             (
                 Lang.Get("AutoRetainerWork-Refresh-Title"),
                 width,
-                CreateOverlayButtonRow(EnqueueRetainersRefresh, () => taskHelper?.Abort(), width)
+                CreateOverlayActionButton(EnqueueRetainersRefresh, () => taskHelper?.Abort(), width)
             );
 
         private void EnqueueRetainersRefresh()
@@ -50,20 +49,12 @@ public partial class AutoRetainerWork
                 {
                     taskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return Module.EnterRetainer(index);
-                        },
+                        () => taskHelper.AbortByConflictKey(Module) || Module.EnterRetainer(index),
                         $"选择进入 {index} 号雇员"
                     );
                     taskHelper.Enqueue
                     (
-                        () =>
-                        {
-                            if (taskHelper.AbortByConflictKey(Module)) return true;
-                            return LeaveRetainer();
-                        },
+                        () => taskHelper.AbortByConflictKey(Module) || LeaveRetainer(),
                         "回到雇员列表"
                     );
                 }

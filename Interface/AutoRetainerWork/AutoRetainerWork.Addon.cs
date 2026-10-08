@@ -1,9 +1,9 @@
-using System.Numerics;
+using DailyRoutines.Common.Info;
+using DailyRoutines.Internal;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes.ComponentNode;
 using KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Addons;
-using OmenTools.KamiToolKit.Nodes.Collasping;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -14,7 +14,9 @@ public unsafe partial class AutoRetainerWork
         AutoRetainerWork module
     ) : AttachedAddon("RetainerList")
     {
-        private CollaspingNode? treeListNode;
+        private readonly Dictionary<CollapsingHeaderNode, NavFocusNode> categoryFocusNodes = [];
+
+        private VerticalListNode? treeListNode;
 
         protected override void OnSetup
         (
@@ -22,13 +24,24 @@ public unsafe partial class AutoRetainerWork
             Span<AtkValue> atkValues
         )
         {
+            categoryFocusNodes.Clear();
+
             var width = ContentSize.X;
             treeListNode = new()
             {
-                Position                = ContentStartPosition,
-                Size                    = new(width, 0f),
-                CategoryVerticalSpacing = 4f,
-                OnLayoutUpdate          = height => SetWindowSize(Size.X, ContentStartPosition.Y + height + 16f)
+                Position    = ContentStartPosition,
+                Size        = new(width, 0f),
+                FitContents = true,
+                FitWidth    = true,
+                ItemSpacing = 4f,
+                OnSizeUpdated = () =>
+                {
+                    SetWindowSize
+                    (
+                        Size.X,
+                        ContentStartPosition.Y + treeListNode.Height + 16f
+                    );
+                }
             };
 
             foreach (var worker in module.workers)
@@ -36,17 +49,64 @@ public unsafe partial class AutoRetainerWork
                 var categoryNode = worker.CreateOverlayCategory(width);
                 if (categoryNode == null) continue;
 
-                treeListNode.AddCategoryNode(categoryNode);
+                var headerFocusNode = new NavFocusNode
+                {
+                    Position   = new(2f, 14f),
+                    OnSelected = () => categoryNode.IsCollapsed = !categoryNode.IsCollapsed
+                };
+                headerFocusNode.AttachNode(categoryNode);
+                categoryFocusNodes.Add(categoryNode, headerFocusNode);
+
+                treeListNode.AddNode(categoryNode);
+
+                var updateLayout = () =>
+                {
+                    treeListNode.RecalculateLayout();
+                    ApplyControllerNavigation(addon);
+                };
+                categoryNode.OnCollapse   = updateLayout;
+                categoryNode.OnUncollapse = updateLayout;
             }
+
+            var hintTextNode = new TextNode
+            {
+                Width     = ContentSize.X,
+                TextFlags = TextFlags.WordWrap | TextFlags.MultiLine,
+                String = $"※{Lang.Get
+                (
+                    "Common-SupportConflictKeyToInterrupt",
+                    new Dictionary<string, object>
+                    {
+                        ["conflictKey"] = PluginConfig.Instance().ConflictKeyBinding
+                    }
+                )}",
+                FontSize = 12
+            };
+            AtkColors.Hint.ApplyTo(hintTextNode);
+            hintTextNode.Height = hintTextNode.GetTextDrawSize(false).Y;
+
+            treeListNode.AddNode(hintTextNode);
 
             treeListNode.AttachNode(addon);
 
-            treeListNode.RefreshLayout();
+            treeListNode.RecalculateLayout();
 
             ApplyControllerNavigation(addon);
+
+            if (categoryFocusNodes.Count > 0)
+                addon->FocusNode = categoryFocusNodes.Values.First();
         }
 
-        protected override bool CanOpenAddon => !module.IsAnyWorkerBusy();
+        protected override void OnUpdate
+        (
+            AtkUnitBase* addon
+        )
+        {
+            foreach (var worker in module.workers)
+                worker.UpdateOverlayActionButton();
+
+            base.OnUpdate(addon);
+        }
 
         private void ApplyControllerNavigation
         (
@@ -57,57 +117,23 @@ public unsafe partial class AutoRetainerWork
 
             List<ComponentNode> navigationNodes = [];
 
-            foreach (var categoryNode in treeListNode.CategoryNodes)
+            foreach (var (categoryNode, headerFocusNode) in categoryFocusNodes)
             {
-                var headerNode = new NavFocusNode
-                {
-                    Position   = new(2f, 14f),
-                    OnSelected = () => categoryNode.IsCollapsed = !categoryNode.IsCollapsed,
-                    OnHoverStart = () => categoryNode.Timeline?.PlayAnimation
-                    (
-                        categoryNode.IsCollapsed ?
-                            2 :
-                            9
-                    ),
-                    OnHoverEnd = () => categoryNode.Timeline?.PlayAnimation
-                    (
-                        categoryNode.IsCollapsed ?
-                            1 :
-                            8
-                    )
-                };
-                headerNode.AttachNode(categoryNode);
-                navigationNodes.Add(headerNode);
+                navigationNodes.Add(headerFocusNode);
 
-                foreach (var contentNode in categoryNode.Children.OfType<VerticalListNode>().SelectMany(x => x.Nodes))
+                foreach (var contentNode in categoryNode.GetNodes<ComponentNode>())
                 {
-                    switch (contentNode)
+                    if (categoryNode.IsCollapsed)
                     {
-                        case CheckboxNode checkboxNode:
-                            navigationNodes.Add(checkboxNode);
-                            break;
-                        case HorizontalFlexNode flexNode:
-                        {
-                            var buttonNodes = flexNode.Nodes.OfType<TextButtonNode>().ToList();
-                            var rowStart    = navigationNodes.Count;
+                        contentNode.NavIndex = 0;
+                        contentNode.NavUp    = 0;
+                        contentNode.NavDown  = 0;
 
-                            navigationNodes.AddRange(buttonNodes);
-
-                            for (var index = 0; index < buttonNodes.Count; index++)
-                            {
-                                buttonNodes[index].NavLeft = rowStart +
-                                                             (index == 0 ?
-                                                                  buttonNodes.Count :
-                                                                  index);
-                                buttonNodes[index].NavRight = rowStart +
-                                                              (index == buttonNodes.Count - 1 ?
-                                                                   1 :
-                                                                   index + 2);
-                            }
-
-                            break;
-                        }
+                        if (addon->FocusNode == contentNode.ResNode)
+                            addon->FocusNode = headerFocusNode;
                     }
+                    else
+                        navigationNodes.Add(contentNode);
                 }
             }
 
@@ -124,7 +150,6 @@ public unsafe partial class AutoRetainerWork
                                                      index + 2;
             }
 
-            addon->FocusNode = navigationNodes[0];
         }
     }
 }

@@ -1,10 +1,9 @@
-﻿using DailyRoutines.Extensions;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using OmenTools.Interop.Game.AddonEvent;
-using OmenTools.KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.Collasping;
+using KamiToolKit.Nodes;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -39,7 +38,7 @@ public unsafe partial class AutoRetainerWork
             taskHelper = null;
         }
 
-        public override CollaspingCategoryNode CreateOverlayCategory
+        public override CollapsingHeaderNode CreateOverlayCategory
         (
             float width
         ) =>
@@ -71,7 +70,7 @@ public unsafe partial class AutoRetainerWork
                     },
                     width
                 ),
-                CreateOverlayButtonRow(EnqueueRetainersCollect, () => taskHelper?.Abort(), width)
+                CreateOverlayActionButton(EnqueueRetainersCollect, () => taskHelper?.Abort(), width)
             );
 
         private void OnRetainerList
@@ -155,11 +154,7 @@ public unsafe partial class AutoRetainerWork
             {
                 taskHelper.Enqueue
                 (
-                    () =>
-                    {
-                        if (taskHelper.AbortByConflictKey(Module)) return true;
-                        return Module.EnterRetainer(index);
-                    },
+                    () => taskHelper.AbortByConflictKey(Module) || Module.EnterRetainer(index),
                     $"选择进入 {index} 号雇员"
                 );
 
@@ -211,11 +206,7 @@ public unsafe partial class AutoRetainerWork
 
                 taskHelper.Enqueue
                 (
-                    () =>
-                    {
-                        if (taskHelper.AbortByConflictKey(Module)) return true;
-                        return LeaveRetainer();
-                    },
+                    () => taskHelper.AbortByConflictKey(Module) || LeaveRetainer(),
                     "回到雇员列表"
                 );
             }
