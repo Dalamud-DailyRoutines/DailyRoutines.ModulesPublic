@@ -1,4 +1,5 @@
 using System.Numerics;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
 using Dalamud.Game.Addon.Lifecycle;
@@ -1478,7 +1479,7 @@ public unsafe partial class AutoRetainerWork
                 var iconRow = new HorizontalListNode
                 {
                     Alignment         = HorizontalListAnchor.Right,
-                    Position          = ContentStartPosition + new Vector2(ContentSize.X - 1f, 0),
+                    Position          = ContentStartPosition + new Vector2(ContentSize.X - 1f, -2f),
                     FitToContentWidth = true
                 };
                 iconRow.AttachNode(this);
@@ -1507,7 +1508,7 @@ public unsafe partial class AutoRetainerWork
 
                 var rootContainer = new VerticalListNode
                 {
-                    ItemSpacing      = 5f,
+                    ItemSpacing      = 2f,
                     FirstItemSpacing = 30f,
                     Position         = ContentStartPosition,
                     Width            = ContentSize.X,
@@ -1530,6 +1531,27 @@ public unsafe partial class AutoRetainerWork
                 };
                 rootContainer.AddNode(PriceAdjustButton);
 
+                var hintText = new TextNode
+                {
+                    Width     = rootContainer.Width,
+                    TextFlags = TextFlags.WordWrap | TextFlags.MultiLine,
+                    String = $"※{Lang.Get
+                    (
+                        "Common-SupportConflictKeyToInterrupt",
+                        new Dictionary<string, object>
+                        {
+                            ["conflictKey"] = PluginConfig.Instance().ConflictKeyBinding
+                        }
+                    )}",
+                    FontSize = 12
+                };
+                AtkColors.Hint.ApplyTo(hintText);
+                hintText.Height = hintText.GetTextDrawSize(false).Y;
+                
+                rootContainer.AddNode(hintText);
+                
+                rootContainer.AddDummy(4f);
+
                 var returnToInventory = new TextButtonNode
                 {
                     String = Lang.Get("AutoRetainerWork-PriceAdjust-ReturnAllToInventory"),
@@ -1550,7 +1572,7 @@ public unsafe partial class AutoRetainerWork
                     }
                 };
                 rootContainer.AddNode(returnToInventory);
-
+                
                 var returnToRetainer = new TextButtonNode
                 {
                     String = Lang.Get("AutoRetainerWork-PriceAdjust-ReturnAllToRetainer"),
@@ -1572,7 +1594,7 @@ public unsafe partial class AutoRetainerWork
                 };
                 rootContainer.AddNode(returnToRetainer);
 
-                rootContainer.AddDummy(2f);
+                rootContainer.AddDummy(4f);
 
                 AutoAdjustPriceCheckbox = new()
                 {
@@ -1615,19 +1637,19 @@ public unsafe partial class AutoRetainerWork
                 };
                 rootContainer.AddNode(NotifyPriceAdjustCheckbox);
 
-                rootContainer.RecalculateLayout();
-                SetWindowSize(Size.X, ContentStartPosition.Y + rootContainer.Height + 20f);
-                rootContainer.Position = ContentStartPosition;
+                SetWindowSize(Size.X, ContentStartPosition.Y + rootContainer.Height + 16f);
             }
 
-            protected override void OnAttachedAddonUpdate
+            protected override void OnUpdate
             (
-                AtkUnitBase* addon,
-                AtkUnitBase* hostAddon
-            ) =>
+                AtkUnitBase* addon
+            )
+            {
                 PriceAdjustButton?.String = worker.taskHelper?.IsBusy ?? false ?
                                                 Lang.Get("Stop") :
                                                 Lang.Get("AutoRetainerWork-PriceAdjust-AutoAdjustPrice-Batch");
+                base.OnUpdate(addon);
+            }
         }
 
         public static class PriceCacheManager
