@@ -1,4 +1,3 @@
-using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -226,8 +225,8 @@ public class OptimizedLetter : ModuleBase
 
             var layoutNode = new VerticalListNode
             {
-                Position    = ContentStartPosition + new Vector2(0, 2),
-                ItemSpacing = 1,
+                Position    = ContentStartPosition,
+                ItemSpacing = 5f,
                 Size        = new(275, 28),
                 FitContents = true
             };
@@ -244,12 +243,11 @@ public class OptimizedLetter : ModuleBase
                     var info = InfoProxyLetter.Instance();
                     foreach (var (index, _) in letters)
                         InfoProxyLetter.Instance()->DeleteLetter((uint)index);
-                    
+
                     info->RequestData();
                 }
             };
             layoutNode.AddNode(deleteAllButton);
-            layoutNode.AddDummy(5);
 
             var deleteNonPlayerButton = new HoldButtonNode
             {
@@ -268,8 +266,7 @@ public class OptimizedLetter : ModuleBase
                 }
             };
             layoutNode.AddNode(deleteNonPlayerButton);
-            layoutNode.AddDummy(5);
-            
+
             var claimAllButton = new HoldButtonNode
             {
                 UnlockAfterClick = true,
@@ -288,18 +285,22 @@ public class OptimizedLetter : ModuleBase
                     }
                 }
             };
-            
+
             layoutNode.AddNode(claimAllButton);
             layoutNode.AttachNode(this);
+
+            SetWindowSize(new(Size.X, ContentStartPosition.Y + layoutNode.Height + 16f));
         }
 
-        protected override unsafe void OnAttachedAddonFinalize
+        protected override unsafe void OnFinalize
         (
             AtkUnitBase* addon
         )
         {
             FireRequestEvent?.Dispose();
             FireRequestEvent = null;
+
+            base.OnFinalize(addon);
         }
 
         private static unsafe bool TryFindLetters
