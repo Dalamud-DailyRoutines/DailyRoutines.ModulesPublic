@@ -266,14 +266,17 @@ public unsafe class AutoExpertDelivery : ModuleBase
             GrandCompanySupplyList->Callback(0, module.config.DefaultPage);
         }
 
-        protected override void OnAttachedAddonUpdate
+        protected override void OnUpdate
         (
-            AtkUnitBase* addon,
-            AtkUnitBase* hostAddon
-        ) =>
+            AtkUnitBase* addon
+        )
+        {
             OperateButtonNode?.String = module.TaskHelper.IsBusy ?
                                             Lang.Get("Stop") :
                                             Lang.Get("AutoExpertDelivery-StartBatch");
+            
+            base.OnUpdate(addon);
+        }
 
         protected override void OnSetup
         (
