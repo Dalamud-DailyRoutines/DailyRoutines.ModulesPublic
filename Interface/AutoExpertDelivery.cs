@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -219,7 +218,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
         if (companySeals + (uint)(sealReward * buffMultiplier) > capAmount)
         {
             var message = Lang.Get("AutoExpertDelivery-Notification-Message");
-            
+
             NotifyHelper.Instance().Chat(message);
             NotifyHelper.Instance().TrayWarning
             (
@@ -249,7 +248,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             !module.TaskHelper.IsBusy            &&
             HostAddon                    != null &&
             HostAddon->AtkValues[5].UInt == 2;
-        
+
         private VerticalListNode? ControlTabLayout;
         private VerticalListNode? SettingTabLayout;
 
@@ -274,7 +273,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             OperateButtonNode?.String = module.TaskHelper.IsBusy ?
                                             Lang.Get("Stop") :
                                             Lang.Get("AutoExpertDelivery-StartBatch");
-            
+
             base.OnUpdate(addon);
         }
 
@@ -292,7 +291,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                 NavDown  = 3
             };
 
-            var tabContentPosition = tabNode.Position + new Vector2(0, tabNode.Size.Y);
+            var tabContentPosition = tabNode.Position + tabNode.Size with { X = 0 };
 
             tabNode.AddTab
             (
@@ -302,7 +301,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                     ControlTabLayout.IsVisible = true;
                     SettingTabLayout.IsVisible = false;
                     ApplyControllerNavigation(tabNode);
-                    
+
                     SetWindowSize(Size with { Y = tabNode.Height + ControlTabLayout.Height + 28f });
                 }
             );
@@ -315,7 +314,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                     ControlTabLayout.IsVisible = false;
                     SettingTabLayout.IsVisible = true;
                     ApplyControllerNavigation(tabNode);
-                    
+
                     SetWindowSize(Size with { Y = tabNode.Height + SettingTabLayout.Height + 28f });
                 }
             );
@@ -342,6 +341,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                         module.TaskHelper.Abort();
                         return;
                     }
+
                     module.EnqueueDelivery();
                 }
             };
@@ -359,8 +359,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
             var exchangeShopAndExchangeNode = new TextButtonNode
             {
-                Size      = ContentSize with { Y = 42 },
-                String    = Lang.Get("AutoExpertDelivery-OpenShopAndExchange"),
+                Size   = ContentSize with { Y = 42 },
+                String = Lang.Get("AutoExpertDelivery-OpenShopAndExchange"),
                 OnClick = () =>
                 {
                     if (module.TaskHelper.IsBusy) return;
@@ -369,7 +369,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             };
 
             ControlTabLayout.AddNode([OperateButtonNode, exchangeShopNode, exchangeShopAndExchangeNode]);
-            
+
             ControlTabLayout.AttachNode(this);
 
             SettingTabLayout = new()
@@ -422,7 +422,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
             };
             skipUltimateTotemExchangeItemsNode.Label.TextFlags |= TextFlags.MultiLine | TextFlags.WordWrap;
             SettingTabLayout.AddNode(skipUltimateTotemExchangeItemsNode);
-            
+
             SettingTabLayout.AddDummy(5f);
 
             var defaultPageTitleNode = new TextNode
@@ -433,33 +433,28 @@ public unsafe class AutoExpertDelivery : ModuleBase
             };
             SettingTabLayout.AddNode(defaultPageTitleNode);
 
-            var defaultPageGroupNode = new RadioButtonGroupNode();
-            defaultPageGroupNode.VerticalPadding = 5f;
+            var defaultPageGroupNode = new RadioButtonGroupNode
+            {
+                VerticalPadding = 5f
+            };
 
             for (var i = 0U; i < 3; i++)
+                defaultPageGroupNode.AddButton(LuminaWrapper.GetAddonTextSeString(4572 + i));
+
+            defaultPageGroupNode.SelectedIndex = module.config.DefaultPage;
+            defaultPageGroupNode.OnSelectionChanged = _ =>
             {
-                var index = i;
-
-                defaultPageGroupNode.AddButton
-                (
-                    LuminaWrapper.GetAddonTextSeString(4572 + i),
-                    () =>
-                    {
-                        module.config.DefaultPage = (int)index;
-                        module.config.Save(module);
-                    }
-                );
-            }
-
-            defaultPageGroupNode.SelectedOption = LuminaWrapper.GetAddonTextSeString(4572 + (uint)module.config.DefaultPage);
+                module.config.DefaultPage = defaultPageGroupNode.SelectedIndex;
+                module.config.Save(module);
+            };
             SettingTabLayout.AddNode(defaultPageGroupNode);
-            
+
             SettingTabLayout.AttachNode(this);
 
             ApplyControllerNavigation(tabNode);
 
             addon->FocusNode = tabNode.TabButtons[0];
-            
+
             SetWindowSize(Size with { Y = tabNode.Height + ControlTabLayout.Height + 28f });
         }
 
@@ -534,7 +529,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
                     item.ExpReward  > 0 ||
                     item.SealReward <= 0)
                     continue;
-                
+
                 returnValues.Add(new(item.ItemId, item.Inventory, item.Slot, (uint)item.SealReward));
             }
 
