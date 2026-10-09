@@ -14,6 +14,8 @@ using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Nodes;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
 
@@ -75,10 +77,10 @@ public partial class BetterPartyFinderFilter
     {
         private class RegexRow
         {
-            public HorizontalListNode Row          { get; init; } = null!;
-            public CheckboxNode       Checkbox     { get; init; } = null!;
-            public TextInputNode      TextInput    { get; init; } = null!;
-            public TextButtonNode     DeleteButton { get; init; } = null!;
+            public HorizontalListNode Row       { get; init; } = null!;
+            public CheckboxNode       Checkbox  { get; init; } = null!;
+            public TextInputNode      TextInput { get; init; } = null!;
+            public int                Index     { get; set; }
         }
 
         private readonly List<RegexRow> regexRows = [];
@@ -108,26 +110,26 @@ public partial class BetterPartyFinderFilter
         private VerticalListNode highEndPanel     = null!;
         private VerticalListNode descriptionPanel = null!;
 
-        private CheckboxNode     ascCheckbox              = null!;
-        private CheckboxNode     desCheckbox              = null!;
-        private CheckboxNode     blacklistedCheckbox      = null!;
-        private CheckboxNode     lockedCheckbox           = null!;
-        private VerticalListNode notifyLayout             = null!;
-        private CheckboxNode     notifyCheckbox           = null!;
-        private NumericInputNode notifyIntervalInput      = null!;
-        private CheckboxNode     noNotifyWhenZeroCheckbox = null!;
+        private RadioButtonGroupNode orderRadioGroup          = null!;
+        private RadioButtonNode      ascRadioButton           = null!;
+        private RadioButtonNode      desRadioButton           = null!;
+        private CheckboxNode         blacklistedCheckbox      = null!;
+        private CheckboxNode         lockedCheckbox           = null!;
+        private VerticalListNode     notifyLayout             = null!;
+        private CheckboxNode         notifyCheckbox           = null!;
+        private NumericInputNode     notifyIntervalInput      = null!;
+        private CheckboxNode         noNotifyWhenZeroCheckbox = null!;
 
-        private CheckboxNode       autoModeCheckbox   = null!;
-        private CheckboxNode       manualModeCheckbox = null!;
-        private HorizontalListNode modeRow            = null!;
-        private VerticalListNode   numLayout          = null!;
+        private RadioButtonGroupNode modeRadioGroup        = null!;
+        private RadioButtonNode      autoModeRadioButton   = null!;
+        private RadioButtonNode      manualModeRadioButton = null!;
+        private VerticalListNode     numLayout             = null!;
 
-        private CheckboxNode     blacklistCheckbox = null!;
-        private CheckboxNode     whitelistCheckbox = null!;
-        private VerticalListNode listContainer     = null!;
-        private TextButtonNode   prevPageBtn       = null!;
-        private TextButtonNode   nextPageBtn       = null!;
-        private TextNode         pageLabel         = null!;
+        private RadioButtonGroupNode listModeRadioGroup   = null!;
+        private RadioButtonNode      blacklistRadioButton = null!;
+        private RadioButtonNode      whitelistRadioButton = null!;
+        private VerticalListNode     listContainer        = null!;
+        private PaginationNode       paginationBar        = null!;
 
         private int currentPageIndex;
         private int currentActiveTab;
@@ -146,8 +148,15 @@ public partial class BetterPartyFinderFilter
 
             if (generalPanel.IsVisible)
             {
-                ascCheckbox.IsChecked              = FlagStatusModule.Instance()->UIFlags[4]  == 1;
-                desCheckbox.IsChecked              = FlagStatusModule.Instance()->UIFlags[4]  == 3;
+                var orderFlag = FlagStatusModule.Instance()->UIFlags[4];
+
+                orderRadioGroup.SelectedButton = orderFlag switch
+                {
+                    1 => ascRadioButton,
+                    3 => desRadioButton,
+                    _ => null
+                };
+
                 blacklistedCheckbox.IsChecked      = FlagStatusModule.Instance()->UIFlags[12] == 1;
                 lockedCheckbox.IsChecked           = FlagStatusModule.Instance()->UIFlags[7]  == 0;
                 notifyCheckbox.IsChecked           = NotifyNewRecruitment                     == 1;
@@ -159,7 +168,6 @@ public partial class BetterPartyFinderFilter
                 if (notifyLayout.IsVisible != isNotifyEnabled)
                 {
                     notifyLayout.IsVisible = isNotifyEnabled;
-                    notifyLayout.RecalculateLayout();
                     RecalculatePanel(generalPanel);
                 }
             }
@@ -188,8 +196,8 @@ public partial class BetterPartyFinderFilter
             // 1. TabBar1
             tabBar1 = new TabBarNode
             {
-                Position  = ContentStartPosition,
-                Size      = ContentSize with { Y = 28f },
+                Position = ContentStartPosition,
+                Size     = ContentSize with { Y = 28f }
             };
 
             tabBar1.AddTab(Lang.Get("General"),                                      () => SwitchTab(0));
@@ -201,8 +209,8 @@ public partial class BetterPartyFinderFilter
             // 2. TabBar2
             tabBar2 = new TabBarNode
             {
-                Position  = ContentStartPosition + new Vector2(0f, 28f),
-                Size      = ContentSize with { Y = 28f },
+                Position = ContentStartPosition + new Vector2(0f, 28f),
+                Size     = ContentSize with { Y = 28f }
             };
 
             tabBar2.AddTab(LuminaWrapper.GetAddonText(11070),                         () => OnActionTabClicked(3));
@@ -259,6 +267,35 @@ public partial class BetterPartyFinderFilter
                 Size        = ContentSize with { X = ContentSize.X - ROW_INDENT }
             };
 
+            var orderRow = new HorizontalListNode
+            {
+                Size = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f }
+            };
+
+            orderRadioGroup = new RadioButtonGroupNode
+            {
+                FitToContentHeight         = false,
+                Height                     = 28f,
+                SelectFirstButtonByDefault = false
+            };
+            orderRadioGroup.LayoutOrientation = LayoutOrientation.Horizontal;
+            orderRadioGroup.HorizontalPadding = ORDER_ROW_SPACING;
+
+            ascRadioButton = orderRadioGroup.AddButton
+            (
+                LuminaWrapper.GetAddonText(10127),
+                () => AgentId.LookingForGroup.SendEvent(1, 24, 0, 0)
+            );
+
+            desRadioButton = orderRadioGroup.AddButton
+            (
+                LuminaWrapper.GetAddonText(10128),
+                () => AgentId.LookingForGroup.SendEvent(1, 24, 1, 0)
+            );
+
+            orderRow.AddNode(orderRadioGroup);
+            displayLayout.AddNode(orderRow);
+
             var filterSameDescCheckbox = new CheckboxNode
             {
                 Size      = ContentSize with { Y = 24f },
@@ -272,52 +309,10 @@ public partial class BetterPartyFinderFilter
             };
             displayLayout.AddNode(filterSameDescCheckbox);
 
-            // TODO: 改成使用 DropDownList
-            var orderRow = new HorizontalListNode
-            {
-                Size      = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f }
-            };
-
-            ascCheckbox = new CheckboxNode
-            {
-                Size      = ContentSize with { Y = 24f },
-                String    = LuminaWrapper.GetAddonText(10127),
-                OnClick = isChecked =>
-                {
-                    if (isChecked)
-                    {
-                        AgentId.LookingForGroup.SendEvent(1, 24, 0, 0);
-                        desCheckbox.IsChecked = false;
-                    }
-                    else
-                        ascCheckbox.IsChecked = true;
-                }
-            };
-            orderRow.AddNode(ascCheckbox);
-            orderRow.AddDummy(ORDER_ROW_SPACING);
-
-            desCheckbox = new CheckboxNode
-            {
-                Size      = ContentSize with { Y = 24f },
-                String    = LuminaWrapper.GetAddonText(10128),
-                OnClick = isChecked =>
-                {
-                    if (isChecked)
-                    {
-                        AgentId.LookingForGroup.SendEvent(1, 24, 1, 0);
-                        ascCheckbox.IsChecked = false;
-                    }
-                    else
-                        desCheckbox.IsChecked = true;
-                }
-            };
-            orderRow.AddNode(desCheckbox);
-            displayLayout.AddNode(orderRow);
-
             blacklistedCheckbox = new CheckboxNode
             {
-                Size      = ContentSize with { Y = 24f },
-                String    = LuminaWrapper.GetAddonText(11124),
+                Size   = ContentSize with { Y = 24f },
+                String = LuminaWrapper.GetAddonText(11124),
                 OnClick = isChecked =>
                 {
                     var currentLocked = FlagStatusModule.Instance()->UIFlags[7] == 0;
@@ -328,8 +323,8 @@ public partial class BetterPartyFinderFilter
 
             lockedCheckbox = new CheckboxNode
             {
-                Size      = ContentSize with { Y = 24f },
-                String    = LuminaWrapper.GetAddonText(11128),
+                Size   = ContentSize with { Y = 24f },
+                String = LuminaWrapper.GetAddonText(11128),
                 OnClick = isChecked =>
                 {
                     var currentBlacklisted = FlagStatusModule.Instance()->UIFlags[12] == 1;
@@ -360,8 +355,8 @@ public partial class BetterPartyFinderFilter
 
             notifyCheckbox = new CheckboxNode
             {
-                String    = LuminaWrapper.GetAddonText(11119),
-                Size      = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f },
+                String = LuminaWrapper.GetAddonText(11119),
+                Size   = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f },
                 OnClick = isChecked =>
                 {
                     RefreshDisplaySettings(notifyRecruitment: isChecked);
@@ -404,9 +399,9 @@ public partial class BetterPartyFinderFilter
 
             noNotifyWhenZeroCheckbox = new CheckboxNode
             {
-                Size      = ContentSize with { Y = 24f },
-                String    = LuminaWrapper.GetAddonText(11118),
-                OnClick   = isChecked => { RefreshDisplaySettings(noNotifyWhenZero: isChecked); }
+                Size    = ContentSize with { Y = 24f },
+                String  = LuminaWrapper.GetAddonText(11118),
+                OnClick = isChecked => { RefreshDisplaySettings(noNotifyWhenZero: isChecked); }
             };
 
             notifyLayout.AddDummy(12f);
@@ -438,10 +433,11 @@ public partial class BetterPartyFinderFilter
             // 高难度面板 (High-End)
             highEndPanel = new VerticalListNode
             {
-                ItemSpacing = 4f,
-                FitContents = true,
-                Alignment   = VerticalListAlignment.Right,
-                Size        = ContentSize
+                ItemSpacing      = 4f,
+                FirstItemSpacing = 8f,
+                FitContents      = true,
+                Alignment        = VerticalListAlignment.Right,
+                Size             = ContentSize
             };
 
             var highEndFilterSameJobCheckbox = new CheckboxNode
@@ -476,58 +472,39 @@ public partial class BetterPartyFinderFilter
             var filterRoleCountLayout = new VerticalListNode
             {
                 FitContents = true,
-                Size        = ContentSize with { X = ContentSize.X - ROW_INDENT }
+                Size        = ContentSize with { X = ContentSize.X - ROW_INDENT },
+                ItemSpacing = 4f
             };
 
-            autoModeCheckbox = new CheckboxNode
+            modeRadioGroup = new RadioButtonGroupNode
             {
-                Size        = ContentSize with { Y = 24f },
-                IsVisible   = module.config.HighEndFilterRoleCount,
-                IsChecked   = !module.manualMode,
-                String      = Lang.Get("AutoMode"),
-                TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-AutoMode-Help"),
-                OnClick = isChecked =>
-                {
-                    if (isChecked)
-                    {
-                        module.manualMode            = false;
-                        manualModeCheckbox.IsChecked = false;
-                    }
-                    else
-                        autoModeCheckbox.IsChecked = true;
-                }
+                FitToContentHeight         = false,
+                Height                     = 28f,
+                IsVisible                  = module.config.HighEndFilterRoleCount,
+                SelectFirstButtonByDefault = false
             };
+            modeRadioGroup.LayoutOrientation = LayoutOrientation.Horizontal;
+            modeRadioGroup.HorizontalPadding = ORDER_ROW_SPACING;
 
-            manualModeCheckbox = new CheckboxNode
-            {
-                Size        = ContentSize with { Y = 24f },
-                IsVisible   = module.config.HighEndFilterRoleCount,
-                IsChecked   = module.manualMode,
-                String      = Lang.Get("ManualMode"),
-                TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-ManualMode-Help"),
-                OnClick = isChecked =>
-                {
-                    if (isChecked)
-                    {
-                        module.manualMode          = true;
-                        autoModeCheckbox.IsChecked = false;
-                    }
-                    else
-                        manualModeCheckbox.IsChecked = true;
-                }
-            };
+            autoModeRadioButton = modeRadioGroup.AddButton
+            (
+                Lang.Get("AutoMode"),
+                () => module.manualMode = false
+            );
+            autoModeRadioButton.TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-AutoMode-Help");
 
-            modeRow = new HorizontalListNode
-            {
-                IsVisible = module.config.HighEndFilterRoleCount,
-                Size      = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f }
-            };
+            manualModeRadioButton = modeRadioGroup.AddButton
+            (
+                Lang.Get("ManualMode"),
+                () => module.manualMode = true
+            );
+            manualModeRadioButton.TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-ManualMode-Help");
 
-            modeRow.AddNode(autoModeCheckbox);
-            modeRow.AddDummy(ORDER_ROW_SPACING);
-            modeRow.AddNode(manualModeCheckbox);
+            modeRadioGroup.SelectedButton = module.manualMode ?
+                                                manualModeRadioButton :
+                                                autoModeRadioButton;
 
-            filterRoleCountLayout.AddNode(modeRow);
+            filterRoleCountLayout.AddNode(modeRadioGroup);
 
             numLayout = new VerticalListNode
             {
@@ -616,7 +593,6 @@ public partial class BetterPartyFinderFilter
                 )
             );
 
-            filterRoleCountLayout.AddDummy(4f);
             filterRoleCountLayout.AddNode(numLayout);
 
             highEndPanel.AddNode(filterRoleCountLayout);
@@ -624,7 +600,7 @@ public partial class BetterPartyFinderFilter
             highEndPanel.AttachNode(this);
         }
 
-        private void SetupDescriptionPanel()
+        private unsafe void SetupDescriptionPanel()
         {
             regexRows.Clear();
 
@@ -633,7 +609,7 @@ public partial class BetterPartyFinderFilter
             {
                 IsVisible        = false,
                 ItemSpacing      = 8f,
-                FirstItemSpacing = 8f,
+                FirstItemSpacing = 16f,
                 FitContents      = true,
                 Size             = ContentSize
             };
@@ -645,52 +621,49 @@ public partial class BetterPartyFinderFilter
             AtkColors.Text.ApplyTo(modeLabel);
             descriptionPanel.AddNode(modeLabel);
 
-            blacklistCheckbox = new CheckboxNode
-            {
-                Size        = ContentSize with { Y = 24f },
-                IsChecked   = !module.config.IsWhiteList,
-                String      = Lang.Get("Blacklist"),
-                TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Blacklist-Help"),
-                OnClick = isChecked =>
-                {
-                    if (isChecked)
-                    {
-                        module.config.IsWhiteList = false;
-                        module.config.Save(module);
-                        whitelistCheckbox.IsChecked = false;
-                    }
-                    else
-                        blacklistCheckbox.IsChecked = true;
-                }
-            };
+            descriptionPanel.AddDummy();
 
-            whitelistCheckbox = new CheckboxNode
+            listModeRadioGroup = new RadioButtonGroupNode
             {
-                Size        = ContentSize with { Y = 24f },
-                IsChecked   = module.config.IsWhiteList,
-                String      = Lang.Get("Whitelist"),
-                TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Whitelist-Help"),
-                OnClick = isChecked =>
-                {
-                    if (isChecked)
-                    {
-                        module.config.IsWhiteList = true;
-                        module.config.Save(module);
-                        blacklistCheckbox.IsChecked = false;
-                    }
-                    else
-                        whitelistCheckbox.IsChecked = true;
-                }
+                FitToContentHeight         = false,
+                Height                     = 28f,
+                SelectFirstButtonByDefault = false
             };
+            listModeRadioGroup.LayoutOrientation = LayoutOrientation.Horizontal;
+            listModeRadioGroup.HorizontalPadding = ORDER_ROW_SPACING;
+
+            blacklistRadioButton = listModeRadioGroup.AddButton
+            (
+                Lang.Get("Blacklist"),
+                () =>
+                {
+                    module.config.IsWhiteList = false;
+                    module.config.Save(module);
+                }
+            );
+            blacklistRadioButton.TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Blacklist-Help");
+
+            whitelistRadioButton = listModeRadioGroup.AddButton
+            (
+                Lang.Get("Whitelist"),
+                () =>
+                {
+                    module.config.IsWhiteList = true;
+                    module.config.Save(module);
+                }
+            );
+            whitelistRadioButton.TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Whitelist-Help");
+
+            listModeRadioGroup.SelectedButton = module.config.IsWhiteList ?
+                                                    whitelistRadioButton :
+                                                    blacklistRadioButton;
 
             var workModeRow = new HorizontalListNode
             {
                 Size = ContentSize with { Y = 24f }
             };
             workModeRow.AddDummy(16f);
-            workModeRow.AddNode(blacklistCheckbox);
-            workModeRow.AddDummy(ORDER_ROW_SPACING);
-            workModeRow.AddNode(whitelistCheckbox);
+            workModeRow.AddNode(listModeRadioGroup);
 
             descriptionPanel.AddNode(workModeRow);
 
@@ -718,9 +691,8 @@ public partial class BetterPartyFinderFilter
             };
             descriptionPanel.AddNode(listContainer);
 
-            const float ROW_CHECKBOX_HEIGHT  = 28f;
-            const float ROW_ITEM_SPACING     = 4f;
-            const float ROW_DELETE_BTN_WIDTH = 42f;
+            const float ROW_CHECKBOX_HEIGHT = 28f;
+            const float ROW_ITEM_SPACING    = 4f;
 
             for (var i = 0; i < 10; i++)
             {
@@ -732,91 +704,64 @@ public partial class BetterPartyFinderFilter
 
                 var checkbox = new CheckboxNode
                 {
-                    Size      = new(ROW_CHECKBOX_HEIGHT, ROW_CHECKBOX_HEIGHT),
-                    String    = string.Empty
+                    Size   = new(ROW_CHECKBOX_HEIGHT, ROW_CHECKBOX_HEIGHT),
+                    String = string.Empty
                 };
 
                 var textInput = new TextInputNode
                 {
-                    Size              = new(ContentSize.X - checkbox.Width - ROW_DELETE_BTN_WIDTH - (ROW_ITEM_SPACING * 2f), 32f),
-                    PlaceholderString = Lang.Get("Regex")
-                };
-
-                var deleteBtn = new TextButtonNode
-                {
-                    Size     = new(ROW_DELETE_BTN_WIDTH, ROW_CHECKBOX_HEIGHT),
-                    Position = new(0, 3),
-                    String   = Lang.Get("Delete")
+                    Size              = new(ContentSize.X - checkbox.Width - ROW_ITEM_SPACING, 32f),
+                    PlaceholderString = Lang.Get("Regex"),
+                    ShowLimitText     = false
                 };
 
                 row.AddNode(checkbox);
                 row.AddDummy(ROW_ITEM_SPACING);
                 row.AddNode(textInput);
-                row.AddDummy(ROW_ITEM_SPACING);
-                row.AddNode(deleteBtn);
 
                 listContainer.AddNode(row);
 
-                regexRows.Add
+                var regexRow = new RegexRow
+                {
+                    Row       = row,
+                    Checkbox  = checkbox,
+                    TextInput = textInput
+                };
+
+                checkbox.AddEvent
                 (
-                    new()
+                    AtkEventType.MouseClick,
+                    (_, _, _, _, atkEventData) =>
                     {
-                        Row          = row,
-                        Checkbox     = checkbox,
-                        TextInput    = textInput,
-                        DeleteButton = deleteBtn
+                        if (atkEventData->IsRightClick)
+                            ShowContextMenu(regexRow);
                     }
                 );
+
+                regexRows.Add(regexRow);
             }
+
+            paginationBar = new PaginationNode
+            {
+                IsDisplayIndicatorText = true,
+                OnPreviousPage = () =>
+                {
+                    currentPageIndex--;
+                    RebuildRegexList();
+                },
+                OnNextPage = () =>
+                {
+                    currentPageIndex++;
+                    RebuildRegexList();
+                }
+            };
 
             var pagingLayout = new HorizontalFlexNode
             {
                 Size           = ContentSize with { Y = 28f },
-                AlignmentFlags = FlexFlags.CenterHorizontally,
-                Position       = new(0, 6)
+                AlignmentFlags = FlexFlags.CenterHorizontally
             };
-
-            prevPageBtn = new TextButtonNode
-            {
-                Size   = new(40f, 24f),
-                String = "<",
-                OnClick = () =>
-                {
-                    if (currentPageIndex > 0)
-                    {
-                        currentPageIndex--;
-                        RebuildRegexList();
-                    }
-                }
-            };
-
-            pageLabel = new TextNode
-            {
-                TextFlags     = TextFlags.AutoAdjustNodeSize,
-                String        = "1 / 1",
-                AlignmentType = AlignmentType.Left,
-                Position      = new(0, 3)
-            };
-
-            nextPageBtn = new TextButtonNode
-            {
-                Size   = new(40f, 24f),
-                String = ">",
-                OnClick = () =>
-                {
-                    var totalPages = Math.Max(1, (int)Math.Ceiling(module.config.BlackList.Count / 10.0));
-
-                    if (currentPageIndex < totalPages - 1)
-                    {
-                        currentPageIndex++;
-                        RebuildRegexList();
-                    }
-                }
-            };
-
-            pagingLayout.AddNode(prevPageBtn);
-            pagingLayout.AddNode(pageLabel);
-            pagingLayout.AddNode(nextPageBtn);
+            pagingLayout.AddNode(paginationBar);
 
             descriptionPanel.AddNode(pagingLayout);
 
@@ -835,7 +780,7 @@ public partial class BetterPartyFinderFilter
 
             var row = new HorizontalListNode
             {
-                Size      = new(ContentSize.X - ROW_INDENT, 28f)
+                Size = new(ContentSize.X - ROW_INDENT, 28f)
             };
 
             var icon = addonTextID switch
@@ -1010,10 +955,8 @@ public partial class BetterPartyFinderFilter
         private void UpdateHighEndContainerVisibility()
         {
             var enabled = module.config.HighEndFilterRoleCount;
-            autoModeCheckbox.IsVisible   = enabled;
-            manualModeCheckbox.IsVisible = enabled;
-            modeRow.IsVisible            = enabled;
-            numLayout.IsVisible          = enabled;
+            modeRadioGroup.IsVisible = enabled;
+            numLayout.IsVisible      = enabled;
 
             numLayout.RecalculateLayout();
             RecalculatePanel(highEndPanel);
@@ -1040,6 +983,7 @@ public partial class BetterPartyFinderFilter
                     var localItem   = items[i];
                     var globalIndex = (currentPageIndex * 10) + i;
 
+                    regexRow.Index              = globalIndex;
                     regexRow.Row.IsVisible      = true;
                     regexRow.Checkbox.IsChecked = localItem.Key;
                     regexRow.Checkbox.OnClick = isChecked =>
@@ -1053,27 +997,55 @@ public partial class BetterPartyFinderFilter
                     {
                         module.HandleRegexUpdate(globalIndex, module.config.BlackList[globalIndex].Key, text.ToString());
                     };
-
-                    regexRow.DeleteButton.OnClick = () =>
-                    {
-                        module.config.BlackList.RemoveAt(globalIndex);
-                        module.config.Save(module);
-                        var newTotalPages = Math.Max(1, (int)Math.Ceiling(module.config.BlackList.Count / 10.0));
-                        if (currentPageIndex >= newTotalPages)
-                            currentPageIndex = newTotalPages - 1;
-                        RebuildRegexList();
-                    };
                 }
                 else
                     regexRow.Row.IsVisible = false;
             }
 
-            prevPageBtn.IsEnabled = currentPageIndex > 0;
-            nextPageBtn.IsEnabled = currentPageIndex < totalPages - 1;
-            pageLabel.String      = $"{currentPageIndex + 1} / {totalPages}";
+            paginationBar.PreviousPageButtonNode.IsEnabled = currentPageIndex > 0;
+            paginationBar.NextPageButtonNode.IsEnabled     = currentPageIndex < totalPages - 1;
+            paginationBar.IndicatorTextNode.String         = $"{currentPageIndex + 1} / {totalPages}";
 
             listContainer.RecalculateLayout();
             RecalculatePanel(descriptionPanel);
+        }
+
+        private void ShowContextMenu
+        (
+            RegexRow regexRow
+        )
+        {
+            List<ContextMenuItem> menus =
+            [
+                new()
+                {
+                    Name = Lang.Get("BetterPartyFinderFilter-Description-Delete"),
+                    OnClicked = _ =>
+                    {
+                        module.config.BlackList.RemoveAt(regexRow.Index);
+                        module.config.Save(module);
+
+                        var newTotalPages = Math.Max(1, (int)Math.Ceiling(module.config.BlackList.Count / 10.0));
+                        if (currentPageIndex >= newTotalPages)
+                            currentPageIndex = newTotalPages - 1;
+
+                        RebuildRegexList();
+                    }
+                }
+            ];
+
+            ContextMenuManager.Instance().Open
+            (
+                new ContextMenuOpenedArgs(),
+                [
+                    new ContextMenuEntryInfo
+                    (
+                        nameof(ContextMenuManager),
+                        _ => menus,
+                        omitPrefix: true
+                    )
+                ]
+            );
         }
 
         protected override void OnUpdate
@@ -1081,27 +1053,21 @@ public partial class BetterPartyFinderFilter
             AtkUnitBase* addon
         )
         {
-            if (tabBar1 != null)
-            {
-                tabBar1.Position = ContentStartPosition;
-                tabBar1.Width    = ContentSize.X;
-            }
+            tabBar1.Position = ContentStartPosition;
+            tabBar1.Width    = ContentSize.X;
 
-            if (tabBar2 != null)
-            {
-                tabBar2.Position = ContentStartPosition + new Vector2(0f, 28f);
-                tabBar2.Width    = ContentSize.X;
-            }
+            tabBar2.Position = ContentStartPosition + new Vector2(0f, 28f);
+            tabBar2.Width    = ContentSize.X;
 
             switch (currentActiveTab)
             {
-                case 0 when generalPanel != null:
+                case 0:
                     RecalculatePanel(generalPanel);
                     break;
-                case 1 when highEndPanel != null:
+                case 1:
                     RecalculatePanel(highEndPanel);
                     break;
-                case 2 when descriptionPanel != null:
+                case 2:
                     RecalculatePanel(descriptionPanel);
                     break;
             }
