@@ -334,6 +334,7 @@ public unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
         if (TaskHelper.IsBusy)
         {
             TaskHelper.Enqueue(() => LookingForGroupCondition->Close(true));
+            TaskHelper.Enqueue(() => LookingForGroupCondition == null);
             TaskHelper.Enqueue(() => LookingForGroup->Callback(14));
         }
 

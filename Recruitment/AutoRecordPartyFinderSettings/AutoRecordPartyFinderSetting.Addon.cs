@@ -1,16 +1,14 @@
-using System.Numerics;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using KamiToolKit.Nodes.Simplified;
 using Lumina.Text.ReadOnly;
 using OmenTools.KamiToolKit.Addons;
-using ContextMenu = KamiToolKit.ContextMenu.ContextMenu;
+using OmenTools.KamiToolKit.Nodes;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.AutoRecordPartyFinderSettings;
 
@@ -19,78 +17,16 @@ public unsafe partial class AutoRecordPartyFinderSetting
     private sealed class AutoRecordPartyFinderSettingAddon
     (
         AutoRecordPartyFinderSetting module
-    )
-        : AttachedAddon("LookingForGroupCondition", AddonEvent.PostSetup)
+    ) : AttachedAddon("LookingForGroupCondition", AddonEvent.PostSetup)
     {
         private VerticalListNode?   mainLayout;
         private HorizontalListNode? actionHeader;
         private VerticalListNode?   presetListContainer;
-        private HorizontalFlexNode? pagingLayout;
+        private PaginationNode?     paginationBar;
 
-        private readonly List<PresetRowNode> presetRows  = [];
-        private          TextButtonNode      prevPageBtn = null!;
-        private          TextButtonNode      nextPageBtn = null!;
-        private          TextNode            pageLabel   = null!;
+        private readonly List<PresetRowNode> presetRows = [];
 
         public int CurrentPageIndex;
-
-        private ContextMenu? contextMenu;
-
-        public override void Dispose()
-        {
-            contextMenu?.Dispose();
-            contextMenu = null;
-
-            base.Dispose();
-        }
-
-        public void ShowContextMenu
-        (
-            PartyFinderSetting setting
-        )
-        {
-            contextMenu?.Dispose();
-            contextMenu = new();
-
-            contextMenu.AddItem
-            (
-                Lang.Get("Update"),
-                () =>
-                {
-                    if (LookingForGroupCondition == null || !LookingForGroupCondition->IsAddonAndNodesReady()) return;
-
-                    var currentDisplayName = setting.DisplayName;
-                    var updated            = module.config.Last.Copy();
-                    updated.DisplayName = currentDisplayName;
-
-                    var index = module.config.Slot.IndexOf(setting);
-
-                    if (index != -1)
-                    {
-                        module.config.Slot[index] = updated;
-                        module.config.Save(module);
-                        RefreshPresetList();
-                    }
-                }
-            );
-
-            contextMenu.Open();
-        }
-
-        protected override AttachedAddonPosition AttachPosition =>
-            AttachedAddonPosition.LeftTop;
-
-        protected override Vector2 PositionOffset =>
-            new(0f, 6f);
-
-        protected override bool CanOpenAddon =>
-            LookingForGroupCondition != null && LookingForGroupCondition->IsAddonAndNodesReady();
-
-        protected override bool CanCloseHostAddon
-        (
-            AtkUnitBase* hostAddon
-        ) =>
-            false;
 
         protected override void OnSetup
         (
@@ -98,17 +34,8 @@ public unsafe partial class AutoRecordPartyFinderSetting
             Span<AtkValue> atkValues
         )
         {
-            if (WindowNode is WindowNode windowNode)
-                windowNode.CloseButtonNode.IsVisible = false;
-
-            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x4,  true);
-            FlagHelper.UpdateFlag(ref addon->Flags1A0, 0x80, true);
-            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x40, true);
-            FlagHelper.UpdateFlag(ref addon->Flags1A3, 0x1,  true);
-
             mainLayout = new VerticalListNode
             {
-                IsVisible   = true,
                 Position    = ContentStartPosition,
                 ItemSpacing = 6f,
                 Size        = ContentSize,
@@ -117,7 +44,6 @@ public unsafe partial class AutoRecordPartyFinderSetting
 
             actionHeader = new HorizontalListNode
             {
-                IsVisible   = true,
                 Size        = ContentSize with { Y = 32f },
                 ItemSpacing = 8f
             };
@@ -125,8 +51,8 @@ public unsafe partial class AutoRecordPartyFinderSetting
             var addButton = new TextButtonNode
             {
                 Size        = ContentSize with { Y = 32f },
-                String      = Lang.Get("Add"),
-                TextTooltip = Lang.Get("AutoRecordPartyFinderSetting-Button-Save-Help"),
+                String      = Lang.Get("AutoRecordPartyFinderSetting-Button-Save"),
+                TextureType = ButtonTextureType.ButtonB,
                 OnClick = () =>
                 {
                     if (!LookingForGroupCondition->IsAddonAndNodesReady()) return;
@@ -140,16 +66,11 @@ public unsafe partial class AutoRecordPartyFinderSetting
                     RefreshPresetList();
                 }
             };
-            var backgroundNode = (SimpleNineGridNode)addButton.BackgroundNode;
-            backgroundNode.TexturePath = "ui/uld/img04/ButtonB_hr1.tex";
-            backgroundNode.TextureSize = new(80, 36);
-            backgroundNode.Offsets     = new(16);
 
             actionHeader.AddNode(addButton);
 
             presetListContainer = new VerticalListNode
             {
-                IsVisible   = true,
                 ItemSpacing = 4f,
                 FitContents = true,
                 FitWidth    = true,
@@ -165,58 +86,21 @@ public unsafe partial class AutoRecordPartyFinderSetting
                 presetRows.Add(row);
             }
 
-            pagingLayout = new HorizontalFlexNode
+            paginationBar = new PaginationNode
             {
-                IsVisible      = true,
-                Size           = ContentSize with { Y = 28f },
-                AlignmentFlags = FlexFlags.CenterHorizontally
-            };
-
-            prevPageBtn = new TextButtonNode
-            {
-                Size   = new(40f, 24f),
-                String = "<",
-                OnClick = () =>
+                IsDisplayIndicatorText = true,
+                OnSizeUpdated          = CenterPaginationBar,
+                OnPreviousPage = () =>
                 {
-                    if (CurrentPageIndex > 0)
-                    {
-                        CurrentPageIndex--;
-                        RefreshPresetList();
-                    }
+                    CurrentPageIndex--;
+                    RefreshPresetList();
+                },
+                OnNextPage = () =>
+                {
+                    CurrentPageIndex++;
+                    RefreshPresetList();
                 }
             };
-
-            pageLabel = new TextNode
-            {
-                TextFlags     = TextFlags.AutoAdjustNodeSize,
-                String        = "1 / 1",
-                AlignmentType = AlignmentType.Center,
-                FontSize      = 14,
-                Position      = new(0, 3)
-            };
-
-            nextPageBtn = new TextButtonNode
-            {
-                Size   = new(40f, 24f),
-                String = ">",
-                OnClick = () =>
-                {
-                    var totalItems = module.config.Slot.Count;
-                    var totalPages = Math.Max(1, (int)Math.Ceiling(totalItems / 10.0));
-
-                    if (CurrentPageIndex < totalPages - 1)
-                    {
-                        CurrentPageIndex++;
-                        RefreshPresetList();
-                    }
-                }
-            };
-
-            pagingLayout.AddNode(prevPageBtn);
-            pagingLayout.AddDummy(10f);
-            pagingLayout.AddNode(pageLabel);
-            pagingLayout.AddDummy(10f);
-            pagingLayout.AddNode(nextPageBtn);
 
             mainLayout.AddNode(actionHeader);
             mainLayout.AddNode
@@ -228,8 +112,10 @@ public unsafe partial class AutoRecordPartyFinderSetting
                 }
             );
             mainLayout.AddNode(presetListContainer);
+
             mainLayout.AddDummy();
-            mainLayout.AddNode(pagingLayout);
+            mainLayout.AddNode(paginationBar);
+            mainLayout.AddDummy();
 
             mainLayout.AttachNode(this);
 
@@ -263,9 +149,9 @@ public unsafe partial class AutoRecordPartyFinderSetting
                     row.IsVisible = false;
             }
 
-            prevPageBtn.IsEnabled = CurrentPageIndex > 0;
-            nextPageBtn.IsEnabled = CurrentPageIndex < totalPages - 1;
-            pageLabel.String      = $"{CurrentPageIndex + 1} / {totalPages}";
+            paginationBar.PreviousPageButtonNode.IsEnabled = CurrentPageIndex > 0;
+            paginationBar.NextPageButtonNode.IsEnabled     = CurrentPageIndex < totalPages - 1;
+            paginationBar.IndicatorTextNode.String         = $"{CurrentPageIndex + 1} / {totalPages}";
 
             presetListContainer.RecalculateLayout();
 
@@ -275,6 +161,15 @@ public unsafe partial class AutoRecordPartyFinderSetting
                 SetWindowSize(Size.X, ContentStartPosition.Y + mainLayout.Height + 16f);
                 mainLayout.Position = ContentStartPosition;
             }
+
+            CenterPaginationBar();
+        }
+
+        private void CenterPaginationBar()
+        {
+            if (paginationBar is not { } bar) return;
+
+            bar.X = (ContentSize.X - bar.Width) / 2.0f;
         }
 
         protected override void OnHostAddon
@@ -292,6 +187,64 @@ public unsafe partial class AutoRecordPartyFinderSetting
                 module.isAppliedOnce = true;
             }
         }
+
+        public void ShowContextMenu
+        (
+            PartyFinderSetting setting
+        )
+        {
+            List<ContextMenuItem> menus =
+            [
+                new()
+                {
+                    Name = Lang.GetSe("AutoRecordPartyFinderSetting-ContextMenu-Update"),
+                    OnClicked = _ =>
+                    {
+                        if (!LookingForGroupCondition->IsAddonAndNodesReady()) return;
+
+                        var currentDisplayName = setting.DisplayName;
+                        var updated            = module.config.Last.Copy();
+                        updated.DisplayName = currentDisplayName;
+
+                        var index = module.config.Slot.IndexOf(setting);
+
+                        if (index == -1) return;
+
+                        module.config.Slot[index] = updated;
+                        module.config.Save(module);
+                        RefreshPresetList();
+                    }
+                },
+                new()
+                {
+                    Name = Lang.GetSe("AutoRecordPartyFinderSetting-ContextMenu-Delete"),
+                    OnClicked = _ =>
+                    {
+                        module.config.Slot.Remove(setting);
+                        module.config.Save(module);
+
+                        var newTotalPages = Math.Max(1, (int)Math.Ceiling(module.config.Slot.Count / 10.0));
+                        if (CurrentPageIndex >= newTotalPages)
+                            CurrentPageIndex = newTotalPages - 1;
+
+                        RefreshPresetList();
+                    }
+                }
+            ];
+
+            ContextMenuManager.Instance().Open
+            (
+                new ContextMenuOpenedArgs(),
+                [
+                    new ContextMenuEntryInfo
+                    (
+                        nameof(ContextMenuManager),
+                        _ => menus,
+                        omitPrefix: true
+                    )
+                ]
+            );
+        }
     }
 
     private class PresetRowNode : HorizontalListNode
@@ -299,7 +252,6 @@ public unsafe partial class AutoRecordPartyFinderSetting
         public PartyFinderSetting Setting { get; set; } = null!;
 
         private readonly TextButtonNode titleButton;
-        private readonly TextButtonNode deleteButton;
 
         public PresetRowNode
         (
@@ -307,38 +259,16 @@ public unsafe partial class AutoRecordPartyFinderSetting
             AutoRecordPartyFinderSettingAddon addon
         )
         {
-            IsVisible   = true;
-            Size        = new(addon.ContentSize.X - 8f, 28f);
-            ItemSpacing = 6f;
+            Size = addon.ContentSize with { Y = 28f };
 
             titleButton = new TextButtonNode
             {
-                IsVisible = true,
-                Size      = new(addon.ContentSize.X - 74f, 28f),
-                String    = string.Empty
+                Size   = addon.ContentSize with { Y = 28f },
+                String = string.Empty
             };
             titleButton.LabelNode.TextFlags |= TextFlags.Ellipsis;
-            deleteButton = new TextButtonNode
-            {
-                IsVisible = true,
-                Size      = new(68f, 28f),
-                String    = Lang.Get("Delete"),
-                OnClick = () =>
-                {
-                    module.config.Slot.Remove(Setting);
-                    module.config.Save(module);
-
-                    var newTotalPages = Math.Max(1, (int)Math.Ceiling(module.config.Slot.Count / 10.0));
-                    if (addon.CurrentPageIndex >= newTotalPages)
-                        addon.CurrentPageIndex = newTotalPages - 1;
-
-                    addon.RefreshPresetList();
-                },
-                TextTooltip = Lang.Get("Delete")
-            };
 
             AddNode(titleButton);
-            AddNode(deleteButton);
 
             titleButton.AddEvent
             (
@@ -362,12 +292,20 @@ public unsafe partial class AutoRecordPartyFinderSetting
 
             var description = new ReadOnlySeString(setting.DescriptionBytes ?? []);
             var title = string.IsNullOrEmpty(setting.DisplayName) ?
-                            $"[{Lang.Get("None")}]" :
+                            Lang.Get("None") :
                             setting.DisplayName;
 
             titleButton.String = description;
 
-            var tooltipText = Lang.GetSe("AutoRecordPartyFinderSetting-Message", title, description);
+            var tooltipText = Lang.GetSe
+            (
+                "AutoRecordPartyFinderSetting-Message",
+                new Dictionary<string, object>
+                {
+                    ["contentName"] = title,
+                    ["description"] = description,
+                }
+            );
             titleButton.TextTooltip = tooltipText;
         }
     }
