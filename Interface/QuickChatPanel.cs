@@ -374,7 +374,7 @@ public unsafe class QuickChatPanel : ModuleBase
             AttachedAddonPosition.RightBottom;
 
         protected override Vector2 PositionOffset =>
-            instance.config.OverlayOffset + new Vector2(0, -36f);
+            instance.config.OverlayOffset + new Vector2(0, -34f);
 
         protected override bool AutoOpenAddon =>
             false;
