@@ -190,7 +190,6 @@ public partial class BetterPartyFinderFilter
             {
                 Position  = ContentStartPosition,
                 Size      = ContentSize with { Y = 28f },
-                IsVisible = true
             };
 
             tabBar1.AddTab(Lang.Get("General"),                                      () => SwitchTab(0));
@@ -204,7 +203,6 @@ public partial class BetterPartyFinderFilter
             {
                 Position  = ContentStartPosition + new Vector2(0f, 28f),
                 Size      = ContentSize with { Y = 28f },
-                IsVisible = true
             };
 
             tabBar2.AddTab(LuminaWrapper.GetAddonText(11070),                         () => OnActionTabClicked(3));
@@ -239,17 +237,17 @@ public partial class BetterPartyFinderFilter
             // 一般面板 (General)
             generalPanel = new VerticalListNode
             {
-                IsVisible        = true,
                 ItemSpacing      = 8f,
                 FirstItemSpacing = 16f,
                 FitContents      = true,
-                FitWidth         = true,
+                Alignment        = VerticalListAlignment.Right,
                 Size             = ContentSize
             };
 
             var displayLabel = new LabelTextNode
             {
                 String    = LuminaWrapper.GetAddonText(11127),
+                Width     = ContentSize.X,
                 TextColor = ColorHelper.GetColor(2)
             };
             generalPanel.AddNode(displayLabel);
@@ -258,14 +256,12 @@ public partial class BetterPartyFinderFilter
             var displayLayout = new VerticalListNode
             {
                 FitContents = true,
-                FitWidth    = true,
-                Position    = new(20, 0)
+                Size        = ContentSize with { X = ContentSize.X - ROW_INDENT }
             };
 
             var filterSameDescCheckbox = new CheckboxNode
             {
-                Size      = new(280f, 24f),
-                IsVisible = true,
+                Size      = ContentSize with { Y = 24f },
                 IsChecked = module.config.FilterSameDescription,
                 String    = Lang.Get("BetterPartyFinderFilter-FilterDuplicate"),
                 OnClick = isChecked =>
@@ -279,14 +275,12 @@ public partial class BetterPartyFinderFilter
             // TODO: 改成使用 DropDownList
             var orderRow = new HorizontalListNode
             {
-                IsVisible = true,
-                Size      = new(280f, 24f)
+                Size      = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f }
             };
 
             ascCheckbox = new CheckboxNode
             {
-                Size      = new(135f, 24f),
-                IsVisible = true,
+                Size      = ContentSize with { Y = 24f },
                 String    = LuminaWrapper.GetAddonText(10127),
                 OnClick = isChecked =>
                 {
@@ -300,12 +294,11 @@ public partial class BetterPartyFinderFilter
                 }
             };
             orderRow.AddNode(ascCheckbox);
-            orderRow.AddDummy(10f);
+            orderRow.AddDummy(ORDER_ROW_SPACING);
 
             desCheckbox = new CheckboxNode
             {
-                Size      = new(135f, 24f),
-                IsVisible = true,
+                Size      = ContentSize with { Y = 24f },
                 String    = LuminaWrapper.GetAddonText(10128),
                 OnClick = isChecked =>
                 {
@@ -323,8 +316,7 @@ public partial class BetterPartyFinderFilter
 
             blacklistedCheckbox = new CheckboxNode
             {
-                Size      = new(280f, 24f),
-                IsVisible = true,
+                Size      = ContentSize with { Y = 24f },
                 String    = LuminaWrapper.GetAddonText(11124),
                 OnClick = isChecked =>
                 {
@@ -336,8 +328,7 @@ public partial class BetterPartyFinderFilter
 
             lockedCheckbox = new CheckboxNode
             {
-                Size      = new(280f, 24f),
-                IsVisible = true,
+                Size      = ContentSize with { Y = 24f },
                 String    = LuminaWrapper.GetAddonText(11128),
                 OnClick = isChecked =>
                 {
@@ -352,6 +343,7 @@ public partial class BetterPartyFinderFilter
             var notifyLabel = new LabelTextNode
             {
                 String    = LuminaWrapper.GetAddonText(11116),
+                Width     = ContentSize.X,
                 TextColor = ColorHelper.GetColor(2)
             };
 
@@ -360,17 +352,16 @@ public partial class BetterPartyFinderFilter
 
             var notifyLabelLayout = new VerticalListNode
             {
-                Position         = new(20, 0),
                 FitContents      = true,
-                FitWidth         = true,
-                FirstItemSpacing = 8f
+                Alignment        = VerticalListAlignment.Right,
+                FirstItemSpacing = 8f,
+                Size             = ContentSize with { X = ContentSize.X - ROW_INDENT }
             };
 
             notifyCheckbox = new CheckboxNode
             {
-                Size      = new(280f, 24f),
-                IsVisible = true,
                 String    = LuminaWrapper.GetAddonText(11119),
+                Size      = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f },
                 OnClick = isChecked =>
                 {
                     RefreshDisplaySettings(notifyRecruitment: isChecked);
@@ -386,15 +377,15 @@ public partial class BetterPartyFinderFilter
 
             notifyLayout = new VerticalListNode
             {
-                Position    = new(20, 0),
                 FitContents = true,
-                IsVisible   = NotifyNewRecruitment == 1
+                IsVisible   = NotifyNewRecruitment == 1,
+                Size        = ContentSize with { X = ContentSize.X - (ROW_INDENT * 2f) }
             };
 
             var notifyIntervalLabel = new LabelTextNode
             {
                 String    = LuminaWrapper.GetAddonText(11117),
-                Size      = new(198f, 20f),
+                Height    = 20f,
                 Position  = new(0, 3),
                 TextColor = ColorHelper.GetColor(31)
             };
@@ -402,7 +393,6 @@ public partial class BetterPartyFinderFilter
             notifyIntervalInput = new NumericInputNode
             {
                 Size          = new(220f, 24f),
-                Position      = new(20, 0),
                 Min           = 1,
                 Max           = 10,
                 Value         = (int)FlagStatusModule.Instance()->UIFlags[5],
@@ -414,8 +404,7 @@ public partial class BetterPartyFinderFilter
 
             noNotifyWhenZeroCheckbox = new CheckboxNode
             {
-                Size      = new(260f, 24f),
-                IsVisible = true,
+                Size      = ContentSize with { Y = 24f },
                 String    = LuminaWrapper.GetAddonText(11118),
                 OnClick   = isChecked => { RefreshDisplaySettings(noNotifyWhenZero: isChecked); }
             };
@@ -430,10 +419,11 @@ public partial class BetterPartyFinderFilter
                 TextFlags = TextFlags.AutoAdjustNodeSize,
                 String    = LuminaWrapper.GetAddonText(11171),
                 Position  = new(0, 3),
-                FontSize  = 12
+                FontSize  = 12,
+                Width     = ContentSize.X - ROW_INDENT
             };
             AtkColors.Hint.ApplyTo(notifyInfoLabel);
-            
+
             notifyLabelLayout.AddDummy(12f);
             notifyLabelLayout.AddNode(notifyInfoLabel);
             notifyLabelLayout.AddDummy(12f);
@@ -450,16 +440,16 @@ public partial class BetterPartyFinderFilter
             {
                 ItemSpacing = 4f,
                 FitContents = true,
-                FitWidth    = true,
+                Alignment   = VerticalListAlignment.Right,
                 Size        = ContentSize
             };
 
             var highEndFilterSameJobCheckbox = new CheckboxNode
             {
-                Size        = new(280f, 24f),
                 IsChecked   = module.config.HighEndFilterSameJob,
                 String      = Lang.Get("BetterPartyFinderFilter-HighEndFilter-SameJob"),
                 TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-SameJob-Help"),
+                Size        = ContentSize with { Y = 24f },
                 OnClick = isChecked =>
                 {
                     module.config.HighEndFilterSameJob = isChecked;
@@ -470,11 +460,10 @@ public partial class BetterPartyFinderFilter
 
             var highEndFilterRoleCountCheckbox = new CheckboxNode
             {
-                Size        = new(280f, 24f),
-                IsVisible   = true,
                 IsChecked   = module.config.HighEndFilterRoleCount,
                 String      = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount"),
                 TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-RoleCount-Help"),
+                Size        = ContentSize with { Y = 24f },
                 OnClick = isChecked =>
                 {
                     module.config.HighEndFilterRoleCount = isChecked;
@@ -486,14 +475,13 @@ public partial class BetterPartyFinderFilter
 
             var filterRoleCountLayout = new VerticalListNode
             {
-                Position    = new(20, 0),
                 FitContents = true,
-                FitWidth    = true
+                Size        = ContentSize with { X = ContentSize.X - ROW_INDENT }
             };
 
             autoModeCheckbox = new CheckboxNode
             {
-                Size        = new(135f, 24f),
+                Size        = ContentSize with { Y = 24f },
                 IsVisible   = module.config.HighEndFilterRoleCount,
                 IsChecked   = !module.manualMode,
                 String      = Lang.Get("AutoMode"),
@@ -512,7 +500,7 @@ public partial class BetterPartyFinderFilter
 
             manualModeCheckbox = new CheckboxNode
             {
-                Size        = new(135f, 24f),
+                Size        = ContentSize with { Y = 24f },
                 IsVisible   = module.config.HighEndFilterRoleCount,
                 IsChecked   = module.manualMode,
                 String      = Lang.Get("ManualMode"),
@@ -532,11 +520,11 @@ public partial class BetterPartyFinderFilter
             modeRow = new HorizontalListNode
             {
                 IsVisible = module.config.HighEndFilterRoleCount,
-                Size      = new(280f, 24f)
+                Size      = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f }
             };
 
             modeRow.AddNode(autoModeCheckbox);
-            modeRow.AddDummy(10f);
+            modeRow.AddDummy(ORDER_ROW_SPACING);
             modeRow.AddNode(manualModeCheckbox);
 
             filterRoleCountLayout.AddNode(modeRow);
@@ -546,8 +534,7 @@ public partial class BetterPartyFinderFilter
                 IsVisible   = module.config.HighEndFilterRoleCount,
                 ItemSpacing = 4f,
                 FitContents = true,
-                FitWidth    = true,
-                Size        = ContentSize
+                Size        = ContentSize with { X = ContentSize.X - ROW_INDENT }
             };
 
             numLayout.AddNode
@@ -648,7 +635,6 @@ public partial class BetterPartyFinderFilter
                 ItemSpacing      = 8f,
                 FirstItemSpacing = 8f,
                 FitContents      = true,
-                FitWidth         = true,
                 Size             = ContentSize
             };
 
@@ -656,12 +642,12 @@ public partial class BetterPartyFinderFilter
             {
                 String = Lang.Get("Mode")
             };
+            AtkColors.Text.ApplyTo(modeLabel);
             descriptionPanel.AddNode(modeLabel);
 
             blacklistCheckbox = new CheckboxNode
             {
-                Size        = new(135f, 24f),
-                IsVisible   = true,
+                Size        = ContentSize with { Y = 24f },
                 IsChecked   = !module.config.IsWhiteList,
                 String      = Lang.Get("Blacklist"),
                 TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Blacklist-Help"),
@@ -680,8 +666,7 @@ public partial class BetterPartyFinderFilter
 
             whitelistCheckbox = new CheckboxNode
             {
-                Size        = new(135f, 24f),
-                IsVisible   = true,
+                Size        = ContentSize with { Y = 24f },
                 IsChecked   = module.config.IsWhiteList,
                 String      = Lang.Get("Whitelist"),
                 TextTooltip = Lang.Get("BetterPartyFinderFilter-Description-Whitelist-Help"),
@@ -700,11 +685,11 @@ public partial class BetterPartyFinderFilter
 
             var workModeRow = new HorizontalListNode
             {
-                Size      = new(280f, 24f),
-                Position  = new(16, 0)
+                Size = ContentSize with { Y = 24f }
             };
+            workModeRow.AddDummy(16f);
             workModeRow.AddNode(blacklistCheckbox);
-            workModeRow.AddDummy(10f);
+            workModeRow.AddDummy(ORDER_ROW_SPACING);
             workModeRow.AddNode(whitelistCheckbox);
 
             descriptionPanel.AddNode(workModeRow);
@@ -727,46 +712,47 @@ public partial class BetterPartyFinderFilter
 
             listContainer = new VerticalListNode
             {
-                IsVisible   = true,
                 ItemSpacing = 4f,
                 FitContents = true,
-                FitWidth    = true,
                 Size        = ContentSize
             };
             descriptionPanel.AddNode(listContainer);
+
+            const float ROW_CHECKBOX_HEIGHT  = 28f;
+            const float ROW_ITEM_SPACING     = 4f;
+            const float ROW_DELETE_BTN_WIDTH = 42f;
 
             for (var i = 0; i < 10; i++)
             {
                 var row = new HorizontalListNode
                 {
                     IsVisible = false,
-                    Size      = new(280f, 32f)
+                    Size      = ContentSize with { Y = 32f }
                 };
 
                 var checkbox = new CheckboxNode
                 {
-                    Size      = new(28f, 28),
-                    IsVisible = true,
+                    Size      = new(ROW_CHECKBOX_HEIGHT, ROW_CHECKBOX_HEIGHT),
                     String    = string.Empty
                 };
 
                 var textInput = new TextInputNode
                 {
-                    Size              = new(290f, 32),
+                    Size              = new(ContentSize.X - checkbox.Width - ROW_DELETE_BTN_WIDTH - (ROW_ITEM_SPACING * 2f), 32f),
                     PlaceholderString = Lang.Get("Regex")
                 };
 
                 var deleteBtn = new TextButtonNode
                 {
-                    Size     = new(42f, 28f),
+                    Size     = new(ROW_DELETE_BTN_WIDTH, ROW_CHECKBOX_HEIGHT),
                     Position = new(0, 3),
                     String   = Lang.Get("Delete")
                 };
 
                 row.AddNode(checkbox);
-                row.AddDummy(4f);
+                row.AddDummy(ROW_ITEM_SPACING);
                 row.AddNode(textInput);
-                row.AddDummy(4f);
+                row.AddDummy(ROW_ITEM_SPACING);
                 row.AddNode(deleteBtn);
 
                 listContainer.AddNode(row);
@@ -785,7 +771,6 @@ public partial class BetterPartyFinderFilter
 
             var pagingLayout = new HorizontalFlexNode
             {
-                IsVisible      = true,
                 Size           = ContentSize with { Y = 28f },
                 AlignmentFlags = FlexFlags.CenterHorizontally,
                 Position       = new(0, 6)
@@ -838,17 +823,19 @@ public partial class BetterPartyFinderFilter
             descriptionPanel.AttachNode(this);
         }
 
-        private static HorizontalListNode CreateRoleCountNumericInput
+        private HorizontalListNode CreateRoleCountNumericInput
         (
             uint        addonTextID,
             int         initialVal,
             Action<int> onValueUpdate
         )
         {
+            const float ICON_SIZE   = 28f;
+            const float INPUT_WIDTH = 100f;
+
             var row = new HorizontalListNode
             {
-                IsVisible = true,
-                Size      = new(310f, 28f)
+                Size      = new(ContentSize.X - ROW_INDENT, 28f)
             };
 
             var icon = addonTextID switch
@@ -858,7 +845,7 @@ public partial class BetterPartyFinderFilter
                 {
                     TextureCoordinates = new(0, 80),
                     TextureSize        = new(28),
-                    Size               = new(28),
+                    Size               = new(ICON_SIZE),
                     TexturePath        = "ui/uld/img04/LFG_hr1.tex"
                 },
                 // 纯粹治疗职业
@@ -866,7 +853,7 @@ public partial class BetterPartyFinderFilter
                 {
                     TextureCoordinates = new(0, 56),
                     TextureSize        = new(28),
-                    Size               = new(28),
+                    Size               = new(ICON_SIZE),
                     TexturePath        = "ui/uld/LFGSelectRole_hr1.tex"
                 },
                 // 护盾治疗职业
@@ -874,7 +861,7 @@ public partial class BetterPartyFinderFilter
                 {
                     TextureCoordinates = new(28, 56),
                     TextureSize        = new(28),
-                    Size               = new(28),
+                    Size               = new(ICON_SIZE),
                     TexturePath        = "ui/uld/LFGSelectRole_hr1.tex"
                 },
                 // 近战职业
@@ -882,7 +869,7 @@ public partial class BetterPartyFinderFilter
                 {
                     TextureCoordinates = new(0),
                     TextureSize        = new(28),
-                    Size               = new(28),
+                    Size               = new(ICON_SIZE),
                     TexturePath        = "ui/uld/LFGSelectRole_hr1.tex"
                 },
                 // 远程物理职业
@@ -890,7 +877,7 @@ public partial class BetterPartyFinderFilter
                 {
                     TextureCoordinates = new(28, 0),
                     TextureSize        = new(28),
-                    Size               = new(28),
+                    Size               = new(ICON_SIZE),
                     TexturePath        = "ui/uld/LFGSelectRole_hr1.tex"
                 },
                 // 远程魔法职业
@@ -898,7 +885,7 @@ public partial class BetterPartyFinderFilter
                 {
                     TextureCoordinates = new(56, 0),
                     TextureSize        = new(28),
-                    Size               = new(28),
+                    Size               = new(ICON_SIZE),
                     TexturePath        = "ui/uld/LFGSelectRole_hr1.tex"
                 },
                 _ => null
@@ -906,18 +893,18 @@ public partial class BetterPartyFinderFilter
             ArgumentNullException.ThrowIfNull((object?)icon);
 
             row.AddNode(icon);
-            row.AddDummy(10f);
+            row.AddDummy(ORDER_ROW_SPACING);
 
             var label = new LabelTextNode
             {
                 String   = LuminaWrapper.GetAddonText(addonTextID),
-                Size     = new(208f, 20f),
+                Size     = new(row.Width - ICON_SIZE - INPUT_WIDTH - (ORDER_ROW_SPACING * 2f), 20f),
                 Position = new(0, 3)
             };
 
             var numInput = new NumericInputNode
             {
-                Size          = new(100f, 24f),
+                Size          = new(INPUT_WIDTH, 24f),
                 Min           = -1,
                 Max           = 8,
                 Value         = initialVal,
@@ -925,7 +912,7 @@ public partial class BetterPartyFinderFilter
             };
 
             row.AddNode(label);
-            row.AddDummy(10f);
+            row.AddDummy(ORDER_ROW_SPACING);
             row.AddNode(numInput);
             return row;
         }
@@ -939,7 +926,7 @@ public partial class BetterPartyFinderFilter
 
             panel.RecalculateLayout();
 
-            SetWindowSize(400f, ContentStartPosition.Y + tabBar1.Height + tabBar2.Height + panel.Height + 24f);
+            SetWindowSize(Size.X, ContentStartPosition.Y + tabBar1.Height + tabBar2.Height + panel.Height + 24f);
             panel.Position   = ContentStartPosition + new Vector2(0f, 62f);
             tabBar1.Position = ContentStartPosition;
             tabBar2.Position = ContentStartPosition + new Vector2(0f, 28f);
@@ -1092,7 +1079,7 @@ public partial class BetterPartyFinderFilter
         protected override void OnUpdate
         (
             AtkUnitBase* addon
-        ) 
+        )
         {
             if (tabBar1 != null)
             {
@@ -1118,8 +1105,15 @@ public partial class BetterPartyFinderFilter
                     RecalculatePanel(descriptionPanel);
                     break;
             }
-            
+
             base.OnUpdate(addon);
         }
+
+        #region 常量
+
+        private const float ORDER_ROW_SPACING = 10f;
+        private const float ROW_INDENT        = 20f;
+
+        #endregion
     }
 }
