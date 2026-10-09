@@ -580,7 +580,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 TexturePath        = "ui/uld/EnemyList.tex",
                 TextureCoordinates = new(96, 80),
                 TextureSize        = new(24, 20),
-                Size               = new(124, 24),
+                Size               = new(124, 20),
                 Offsets            = new(8),
                 Alpha              = 1f
             };
