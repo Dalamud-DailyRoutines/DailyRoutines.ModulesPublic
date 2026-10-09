@@ -123,7 +123,7 @@ public unsafe partial class OptimizedFriendList
             nicknameInputNode = new()
             {
                 Position      = new(12, 100),
-                Size          = new(436, 26),
+                Size          = new(436, 32),
                 MaxCharacters = 64,
                 ShowLimitText = true,
                 AutoSelectAll = false,
