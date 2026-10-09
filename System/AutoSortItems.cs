@@ -18,9 +18,6 @@ public class AutoSortItems : ModuleBase
         Author      = ["那年雪落"]
     };
 
-    private readonly string[] sortOptions = [Lang.Get("Descending"), Lang.Get("Ascending")];
-    private readonly string[] tabOptions  = [Lang.Get("AutoSortItems-Splited"), Lang.Get("AutoSortItems-Merged")];
-
     private Config config = null!;
 
     protected override void Init()
@@ -41,16 +38,7 @@ public class AutoSortItems : ModuleBase
             TaskHelper.Enqueue(CheckCanSort);
 
         ImGui.NewLine();
-
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
-            config.Save(this);
-
-        ImGui.SameLine();
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
-            config.Save(this);
-
-        ImGui.Spacing();
-
+        
         var       tableSize = (ImGui.GetContentRegionAvail() * 0.75f) with { Y = 0 };
         using var table     = ImRaii.Table(Lang.Get("Sort"), 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg, tableSize);
         if (!table) return;
@@ -160,11 +148,6 @@ public class AutoSortItems : ModuleBase
 
         ChatManager.Instance().SendMessage("/itemsort execute inventory");
 
-        if (config.SendNotification)
-            NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoSortItems-SortMessage"));
-        if (config.SendChat)
-            NotifyHelper.Instance().Chat(Lang.Get("AutoSortItems-SortMessage"));
-
         return true;
 
         void SendSortCondition
@@ -186,14 +169,15 @@ public class AutoSortItems : ModuleBase
         public int InventoryID;
         public int InventoryItemLevel;
         public int InventoryTab;
-
-        public bool SendChat;
-        public bool SendNotification = true;
     }
 
     #region 常量
 
     private static readonly string[] SortOptionsCommand = ["des", "asc"];
+    
+    private readonly string[] sortOptions = [Lang.Get("Descending"), Lang.Get("Ascending")];
+    
+    private readonly string[] tabOptions  = [Lang.Get("AutoSortItems-Splited"), Lang.Get("AutoSortItems-Merged")];
 
     #endregion
 }
