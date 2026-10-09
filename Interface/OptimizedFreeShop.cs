@@ -5,21 +5,19 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Agent;
-using Dalamud.Game.Agent.AgentArgTypes;
-using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Utility.Numerics;
+using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.BaseTypes;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
-using Lumina.Text.Payloads;
-using Lumina.Text.ReadOnly;
-using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
+using OmenTools.Interop.Game.Models.Native;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
-using OmenTools.Threading.TaskHelper;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -28,166 +26,133 @@ public unsafe class OptimizedFreeShop : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = Lang.Get("OptimizedFreeShopTitle"),
-        Description         = Lang.Get("OptimizedFreeShopDescription"),
-        Category            = ModuleCategory.Interface,
-        ModulesPrerequisite = ["AutoClaimItemIgnoringMismatchJobAndLevel"]
+        Title       = Lang.Get("OptimizedFreeShopTitle"),
+        Description = Lang.Get("OptimizedFreeShopDescription"),
+        Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
-    private Config config = null!;
+    private static readonly CompSig CheckItemBarterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 54 41 56 41 57 48 83 EC ?? 0F B7 C2");
+    private delegate byte CheckItemBarterDelegate
+    (
+        nint       checker,
+        ushort     checkType,
+        Character* character,
+        nint       trade
+    );
+    private Hook<CheckItemBarterDelegate>? CheckItemBarterHook;
+    
+    private static readonly CompSig FreeShopCheckerSig = new
+    (
+        "48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? 49 8B 4E"
+    );
+    private nint freeShopChecker;
 
     private OptimizedFreeShopAddon? addon;
 
-    private TaskHelper? clickYesnoHelper;
-
     protected override void Init()
     {
-        TaskHelper       ??= new();
-        clickYesnoHelper ??= new();
+        TaskHelper ??= new();
 
-        config = Config.Load(this) ?? new();
+        freeShopChecker = FreeShopCheckerSig.GetStatic(3);
+        
+        CheckItemBarterHook ??= CheckItemBarterSig.GetHook<CheckItemBarterDelegate>(CheckItemBarterDetour);
+        CheckItemBarterHook.Enable();
 
         addon ??= new(this)
         {
-            InternalName          = "DROptimizedFreeShop",
-            Title                 = Info.Title,
-            Size                  = new(220f, 128f),
-            RememberClosePosition = false
+            InternalName = "DROptimizedFreeShop",
+            Title        = Info.Title,
+            Size         = new(230f, 128f),
         };
-
-        IAgentLifecycle.Instance().RegisterListener(AgentEvent.PostReceiveEvent, Dalamud.Game.Agent.AgentId.FreeShop, OnAgent);
-
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "FreeShop", OnAddon);
     }
 
     protected override void Uninit()
     {
-        IAgentLifecycle.Instance().UnregisterListener(OnAgent);
-        IAddonLifecycle.Instance().UnregisterListener(OnAddon);
-
-        clickYesnoHelper?.Abort();
-
         addon?.Dispose();
         addon = null;
-
-        clickYesnoHelper = null;
     }
 
-    private void OnAgent
+    private byte CheckItemBarterDetour
     (
-        AgentEvent type,
-        AgentArgs  args
+        nint       checker,
+        ushort     checkType,
+        Character* character,
+        nint       trade
     )
     {
-        if (!config.IsEnabled)
-            return;
+        if (checker == freeShopChecker && checkType is >= 1000 and <= 1012)
+            return 0;
 
-        var receiveEventArgs = args as AgentReceiveEventArgs;
-        var atkValues        = (AtkValue*)receiveEventArgs.AtkValues;
-
-        if (receiveEventArgs.EventKind == 0 && atkValues[0].Int == 0)
-        {
-            clickYesnoHelper.Abort();
-            clickYesnoHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
-        }
+        return CheckItemBarterHook.Original(checker, checkType, character, trade);
     }
 
-    private void OnAddon
+    private void BatchClaim
     (
-        AddonEvent type,
-        AddonArgs  args
-    )
-    {
-        if (type == AddonEvent.PreFinalize)
-            clickYesnoHelper?.Abort();
-    }
-
-    internal bool IsFastClaimEnabled
-    {
-        get => config.IsEnabled;
-        set
-        {
-            config.IsEnabled = value;
-            config.Save(this);
-        }
-    }
-
-    internal void BatchClaim
-    (
-        List<(int Index, uint ID)> itemData
+        List<(int Index, uint ItemID)> items
     )
     {
         TaskHelper.Abort();
 
-        var anythingNotInBag = false;
+        var agent = AgentFreeShop.Instance();
+        if (agent == null || !agent->AgentInterface.IsAgentActive()) return;
 
-        foreach (var (index, itemID) in itemData)
+        var addonID = agent->AgentInterface.AddonId;
+
+        foreach (var (index, itemID) in items)
         {
             if (LocalPlayerState.GetItemCount(itemID) > 0) continue;
 
-            anythingNotInBag = true;
+            var requested = false;
+            TaskHelper.Enqueue
+            (() =>
+                {
+                    var currentAgent = AgentFreeShop.Instance();
 
-            TaskHelper.Enqueue(() => AgentId.FreeShop.SendEvent(0, 0, index));
-            TaskHelper.DelayNext(10);
+                    if (currentAgent                         == null    ||
+                        currentAgent->AgentInterface.AddonId != addonID ||
+                        !currentAgent->AgentInterface.IsAgentActive())
+                    {
+                        TaskHelper.Abort();
+                        return true;
+                    }
+
+                    if ((uint)index >= currentAgent->ItemCount || currentAgent->Items[index].ItemID != itemID)
+                    {
+                        TaskHelper.Abort();
+                        return true;
+                    }
+
+                    if (currentAgent->Items[index].IsOwned || LocalPlayerState.GetItemCount(itemID) > 0)
+                        return true;
+
+                    if (requested) return false;
+                    if (currentAgent->Items[index].IsUnavailable) return true;
+                    if (currentAgent->IsInteractionBlocked || currentAgent->IsLoadingItems) return false;
+
+                    requested = true;
+                    AgentId.FreeShop.SendEvent(0, 0, index);
+                    return false;
+                }
+            );
         }
-
-        if (anythingNotInBag)
-            TaskHelper.Enqueue(() => BatchClaim(itemData));
-    }
-
-    private class Config : ModuleConfig
-    {
-        public bool IsEnabled = true;
     }
 
     internal class OptimizedFreeShopAddon
     (
         OptimizedFreeShop module
-    ) : AttachedAddon("FreeShop")
+    )
+        : AttachedAddon("FreeShop", AddonEvent.PostRefresh, AddonEvent.PostReceiveEvent)
     {
-        private readonly Dictionary<uint, IconButtonNode> jobButtons = [];
-
-        private uint selectedClassJob;
-
-        protected override AttachedAddonPosition AttachPosition =>
-            AttachedAddonPosition.LeftTop;
-
-        protected override void OnDraw
-        (
-            AtkUnitBase* addon
-        )
-        {
-            if (!HostAddon->IsAddonAndNodesReady()) return;
-
-            var dropDownComponent = HostAddon->GetComponentByNodeId(3);
-            if (dropDownComponent == null) return;
-
-            var checkBoxComponent = dropDownComponent->UldManager.SearchNodeById(2)->GetAsAtkComponentCheckBox();
-            if (checkBoxComponent == null) return;
-
-            var textNode = checkBoxComponent->ButtonTextNode;
-            if (textNode == null) return;
-
-            var selectedItemText = new ReadOnlySeString(textNode->NodeText);
-
-            var firstPayload = selectedItemText.First();
-
-            // 没法拿到职业图标, 肯定不是
-            if (firstPayload.Type            != ReadOnlySePayloadType.Macro ||
-                firstPayload.MacroCode       != MacroCode.Icon              ||
-                firstPayload.ExpressionCount != 1                           ||
-                !firstPayload.TryGetExpression(out var expr)                ||
-                !expr.TryGetUInt(out var bitmapFontIconID))
-            {
-                UpdateSelectedJob(0);
-                return;
-            }
-
-            var classJob = ((BitmapFontIcon)bitmapFontIconID).ToClassJob();
-            UpdateSelectedJob(classJob.RowId);
-        }
+        private readonly Dictionary<uint, List<(int Index, uint ItemID)>>                             jobItems      = [];
+        private readonly Dictionary<uint, (IconButtonNode Button, ResNode Background, ResNode Image)> jobHighlights = [];
+        
+        private VerticalListNode? jobLayout;
+        private uint?             highlightedClassJobID;
 
         protected override void OnSetup
         (
@@ -195,218 +160,274 @@ public unsafe class OptimizedFreeShop : ModuleBase
             Span<AtkValue> atkValues
         )
         {
-            jobButtons.Clear();
-            selectedClassJob = 0;
+            jobItems.Clear();
+            jobHighlights.Clear();
 
-            if (WindowNode is WindowNode windowNode)
-                windowNode.CloseButtonNode.IsVisible = false;
-
-            var verticalLayout = new VerticalListNode
+            jobLayout = new()
             {
-                IsVisible   = true,
-                ItemSpacing = 4f,
                 Position    = ContentStartPosition,
-                Size        = ContentSize with { Y = 28f }
+                ItemSpacing = 4f,
+                Width       = ContentSize.X,
+                FitContents = true
             };
+            jobLayout.AttachNode(this);
 
-            var enabledNode = new CheckboxNode
+            RefreshItems();
+        }
+
+        protected override void OnHostAddon
+        (
+            AddonEvent type,
+            AddonArgs? args
+        )
+        {
+            switch (type)
             {
-                Size      = ContentSize with { Y = 28f },
-                IsVisible = true,
-                IsChecked = module.IsFastClaimEnabled,
-                IsEnabled = true,
-                String    = Lang.Get("OptimizedFreeShop-FastClaim"),
-                OnClick   = isChecked => module.IsFastClaimEnabled = isChecked
-            };
-            verticalLayout.AddNode(enabledNode); // 第一行
+                case AddonEvent.PostRefresh when IsAllocated:
+                    RefreshItems();
+                    break;
+                case AddonEvent.PostReceiveEvent when args is AddonReceiveEventArgs receiveEventArgs &&
+                                                      (AtkEventType)receiveEventArgs.AtkEventType is AtkEventType.ListItemHighlight or AtkEventType.ButtonClick:
+                    UpdateHighlights();
+                    break;
+                case AddonEvent.PostClose:
+                case AddonEvent.PreFinalize:
+                    module.TaskHelper?.Abort();
+                    break;
+            }
+        }
 
-            var jobLineNode = new HorizontalListNode
+        protected override void OnFinalize
+        (
+            AtkUnitBase* addon
+        )
+        {
+            jobItems.Clear();
+            jobHighlights.Clear();
+            
+            highlightedClassJobID = null;
+            jobLayout             = null;
+            
+            base.OnFinalize(addon);
+        }
+
+        private void RefreshItems()
+        {
+            if (jobLayout == null || !HostAddon->IsAddonAndNodesReady()) return;
+
+            var host        = (AddonFreeShop*)HostAddon;
+            var classJobs   = host->ClassJobIDs[..(int)host->ClassJobCount];
+            var jobsChanged = jobItems.Count != classJobs.Length - 1;
+
+            for (var i = 1; i < classJobs.Length; i++)
             {
-                IsVisible = true,
-                Size      = ContentSize with { Y = 36f },
-                Position  = ContentStartPosition.WithY(0)
-            };
-
-            var jobCount  = 0;
-            var lineCount = 0;
-
-            foreach (var (classJobCategory, items) in GetClaimItems())
-            {
-                if (!LuminaGetter.TryGetRow(classJobCategory, out ClassJobCategory categoryData)) continue;
-                if (LuminaGetter.Get<ClassJob>()
-                                .FirstOrDefault(x => categoryData.IsClassJobIn(x.RowId))
-                    is not { RowId: > 0 } classJobData)
-                    continue;
-
-                if (jobCount >= 5)
+                if (jobItems.TryGetValue(classJobs[i], out var items))
+                    items.Clear();
+                else
                 {
-                    verticalLayout.AddNode(jobLineNode);
-                    jobLineNode = new()
-                    {
-                        IsVisible = true,
-                        Size      = ContentSize with { Y = 36f },
-                        Position  = ContentStartPosition.WithY(0)
-                    };
+                    jobsChanged = true;
+                    jobItems.Add(classJobs[i], []);
+                }
+            }
 
-                    jobCount = 0;
-                    lineCount++;
+            foreach (var classJobID in jobItems.Keys.ToArray())
+            {
+                if (!classJobs.Contains(classJobID))
+                    jobItems.Remove(classJobID);
+            }
+
+            foreach (var item in host->Items[..(int)host->ItemCount])
+            {
+                if (!LuminaGetter.TryGetRow(item.ClassJobCategoryID, out ClassJobCategory category)) continue;
+
+                foreach (var (classJobID, items) in jobItems)
+                {
+                    if (category.IsClassJobIn(classJobID))
+                        items.Add((item.Index, item.ItemID));
+                }
+            }
+
+            if (jobsChanged || jobHighlights.Count != jobItems.Count)
+                RebuildButtons(classJobs);
+
+            UpdateHighlights();
+            SetWindowSize(Size.X, ContentStartPosition.Y + jobLayout.Height + 16f);
+        }
+
+        private void RebuildButtons
+        (
+            Span<uint> classJobs
+        )
+        {
+            jobLayout.Clear();
+            jobHighlights.Clear();
+            highlightedClassJobID = null;
+            HorizontalListNode? row      = null;
+            var                 jobCount = 0;
+
+            foreach (var classJobID in classJobs)
+            {
+                if (classJobID == 0 || !LuminaGetter.TryGetRow(classJobID, out ClassJob classJob)) continue;
+
+                if (jobCount % 4 == 0)
+                {
+                    row = new()
+                    {
+                        ItemSpacing = 4f,
+                        Size        = ContentSize with { Y = 48f },
+                    };
+                    jobLayout.AddNode(row);
                 }
 
-                var jobButton = new IconButtonNode
+                var button = new IconButtonNode
                 {
-                    Size        = new(36f),
-                    IsVisible   = true,
-                    IsEnabled   = true,
-                    IconId      = classJobData.RowId + 62100,
-                    OnClick     = () => module.BatchClaim(items),
-                    TextTooltip = $"{Lang.Get("OptimizedFreeShop-BatchClaim")}: {classJobData.Name}"
+                    Size    = new(48f),
+                    IconId  = classJobID + 62100,
+                    OnClick = () => module.BatchClaim(jobItems[classJobID]),
+                    TextTooltip = Lang.Get
+                    (
+                        "OptimizedFreeShop-BatchClaim",
+                        new Dictionary<string, object>
+                        {
+                            ["classJob"] = classJob.Name
+                        }
+                    )
                 };
+                var background = AddHighlightTimeline
+                (
+                    button,
+                    button.BackgroundNode,
+                    new TimelineBuilder()
+                        .AddFrameSetWithFrame(1, 10, 1, Vector2.Zero, 255, multiplyColor: new Vector3(100f))
+                        .BeginFrameSet(11, 17)
+                        .AddFrame(11, Vector2.Zero, 255, multiplyColor: new Vector3(100f))
+                        .AddFrame(13, Vector2.Zero, 255, multiplyColor: new Vector3(100f), addColor: new Vector3(16f))
+                        .EndFrameSet()
+                        .AddFrameSetWithFrame(18, 26, 18, new Vector2(0f, 1f), 255, new Vector3(16f))
+                        .AddFrameSetWithFrame(27, 36, 27, Vector2.Zero,        178, multiplyColor: new Vector3(50f))
+                        .AddFrameSetWithFrame(37, 46, 37, Vector2.Zero,        255, multiplyColor: new Vector3(100f), addColor: new Vector3(16f))
+                        .BeginFrameSet(47, 53)
+                        .AddFrame(47, Vector2.Zero, 255, multiplyColor: new Vector3(100f), addColor: new Vector3(16f))
+                        .AddFrame(53, Vector2.Zero, 255, multiplyColor: new Vector3(100f))
+                        .EndFrameSet(),
+                    32f,
+                    115f
+                );
 
-                AddHighlightTimeline(jobButton);
-                PlayHighlight(jobButton, false);
-                jobButtons[classJobData.RowId] = jobButton;
-
-                jobLineNode.AddNode(jobButton);
-                jobLineNode.AddDummy(4f);
+                var image = AddHighlightTimeline
+                (
+                    button,
+                    button.ImageNode,
+                    new TimelineBuilder()
+                        .AddFrameSetWithFrame(1,  10, 1,  Vector2.Zero,        255, multiplyColor: new Vector3(100f))
+                        .AddFrameSetWithFrame(11, 17, 11, Vector2.Zero,        255, multiplyColor: new Vector3(100f))
+                        .AddFrameSetWithFrame(18, 26, 18, new Vector2(0f, 1f), 255, multiplyColor: new Vector3(100f))
+                        .AddFrameSetWithFrame(27, 36, 27, Vector2.Zero,        153, multiplyColor: new Vector3(80f))
+                        .AddFrameSetWithFrame(37, 46, 37, Vector2.Zero,        255, multiplyColor: new Vector3(100f))
+                        .AddFrameSetWithFrame(47, 53, 47, Vector2.Zero,        255, multiplyColor: new Vector3(100f)),
+                    20f,
+                    110f
+                );
+                jobHighlights.Add(classJobID, (button, background, image));
+                row.AddNode(button);
                 jobCount++;
             }
-
-            if (jobCount > 0)
-            {
-                verticalLayout.AddNode(jobLineNode);
-                lineCount++;
-            }
-
-            SetWindowSize(Size.X, 128f + (Math.Max(lineCount - 1, 0) * 40f));
-
-            verticalLayout.AttachNode(this);
         }
 
-        private static Dictionary<uint, List<(int Index, uint ID)>> GetClaimItems()
-        {
-            var itemCount = FreeShop->AtkValues[76].UInt;
-            var itemIDs   = new Dictionary<uint, List<(int Index, uint ID)>>();
-
-            for (var i = 0; i < itemCount; i++)
-            {
-                var itemID = FreeShop->AtkValues[138 + i].UInt;
-                if (!LuminaGetter.TryGetRow(itemID, out Item itemData)) continue;
-
-                itemIDs.TryAdd(itemData.ClassJobCategory.RowId, []);
-                itemIDs[itemData.ClassJobCategory.RowId].Add((i, itemID));
-            }
-
-            return itemIDs;
-        }
-
-        private void UpdateSelectedJob
+        private static ResNode AddHighlightTimeline
         (
-            uint classJobID
+            IconButtonNode  button,
+            NodeBase        content,
+            TimelineBuilder interactionTimeline,
+            float           addColor,
+            float           multiplyColor
         )
         {
-            if (classJobID == 0)
+            var position = content.Position;
+            var animation = new ResNode
             {
-                if (selectedClassJob != 0)
-                {
-                    foreach (var (_, buttonNode) in jobButtons)
-                        PlayHighlight(buttonNode, true);
-                }
-
-                selectedClassJob = 0;
-                return;
-            }
-
-            if (selectedClassJob == classJobID)
-                return;
-
-            if (jobButtons.TryGetValue(selectedClassJob, out var previousButton))
-                PlayHighlight(previousButton, false);
-
-            selectedClassJob = classJobID;
-
-            if (jobButtons.TryGetValue(selectedClassJob, out var currentButton))
-                PlayHighlight(currentButton, true);
-        }
-
-        private static void AddHighlightTimeline
-        (
-            IconButtonNode button
-        )
-        {
-            button.AddTimeline
+                Size = button.Size
+            };
+            content.DetachNode();
+            animation.AttachNode(button);
+            content.AttachNode(animation);
+            animation.AddTimeline
             (
-                new TimelineBuilder()
-                    .BeginFrameSet(1, 220)
-                    .AddLabelPair(1,   10,  1)
-                    .AddLabelPair(11,  17,  2)
-                    .AddLabelPair(18,  26,  3)
-                    .AddLabelPair(27,  36,  7)
-                    .AddLabelPair(37,  46,  6)
-                    .AddLabelPair(47,  53,  4)
-                    .AddLabelPair(201, 210, 101)
-                    .AddLabelPair(211, 220, 102)
+                interactionTimeline
+                    .BeginFrameSet(HIGHLIGHT_ON_START_FRAME, HIGHLIGHT_OFF_END_FRAME)
+                    .AddLabelPair(HIGHLIGHT_ON_START_FRAME,  HIGHLIGHT_ON_END_FRAME,  HIGHLIGHT_ON_LABEL)
+                    .AddLabelPair(HIGHLIGHT_OFF_START_FRAME, HIGHLIGHT_OFF_END_FRAME, HIGHLIGHT_OFF_LABEL)
                     .EndFrameSet()
                     .Build()
             );
-
-            button.BackgroundNode.AddTimeline
+            content.AddTimeline
             (
                 new TimelineBuilder()
-                    .AddFrameSetWithFrame(1, 10, 1, Vector2.Zero, 255, multiplyColor: new Vector3(100f))
-                    .BeginFrameSet(11, 17)
-                    .AddFrame(11, Vector2.Zero, 255, multiplyColor: new Vector3(100f))
-                    .AddFrame(13, Vector2.Zero, 255, multiplyColor: new Vector3(100f), addColor: new Vector3(16f))
+                    .BeginFrameSet(HIGHLIGHT_ON_START_FRAME, HIGHLIGHT_ON_END_FRAME)
+                    .AddFrame(HIGHLIGHT_ON_START_FRAME, position, addColor: Vector3.Zero,          multiplyColor: new Vector3(100f))
+                    .AddFrame(HIGHLIGHT_ON_END_FRAME,   position, addColor: new Vector3(addColor), multiplyColor: new Vector3(multiplyColor))
                     .EndFrameSet()
-                    .AddFrameSetWithFrame(18, 26, 18, new Vector2(0f, 1f), 255, new Vector3(16f))
-                    .AddFrameSetWithFrame(27, 36, 27, Vector2.Zero,        178, multiplyColor: new Vector3(50f))
-                    .AddFrameSetWithFrame(37, 46, 37, Vector2.Zero,        255, multiplyColor: new Vector3(100f), addColor: new Vector3(16f))
-                    .BeginFrameSet(47, 53)
-                    .AddFrame(47, Vector2.Zero, 255, multiplyColor: new Vector3(100f), addColor: new Vector3(16f))
-                    .AddFrame(53, Vector2.Zero, 255, multiplyColor: new Vector3(100f))
-                    .EndFrameSet()
-                    .BeginFrameSet(201, 210)
-                    .AddFrame(201, addColor: Vector3.Zero,     multiplyColor: new Vector3(100f))
-                    .AddFrame(210, addColor: new Vector3(32f), multiplyColor: new Vector3(115f))
-                    .EndFrameSet()
-                    .BeginFrameSet(211, 220)
-                    .AddFrame(211, addColor: new Vector3(32f), multiplyColor: new Vector3(115f))
-                    .AddFrame(220, addColor: Vector3.Zero,     multiplyColor: new Vector3(100f))
+                    .BeginFrameSet(HIGHLIGHT_OFF_START_FRAME, HIGHLIGHT_OFF_END_FRAME)
+                    .AddFrame(HIGHLIGHT_OFF_START_FRAME, position, addColor: new Vector3(addColor), multiplyColor: new Vector3(multiplyColor))
+                    .AddFrame(HIGHLIGHT_OFF_END_FRAME,   position, addColor: Vector3.Zero,          multiplyColor: new Vector3(100f))
                     .EndFrameSet()
                     .Build()
             );
-
-            button.ImageNode.AddTimeline
-            (
-                new TimelineBuilder()
-                    .AddFrameSetWithFrame(1,  10, 1,  new Vector2(8f),     255, multiplyColor: new Vector3(100f))
-                    .AddFrameSetWithFrame(11, 17, 11, new Vector2(8f),     255, multiplyColor: new Vector3(100f))
-                    .AddFrameSetWithFrame(18, 26, 18, new Vector2(8f, 9f), 255, multiplyColor: new Vector3(100f))
-                    .AddFrameSetWithFrame(27, 36, 27, new Vector2(8f),     153, multiplyColor: new Vector3(80f))
-                    .AddFrameSetWithFrame(37, 46, 37, new Vector2(8f),     255, multiplyColor: new Vector3(100f))
-                    .AddFrameSetWithFrame(47, 53, 47, new Vector2(8f),     255, multiplyColor: new Vector3(100f))
-                    .BeginFrameSet(201, 210)
-                    .AddFrame(201, new Vector2(8f), addColor: Vector3.Zero,     multiplyColor: new Vector3(100f))
-                    .AddFrame(210, new Vector2(8f), addColor: new Vector3(20f), multiplyColor: new Vector3(110f))
-                    .EndFrameSet()
-                    .BeginFrameSet(211, 220)
-                    .AddFrame(211, new Vector2(8f), addColor: new Vector3(20f), multiplyColor: new Vector3(110f))
-                    .AddFrame(220, new Vector2(8f), addColor: Vector3.Zero,     multiplyColor: new Vector3(100f))
-                    .EndFrameSet()
-                    .Build()
-            );
+            return animation;
         }
 
-        private static void PlayHighlight
-        (
-            IconButtonNode button,
-            bool           isSelected
-        )
+        private void UpdateHighlights()
         {
-            var labelID = isSelected ?
-                              101 :
-                              102;
+            if (!HostAddon->IsAddonAndNodesReady()) return;
 
-            button.Timeline?.PlayAnimation(labelID);
+            var selectedClassJobID = ((AddonFreeShop*)HostAddon)->SelectedClassJobID;
+            if (highlightedClassJobID == selectedClassJobID) return;
+
+            foreach (var (classJobID, highlight) in jobHighlights)
+            {
+                var isHighlighted  = selectedClassJobID    == 0 || selectedClassJobID    == classJobID;
+                var wasHighlighted = highlightedClassJobID == 0 || highlightedClassJobID == classJobID;
+                if (highlightedClassJobID.HasValue && isHighlighted == wasHighlighted) continue;
+
+                var startFrame = isHighlighted ?
+                                     HIGHLIGHT_ON_START_FRAME :
+                                     HIGHLIGHT_OFF_START_FRAME;
+                var background = highlight.Button.BackgroundNode;
+                var image      = highlight.Button.ImageNode;
+                background.Timeline.UpdateKeyFrame
+                (
+                    startFrame,
+                    KeyFrameGroupType.Tint,
+                    addColor: background.AddColor           * 255f,
+                    multiplyColor: background.MultiplyColor * 100f
+                );
+                image.Timeline.UpdateKeyFrame
+                (
+                    startFrame,
+                    KeyFrameGroupType.Tint,
+                    addColor: image.AddColor           * 255f,
+                    multiplyColor: image.MultiplyColor * 100f
+                );
+
+                var labelID = isHighlighted ?
+                                  HIGHLIGHT_ON_LABEL :
+                                  HIGHLIGHT_OFF_LABEL;
+                highlight.Background.Timeline.PlayAnimation(labelID);
+                highlight.Image.Timeline.PlayAnimation(labelID);
+            }
+
+            highlightedClassJobID = selectedClassJobID;
         }
+
+        #region 常量
+
+        private const int HIGHLIGHT_ON_LABEL        = 101;
+        private const int HIGHLIGHT_OFF_LABEL       = 102;
+        private const int HIGHLIGHT_ON_START_FRAME  = 201;
+        private const int HIGHLIGHT_ON_END_FRAME    = 210;
+        private const int HIGHLIGHT_OFF_START_FRAME = 211;
+        private const int HIGHLIGHT_OFF_END_FRAME   = 220;
+
+        #endregion
     }
 }
