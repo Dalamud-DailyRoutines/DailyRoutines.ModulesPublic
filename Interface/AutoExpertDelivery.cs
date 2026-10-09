@@ -435,7 +435,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
 
             var defaultPageGroupNode = new RadioButtonGroupNode
             {
-                VerticalPadding = 5f
+                ItemSpacing = 5f
             };
 
             for (var i = 0U; i < 3; i++)

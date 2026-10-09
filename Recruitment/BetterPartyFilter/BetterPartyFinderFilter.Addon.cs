@@ -322,7 +322,7 @@ public partial class BetterPartyFinderFilter
                 SelectFirstButtonByDefault = false
             };
             orderRadioGroup.LayoutOrientation = LayoutOrientation.Horizontal;
-            orderRadioGroup.HorizontalPadding = ORDER_ROW_SPACING;
+            orderRadioGroup.ItemSpacing       = ORDER_ROW_SPACING;
 
             ascRadioButton = orderRadioGroup.AddButton
             (
@@ -510,7 +510,7 @@ public partial class BetterPartyFinderFilter
                 SelectFirstButtonByDefault = false
             };
             modeRadioGroup.LayoutOrientation = LayoutOrientation.Horizontal;
-            modeRadioGroup.HorizontalPadding = ORDER_ROW_SPACING;
+            modeRadioGroup.ItemSpacing       = ORDER_ROW_SPACING;
 
             autoModeRadioButton = modeRadioGroup.AddButton
             (
@@ -656,7 +656,7 @@ public partial class BetterPartyFinderFilter
                 SelectFirstButtonByDefault = false
             };
             listModeRadioGroup.LayoutOrientation = LayoutOrientation.Horizontal;
-            listModeRadioGroup.HorizontalPadding = ORDER_ROW_SPACING;
+            listModeRadioGroup.ItemSpacing       = ORDER_ROW_SPACING;
 
             blacklistRadioButton = listModeRadioGroup.AddButton
             (
