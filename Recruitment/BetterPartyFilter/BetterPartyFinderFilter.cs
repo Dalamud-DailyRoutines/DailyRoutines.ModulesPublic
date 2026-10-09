@@ -5,8 +5,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Gui.PartyFinder.Types;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -31,12 +29,6 @@ public partial class BetterPartyFinderFilter : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
 
-    private static uint NotifyNewRecruitment
-    {
-        get => IGameConfig.Instance().UiConfig.GetUInt("PartyFinderNewArrivalDisp");
-        set => IGameConfig.Instance().UiConfig.Set("PartyFinderNewArrivalDisp", value);
-    }
-
     private Config config = null!;
 
     private int  batchIndex;
@@ -57,7 +49,7 @@ public partial class BetterPartyFinderFilter : ModuleBase
         {
             InternalName = "DRBetterPartyFinderFilter",
             Title        = Info.Title,
-            Size         = new(450f, 220f),
+            Size         = new(450f, 220f)
         };
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "LookingForGroup", OnAddon);
@@ -74,60 +66,6 @@ public partial class BetterPartyFinderFilter : ModuleBase
 
         buttonNode?.Dispose();
         buttonNode = null;
-
-        isNeedToOpenAddon = false;
-    }
-
-    private static unsafe void RefreshDisplaySettings
-    (
-        bool? displayBlacklisted = null,
-        bool? displayLocked      = null,
-        bool? notifyRecruitment  = null,
-        uint? notifyInterval     = null,
-        bool? noNotifyWhenZero   = null
-    )
-    {
-        displayBlacklisted ??= FlagStatusModule.Instance()->UIFlags[12] == 1;
-        displayLocked      ??= FlagStatusModule.Instance()->UIFlags[7]  == 0;
-        notifyInterval     ??= FlagStatusModule.Instance()->UIFlags[5];
-        noNotifyWhenZero   ??= FlagStatusModule.Instance()->UIFlags[6] == 1;
-        notifyRecruitment  ??= NotifyNewRecruitment                    == 1;
-
-        var flag0 = displayBlacklisted.Value ?
-                        0 :
-                        0x20000;
-        var flag1 = displayLocked.Value ?
-                        0 :
-                        0x10000;
-        var flag2 = noNotifyWhenZero.Value ?
-                        0x10000 :
-                        0;
-        var flag3 = notifyRecruitment.Value ?
-                        0x1 :
-                        0;
-
-        var targetValue0 = displayBlacklisted.Value ?
-                               1 :
-                               0;
-        var targetValue1 = displayLocked.Value ?
-                               0 :
-                               1;
-        var targetValue2 = noNotifyWhenZero.Value ?
-                               1 :
-                               0;
-        var targetValue3 = notifyRecruitment.Value ?
-                               1 :
-                               0;
-
-        if (FlagStatusModule.Instance()->UIFlags[12] == targetValue0         &&
-            FlagStatusModule.Instance()->UIFlags[7]  == targetValue1         &&
-            FlagStatusModule.Instance()->UIFlags[5]  == notifyInterval.Value &&
-            FlagStatusModule.Instance()->UIFlags[6]  == targetValue2         &&
-            NotifyNewRecruitment                     == targetValue3)
-            return;
-
-        AgentId.LookingForGroup.SendEvent(13, 0, (uint)(flag2 + notifyInterval.Value), (uint)(flag0 + flag1 + flag3));
-        NotifyNewRecruitment = (uint)targetValue3;
     }
 
     private void HandleRegexUpdate
@@ -139,13 +77,25 @@ public partial class BetterPartyFinderFilter : ModuleBase
     {
         try
         {
-            _                       = new Regex(value);
+            _ = new Regex(value);
+
             config.BlackList[index] = new(key, value);
             config.Save(this);
         }
         catch (ArgumentException)
         {
-            NotifyHelper.Instance().NotificationWarning(Lang.Get("BetterPartyFinderFilter-RegexError"));
+            var message = Lang.Get
+            (
+                "BetterPartyFinderFilter-Notification-RegexError",
+                new Dictionary<string, object>
+                {
+                    ["input"] = value
+                }
+            );
+
+            NotifyHelper.ToastError(message);
+            NotifyHelper.Instance().ChatError(message);
+
             config = Config.Load(this) ?? new();
         }
     }
@@ -182,10 +132,7 @@ public partial class BetterPartyFinderFilter : ModuleBase
             return true;
 
         var description = listing.Description.ToString();
-        if (string.IsNullOrWhiteSpace(description))
-            return true;
-
-        return descriptionSet.Add((listing.RawDuty, description));
+        return string.IsNullOrWhiteSpace(description) || descriptionSet.Add((listing.RawDuty, description));
     }
 
     private bool FilterByRegexList

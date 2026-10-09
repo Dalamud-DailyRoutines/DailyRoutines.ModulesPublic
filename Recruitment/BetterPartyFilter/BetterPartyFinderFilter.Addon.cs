@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Reflection;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Info;
 using DailyRoutines.Extensions;
@@ -22,7 +21,6 @@ namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
 public partial class BetterPartyFinderFilter
 {
     private TextButtonNode?               buttonNode;
-    private bool                          isNeedToOpenAddon;
     private BetterPartyFinderFilterAddon? addon;
 
     private unsafe void OnAddon
@@ -41,12 +39,7 @@ public partial class BetterPartyFinderFilter
                     Size     = new(154, 32),
                     String   = Lang.Get("Filter"),
                     Position = new(736, 72),
-                    OnClick = () =>
-                    {
-                        isNeedToOpenAddon ^= true;
-                        if (!isNeedToOpenAddon)
-                            addon.Close();
-                    }
+                    OnClick  = () => addon.Toggle()
                 };
 
                 buttonNode.LabelNode.AutoAdjustTextSize();
@@ -64,8 +57,7 @@ public partial class BetterPartyFinderFilter
                 break;
 
             case AddonEvent.PreFinalize:
-                buttonNode        = null;
-                isNeedToOpenAddon = false;
+                buttonNode = null;
                 break;
         }
     }
@@ -73,38 +65,14 @@ public partial class BetterPartyFinderFilter
     private unsafe class BetterPartyFinderFilterAddon
     (
         BetterPartyFinderFilter module
-    ) : AttachedAddon("LookingForGroup")
+    ) : AttachedAddon("LookingForGroup", AddonEvent.PostRefresh, AddonEvent.PostReceiveEvent)
     {
-        private class RegexRow
-        {
-            public HorizontalListNode Row       { get; init; } = null!;
-            public CheckboxNode       Checkbox  { get; init; } = null!;
-            public TextInputNode      TextInput { get; init; } = null!;
-            public int                Index     { get; set; }
-        }
+        protected override bool AutoOpenAddon => false;
 
         private readonly List<RegexRow> regexRows = [];
 
         private TabBarNode tabBar1 = null!;
         private TabBarNode tabBar2 = null!;
-
-        private static readonly FieldInfo RadioButtonsField =
-            typeof(TabBarNode).GetField("radioButtons", BindingFlags.NonPublic | BindingFlags.Instance);
-
-        private static void ClearTabBarSelection
-        (
-            TabBarNode bar
-        )
-        {
-            if (RadioButtonsField.GetValue(bar) is List<TabBarRadioButtonNode> buttons)
-            {
-                foreach (var btn in buttons)
-                {
-                    btn.IsChecked  = false;
-                    btn.IsSelected = false;
-                }
-            }
-        }
 
         private VerticalListNode generalPanel     = null!;
         private VerticalListNode highEndPanel     = null!;
@@ -131,47 +99,36 @@ public partial class BetterPartyFinderFilter
         private VerticalListNode     listContainer        = null!;
         private PaginationNode       paginationBar        = null!;
 
-        private int currentPageIndex;
-        private int currentActiveTab;
+        private int  currentPageIndex;
+        private int  currentActiveTab;
+        private bool isPanelReady;
 
-        protected override AttachedAddonPosition AttachPosition =>
-            AttachedAddonPosition.LeftTop;
-
-        protected override bool CanOpenAddon => module.isNeedToOpenAddon;
-
-        protected override void OnDraw
+        protected override void OnHostAddon
         (
-            AtkUnitBase* addon
+            AddonEvent type,
+            AddonArgs? args
         )
         {
-            if (!HostAddon->IsAddonAndNodesReady()) return;
-
-            if (generalPanel.IsVisible)
+            switch (type)
             {
-                var orderFlag = FlagStatusModule.Instance()->UIFlags[4];
+                case AddonEvent.PostRefresh:
+                case AddonEvent.PostReceiveEvent
+                    when args is AddonReceiveEventArgs { AtkEventType: var eventType } eventArgs &&
+                         (((AtkEventType)eventType == AtkEventType.ListItemClick && eventArgs.EventParam == 1) ||
+                          ((AtkEventType)eventType == AtkEventType.ButtonClick   && eventArgs.EventParam == 7)):
 
-                orderRadioGroup.SelectedButton = orderFlag switch
-                {
-                    1 => ascRadioButton,
-                    3 => desRadioButton,
-                    _ => null
-                };
+                    if (IsRequestedOpen && currentActiveTab == 0)
+                        RefreshGeneralPanel();
 
-                blacklistedCheckbox.IsChecked      = FlagStatusModule.Instance()->UIFlags[12] == 1;
-                lockedCheckbox.IsChecked           = FlagStatusModule.Instance()->UIFlags[7]  == 0;
-                notifyCheckbox.IsChecked           = NotifyNewRecruitment                     == 1;
-                notifyIntervalInput.Value          = (int)FlagStatusModule.Instance()->UIFlags[5];
-                noNotifyWhenZeroCheckbox.IsChecked = FlagStatusModule.Instance()->UIFlags[6] == 1;
-
-                var isNotifyEnabled = notifyCheckbox.IsChecked;
-
-                if (notifyLayout.IsVisible != isNotifyEnabled)
-                {
-                    notifyLayout.IsVisible = isNotifyEnabled;
-                    RecalculatePanel(generalPanel);
-                }
+                    break;
             }
         }
+
+        protected override void OnShow
+        (
+            AtkUnitBase* addon
+        ) =>
+            RefreshGeneralPanel();
 
         protected override void OnSetup
         (
@@ -179,6 +136,7 @@ public partial class BetterPartyFinderFilter
             Span<AtkValue> atkValues
         )
         {
+            isPanelReady     = false;
             currentPageIndex = 0;
             currentActiveTab = 0;
 
@@ -187,8 +145,96 @@ public partial class BetterPartyFinderFilter
             SetupHighEndPanel();
             SetupDescriptionPanel();
 
+            isPanelReady = true;
             SwitchTab(0);
             module.TaskHelper.Enqueue(() => ClearTabBarSelection(tabBar2));
+        }
+
+        protected override void OnFinalize
+        (
+            AtkUnitBase* addon
+        )
+        {
+            isPanelReady = false;
+            base.OnFinalize(addon);
+        }
+
+        private static void ClearTabBarSelection
+        (
+            TabBarNode bar
+        )
+        {
+            foreach (var button in bar.TabButtons)
+            {
+                button.IsChecked  = false;
+                button.IsSelected = false;
+            }
+        }
+
+        private void RefreshGeneralPanel()
+        {
+            if (!isPanelReady) return;
+
+            var flags = FlagStatusModule.Instance();
+            orderRadioGroup.SelectedButton = (flags->UIFlags[4] & 2) == 0 ?
+                                                 ascRadioButton :
+                                                 desRadioButton;
+
+            blacklistedCheckbox.IsChecked      = flags->UIFlags[12]                                                   == 1;
+            lockedCheckbox.IsChecked           = flags->UIFlags[7]                                                    == 0;
+            notifyCheckbox.IsChecked           = IGameConfig.Instance().UiConfig.GetUInt("PartyFinderNewArrivalDisp") == 1;
+            noNotifyWhenZeroCheckbox.IsChecked = flags->UIFlags[6]                                                    == 1;
+
+            var notifyInterval = (int)flags->UIFlags[5];
+            if (notifyIntervalInput.Value != notifyInterval)
+                notifyIntervalInput.Value = notifyInterval;
+
+            if (notifyLayout.IsVisible != notifyCheckbox.IsChecked)
+            {
+                notifyLayout.IsVisible = notifyCheckbox.IsChecked;
+                notifyLayout.RecalculateLayout();
+                RecalculatePanel(generalPanel);
+            }
+        }
+
+        private void RefreshDisplaySettings
+        (
+            bool? displayBlacklisted = null,
+            bool? displayLocked      = null,
+            bool? notifyRecruitment  = null,
+            uint? notifyInterval     = null,
+            bool? noNotifyWhenZero   = null
+        )
+        {
+            var flags                     = FlagStatusModule.Instance();
+            var notifyCurrentlyEnabled    = IGameConfig.Instance().UiConfig.GetUInt("PartyFinderNewArrivalDisp") == 1;
+            var showBlacklisted           = displayBlacklisted ?? flags->UIFlags[12] == 1;
+            var showLocked                = displayLocked      ?? flags->UIFlags[7]  == 0;
+            var notifyEnabled             = notifyRecruitment  ?? notifyCurrentlyEnabled;
+            var interval                  = notifyInterval     ?? flags->UIFlags[5];
+            var suppressEmptyNotification = noNotifyWhenZero   ?? flags->UIFlags[6] == 1;
+
+            if (showBlacklisted           == (flags->UIFlags[12] == 1) &&
+                showLocked                == (flags->UIFlags[7]  == 0) &&
+                notifyEnabled             == notifyCurrentlyEnabled    &&
+                interval                  == flags->UIFlags[5]         &&
+                suppressEmptyNotification == (flags->UIFlags[6] == 1))
+                return;
+
+            var notificationFlags = interval;
+            if (suppressEmptyNotification)
+                notificationFlags |= 0x10000;
+
+            var displayFlags = notifyEnabled ?
+                                   1U :
+                                   0U;
+            if (!showLocked)
+                displayFlags |= 0x10000;
+            if (!showBlacklisted)
+                displayFlags |= 0x20000;
+
+            AgentId.LookingForGroup.SendEvent(13, 0, notificationFlags, displayFlags);
+            RefreshGeneralPanel();
         }
 
         private void SetupTabBars()
@@ -229,10 +275,7 @@ public partial class BetterPartyFinderFilter
                 TabBarNode tab
             )
             {
-                if (RadioButtonsField.GetValue(tab) is not List<TabBarRadioButtonNode> buttons)
-                    return;
-
-                foreach (var btn in buttons)
+                foreach (var btn in tab.TabButtons)
                 {
                     btn.TextTooltip         =  btn.String;
                     btn.LabelNode.TextFlags |= TextFlags.Ellipsis;
@@ -311,25 +354,17 @@ public partial class BetterPartyFinderFilter
 
             blacklistedCheckbox = new CheckboxNode
             {
-                Size   = ContentSize with { Y = 24f },
-                String = LuminaWrapper.GetAddonText(11124),
-                OnClick = isChecked =>
-                {
-                    var currentLocked = FlagStatusModule.Instance()->UIFlags[7] == 0;
-                    RefreshDisplaySettings(isChecked, currentLocked);
-                }
+                Size    = ContentSize with { Y = 24f },
+                String  = LuminaWrapper.GetAddonText(11124),
+                OnClick = isChecked => RefreshDisplaySettings(isChecked)
             };
             displayLayout.AddNode(blacklistedCheckbox);
 
             lockedCheckbox = new CheckboxNode
             {
-                Size   = ContentSize with { Y = 24f },
-                String = LuminaWrapper.GetAddonText(11128),
-                OnClick = isChecked =>
-                {
-                    var currentBlacklisted = FlagStatusModule.Instance()->UIFlags[12] == 1;
-                    RefreshDisplaySettings(currentBlacklisted, isChecked);
-                }
+                Size    = ContentSize with { Y = 24f },
+                String  = LuminaWrapper.GetAddonText(11128),
+                OnClick = isChecked => RefreshDisplaySettings(displayLocked: isChecked)
             };
             displayLayout.AddNode(lockedCheckbox);
 
@@ -355,25 +390,16 @@ public partial class BetterPartyFinderFilter
 
             notifyCheckbox = new CheckboxNode
             {
-                String = LuminaWrapper.GetAddonText(11119),
-                Size   = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f },
-                OnClick = isChecked =>
-                {
-                    RefreshDisplaySettings(notifyRecruitment: isChecked);
-
-                    var enabled = NotifyNewRecruitment == 1;
-                    notifyLayout.IsVisible = enabled;
-
-                    notifyLayout.RecalculateLayout();
-                    RecalculatePanel(generalPanel);
-                }
+                String  = LuminaWrapper.GetAddonText(11119),
+                Size    = ContentSize with { X = ContentSize.X - ROW_INDENT, Y = 24f },
+                OnClick = isChecked => RefreshDisplaySettings(notifyRecruitment: isChecked)
             };
             notifyLabelLayout.AddNode(notifyCheckbox);
 
             notifyLayout = new VerticalListNode
             {
                 FitContents = true,
-                IsVisible   = NotifyNewRecruitment == 1,
+                IsVisible   = IGameConfig.Instance().UiConfig.GetUInt("PartyFinderNewArrivalDisp") == 1,
                 Size        = ContentSize with { X = ContentSize.X - (ROW_INDENT * 2f) }
             };
 
@@ -401,7 +427,7 @@ public partial class BetterPartyFinderFilter
             {
                 Size    = ContentSize with { Y = 24f },
                 String  = LuminaWrapper.GetAddonText(11118),
-                OnClick = isChecked => { RefreshDisplaySettings(noNotifyWhenZero: isChecked); }
+                OnClick = isChecked => RefreshDisplaySettings(noNotifyWhenZero: isChecked)
             };
 
             notifyLayout.AddDummy(12f);
@@ -711,8 +737,7 @@ public partial class BetterPartyFinderFilter
                 var textInput = new TextInputNode
                 {
                     Size              = new(ContentSize.X - checkbox.Width - ROW_ITEM_SPACING, 32f),
-                    PlaceholderString = Lang.Get("Regex"),
-                    ShowLimitText     = false
+                    PlaceholderString = Lang.Get("Regex")
                 };
 
                 row.AddNode(checkbox);
@@ -874,7 +899,9 @@ public partial class BetterPartyFinderFilter
             SetWindowSize(Size.X, ContentStartPosition.Y + tabBar1.Height + tabBar2.Height + panel.Height + 24f);
             panel.Position   = ContentStartPosition + new Vector2(0f, 62f);
             tabBar1.Position = ContentStartPosition;
+            tabBar1.Width    = ContentSize.X;
             tabBar2.Position = ContentStartPosition + new Vector2(0f, 28f);
+            tabBar2.Width    = ContentSize.X;
         }
 
         private void SwitchTab
@@ -906,6 +933,7 @@ public partial class BetterPartyFinderFilter
             switch (tabIndex)
             {
                 case 0:
+                    RefreshGeneralPanel();
                     RecalculatePanel(generalPanel);
                     break;
                 case 1:
@@ -1048,31 +1076,12 @@ public partial class BetterPartyFinderFilter
             );
         }
 
-        protected override void OnUpdate
-        (
-            AtkUnitBase* addon
-        )
+        private class RegexRow
         {
-            tabBar1.Position = ContentStartPosition;
-            tabBar1.Width    = ContentSize.X;
-
-            tabBar2.Position = ContentStartPosition + new Vector2(0f, 28f);
-            tabBar2.Width    = ContentSize.X;
-
-            switch (currentActiveTab)
-            {
-                case 0:
-                    RecalculatePanel(generalPanel);
-                    break;
-                case 1:
-                    RecalculatePanel(highEndPanel);
-                    break;
-                case 2:
-                    RecalculatePanel(descriptionPanel);
-                    break;
-            }
-
-            base.OnUpdate(addon);
+            public HorizontalListNode Row       { get; init; } = null!;
+            public CheckboxNode       Checkbox  { get; init; } = null!;
+            public TextInputNode      TextInput { get; init; } = null!;
+            public int                Index     { get; set; }
         }
 
         #region 常量
