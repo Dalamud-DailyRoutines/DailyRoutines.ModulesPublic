@@ -1,5 +1,5 @@
-using System.Numerics;
 using System.Runtime.InteropServices;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -7,12 +7,14 @@ using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
+using OmenTools.Interop.Game.Models.Native;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;
@@ -23,9 +25,21 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("FastGrandCompanyExchangeTitle"),
-        Description = Lang.Get("FastGrandCompanyExchangeDescription"),
-        Category    = ModuleCategory.Interface
+        Title = Lang.Get("FastGrandCompanyExchangeTitle"),
+        Description = Lang.Get
+        (
+            "FastGrandCompanyExchangeDescription",
+            new Dictionary<string, object>
+            {
+                ["command"] = COMMAND
+            }
+        ),
+        Category = ModuleCategory.Interface
+    };
+
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
     };
 
     private static readonly CompSig GCShopHandlerSig =
@@ -65,15 +79,21 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
         GCShopExchange   = GCShopExchangeSig.GetDelegate<GCShopExchangeDelegate>();
         GCShopReload     = GCShopReloadSig.GetDelegate<GCShopReloadDelegate>();
 
-        addon ??= new(this)
+        addon = new(this)
         {
-            InternalName          = "DRFastGCExchange",
-            Title                 = Info.Title,
-            Size                  = new(290f, 240f),
-            RememberClosePosition = true
+            InternalName = "DRFastGCExchange",
+            Title        = Info.Title,
+            Size         = new(290f, 240f)
         };
 
-        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("FastGrandCompanyExchange-CommandHelp") });
+        CommandManager.Instance().AddSubCommand
+        (
+            COMMAND,
+            new(OnCommand)
+            {
+                HelpMessage = Lang.Get("FastGrandCompanyExchange-CommandHelp")
+            }
+        );
     }
 
     protected override void Uninit()
@@ -86,10 +106,8 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
-
-        ImGui.SameLine();
-        ImGui.TextWrapped($"/pdr {COMMAND} {Lang.Get("FastGrandCompanyExchange-CommandHelp")}");
+        using (ImRaii.Heading1(Lang.Get("Command")))
+            ImGui.TextWrapped($"/pdr {COMMAND} {Lang.Get("FastGrandCompanyExchange-CommandHelp")}");
     }
 
     private void OnCommand
@@ -99,21 +117,41 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
     )
     {
         args = args.Trim();
-        if (string.IsNullOrWhiteSpace(args)) return;
+        if (args.Length == 0) return;
 
-        var splited = args.Split(' ');
-        if (splited.Length is not (1 or 2)) return;
-
-        if (splited[0] == "default")
+        if (args == "default" ||
+            args.StartsWith("default ", StringComparison.Ordinal))
         {
             EnqueueByName(config.ExchangeItemName, config.ExchangeItemCount);
             return;
         }
 
-        var itemCount = splited.Length == 2 && int.TryParse(splited[1], out var itemCountParsed) && itemCountParsed >= -1 ?
-                            itemCountParsed :
-                            -1;
-        EnqueueByName(splited[0], itemCount);
+        var itemName  = args;
+        var itemCount = -1;
+
+        // 从右往左寻找最后一个空白字符
+        var separatorIndex = args.Length - 1;
+        while (separatorIndex >= 0 &&
+               !char.IsWhiteSpace(args[separatorIndex]))
+            separatorIndex--;
+
+        // 尝试将最后一个部分解析为数量
+        if (separatorIndex >= 0                                                &&
+            int.TryParse(args.AsSpan(separatorIndex + 1), out var parsedCount) &&
+            parsedCount >= -1)
+        {
+            itemName  = args[..separatorIndex].TrimEnd();
+            itemCount = parsedCount;
+        }
+
+        // 带引号的物品名
+        if (itemName is ['"', _, ..] &&
+            itemName[^1] == '"')
+            itemName = itemName[1..^1];
+
+        if (string.IsNullOrWhiteSpace(itemName)) return;
+
+        EnqueueByName(itemName, itemCount);
     }
 
     private bool EnqueueByName
@@ -128,8 +166,8 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
         (
             ExecuteExchange,
             "军票兑换",
-            timeoutMS: 10000,
-            timeoutBehaviour: TaskAbortBehaviour.AbortCurrent
+            10000,
+            TaskAbortBehaviour.AbortCurrent
         );
         return true;
     }
@@ -242,47 +280,6 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
         return -1;
     }
 
-    [StructLayout(LayoutKind.Explicit, Size = 15712)]
-    private struct GCShopEventHandler
-    {
-        [FieldOffset(448)]
-        public nint PurchaseInterface;
-
-        [FieldOffset(456)]
-        public GCShopItemSlot Slots;
-
-        [FieldOffset(15656)]
-        public byte GrandCompany;
-
-        [FieldOffset(15657)]
-        public byte SubCategory;
-
-        [FieldOffset(15658)]
-        public byte Tier;
-
-        [FieldOffset(15700)]
-        public uint SelectedDisplayIndex;
-
-        [FieldOffset(15704)]
-        public uint ExchangeCount;
-    }
-
-    [StructLayout(LayoutKind.Explicit, Size = 304)]
-    private struct GCShopItemSlot
-    {
-        [FieldOffset(4)]
-        public uint ItemID;
-
-        [FieldOffset(12)]
-        public uint CostGCSeals;
-
-        [FieldOffset(16)]
-        public uint IsValid;
-
-        [FieldOffset(20)]
-        public uint DisplayIndex;
-    }
-
     private class DRFastGCExchange
     (
         FastGrandCompanyExchange instance
@@ -296,51 +293,46 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
         {
             var layoutNode = new VerticalListNode
             {
-                IsVisible   = true,
-                Position    = ContentStartPosition + new Vector2(0, 2),
+                Position    = ContentStartPosition,
                 ItemSpacing = 1,
-                Size        = new(275, 28),
+                Width       = ContentSize.X,
                 FitContents = true
             };
 
             var exchangeButtonNode = new TextButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(layoutNode.Size.X - 10, 38),
-                String    = Lang.Get("Exchange"),
+                Size        = new(layoutNode.Width, 38),
+                String      = Lang.Get("Exchange"),
+                TextureType = ButtonTextureType.ButtonB,
                 OnClick = () =>
                 {
-                    if (instance.TaskHelper.IsBusy) return;
+                    if (instance.TaskHelper.IsBusy)
+                        return;
                     instance.EnqueueByName(instance.config.ExchangeItemName, instance.config.ExchangeItemCount);
                 }
             };
-
             layoutNode.AddNode(exchangeButtonNode);
 
             layoutNode.AddDummy(5);
 
             var itemLableNode = new TextNode
             {
-                IsVisible = true,
-                Size      = new(layoutNode.Size.X - 20, 24),
-                FontSize  = 14,
-                String    = Lang.Get("Item")
+                Size     = new(layoutNode.Width, 24),
+                String   = Lang.Get("Item"),
+                FontSize = 14
             };
-
             layoutNode.AddNode(itemLableNode);
 
             var itemNameInputNode = new TextInputNode
             {
-                IsVisible       = true,
-                Size            = new(layoutNode.Size.X - 10, 35),
+                Size            = new(layoutNode.Width, 36),
                 String          = instance.config.ExchangeItemName,
-                OnInputReceived = x => instance.config.ExchangeItemName = x.ToString()
+                OnInputReceived = x => instance.config.ExchangeItemName = x.ToString(),
+                OnInputComplete = UpdateExchangeItem
             };
 
-            itemNameInputNode.OnInputComplete = UpdateExchangeItem;
-            itemNameInputNode.OnEditComplete  = _ => UpdateExchangeItem(itemNameInputNode.String);
-            itemNameInputNode.OnUnfocused     = () => UpdateExchangeItem(itemNameInputNode.String);
+            itemNameInputNode.OnEditComplete = _ => UpdateExchangeItem(itemNameInputNode.String);
+            itemNameInputNode.OnUnfocused    = () => UpdateExchangeItem(itemNameInputNode.String);
 
             itemNameInputNode.CursorNode.ScaleY        =  1.4f;
             itemNameInputNode.CurrentTextNode.FontSize =  14;
@@ -352,33 +344,30 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
 
             var countLableNode = new TextNode
             {
-                IsVisible = true,
-                Size      = new(layoutNode.Size.X - 20, 24),
-                FontSize  = 14,
-                String    = Lang.Get("Amount")
+                Size     = new(layoutNode.Width, 24),
+                String   = Lang.Get("Amount"),
+                FontSize = 14
             };
-
             layoutNode.AddNode(countLableNode);
 
             var countInputNode = new NumericInputNode
             {
-                IsVisible = true,
-                Size      = new(layoutNode.Size.X - 10, 35),
-                Step      = 1,
-                Min       = -1,
+                Size  = new(layoutNode.Width, 36),
+                Step  = 1,
+                Min   = -1,
+                Value = instance.config.ExchangeItemCount,
                 OnValueUpdate = newValue =>
                 {
                     instance.config.ExchangeItemCount = newValue;
 
                     instance.config.ExchangeItemCount = (int)MathF.Max(-1, instance.config.ExchangeItemCount);
                     instance.config.Save(instance);
-                },
-                Value = instance.config.ExchangeItemCount
+                }
             };
-
             layoutNode.AddNode(countInputNode);
 
             layoutNode.AttachNode(this);
+            SetWindowSize(Size.X, ContentStartPosition.Y + layoutNode.Height + 16f);
         }
 
         private void UpdateExchangeItem
@@ -410,7 +399,6 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
             if (instance.config.ExchangeItemName == x.ToString())
                 return;
 
-            CloseAddonOnly();
             instance.config.Save(instance);
         }
     }
