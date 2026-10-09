@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -9,10 +10,13 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Havok.Animation.Playback.Control.Default;
-using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Nodes.CameraSettingsButton;
+using ButtonBase = KamiToolKit.Nodes.ButtonBase;
+using CircleButtonIcon = OmenTools.KamiToolKit.Nodes.CircleButton.CircleButtonIcon;
+using CircleButtonNode = OmenTools.KamiToolKit.Nodes.CircleButton.CircleButtonNode;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -22,8 +26,13 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
     {
         Title       = Lang.Get("PortraitAnimationTimeEditorTitle"),
         Description = Lang.Get("PortraitAnimationTimeEditorDescription"),
-        Author      = ["Yarukon"],
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        Author      = ["Yarukon"]
+    };
+
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
     };
 
     private int   frameCount;
@@ -34,10 +43,9 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
     protected override void Init() =>
         addon ??= new(this)
         {
-            InternalName          = "DRPortraitAnimationTimeEditor",
-            Title                 = Lang.Get("PortraitAnimationTimeEditor-AddonTitle"),
-            Size                  = new(300f, 136f),
-            RememberClosePosition = false
+            InternalName = "DRPortraitAnimationTimeEditor",
+            Title        = Info.Title,
+            Size         = new(300f, 136f)
         };
 
     protected override void Uninit()
@@ -58,12 +66,20 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
 
     private hkaDefaultAnimationControl* UpdateAnimationState()
     {
-        var view      = CharaView;
-        var chara     = view == null ? null : view->GetCharacter();
+        var view = CharaView;
+        var chara = view == null ?
+                        null :
+                        view->GetCharacter();
         var animation = GetAnimationControl(chara);
-        var binding   = animation == null ? null : animation->hkaAnimationControl.Binding.ptr;
-        var clip      = binding == null ? null : binding->Animation.ptr;
-        var timeline  = chara == null ? null : chara->Timeline.TimelineSequencer.GetSchedulerTimeline(0);
+        var binding = animation == null ?
+                          null :
+                          animation->hkaAnimationControl.Binding.ptr;
+        var clip = binding == null ?
+                       null :
+                       binding->Animation.ptr;
+        var timeline = chara == null ?
+                           null :
+                           chara->Timeline.TimelineSequencer.GetSchedulerTimeline(0);
 
         if (view == null || clip == null || timeline == null)
         {
@@ -83,9 +99,13 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
     )
     {
         var editorState = EditorState;
-        var view        = editorState == null ? null : editorState->CharaView;
-        var chara       = view == null ? null : view->GetCharacter();
-        var banner      = (AddonBannerEditor*)BannerEditor;
+        var view = editorState == null ?
+                       null :
+                       editorState->CharaView;
+        var chara = view == null ?
+                        null :
+                        view->GetCharacter();
+        var banner = (AddonBannerEditor*)BannerEditor;
         if (editorState == null || view == null || chara == null || banner == null)
             return;
 
@@ -113,15 +133,23 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
     {
         if (charaActor == null) return null;
 
-        var model             = ((Actor*)charaActor)->Model;
-        var skeleton          = model == null ? null : model->Skeleton;
-        var partialSkeletons  = skeleton == null ? null : skeleton->PartialSkeletons;
-        var animatedSkeleton  = partialSkeletons == null ? null : partialSkeletons->GetHavokAnimatedSkeleton(0);
+        var model = ((Actor*)charaActor)->Model;
+        var skeleton = model == null ?
+                           null :
+                           model->Skeleton;
+        var partialSkeletons = skeleton == null ?
+                                   null :
+                                   skeleton->PartialSkeletons;
+        var animatedSkeleton = partialSkeletons == null ?
+                                   null :
+                                   partialSkeletons->GetHavokAnimatedSkeleton(0);
         if (animatedSkeleton == null)
             return null;
 
         var animationControls = animatedSkeleton->AnimationControls;
-        return animationControls.Length == 0 ? null : animationControls[0];
+        return animationControls.Length == 0 ?
+                   null :
+                   animationControls[0];
     }
 
     private sealed class PortraitAnimationTimeEditorAddon
@@ -129,20 +157,16 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         PortraitAnimationTimeEditor module
     ) : AttachedAddon("BannerEditor")
     {
-        private const float BUTTON_SIZE    = 28f;
-        private const float BUTTON_SPACING = 4f;
-        private const float CONTROL_WIDTH  = (3f * BUTTON_SIZE) + (2f * BUTTON_SPACING);
-
-        private TextNode         frameLabel      = null!;
-        private FloatSliderNode  frameSlider     = null!;
-        private CircleButtonNode playbackButton = null!;
-
-        private CircleButtonNode[] controlButtons = [];
-        private bool               isSyncing;
-        private bool?              pendingPlaybackState;
-
         protected override AttachedAddonPosition AttachPosition =>
-            AttachedAddonPosition.RightTop;
+            AttachedAddonPosition.RightBottom;
+
+        private TextNode                 frameLabel     = null!;
+        private FloatSliderNode          frameSlider    = null!;
+        private CameraSettingsButtonNode playbackButton = null!;
+
+        private ButtonBase[] controlButtons = [];
+        private bool         isSyncing;
+        private bool?        pendingPlaybackState;
 
         protected override void OnSetup
         (
@@ -150,9 +174,6 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
             Span<AtkValue> atkValues
         )
         {
-            if (WindowNode is WindowNode windowNode)
-                windowNode.CloseButtonNode.IsVisible = false;
-
             var verticalList = new VerticalListNode
             {
                 FitContents = true,
@@ -162,7 +183,7 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
 
             var controlRow = new HorizontalListNode
             {
-                Size             = ContentSize with { Y = 28 },
+                Size             = ContentSize with { Y = 32 },
                 FirstItemSpacing = (ContentSize.X - CONTROL_WIDTH) / 2f,
                 ItemSpacing      = BUTTON_SPACING
             };
@@ -172,19 +193,20 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
                 CreateControlButton
                 (
                     CircleButtonIcon.LeftArrow,
-                    "-1",
+                    Lang.Get("PortraitAnimationTimeEditor-LastFrame"),
                     () => module.SetCurrentFrame(MathF.Ceiling(module.currentFrame) - 1f)
                 ),
-                playbackButton = CreateControlButton
-                (
-                    CircleButtonIcon.MusicNote,
-                    LuminaWrapper.GetAddonText(4802),
-                    TogglePlayback
-                ),
+                playbackButton = new CameraSettingsButtonNode
+                {
+                    Size        = new(BUTTON_SIZE),
+                    Icon        = CameraSettingsButtonIcon.Play,
+                    TextTooltip = LuminaWrapper.GetAddonText(14704),
+                    OnClick     = TogglePlayback
+                },
                 CreateControlButton
                 (
                     CircleButtonIcon.RightArrow,
-                    "+1",
+                    Lang.Get("PortraitAnimationTimeEditor-NextFrame"),
                     () => module.SetCurrentFrame(MathF.Floor(module.currentFrame) + 1f)
                 )
             ];
@@ -198,9 +220,9 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
                 AlignmentType = AlignmentType.Center,
                 TextFlags     = TextFlags.Edge | TextFlags.AutoAdjustNodeSize,
                 String        = "000.00 / 000",
-                Size          = new(Size.X - 24f, 28f)
+                Size          = ContentSize with { Y = 28f }
             };
-
+            AtkColors.ValueEmphasize.ApplyTo(frameLabel);
             verticalList.AddNode(frameLabel);
 
             frameSlider = new FloatSliderNode
@@ -218,16 +240,19 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
             frameSlider.FloatValueNode.FontSize = 0;
 
             verticalList.AddNode(frameSlider);
+
+            SetWindowSize(Size.X, ContentStartPosition.Y + verticalList.Height + 16f);
         }
 
-        protected override void OnAttachedAddonUpdate
+        protected override void OnUpdate
         (
-            AtkUnitBase* addon,
-            AtkUnitBase* hostAddon
+            AtkUnitBase* addon
         )
         {
-            if (hostAddon->GetNodeById(107) != null)
+            if (HostAddon != null && HostAddon->GetNodeById(107) != null)
                 SyncControls(module.UpdateAnimationState());
+
+            base.OnUpdate(addon);
         }
 
         private static CircleButtonNode CreateControlButton
@@ -238,8 +263,6 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         ) =>
             new()
             {
-                IsVisible   = true,
-                IsEnabled   = true,
                 Size        = new(BUTTON_SIZE),
                 Icon        = icon,
                 TextTooltip = tooltip,
@@ -248,9 +271,14 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
 
         private void TogglePlayback()
         {
-            var view    = CharaView;
-            var control = GetAnimationControl(view == null ? null : view->GetCharacter());
-            var banner  = (AddonBannerEditor*)BannerEditor;
+            var view = CharaView;
+            var control = GetAnimationControl
+            (
+                view == null ?
+                    null :
+                    view->GetCharacter()
+            );
+            var banner = (AddonBannerEditor*)BannerEditor;
             if (view == null || control == null || banner == null)
                 return;
 
@@ -266,7 +294,7 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         )
         {
             var hasAnimation = animation != null;
-            var maxFrame = MathF.Max(1f, module.frameCount);
+            var maxFrame     = MathF.Max(1f, module.frameCount);
 
             foreach (var button in controlButtons)
                 button.IsEnabled = hasAnimation;
@@ -311,12 +339,20 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         )
         {
             playbackButton.Icon = isPlaying ?
-                                      CircleButtonIcon.WavePulse :
-                                      CircleButtonIcon.MusicNote;
+                                      CameraSettingsButtonIcon.Pause :
+                                      CameraSettingsButtonIcon.Play;
             playbackButton.TextTooltip = isPlaying ?
-                                             LuminaWrapper.GetAddonText(13910) :
-                                             LuminaWrapper.GetAddonText(4802);
+                                             LuminaWrapper.GetAddonText(14705) :
+                                             LuminaWrapper.GetAddonText(14704);
         }
+
+        #region 常量
+
+        private const float BUTTON_SIZE    = 28f;
+        private const float BUTTON_SPACING = 4f;
+        private const float CONTROL_WIDTH  = (3f * BUTTON_SIZE) + (2f * BUTTON_SPACING);
+
+        #endregion
     }
 
     [StructLayout(LayoutKind.Explicit)]
