@@ -5,12 +5,10 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Internal;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
@@ -24,7 +22,6 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.Collasping;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using Action = System.Action;
@@ -62,11 +59,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
         chatPanelAddon = new(this)
         {
-            InternalName          = "DRQuickChatPanel",
-            Title                 = Info.Title,
-            Size                  = new(542f, 400f),
-            RememberClosePosition = false,
-            DisableClose          = true
+            InternalName = "DRQuickChatPanel",
+            Title        = Info.Title,
+            Size         = new(542f, 400f)
         };
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "ChatLog", OnAddon);
@@ -126,7 +121,17 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             if (config.SavedMessages.Count == 0)
             {
-                ImGui.TextDisabled(Lang.Get("QuickChatPanel-SavedMessagesAmountText", 0));
+                ImGui.TextDisabled
+                (
+                    Lang.Get
+                    (
+                        "QuickChatPanel-SavedMessagesAmountText",
+                        new Dictionary<string, object>
+                        {
+                            ["count"] = 0
+                        }
+                    )
+                );
                 return;
             }
 
@@ -163,7 +168,17 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             if (config.SavedMacros.Count == 0)
             {
-                ImGui.TextDisabled(Lang.Get("QuickChatPanel-SavedMacrosAmountText", 0));
+                ImGui.TextDisabled
+                (
+                    Lang.Get
+                    (
+                        "QuickChatPanel-SavedMacrosAmountText",
+                        new Dictionary<string, object>
+                        {
+                            ["count"] = 0
+                        }
+                    )
+                );
                 return;
             }
 
@@ -228,8 +243,6 @@ public unsafe class QuickChatPanel : ModuleBase
                     sendButton = new()
                     {
                         Size        = new(64, textInputNode->Height + 4),
-                        IsVisible   = true,
-                        IsEnabled   = true,
                         String      = Lang.Get("Send"),
                         TextTooltip = Info.Title
 
@@ -287,9 +300,7 @@ public unsafe class QuickChatPanel : ModuleBase
         if (textNode == null) return false;
 
         var text = textNode->NodeText.ToString();
-        if (string.IsNullOrWhiteSpace(text)) return false;
-
-        return true;
+        return !string.IsNullOrWhiteSpace(text);
     }
 
     private bool SendChatboxMessage()
@@ -347,19 +358,6 @@ public unsafe class QuickChatPanel : ModuleBase
         chatPanelAddon?.Close();
     }
 
-    // TODO: 改成 ReadOnlyString, 这个等 API 16
-    private static void SendGameItemLink
-    (
-        Item item
-    ) =>
-        NotifyHelper.Instance().Chat
-        (
-            new SeStringBuilder()
-                .AddItemLink(item.RowId, PluginConfig.Instance().ConflictKeyBinding.IsPressed())
-                .Build()
-                .Encode()
-        );
-
     private class Config : ModuleConfig
     {
         public MacroDisplayMode         OverlayMacroDisplayMode = MacroDisplayMode.Buttons;
@@ -372,6 +370,15 @@ public unsafe class QuickChatPanel : ModuleBase
 
     private class QuickChatPanelAddon : AttachedAddon
     {
+        protected override AttachedAddonPosition AttachPosition =>
+            AttachedAddonPosition.RightBottom;
+
+        protected override Vector2 PositionOffset =>
+            instance.config.OverlayOffset + new Vector2(0, -36f);
+
+        protected override bool AutoOpenAddon =>
+            false;
+
         private readonly Dictionary<QuickChatTab, ListButtonNode>                  tabButtons      = [];
         private readonly Dictionary<QuickChatTab, ResNode>                         tabRoots        = [];
         private readonly Dictionary<QuickChatTab, ScrollingNode<VerticalListNode>> tabContentLists = [];
@@ -408,40 +415,25 @@ public unsafe class QuickChatPanel : ModuleBase
             );
         }
 
-        protected override AttachedAddonPosition AttachPosition =>
-            AttachedAddonPosition.RightBottom;
-
-        protected override Vector2 PositionOffset =>
-            instance.config.OverlayOffset + new Vector2(0, -28f);
-
-        protected override bool CanOpenAddon =>
-            false;
-
-        public void TogglePanel()
+        public override void Dispose()
         {
-            if (IsOpen)
-            {
-                Close();
-                return;
-            }
-
-            Open();
+            taskHelper.Dispose();
+            base.Dispose();
         }
 
-        protected override bool CanCloseHostAddon
+        protected override void OnUpdate
         (
-            AtkUnitBase* hostAddon
-        ) =>
-            false;
-
-        protected override void OnAttachedAddonUpdate
-        (
-            AtkUnitBase* addon,
-            AtkUnitBase* hostAddon
+            AtkUnitBase* addon
         )
         {
-            if (IKeyState.Instance()[VirtualKey.ESCAPE]) Close();
+            if (IKeyState.Instance()[VirtualKey.ESCAPE])
+            {
+                Close();
+                if (SystemMenu->IsAddonAndNodesReady())
+                    SystemMenu->Close(true);
+            }
 
+            base.OnUpdate(addon);
         }
 
         protected override void OnSetup
@@ -457,7 +449,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var body = new HorizontalListNode
             {
-                IsVisible   = true,
                 Position    = ContentStartPosition,
                 Size        = ContentSize,
                 ItemSpacing = 8f,
@@ -466,7 +457,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var nav = new VerticalListNode
             {
-                IsVisible   = true,
                 Size        = new(108f, body.Height),
                 ItemSpacing = 5f,
                 FitWidth    = true
@@ -485,13 +475,11 @@ public unsafe class QuickChatPanel : ModuleBase
 
             contentPanel = new SimpleComponentNode
             {
-                IsVisible = true,
-                Size      = contentSize
+                Size = contentSize
             };
 
             contentPanelBackground = new SimpleNineGridNode
             {
-                IsVisible          = true,
                 TexturePath        = "ui/uld/ToolTipS.tex",
                 TextureCoordinates = Vector2.Zero,
                 TextureSize        = new(32f, 24f),
@@ -514,10 +502,15 @@ public unsafe class QuickChatPanel : ModuleBase
             ShowTab(selectedTab);
         }
 
-        public override void Dispose()
+        public void TogglePanel()
         {
-            taskHelper.Dispose();
-            base.Dispose();
+            if (IsRequestedOpen)
+            {
+                Close();
+                return;
+            }
+
+            Open();
         }
 
         private void SelectTab
@@ -550,8 +543,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var tabRoot = new ResNode
             {
-                IsVisible = false,
-                Size      = tabContentSize
+                Size = tabContentSize
             };
             tabRoot.AttachNode(contentPanel);
 
@@ -560,7 +552,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 Position          = new(9f),
                 Size              = tabContentSize - new Vector2(8f, 12f),
                 ScrollSpeed       = 36,
-                AutoHideScrollBar = true,
+                AutoHideScrollBar = true
             };
             contentList.ContentNode.ItemSpacing = 5f;
             contentList.ContentNode.FitWidth    = true;
@@ -625,8 +617,6 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var button = new ListButtonNode
             {
-                IsVisible   = true,
-                IsEnabled   = true,
                 Size        = new(116f, 34f),
                 String      = text,
                 TextTooltip = text,
@@ -646,7 +636,19 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             if (instance.config.SavedMessages.Count == 0)
             {
-                AddEmptyState(contentList, Lang.Get("QuickChatPanel-SavedMessagesAmountText", 0), Lang.Get("QuickChatPanel-SendMessageHelp"));
+                AddEmptyState
+                (
+                    contentList,
+                    Lang.Get
+                    (
+                        "QuickChatPanel-SavedMessagesAmountText",
+                        new Dictionary<string, object>
+                        {
+                            ["count"] = 0
+                        }
+                    ),
+                    Lang.Get("QuickChatPanel-SendMessageHelp")
+                );
                 return;
             }
 
@@ -678,7 +680,18 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             if (instance.config.SavedMacros.Count == 0)
             {
-                AddEmptyState(contentList, Lang.Get("QuickChatPanel-SavedMacrosAmountText", 0), Lang.Get("QuickChatPanelTitle-DragHelp"));
+                AddEmptyState
+                (
+                    contentList,
+                    Lang.Get
+                    (
+                        "QuickChatPanel-SavedMacrosAmountText",
+                        new Dictionary<string, object>
+                        {
+                            ["count"] = 0
+                        }
+                    )
+                );
                 return;
             }
 
@@ -719,8 +732,6 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 var button = new TextButtonNode
                 {
-                    IsVisible   = true,
-                    IsEnabled   = true,
                     Size        = new(contentList.ContentNode.Width, 52f),
                     String      = string.Empty,
                     TextTooltip = title
@@ -730,7 +741,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var icon = new IconImageNode
                 {
-                    IsVisible   = true,
                     Size        = new(28f),
                     TextureSize = new(28f),
                     IconId      = iconID,
@@ -742,7 +752,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var text = new TextNode
                 {
-                    IsVisible     = true,
                     Position      = new(icon.Position.X + icon.Size.X + 6f, 0f),
                     String        = title,
                     AlignmentType = AlignmentType.Left,
@@ -800,8 +809,6 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 var button = new TextButtonNode
                 {
-                    IsVisible   = true,
-                    IsEnabled   = true,
                     Size        = new(110f, 110f),
                     String      = string.Empty,
                     TextTooltip = text,
@@ -812,7 +819,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var icon = new IconImageNode
                 {
-                    IsVisible  = true,
                     Size       = new(50f),
                     IconId     = iconID,
                     FitTexture = true
@@ -823,7 +829,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 new TextNode
                 {
-                    IsVisible     = true,
                     Position      = new(0f, 64f),
                     Size          = new(button.Width, 24f),
                     String        = text,
@@ -885,20 +890,20 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var listNode = new ListNode<Item, ItemListItemNode>
             {
-                IsVisible   = true,
                 ItemSpacing = 4f,
                 Size        = new(contentList.ContentNode.Width, contentList.Size.Y - 48f),
                 OptionsList = GetGameItemResults(),
                 OnItemSelected = item =>
                 {
-                    if (item.RowId != 0)
-                        SendGameItemLink(item);
+                    if (item.RowId == 0)
+                        return;
+
+                    ContextMenuManager.Instance().OpenItem(item.RowId, AddonId);
                 }
             };
 
             var searchBarNode = new TextInputNode
             {
-                IsVisible       = true,
                 Size            = new(contentList.ContentNode.Width, 36f),
                 String          = itemSearchInput,
                 MaxCharacters   = 128,
@@ -966,7 +971,6 @@ public unsafe class QuickChatPanel : ModuleBase
             HorizontalListNode CreateGlyphRow() =>
                 new()
                 {
-                    IsVisible          = true,
                     Size               = new(contentList.ContentNode.Width, 36f),
                     ItemSpacing        = 4f,
                     FirstItemSpacing   = 0f,
@@ -982,8 +986,6 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 var button = new TextButtonNode
                 {
-                    IsVisible   = true,
-                    IsEnabled   = true,
                     Size        = new(48f, 32f),
                     String      = text,
                     TextTooltip = tooltip,
@@ -1000,38 +1002,22 @@ public unsafe class QuickChatPanel : ModuleBase
             ScrollingNode<VerticalListNode> contentList
         )
         {
-            var contentWidth = contentList.ContentNode.Width - 12f;
+            var contentWidth = contentList.ContentNode.Width;
 
-            CollaspingNode? tree = null;
-            tree = new()
+            var generalOverlay = new CollapsingHeaderNode
             {
-                IsVisible               = true,
-                Size                    = new(contentWidth, 0f),
-                CategoryVerticalSpacing = 5f
-            };
-            tree.OnLayoutUpdate = height =>
-            {
-                if (tree == null) return;
-
-                tree.Height = height;
-                contentList.RecalculateSizes();
-            };
-
-            var generalOverlay = new VerticalListNode
-            {
-                IsVisible        = true,
-                Size             = new(contentWidth, 0f),
-                FitContents      = true,
+                Size             = new(contentWidth, 28f),
+                String           = Lang.Get("General"),
                 FitWidth         = true,
                 ItemSpacing      = 5f,
-                FirstItemSpacing = 10f
+                FirstItemSpacing = 10f,
+                OnToggle         = UpdateSettingsLayout
             };
 
             generalOverlay.AddNode
             (
                 new TextNode
                 {
-                    IsVisible     = true,
                     Size          = new(contentWidth, 22f),
                     String        = Lang.Get("Offset"),
                     FontSize      = 13,
@@ -1041,7 +1027,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var offsetRow = new HorizontalListNode
             {
-                IsVisible          = true,
                 Size               = new(contentWidth, 34f),
                 ItemSpacing        = 6f,
                 FirstItemSpacing   = 0f,
@@ -1067,29 +1052,19 @@ public unsafe class QuickChatPanel : ModuleBase
             );
             generalOverlay.AddNode(offsetRow);
 
-            tree.AddCategoryNode
-            (
-                new CollaspingCategoryNode
-                {
-                    IsVisible = true,
-                    Size      = new(contentWidth, 28f),
-                    String    = Lang.Get("General")
-                }
-            );
-            tree.CategoryNodes[^1].AddNode(generalOverlay);
-
-            var messagesSection = new VerticalListNode
+            var messagesSection = new CollapsingHeaderNode
             {
-                IsVisible   = true,
-                Size        = new(contentWidth, 0f),
-                FitContents = true,
-                FitWidth    = true,
-                ItemSpacing = 5f
+                Size             = new(contentWidth, 28f),
+                String           = Lang.Get("QuickChatPanel-Messages"),
+                IsCollapsed      = true,
+                FitWidth         = true,
+                FirstItemSpacing = 4f,
+                ItemSpacing      = 5f,
+                OnToggle         = UpdateSettingsLayout
             };
 
             var messageRow = new HorizontalListNode
             {
-                IsVisible          = true,
                 Size               = new(contentWidth, 36f),
                 ItemSpacing        = 6f,
                 FirstItemSpacing   = 0f,
@@ -1098,7 +1073,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var messageInputNode = new TextInputNode
             {
-                IsVisible     = true,
                 Size          = new(contentWidth - 84f, 32f),
                 MaxCharacters = 1000
             };
@@ -1106,10 +1080,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var addMessageButton = new TextButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(78f, 32f),
-                String    = Lang.Get("Add"),
+                Size   = new(78f, 32f),
+                String = Lang.Get("Add"),
                 OnClick = () =>
                 {
                     var text = messageInputNode.String.ToString();
@@ -1131,7 +1103,6 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 var row = new HorizontalListNode
                 {
-                    IsVisible          = true,
                     Size               = new(contentWidth, 34f),
                     ItemSpacing        = 6f,
                     FirstItemSpacing   = 0f,
@@ -1141,7 +1112,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 (
                     new TextNode
                     {
-                        IsVisible     = true,
                         Size          = new(contentWidth - 86f, 30f),
                         String        = message,
                         AlignmentType = AlignmentType.Left,
@@ -1150,10 +1120,8 @@ public unsafe class QuickChatPanel : ModuleBase
                 );
                 var button = new TextButtonNode
                 {
-                    IsVisible = true,
-                    IsEnabled = true,
-                    Size      = new(80f, 30f),
-                    String    = Lang.Get("Delete"),
+                    Size   = new(80f, 30f),
+                    String = Lang.Get("Delete"),
                     OnClick = () =>
                     {
                         instance.config.SavedMessages.Remove(message);
@@ -1165,33 +1133,21 @@ public unsafe class QuickChatPanel : ModuleBase
                 messagesSection.AddNode(row);
             }
 
-            tree.AddCategoryNode
-            (
-                new CollaspingCategoryNode
-                {
-                    IsVisible   = true,
-                    Size        = new(contentWidth, 28f),
-                    String      = Lang.Get("QuickChatPanel-Messages"),
-                    IsCollapsed = true
-                }
-            );
-            tree.CategoryNodes[^1].AddNode(messagesSection);
-
-            var macrosSection = new VerticalListNode
+            var macrosSection = new CollapsingHeaderNode
             {
-                IsVisible        = true,
-                Size             = new(contentWidth, 0f),
-                FitContents      = true,
+                Size             = new(contentWidth, 28f),
+                String           = Lang.Get("QuickChatPanel-Macro"),
+                IsCollapsed      = true,
                 FitWidth         = true,
                 ItemSpacing      = 5f,
-                FirstItemSpacing = 10f
+                FirstItemSpacing = 10f,
+                OnToggle         = UpdateSettingsLayout
             };
 
             macrosSection.AddNode
             (
                 new TextNode
                 {
-                    IsVisible     = true,
                     Size          = new(contentWidth, 22f),
                     String        = Lang.Get("QuickChatPanel-MacroButton-DisplayType"),
                     FontSize      = 13,
@@ -1201,10 +1157,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
             var dropdown = new StringDropDownNode
             {
-                IsVisible      = true,
                 Size           = new(contentWidth, 30f),
                 MaxListOptions = MacroDisplayModeLoc.Count,
-                Options        = MacroDisplayModeLoc.Values.ToList()
+                Options        = [.. MacroDisplayModeLoc.Values]
             };
             dropdown.SelectedOption = MacroDisplayModeLoc[instance.config.OverlayMacroDisplayMode];
             dropdown.OnOptionSelected = text =>
@@ -1222,32 +1177,21 @@ public unsafe class QuickChatPanel : ModuleBase
             AddMacroSection(true);
             AddMacroSection(false);
 
-            tree.AddCategoryNode
-            (
-                new CollaspingCategoryNode
-                {
-                    IsVisible   = true,
-                    Size        = new(contentWidth, 28f),
-                    String      = Lang.Get("QuickChatPanel-Macro"),
-                    IsCollapsed = true
-                }
-            );
-            tree.CategoryNodes[^1].AddNode(macrosSection);
-
-            var sounds = new VerticalListNode
+            var sounds = new CollapsingHeaderNode
             {
-                IsVisible   = true,
-                Size        = new(contentWidth, 0f),
-                FitContents = true,
-                FitWidth    = true,
-                ItemSpacing = 5f
+                Size             = new(contentWidth, 28f),
+                String           = Lang.Get("QuickChatPanel-SystemSound"),
+                IsCollapsed      = true,
+                FitWidth         = true,
+                FirstItemSpacing = 4f,
+                ItemSpacing      = 5f,
+                OnToggle         = UpdateSettingsLayout
             };
 
             foreach (var (key, value) in instance.config.SoundEffectNotes.OrderBy(x => x.Key))
             {
                 var row = new HorizontalListNode
                 {
-                    IsVisible          = true,
                     Size               = new(contentWidth, 34f),
                     ItemSpacing        = 6f,
                     FirstItemSpacing   = 0f,
@@ -1257,7 +1201,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 (
                     new TextNode
                     {
-                        IsVisible     = true,
                         Size          = new(58f, 30f),
                         String        = $"<se.{key}>",
                         AlignmentType = AlignmentType.Left,
@@ -1267,7 +1210,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var input = new TextInputNode
                 {
-                    IsVisible     = true,
                     Size          = new(contentWidth - 64f, 30f),
                     String        = value,
                     MaxCharacters = 32
@@ -1280,22 +1222,17 @@ public unsafe class QuickChatPanel : ModuleBase
                 sounds.AddNode(row);
             }
 
-            tree.AddCategoryNode
-            (
-                new CollaspingCategoryNode
-                {
-                    IsVisible   = true,
-                    Size        = new(contentWidth, 28f),
-                    String      = Lang.Get("QuickChatPanel-SystemSound"),
-                    IsCollapsed = true
-                }
-            );
-            tree.CategoryNodes[^1].AddNode(sounds);
-
-            contentList.ContentNode.AddNode(tree);
-            tree.RefreshLayout();
-            contentList.RecalculateSizes();
+            contentList.ContentNode.AddNode([generalOverlay, messagesSection, macrosSection, sounds]);
             return;
+
+            void UpdateSettingsLayout
+            (
+                bool isExpanded
+            )
+            {
+                contentList.ContentNode.RecalculateLayout();
+                contentList.RecalculateSizes();
+            }
 
             void AddMacroSection
             (
@@ -1308,8 +1245,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 (
                     new TextNode
                     {
-                        IsVisible = true,
-                        Size      = new(contentWidth, 22f),
+                        Size = new(contentWidth, 22f),
                         String = LuminaWrapper.GetAddonText
                         (
                             isIndividual ?
@@ -1332,11 +1268,16 @@ public unsafe class QuickChatPanel : ModuleBase
                     var name = macro->Name.ToString();
                     if (string.IsNullOrEmpty(name)) continue;
 
-                    var savedMacro = (*macro).ToSavedMacro();
-                    savedMacro.Position = i;
-                    savedMacro.Category = isIndividual ?
-                                              0U :
-                                              1U;
+                    var savedMacro = new SavedMacro
+                    {
+                        Position = i,
+                        Category = isIndividual ?
+                                       0U :
+                                       1U,
+                        Name           = name,
+                        IconID         = macro->IconId,
+                        LastUpdateTime = StandardTimeManager.Instance().Now
+                    };
                     macrosSection.AddNode(MacroRow(savedMacro));
                 }
             }
@@ -1349,7 +1290,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 var isSaved = instance.config.SavedMacros.Contains(macro);
                 var row = new HorizontalListNode
                 {
-                    IsVisible          = true,
                     Size               = new(contentWidth, 42f),
                     ItemSpacing        = 6f,
                     FirstItemSpacing   = 0f,
@@ -1358,7 +1298,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var info = new SimpleComponentNode
                 {
-                    IsVisible = true,
                     Size = new
                     (
                         contentWidth -
@@ -1371,7 +1310,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 new IconImageNode
                 {
-                    IsVisible  = true,
                     Position   = new(4f, 4f),
                     Size       = new(28f),
                     IconId     = macro.IconID,
@@ -1380,7 +1318,6 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 new TextNode
                 {
-                    IsVisible     = true,
                     Position      = new(38f, 0f),
                     Size          = new(info.Width - 42f, 36f),
                     String        = macro.Name,
@@ -1394,8 +1331,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 {
                     var refreshButton = new TextButtonNode
                     {
-                        IsVisible   = true,
-                        IsEnabled   = true,
                         Size        = new(80f, 34f),
                         String      = Lang.Get("Refresh"),
                         TextTooltip = $"{Lang.Get("QuickChatPanel-LastUpdateTime")}: {instance.config.SavedMacros.Find(x => x.Equals(macro))?.LastUpdateTime}"
@@ -1414,9 +1349,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var toggleButton = new TextButtonNode
                 {
-                    IsVisible = true,
-                    IsEnabled = true,
-                    Size      = new(80f, 34f),
+                    Size = new(80f, 34f),
                     String = Lang.Get
                     (
                         isSaved ?
@@ -1457,7 +1390,6 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 var row = new HorizontalListNode
                 {
-                    IsVisible          = true,
                     Size               = new(154f, 32f),
                     ItemSpacing        = 4f,
                     FirstItemSpacing   = 0f,
@@ -1468,7 +1400,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 (
                     new TextNode
                     {
-                        IsVisible     = true,
                         Position      = new(0, 2),
                         Size          = new(18f, 20f),
                         TextFlags     = TextFlags.AutoAdjustNodeSize,
@@ -1480,10 +1411,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var input = new TextInputNode
                 {
-                    IsVisible = true,
-                    Size      = new(132f, 30f),
-                    Position  = new(0, -4),
-                    String    = value.ToString()
+                    Size     = new(132f, 30f),
+                    Position = new(0, -4),
+                    String   = value.ToString()
 
                 };
                 input.CurrentTextNode.FontSize = 14;
@@ -1508,7 +1438,6 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var state = new VerticalListNode
             {
-                IsVisible   = true,
                 Size        = new(contentList.ContentNode.Width, 72f),
                 ItemSpacing = 2f,
                 FitWidth    = true
@@ -1518,7 +1447,6 @@ public unsafe class QuickChatPanel : ModuleBase
             (
                 new TextNode
                 {
-                    IsVisible     = true,
                     Size          = new(contentList.ContentNode.Width, 30f),
                     String        = text,
                     FontSize      = 16,
@@ -1533,7 +1461,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 (
                     new TextNode
                     {
-                        IsVisible     = true,
                         Size          = new(contentList.ContentNode.Width, 24f),
                         String        = detail,
                         TextColor     = ColorHelper.GetColor(3),
@@ -1551,7 +1478,6 @@ public unsafe class QuickChatPanel : ModuleBase
         ) =>
             new()
             {
-                IsVisible          = true,
                 Size               = new(contentList.ContentNode.Width, 82f),
                 ItemSpacing        = 8f,
                 FirstItemSpacing   = 0f,
@@ -1564,7 +1490,6 @@ public unsafe class QuickChatPanel : ModuleBase
         ) =>
             new()
             {
-                IsVisible          = true,
                 Size               = new(contentList.ContentNode.Width, 38f),
                 ItemSpacing        = 6f,
                 FirstItemSpacing   = 0f,
@@ -1582,8 +1507,6 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var button = new TextButtonNode
             {
-                IsVisible   = true,
-                IsEnabled   = true,
                 Size        = new(contentList.ContentNode.Width, 32f),
                 String      = text,
                 TextTooltip = tooltip,
@@ -1609,8 +1532,6 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var button = new TextButtonNode
             {
-                IsVisible   = true,
-                IsEnabled   = true,
                 Size        = new(116f, 34f),
                 String      = text,
                 TextTooltip = tooltip,
@@ -1628,8 +1549,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
     public class SavedMacro : IEquatable<SavedMacro>
     {
-        public uint     Category       { get; set; } // 0 - Individual; 1 - Shared
-        public int      Position       { get; set; }
+        public uint     Category       { get; init; }
+        public int      Position       { get; init; }
         public string   Name           { get; set; } = string.Empty;
         public uint     IconID         { get; set; }
         public DateTime LastUpdateTime { get; set; } = DateTime.MinValue;
@@ -1681,25 +1602,7 @@ public unsafe class QuickChatPanel : ModuleBase
         [MacroDisplayMode.Buttons] = Lang.Get("QuickChatPanel-Buttons")
     }.ToFrozenDictionary();
 
-    private static readonly char[] SeIconChars = Enum.GetValues<SeIconChar>().Select(x => (char)x).ToArray();
+    private static readonly char[] SeIconChars = [.. Enum.GetValues<SeIconChar>().Select(x => (char)x)];
 
     #endregion
-}
-
-static file class QuickChatPanelExtensions
-{
-    public static QuickChatPanel.SavedMacro ToSavedMacro
-    (
-        this RaptureMacroModule.Macro macro
-    )
-    {
-        var savedMacro = new QuickChatPanel.SavedMacro
-        {
-            Name           = macro.Name.ToString(),
-            IconID         = macro.IconId,
-            LastUpdateTime = StandardTimeManager.Instance().Now
-        };
-
-        return savedMacro;
-    }
 }
