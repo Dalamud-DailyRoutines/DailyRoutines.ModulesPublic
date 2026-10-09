@@ -1,4 +1,3 @@
-using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -7,7 +6,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Classes;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.KamiToolKit.Addons;
@@ -32,10 +31,9 @@ public unsafe class AutoRestoreFurniture : ModuleBase
 
         addon ??= new(this)
         {
-            InternalName          = "DRAutoRestoreFurniture",
-            Title                 = Info.Title,
-            Size                  = new(280f, 170f),
-            RememberClosePosition = false
+            InternalName = "DRAutoRestoreFurniture",
+            Title        = Info.Title,
+            Size         = new(300f, 170f)
         };
 
         LogMessageManager.Instance().RegPre(OnLogMessage);
@@ -103,52 +101,29 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         private TextButtonNode? placedToInventoryButton;
         private TextButtonNode? storedToInventoryButton;
 
-        protected override AttachedAddonPosition AttachPosition =>
-            AttachedAddonPosition.LeftTop;
-
-        protected override Vector2 PositionOffset =>
-            new(0f, 6f);
-
-        protected override bool CanOpenAddon =>
-            HousingGoods != null && HousingGoods->IsAddonAndNodesReady();
-
-        protected override bool CanCloseHostAddon
-        (
-            AtkUnitBase* hostAddon
-        ) =>
-            false;
-
         protected override void OnSetup
         (
             AtkUnitBase*   addon,
             Span<AtkValue> atkValues
         )
         {
-            if (WindowNode is WindowNode windowNode)
-                windowNode.CloseButtonNode.IsVisible = false;
-
-            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x4,  true);
-            FlagHelper.UpdateFlag(ref addon->Flags1A0, 0x80, true);
-            FlagHelper.UpdateFlag(ref addon->Flags1A1, 0x40, true);
-            FlagHelper.UpdateFlag(ref addon->Flags1A3, 0x1,  true);
-
             var layout = new VerticalListNode
             {
-                IsVisible   = true,
                 Position    = ContentStartPosition,
                 ItemSpacing = 4f,
                 Size        = ContentSize,
                 FitContents = true
             };
 
-            stopButton = new()
+            var title = new TextNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(ContentSize.X - 8f, 32f),
-                String    = Lang.Get("Stop"),
-                OnClick   = module.TaskHelper.Abort
+                String    = Lang.Get("AutoRestoreFurniture-Return"),
+                Width     = ContentSize.X,
+                TextFlags = TextFlags.MultiLine | TextFlags.WordWrap,
+                FontSize  = 16
             };
+            title.Height = title.GetTextDrawSize().Y;
+            layout.AddNode(title);
 
             placedToStoreRoomButton = CreateActionButton
             (
@@ -169,26 +144,38 @@ public unsafe class AutoRestoreFurniture : ModuleBase
                 true
             );
 
+            layout.AddNode([placedToStoreRoomButton, placedToInventoryButton, storedToInventoryButton]);
+
+            layout.AddDummy();
+
+            stopButton = new()
+            {
+                Size        = ContentSize with { Y = 32f },
+                String      = Lang.Get("Stop"),
+                TextureType = ButtonTextureType.ButtonB,
+                OnClick     = module.TaskHelper.Abort
+            };
             layout.AddNode(stopButton);
-            layout.AddNode(placedToStoreRoomButton);
-            layout.AddNode(placedToInventoryButton);
-            layout.AddNode(storedToInventoryButton);
 
             layout.AttachNode(this);
 
-            layout.RecalculateLayout();
-
             SetWindowSize(Size.X, ContentStartPosition.Y + layout.Height + 16f);
-            layout.Position = ContentStartPosition;
-            layout.Height   = layout.Height;
         }
 
-        protected override void OnAttachedAddonUpdate
+        protected override void OnUpdate
         (
-            AtkUnitBase* addon,
-            AtkUnitBase* hostAddon
-        ) =>
-            RefreshState();
+            AtkUnitBase* addon
+        )
+        {
+            var isBusy = module.TaskHelper.IsBusy;
+
+            placedToStoreRoomButton?.IsEnabled = !isBusy;
+            placedToInventoryButton?.IsEnabled = !isBusy;
+            storedToInventoryButton?.IsEnabled = !isBusy;
+            stopButton?.IsEnabled              = isBusy;
+
+            base.OnUpdate(addon);
+        }
 
         protected override void OnHostAddon
         (
@@ -209,10 +196,8 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         {
             var button = new TextButtonNode
             {
-                IsVisible = true,
-                IsEnabled = true,
-                Size      = new(ContentSize.X - 8f, 32f),
-                String    = label
+                Size   = ContentSize with { Y = 32f },
+                String = label
             };
 
             button.OnClick = () =>
@@ -233,23 +218,6 @@ public unsafe class AutoRestoreFurniture : ModuleBase
             };
 
             return button;
-        }
-
-        private void RefreshState()
-        {
-            var isBusy = module.TaskHelper.IsBusy;
-
-            if (placedToStoreRoomButton != null)
-                placedToStoreRoomButton.IsEnabled = !isBusy;
-
-            if (placedToInventoryButton != null)
-                placedToInventoryButton.IsEnabled = !isBusy;
-
-            if (storedToInventoryButton != null)
-                storedToInventoryButton.IsEnabled = !isBusy;
-
-            if (stopButton != null)
-                stopButton.IsEnabled = isBusy;
         }
     }
 }
