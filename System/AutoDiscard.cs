@@ -111,10 +111,10 @@ public unsafe class AutoDiscard : ModuleBase
 
         var orderColumnWidth = ImGui.CalcTextSize((moduleConfig.DiscardGroups.Count + 1).ToString()).X + 24;
         ImGui.TableSetupColumn("Order",      ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize, orderColumnWidth);
-        ImGui.TableSetupColumn("UniqueName", ImGuiTableColumnFlags.None,                                        20f);
-        ImGui.TableSetupColumn("Items",      ImGuiTableColumnFlags.None,                                        80f);
-        ImGui.TableSetupColumn("Behaviour",  ImGuiTableColumnFlags.None,                                        30f);
-        ImGui.TableSetupColumn("Operations", ImGuiTableColumnFlags.None,                                        30f);
+        ImGui.TableSetupColumn("UniqueName", ImGuiTableColumnFlags.WidthStretch,                                20f);
+        ImGui.TableSetupColumn("Items",      ImGuiTableColumnFlags.WidthStretch,                                80f);
+        ImGui.TableSetupColumn("Behaviour",  ImGuiTableColumnFlags.WidthStretch,                                30f);
+        ImGui.TableSetupColumn("Operations", ImGuiTableColumnFlags.WidthStretch,                                30f);
 
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
 
@@ -323,7 +323,7 @@ public unsafe class AutoDiscard : ModuleBase
                             ];
                             lastAddedItemsByName.ForEach(x => group.Items.Add(x.RowId));
                             moduleConfig.Save(this);
-                            
+
                             NotifyHelper.Instance().Chat
                             (
                                 Lang.Get
@@ -695,10 +695,10 @@ public unsafe class AutoDiscard : ModuleBase
         {
             if (module.moduleConfig.DiscardGroups.Count == 0)
                 return null;
-            
-            if (args.TargetInventoryItem is not { } item) 
+
+            if (args.TargetInventoryItem is not { } item)
                 return null;
-            
+
             var itemID = item.GetBaseItemId();
             if (!LuminaGetter.TryGetRow<Item>(itemID, out _))
                 return null;
@@ -710,7 +710,7 @@ public unsafe class AutoDiscard : ModuleBase
                 Name = name,
                 Submenu = new()
                 {
-                    Title = name,
+                    Title   = name,
                     Entries = [.. module.moduleConfig.DiscardGroups.Select(group => new DiscardGroupMenuItem(module, group, itemID))]
                 }
             };
@@ -719,9 +719,9 @@ public unsafe class AutoDiscard : ModuleBase
 
     private sealed class DiscardGroupMenuItem
     (
-        AutoDiscard        module,
-        DiscardItemsGroup  group,
-        uint               itemID
+        AutoDiscard       module,
+        DiscardItemsGroup group,
+        uint              itemID
     ) : ContextMenuEntry
     {
         public override string Identifier =>
