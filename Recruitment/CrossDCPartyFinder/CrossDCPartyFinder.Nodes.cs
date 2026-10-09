@@ -1,6 +1,8 @@
-﻿using Dalamud.Game.Addon.Lifecycle;
+using System.Numerics;
+using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
@@ -10,8 +12,7 @@ namespace DailyRoutines.ModulesPublic.CrossDCPartyFinder;
 
 public partial class CrossDCPartyFinder
 {
-    private Dictionary<string, CheckboxNode> checkboxNodes = [];
-    private HorizontalListNode?              layoutNode;
+    private RadioButtonGroupNode? dataCenterGroup;
 
     private unsafe void OnAddon
     (
@@ -34,27 +35,26 @@ public partial class CrossDCPartyFinder
             case AddonEvent.PostSetup:
                 Overlay.IsOpen = true;
 
-                layoutNode = new()
+                dataCenterGroup = new()
                 {
-                    IsVisible = true,
-                    Position  = new(85, 8)
+                    Position                   = new(85, 14),
+                    Height                     = 28,
+                    ItemSpacing                = 4f,
+                    LayoutOrientation          = LayoutOrientation.Horizontal,
+                    SelectFirstButtonByDefault = false,
+                    FitToContentWidth          = true
                 };
 
                 foreach (var dataCenter in dataCenters)
                 {
-                    var node = new CheckboxNode
+                    var radioButton = new RadioButtonNode
                     {
-                        Size      = new(100f, 28f),
-                        IsVisible = true,
-                        IsChecked = dataCenter == selectedDataCenter,
-                        IsEnabled = true,
-                        String    = dataCenter,
-                        OnClick = _ =>
+                        Height      = 16.0f,
+                        String      = dataCenter,
+                        TextTooltip = $"查看{dataCenter}大区的招募信息",
+                        Callback = () =>
                         {
                             selectedDataCenter = dataCenter;
-
-                            foreach (var x in checkboxNodes)
-                                x.Value.IsChecked = x.Key == dataCenter;
 
                             if (LocatedDataCenter == dataCenter)
                             {
@@ -67,27 +67,21 @@ public partial class CrossDCPartyFinder
                         }
                     };
 
-                    checkboxNodes[dataCenter] = node;
-
-                    layoutNode.AddNode(node);
+                    var labelSize = radioButton.LabelNode.GetTextDrawSize(considerScale: false);
+                    radioButton.LabelNode.Size = new Vector2(MathF.Ceiling(labelSize.X), radioButton.Height);
+                    radioButton.Width          = radioButton.LabelNode.X + radioButton.LabelNode.Width;
+                    
+                    dataCenterGroup.AddButton(radioButton);
                 }
 
-                layoutNode.AttachNode(LookingForGroup->GetComponentNodeById(51));
+                dataCenterGroup.SelectedOption = selectedDataCenter;
+
+                dataCenterGroup.AttachNode(LookingForGroup->GetComponentNodeById(51));
                 break;
             case AddonEvent.PreFinalize:
-                Overlay.IsOpen = false;
-                ClearNodes();
+                Overlay.IsOpen  = false;
+                dataCenterGroup = null;
                 break;
         }
-    }
-
-    private void ClearNodes()
-    {
-        layoutNode?.Dispose();
-        layoutNode = null;
-
-        foreach (var x in checkboxNodes.Values)
-            x.Dispose();
-        checkboxNodes.Clear();
     }
 }

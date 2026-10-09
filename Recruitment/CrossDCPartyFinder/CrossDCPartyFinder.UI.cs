@@ -151,8 +151,8 @@ public partial class CrossDCPartyFinder
                 {
                     selectedDataCenter = LocatedDataCenter;
 
-                    foreach (var x in checkboxNodes)
-                        x.Value.IsChecked = x.Key == LocatedDataCenter;
+                    if (dataCenterGroup is { } dataCenterGroupNode)
+                        dataCenterGroupNode.SelectedOption = LocatedDataCenter;
 
                     AgentId.LookingForGroup.SendEvent(1, 17);
                     isNeedToDisable = false;
