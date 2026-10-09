@@ -9,6 +9,7 @@ using KamiToolKit.Controllers;
 using KamiToolKit.Enums;
 using KamiToolKit.MapOverlay;
 using KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Helpers;
@@ -38,13 +39,12 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
 
     private MarkerDetailsAddon? markerDetailsAddon;
     private MarkerListAddon?    markerListAddon;
-    
+
     private AddonController<AddonAreaMap>? areaMapController;
     private MapOverlayController?          mapOverlayController;
 
     private HorizontalListNode? mapButtonContainer;
     private CircleButtonNode?   mapAddButton;
-    private CircleButtonNode?   mapListButton;
 
     private bool isPlacingMarker;
 
@@ -93,7 +93,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
 
         areaMapController?.Dispose();
         areaMapController = null;
-        
+
         OnAreaMapFinalize(null);
 
         mapOverlayController?.Dispose();
@@ -114,7 +114,7 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
         string arguments
     ) =>
         markerListAddon?.Open();
-    
+
     private void OnAreaMapSetup
     (
         AddonAreaMap* addon
@@ -138,10 +138,10 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
                 OnClick     = TogglePlacementMode
             }
         );
-        
+
         mapButtonContainer.AddNode
         (
-            mapListButton = new()
+            new CircleButtonNode
             {
                 Icon        = CircleButtonIcon.Document,
                 TextTooltip = Lang.Get("CustomizeMapMarker-OpenList"),
@@ -149,12 +149,12 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
                 OnClick     = () => markerListAddon?.Toggle()
             }
         );
-        
+
         mapButtonContainer.RecalculateLayout();
 
         mapButtonContainer.AttachNode(addon->LocationContainerNode);
     }
-    
+
     private void OnAreaMapUpdate
     (
         AddonAreaMap* addon
@@ -173,9 +173,8 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
 
         mapButtonContainer?.Dispose();
         mapButtonContainer = null;
-        
-        mapAddButton  = null;
-        mapListButton = null;
+
+        mapAddButton = null;
     }
 
     private void TogglePlacementMode()
@@ -282,13 +281,10 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
     private static string FormatMapName
     (
         uint mapID
-    )
-    {
-        if (!LuminaGetter.TryGetRow<Map>(mapID, out var map))
-            return $"Map {mapID}";
-
-        return GetMapName(map, mapID);
-    }
+    ) =>
+        LuminaGetter.TryGetRow<Map>(mapID, out var map) ?
+            GetMapName(map, mapID) :
+            $"Map {mapID}";
 
     private static string GetMapName
     (
@@ -421,14 +417,14 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
             (
                 new MapMarkerNode
                 {
-                    MapId          = marker.MapID,
-                    Position       = marker.TexturePosition,
-                    IconId         = marker.IconID,
-                    Size           = new(32),
-                    MarkerScale    = marker.Scale,
-                    TextTooltip    = $"{marker.Name} [{marker.Group}]\n{marker.Description}".Trim(),
-                    OnClick        = () => HandleMarkerClick(markerID),
-                    OnRightClick   = () => markerDetailsAddon?.OpenMarker(markerID)
+                    MapId        = marker.MapID,
+                    Position     = marker.TexturePosition,
+                    IconId       = marker.IconID,
+                    Size         = new(32),
+                    MarkerScale  = marker.Scale,
+                    TextTooltip  = $"{marker.Name} [{marker.Group}]\n{marker.Description}".Trim(),
+                    OnClick      = () => HandleMarkerClick(markerID),
+                    OnRightClick = () => markerDetailsAddon?.OpenMarker(markerID)
                 }
             );
         }

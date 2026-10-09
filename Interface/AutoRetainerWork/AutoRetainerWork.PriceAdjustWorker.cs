@@ -15,6 +15,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
@@ -1464,7 +1465,7 @@ public unsafe partial class AutoRetainerWork
 
                 var settingsButton = new CircleButtonNode
                 {
-                    Icon        = CircleButtonIcon.GearCog,
+                    Icon        = CircleButtonIcon.Gear,
                     Size        = new(28),
                     TextTooltip = Lang.Get("Settings"),
                     OnClick     = () => ChatManager.Instance().SendCommand("/pdr search AutoRetainerWork")

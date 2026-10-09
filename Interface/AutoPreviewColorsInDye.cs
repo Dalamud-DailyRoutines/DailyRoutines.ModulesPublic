@@ -12,6 +12,7 @@ using KamiToolKit.BaseTypes;
 using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.UiOverlay;
 using Lumina.Excel.Sheets;
@@ -328,8 +329,9 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
             if (!LuminaGetter.TryGetRow<Stain>(stainID, out var stain))
                 return;
 
+            var row   = index / perRow;
             var x     = OVERLAY_PADDING_X   + (index % perRow * cellWidth);
-            var y     = OVERLAY_FIRST_ROW_Y + (index / perRow * cellHeight);
+            var y     = OVERLAY_FIRST_ROW_Y + (row            * cellHeight);
             var color = stain.Color.ReverseToVector4();
 
             var squareNode = new TextNode
@@ -889,7 +891,7 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
         (
             52254,
             new(1f, 0.95f, 0.65f, 1f),
-            Enumerable.Range(1, 85).Select(static x => (uint)x).ToArray()
+            [.. Enumerable.Range(1, 85).Select(static x => (uint)x)]
         ),
         [52255] = new
         (
