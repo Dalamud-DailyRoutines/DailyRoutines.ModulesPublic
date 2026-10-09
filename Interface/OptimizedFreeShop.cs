@@ -2,7 +2,6 @@ using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
@@ -45,7 +44,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
         nint       trade
     );
     private Hook<CheckItemBarterDelegate>? CheckItemBarterHook;
-    
+
     private static readonly CompSig FreeShopCheckerSig = new
     (
         "48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? EB ?? 48 8D 1D ?? ?? ?? ?? 49 8B 4E"
@@ -58,8 +57,8 @@ public unsafe class OptimizedFreeShop : ModuleBase
     {
         TaskHelper ??= new();
 
-        freeShopChecker = FreeShopCheckerSig.GetStatic(3);
-        
+        freeShopChecker = FreeShopCheckerSig.GetStatic();
+
         CheckItemBarterHook ??= CheckItemBarterSig.GetHook<CheckItemBarterDelegate>(CheckItemBarterDetour);
         CheckItemBarterHook.Enable();
 
@@ -67,7 +66,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
         {
             InternalName = "DROptimizedFreeShop",
             Title        = Info.Title,
-            Size         = new(230f, 128f),
+            Size         = new(230f, 128f)
         };
     }
 
@@ -150,7 +149,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
     {
         private readonly Dictionary<uint, List<(int Index, uint ItemID)>>                             jobItems      = [];
         private readonly Dictionary<uint, (IconButtonNode Button, ResNode Background, ResNode Image)> jobHighlights = [];
-        
+
         private VerticalListNode? jobLayout;
         private uint?             highlightedClassJobID;
 
@@ -204,10 +203,10 @@ public unsafe class OptimizedFreeShop : ModuleBase
         {
             jobItems.Clear();
             jobHighlights.Clear();
-            
+
             highlightedClassJobID = null;
             jobLayout             = null;
-            
+
             base.OnFinalize(addon);
         }
 
@@ -274,7 +273,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
                     row = new()
                     {
                         ItemSpacing = 4f,
-                        Size        = ContentSize with { Y = 48f },
+                        Size        = ContentSize with { Y = 48f }
                     };
                     jobLayout.AddNode(row);
                 }
