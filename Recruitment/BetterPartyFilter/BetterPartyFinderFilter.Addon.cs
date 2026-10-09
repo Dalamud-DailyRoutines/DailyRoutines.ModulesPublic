@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Reflection;
 using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -74,10 +75,10 @@ public partial class BetterPartyFinderFilter
     {
         private class RegexRow
         {
-            public HorizontalListNode Row          { get; set; } = null!;
-            public CheckboxNode       Checkbox     { get; set; } = null!;
-            public TextInputNode      TextInput    { get; set; } = null!;
-            public TextButtonNode     DeleteButton { get; set; } = null!;
+            public HorizontalListNode Row          { get; init; } = null!;
+            public CheckboxNode       Checkbox     { get; init; } = null!;
+            public TextInputNode      TextInput    { get; init; } = null!;
+            public TextButtonNode     DeleteButton { get; init; } = null!;
         }
 
         private readonly List<RegexRow> regexRows = [];
@@ -136,12 +137,6 @@ public partial class BetterPartyFinderFilter
 
         protected override bool CanOpenAddon => module.isNeedToOpenAddon;
 
-        protected override bool CanCloseHostAddon
-        (
-            AtkUnitBase* hostAddon
-        ) =>
-            module.isNeedToOpenAddon;
-
         protected override void OnDraw
         (
             AtkUnitBase* addon
@@ -178,9 +173,6 @@ public partial class BetterPartyFinderFilter
         {
             currentPageIndex = 0;
             currentActiveTab = 0;
-
-            if (WindowNode is WindowNode windowNode)
-                windowNode.CloseButtonNode.IsVisible = false;
 
             SetupTabBars();
             SetupGeneralPanel();
@@ -438,9 +430,10 @@ public partial class BetterPartyFinderFilter
                 TextFlags = TextFlags.AutoAdjustNodeSize,
                 String    = LuminaWrapper.GetAddonText(11171),
                 Position  = new(0, 3),
-                TextColor = ColorHelper.GetColor(3),
                 FontSize  = 12
             };
+            AtkColors.Hint.ApplyTo(notifyInfoLabel);
+            
             notifyLabelLayout.AddDummy(12f);
             notifyLabelLayout.AddNode(notifyInfoLabel);
             notifyLabelLayout.AddDummy(12f);
@@ -455,7 +448,6 @@ public partial class BetterPartyFinderFilter
             // 高难度面板 (High-End)
             highEndPanel = new VerticalListNode
             {
-                IsVisible   = false,
                 ItemSpacing = 4f,
                 FitContents = true,
                 FitWidth    = true,
@@ -464,10 +456,10 @@ public partial class BetterPartyFinderFilter
 
             var highEndFilterSameJobCheckbox = new CheckboxNode
             {
-                Size      = new(280f, 24f),
-                IsVisible = true,
-                IsChecked = module.config.HighEndFilterSameJob,
-                String    = Lang.Get("BetterPartyFinderFilter-HighEndFilter-SameJob"),
+                Size        = new(280f, 24f),
+                IsChecked   = module.config.HighEndFilterSameJob,
+                String      = Lang.Get("BetterPartyFinderFilter-HighEndFilter-SameJob"),
+                TextTooltip = Lang.Get("BetterPartyFinderFilter-HighEndFilter-SameJob-Help"),
                 OnClick = isChecked =>
                 {
                     module.config.HighEndFilterSameJob = isChecked;
@@ -708,7 +700,6 @@ public partial class BetterPartyFinderFilter
 
             var workModeRow = new HorizontalListNode
             {
-                IsVisible = true,
                 Size      = new(280f, 24f),
                 Position  = new(16, 0)
             };
@@ -720,9 +711,9 @@ public partial class BetterPartyFinderFilter
 
             var addPresetBtn = new TextButtonNode
             {
-                Size      = new(280f, 28f),
-                IsVisible = true,
-                String    = $"{Lang.Get("Add")} ({Lang.Get("Regex")})",
+                Size        = ContentSize with { Y = 32 },
+                String      = Lang.Get("BetterPartyFinderFilter-Description-Add"),
+                TextureType = ButtonTextureType.ButtonB,
                 OnClick = () =>
                 {
                     module.config.BlackList.Add(new(true, string.Empty));
@@ -1098,11 +1089,10 @@ public partial class BetterPartyFinderFilter
             RecalculatePanel(descriptionPanel);
         }
 
-        protected override void OnAttachedAddonUpdate
+        protected override void OnUpdate
         (
-            AtkUnitBase* addon,
-            AtkUnitBase* hostAddon
-        )
+            AtkUnitBase* addon
+        ) 
         {
             if (tabBar1 != null)
             {
@@ -1128,6 +1118,8 @@ public partial class BetterPartyFinderFilter
                     RecalculatePanel(descriptionPanel);
                     break;
             }
+            
+            base.OnUpdate(addon);
         }
     }
 }

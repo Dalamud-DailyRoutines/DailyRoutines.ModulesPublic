@@ -55,10 +55,9 @@ public partial class BetterPartyFinderFilter : ModuleBase
 
         addon ??= new(this)
         {
-            InternalName          = "DRBetterPartyFinderFilter",
-            Title                 = Info.Title,
-            Size                  = new(400f, 220f),
-            RememberClosePosition = false
+            InternalName = "DRBetterPartyFinderFilter",
+            Title        = Info.Title,
+            Size         = new(400f, 220f),
         };
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "LookingForGroup", OnAddon);
