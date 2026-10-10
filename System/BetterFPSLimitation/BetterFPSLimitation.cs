@@ -134,8 +134,38 @@ public partial class BetterFPSLimitation : ModuleBase
     (
         string command,
         string args
-    ) =>
-        ToggleAddon();
+    )
+    {
+        args = args.Trim();
+
+        switch (args.ToLowerInvariant())
+        {
+            case "":
+                ToggleAddon();
+                return;
+            case "on":
+                config.IsEnabled = true;
+                break;
+            case "off":
+                config.IsEnabled = false;
+                break;
+            case "toggle":
+                config.IsEnabled = !config.IsEnabled;
+                break;
+            default:
+                if (!short.TryParse(args, out var targetFPS) || targetFPS < 1)
+                {
+                    NotifyHelper.Instance().ChatError(Lang.Get("Commands-InvalidArgs", $"/pdr {COMMAND}", args));
+                    return;
+                }
+
+                config.Limitation = targetFPS;
+                config.IsEnabled  = true;
+                break;
+        }
+
+        config.Save(this);
+    }
 
     private unsafe void OnUpdate
     (

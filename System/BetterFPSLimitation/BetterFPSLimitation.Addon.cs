@@ -196,6 +196,7 @@ public partial class BetterFPSLimitation
 
             IsEnabledNode?.IsChecked = module.config.IsEnabled;
             FPSInputNode?.Value = module.config.Limitation;
+            FPSInputNode?.ValueTextNode.SetNumber(module.config.Limitation);
         }
     }
 }
