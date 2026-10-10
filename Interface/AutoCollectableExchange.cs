@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
@@ -39,7 +40,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
     (
         AgentInterface* agentCollectablesShop
     );
-    private HandInCollectablesDelegate? handInCollectables;
+    private HandInCollectablesDelegate? HandInCollectables;
 
     private AtkEventWrapper? exchangeEvent;
     private TextButtonNode?  scripExchangeButton;
@@ -49,7 +50,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
     {
         TaskHelper ??= new();
 
-        handInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
+        HandInCollectables ??= HandInCollectablesSig.GetDelegate<HandInCollectablesDelegate>();
 
         LogMessageManager.Instance().RegPre(OnLogMessage);
 
@@ -178,11 +179,11 @@ public unsafe class AutoCollectableExchange : ModuleBase
             if (list == null) 
                 return;
             
-            EnqueueExchange(list->ListLength, 0);
+            EnqueueExchange(-1, 0);
             return;
         }
 
-        handInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
+        HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
     }
 
     private void UpdateExchangeButton
@@ -303,7 +304,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
                 if (list->ListLength == lastListLength)
                     return false;
 
-                handInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
+                HandInCollectables(AgentModule.Instance()->GetAgentByInternalId(AgentId.CollectablesShop));
 
                 finishedRound += 1;
                 TaskHelper.Enqueue(() => EnqueueExchange(currentListLength, finishedRound), "EnqueueNewRound");
