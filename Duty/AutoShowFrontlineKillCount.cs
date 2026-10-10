@@ -9,6 +9,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
+// TODO: 疑似失效，需要检查
 public unsafe class AutoShowFrontlineKillCount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -18,7 +19,10 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private uint lastKillCount;
     private uint preview = 1;

@@ -25,7 +25,11 @@ public partial class CrossDCPartyFinder : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        CNOnly           = true,
+        CNDefaultEnabled = true
+    };
 
     private static string LocatedDataCenter =>
         GameState.CurrentDataCenterData.Name.ToString();

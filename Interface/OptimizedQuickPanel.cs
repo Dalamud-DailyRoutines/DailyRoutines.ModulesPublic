@@ -31,7 +31,10 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig AddonControlReceiveEventSig = new("40 53 56 41 56 48 81 EC ?? ?? ?? ?? 48 8B F1");
     private delegate void AddonControlReceiveEventDelegate

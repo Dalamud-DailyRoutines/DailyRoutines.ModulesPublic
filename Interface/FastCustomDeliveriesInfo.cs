@@ -23,7 +23,11 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth          = true,
+        AllDefaultEnabled = true
+    };
 
     protected override void Init() =>
         IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreReceiveEvent, AgentId.SatisfactionList, OnAgent);

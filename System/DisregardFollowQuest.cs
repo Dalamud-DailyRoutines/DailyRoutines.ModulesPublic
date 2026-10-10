@@ -16,7 +16,10 @@ public class DisregardFollowQuest : ModuleBase
         Author      = ["Errer"]
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth = true
+    };
 
     private static readonly CompSig FollowTargetRecastSig = new("48 89 5C 24 ?? 57 48 81 EC ?? ?? ?? ?? F3 41 0F 10 00");
 

@@ -16,6 +16,11 @@ public unsafe class AutoAllowMultipleGames : ModuleBase
         Author      = ["Fragile"]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     protected override void Init()
     {
         foreach (var handle in EnumHandles())

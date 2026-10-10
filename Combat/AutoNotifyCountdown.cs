@@ -16,7 +16,10 @@ public class AutoNotifyCountdown : ModuleBase
         Author      = ["HSS"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
     
     protected override void Init() =>
         LogMessageManager.Instance().RegPost(OnLogMessage);

@@ -15,7 +15,10 @@ public unsafe class IgnoreWindowMinSizeLimit : ModuleBase
         Author      = ["Siren"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private int originalMinWidth  = 1024;
     private int originalMinHeight = 720;

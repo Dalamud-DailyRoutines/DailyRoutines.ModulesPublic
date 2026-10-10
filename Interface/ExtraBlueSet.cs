@@ -22,6 +22,11 @@ public unsafe class ExtraBlueSet : ModuleBase
         Author      = ["Marsh"]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private Config config = null!;
 
     private string newPresetNameInput = string.Empty;

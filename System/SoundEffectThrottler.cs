@@ -18,7 +18,6 @@ public class SoundEffectThrottler : ModuleBase
     };
 
     private static readonly CompSig PlaySoundEffectSig = new("E9 ?? ?? ?? ?? C6 41 28 01");
-
     private delegate void PlaySoundEffectDelegate
     (
         uint sound,
@@ -26,7 +25,6 @@ public class SoundEffectThrottler : ModuleBase
         nint a3,
         byte a4
     );
-
     private Hook<PlaySoundEffectDelegate>? PlaySoundEffectHook;
 
     private Config? config;

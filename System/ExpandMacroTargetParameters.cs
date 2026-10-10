@@ -28,6 +28,11 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private Hook<PronounModule.Delegates.ResolvePlaceholder>? ResolvePlaceholderHook;
 
     protected override void Init()

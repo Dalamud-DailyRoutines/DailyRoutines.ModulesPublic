@@ -24,6 +24,11 @@ public unsafe class AutoAetherialReduction : ModuleBase
         Author      = ["YLCHEN"]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private TextNode?       lableNode;
     private TextButtonNode? startButtonNode;
     private TextButtonNode? stopButtonNode;

@@ -20,6 +20,7 @@ using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
+// TODO：咏唱文本默认颜色改为和 EnemyList 一致
 public unsafe class OptimizedTargetInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -29,7 +30,10 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         Category    = ModuleCategory.Combat
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Config config = null!;
 

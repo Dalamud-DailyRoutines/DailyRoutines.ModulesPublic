@@ -29,12 +29,10 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     (
         "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 B8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 8B 15"
     );
-
     private delegate void DeviceDX11PostTickDelegate
     (
         Device* device
     );
-
     private Hook<DeviceDX11PostTickDelegate>? DeviceDX11PostTickHook;
 
     private Config config = null!;

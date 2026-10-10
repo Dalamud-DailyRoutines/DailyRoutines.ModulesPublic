@@ -25,7 +25,10 @@ public unsafe class PraetoriumHelper : ModuleBase
         Author   = ["逆光"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init()
     {

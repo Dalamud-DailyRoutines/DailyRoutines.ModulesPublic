@@ -39,7 +39,10 @@ public unsafe class OptimizedEnemyList : ModuleBase
         ModulesPair = ["AutoDisplayHiddenCast"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private MemoryPatch enemyListIsCastInProgressPatch = null!;
     private MemoryPatch enemyListClearSpellIDPatch     = null!;

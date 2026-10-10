@@ -23,7 +23,10 @@ public unsafe class StrikingTreeHelper : ModuleBase
         Category = ModuleCategory.Duty
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private ZoneIndicatorHandle? handle;
 

@@ -25,7 +25,10 @@ public unsafe class SastashaHelper : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private uint correctBookID;
 

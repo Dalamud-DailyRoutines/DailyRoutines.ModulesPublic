@@ -35,7 +35,10 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth = true
+    };
 
     private          Config            config            = null!;
     private readonly Throttler<string> retainerThrottler = new();

@@ -19,13 +19,15 @@ public unsafe class SimplifiedSystemMenu : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Hook<AgentHUD.Delegates.OpenSystemMenu> OpenSystemMenuHook = null!;
 
     private static readonly CompSig GenerateSystemMenuSig = new
         ("40 53 55 56 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 49 8B D9");
-
     private delegate byte GenerateSystemMenuDelegate
     (
         AgentHUD* agent,
@@ -33,7 +35,6 @@ public unsafe class SimplifiedSystemMenu : ModuleBase
         int       valueCount,
         ulong     eventKind
     );
-
     private Hook<GenerateSystemMenuDelegate> GenerateSystemMenuHook;
 
     protected override void Init()

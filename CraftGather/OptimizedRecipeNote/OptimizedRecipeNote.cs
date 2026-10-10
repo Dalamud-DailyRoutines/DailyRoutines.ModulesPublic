@@ -49,7 +49,10 @@ public partial class OptimizedRecipeNote : ModuleBase
         ModulesPrerequisite = ["AutoShowItemNPCShopInfo"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig SimpleCraftGetAmountUpperLimitSig = 
         new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");

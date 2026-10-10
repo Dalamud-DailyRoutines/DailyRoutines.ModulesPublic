@@ -32,8 +32,8 @@ public unsafe class AutoDisplayIDInformation : ModuleBase
         Author      = ["Middo"]
     };
 
-    private static readonly CompSig GetStatusTooltipTextSig = new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
-
+    private static readonly CompSig GetStatusTooltipTextSig = 
+        new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
     private delegate CStringPointer GetStatusTooltipTextDelegate
     (
         AgentHUD*   agent,
@@ -41,7 +41,6 @@ public unsafe class AutoDisplayIDInformation : ModuleBase
         uint        statusID,
         uint        param
     );
-
     private Hook<GetStatusTooltipTextDelegate>? GetStatusTooltipTextHook;
 
     private Config        config = null!;

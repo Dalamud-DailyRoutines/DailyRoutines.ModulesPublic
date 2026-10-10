@@ -19,7 +19,10 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
     
     private long cutsceneBeginTick;
     private long cutsceneLastWatchingTick;

@@ -16,9 +16,7 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
         Description = Lang.Get("AutoClaimItemIgnoringMismatchJobAndLevelDescription"),
         Category    = ModuleCategory.Interface
     };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     protected override void Init()
     {
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);

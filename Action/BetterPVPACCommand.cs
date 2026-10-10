@@ -18,7 +18,10 @@ public unsafe class BetterPVPACCommand : ModuleBase
         ModulesPair = ["OptimizedPVPProfileAction"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig ShellCommandActionExecuteCommandSig = new("40 57 41 55 41 56 48 83 EC ?? 45 32 ED");
     private delegate long ExecuteCommandDelegate

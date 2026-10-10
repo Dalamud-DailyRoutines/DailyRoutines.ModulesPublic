@@ -24,7 +24,10 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         Author      = ["Mizami", "Cyf5119"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private delegate void SetContentsFinderSettingsInitDelegate
     (

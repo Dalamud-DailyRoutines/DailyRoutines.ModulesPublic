@@ -17,7 +17,10 @@ public class AutoBlockAgelessWordsAndSolidReason : ModuleBase
         Category    = ModuleCategory.CraftGather
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseActionLocation(OnUseAction);
