@@ -94,8 +94,12 @@ public class ContentFinderCommand : ModuleBase
             return;
 
         var options = new ContentsFinderOption { Config817to820 = true };
-        if (dutyType.dutyType == DutyType.Normal && arguments.Length == 3 && !TryParseContentSettings(arguments[2], ref options))
+        if (arguments.Length == 3 &&
+            !TryParseContentSettings(arguments[2], dutyType.dutyType, ref options))
+        {
+            NotifyHelper.Instance().ChatError(Lang.Get("Commands-InvalidArgs", command, args));
             return;
+        }
 
         ExecuteDutyRequest(dutyType.dutyType, contentIds, options);
     }
@@ -235,6 +239,7 @@ public class ContentFinderCommand : ModuleBase
     private static bool TryParseContentSettings
     (
         string                   input,
+        DutyType                 dutyType,
         ref ContentsFinderOption options
     )
     {
@@ -247,6 +252,16 @@ public class ContentFinderCommand : ModuleBase
         {
             if (!OptionSetters.TryGetValue(part, out var setter))
                 return false;
+
+            var isAllowed = dutyType switch
+            {
+                DutyType.Normal   => true,
+                DutyType.Roulette => part is "supply" or "sync" or "limitleveling",
+                _                 => false
+            };
+
+            if (!isAllowed) return false;
+
             setter.action(wrapper);
         }
 
