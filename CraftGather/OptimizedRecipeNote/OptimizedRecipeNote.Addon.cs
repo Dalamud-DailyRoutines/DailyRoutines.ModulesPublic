@@ -1,15 +1,17 @@
 using System.Text;
 using DailyRoutines.Common.Info;
+using Dalamud.Game.Agent;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Enums;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using KamiToolKit.Nodes.Simplified;
 using Lumina.Data.Parsing.Uld;
 using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
@@ -18,6 +20,7 @@ using OmenTools.KamiToolKit.Nodes.Background;
 using OmenTools.KamiToolKit.Nodes.GaugeBarCraft;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
+using AgentId = Dalamud.Game.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic.CraftGather;
 
@@ -25,16 +28,15 @@ public partial class OptimizedRecipeNote
 {
     private class AddonActionsPreview
     (
-        OptimizedRecipeNote inModule,
-        TaskHelper          inTaskHelper,
-        CalculationResult    result
+        TaskHelper        inTaskHelper,
+        CalculationResult result
     ) : NativeAddon
     {
         public static AddonActionsPreview? Addon { get; set; }
 
-        public CalculationResult    Result     { get; init; } = result;
-        public TaskHelper          TaskHelper { get; init; } = inTaskHelper;
-        public OptimizedRecipeNote Module     { get; init; } = inModule;
+        public CalculationResult Result          { get; init; } = result;
+        public TaskHelper        TaskHelper      { get; init; } = inTaskHelper;
+        public int               CraftableAmount { get; }       = Math.Max(1, GetCraftableAmount(result.GetRecipe()));
 
         public VerticalListNode RootContainer { get; private set; }
 
@@ -101,14 +103,14 @@ public partial class OptimizedRecipeNote
         public static void OpenWithActions
         (
             OptimizedRecipeNote module,
-            CalculationResult    result
+            CalculationResult   result
         )
         {
             if (result.Actions.Count == 0) return;
 
             Addon?.Dispose();
 
-            Addon = new(module, module.TaskHelper, result)
+            Addon = new(module.TaskHelper, result)
             {
                 InternalName          = "DRRecipeNoteActionsPreview",
                 Title                 = Lang.Get("OptimizedRecipeNote-AddonTitle"),
@@ -262,7 +264,7 @@ public partial class OptimizedRecipeNote
             ExecuteButton = new()
             {
                 Size        = new(140, EXECUTION_CONTAINER_HEIGHT),
-                String      = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", 1),
+                String      = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", CraftableAmount),
                 TextureType = ButtonTextureType.ButtonB,
                 OnClick = () =>
                 {
@@ -286,9 +288,27 @@ public partial class OptimizedRecipeNote
                     {
                         var currentRound = round;
 
+                        TaskHelper.Enqueue(() =>
+                        {
+                            if (RecipeNoteAddon == null)
+                                AgentRecipeNote.Instance()->OpenRecipeByRecipeId(Result.RecipeID);
+                            
+                            var recipeList = RecipeNote.Instance()->RecipeList;
+                            if (recipeList == null) 
+                                return false;
+
+                            var recipe = recipeList->SelectedRecipe;
+                            if (recipe == null) 
+                                return false;
+                            
+                            return recipe->RecipeId == Result.RecipeID;
+                        });
+                        
                         TaskHelper.Enqueue
                         (() =>
                             {
+                                RefreshRecipeMaterials();
+                                
                                 var currentCraftRound = currentRound + 1;
 
                                 CraftProgressBar.MaxValue  = totalCraftRound;
@@ -298,7 +318,7 @@ public partial class OptimizedRecipeNote
                                 CraftRoundInfo.String    = $"{currentCraftRound}/{totalCraftRound}";
                                 CraftRoundInfo.IsVisible = true;
 
-                                RecipeNoteAddon->Callback(8);
+                                AgentId.RecipeNote.SendEvent(0, 8);
                             }
                         );
 
@@ -353,7 +373,7 @@ public partial class OptimizedRecipeNote
                 Min           = 1,
                 Max           = 99999,
                 Step          = 1,
-                Value         = 1,
+                Value         = CraftableAmount,
                 OnValueUpdate = value => ExecuteButton.String = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", value)
             };
             ExecutionContainer.AddNode(CraftCountInput);

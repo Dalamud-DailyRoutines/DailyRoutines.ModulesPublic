@@ -18,10 +18,8 @@ using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using InteropGenerator.Runtime;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.Timelines;
@@ -56,7 +54,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private static readonly CompSig SimpleCraftGetAmountUpperLimitSig = 
+    private static readonly CompSig SimpleCraftGetAmountUpperLimitSig =
         new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
     private delegate int SimpleCraftGetAmountUpperLimitDelegate
     (
@@ -65,8 +63,8 @@ public partial class OptimizedRecipeNote : ModuleBase
     );
     private Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
 
-    private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
-    private MemoryPatch SimpleCraftAmountJudgePatch = null!;
+    private static readonly CompSig     SimpleCraftAmountJudgeSig   = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
+    private                 MemoryPatch SimpleCraftAmountJudgePatch = null!;
 
     private static readonly CompSig RecipeNotePraticeSettingSetupSig = new
     (
@@ -119,7 +117,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         TaskHelper ??= new() { TimeoutMS = 15_000 };
 
         config = Config.Load(this) ?? new();
-        
+
         SimpleCraftGetAmountUpperLimitHook =
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
@@ -235,7 +233,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
 
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish"), ref config.IsSwitchJobButton))
+        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish"), ref config.IsNotifyQuickSynthesisFinish))
             config.Save(this);
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish-Help"));
@@ -273,6 +271,53 @@ public partial class OptimizedRecipeNote : ModuleBase
         return maxPortion;
     }
 
+    private static unsafe int GetCraftableAmount
+    (
+        Recipe recipe
+    )
+    {
+        var maxPortion = 9999;
+
+        for (var index = 0; index < recipe.Ingredient.Count; index++)
+        {
+            var ingredient = recipe.Ingredient[index];
+            if (!ingredient.IsValid || ingredient.RowId == 0) continue;
+
+            var amount = recipe.AmountIngredient[index];
+            if (amount == 0) continue;
+
+            var itemCount = InventoryManager.Instance()->GetInventoryItemCount(ingredient.RowId) +
+                            InventoryManager.Instance()->GetInventoryItemCount(ingredient.RowId, true);
+            maxPortion = Math.Min(maxPortion, itemCount / amount);
+        }
+
+        return maxPortion;
+    }
+
+    private static unsafe void RefreshRecipeMaterials()
+    {
+        var recipeList = RecipeNote.Instance()->RecipeList;
+        if (recipeList == null) return;
+
+        var recipe = recipeList->SelectedRecipe;
+        if (recipe == null) return;
+
+        for (var index = 0; index < recipe->Ingredients.Length; index++)
+        {
+            ref var ingredient = ref recipe->Ingredients[index];
+            if (ingredient.ItemId == 0 || ingredient.Amount == 0) continue;
+
+            var nqAmount = Math.Min
+            (
+                ingredient.Amount,
+                InventoryManager.Instance()->GetInventoryItemCount(ingredient.ItemId)
+            );
+            var hqAmount = Math.Min(ingredient.Amount - nqAmount, InventoryManager.Instance()->GetInventoryItemCount(ingredient.ItemId, true));
+            ingredient.NQCount = (byte)nqAmount;
+            ingredient.HQCount = (byte)hqAmount;
+        }
+    }
+
     private unsafe AtkValue* RecipeNotePraticeSettingSetupDetour
     (
         AtkEventListener* listener,
@@ -301,7 +346,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                calculateRecipeButton    = null;
+                calculateRecipeButton   = null;
                 switchJobButton         = null;
                 displayOthersButton     = null;
                 displayOthersJobsLayout = null;
@@ -1029,14 +1074,14 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (installRaphaelTask != null) return;
 
         installRaphaelTask = IFramework.Instance()
-                                     .RunOnTick
-                                     (async () => await DalamudReflector.AddPlugin
-                                                  (
-                                                      "https://raw.githubusercontent.com/AtmoOmen/DalamudPlugins/main/pluginmaster.json",
-                                                      "Raphael.Dalamud"
-                                                  )
-                                     )
-                                     .ContinueWith(_ => installRaphaelTask = null);
+                                       .RunOnTick
+                                       (async () => await DalamudReflector.AddPlugin
+                                                    (
+                                                        "https://raw.githubusercontent.com/AtmoOmen/DalamudPlugins/main/pluginmaster.json",
+                                                        "Raphael.Dalamud"
+                                                    )
+                                       )
+                                       .ContinueWith(_ => installRaphaelTask = null);
     }
 
     private void OnClickPreviewPayload
@@ -1082,32 +1127,32 @@ public partial class OptimizedRecipeNote : ModuleBase
                                    .Append(result.GetJob().Name)
                                    .ToReadOnlySeString();
         rented.Clear();
-        
+
         rented.Append
-        (
-            Lang.GetSe
-            (
-                "OptimizedRecipeNote-Message-SolveResult",
-                new Dictionary<string, object>
-                {
-                    ["classJob"] = classJobString,
-                    ["item"]     = ReadOnlySeString.CreateItemLink(result.GetRecipe().ItemResult.RowId, false),
-                    ["step"]     = result.Actions.Count,
-                    ["second"]   = result.Actions.Count * 3
-                }
-            )
-        )
-        .AppendNewLine()
-        .AppendDalamudSeString(result.CopyLinkPayload)
-        .Append("  \ue06f ")
-        .Append(Lang.Get("OptimizedRecipeNote-Message-CopyAsMacro"))
-        .PopLink()
-        .AppendNewLine()
-        .AppendDalamudSeString(result.PreviewLinkPayload)
-        .Append("  \ue06f ")
-        .Append(Lang.Get("OptimizedRecipeNote-Message-PreviewSteps"))
-        .PopLink();
-        
+              (
+                  Lang.GetSe
+                  (
+                      "OptimizedRecipeNote-Message-SolveResult",
+                      new Dictionary<string, object>
+                      {
+                          ["classJob"] = classJobString,
+                          ["item"]     = ReadOnlySeString.CreateItemLink(result.GetRecipe().ItemResult.RowId, false),
+                          ["step"]     = result.Actions.Count,
+                          ["second"]   = result.Actions.Count * 3
+                      }
+                  )
+              )
+              .AppendNewLine()
+              .AppendDalamudSeString(result.CopyLinkPayload)
+              .Append("  \ue06f ")
+              .Append(Lang.Get("OptimizedRecipeNote-Message-CopyAsMacro"))
+              .PopLink()
+              .AppendNewLine()
+              .AppendDalamudSeString(result.PreviewLinkPayload)
+              .Append("  \ue06f ")
+              .Append(Lang.Get("OptimizedRecipeNote-Message-PreviewSteps"))
+              .PopLink();
+
         NotifyHelper.Instance().Chat(rented.ToReadOnlySeString());
     }
 
@@ -1205,7 +1250,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     #endregion
 
     #region 工具
-    
+
     private static unsafe bool TryGetCurrentRecipe
     (
         out uint   recipeID,
