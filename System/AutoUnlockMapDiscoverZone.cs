@@ -16,14 +16,13 @@ public unsafe class AutoUnlockMapDiscoverZone : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    private static readonly CompSig AgentMapUpdateSig = new("48 89 5C 24 ?? 55 56 57 41 54 41 55 41 56 41 57 48 83 EC ?? 48 8B E9 E8");
-
+    private static readonly CompSig AgentMapUpdateSig = 
+        new("48 89 5C 24 ?? 55 56 57 41 54 41 55 41 56 41 57 48 83 EC ?? 48 8B E9 E8");
     private delegate void AgentMapUpdateDelegate
     (
         AgentMap* agent,
         uint      updateCount
     );
-
     private Hook<AgentMapUpdateDelegate>? AgentMapUpdateHook;
 
     protected override void Init()

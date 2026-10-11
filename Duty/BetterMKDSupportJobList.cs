@@ -43,7 +43,10 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Config config = null!;
 
@@ -1126,7 +1129,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                             tooltipArgs.ActionArgs.Kind  = DetailKind.MKDTrait;
                             tooltipArgs.ActionArgs.Id    = (int)trait;
 
-                            AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Action, (ushort)addon.AddonId, node, &tooltipArgs);
+                            AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Action, addon.AddonId, node, &tooltipArgs);
                         },
                         OnRollOut = node => node.HideTooltip()
                     };
@@ -1403,7 +1406,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                                                         (int)ActionID :
                                                         31 + ActionIndex;
 
-                        AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Action, (ushort)Addon.AddonId, node, &tooltipArgs);
+                        AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Action, Addon.AddonId, node, &tooltipArgs);
                     };
                     OnRollOut = node => node.HideTooltip();
                     OnClicked = _ =>

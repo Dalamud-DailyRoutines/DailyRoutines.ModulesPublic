@@ -25,6 +25,11 @@ public unsafe class HullbreakerIsleHelper : ModuleBase
         Category = ModuleCategory.Duty
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private ZoneIndicatorHandle? trapHandle;
     private ZoneIndicatorHandle? fakeTreasureHandle;
 

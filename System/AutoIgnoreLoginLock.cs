@@ -21,7 +21,10 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Hook<AgentLobby.Delegates.Update> AgentLobbyUpdateHook;
     

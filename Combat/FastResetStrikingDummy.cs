@@ -20,7 +20,10 @@ public class FastResetStrikingDummy : ModuleBase
         Category    = ModuleCategory.Combat
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private CancellationTokenSource cancelSource = null!;
 

@@ -24,6 +24,11 @@ public unsafe class AutoSplitStacks : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private Config config = null!;
 
     private ItemSelectCombo    itemSelectCombo        = null!;

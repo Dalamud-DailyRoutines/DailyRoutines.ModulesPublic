@@ -29,15 +29,14 @@ public unsafe class AutoMaterialize : ModuleBase
     };
 
     // 0 - 成功; 3 - 获取 InventoryType 或 InventorySlot 失败; 4 - 物品为空或不符合条件; 9 - 当前 Condition 不满足; 34 - 当前状态无法使用; 
-    private static readonly CompSig ExtractMateriaSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 41 0F BF F8 8B DA 48 8B F1 45 33 C0");
-
+    private static readonly CompSig ExtractMateriaSig = 
+        new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 41 0F BF F8 8B DA 48 8B F1 45 33 C0");
     private delegate int ExtractMateriaDelegate
     (
         nint          a1,
         InventoryType type,
         uint          slot
     );
-
     private Hook<ExtractMateriaDelegate>? ExtractMateriaHook;
 
     private TextNode?       lableNode;

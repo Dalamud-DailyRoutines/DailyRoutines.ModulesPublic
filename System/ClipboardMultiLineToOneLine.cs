@@ -19,13 +19,12 @@ public unsafe class ClipboardMultiLineToOneLine : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    private static readonly CompSig GetClipboardDataSig = new("40 53 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 BA");
-
+    private static readonly CompSig GetClipboardDataSig = 
+        new("40 53 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 BA");
     private delegate Utf8String* GetClipboardDataDelegate
     (
         ClipBoard* clipBoard
     );
-
     private Hook<GetClipboardDataDelegate>? GetClipboardDataHook;
 
     protected override void Init()

@@ -27,7 +27,10 @@ public unsafe class OptimizedCharacterClass : ModuleBase
         Author      = ["Middo"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private readonly List<AtkEventWrapper> events = [];
 

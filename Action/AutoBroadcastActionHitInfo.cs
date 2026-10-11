@@ -24,7 +24,6 @@ public unsafe class AutoBroadcastActionHitInfo : ModuleBase
     };
 
     private static readonly CompSig ProcessPacketActionEffectSig = new("E8 ?? ?? ?? ?? 48 8B 8D F0 03 00 00");
-
     private delegate void ProcessPacketActionEffectDelegate
     (
         uint                        sourceID,
@@ -34,7 +33,6 @@ public unsafe class AutoBroadcastActionHitInfo : ModuleBase
         ActionEffectHandler.Effect* effectArray,
         ulong*                      effectTrail
     );
-
     private Hook<ProcessPacketActionEffectDelegate> ProcessPacketActionEffectHook;
 
     private Config config = null!;

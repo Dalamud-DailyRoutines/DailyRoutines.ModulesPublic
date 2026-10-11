@@ -36,7 +36,10 @@ public unsafe class FastInstanceZoneChange : ModuleBase
         ModulesPair = ["InstantTeleport"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Config        config = null!;
     private IDtrBarEntry? entry;

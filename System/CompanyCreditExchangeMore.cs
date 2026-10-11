@@ -21,10 +21,14 @@ public unsafe class CompanyCreditExchangeMore : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth          = true,
+        AllDefaultEnabled = true
+    };
 
-    private static readonly CompSig AddonFreeCompanyCreditShopRefreshSig = new("41 56 41 57 48 83 EC ?? 0F B6 81 ?? ?? ?? ?? 4D 8B F8");
-
+    private static readonly CompSig AddonFreeCompanyCreditShopRefreshSig = 
+        new("41 56 41 57 48 83 EC ?? 0F B6 81 ?? ?? ?? ?? 4D 8B F8");
     [return: MarshalAs(UnmanagedType.U1)]
     private delegate bool AddonFreeCompanyCreditShopRefreshDelegate
     (
@@ -32,7 +36,6 @@ public unsafe class CompanyCreditExchangeMore : ModuleBase
         uint         atkValueCount,
         AtkValue*    atkValues
     );
-
     private Hook<AddonFreeCompanyCreditShopRefreshDelegate> AddonFreeCompanyCreditShopRefreshHook;
 
     private Config config = null!;

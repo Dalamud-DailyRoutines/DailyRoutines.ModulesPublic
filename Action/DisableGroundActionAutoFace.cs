@@ -14,6 +14,11 @@ public class DisableGroundActionAutoFace : ModuleBase
         Category    = ModuleCategory.Action
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private MemoryPatch groundActionAutoFacePatch = null!;
 
     protected override void Init()

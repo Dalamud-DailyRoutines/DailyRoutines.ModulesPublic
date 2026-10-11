@@ -33,7 +33,10 @@ public class AutoDisplayMitigationInfo : ModuleBase
         Author      = ["HaKu"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private          Config          config = null!;
     private          IDtrBarEntry?   barEntry;

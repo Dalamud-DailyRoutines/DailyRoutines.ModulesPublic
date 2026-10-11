@@ -39,6 +39,11 @@ public unsafe class AutoExpertDelivery : ModuleBase
         ModulesPrerequisite = ["FastGrandCompanyExchange"]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private Config config = null!;
 
     private DRAutoExpertDelivery? addonExpertDelivery;

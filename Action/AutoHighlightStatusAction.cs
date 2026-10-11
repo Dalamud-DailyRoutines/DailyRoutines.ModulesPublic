@@ -29,6 +29,11 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         Author      = ["HaKu"]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private Hook<ActionManager.Delegates.IsActionHighlighted>? IsActionHighlightedHook;
 
     private Config config = null!;

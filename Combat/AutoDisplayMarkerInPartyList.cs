@@ -31,7 +31,6 @@ public unsafe class AutoDisplayMarkerInPartyList : ModuleBase
     };
 
     private static readonly CompSig UpdateMarkerLocalSig = new("E8 ?? ?? ?? ?? 4C 8B C5 8B D7 48 8B CB E8");
-
     private delegate void UpdateMarkerLocalDelegate
     (
         MarkingController* controller,
@@ -39,7 +38,6 @@ public unsafe class AutoDisplayMarkerInPartyList : ModuleBase
         GameObjectId       objectID,
         uint               entityID
     );
-
     private Hook<UpdateMarkerLocalDelegate>? UpdateMarkerLocalHook;
 
     private Config config = null!;

@@ -14,7 +14,11 @@ public class SameAethernetTeleport : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth          = true,
+        AllDefaultEnabled = true
+    };
 
     private MemoryPatch patch0 = null!;
     private MemoryPatch patch1 = null!;

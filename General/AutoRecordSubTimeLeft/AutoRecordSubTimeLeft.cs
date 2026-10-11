@@ -27,13 +27,17 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         Author      = ["Due"]
     };
 
-    private static readonly CompSig AgentLobbyOnLoginSig = new("E8 ?? ?? ?? ?? 41 C6 45 ?? ?? E9 ?? ?? ?? ?? 83 FB 03");
+    public override ModulePermission Permission { get; } = new()
+    {
+        CNOnly           = true,
+        CNDefaultEnabled = true
+    };
 
+    private static readonly CompSig AgentLobbyOnLoginSig = new("E8 ?? ?? ?? ?? 41 C6 45 ?? ?? E9 ?? ?? ?? ?? 83 FB 03");
     private unsafe delegate nint AgentLobbyOnLoginDelegate
     (
         AgentLobby* agent
     );
-
     private Hook<AgentLobbyOnLoginDelegate>? AgentLobbyOnLoginHook;
 
     private Config           config = null!;
@@ -44,9 +48,7 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
     private DatePicker? endDatePicker;
     private DateTime    queryStartDate;
     private DateTime    queryEndDate;
-
-    public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
-
+    
     protected override unsafe void Init()
     {
         config     =   Config.Load(this) ?? new();
