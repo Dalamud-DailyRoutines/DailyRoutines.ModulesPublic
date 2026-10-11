@@ -100,7 +100,18 @@ public class ContentFinderCommand : ModuleBase
         if (arguments.Length == 3 &&
             !TryParseContentSettings(arguments[2], dutyType.dutyType, ref options))
         {
-            NotifyHelper.Instance().ChatError(Lang.Get("Commands-InvalidArgs", command, args));
+            NotifyHelper.Instance().ChatError
+            (
+                ISeStringEvaluator.Instance().EvaluateFromLogMessage
+                (
+                    3802,
+                    [
+                        1,
+                        LuminaWrapper.GetAddonText(9448),
+                        args
+                    ]
+                )
+            );
             return;
         }
 
