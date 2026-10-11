@@ -10,7 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Dalamud.Helpers;
 using OmenTools.OmenService;
-using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.Native.AgentReceiveEventDelegate;
+using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentReceiveEventDelegate;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -33,7 +33,6 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         float     worldZ,
         uint      iconID = 60561
     );
-
     private Hook<SetFlagMarkerDelegate>? SetFlagMarkerHook;
 
     private Hook<AgentReceiveEventDelegate>? AgentMapReceiveEventHook;
@@ -198,10 +197,7 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
             return false;
 
         var flagMarker = GameState.FlagMarker;
-        if (flagMarker.TerritoryId == 0 || flagMarker.MapId == 0 || flagMarker.TerritoryId != GameState.TerritoryType)
-            return false;
-
-        return true;
+        return flagMarker.TerritoryId != 0 && flagMarker.MapId != 0 && flagMarker.TerritoryId == GameState.TerritoryType;
     }
 
     private class Config : ModuleConfig

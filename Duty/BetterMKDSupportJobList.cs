@@ -25,7 +25,7 @@ using OmenTools.Info.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
-using AgentShowDelegate = FFXIVClientStructs.Expansion.Native.AgentShowDelegate;
+using AgentShowDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentShowDelegate;
 using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
 
 namespace DailyRoutines.ModulesPublic.Duty;
@@ -125,7 +125,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
 
             if (ImGui.SmallButton(Lang.Get("Reset")))
             {
-                config.AddonSupportJobOrder = config.AddonSupportJobOrder.Order().ToList();
+                config.AddonSupportJobOrder = [.. config.AddonSupportJobOrder.Order()];
                 config.Save(this);
             }
 

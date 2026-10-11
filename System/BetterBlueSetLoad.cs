@@ -7,10 +7,9 @@ using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using FFXIVClientStructs.Expansion.Native;
+using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentReceiveEventDelegate;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
 using OmenTools.OmenService;
 
@@ -29,9 +28,9 @@ public unsafe class BetterBlueSetLoad : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
     private Hook<AgentReceiveEventDelegate>? AgentAozNotebookReceiveEventHook;
-    
+
     private SelectYesnoAddon? drSelectYesno;
 
     protected override void Init()
@@ -50,7 +49,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
     protected override void Uninit()
     {
         CommandManager.Instance().RemoveSubCommand(COMMAND);
-        
+
         drSelectYesno?.Dispose();
         drSelectYesno = null;
     }
@@ -62,7 +61,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
         using (ImRaii.PushIndent())
             ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("BetterBlueSetLoad-CommandHelp")}");
     }
-    
+
     private AtkValue* AgentAozNotebookReceiveEventDetour
     (
         AgentInterface* agent,
@@ -73,18 +72,18 @@ public unsafe class BetterBlueSetLoad : ModuleBase
     )
     {
         var addon = AOZNotebookPresetList;
-        
+
         if (!addon->IsAddonAndNodesReady() ||
             addon->AtkValues       == null ||
             addon->AtkValues->UInt != 0    ||
             eventKind              != 1    ||
             valueCount             != 2)
             return InvokeOriginal();
-        
+
         var index = values[1].UInt;
-        if (values[1].Type != AtkValueType.UInt || index > 4) 
+        if (values[1].Type != AtkValueType.UInt || index > 4)
             return InvokeOriginal();
-        
+
         drSelectYesno?.Dispose();
 
         addon->IsVisible = false;
@@ -120,7 +119,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
                 ParentID        = AOZNotebook->Id
             }
         );
-        
+
         returnValues->SetBool(false);
         return returnValues;
 
@@ -148,11 +147,11 @@ public unsafe class BetterBlueSetLoad : ModuleBase
                         .DistinctBy(x => x.Name)
                         .ToDictionary(x => x.Name, x => x.Index);
             if (!names.TryGetValue(args, out setIndex)) return;
-            
+
             ApplyByIndex(setIndex);
         }
     }
-    
+
     private static void ApplyByIndex
     (
         uint index
@@ -160,7 +159,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
     {
         if (index > 4) return;
 
-        var set = AozNoteModule.Instance()->ActiveSets[(int)index];
+        var set     = AozNoteModule.Instance()->ActiveSets[(int)index];
         var setName = GetSetName(index);
 
         var manager = ActionManager.Instance();
@@ -194,7 +193,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
         for (var i = 0; i < 24; i++)
             if (final[i] != 0)
                 manager->AssignBlueMageActionToSlot(i, final[i]);
-        
+
         AozNoteModule.Instance()->LoadActiveSetHotBars((int)index);
 
         using var utf8String = new Utf8String(setName);
