@@ -23,6 +23,11 @@ public unsafe class AutoStoreToCabinet : ModuleBase
         Description = Lang.Get("AutoStoreToCabinetDescription"),
         Category    = ModuleCategory.Interface
     };
+    
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private AutoStoreToCabinetAddon? addon;
 

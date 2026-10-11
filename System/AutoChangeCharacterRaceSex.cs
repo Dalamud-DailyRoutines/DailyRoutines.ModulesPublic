@@ -23,13 +23,12 @@ public unsafe class AutoChangeCharacterRaceSex : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    private static readonly CompSig UpdateDrawDataSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 40 45 33 F6 48 8D 59 7A");
-
+    private static readonly CompSig UpdateDrawDataSig = 
+        new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 40 45 33 F6 48 8D 59 7A");
     private delegate byte UpdateDrawDataDelegate
     (
         DrawDataContainer* data
     );
-
     private Hook<UpdateDrawDataDelegate>? UpdateDrawDataHook;
 
     private Config config = null!;

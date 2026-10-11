@@ -28,7 +28,13 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { CNOnly = true, TCOnly = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        CNOnly           = true,
+        TCOnly           = true,
+        CNDefaultEnabled = true,
+        TCDefaultEnabled = true
+    };
 
     private Config config = null!;
 

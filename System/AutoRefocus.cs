@@ -16,6 +16,11 @@ public class AutoRefocus : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private ulong focusTarget = 0xE000_0000;
 
     protected override void Init()

@@ -19,7 +19,10 @@ public unsafe class NoAutoClosePartyFinder : ModuleBase
         Author      = ["Nyy", "YLCHEN"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig LookingForGroupHideSig = new("48 89 5C 24 ?? 57 48 83 EC 20 83 A1 ?? ?? ?? ?? ??");
 

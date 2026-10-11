@@ -19,6 +19,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
+// TODO：之后重写成新模块，现在并不需要自己维护一个 ImGui 界面了
 public class BetterFateProgressUI : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -28,7 +29,10 @@ public class BetterFateProgressUI : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private readonly CancellationTokenSource cancelSource = new();
 

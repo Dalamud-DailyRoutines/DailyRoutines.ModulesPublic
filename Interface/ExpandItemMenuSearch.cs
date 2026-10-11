@@ -22,7 +22,10 @@ public class ExpandItemMenuSearch : ModuleBase
         Author      = ["HSS"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private SearchMenuItemBase[] SearchMenuItems
     {

@@ -35,10 +35,13 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth = true
+    };
 
     private static bool IsEligibleForTeleporting =>
-        !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium;
+        !(GameState.IsCN || GameState.IsTC) || AuthState.IsTester;
 
     private static Vector2 ChildSize => ScaledVector2(450f, 150);
 

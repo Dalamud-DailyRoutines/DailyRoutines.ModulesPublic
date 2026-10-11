@@ -23,7 +23,10 @@ public unsafe class RealQueuePosition : ModuleBase
         Author      = ["逆光", "Nukoooo"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig AgentWorldTravelUpdaterSig = new("E8 ?? ?? ?? ?? 40 0A F8 B9 ?? ?? ?? ??");
     private delegate bool AgentWorldTravelUpdateDelegate

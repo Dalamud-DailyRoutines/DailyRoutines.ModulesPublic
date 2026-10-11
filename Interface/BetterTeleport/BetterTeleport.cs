@@ -358,7 +358,7 @@ public unsafe partial class BetterTeleport : ModuleBase
     }
 
     private static bool IsWithPermission() =>
-        !(GameState.IsCN || GameState.IsTC) || AuthState.IsPremium || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
+        !(GameState.IsCN || GameState.IsTC) || AuthState.IsTester || Sheets.SpeedDetectionZones.ContainsKey(GameState.TerritoryType);
 
     #region 配置
 

@@ -28,7 +28,11 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true, AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth          = true,
+        AllDefaultEnabled = true
+    };
 
     private static InfoProxyItemSearch* InfoProxy => InfoProxyItemSearch.Instance();
 

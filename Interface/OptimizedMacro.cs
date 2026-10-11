@@ -25,7 +25,10 @@ public unsafe class OptimizedMacro : ModuleBase
         PreviewImageURL = ["https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/OptimizedMacro-UI.png"] // TODO: 更改仓库
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Config config = null!;
 

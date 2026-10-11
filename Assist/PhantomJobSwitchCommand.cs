@@ -19,7 +19,10 @@ public class PhantomJobSwitchCommand : ModuleBase
         Category    = ModuleCategory.Assist
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init() =>
         CommandManager.Instance().AddSubCommand

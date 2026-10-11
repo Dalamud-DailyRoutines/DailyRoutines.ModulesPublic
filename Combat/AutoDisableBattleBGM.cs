@@ -19,13 +19,11 @@ public unsafe class AutoDisableBattleBGM : ModuleBase
     };
 
     private static readonly CompSig IsInBattleStateSig = new("E8 ?? ?? ?? ?? 38 87 ?? ?? ?? ?? 75 09");
-
     private delegate byte IsInBattleDelegate
     (
         BGMSystem*       system,
         BGMSystem.Scene* scene
     );
-
     private Hook<IsInBattleDelegate>? IsInBattleStateHook;
 
     private Config config = null!;

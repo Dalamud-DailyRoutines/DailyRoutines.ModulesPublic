@@ -31,7 +31,10 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Config config = null!;
 

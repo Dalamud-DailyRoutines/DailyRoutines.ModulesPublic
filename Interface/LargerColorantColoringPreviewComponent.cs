@@ -15,7 +15,10 @@ public unsafe class LargerColorantColoringPreviewComponent : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     // 懒得恢复了, 就这样
     protected override void Init()

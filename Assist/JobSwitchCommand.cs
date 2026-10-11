@@ -17,7 +17,10 @@ public class JobSwitchCommand : ModuleBase
         Category    = ModuleCategory.Assist
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init() =>
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("JobSwitchCommand-CommandHelp") });

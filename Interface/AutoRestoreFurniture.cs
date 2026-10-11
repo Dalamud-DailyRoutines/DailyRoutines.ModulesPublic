@@ -23,6 +23,11 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private AutoRestoreFurnitureAddon? addon;
 
     protected override void Init()

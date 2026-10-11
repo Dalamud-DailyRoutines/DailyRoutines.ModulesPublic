@@ -10,7 +10,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
-using OmenTools.Dalamud;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
@@ -32,7 +31,10 @@ public unsafe class AutoCollectableExchange : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig HandInCollectablesSig =
         new("48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 48 8B 49");

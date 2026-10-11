@@ -15,6 +15,11 @@ public class AutoHolmgangSelf : ModuleBase
         Category    = ModuleCategory.Action
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
 

@@ -20,7 +20,10 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         Author      = ["ErxCharlotte"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private TextButtonNode? tryOnButtonNode;
 

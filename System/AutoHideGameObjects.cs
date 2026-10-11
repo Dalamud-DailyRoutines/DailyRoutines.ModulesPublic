@@ -23,12 +23,10 @@ public unsafe class AutoHideGameObjects : ModuleBase
     };
 
     private static readonly CompSig UpdateObjectArraysSig = new("40 57 48 83 EC ?? 48 89 5C 24 ?? 33 DB");
-
     private delegate void* UpdateObjectArraysDelegate
     (
         GameObjectManager* objectManager
     );
-
     private Hook<UpdateObjectArraysDelegate> UpdateObjectArraysHook;
 
     private Config config = null!;

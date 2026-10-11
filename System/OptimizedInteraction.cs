@@ -29,7 +29,10 @@ public unsafe class OptimizedInteraction : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth = true
+    };
 
     // 当前位置无法进行该操作
     private static readonly CompSig CameraObjectBlockedSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? EB ?? 40 B7");

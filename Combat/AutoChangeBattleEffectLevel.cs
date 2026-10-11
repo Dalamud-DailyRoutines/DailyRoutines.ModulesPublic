@@ -20,9 +20,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Siren"]
     };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     private Config         config = null!;
     private EffectSetting? lastAppliedSettings;
 

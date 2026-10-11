@@ -27,7 +27,10 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         Category    = ModuleCategory.Recruitment
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private SelectYesnoAddon? confirmAddon;
 

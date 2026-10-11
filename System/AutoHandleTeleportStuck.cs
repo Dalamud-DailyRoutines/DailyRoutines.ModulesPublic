@@ -22,7 +22,10 @@ public class AutoHandleTeleportStuck : ModuleBase
         Category = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init() =>
         LogMessageManager.Instance().RegPre(OnReceiveLogMessage);

@@ -18,7 +18,10 @@ public unsafe class AutoBlockEmptyXBMParty : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Hook<AgentReceiveEventDelegate>? AgentReceiveEventHook;
 

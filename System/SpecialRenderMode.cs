@@ -19,6 +19,8 @@ public unsafe class SpecialRenderMode : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    private static readonly CompSig ToggleFadeSig =
+        new("E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 8F ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4C 24");
     private delegate void ToggleFadeDelegate
     (
         EnvironmentManager* manager,
@@ -26,14 +28,13 @@ public unsafe class SpecialRenderMode : ModuleBase
         float               fadeDuration,
         Vector4*            fadeColor
     );
-
     private ToggleFadeDelegate ToggleFade = null!;
 
     private Config config = null!;
 
     protected override void Init()
     {
-        ToggleFade = new CompSig("E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 8F ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4C 24").GetDelegate<ToggleFadeDelegate>();
+        ToggleFade = ToggleFadeSig.GetDelegate<ToggleFadeDelegate>();
         config     = Config.Load(this) ?? new();
     }
 

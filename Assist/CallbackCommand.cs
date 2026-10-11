@@ -17,7 +17,10 @@ public unsafe class CallbackCommand : ModuleBase
         Category    = ModuleCategory.Assist
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private const string COMMAND = "callback";
 

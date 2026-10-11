@@ -13,6 +13,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
+// TODO：等待重构（每个界面一套处理逻辑）
 public unsafe class AutoNumericInputMax : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -22,21 +23,21 @@ public unsafe class AutoNumericInputMax : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth = true
+    };
 
     private static readonly CompSig UldUpdateSig =
         new("40 53 48 83 EC ?? 48 8B D9 48 83 C1 ?? E8 ?? ?? ?? ?? 80 BB ?? ?? ?? ?? ?? 74 ?? 48 8B CB");
-
     private delegate nint UldUpdateDelegate
     (
         AtkComponentNumericInput* component
     );
-
     private Hook<UldUpdateDelegate>? UldUpdateHook;
 
     private static readonly CompSig NumericSetValueSig = new
         ("E8 ?? ?? ?? ?? C7 83 ?? ?? ?? ?? ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 8B 91");
-
     private delegate void NumericSetValueDelegate
     (
         AtkComponentNumericInput* component,
@@ -44,7 +45,6 @@ public unsafe class AutoNumericInputMax : ModuleBase
         bool                      a3,
         bool                      a4
     );
-
     private NumericSetValueDelegate? NumericSetValue;
 
     private          Config          config    = null!;

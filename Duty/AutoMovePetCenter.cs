@@ -26,13 +26,11 @@ public unsafe class AutoMovePetCenter : ModuleBase
         (
             "48 89 5C 24 08 57 48 81 EC 30 04 00 00 48 8B DA 8B F9 E8 ?? ?? ?? ?? 3C 01 75 21 E8 ?? ?? ?? ?? 3C 01 75 18 80 BB 82 00 00 00 02 75 0F 8B 05 ?? ?? ?? ?? 39 43 54 0F 85 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B6 53 7E 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 44 24 28 C7 44 24 20 02 00 00 00"
         );
-
     private delegate void ProcessPacketSpawnNPCDelegate
     (
         uint  targetID,
         byte* packetData
     );
-
     private Hook<ProcessPacketSpawnNPCDelegate>? ProcessPacketSpawnNPCHook;
 
     protected override void Init()
