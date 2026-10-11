@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
-using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
+using AgentShowDelegate = FFXIVClientStructs.Expansion.Native.AgentShowDelegate;
 
 namespace DailyRoutines.ModulesPublic;
 

@@ -10,7 +10,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Native;
+using FFXIVClientStructs.Expansion.Native;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
 using OmenTools.OmenService;
 

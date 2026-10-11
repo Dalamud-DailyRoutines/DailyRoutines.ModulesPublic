@@ -11,9 +11,9 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using AgentFreeCompany = OmenTools.Interop.Game.Models.Native.AgentFreeCompany;
-using AgentFreeCompanyProfile = OmenTools.Interop.Game.Models.Native.AgentFreeCompanyProfile;
-using InfoProxyFreeCompany = OmenTools.Interop.Game.Models.Native.InfoProxyFreeCompany;
+using AgentFreeCompany = FFXIVClientStructs.Expansion.Native.AgentFreeCompany;
+using AgentFreeCompanyProfile = FFXIVClientStructs.Expansion.Native.AgentFreeCompanyProfile;
+using InfoProxyFreeCompany = FFXIVClientStructs.Expansion.Native.InfoProxyFreeCompany;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 

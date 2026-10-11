@@ -4,7 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Interop.Game.Models.Native;
+using FFXIVClientStructs.Expansion.Native;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Duty;

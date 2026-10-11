@@ -14,7 +14,7 @@ using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Native;
+using FFXIVClientStructs.Expansion.Native;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;

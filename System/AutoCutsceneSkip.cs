@@ -18,7 +18,7 @@ using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
-using LuaFunctionDelegate = OmenTools.Interop.Game.Models.Native.LuaFunctionDelegate;
+using LuaFunctionDelegate = FFXIVClientStructs.Expansion.Native.LuaFunctionDelegate;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;

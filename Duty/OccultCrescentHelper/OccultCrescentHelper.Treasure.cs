@@ -15,7 +15,7 @@ using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Native;
+using FFXIVClientStructs.Expansion.Native;
 using OmenTools.OmenService;
 using OmenTools.OmenService.ZoneIndicator;
 using OmenTools.Threading;

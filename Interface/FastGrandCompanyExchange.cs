@@ -14,7 +14,7 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Native;
+using FFXIVClientStructs.Expansion.Native;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;

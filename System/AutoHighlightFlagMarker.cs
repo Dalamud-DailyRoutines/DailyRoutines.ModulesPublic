@@ -10,7 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Dalamud.Helpers;
 using OmenTools.OmenService;
-using AgentReceiveEventDelegate = OmenTools.Interop.Game.Models.Native.AgentReceiveEventDelegate;
+using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.Native.AgentReceiveEventDelegate;
 
 namespace DailyRoutines.ModulesPublic;
 

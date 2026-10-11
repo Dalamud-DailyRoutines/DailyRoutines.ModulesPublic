@@ -25,7 +25,7 @@ using OmenTools.Info.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
-using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
+using AgentShowDelegate = FFXIVClientStructs.Expansion.Native.AgentShowDelegate;
 using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
 
 namespace DailyRoutines.ModulesPublic.Duty;

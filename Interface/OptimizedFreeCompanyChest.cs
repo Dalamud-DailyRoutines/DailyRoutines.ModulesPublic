@@ -22,7 +22,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using AgentFreeCompanyChest = OmenTools.Interop.Game.Models.Native.AgentFreeCompanyChest;
+using AgentFreeCompanyChest = FFXIVClientStructs.Expansion.Native.AgentFreeCompanyChest;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 

@@ -8,7 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
+using AgentShowDelegate = FFXIVClientStructs.Expansion.Native.AgentShowDelegate;
 
 namespace DailyRoutines.ModulesPublic;
 

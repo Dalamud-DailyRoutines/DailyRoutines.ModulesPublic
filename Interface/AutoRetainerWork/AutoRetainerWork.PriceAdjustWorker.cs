@@ -27,7 +27,7 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using Action = System.Action;
-using AgentRetainer = OmenTools.Interop.Game.Models.Native.AgentRetainer;
+using AgentRetainer = FFXIVClientStructs.Expansion.Native.AgentRetainer;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 

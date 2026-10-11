@@ -10,7 +10,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Native;
+using FFXIVClientStructs.Expansion.Native;
 using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Interface;
