@@ -137,8 +137,52 @@ public partial class BetterFPSLimitation : ModuleBase
     (
         string command,
         string args
-    ) =>
-        ToggleAddon();
+    )
+    {
+        args = args.Trim();
+
+        var previousSettings = (config.IsEnabled, config.Limitation);
+
+        switch (args.ToLowerInvariant())
+        {
+            case "":
+                ToggleAddon();
+                return;
+            case "on":
+                config.IsEnabled = true;
+                break;
+            case "off":
+                config.IsEnabled = false;
+                break;
+            case "toggle":
+                config.IsEnabled ^= true;
+                break;
+            default:
+                if (!short.TryParse(args, out var targetFPS) || targetFPS < 1)
+                {
+                    NotifyHelper.Instance().ChatError
+                    (
+                        ISeStringEvaluator.Instance().EvaluateFromLogMessage
+                        (
+                            3802,
+                            [
+                                1,
+                                LuminaWrapper.GetAddonText(9448),
+                                args
+                            ]
+                        )
+                    );
+                    return;
+                }
+
+                config.Limitation = targetFPS;
+                config.IsEnabled  = true;
+                break;
+        }
+
+        if (previousSettings != (config.IsEnabled, config.Limitation))
+            config.Save(this);
+    }
 
     private unsafe void OnUpdate
     (
