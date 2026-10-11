@@ -24,6 +24,11 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
         Category    = ModuleCategory.Recruitment
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private Config config = null!;
 
     private Timer? refreshTimer;

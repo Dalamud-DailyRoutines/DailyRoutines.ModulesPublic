@@ -539,16 +539,6 @@ public partial class AutoMarksFinder
             var currentPos     = LocalPlayerState.Object?.Position ?? Vector3.Zero;
             var directDistance = Vector3.Distance(currentPos, targetPoint);
 
-            // if ((GameState.IsCN || GameState.IsTC) && AuthState.IsPremium)
-            // {
-            //     return new PathDecision
-            //     {
-            //         Type           = PathDecision.PathType.SmartTP,
-            //         TargetPosition = targetPoint,
-            //         EstimatedTime  = 0
-            //     };
-            // }
-
             if (directDistance <= 100)
             {
                 return new PathDecision

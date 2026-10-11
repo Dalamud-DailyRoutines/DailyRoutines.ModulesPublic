@@ -14,10 +14,10 @@ public class AutoCancelMountCast : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title            = Lang.Get("AutoCancelMountCastTitle"),
-        Description      = Lang.Get("AutoCancelMountCastDescription"),
-        Category         = ModuleCategory.Action,
-        Author           = ["Bill"],
+        Title       = Lang.Get("AutoCancelMountCastTitle"),
+        Description = Lang.Get("AutoCancelMountCastDescription"),
+        Category    = ModuleCategory.Action,
+        Author      = ["Bill"],
         ModulesPair = ["BetterMountRoulette"]
     };
 

@@ -24,8 +24,13 @@ public unsafe class AutoUseItemStacks : ModuleBase
         Author      = ["Cindy-Master"]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private OpenCofferMenuItem openCofferMenu = null!;
-    private InputNumericAddon?    drInputNumeric;
+    private InputNumericAddon? drInputNumeric;
 
     protected override void Init()
     {

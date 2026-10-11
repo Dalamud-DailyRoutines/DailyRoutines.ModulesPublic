@@ -14,7 +14,10 @@ public class AutoNotifyLogin : ModuleBase
         Category    = ModuleCategory.Notification
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
     
     protected override void Init() =>
         GameState.Instance().Login += OnLogin;

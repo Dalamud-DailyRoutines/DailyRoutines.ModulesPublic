@@ -28,13 +28,12 @@ public unsafe class CustomizeGameObject : ModuleBase
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
 
-    private static readonly CompSig CharacterUpdateSig = new("4C 8B DC 53 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 80 89");
-
+    private static readonly CompSig CharacterUpdateSig = 
+        new("4C 8B DC 53 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 80 89");
     private delegate void* CharacterUpdateDelegate
     (
         Character* character
     );
-
     private Hook<CharacterUpdateDelegate>? CharacterUpdateHook;
 
     private Config config = null!;

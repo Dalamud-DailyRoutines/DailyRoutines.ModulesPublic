@@ -26,6 +26,11 @@ public unsafe class SelectableRecruitmentText : ModuleBase
         ]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private TextMultiLineInputNode? recruitmentTextNode;
 
     protected override void Init()

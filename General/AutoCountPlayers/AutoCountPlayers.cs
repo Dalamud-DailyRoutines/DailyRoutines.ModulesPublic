@@ -32,9 +32,7 @@ public unsafe partial class AutoCountPlayers : ModuleBase
         Description = Lang.Get("AutoCountPlayersDescription"),
         Category    = ModuleCategory.General
     };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     private static bool IsPlayerSearchLocation =>
         IsContentSearchZone || IsPlayerSearchZone;
 

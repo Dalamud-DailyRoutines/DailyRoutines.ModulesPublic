@@ -28,7 +28,10 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init()
     {

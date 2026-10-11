@@ -24,6 +24,11 @@ public class MoreMessageFilterPresets : ModuleBase
         Author      = ["Ponta"]
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private static readonly CompSig ApplyMessageFilterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 4C 24 ?? 56 57 41 54 41 56 41 57 48 83 EC ?? 45 33 E4");
     private delegate int ApplyMessageFilterDelegate
     (

@@ -18,7 +18,10 @@ public class CopyItemNameContextMenu : ModuleBase
         Author      = ["Nukoooo"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private CopyItemNameMenuItem menuItem        = null!;
     private CopyItemNameMenuItem glamourMenuItem = null!;

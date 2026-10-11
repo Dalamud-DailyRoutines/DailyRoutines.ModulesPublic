@@ -17,7 +17,10 @@ public unsafe class BetterPartyFinderSort : ModuleBase
         Author      = ["decorwdyun"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private byte* PartyFinderSortType = null;
 

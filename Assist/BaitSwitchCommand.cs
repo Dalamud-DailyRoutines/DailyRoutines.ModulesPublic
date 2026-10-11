@@ -21,6 +21,11 @@ public class BaitSwitchCommand : ModuleBase
         Description = Lang.Get("BaitSwitchCommandDescription"),
         Category    = ModuleCategory.Assist
     };
+    
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init() =>
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BaitSwitchCommand-CommandHelp") });

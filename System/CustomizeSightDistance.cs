@@ -21,6 +21,11 @@ public unsafe class CustomizeSightDistance : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        NeedAuth = true
+    };
+
     private static readonly CompSig SetActiveCameraSig = new("40 57 41 54 41 57 48 83 EC ?? 4C 63 FA");
     private delegate void SetActiveCameraDelegate
     (

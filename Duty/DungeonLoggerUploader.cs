@@ -22,9 +22,7 @@ public class DungeonLoggerUploader : ModuleBase
         Category    = ModuleCategory.Duty,
         Author      = ["Middo"]
     };
-
-    public override ModulePermission Permission { get; } = new() { CNOnly = true };
-
+    
     private HttpClient HTTPClient
     {
         get

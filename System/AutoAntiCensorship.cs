@@ -29,7 +29,11 @@ public unsafe class AutoAntiCensorship : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { CNOnly = true, CNDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        CNOnly           = true,
+        CNDefaultEnabled = true
+    };
 
     private static readonly CompSig GetFilteredUtf8StringSig = new("48 89 74 24 ?? 57 48 83 EC ?? 48 83 79 ?? ?? 48 8B FA 48 8B F1 0F 84 ?? ?? ?? ?? 48 89 5C 24");
     private delegate void GetFilteredUtf8StringDelegate

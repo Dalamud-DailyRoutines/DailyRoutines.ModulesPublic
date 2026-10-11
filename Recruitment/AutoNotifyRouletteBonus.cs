@@ -27,9 +27,7 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["BoxingBunny"]
     };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     private static readonly CompSig SetContentRouletteRoleBonusSig = new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
     private delegate void SetContentRouletteRoleBonusDelegate
     (

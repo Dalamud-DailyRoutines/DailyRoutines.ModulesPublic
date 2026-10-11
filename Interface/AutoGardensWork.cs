@@ -29,9 +29,7 @@ public unsafe class AutoGardensWork : ModuleBase
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
-
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
-
+    
     private Config config = null!;
 
     private string searchSeed      = string.Empty;

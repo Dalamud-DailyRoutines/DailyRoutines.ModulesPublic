@@ -22,7 +22,10 @@ public unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
         Author      = ["status102"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private Config config = null!;
 

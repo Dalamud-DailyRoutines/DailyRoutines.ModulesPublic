@@ -20,7 +20,10 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private AtkEventWrapper? claimAllEvent;
 

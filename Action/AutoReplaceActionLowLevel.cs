@@ -20,6 +20,11 @@ public unsafe class AutoReplaceActionLowLevel : ModuleBase
         Category    = ModuleCategory.Action
     };
 
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
+
     private static readonly CompSig IsActionReplaceableSig =
         new("40 53 48 83 EC ?? 8B D9 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 10 48 8B C8 FF 92 ?? ?? ?? ?? 8B D3");
     private delegate bool IsActionReplaceableDelegate

@@ -18,7 +18,10 @@ public class AutoOpenNeedGreed : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     protected override void Init()
     {

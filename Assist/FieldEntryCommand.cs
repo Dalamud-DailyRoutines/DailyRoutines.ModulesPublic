@@ -21,7 +21,10 @@ public unsafe class FieldEntryCommand : ModuleBase
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private readonly FrozenDictionary<string, (Action EnqueueAction, uint Content)> commandArgs = new Dictionary<string, (Action EnqueueAction, uint Content)>
     {

@@ -23,9 +23,7 @@ public unsafe class AutoHideBanners : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["XSZYYS"]
     };
-
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
-
+    
     private static readonly CompSig SetImageSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
     private delegate void SetImageDelegate
     (

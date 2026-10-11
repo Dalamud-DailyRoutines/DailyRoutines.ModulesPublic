@@ -23,7 +23,10 @@ public unsafe class OptimizedXBMMonsterNotebook : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig BuildNotebookDetailSig =
         new("40 53 56 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B DA");

@@ -20,7 +20,10 @@ public unsafe class PlaceFurnitureAnywhere : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        AllDefaultEnabled = true
+    };
 
     private static readonly CompSig RaycastFilterSig = new("48 8B C4 48 89 58 ?? 48 89 70 ?? 57 48 81 EC ?? ?? ?? ?? 33 DB 48 8B F2");
 

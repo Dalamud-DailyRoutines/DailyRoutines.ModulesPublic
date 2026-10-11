@@ -25,7 +25,11 @@ public unsafe class ChineseNumericalNotation : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { CNDefaultEnabled = true, TCDefaultEnabled = true };
+    public override ModulePermission Permission { get; } = new()
+    {
+        CNDefaultEnabled = true,
+        TCDefaultEnabled = true
+    };
 
     private static readonly CompSig FormatNumberSig = new("E8 ?? ?? ?? ?? 44 3B F7");
 
