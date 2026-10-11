@@ -141,6 +141,8 @@ public partial class BetterFPSLimitation : ModuleBase
     {
         args = args.Trim();
 
+        var previousSettings = (config.IsEnabled, config.Limitation);
+
         switch (args.ToLowerInvariant())
         {
             case "":
@@ -153,12 +155,23 @@ public partial class BetterFPSLimitation : ModuleBase
                 config.IsEnabled = false;
                 break;
             case "toggle":
-                config.IsEnabled = !config.IsEnabled;
+                config.IsEnabled ^= true;
                 break;
             default:
                 if (!short.TryParse(args, out var targetFPS) || targetFPS < 1)
                 {
-                    NotifyHelper.Instance().ChatError(Lang.Get("Commands-InvalidArgs", $"/pdr {COMMAND}", args));
+                    NotifyHelper.Instance().ChatError
+                    (
+                        ISeStringEvaluator.Instance().EvaluateFromLogMessage
+                        (
+                            3802,
+                            [
+                                1,
+                                LuminaWrapper.GetAddonText(9448),
+                                args
+                            ]
+                        )
+                    );
                     return;
                 }
 
@@ -167,7 +180,8 @@ public partial class BetterFPSLimitation : ModuleBase
                 break;
         }
 
-        config.Save(this);
+        if (previousSettings != (config.IsEnabled, config.Limitation))
+            config.Save(this);
     }
 
     private unsafe void OnUpdate
