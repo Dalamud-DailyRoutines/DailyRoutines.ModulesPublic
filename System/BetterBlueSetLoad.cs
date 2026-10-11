@@ -140,8 +140,7 @@ public unsafe class BetterBlueSetLoad : ModuleBase
         {
             var names = AozNoteModule.Instance()->ActiveSets
                         .ToArray()
-                        .Select((value, index) => (Index: (uint)index, Name: value.CustomNameString))
-                        .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+                        .Select((_, index) => (Index: (uint)index, Name: GetSetName((uint)index)))
                         .DistinctBy(x => x.Name)
                         .ToDictionary(x => x.Name, x => x.Index);
             if (!names.TryGetValue(args, out setIndex)) return;
