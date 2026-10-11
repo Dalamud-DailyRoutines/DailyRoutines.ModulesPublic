@@ -27,12 +27,12 @@ public partial class OptimizedRecipeNote
     (
         OptimizedRecipeNote inModule,
         TaskHelper          inTaskHelper,
-        CaculationResult    result
+        CalculationResult    result
     ) : NativeAddon
     {
         public static AddonActionsPreview? Addon { get; set; }
 
-        public CaculationResult    Result     { get; init; } = result;
+        public CalculationResult    Result     { get; init; } = result;
         public TaskHelper          TaskHelper { get; init; } = inTaskHelper;
         public OptimizedRecipeNote Module     { get; init; } = inModule;
 
@@ -101,7 +101,7 @@ public partial class OptimizedRecipeNote
         public static void OpenWithActions
         (
             OptimizedRecipeNote module,
-            CaculationResult    result
+            CalculationResult    result
         )
         {
             if (result.Actions.Count == 0) return;
