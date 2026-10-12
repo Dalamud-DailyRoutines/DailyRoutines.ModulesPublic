@@ -449,12 +449,11 @@ public partial class FastWorldTravel : ModuleBase
             "登出游戏"
         );
 
-        // 实际上为帧数倒数 TODO：FFCS
         TaskHelper.Enqueue
         (
             () => !GameState.IsLoggedIn             &&
                   TitleMenu->IsAddonAndNodesReady() &&
-                  AgentLobby.Instance()->HoveredCharacterIndex == 0,
+                  AgentLobby.Instance()->FramesUntilLogout == 0,
             "等待标题界面"
         );
 
