@@ -19,9 +19,16 @@ public unsafe class BetterBlueSetLoad : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("BetterBlueSetLoadTitle"),
-        Description = Lang.Get("BetterBlueSetLoadDescription", COMMAND),
-        Category    = ModuleCategory.System
+        Title = Lang.Get("BetterBlueSetLoadTitle"),
+        Description = Lang.Get
+        (
+            "BetterBlueSetLoadDescription",
+            new Dictionary<string, object>
+            {
+                ["command"] = COMMAND
+            }
+        ),
+        Category = ModuleCategory.System
     };
 
     public override ModulePermission Permission { get; } = new()
