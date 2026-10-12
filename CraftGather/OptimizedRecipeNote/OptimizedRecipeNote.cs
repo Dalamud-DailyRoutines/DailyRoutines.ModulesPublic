@@ -46,7 +46,12 @@ public partial class OptimizedRecipeNote : ModuleBase
         Title               = Lang.Get("OptimizedRecipeNoteTitle"),
         Description         = Lang.Get("OptimizedRecipeNoteDescription"),
         Category            = ModuleCategory.CraftGather,
-        ModulesPrerequisite = ["AutoShowItemNPCShopInfo"]
+        ModulesPrerequisite = ["AutoShowItemNPCShopInfo"],
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-2.png",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-1.png"
+        ],
     };
 
     public override ModulePermission Permission { get; } = new()
