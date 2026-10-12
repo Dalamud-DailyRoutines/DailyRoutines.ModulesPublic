@@ -1,6 +1,5 @@
 using System.Text;
 using DailyRoutines.Common.Info;
-using Dalamud.Game.Agent;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
@@ -17,6 +16,7 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.Background;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.KamiToolKit.Nodes.GaugeBarCraft;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
@@ -72,20 +72,15 @@ public partial class OptimizedRecipeNote
 
         #endregion
 
-        #region 宏复制行
-
-        public const float COPY_MACRO_CONTAINER_HEIGHT = 35f;
-
-        public HorizontalListNode CopyMacroContainer { get; private set; }
-
-        #endregion
-
         #region 技能
 
         public const float ACTION_CONTAINER_INNER_PADDING = 12.5f;
         public const float ACTION_BLOCK_SPACING           = 5f;
         public const float ACTION_BLOCK_SIZE              = 50f;
+        public const float COPY_MACRO_BUTTON_SIZE         = 28f;
+        public const float COPY_MACRO_BUTTON_SPACING      = 5f;
         public const float ITEM_INFO_SIZE                 = 48f;
+        public const int   MACRO_ACTION_COUNT             = 15;
 
         public const float ACTION_USED_ALPHA   = 0.2f;
         public const float ACTION_NORMAL_ALPHA = 1f;
@@ -96,7 +91,21 @@ public partial class OptimizedRecipeNote
         public ItemIconNode       ItemIcon                  { get; private set; }
         public TextNode           ItemName                  { get; private set; }
         public TextNode           MacroStats                { get; private set; }
+        public CircleButtonNode   CopyMacroButton           { get; private set; }
         public List<DragDropNode> ActionBlocks              { get; private set; } = [];
+
+        #endregion
+
+        #region 预计结果
+
+        public const float PREVIEW_GAUGE_WIDTH = 200f;
+        public const float PREVIEW_INFO_WIDTH  = 110f;
+
+        public HorizontalListNode CraftPreviewContainer    { get; private set; }
+        public GaugeBarCraftNode  CraftPreviewProgressBar  { get; private set; }
+        public TextNode           CraftPreviewProgressInfo { get; private set; }
+        public GaugeBarCraftNode  CraftPreviewQualityBar   { get; private set; }
+        public TextNode           CraftPreviewQualityInfo  { get; private set; }
 
         #endregion
 
@@ -271,6 +280,9 @@ public partial class OptimizedRecipeNote
                     if (TaskHelper.IsBusy)
                     {
                         TaskHelper.Abort();
+
+                        CraftRoundInfo.IsVisible   = false;
+                        CraftProgressBar.IsVisible = false;
                         return;
                     }
 
@@ -288,35 +300,30 @@ public partial class OptimizedRecipeNote
                     {
                         var currentRound = round;
 
-                        TaskHelper.Enqueue(() =>
-                        {
-                            if (RecipeNoteAddon == null)
-                                AgentRecipeNote.Instance()->OpenRecipeByRecipeId(Result.RecipeID);
-                            
-                            var recipeList = RecipeNote.Instance()->RecipeList;
-                            if (recipeList == null) 
-                                return false;
+                        TaskHelper.Enqueue
+                        (() =>
+                            {
+                                if (RecipeNoteAddon == null)
+                                    AgentRecipeNote.Instance()->OpenRecipeByRecipeId(Result.RecipeID);
 
-                            var recipe = recipeList->SelectedRecipe;
-                            if (recipe == null) 
-                                return false;
-                            
-                            return recipe->RecipeId == Result.RecipeID;
-                        });
-                        
+                                var recipeList = RecipeNote.Instance()->RecipeList;
+                                if (recipeList == null)
+                                    return false;
+
+                                var recipe = recipeList->SelectedRecipe;
+                                if (recipe == null)
+                                    return false;
+
+                                return recipe->RecipeId == Result.RecipeID;
+                            }
+                        );
+
                         TaskHelper.Enqueue
                         (() =>
                             {
                                 RefreshRecipeMaterials();
-                                
-                                var currentCraftRound = currentRound + 1;
 
-                                CraftProgressBar.MaxValue  = totalCraftRound;
-                                CraftProgressBar.Value     = currentCraftRound;
-                                CraftProgressBar.IsVisible = true;
-
-                                CraftRoundInfo.String    = $"{currentCraftRound}/{totalCraftRound}";
-                                CraftRoundInfo.IsVisible = true;
+                                UpdateCraftRoundProgress(currentRound + 1, totalCraftRound);
 
                                 AgentId.RecipeNote.SendEvent(0, 8);
                             }
@@ -404,46 +411,6 @@ public partial class OptimizedRecipeNote
 
             #endregion
 
-            #region 复制宏
-
-            CopyMacroContainer = new()
-            {
-                FitToContentWidth = true,
-                Height            = COPY_MACRO_CONTAINER_HEIGHT,
-                ItemSpacing       = 5f
-            };
-            RootContainer.AddNode(CopyMacroContainer);
-
-            var macroButtonCount = (int)Math.Ceiling(Result.Actions.Count / 15f);
-
-            for (var i = 0; i < macroButtonCount; i++)
-            {
-                var macroIndex = i;
-                var button = new TextButtonNode
-                {
-                    Size   = new(140, 28f),
-                    String = Lang.Get("OptimizedRecipeNote-Button-CopyMacro", macroIndex + 1),
-                    OnClick = () =>
-                    {
-                        var startIndex = macroIndex * 15;
-                        var endIndex   = Math.Min(startIndex + 15, Result.Actions.Count);
-
-                        var actionsForMacro = Result.Actions.Skip(startIndex).Take(endIndex - startIndex);
-
-                        var builder = new StringBuilder();
-                        foreach (var action in actionsForMacro)
-                            builder.AppendLine($"/ac {LuminaWrapper.GetActionName(action)} <wait.3>");
-                        ImGui.SetClipboardText(builder.ToString());
-
-                        var message = Lang.Get("OptimizedRecipeNote-Message-MacroCopied", macroIndex + 1);
-                        NotifyHelper.Toast(message);
-                    }
-                };
-                CopyMacroContainer.AddNode(button);
-            }
-
-            #endregion
-
             #region 技能
 
             ActionContainerBackground = new()
@@ -464,7 +431,7 @@ public partial class OptimizedRecipeNote
 
             ItemInfoContainer = new()
             {
-                Size        = new(ActionContainer.Width, ITEM_INFO_SIZE),
+                Size        = new(ActionContainer.Width, 36f),
                 ItemSpacing = ACTION_BLOCK_SPACING
             };
             ActionContainer.AddNode(ItemInfoContainer);
@@ -506,10 +473,72 @@ public partial class OptimizedRecipeNote
                     Result.Actions.Count * 3
                 ),
                 FontSize = 14,
-                X        = ActionContainer.Width
+                X        = ActionContainer.Width - COPY_MACRO_BUTTON_SIZE - COPY_MACRO_BUTTON_SPACING
             };
             AtkColors.LabelLight.ApplyTo(MacroStats);
             MacroStats.AttachNode(ActionContainer);
+
+            CopyMacroButton = new()
+            {
+                Icon     = CircleButtonIcon.Document,
+                Size     = new(COPY_MACRO_BUTTON_SIZE),
+                Position = new(ActionContainer.Width - COPY_MACRO_BUTTON_SIZE, 6f),
+                OnClick  = OpenCopyMacroContextMenu
+            };
+            CopyMacroButton.AttachNode(ActionContainer);
+
+            CraftPreviewContainer = new()
+            {
+                FitToContentWidth = true,
+                Height            = EXECUTION_CONTAINER_HEIGHT,
+                ItemSpacing       = 10f
+            };
+            ActionContainer.AddNode(CraftPreviewContainer);
+
+            var recipeMaxProgress = GetRecipeMaxProgress(Result.GetRecipe());
+            var recipeMaxQuality  = GetRecipeMaxQuality(Result.GetRecipe());
+
+            CraftPreviewProgressBar = new()
+            {
+                Type     = CraftGaugeType.Progress,
+                Size     = new(PREVIEW_GAUGE_WIDTH, 16f),
+                Y        = 12f,
+                MaxValue = recipeMaxProgress,
+                Value    = Result.FinalProgress
+            };
+            CraftPreviewContainer.AddNode(CraftPreviewProgressBar);
+
+            CraftPreviewProgressInfo = new()
+            {
+                FontSize      = 20,
+                FontType      = FontType.TrumpGothic,
+                AlignmentType = AlignmentType.Center,
+                Size          = new(PREVIEW_INFO_WIDTH, EXECUTION_CONTAINER_HEIGHT),
+                String        = $"{Result.FinalProgress}/{recipeMaxProgress}"
+            };
+            AtkColors.Text.ApplyTo(CraftPreviewProgressInfo);
+            CraftPreviewContainer.AddNode(CraftPreviewProgressInfo);
+
+            CraftPreviewQualityBar = new()
+            {
+                Type     = CraftGaugeType.Quality,
+                Size     = new(PREVIEW_GAUGE_WIDTH, 16f),
+                Y        = 12f,
+                MaxValue = recipeMaxQuality,
+                Value    = Result.FinalQuality
+            };
+            CraftPreviewContainer.AddNode(CraftPreviewQualityBar);
+
+            CraftPreviewQualityInfo = new()
+            {
+                FontSize      = 20,
+                FontType      = FontType.TrumpGothic,
+                AlignmentType = AlignmentType.Center,
+                Size          = new(PREVIEW_INFO_WIDTH, EXECUTION_CONTAINER_HEIGHT),
+                String        = $"{Result.FinalQuality}/{recipeMaxQuality}"
+            };
+            AtkColors.Text.ApplyTo(CraftPreviewQualityInfo);
+            CraftPreviewContainer.AddNode(CraftPreviewQualityInfo);
 
             var currentRow = new HorizontalListNode
             {
@@ -703,6 +732,70 @@ public partial class OptimizedRecipeNote
                 th.Enqueue(() => !ICondition.Instance()[ConditionFlag.ExecutingCraftingAction]);
                 th.Enqueue(() => ActionBlocks[i].Alpha = ACTION_USED_ALPHA);
             }
+        }
+
+        private void UpdateCraftRoundProgress
+        (
+            int currentRound,
+            int totalRound
+        )
+        {
+            CraftProgressBar.MaxValue  = totalRound;
+            CraftProgressBar.Value     = currentRound;
+            CraftProgressBar.IsVisible = true;
+
+            CraftRoundInfo.String    = $"{currentRound}/{totalRound}";
+            CraftRoundInfo.IsVisible = true;
+        }
+
+        private void OpenCopyMacroContextMenu()
+        {
+            var macroCount = (int)Math.Ceiling(Result.Actions.Count / (float)MACRO_ACTION_COUNT);
+
+            List<ContextMenuItem> menus = [];
+
+            for (var index = 0; index < macroCount; index++)
+            {
+                var macroIndex = index;
+
+                menus.Add
+                (
+                    new()
+                    {
+                        Name      = Lang.Get("OptimizedRecipeNote-Button-CopyMacro", macroIndex + 1),
+                        OnClicked = _ => CopyMacroToClipboard(macroIndex)
+                    }
+                );
+            }
+
+            ContextMenuManager.Instance().Open
+            (
+                new(),
+                [
+                    new ContextMenuEntryInfo
+                    (
+                        nameof(OptimizedRecipeNote),
+                        _ => menus,
+                        omitPrefix: true
+                    )
+                ]
+            );
+        }
+
+        private void CopyMacroToClipboard
+        (
+            int macroIndex
+        )
+        {
+            var startIndex = macroIndex * MACRO_ACTION_COUNT;
+            var endIndex   = Math.Min(startIndex + MACRO_ACTION_COUNT, Result.Actions.Count);
+
+            var builder = new StringBuilder();
+            foreach (var action in Result.Actions.Skip(startIndex).Take(endIndex - startIndex))
+                builder.AppendLine($"/ac {LuminaWrapper.GetActionName(action)} <wait.3>");
+            ImGui.SetClipboardText(builder.ToString());
+
+            NotifyHelper.Toast(Lang.Get("OptimizedRecipeNote-Message-MacroCopied", macroIndex + 1));
         }
     }
 }

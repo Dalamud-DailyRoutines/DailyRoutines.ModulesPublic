@@ -1012,6 +1012,8 @@ public partial class OptimizedRecipeNote : ModuleBase
                             calculationResults[id] = new
                             (
                                 response.Actions,
+                                response.FinalProgress,
+                                response.FinalQuality,
                                 recipeID,
                                 craftPoint,
                                 craftsmanship,
@@ -1275,6 +1277,12 @@ public partial class OptimizedRecipeNote : ModuleBase
         return true;
     }
 
+    private static int GetRecipeMaxProgress
+    (
+        Recipe recipe
+    ) =>
+        (int)(GetRecipeLevelTable(recipe).Difficulty * (float)recipe.DifficultyFactor / 100f);
+
     private static int GetRecipeMaxQuality
     (
         Recipe recipe
@@ -1294,6 +1302,8 @@ public partial class OptimizedRecipeNote : ModuleBase
     private record CalculationResult
     (
         List<uint>         Actions,
+        int                FinalProgress,
+        int                FinalQuality,
         uint               RecipeID,
         int                CraftPoint,
         int                Craftmanship,
