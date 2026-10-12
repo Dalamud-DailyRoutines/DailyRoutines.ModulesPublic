@@ -5,7 +5,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
@@ -19,7 +18,6 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Enums;
@@ -45,7 +43,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         Description         = Lang.Get("AutoSubmarineCollectDescription"),
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoCutsceneSkip"],
-        ModulesPair    = ["OptimizedInteraction"]
+        ModulesPair         = ["OptimizedInteraction"]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
@@ -56,10 +54,12 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     (
         "40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3 48 8D 48 ?? 48 83 C4 ?? 5B E9 ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3"
     );
+
     private delegate nint SubmarineReturnTimeDelegate
     (
         SubmarineReturnTimePacket* packet
     );
+
     private Hook<SubmarineReturnTimeDelegate>? SubmarineReturnTimeHook;
 
     private Config config = null!;
@@ -71,7 +71,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private          TextButtonNode?       autoCollectNode;
 
     private bool isNextNotifyIgnoreTime;
-    
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -119,7 +119,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         FrameworkManager.Instance().Unreg(OnUpdate);
         GameState.Instance().Login -= OnLogin;
-        
+
         if (collectSubmarinePayload != null)
             LinkPayloadManager.Instance().Unreg(collectSubmarinePayload.CommandId);
         collectSubmarinePayload = null;
@@ -202,11 +202,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             TaskHelper.Enqueue(task);
     }
 
-    private static bool TeleportToHouseZone()
-    {
-        if (!Throttler.Shared.Throttle("AutoSubmarineCollect-TeleportToHouseZone")) return false;
-        return Telepo.Instance()->Teleport(96, 0);
-    }
+    private static bool TeleportToHouseZone() =>
+        Throttler.Shared.Throttle("AutoSubmarineCollect-TeleportToHouseZone") && Telepo.Instance()->Teleport(96, 0);
 
     private static bool TeleportToHouseEntry()
     {
@@ -222,8 +219,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         // 没找到入口
         if (HousingManager.Instance()->OutdoorTerritory->HouseUnit.PlotIndex != workshopInfo.PlotIndex ||
             IObjectTable.Instance()
-                    .Where(x => x is { ObjectKind: ObjectKind.EventObj, DataID: 2002737 })
-                    .OrderBy(x => Vector2.DistanceSquared(x.Position.ToVector2(), workshopInfo.Position.ToVector2())).FirstOrDefault() is not { } entryObject)
+                        .Where(x => x is { ObjectKind: ObjectKind.EventObj, DataID: 2002737 })
+                        .OrderBy(x => Vector2.DistanceSquared(x.Position.ToVector2(), workshopInfo.Position.ToVector2())).FirstOrDefault() is not { } entryObject)
         {
             MovementManager.Instance().TPSmart_InZone(workshopInfo.Position);
             return false;
@@ -258,9 +255,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             return false;
         }
 
-        if (!UIModule.IsScreenReady()) return false;
-
-        return entryObject.TargetInteract();
+        return UIModule.IsScreenReady() && entryObject.TargetInteract();
     }
 
     private static bool TeleportToRoomSelect()
@@ -513,7 +508,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private bool EnqueueSubmarineCollect()
     {
         TaskHelper.Enqueue(() => !ICondition.Instance().Any(ConditionFlag.OccupiedInCutSceneEvent, ConditionFlag.WatchingCutscene78), "等待过场动画结束");
-        TaskHelper.Enqueue(IsOnValidSubmarineList,                                                                                            "等待潜水艇列表界面出现");
+        TaskHelper.Enqueue(IsOnValidSubmarineList,                                                                                    "等待潜水艇列表界面出现");
         TaskHelper.Enqueue
         (
             () =>
@@ -621,7 +616,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                 "AutoSubmarineCollect-LackSpecificItems",
                 SeString.CreateItemLink(itemLacked)
             );
-            
+
             NotifyHelper.Instance().Chat(message);
             NotifyHelper.ToastError(message);
             return true;
@@ -667,10 +662,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         if (!SelectString->IsAddonAndNodesReady()) return false;
 
         var title = SelectString->AtkValues[2].String.ToString();
-        if (string.IsNullOrEmpty(title) || !VoyageListTitleText.All(title.Contains))
-            return false;
-
-        return true;
+        return !string.IsNullOrEmpty(title) && VoyageListTitleText.All(title.Contains);
     }
 
     // 通知潜水艇完成情况
@@ -681,10 +673,10 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     {
         var maxCount      = packet->GetAvailableCount();
         var finishedCount = packet->GetFinishCount();
-        
+
         if (maxCount == 0)
             return;
-        
+
         if (config.AutoCollectCount > 0 && finishedCount >= Math.Min(maxCount, config.AutoCollectCount))
             ChatManager.Instance().SendMessage("/pdr submarine");
 
@@ -701,16 +693,16 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         }
 
         isNextNotifyIgnoreTime = false;
-        
+
         config.LastNotifyContentID = LocalPlayerState.ContentID;
         config.LastNotifyTime      = StandardTimeManager.Instance().UTCNowOffset;
         config.Save(this);
-        
+
         var returnTime = packet->GetLatestReturnTime();
-            
+
         using var rented  = new RentedSeStringBuilder();
         var       builder = rented.Builder;
-            
+
         if (maxCount == finishedCount)
         {
             var message = ISeStringEvaluator.Instance().EvaluateFromAddon
@@ -725,12 +717,12 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                     )
                 ]
             );
-                
+
             builder
                 .AppendDalamudSeString(collectSubmarinePayload)
                 .Append(message)
                 .AppendDalamudSeString(RawPayload.LinkTerminator);
-                
+
             NotifyHelper.Instance().Chat(builder.ToReadOnlySeString());
         }
         else
@@ -741,7 +733,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                 maxCount - finishedCount,
                 returnTime.ToString("yyyy/MM/dd HH:mm:ss")
             );
-                
+
             NotifyHelper.Instance().Chat(message);
         }
     }
@@ -753,7 +745,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             GameState.ContentFinderCondition                             != 0 ||
             HousingManager.GetOwnedHouseId(EstateType.FreeCompanyEstate) == INVALID_HOUSE_ID)
             return;
-        
+
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestSubmarine, 1);
     }
 
@@ -771,7 +763,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private class Config : ModuleConfig
     {
         public uint AutoCollectCount;
-        public uint NotifyCount     = 4;
+        public uint NotifyCount = 4;
 
         public DateTimeOffset LastNotifyTime = DateTimeOffset.MinValue;
         public ulong          LastNotifyContentID;
@@ -828,13 +820,10 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                 FontType      = FontType.MiedingerMed,
                 AlignmentType = AlignmentType.TopRight,
                 Position      = new(width - 20, 4),
-                TextColor     = ColorHelper.GetColor(50),
-                TextOutlineColor = ColorHelper.GetColor
-                (
-                    (uint)(itemCount > 20 ?
-                               28 :
-                               17)
-                ),
+                TextColorID   = 50,
+                TextOutlineColorID = (uint)(itemCount > 20 ?
+                                                28 :
+                                                17),
                 FontSize = 16,
                 String   = textBuilder.Build().Encode()
             };
@@ -860,12 +849,9 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             textBuilder.AddText($"{itemCount}");
 
             CountNode.String = textBuilder.Build().Encode();
-            CountNode.TextOutlineColor = ColorHelper.GetColor
-            (
-                (uint)(itemCount > 20 ?
-                           28 :
-                           17)
-            );
+            CountNode.TextOutlineColorID = (uint)(itemCount > 20 ?
+                                                      28 :
+                                                      17);
         }
 
         protected override void Dispose
@@ -903,7 +889,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         public int ReturnTime4;
 
         public int GetFinishCount() =>
-            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }.Count(x => x != 0 && x <= StandardTimeManager.Instance().UTCNowOffset.ToUnixTimeSeconds());
+            new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }.Count
+                (x => x != 0 && x <= StandardTimeManager.Instance().UTCNowOffset.ToUnixTimeSeconds());
 
         public int GetAvailableCount() =>
             new List<int> { ReturnTime1, ReturnTime2, ReturnTime3, ReturnTime4 }.Count(x => x != 0);
@@ -964,7 +951,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     #region 常量
 
     private const string COMMAND = "submarine";
-    
+
     private const ulong INVALID_HOUSE_ID = 0xFFFFFFFFFFFFFFFF;
 
     // 桶装青磷水和魔导机械修理材料

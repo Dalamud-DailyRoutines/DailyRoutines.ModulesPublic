@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Numerics;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -105,6 +105,14 @@ public unsafe partial class OptimizedSalvage
         };
         skillColumnHeader.AttachNode(rightmostHeaderText, NodePosition.AfterTarget);
 
+        var header = skillColumnHeader;
+        header.ColorThemeChanged += () =>
+        {
+            header.TextColor        = headerTextNode->TextColor.ToVector4();
+            header.TextOutlineColor = headerTextNode->EdgeColor.ToVector4();
+            header.BackgroundColor  = headerTextNode->BackgroundColor.ToVector4();
+        };
+
         skillListComponent = (AtkComponentList*)listNode->Component;
     }
 
@@ -203,6 +211,24 @@ public unsafe partial class OptimizedSalvage
                 DefaultColor = skillNode.TextColor
             };
             skillColumnNodes[key] = entry;
+
+            var skillEntry = entry;
+            skillNode.ColorThemeChanged += () =>
+            {
+                var baseNode = listItemRenderer->UldManager.SearchNodeById(6);
+                if (baseNode == null)
+                    return;
+
+                var baseTextNode = baseNode->GetAsAtkTextNode();
+                if (baseTextNode == null)
+                    return;
+
+                skillEntry.DefaultColor    = baseTextNode->TextColor.ToVector4();
+                var (_, themedColor)       = GetSkillColumnDisplay(listItemRenderer->ListItemIndex, skillEntry.DefaultColor);
+                skillNode.TextColor        = themedColor;
+                skillNode.TextOutlineColor = baseTextNode->EdgeColor.ToVector4();
+                skillNode.BackgroundColor  = baseTextNode->BackgroundColor.ToVector4();
+            };
         }
 
         var (text, color) = GetSkillColumnDisplay(index, entry.DefaultColor);
@@ -251,11 +277,11 @@ public unsafe partial class OptimizedSalvage
         if (!TryGetDesynthesisInfo(index, out var skillLevel, out var itemLevel))
             return (string.Empty, defaultColor);
 
-        var color = skillLevel <= itemLevel ?
-                        defaultColor :
-                        skillLevel > itemLevel + 50 ?
-                            ColorHelper.GetColor(COLOR_LEVEL_TOO_HIGH) :
-                            ColorHelper.GetColor(COLOR_LEVEL_HIGH);
+        var color = defaultColor;
+        if (skillLevel > itemLevel + 50)
+            color = ColorHelper.GetColor(COLOR_LEVEL_TOO_HIGH);
+        else if (skillLevel > itemLevel)
+            color = ColorHelper.GetColor(COLOR_LEVEL_HIGH);
 
         return (string.Create(CultureInfo.InvariantCulture, $"{skillLevel:F2}/{itemLevel:F2}"), color);
     }
@@ -290,7 +316,7 @@ public unsafe partial class OptimizedSalvage
     private sealed class SkillColumnEntry
     {
         public required TextNode Node         { get; init; }
-        public required Vector4  DefaultColor { get; init; }
+        public required Vector4  DefaultColor { get; set; }
 
         public string Text { get; set; } = string.Empty;
     }

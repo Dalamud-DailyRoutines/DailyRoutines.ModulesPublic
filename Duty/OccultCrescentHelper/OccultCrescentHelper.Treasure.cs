@@ -73,12 +73,10 @@ public partial class OccultCrescentHelper
         {
             calculateCollisionHook ??= CalculateCollisionSig.GetHook<CalculateCollisionDelegate>(CalculateCollisionDetour);
 
-            treasureTaskHelper ??= new()
-            {
-                TimeoutMS       = 180_000,
-                EnterBusyAction = () => calculateCollisionHook?.Enable(),
-                LeaveBusyAction = () => calculateCollisionHook?.Disable()
-            };
+            treasureTaskHelper ??= new() { TimeoutMS = 180_000 };
+
+            treasureTaskHelper.EnterBusyState += OnEnterBusyState;
+            treasureTaskHelper.LeaveBusyState += OnLeaveBusyState;
 
             WindowManager.Instance().PostDraw        += OnPosDraw;
             IClientState.Instance().TerritoryChanged += OnZoneChanged;
@@ -105,6 +103,12 @@ public partial class OccultCrescentHelper
             treasureHandle?.Unreg();
             treasureHandle = null;
 
+            if (treasureTaskHelper != null)
+            {
+                treasureTaskHelper.EnterBusyState -= OnEnterBusyState;
+                treasureTaskHelper.LeaveBusyState -= OnLeaveBusyState;
+            }
+
             treasureTaskHelper?.Abort();
             treasureTaskHelper?.Dispose();
             treasureTaskHelper = null;
@@ -116,6 +120,11 @@ public partial class OccultCrescentHelper
             treasureObjects.Clear();
         }
 
+        private void OnEnterBusyState() =>
+            calculateCollisionHook?.Enable();
+
+        private void OnLeaveBusyState() =>
+            calculateCollisionHook?.Disable();
 
         #region 界面
 

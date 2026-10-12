@@ -13,7 +13,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Client.UI.Shell;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Interop;
-using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
@@ -1445,7 +1444,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     Size          = new(rowWidth, RowHeight),
                     String        = text,
                     FontSize      = 16,
-                    TextColor     = ColorHelper.GetColor(3),
+                    TextColorID   = 3,
                     AlignmentType = AlignmentType.Center
                 }
             );
@@ -1458,7 +1457,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     {
                         Size          = new(rowWidth, RowHeight * 0.8f),
                         String        = detail,
-                        TextColor     = ColorHelper.GetColor(3),
+                        TextColorID   = 3,
                         AlignmentType = AlignmentType.Center
                     }
                 );
