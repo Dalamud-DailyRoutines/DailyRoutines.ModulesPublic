@@ -195,8 +195,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
         TextNode node
     )
     {
-        if (node.Node                                    == null ||
-            (node.Node->TextFlags & TextFlags.FontCache) == 0)
+        if (node.Node == null || !node.Node->TextFlags.IsSet(TextFlags.FontCache))
             return;
 
         ((ExpansionTextNode*)node.Node)->RebuildFontCache();
@@ -241,7 +240,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
     )
     {
         var manager = &addon->UldManager;
-        if ((manager->ResourceFlags & AtkUldManagerResourceFlag.AssetsHaveThemeSupport) == 0)
+        if (!manager->ResourceFlags.IsSet(AtkUldManagerResourceFlag.AssetsHaveThemeSupport))
             return null;
 
         if (addonPaths.TryGetValue((nint)addon, out var recordedPath))
@@ -400,7 +399,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
         if (!visitedManagers.Add((nint)manager) || manager->Objects == null)
             return;
 
-        var useTheme    = (manager->ResourceFlags & AtkUldManagerResourceFlag.AssetsHaveThemeSupport) != 0;
+        var useTheme    = manager->ResourceFlags.IsSet(AtkUldManagerResourceFlag.AssetsHaveThemeSupport);
         var definitions = data.WidgetNodes;
         if (manager->BaseType == AtkUldManagerBaseType.Component &&
             !data.ComponentNodes.TryGetValue(manager->Objects->Id, out definitions))
@@ -446,7 +445,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
 
             if (info->ComponentType == ComponentType.NumericInput)
             {
-                var componentUsesTheme = (component->UldManager.ResourceFlags & AtkUldManagerResourceFlag.AssetsHaveThemeSupport) != 0;
+                var componentUsesTheme = component->UldManager.ResourceFlags.IsSet(AtkUldManagerResourceFlag.AssetsHaveThemeSupport);
                 RefreshNumericInput((AtkComponentNumericInput*)component, data, holder, componentUsesTheme);
             }
         }
@@ -505,7 +504,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
         bool              useTheme
     )
     {
-        if ((data.TextFlags2 & NodeData.TextFlags2.IsUIColor) != 0)
+        if (data.TextFlags2.IsSet(NodeData.TextFlags2.IsUIColor))
         {
             var expected = holder->GetColor(false, data.Color);
             if (useTheme && loadedColors.TryGetValue(data.Color, out var previous))
@@ -518,7 +517,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
             }
         }
 
-        if ((data.TextFlags2 & NodeData.TextFlags2.IsUIEdgeColor) != 0)
+        if (data.TextFlags2.IsSet(NodeData.TextFlags2.IsUIEdgeColor))
         {
             var expected = holder->GetColor(false, data.EdgeColor);
             if (useTheme && loadedColors.TryGetValue(data.EdgeColor, out var previous))
@@ -531,7 +530,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
             }
         }
 
-        if ((data.TextFlags & NodeData.TextFlags.Emboss) != 0)
+        if (data.TextFlags.IsSet(NodeData.TextFlags.Emboss))
         {
             if (useTheme && holder->ActiveColorThemeType != 0)
                 node->TextFlags &= ~TextFlags.Emboss;
@@ -558,7 +557,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
         }
 
         node->IsDirty = true;
-        if ((node->TextFlags & TextFlags.FontCache) != 0)
+        if (node->TextFlags.IsSet(TextFlags.FontCache))
             ((ExpansionTextNode*)node)->RebuildFontCache();
     }
 
@@ -622,14 +621,14 @@ public unsafe class ColorThemeHotReload : ModuleBase
             {
                 textNode->TextColor.RGBA = (focusColor & RGB_MASK) | (textNode->TextColor.RGBA & ALPHA_MASK);
                 textNode->IsDirty        = true;
-                if ((textNode->TextFlags & TextFlags.FontCache) != 0)
+                if (textNode->TextFlags.IsSet(TextFlags.FontCache))
                     ((ExpansionTextNode*)textNode)->RebuildFontCache();
             }
 
             if (data.ComponentNodes.TryGetValue(input->UldManager.Objects->Id, out var definitions) &&
                 definitions.TryGetValue(textNode->GetBaseNodeId(), out var definition)              &&
                 definition.Node is NodeData.TextNode textData                                       &&
-                (textData.TextFlags2 & NodeData.TextFlags2.IsUIColor) != 0)
+                textData.TextFlags2.IsSet(NodeData.TextFlags2.IsUIColor))
             {
                 var expected = holder->GetColor(false, textData.Color);
                 if (useTheme && loadedColors.TryGetValue(textData.Color, out var previous))
