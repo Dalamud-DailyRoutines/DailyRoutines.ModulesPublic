@@ -62,6 +62,7 @@ public partial class AutoReplyChatBot
 
         try
         {
+            context.CancellationToken.ThrowIfCancellationRequested();
             var args = string.IsNullOrWhiteSpace(argumentsJSON) ?
                            new JObject() :
                            JObject.Parse(argumentsJSON);
@@ -72,6 +73,7 @@ public partial class AutoReplyChatBot
                              {
                                  try
                                  {
+                                     context.CancellationToken.ThrowIfCancellationRequested();
                                      return await tool.ExecuteAsync(args, context).ConfigureAwait(false);
                                  }
                                  catch (Exception innerEx)
@@ -82,26 +84,17 @@ public partial class AutoReplyChatBot
                              }
                          ).ConfigureAwait(false);
 
-            DLog.Debug($"[ExecuteToolAsync] 工具 {name} 执行完成，返回结果长度: {result?.Length ?? 0}");
             return result;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             DLog.Error($"[ExecuteToolAsync] 工具 '{name}' 执行失败: {ex}");
             return $"Error executing '{name}': {ex.Message}";
         }
-    }
-
-    private static ToolCall? ParseToolCallsFromResponse
-    (
-        JObject      jObj,
-        IChatBackend backend
-    )
-    {
-        var toolCalls = backend.ParseToolCalls(jObj);
-        if (toolCalls is not { Count: > 0 }) return null;
-
-        return toolCalls[0];
     }
 
     private sealed class ToolCall
@@ -140,7 +133,7 @@ public partial class AutoReplyChatBot
                 foreach (var frag in result.Fragments)
                 {
                     if (!builders.TryGetValue(frag.Index, out var builder))
-                        builders[frag.Index] = builder = new Builder();
+                        builders[frag.Index] = builder = new Builder { Index = frag.Index };
 
                     if (frag.ID != null)
                     {
@@ -167,17 +160,19 @@ public partial class AutoReplyChatBot
                 return;
             }
 
-            ToolCalls = builders.Values
-                                .OrderBy(b => b.Index)
-                                .Select
-                                (b => new ToolCall
-                                    {
-                                        ID        = b.ID   ?? string.Empty,
-                                        Name      = b.Name ?? string.Empty,
-                                        Arguments = b.ArgumentsBuilder.ToString()
-                                    }
-                                )
-                                .ToList();
+            ToolCalls =
+            [
+                .. builders.Values
+                           .OrderBy(b => b.Index)
+                           .Select
+                           (b => new ToolCall
+                               {
+                                   ID        = b.ID   ?? string.Empty,
+                                   Name      = b.Name ?? string.Empty,
+                                   Arguments = b.ArgumentsBuilder.ToString()
+                               }
+                           )
+            ];
         }
 
         private sealed class Builder
@@ -354,9 +349,9 @@ public partial class AutoReplyChatBot
                 var def = type.GetGenericTypeDefinition();
                 if (def == typeof(RowRef<>))
                     return $"Link→{type.GetGenericArguments()[0].Name}";
-                if (def == typeof(ExcelSheet<>))
-                    return $"Sheet<{type.GetGenericArguments()[0].Name}>";
-                return $"{def.Name.Replace("`1", "")}<{type.GetGenericArguments()[0].Name}>";
+                return def == typeof(ExcelSheet<>) ?
+                           $"Sheet<{type.GetGenericArguments()[0].Name}>" :
+                           $"{def.Name.Replace("`1", "")}<{type.GetGenericArguments()[0].Name}>";
             }
 
             if (type == typeof(ReadOnlySeString)) return "string";
@@ -370,15 +365,15 @@ public partial class AutoReplyChatBot
 
             if (type.IsArray && type.GetArrayRank() == 1)
             {
-                var elemType = type.GetElementType()!;
+                var elemType = type.GetElementType();
                 if (elemType == typeof(byte) || elemType == typeof(short) || elemType == typeof(ushort) || elemType == typeof(int) || elemType == typeof(uint))
                     return $"{GetFriendlyTypeName(elemType)}[]";
             }
 
             if (type.IsEnum) return "enum";
-            if (type is { IsValueType: true, IsPrimitive: true }) return "scalar";
-
-            return type.Name;
+            return type is { IsValueType: true, IsPrimitive: true } ?
+                       "scalar" :
+                       type.Name;
         }
     }
 
@@ -757,12 +752,17 @@ public partial class AutoReplyChatBot
 
             var type = value.GetType();
 
-            if (value is ReadOnlySeString ros) return ros.ToString();
-            if (value is string s) return s;
-            if (value is bool b)
-                return b ?
-                           "true" :
-                           "false";
+            switch (value)
+            {
+                case ReadOnlySeString ros:
+                    return ros.ToString();
+                case string s:
+                    return s;
+                case bool b:
+                    return b ?
+                               "true" :
+                               "false";
+            }
 
             // RowRef<T>
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(RowRef<>))
@@ -786,10 +786,12 @@ public partial class AutoReplyChatBot
             }
 
             if (type.IsEnum) return $"{value} ({(int)value})";
-            if (value is float f) return $"{f:F2}";
-            if (value is double d) return $"{d:F2}";
-
-            return value.ToString() ?? "";
+            return value switch
+            {
+                float f  => $"{f:F2}",
+                double d => $"{d:F2}",
+                _        => value.ToString() ?? ""
+            };
         }
 
         private static IEnumerable<object> ApplySimpleFilter
@@ -839,44 +841,50 @@ public partial class AutoReplyChatBot
             string valueStr
         )
         {
-            if (raw is uint u)
-                return u.CompareTo
-                (
-                    uint.TryParse(valueStr, out var uv) ?
-                        uv :
-                        0
-                );
-            if (raw is int i)
-                return i.CompareTo
-                (
-                    int.TryParse(valueStr, out var iv) ?
-                        iv :
-                        0
-                );
-            if (raw is ushort us)
-                return us.CompareTo
-                (
-                    ushort.TryParse(valueStr, out var usv) ?
-                        usv :
-                        0
-                );
-            if (raw is byte b)
-                return b.CompareTo
-                (
-                    byte.TryParse(valueStr, out var bv) ?
-                        bv :
-                        0
-                );
-            if (raw is float f)
-                return f.CompareTo
-                (
-                    float.TryParse(valueStr, out var fv) ?
-                        fv :
-                        0
-                );
-            if (raw is bool bl) return bl.CompareTo(bool.TryParse(valueStr, out var blv) && blv);
-            if (raw is ReadOnlySeString ros) return string.Compare(ros.ToString(), valueStr, StringComparison.OrdinalIgnoreCase);
-            if (raw is string s) return string.Compare(s,                          valueStr, StringComparison.OrdinalIgnoreCase);
+            switch (raw)
+            {
+                case uint u:
+                    return u.CompareTo
+                    (
+                        uint.TryParse(valueStr, out var uv) ?
+                            uv :
+                            0
+                    );
+                case int i:
+                    return i.CompareTo
+                    (
+                        int.TryParse(valueStr, out var iv) ?
+                            iv :
+                            0
+                    );
+                case ushort us:
+                    return us.CompareTo
+                    (
+                        ushort.TryParse(valueStr, out var usv) ?
+                            usv :
+                            0
+                    );
+                case byte b:
+                    return b.CompareTo
+                    (
+                        byte.TryParse(valueStr, out var bv) ?
+                            bv :
+                            0
+                    );
+                case float f:
+                    return f.CompareTo
+                    (
+                        float.TryParse(valueStr, out var fv) ?
+                            fv :
+                            0
+                    );
+                case bool bl:
+                    return bl.CompareTo(bool.TryParse(valueStr, out var blv) && blv);
+                case ReadOnlySeString ros:
+                    return string.Compare(ros.ToString(), valueStr, StringComparison.OrdinalIgnoreCase);
+                case string s:
+                    return string.Compare(s, valueStr, StringComparison.OrdinalIgnoreCase);
+            }
 
             // RowRef<T>: compare by RowId
             var rowIDProp = raw.GetType().GetProperty("RowId");
@@ -1052,10 +1060,9 @@ public partial class AutoReplyChatBot
                                  .Where(x => ICondition.Instance()[x])
                                  .ToList();
 
-            if (conditions.Count == 0)
-                return "当前无特殊状态";
-
-            return string.Join(", ", conditions);
+            return conditions.Count == 0 ?
+                       "当前无特殊状态" :
+                       string.Join(", ", conditions);
         }
 
         private static string BuildParty()
@@ -1106,7 +1113,6 @@ public partial class AutoReplyChatBot
                 {
                     if (obj is not IPlayerCharacter pc) return false;
                     if (pc.EntityID == LocalPlayerState.EntityID) return false;
-                    if (count       >= max) return false;
 
                     var dist = Vector3.Distance(selfObj.Position, pc.Position);
                     return dist <= radius;
@@ -1115,16 +1121,17 @@ public partial class AutoReplyChatBot
 
             foreach (var obj in nearby)
             {
+                if (count >= max)
+                    break;
                 if (obj is not IPlayerCharacter pc) continue;
                 count++;
                 var dist = Vector3.Distance(selfObj.Position, pc.Position);
                 sb.AppendLine($"- {pc.Name} | Lv{pc.Level} {pc.ClassJob.Value.Abbreviation} | {pc.HomeWorld.Value.Name} | {dist:F1}y");
             }
 
-            if (count == 0)
-                return $"半径 {radius} yalm 内未发现其他玩家";
-
-            return sb.ToString().TrimEnd();
+            return count == 0 ?
+                       $"半径 {radius} yalm 内未发现其他玩家" :
+                       sb.ToString().TrimEnd();
         }
 
         private static unsafe string BuildInventory

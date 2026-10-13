@@ -1,12 +1,16 @@
-﻿using Dalamud.Game.Text.SeStringHandling;
+using System.Numerics;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Utility;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
-using KamiToolKit.Nodes.Simplified;
-using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
+using OmenTools.Info.Game.Enums;
 using OmenTools.Info.Lumina;
+using OmenTools.Info.Lumina.ExtraSheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
@@ -22,10 +26,8 @@ public partial class FastWorldTravel
     ) : NativeAddon
     {
         public static AddonDRFastWorldTravel? Addon { get; set; }
-
-        private static readonly Version MinDCTravelerXVersion = new("0.2.3.0");
-
-        private static NodeBase TeleportWidget;
+        
+        private static HorizontalListNode TeleportWidget;
 
         private static bool LastOpenPluginState;
 
@@ -34,17 +36,33 @@ public partial class FastWorldTravel
         private static Dictionary<uint, TextButtonNode> WorldToButtons = [];
 
         private static bool IsPluginEnabled =>
-            IDalamudPluginInterface.Instance().IsPluginEnabled("DCTravelerX", MinDCTravelerXVersion);
+            IDalamudPluginInterface.Instance().IsPluginEnabled("DCTravelerX");
 
-        private static bool IsPluginValid =>
-            IsPluginEnabled && IsDCTravelerValid;
+        public static bool IsAbleToCrossDC
+        {
+            get
+            {
+                if (GameState.IsCN)
+                    return IsPluginEnabled && IsDCTravelerValid;
+                // 日本
+                if (GameState.CurrentWorldData.PhysicalDataCenter.RowId == 1)
+                    return true;
+                
+                return false;
+            }
+        }
 
         public static void Open
         (
             FastWorldTravel module
         )
         {
+            if (Addon is { IsOpen: true } )
+                return;
+            
+            Addon?.Dispose();
             EnsureAddon(module);
+            
             Addon.Open();
         }
 
@@ -53,25 +71,29 @@ public partial class FastWorldTravel
             FastWorldTravel module
         )
         {
+            if (Addon != null)
+            {
+                var isOpen = Addon.IsOpen;
+                
+                Addon.Dispose();
+                Addon = null;
+                
+                if (isOpen)
+                    return;
+            }
+            
             EnsureAddon(module);
-            Addon.Toggle();
+            Addon.Open();
         }
 
         private static void EnsureAddon
         (
             FastWorldTravel module
         ) =>
-            Addon ??= new(module.TaskHelper)
+            Addon = new(module.TaskHelper)
             {
                 InternalName = "DRFastWorldTravel",
-                Title = LuminaWrapper.GetAddonText(12510),
-                Size = new
-                (
-                    GameState.IsCN ?
-                        710f :
-                        180f,
-                    480f
-                )
+                Title        = LuminaWrapper.GetAddonText(12510)
             };
 
         protected override unsafe void OnSetup
@@ -80,51 +102,17 @@ public partial class FastWorldTravel
             Span<AtkValue> atkValues
         )
         {
-            LastOpenPluginState = IsPluginValid;
+            LastOpenPluginState = IsAbleToCrossDC;
             WorldToButtons.Clear();
 
             TeleportWidget          = CreateTeleportWidget();
             TeleportWidget.Position = ContentStartPosition;
 
-            if (GameState.IsCN)
-            {
-                var message = SeString.Empty;
-
-                if (!IsPluginEnabled)
-                {
-                    message = new SeStringBuilder().Append("超域旅行功能依赖 ")
-                                                   .AddUiForeground("DCTravlerX", 32)
-                                                   .Append($" 插件 (版本 {MinDCTravelerXVersion} 及以上)")
-                                                   .Build();
-                }
-                else if (!IsDCTravelerValid)
-                {
-                    message = new SeStringBuilder().Append("无法连接至超域旅行 API, 请确认已安装并启用 ")
-                                                   .AddUiForeground("DCTravlerX", 32)
-                                                   .Append($" 插件 (版本 {MinDCTravelerXVersion} 及以上), 若已启用, 请从 XIVLauncherCN 重启游戏")
-                                                   .Build();
-                }
-
-                if (message != SeString.Empty)
-                {
-                    var pluginHelpNode = new TextNode
-                    {
-                        String           = message.Encode(),
-                        FontSize         = 14,
-                        IsVisible        = true,
-                        Size             = new(150f, 25f),
-                        AlignmentType    = AlignmentType.Center,
-                        Position         = new(305f, -22f),
-                        TextFlags        = TextFlags.Bold | TextFlags.Edge,
-                        TextColor        = ColorHelper.GetColor(50),
-                        TextOutlineColor = ColorHelper.GetColor(32)
-                    };
-                    pluginHelpNode.AttachNode(this);
-                }
-            }
-
             TeleportWidget.AttachNode(this);
+            
+            SetWindowSize(ContentStartPosition + TeleportWidget.Size + new Vector2(16f));
 
+            RequestWaitTimeInfo();
             UpdateWaitTimeInfo();
         }
 
@@ -141,7 +129,7 @@ public partial class FastWorldTravel
 
             if (!GameState.IsCN) return;
 
-            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate") && LastOpenPluginState != IsPluginValid)
+            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate") && LastOpenPluginState != IsAbleToCrossDC)
             {
                 Close();
 
@@ -150,7 +138,7 @@ public partial class FastWorldTravel
                 taskHelper.Enqueue(() => !IsOpen, "等待界面完全关闭");
                 taskHelper.Enqueue(Open,          "重新打开");
 
-                LastOpenPluginState = IsPluginValid;
+                LastOpenPluginState = IsAbleToCrossDC;
                 return;
             }
 
@@ -162,217 +150,207 @@ public partial class FastWorldTravel
                 Throttler.Shared.Remove("FastWorldTravel-OnAddonUpdate-UpdateQueueTime");
             }
 
+            if (Throttler.Shared.Throttle("FastWorldTravel.OnAddonUpdate.UpdateWaitInfo", 5_000))
+                RequestWaitTimeInfo();
+            
             // 都在后台了就不要 DDOS 拂晓服务器了
             if (Throttler.Shared.Throttle
                 (
-                    "FastWorldTravel-OnAddonUpdate-RequestQueueTime",
+                    "FastWorldTravel.OnAddonUpdate.RequestQueueTime",
                     GameState.IsForeground ?
                         15_000U :
                         60_000
                 ))
-                RequestWaitTimeInfoUpdate();
+                RequestWaitTimeInfoUpdateCN();
 
-            if (Throttler.Shared.Throttle("FastWorldTravel-OnAddonUpdate-UpdateQueueTime", 1_000))
+            if (Throttler.Shared.Throttle("FastWorldTravel.OnAddonUpdate.UpdateQueueTime", 1_000))
                 UpdateWaitTimeInfo();
-        }
-
-        private void RequestWaitTimeInfoUpdate() =>
-            IFramework.Instance().RunOnTick
-            (async () =>
-                {
-                    if (!IsOpen || !IsPluginValid || WorldToButtons is not { Count: > 0 }) return;
-                    await RequestDCTravelInfo.InvokeFunc();
-                }
-            );
-
-        private void UpdateWaitTimeInfo()
-        {
-            if (!IsOpen || !IsPluginValid || WorldToButtons is not { Count: > 0 }) return;
-
-            foreach (var (worldID, node) in WorldToButtons)
-            {
-                var time = GetDCTravelWaitTime.InvokeFunc(worldID);
-                if (time == -1) continue;
-
-                var builder = new SeStringBuilder();
-                builder.AddText("超域传送状态:")
-                       .Add(NewLinePayload.Payload)
-                       .AddText("              ");
-
-                switch (time)
-                {
-                    case 0:
-                        builder.AddUiForeground("即刻完成 / 等待 1 分钟以内", 45);
-                        break;
-                    case -999:
-                        builder.AddUiForeground("繁忙 / 无法通行", 518);
-                        break;
-                    default:
-                        builder.AddText("至少需要等待 ")
-                               .AddUiForeground(time.ToString(), 32)
-                               .AddText(" 分钟");
-                        break;
-                }
-
-
-                node.TextTooltip = builder.Build().Encode();
-                var baseColor = time switch
-                {
-                    0    => KnownColor.DarkGreen.ToVector4().ToVector3(),
-                    -999 => KnownColor.DarkRed.ToVector4().ToVector3(),
-                    >= 5 => KnownColor.Brown.ToVector4().ToVector3(),
-                    _    => ColorHelper.GetColor(32).ToVector3()
-                };
-
-                node.AddColor = baseColor;
-            }
         }
 
         private HorizontalListNode CreateTeleportWidget()
         {
-            var mainLayoutContainer = new HorizontalListNode { IsVisible = true };
-
+            var mainLayoutContainer = new HorizontalListNode
+            {
+                FitToContentHeight = true,
+                FitToContentWidth  = true,
+                ItemSpacing        = 25f,
+            };
+            
             // 当前大区
             var currentDCWorlds = Sheets.Worlds
                                         .Where(x => x.Value.DataCenter.RowId == GameState.CurrentDataCenter)
                                         .OrderBy(x => x.Value.Name.ToString())
                                         .ToList();
-            if (currentDCWorlds is not { Count: > 0 }) return mainLayoutContainer;
-
-            var maxWorldCount = currentDCWorlds.Count;
-
-            var currentDCColumn = CreateDataCenterColumn(currentDCWorlds.First().Value.DataCenter.RowId, currentDCWorlds, ref maxWorldCount);
+            if (currentDCWorlds is not { Count: > 0 }) 
+                return mainLayoutContainer;
+            
+            var currentDCColumn = CreateDataCenterColumn(currentDCWorlds.First().Value.DataCenter.RowId, currentDCWorlds);
             mainLayoutContainer.AddNode(currentDCColumn);
-
-            if (!GameState.IsCN)
+            
+            if (!IsAbleToCrossDC)
                 return mainLayoutContainer;
 
-            // 其他大区 (仅国服)
-            var otherDataCenters = Sheets.CNWorlds
-                                         .Where(kvp => kvp.Value.DataCenter.RowId != GameState.CurrentDataCenter)
-                                         .OrderBy(x => x.Value.Name.ToString())
-                                         .GroupBy(x => x.Value.DataCenter.RowId)
-                                         .ToDictionary(x => x.Key, x => x.ToList());
-
-            foreach (var dataCenter in otherDataCenters)
-                maxWorldCount = Math.Max(maxWorldCount, dataCenter.Value.Count);
-
-            foreach (var dataCenter in otherDataCenters)
+            // 国服
+            if (GameState.IsCN)
             {
-                mainLayoutContainer.AddDummy(25);
-
-                var otherDCColumn = CreateDataCenterColumn(dataCenter.Key, dataCenter.Value, ref maxWorldCount);
-                mainLayoutContainer.AddNode(otherDCColumn);
+                var otherDataCenters = Sheets.CNWorlds
+                                             .Where(kvp => kvp.Value.DataCenter.RowId != GameState.CurrentDataCenter)
+                                             .OrderBy(x => x.Value.Name.ToString())
+                                             .GroupBy(x => x.Value.DataCenter.RowId)
+                                             .ToDictionary(x => x.Key, x => x.ToList());
+                foreach (var dataCenter in otherDataCenters)
+                {
+                    var otherDCColumn = CreateDataCenterColumn(dataCenter.Key, dataCenter.Value);
+                    mainLayoutContainer.AddNode(otherDCColumn);
+                }
+            }
+            else
+            {
+                var otherDataCenters = Sheets.Worlds
+                                             .Where(x => x.Value.PhysicalDataCenter.RowId == GameState.CurrentWorldData.PhysicalDataCenter.RowId)
+                                             .Where(kvp => kvp.Value.DataCenter.RowId != GameState.CurrentDataCenter)
+                                             .OrderBy(x => x.Value.Name.ToString())
+                                             .GroupBy(x => x.Value.DataCenter.RowId)
+                                             .ToDictionary(x => x.Key, x => x.ToList());
+                foreach (var dataCenter in otherDataCenters)
+                {
+                    var otherDCColumn = CreateDataCenterColumn(dataCenter.Key, dataCenter.Value);
+                    mainLayoutContainer.AddNode(otherDCColumn);
+                }
             }
 
             return mainLayoutContainer;
         }
 
-        private unsafe SimpleComponentNode CreateDataCenterColumn
+        private unsafe CenteredVerticalListNode CreateDataCenterColumn
         (
-            uint                            dcID,
-            List<KeyValuePair<uint, World>> worlds,
-            ref int                         maxWorldCount
+            uint                                dcID,
+            List<KeyValuePair<uint, WorldTemp>> worlds
         )
         {
-            const float COLUMN_WIDTH                = 150f;
-            const float HEADER_HEIGHT               = 30f;
-            const float SEPARATOR_WIDTH             = 118f;
-            const float SEPARATOR_HEIGHT            = 4f;
-            const float TITLE_BOTTOM_SPACING        = 8f;
-            const float BUTTON_WIDTH                = 140f;
-            const float BUTTON_HEIGHT               = 40f;
-            const float BUTTON_SPACING              = 5f;
-            const float BUTTON_PANEL_TOP_PADDING    = 16f;
-            const float BUTTON_PANEL_BOTTOM_PADDING = 16f;
-
-            var dcName            = LuminaWrapper.GetDataCenterName(dcID);
-            var buttonGroupHeight = (worlds.Count * BUTTON_HEIGHT) + (Math.Max(0, worlds.Count - 1) * BUTTON_SPACING);
-            var buttonPanelHeight = (maxWorldCount                  * BUTTON_HEIGHT)  +
-                                    (Math.Max(0, maxWorldCount - 1) * BUTTON_SPACING) +
-                                    BUTTON_PANEL_TOP_PADDING                          +
-                                    BUTTON_PANEL_BOTTOM_PADDING;
-            var totalHeight = HEADER_HEIGHT + SEPARATOR_HEIGHT + TITLE_BOTTOM_SPACING + buttonPanelHeight;
-
-            var column = new SimpleComponentNode
+            const float COLUMN_WIDTH     = 150f;
+            const float SEPARATOR_WIDTH  = 0.75f * COLUMN_WIDTH;
+            
+            var column = new CenteredVerticalListNode
             {
-                IsVisible = true,
-                Size      = new(COLUMN_WIDTH, totalHeight)
+                FitContents = true,
+                Width       = COLUMN_WIDTH,
+                ItemSpacing = 5f
             };
-
+            
             var header = new TextNode
             {
-                String        = dcName,
+                String        = LuminaWrapper.GetDataCenterName(dcID),
                 FontSize      = 20,
-                IsVisible     = true,
-                Position      = new(0, 8),
-                Size          = new(COLUMN_WIDTH, HEADER_HEIGHT),
+                Size          = new(COLUMN_WIDTH, 32),
                 AlignmentType = AlignmentType.Center,
                 TextFlags     = TextFlags.Bold
             };
-
-            if (dcID != GameState.CurrentDataCenter)
-                header.ShowClickableCursor = true;
-
-            header.AttachNode(column);
-
+            column.AddNode(header);
+            
             var separator = new HorizontalLineNode
             {
-                IsVisible = true,
-                Size      = new(SEPARATOR_WIDTH, SEPARATOR_HEIGHT),
-                Position  = new((COLUMN_WIDTH - SEPARATOR_WIDTH) / 2f, header.Position.Y + HEADER_HEIGHT + 4f)
+                Size = new(SEPARATOR_WIDTH, 4f),
             };
-            separator.AttachNode(column);
+            column.AddNode(separator);
+            
+            column.AddDummy();
 
-            var buttonPanel = new SimpleComponentNode
-            {
-                IsVisible = true,
-                Size      = new(COLUMN_WIDTH, buttonPanelHeight),
-                Position  = new(0f, HEADER_HEIGHT + SEPARATOR_HEIGHT + TITLE_BOTTOM_SPACING)
-            };
-            buttonPanel.AttachNode(column);
-
-            var buttonList = new VerticalListNode
-            {
-                IsVisible   = true,
-                Size        = new(BUTTON_WIDTH, buttonGroupHeight),
-                Position    = new((COLUMN_WIDTH - BUTTON_WIDTH) / 2f, (buttonPanelHeight - buttonGroupHeight) / 2f),
-                ItemSpacing = BUTTON_SPACING
-            };
-            buttonList.AttachNode(buttonPanel);
-
+            using var rented = new RentedSeStringBuilder();
+            
             foreach (var (worldID, worldData) in worlds)
             {
-                var worldNameBuilder = new SeStringBuilder().Append(worldData.Name.ToString());
+                rented.Clear();
 
+                rented.Append(worldData.Name);
+                
                 if (GameState.HomeWorld == worldID)
-                {
-                    worldNameBuilder.Append(" ");
-                    worldNameBuilder.AddIcon(BitmapFontIcon.CrossWorld);
-                }
+                    rented.AppendIcon((uint)BitmapFontIcon.CrossWorld);
 
                 var button = new TextButtonNode
                 {
-                    Size      = new(BUTTON_WIDTH, BUTTON_HEIGHT),
-                    IsVisible = true,
-                    String    = worldNameBuilder.Build().Encode(),
+                    Size      = new(column.Width, 40f),
+                    String    = rented.ToReadOnlySeString(),
                     OnClick = () =>
                     {
                         Close();
                         ChatManager.Instance().SendMessage($"/pdr worldtravel {worldData.Name.ToString()}");
                     },
-                    IsEnabled = GameState.CurrentWorld != worldID && (worldData.DataCenter.RowId == GameState.CurrentDataCenter || IsPluginValid)
+                    IsEnabled = GameState.CurrentWorld != worldID && (worldData.DataCenter.RowId == GameState.CurrentDataCenter || IsAbleToCrossDC)
                 };
 
                 button.LabelNode.TextOutlineColor = KnownColor.Black.ToVector4();
                 button.LabelNode.TextFlags        = TextFlags.Edge;
-                buttonList.AddNode(button);
+                column.AddNode(button);
 
-                if (GameState.IsCN)
-                    WorldToButtons.Add(worldID, button);
+                WorldToButtons.Add(worldID, button);
             }
 
             return column;
+        }
+        
+        private static unsafe void RequestWaitTimeInfo()
+        {
+            AgentWorldTravel.Instance()->WorldListTimer = 0;
+            ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestWorldTravel);
+        }
+
+        private void RequestWaitTimeInfoUpdateCN() =>
+            IFramework.Instance().RunOnTick
+            (async () =>
+                {
+                    if (!IsOpen || !IsAbleToCrossDC || WorldToButtons is not { Count: > 0 }) return;
+                    await RequestDCTravelInfo.InvokeFunc();
+                }
+            );
+
+        private unsafe void UpdateWaitTimeInfo()
+        {
+            if (!IsOpen ||
+                WorldToButtons is not { Count: > 0 })
+                return;
+            
+            using var rented = new RentedSeStringBuilder();
+
+            var clientWorlds = AgentWorldTravel.Instance()->AllWorldsSpan.ToArray();
+
+            foreach (var (worldID, node) in WorldToButtons)
+            {
+                var              isAbleToGoTo = true;
+                ReadOnlySeString tooltip      = new();
+
+                if (clientWorlds.FirstOrDefault(x => x.WorldID == worldID) is { WorldID: > 0 } clientWorldData)
+                {
+                    isAbleToGoTo = clientWorldData.LogMessageID == 0;
+                    if (clientWorldData.LogMessageID > 0)
+                        tooltip = LuminaWrapper.GetLogMessageText(clientWorldData.LogMessageID);
+                }
+
+                if (GameState.IsCN && isAbleToGoTo)
+                {
+                    var time = GetDCTravelWaitTime.InvokeFunc(worldID);
+                    isAbleToGoTo = time == 0;
+                }
+                
+                node.TextTooltip = tooltip;
+                node.AddColor = isAbleToGoTo switch
+                {
+                    true  => KnownColor.DarkGreen.ToVector4().ToVector3(),
+                    false => KnownColor.DarkRed.ToVector4().ToVector3(),
+                };
+            }
+        }
+
+        private class CenteredVerticalListNode : VerticalListNode
+        {
+            protected override void AdjustNode
+            (
+                NodeBase node
+            )
+            {
+                if (node is HorizontalLineNode lineNode)
+                    lineNode.X = (Width - lineNode.Width) / 2f;
+            }
         }
     }
 }

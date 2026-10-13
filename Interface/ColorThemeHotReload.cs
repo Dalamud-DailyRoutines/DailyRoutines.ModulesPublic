@@ -18,7 +18,7 @@ using Lumina.Data.Parsing.Uld;
 using OmenTools.Dalamud;
 using OmenTools.Info.Lumina.ULD;
 using Decoder = Iced.Intel.Decoder;
-using ExpansionUIColorHolder = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkUIColorHolder;
+using AtkUIColorHolder = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkUIColorHolder;
 using ExpansionTextNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkTextNode;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -37,7 +37,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private Hook<ExpansionUIColorHolder.Delegates.LoadColors>? LoadColorsHook;
+    private Hook<AtkUIColorHolder.Delegates.LoadColors>? LoadColorsHook;
     private Hook<AtkUnitBase.Delegates.LoadUldByName>?         LoadUldByNameHook;
 
     private readonly Dictionary<nint, string>              addonPaths      = [];
@@ -52,13 +52,13 @@ public unsafe class ColorThemeHotReload : ModuleBase
     {
         var holder = AtkStage.Instance()->AtkUIColorHolder;
         loadedTheme = holder->ActiveColorThemeType;
-        CaptureColors(holder);
+        CaptureColors((AtkUIColorHolder*)holder);
 
         LoadColorsHook = IGameInteropProvider.Instance().HookFromMemberFunction
         (
-            typeof(ExpansionUIColorHolder.MemberFunctionPointers),
-            nameof(ExpansionUIColorHolder.MemberFunctionPointers.LoadColors),
-            (ExpansionUIColorHolder.Delegates.LoadColors)LoadColorsDetour
+            typeof(AtkUIColorHolder.MemberFunctionPointers),
+            nameof(AtkUIColorHolder.MemberFunctionPointers.LoadColors),
+            (AtkUIColorHolder.Delegates.LoadColors)LoadColorsDetour
         );
         LoadColorsHook.Enable();
 
@@ -121,9 +121,9 @@ public unsafe class ColorThemeHotReload : ModuleBase
             return;
 
         var theme  = IGameConfig.Instance().System.GetUInt(nameof(SystemConfigOption.ColorThemeType));
-        var holder = AtkStage.Instance()->AtkUIColorHolder;
+        var holder = (AtkUIColorHolder*)AtkStage.Instance()->AtkUIColorHolder;
         if (holder->ActiveColorThemeType != theme)
-            ((ExpansionUIColorHolder*)holder)->SetActiveColorThemeType((byte)theme);
+            holder->SetActiveColorThemeType((byte)theme);
     }
 
     private bool LoadUldByNameDetour
@@ -143,19 +143,17 @@ public unsafe class ColorThemeHotReload : ModuleBase
 
     private void LoadColorsDetour
     (
-        ExpansionUIColorHolder* expandedHolder
+        AtkUIColorHolder* holder
     )
     {
-        var holder = (AtkUIColorHolder*)expandedHolder;
-
         if (holder != AtkStage.Instance()->AtkUIColorHolder)
         {
-            LoadColorsHook.Original(expandedHolder);
+            LoadColorsHook.Original(holder);
             return;
         }
 
         CaptureColors(holder);
-        LoadColorsHook.Original(expandedHolder);
+        LoadColorsHook.Original(holder);
 
         try
         {
@@ -223,7 +221,7 @@ public unsafe class ColorThemeHotReload : ModuleBase
                 if (path != null && holder->SetupState == 2)
                 {
                     visitedManagers.Clear();
-                    RefreshManager(&addon->UldManager, resources[path], holder);
+                    RefreshManager(&addon->UldManager, resources[path], (AtkUIColorHolder*)holder);
                     visitedManagers.Clear();
                 }
             }

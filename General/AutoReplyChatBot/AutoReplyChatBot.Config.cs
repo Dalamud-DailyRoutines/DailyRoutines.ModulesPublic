@@ -13,8 +13,8 @@ public partial class AutoReplyChatBot
     private Config             config = null!;
     private ConversationStore? conversationStore;
 
-    private static int                      PendingSaveConfig;
-    private static CancellationTokenSource? SaveConfigTokenSource;
+    private int                      pendingSaveConfig;
+    private CancellationTokenSource? saveConfigTokenSource;
 
     private class Config : ModuleConfig
     {
@@ -37,6 +37,9 @@ public partial class AutoReplyChatBot
         public bool   EnableWorldBook = true;
         public string FilterModel     = "deepseek-v4-flash";
         public string FilterPrompt    = FILTER_SYSTEM_PROMPT;
+        public int    FilterMaxTokens = 4096;
+        public bool   FilterUseMaxCompletionTokens;
+        public bool   FilterSendTemperature = true;
 
         public int          HistoryKeyIndex;
         public int          MaxTokens              = 2048;
@@ -47,6 +50,8 @@ public partial class AutoReplyChatBot
         public int          SelectedPromptIndex;
         public List<Prompt> SystemPrompts = [new()];
         public float        Temperature   = 1.4f;
+        public bool         UseMaxCompletionTokens;
+        public bool         SendTemperature = true;
 
         // 聊天窗口配置
         public Dictionary<string, ChatWindow> TestChatWindows = [];
@@ -63,7 +68,6 @@ public partial class AutoReplyChatBot
     private class ChatWindow
     {
         public string HistoryGUID = string.Empty;
-        public string ID          = string.Empty;
         public string InputText   = string.Empty;
         public bool   IsProcessing;
         public string Name    = string.Empty;
@@ -77,13 +81,14 @@ public partial class AutoReplyChatBot
 
     private class ToolCallRecord
     {
-        public string Name      { get; set; } = string.Empty;
-        public string Arguments { get; set; } = string.Empty;
-        public string Result    { get; set; } = string.Empty;
+        public string Name      { get; init; } = string.Empty;
+        public string Arguments { get; init; } = string.Empty;
+        public string Result    { get; set; }  = string.Empty;
     }
 
     private class ChatMessage
     {
+        [JsonConstructor]
         public ChatMessage() => Timestamp = GameState.ServerTimeUnix;
 
         public ChatMessage
@@ -159,12 +164,12 @@ public partial class AutoReplyChatBot
                 if (thinkEnd >= 0)
                 {
                     ParsedReasoning = textVal.Substring(thinkStart + 7, thinkEnd - (thinkStart + 7)).Trim();
-                    ParsedContent   = (textVal.Substring(0, thinkStart) + textVal.Substring(thinkEnd + 8)).Trim();
+                    ParsedContent   = string.Concat(textVal.AsSpan(0, thinkStart), textVal.AsSpan(thinkEnd + 8)).Trim();
                 }
                 else
                 {
-                    ParsedReasoning = textVal.Substring(thinkStart + 7).Trim();
-                    ParsedContent   = textVal.Substring(0, thinkStart).Trim();
+                    ParsedReasoning = textVal[(thinkStart + 7)..].Trim();
+                    ParsedContent   = textVal[..thinkStart].Trim();
                 }
             }
             else
@@ -224,7 +229,7 @@ public partial class AutoReplyChatBot
         )
         {
             var conv = GetOrLoad(id);
-            return conv.RecentTurns.ToList();
+            return [.. conv.RecentTurns];
         }
 
         public void AppendTurn
@@ -338,66 +343,6 @@ public partial class AutoReplyChatBot
 
             old?.Dispose();
             _ = SaveAfterDelayAsync(cts.Token);
-        }
-
-        public async Task MigrateAsync
-        (
-            Dictionary<string, List<ChatMessage>> histories,
-            Dictionary<string, List<ChatMessage>> pastHistories
-        )
-        {
-            var migrated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            MigrateSet(histories,     migrated, false);
-            MigrateSet(pastHistories, migrated, true);
-
-            await Task.CompletedTask;
-        }
-
-        private void MigrateSet
-        (
-            Dictionary<string, List<ChatMessage>> source,
-            HashSet<string>                       migrated,
-            bool                                  isPast
-        )
-        {
-            foreach (var (id, messages) in source)
-            {
-                if (messages is not { Count: > 0 }) continue;
-                if (!migrated.Add(id)) continue;
-
-                var conv = GetOrLoad(id);
-
-                if (isPast)
-                {
-                    var coldPath = ColdPath(id);
-
-                    try
-                    {
-                        using var writer = new StreamWriter(coldPath, true);
-
-                        foreach (var msg in messages)
-                        {
-                            var json = JsonConvert.SerializeObject(msg);
-                            writer.WriteLine(json);
-                        }
-                    }
-                    catch
-                    {
-                        /* ignored */
-                    }
-                }
-                else
-                {
-                    foreach (var msg in messages)
-                        conv.RecentTurns.Add(msg);
-
-                    if (conv.RecentTurns.Count > HOT_TURN_LIMIT * 2)
-                        ArchiveOldestTurns(conv);
-
-                    RequestSave(id);
-                }
-            }
         }
 
         private async Task SaveAfterDelayAsync
@@ -559,10 +504,10 @@ public partial class AutoReplyChatBot
     {
         if (delayMs < 0) delayMs = 0;
 
-        Interlocked.Exchange(ref PendingSaveConfig, 1);
+        Interlocked.Exchange(ref pendingSaveConfig, 1);
 
         var tokenSource    = new CancellationTokenSource();
-        var oldTokenSource = Interlocked.Exchange(ref SaveConfigTokenSource, tokenSource);
+        var oldTokenSource = Interlocked.Exchange(ref saveConfigTokenSource, tokenSource);
 
         try
         {
@@ -602,7 +547,7 @@ public partial class AutoReplyChatBot
 
     private void FlushSaveConfig()
     {
-        if (Interlocked.Exchange(ref PendingSaveConfig, 0) == 0)
+        if (Interlocked.Exchange(ref pendingSaveConfig, 0) == 0)
             return;
 
         try
@@ -615,9 +560,9 @@ public partial class AutoReplyChatBot
         }
     }
 
-    private static void DisposeSaveConfigScheduler()
+    private void DisposeSaveConfigScheduler()
     {
-        var tokenSource = Interlocked.Exchange(ref SaveConfigTokenSource, null);
+        var tokenSource = Interlocked.Exchange(ref saveConfigTokenSource, null);
         if (tokenSource == null)
             return;
 

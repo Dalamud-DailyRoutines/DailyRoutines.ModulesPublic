@@ -1,4 +1,4 @@
-﻿using Dalamud.Game.Text;
+using Dalamud.Game.Text;
 using OmenTools.Dalamud;
 using OmenTools.OmenService;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
@@ -29,65 +29,9 @@ public partial class AutoReplyChatBot
             if (!cfg.ValidChatTypes.Contains(chatType)) return;
             if (playerName == LocalPlayerState.Name    && worldID == GameState.HomeWorld) return;
             if (chatType   == XivChatType.TellIncoming && cfg.OnlyReplyNonFriendTell && IsFriend(playerName, worldID)) return;
-            if (!module.rateLimiter!.CanProceed(target, cfg.CooldownSeconds)) return;
+            if (!module.rateLimiter.CanProceed(target, cfg.CooldownSeconds)) return;
 
-            // Layer 1: Hard Guard (代码级，零 LLM 消耗)
-            var hardBlock = HardGuardCheck(userText, cfg);
-
-            if (hardBlock != null)
-            {
-                DLog.Debug($"Hard Guard blocked message from {target}: {hardBlock.Value.Reason}");
-                return;
-            }
-
-            // Layer 2: Filter Model (Guard LLM)
-            GuardResult? guardResult = null;
-
-            if (cfg.EnableFilter && !string.IsNullOrWhiteSpace(cfg.FilterModel))
-            {
-                using var filterCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                filterCts.CancelAfter(TimeSpan.FromSeconds(30));
-
-                guardResult = await FilterMessageAsync(cfg, userText, filterCts.Token).ConfigureAwait(false);
-
-                if (guardResult == null)
-                {
-                    DLog.Debug($"Guard model unavailable for {target}, skipping reply");
-                    return;
-                }
-            }
-
-            // Enrich
             module.AppendHistory(target, "user", userText);
-
-            var conv = module.conversationStore!.GetOrLoad(target);
-            var hist = conv.RecentTurns.ToList();
-
-            if (hist.Count == 0) return;
-
-            // Apply guard result to user message
-            if (guardResult != null && guardResult.Value.Level != GuardLevel.Safe)
-            {
-                var gr = guardResult.Value;
-
-                switch (gr.Level)
-                {
-                    case GuardLevel.Block:
-                        DLog.Debug($"Guard blocked message from {target}: {gr.Reason}");
-                        return;
-                    case GuardLevel.Attack when cfg.AttackBehavior == AttackAction.Silent:
-                        DLog.Debug($"Guard silenced attack from {target}: {gr.Intent}");
-                        return;
-                    case GuardLevel.Attack:
-                        userText = $"[Guard: 用户试图进行 {gr.Intent ?? "未知"} 攻击 — {gr.Reason}] {userText}";
-                        break;
-                    case GuardLevel.Flag:
-                        userText = $"[Guard: 消息被标记为可疑 — {gr.Reason}] {userText}";
-                        break;
-                }
-
-                ReplaceLastUserMessage(conv, hist, userText);
-            }
 
             // ── Stage 3-4: Build + LLM ──
             using var ticket = await module.rateLimiter.AcquireAsync(target, ct).ConfigureAwait(false);
@@ -106,7 +50,7 @@ public partial class AutoReplyChatBot
             {
                 ModuleConfig      = cfg,
                 ReplyContext      = replyContext,
-                ConversationStore = module.conversationStore!,
+                ConversationStore = module.conversationStore,
                 CancellationToken = ct
             };
 

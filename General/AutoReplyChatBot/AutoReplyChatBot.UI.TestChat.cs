@@ -17,7 +17,6 @@ public partial class AutoReplyChatBot
             var testGUID = Guid.NewGuid().ToString();
             config.TestChatWindows[testGUID] = new ChatWindow
             {
-                ID          = testGUID,
                 Name        = "Chat Test",
                 Role        = "Tester",
                 HistoryGUID = testGUID
@@ -35,7 +34,6 @@ public partial class AutoReplyChatBot
                     var newGUID = Guid.NewGuid().ToString();
                     config.TestChatWindows[newGUID] = new ChatWindow
                     {
-                        ID          = newGUID,
                         Name        = "New Chat",
                         Role        = "NewUser",
                         HistoryGUID = newGUID
@@ -102,7 +100,7 @@ public partial class AutoReplyChatBot
         if (ImGui.Button($"{Lang.Get("Clear")}"))
         {
             var historyKey = currentWindow.HistoryKey;
-            var histConv   = conversationStore!.GetOrLoad(historyKey);
+            var histConv   = conversationStore.GetOrLoad(historyKey);
             histConv.RecentTurns.Clear();
         }
 
@@ -118,7 +116,7 @@ public partial class AutoReplyChatBot
             if (child)
             {
                 var historyKey = currentWindow.HistoryKey;
-                var messages   = conversationStore!.GetTurns(historyKey);
+                var messages   = conversationStore.GetTurns(historyKey);
 
                 for (var i = 0; i < messages.Count; i++)
                 {
@@ -161,8 +159,8 @@ public partial class AutoReplyChatBot
                             var innerGroupMin = ImGui.GetItemRectMin();
                             var innerGroupMax = ImGui.GetItemRectMax();
 
-                            var bubbleMin = new Vector2(innerGroupMin.X - (8f * GlobalUIScale), innerGroupMin.Y);
-                            var bubbleMax = new Vector2(innerGroupMax.X + (8f * GlobalUIScale), innerGroupMax.Y);
+                            var bubbleMin = innerGroupMin with { X = innerGroupMin.X - (8f * GlobalUIScale) };
+                            var bubbleMax = innerGroupMax with { X = innerGroupMax.X + (8f * GlobalUIScale) };
 
                             var bgCol     = KnownColor.Teal.ToVector4() with { W = 0.45f };
                             var borderCol = KnownColor.CadetBlue.ToVector4() with { W = 0.55f };
@@ -182,7 +180,7 @@ public partial class AutoReplyChatBot
                                     {
                                         try
                                         {
-                                            var delConv = conversationStore!.GetOrLoad(historyKey);
+                                            var delConv = conversationStore.GetOrLoad(historyKey);
                                             if (i < delConv.RecentTurns.Count)
                                                 delConv.RecentTurns.RemoveAt(i);
                                             break;
@@ -254,7 +252,7 @@ public partial class AutoReplyChatBot
                                     {
                                         try
                                         {
-                                            var delConv = conversationStore!.GetOrLoad(historyKey);
+                                            var delConv = conversationStore.GetOrLoad(historyKey);
                                             if (i < delConv.RecentTurns.Count)
                                                 delConv.RecentTurns.RemoveAt(i);
                                             break;
@@ -291,6 +289,7 @@ public partial class AutoReplyChatBot
         ImGui.SameLine();
 
         if ((ImGui.Button(Lang.Get("Send")) || ImGui.IsKeyPressed(ImGuiKey.Enter)) &&
+            !currentWindow.IsProcessing                                            &&
             !string.IsNullOrWhiteSpace(currentWindow.InputText))
         {
             var text       = currentWindow.InputText;
@@ -302,9 +301,9 @@ public partial class AutoReplyChatBot
             AppendHistory(historyKey, "user", text, currentWindow.Role);
 
             var placeholder = new ChatMessage("assistant", string.Empty, config.Model);
-            conversationStore!.GetOrLoad(historyKey).RecentTurns.Add(placeholder);
+            conversationStore.GetOrLoad(historyKey).RecentTurns.Add(placeholder);
 
-            _ = StreamReplyAsync(currentWindow, historyKey, text, placeholder);
+            _ = StreamReplyAsync(currentWindow, historyKey, placeholder);
         }
     }
 
@@ -312,7 +311,6 @@ public partial class AutoReplyChatBot
     (
         ChatWindow  window,
         string      historyKey,
-        string      userText,
         ChatMessage placeholder
     )
     {
@@ -334,61 +332,16 @@ public partial class AutoReplyChatBot
             var cfg = config;
             placeholder.Name = cfg.Model;
 
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
             var toolContext = new ToolExecutionContext
             {
                 ModuleConfig      = config,
                 ReplyContext      = new ReplyContext(),
-                ConversationStore = conversationStore!,
-                CancellationToken = CancellationToken.None
+                ConversationStore = conversationStore,
+                CancellationToken = cts.Token
             };
 
-            // Layer 1: Hard Guard (与生产管线一致)
-            var hardBlock = HardGuardCheck(userText, cfg);
-
-            if (hardBlock != null)
-            {
-                placeholder.Text = string.Empty;
-                return;
-            }
-
-            var tstHist = conversationStore!.GetOrLoad(historyKey).RecentTurns;
-            if (tstHist is { Count: > 0 })
-                await CompressConversationIfNeededAsync(cfg, historyKey, [.. tstHist], CancellationToken.None).ConfigureAwait(false);
-
-            if (cfg.EnableFilter && !string.IsNullOrWhiteSpace(cfg.FilterModel))
-            {
-                using var filterCts   = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                var       guardResult = await FilterMessageAsync(cfg, userText, filterCts.Token).ConfigureAwait(false);
-
-                if (guardResult == null || guardResult.Value.Level is GuardLevel.Block)
-                {
-                    placeholder.Text = string.Empty;
-                    return;
-                }
-
-                if (guardResult.Value.Level != GuardLevel.Safe)
-                {
-                    userText = guardResult.Value.Level switch
-                    {
-                        GuardLevel.Attack => $"[Guard: 攻击 — {guardResult.Value.Reason}] {userText}",
-                        GuardLevel.Flag   => $"[Guard: 可疑 — {guardResult.Value.Reason}] {userText}",
-                        _                 => userText
-                    };
-
-                    var fltConv = conversationStore!.GetOrLoad(historyKey);
-
-                    for (var i = fltConv.RecentTurns.Count - 1; i >= 0; i--)
-                        if (fltConv.RecentTurns[i].Role == "user")
-                        {
-                            fltConv.RecentTurns[i] = new ChatMessage
-                                (fltConv.RecentTurns[i].Role, userText, fltConv.RecentTurns[i].Timestamp, fltConv.RecentTurns[i].Name);
-                            break;
-                        }
-                }
-            }
-
-            using var cts      = new CancellationTokenSource(TimeSpan.FromSeconds(120));
-            var       fullText = new StringBuilder();
+            var fullText = new StringBuilder();
 
             await foreach (var chunk in GenerateReplyStreamAsync(cfg, historyKey, toolContext, placeholder, cts.Token).ConfigureAwait(false))
             {
@@ -409,13 +362,13 @@ public partial class AutoReplyChatBot
                     placeholder.Text = string.Empty;
                 else
                 {
-                    conversationStore!.RequestSave(historyKey);
+                    conversationStore.RequestSave(historyKey);
                     RequestSaveConfig();
                 }
             }
             else
             {
-                conversationStore!.RequestSave(historyKey);
+                conversationStore.RequestSave(historyKey);
                 RequestSaveConfig();
             }
         }
@@ -542,8 +495,8 @@ public partial class AutoReplyChatBot
                 // 绘制左侧的 CadetBlue 竖线
                 drawList.AddLine
                 (
-                    new Vector2(pMin.X - (6f * GlobalUIScale), pMin.Y),
-                    new Vector2(pMin.X - (6f * GlobalUIScale), pMax.Y),
+                    pMin with { X = pMin.X - (6f * GlobalUIScale) },
+                    pMax with { X = pMin.X - (6f * GlobalUIScale) },
                     ImGui.GetColorU32(KnownColor.CadetBlue.ToVector4()),
                     2f * GlobalUIScale
                 );
@@ -688,19 +641,6 @@ public partial class AutoReplyChatBot
             var statusSize   = ImGui.CalcTextSize(statusStr);
             var rightOffsetX = 36f * GlobalUIScale;
 
-            if (isCompleted && !isError)
-            {
-                var msStr  = "0 ms ";
-                var msSize = ImGui.CalcTextSize(msStr);
-                drawList.AddText
-                (
-                    new Vector2(screenPos.X + width - rightOffsetX - msSize.X - statusSize.X, screenPos.Y + ((barHeight - msSize.Y) / 2f)),
-                    ImGui.GetColorU32(KnownColor.DarkGray.ToVector4() with { W = 0.6f }),
-                    msStr
-                );
-                rightOffsetX += msSize.X;
-            }
-
             drawList.AddText
             (
                 new Vector2(screenPos.X + width - rightOffsetX - statusSize.X, screenPos.Y + ((barHeight - statusSize.Y) / 2f)),
@@ -735,8 +675,8 @@ public partial class AutoReplyChatBot
                     // 绘制左侧的 CadetBlue 竖线
                     drawList.AddLine
                     (
-                        new Vector2(pMin.X - (6f * GlobalUIScale), pMin.Y),
-                        new Vector2(pMin.X - (6f * GlobalUIScale), pMax.Y),
+                        pMin with { X = pMin.X - (6f * GlobalUIScale) },
+                        pMax with { X = pMin.X - (6f * GlobalUIScale) },
                         ImGui.GetColorU32(KnownColor.CadetBlue.ToVector4()),
                         2f * GlobalUIScale
                     );
