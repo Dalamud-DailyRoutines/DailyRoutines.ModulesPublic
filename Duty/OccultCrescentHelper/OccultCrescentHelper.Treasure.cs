@@ -1,6 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Utility.Numerics;
@@ -10,12 +9,11 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.ImGuiOm.Widgets.MapRenderer;
 using OmenTools.Info.Game;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Native;
+using PlayerController = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.PlayerController;
 using OmenTools.OmenService;
 using OmenTools.OmenService.ZoneIndicator;
 using OmenTools.Threading;
@@ -75,14 +73,12 @@ public partial class OccultCrescentHelper
         {
             calculateCollisionHook ??= CalculateCollisionSig.GetHook<CalculateCollisionDelegate>(CalculateCollisionDetour);
 
-            treasureTaskHelper ??= new()
-            {
-                TimeoutMS       = 180_000,
-                EnterBusyAction = () => calculateCollisionHook?.Enable(),
-                LeaveBusyAction = () => calculateCollisionHook?.Disable()
-            };
+            treasureTaskHelper ??= new() { TimeoutMS = 180_000 };
 
-            WindowManager.Instance().PostDraw                += OnPosDraw;
+            treasureTaskHelper.EnterBusyState += OnEnterBusyState;
+            treasureTaskHelper.LeaveBusyState += OnLeaveBusyState;
+
+            WindowManager.Instance().PostDraw        += OnPosDraw;
             IClientState.Instance().TerritoryChanged += OnZoneChanged;
             OnZoneChanged(0);
 
@@ -102,10 +98,16 @@ public partial class OccultCrescentHelper
             GamePacketManager.Instance().Unreg(OnPreSendPacket);
 
             IClientState.Instance().TerritoryChanged -= OnZoneChanged;
-            WindowManager.Instance().PostDraw                -= OnPosDraw;
+            WindowManager.Instance().PostDraw        -= OnPosDraw;
 
             treasureHandle?.Unreg();
             treasureHandle = null;
+
+            if (treasureTaskHelper != null)
+            {
+                treasureTaskHelper.EnterBusyState -= OnEnterBusyState;
+                treasureTaskHelper.LeaveBusyState -= OnLeaveBusyState;
+            }
 
             treasureTaskHelper?.Abort();
             treasureTaskHelper?.Dispose();
@@ -118,6 +120,11 @@ public partial class OccultCrescentHelper
             treasureObjects.Clear();
         }
 
+        private void OnEnterBusyState() =>
+            calculateCollisionHook?.Enable();
+
+        private void OnLeaveBusyState() =>
+            calculateCollisionHook?.Disable();
 
         #region 界面
 
@@ -267,6 +274,7 @@ public partial class OccultCrescentHelper
                             Route? hoveredRoute = null;
 
                             var isFirst = true;
+
                             foreach (var route in Routes)
                             {
                                 if (route.TerritoryType != GameState.TerritoryType) continue;
@@ -275,7 +283,7 @@ public partial class OccultCrescentHelper
                                     ImGui.SameLine();
 
                                 isFirst = false;
-                                
+
                                 if (ImGui.Button($"    {route.Name}    "))
                                     EnqueueAutoTreasureHunt(route.Points);
 
@@ -613,11 +621,11 @@ public partial class OccultCrescentHelper
                 StopAutoTreasureHunt();
                 return;
             }
-            
+
             if (queuedGatheringList.Count == 0)
             {
                 var currentPosition = LocalPlayerState.Object.Position;
-                
+
                 treasureTaskHelper.Enqueue
                 (() =>
                     {
@@ -626,9 +634,9 @@ public partial class OccultCrescentHelper
 
                         if (!UIModule.IsScreenReady())
                             return false;
-                        
+
                         MovementManager.Instance().TPSmooth(currentPosition, 24f);
-                        
+
                         if (ICondition.Instance()[ConditionFlag.Mounted])
                         {
                             MountCommand.Dismount();
@@ -637,27 +645,29 @@ public partial class OccultCrescentHelper
 
                         if (ICondition.Instance()[ConditionFlag.Casting])
                             return false;
-                        
+
                         if (ActionManager.Instance()->GetActionStatus(ActionType.Action, DEMI_RETURN_ACTION_ID) != 0)
                             return false;
 
                         if (Throttler.Shared.Throttle("OccultCrescentHelper.TreasureManager.DemiReturn"))
                             UseActionManager.Instance().UseAction(ActionType.Action, DEMI_RETURN_ACTION_ID);
-                        
+
                         return false;
                     }
                 );
-                
-                treasureTaskHelper.Enqueue(() =>
-                {
-                    PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = false;
-                    currentRoute.Clear();
-                    
-                    var message = Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-Notification-End");
-                    NotifyHelper.Instance().NotificationInfo(message);
-                    NotifyHelper.Speak(message);
-                });
-                
+
+                treasureTaskHelper.Enqueue
+                (() =>
+                    {
+                        PlayerController.Instance()->MoveControllerWalk.IsMovementInputLocked = false;
+                        currentRoute.Clear();
+
+                        var message = Lang.Get("OccultCrescentHelper-TreasureManager-AutoOpenTreasure-Notification-End");
+                        NotifyHelper.Instance().NotificationInfo(message);
+                        NotifyHelper.Speak(message);
+                    }
+                );
+
                 return;
             }
 
@@ -731,10 +741,7 @@ public partial class OccultCrescentHelper
 
                     var distanceSquared = MainModule.config.DistanceToAutoOpenTreasure * MainModule.config.DistanceToAutoOpenTreasure;
 
-                    if (LocalPlayerState.DistanceTo2DSquared(gameObject->Position.ToVector2()) > distanceSquared)
-                        return false;
-
-                    return true;
+                    return !(LocalPlayerState.DistanceTo2DSquared(gameObject->Position.ToVector2()) > distanceSquared);
                 }
             );
 
@@ -762,10 +769,7 @@ public partial class OccultCrescentHelper
                     if (gameObject->ObjectKind != ObjectKind.Treasure)
                         return false;
 
-                    if (gameObject->Flags.IsSetAny(Treasure.TreasureFlags.Opened, Treasure.TreasureFlags.FadedOut))
-                        return false;
-
-                    return true;
+                    return !gameObject->Flags.IsSetAny(Treasure.TreasureFlags.Opened, Treasure.TreasureFlags.FadedOut);
                 }
             );
 
@@ -885,13 +889,15 @@ public partial class OccultCrescentHelper
                     Vector3? nearestPoint = null;
 
                     var minDistanceSQ = float.MaxValue;
+
                     foreach (var point in remainingPoints)
                     {
                         var distance = Vector3.DistanceSquared(currentPoint, point);
+
                         if (distance < minDistanceSQ)
                         {
-                            minDistanceSQ  = distance;
-                            nearestPoint = point;
+                            minDistanceSQ = distance;
+                            nearestPoint  = point;
                         }
                     }
 

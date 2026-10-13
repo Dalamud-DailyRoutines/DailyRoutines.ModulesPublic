@@ -4,7 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Interop.Game.Models.Native;
+using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentReceiveEventDelegate;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Duty;
@@ -87,13 +87,17 @@ public unsafe class AutoBlockEmptyXBMParty : ModuleBase
         (*(nint*)(agent + endOffset) - *(nint*)(agent + beginOffset)) >> 3;
 
     // 存活魔兽不足三只时, 兽笛无法全部指派, 此时按存活数量放行
-    private static bool IsFluteAssignmentInsufficient(nint agent)
+    private static bool IsFluteAssignmentInsufficient
+    (
+        nint agent
+    )
     {
         var assignedCount = GetElementCount(agent, FLUTE_LIST_BEGIN_OFFSET, FLUTE_LIST_END_OFFSET);
         if (assignedCount >= 3)
             return false;
 
         var aliveCount = 0;
+
         for (var i = 0; i < PET_CURRENT_HEALTH_COUNT; i++)
         {
             if (*(uint*)(agent + PET_CURRENT_HEALTH_OFFSET + (i * sizeof(uint))) != 0)
@@ -106,7 +110,7 @@ public unsafe class AutoBlockEmptyXBMParty : ModuleBase
     #region 常量
 
     // TODO：等待 FFCS 合并
-    
+
     // AgentXBMStageDetailList: 当前所处阶段, 0 为调整编队, 2 为开始战斗
     private const int STAGE_MODE_OFFSET = 0x3C;
 

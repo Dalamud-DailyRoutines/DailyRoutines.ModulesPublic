@@ -27,7 +27,7 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using Action = System.Action;
-using AgentRetainer = OmenTools.Interop.Game.Models.Native.AgentRetainer;
+using AgentRetainer = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentRetainer;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -80,9 +80,10 @@ public unsafe partial class AutoRetainerWork
             );
             MoveToRetainerMarketHook.Enable();
 
-            taskHelper                 ??= new() { TimeoutMS = 30_000, ShowDebug = true };
-            taskHelper.EnterBusyAction =   () => ToggleOverlayIPC.TryInvokeFunc(true);
-            taskHelper.LeaveBusyAction =   () => ToggleOverlayIPC.TryInvokeFunc(false);
+            taskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
+
+            taskHelper.EnterBusyState += OnEnterBusyState;
+            taskHelper.LeaveBusyState += OnLeaveBusyState;
 
             contextMenuEntry = new(this);
             priceAdjustAddon = new(this)
@@ -131,10 +132,22 @@ public unsafe partial class AutoRetainerWork
 
             contextMenuEntry = null;
 
+            if (taskHelper != null)
+            {
+                taskHelper.EnterBusyState -= OnEnterBusyState;
+                taskHelper.LeaveBusyState -= OnLeaveBusyState;
+            }
+
             taskHelper?.Abort();
             taskHelper?.Dispose();
             taskHelper = null;
         }
+
+        private static void OnEnterBusyState() =>
+            ToggleOverlayIPC.TryInvokeFunc(true);
+
+        private static void OnLeaveBusyState() =>
+            ToggleOverlayIPC.TryInvokeFunc(false);
 
         public override void DrawConfig()
         {

@@ -18,7 +18,7 @@ using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
-using LuaFunctionDelegate = OmenTools.Interop.Game.Models.Native.LuaFunctionDelegate;
+using LuaFunctionDelegate = FFXIVClientStructs.Expansion.FFXIV.Common.Lua.LuaFunctionDelegate;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
@@ -42,7 +42,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
     );
     private Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
 
-    private static readonly CompSig PlayCutsceneSig = 
+    private static readonly CompSig PlayCutsceneSig =
         new("40 53 55 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B 59");
     private delegate nint PlayCutsceneDelegate
     (
@@ -63,10 +63,10 @@ public unsafe class AutoCutsceneSkip : ModuleBase
     (
         "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B B9 ?? ?? ?? ?? 48 8B D9 48 8B 4F ?? E8 ?? ?? ?? ?? 48 8D 8B ?? ?? ?? ?? 8B F0 E8 ?? ?? ?? ?? 48 8B 4F ?? 48 8B D0 E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 85 C0 74 ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 8B CF 4C 8D 05 ?? ?? ?? ?? 8D 56 ?? E8 ?? ?? ?? ?? 48 8B 4F ?? BA ?? ?? ?? ?? 48 8B 5C 24 ?? 48 8B 74 24 ?? 48 83 C4 ?? 5F E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC 48 89 5C 24"
     );
-    
+
     private Hook<LuaFunctionDelegate>? PlayCutsceneLuaHook;
 
-    private static readonly CompSig LuaBaseSig02 = 
+    private static readonly CompSig LuaBaseSig02 =
         new("40 55 56 57 41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24");
 
     private Hook<LuaFunctionDelegate>? PlayStaffRollHook;
@@ -85,9 +85,9 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         cutsceneUnskippablePatch = new("75 ?? 48 8B 4B ?? 48 8B 01 FF 50 ?? 48 8B C8 BA ?? ?? ?? ?? E8 ?? ?? ?? ?? 80 7B", [0xEB]);
 
         config = Config.Load(this) ?? new();
-        
-        whitelistZoneCombo = new("Whitelist");
-        blacklistZoneCombo = new("Blacklist");
+
+        whitelistZoneCombo             = new("Whitelist");
+        blacklistZoneCombo             = new("Blacklist");
         whitelistZoneCombo.SelectedIDs = config.WhitelistZones;
         blacklistZoneCombo.SelectedIDs = config.BlacklistZones;
 
@@ -145,7 +145,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
                     bgColor: bgColor
                 ))
                 config.Save(this);
-            
+
             ImGui.SameLine();
             ImGui.TextUnformatted
             (
@@ -156,9 +156,9 @@ public unsafe class AutoCutsceneSkip : ModuleBase
                         "Blacklist"
                 )
             );
-            
+
             ImGuiOm.HelpMarker(Lang.Get("AutoCutsceneSkip-WorkModeHelp"));
-            
+
             if (config.WorkMode)
             {
                 if (whitelistZoneCombo.DrawCheckbox())
@@ -175,7 +175,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
                     config.Save(this);
                 }
             }
-            
+
             ImGui.SameLine();
             ImGui.TextUnformatted(Lang.Get("Zone"));
         }
@@ -218,7 +218,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
         if (atkValues[0].Int != 12) return;
         if (agent->Context   == null) return;
-        
+
         var index = agent->FindFirstUncompleteEntry();
 
         if (index < 0)
@@ -242,6 +242,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
             return CutsceneHandleInputHook.Original(module, a2);
 
         var skipCallback = module->CutsceneSkipCallback;
+
         if (skipCallback != null && JournalResult == null && SatisfactionSupplyResult == null)
         {
             var option = default(AtkValue);

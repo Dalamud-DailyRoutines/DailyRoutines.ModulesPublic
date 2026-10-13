@@ -22,7 +22,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using AgentFreeCompanyChest = OmenTools.Interop.Game.Models.Native.AgentFreeCompanyChest;
+using AgentFreeCompanyChest = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentFreeCompanyChest;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -41,13 +41,11 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
     };
 
     private static readonly CompSig SendInventoryRefreshSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 8B DA 48 8B F1 33 D2 0F B7 FA");
-
     private delegate bool SendInventoryRefreshDelegate
     (
         InventoryManager* instance,
         int               inventoryType
     );
-
     private Hook<SendInventoryRefreshDelegate>? SendInventoryRefreshHook;
 
     private delegate nint MoveItemDelegate
@@ -58,7 +56,6 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         InventoryType dstInv,
         uint          dstSlot
     );
-
     private MoveItemDelegate moveItem = null!;
 
     private Config config = null!;
@@ -518,10 +515,11 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
     #region 常量
 
     private static readonly uint[] ItemIDs =
-        LuminaGetter.Get<Item>()
-                    .Where(x => x.ItemSortCategory.Value.Param == 150)
-                    .Select(x => x.RowId)
-                    .ToArray();
+    [
+        .. LuminaGetter.Get<Item>()
+                       .Where(x => x.ItemSortCategory.Value.Param == 150)
+                       .Select(x => x.RowId)
+    ];
 
     private static readonly FrozenDictionary<InventoryType, string> DefaultPages = new Dictionary<InventoryType, string>
     {

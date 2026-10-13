@@ -36,11 +36,10 @@ public unsafe partial class OptimizedSalvage : ModuleBase
     {
         config = LoadConfig<Config>() ?? new();
 
-        TaskHelper ??= new()
-        {
-            EnterBusyAction = () => addon?.OperationButton?.String = Lang.Get("Stop"),
-            LeaveBusyAction = () => addon?.OperationButton?.String = Lang.Get("OptimizedSalvage-BatchDesynthesize")
-        };
+        TaskHelper ??= new();
+
+        TaskHelper.EnterBusyState += OnEnterBusyState;
+        TaskHelper.LeaveBusyState += OnLeaveBusyState;
 
         TooltipManager.Instance().RegItem(OnItemTooltip);
 
@@ -66,9 +65,18 @@ public unsafe partial class OptimizedSalvage : ModuleBase
 
         RemoveSkillColumn();
 
+        TaskHelper.EnterBusyState -= OnEnterBusyState;
+        TaskHelper.LeaveBusyState -= OnLeaveBusyState;
+
         addon?.Dispose();
         addon = null;
     }
+
+    private void OnEnterBusyState() =>
+        addon?.OperationButton?.String = Lang.Get("Stop");
+
+    private void OnLeaveBusyState() =>
+        addon?.OperationButton?.String = Lang.Get("OptimizedSalvage-BatchDesynthesize");
 
     private void OnAddon
     (

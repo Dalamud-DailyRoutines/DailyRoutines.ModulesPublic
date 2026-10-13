@@ -15,16 +15,16 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using InteropGenerator.Runtime;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
@@ -46,7 +46,12 @@ public partial class OptimizedRecipeNote : ModuleBase
         Title               = Lang.Get("OptimizedRecipeNoteTitle"),
         Description         = Lang.Get("OptimizedRecipeNoteDescription"),
         Category            = ModuleCategory.CraftGather,
-        ModulesPrerequisite = ["AutoShowItemNPCShopInfo"]
+        ModulesPrerequisite = ["AutoShowItemNPCShopInfo"],
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-2.png",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-1.png"
+        ],
     };
 
     public override ModulePermission Permission { get; } = new()
@@ -54,7 +59,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private static readonly CompSig SimpleCraftGetAmountUpperLimitSig = 
+    private static readonly CompSig SimpleCraftGetAmountUpperLimitSig =
         new("4C 8B DC 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 44 0F B6 CA");
     private delegate int SimpleCraftGetAmountUpperLimitDelegate
     (
@@ -63,8 +68,8 @@ public partial class OptimizedRecipeNote : ModuleBase
     );
     private Hook<SimpleCraftGetAmountUpperLimitDelegate>? SimpleCraftGetAmountUpperLimitHook;
 
-    private static readonly CompSig SimpleCraftAmountJudgeSig = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
-    private MemoryPatch SimpleCraftAmountJudgePatch = null!;
+    private static readonly CompSig     SimpleCraftAmountJudgeSig   = new("0F 87 ?? ?? ?? ?? 48 8B 81 ?? ?? ?? ?? 48 85 C0");
+    private                 MemoryPatch SimpleCraftAmountJudgePatch = null!;
 
     private static readonly CompSig RecipeNotePraticeSettingSetupSig = new
     (
@@ -80,9 +85,9 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private Config config = null!;
 
-    private readonly Dictionary<uint, CaculationResult> caculationResults = [];
+    private readonly Dictionary<uint, CalculationResult> calculationResults = [];
 
-    private TextButtonNode?    caculateRecipeButton;
+    private TextButtonNode?    calculateRecipeButton;
     private TextButtonNode?    switchJobButton;
     private TextureButtonNode? clearSearchButton;
 
@@ -117,7 +122,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         TaskHelper ??= new() { TimeoutMS = 15_000 };
 
         config = Config.Load(this) ?? new();
-        
+
         SimpleCraftGetAmountUpperLimitHook =
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
@@ -151,13 +156,13 @@ public partial class OptimizedRecipeNote : ModuleBase
         AddonActionsPreview.Addon?.Dispose();
         AddonActionsPreview.Addon = null;
 
-        foreach (var x in caculationResults.Values)
+        foreach (var x in calculationResults.Values)
         {
             LinkPayloadManager.Instance().Unreg(x.CopyLinkPayload.CommandId);
             LinkPayloadManager.Instance().Unreg(x.PreviewLinkPayload.CommandId);
         }
 
-        caculationResults.Clear();
+        calculationResults.Clear();
 
         if (installRaphaelLinkPayload != null)
             LinkPayloadManager.Instance().Unreg(installRaphaelLinkPayload.CommandId);
@@ -233,7 +238,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
 
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish"), ref config.IsSwitchJobButton))
+        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish"), ref config.IsNotifyQuickSynthesisFinish))
             config.Save(this);
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish-Help"));
@@ -271,6 +276,53 @@ public partial class OptimizedRecipeNote : ModuleBase
         return maxPortion;
     }
 
+    private static unsafe int GetCraftableAmount
+    (
+        Recipe recipe
+    )
+    {
+        var maxPortion = 9999;
+
+        for (var index = 0; index < recipe.Ingredient.Count; index++)
+        {
+            var ingredient = recipe.Ingredient[index];
+            if (!ingredient.IsValid || ingredient.RowId == 0) continue;
+
+            var amount = recipe.AmountIngredient[index];
+            if (amount == 0) continue;
+
+            var itemCount = InventoryManager.Instance()->GetInventoryItemCount(ingredient.RowId) +
+                            InventoryManager.Instance()->GetInventoryItemCount(ingredient.RowId, true);
+            maxPortion = Math.Min(maxPortion, itemCount / amount);
+        }
+
+        return maxPortion;
+    }
+
+    private static unsafe void RefreshRecipeMaterials()
+    {
+        var recipeList = RecipeNote.Instance()->RecipeList;
+        if (recipeList == null) return;
+
+        var recipe = recipeList->SelectedRecipe;
+        if (recipe == null) return;
+
+        for (var index = 0; index < recipe->Ingredients.Length; index++)
+        {
+            ref var ingredient = ref recipe->Ingredients[index];
+            if (ingredient.ItemId == 0 || ingredient.Amount == 0) continue;
+
+            var nqAmount = Math.Min
+            (
+                ingredient.Amount,
+                InventoryManager.Instance()->GetInventoryItemCount(ingredient.ItemId)
+            );
+            var hqAmount = Math.Min(ingredient.Amount - nqAmount, InventoryManager.Instance()->GetInventoryItemCount(ingredient.ItemId, true));
+            ingredient.NQCount = (byte)nqAmount;
+            ingredient.HQCount = (byte)hqAmount;
+        }
+    }
+
     private unsafe AtkValue* RecipeNotePraticeSettingSetupDetour
     (
         AtkEventListener* listener,
@@ -299,7 +351,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                caculateRecipeButton    = null;
+                calculateRecipeButton   = null;
                 switchJobButton         = null;
                 displayOthersButton     = null;
                 displayOthersJobsLayout = null;
@@ -367,8 +419,8 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private unsafe void RemoveAllNodes()
     {
-        caculateRecipeButton?.Dispose();
-        caculateRecipeButton = null;
+        calculateRecipeButton?.Dispose();
+        calculateRecipeButton = null;
 
         clearSearchButton?.Dispose();
         clearSearchButton = null;
@@ -415,8 +467,8 @@ public partial class OptimizedRecipeNote : ModuleBase
         switchJobButton?.Dispose();
         switchJobButton = null;
 
-        caculateRecipeButton?.Dispose();
-        caculateRecipeButton = null;
+        calculateRecipeButton?.Dispose();
+        calculateRecipeButton = null;
     }
 
     // 清除搜索按钮
@@ -908,17 +960,17 @@ public partial class OptimizedRecipeNote : ModuleBase
     private unsafe void CreateCaculateRecipeButton()
     {
         if (!config.IsCaculateRecipeButton ||
-            caculateRecipeButton != null)
+            calculateRecipeButton != null)
             return;
 
-        caculateRecipeButton = new()
+        calculateRecipeButton = new()
         {
             Position = new(228, 490),
             Size     = new(140, 32),
             String   = Lang.Get("OptimizedRecipeNote-Button-CaculateRecipe")
         };
 
-        caculateRecipeButton.OnClick = () =>
+        calculateRecipeButton.OnClick = () =>
         {
             if (!IDalamudPluginInterface.Instance().IsPluginEnabled(RaphaelIPC.INTERNAL_NAME))
             {
@@ -948,7 +1000,7 @@ public partial class OptimizedRecipeNote : ModuleBase
                 }
             );
 
-            caculateRecipeButton.IsEnabled = false;
+            calculateRecipeButton.IsEnabled = false;
             TaskHelper.Enqueue
             (
                 () =>
@@ -958,13 +1010,15 @@ public partial class OptimizedRecipeNote : ModuleBase
                     switch (response.Status)
                     {
                         case RaphaelCalculationStatus.Success:
-                            caculateRecipeButton.IsEnabled = true;
+                            calculateRecipeButton.IsEnabled = true;
 
                             var copyLinkPayload    = LinkPayloadManager.Instance().Reg(OnClickCopyPayload,    out _);
                             var previewLinkPayload = LinkPayloadManager.Instance().Reg(OnClickPreviewPayload, out _);
-                            caculationResults[id] = new
+                            calculationResults[id] = new
                             (
                                 response.Actions,
+                                response.FinalProgress,
+                                response.FinalQuality,
                                 recipeID,
                                 craftPoint,
                                 craftsmanship,
@@ -972,10 +1026,10 @@ public partial class OptimizedRecipeNote : ModuleBase
                                 copyLinkPayload,
                                 previewLinkPayload
                             );
-                            PrintActionsMessage(caculationResults[id]);
+                            PrintActionsMessage(calculationResults[id]);
                             return true;
                         case RaphaelCalculationStatus.Failed:
-                            caculateRecipeButton.IsEnabled = true;
+                            calculateRecipeButton.IsEnabled = true;
                             if (!string.IsNullOrWhiteSpace(response.ErrorMessage))
                                 NotifyHelper.Instance().ChatError(response.ErrorMessage);
 
@@ -989,23 +1043,23 @@ public partial class OptimizedRecipeNote : ModuleBase
             );
         };
 
-        caculateRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
+        calculateRecipeButton.AttachNode(RecipeNoteAddon->GetNodeById(57));
     }
 
     private void UpdateCaculateRecipeButton()
     {
         if (!config.IsCaculateRecipeButton ||
-            caculateRecipeButton == null)
+            calculateRecipeButton == null)
             return;
 
         if (!TryGetCurrentRecipe(out _, out var recipe) ||
             recipe.CraftType.RowId != LocalPlayerState.ClassJob - 8)
         {
-            caculateRecipeButton.IsVisible = false;
+            calculateRecipeButton.IsVisible = false;
             return;
         }
 
-        caculateRecipeButton.IsVisible = true;
+        calculateRecipeButton.IsVisible = true;
     }
 
     #endregion
@@ -1027,14 +1081,14 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (installRaphaelTask != null) return;
 
         installRaphaelTask = IFramework.Instance()
-                                     .RunOnTick
-                                     (async () => await DalamudReflector.AddPlugin
-                                                  (
-                                                      "https://raw.githubusercontent.com/AtmoOmen/DalamudPlugins/main/pluginmaster.json",
-                                                      "Raphael.Dalamud"
-                                                  )
-                                     )
-                                     .ContinueWith(_ => installRaphaelTask = null);
+                                       .RunOnTick
+                                       (async () => await DalamudReflector.AddPlugin
+                                                    (
+                                                        "https://raw.githubusercontent.com/AtmoOmen/DalamudPlugins/main/pluginmaster.json",
+                                                        "Raphael.Dalamud"
+                                                    )
+                                       )
+                                       .ContinueWith(_ => installRaphaelTask = null);
     }
 
     private void OnClickPreviewPayload
@@ -1043,7 +1097,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         SeString _
     )
     {
-        if (caculationResults.FirstOrDefault(x => x.Value.PreviewLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
+        if (calculationResults.FirstOrDefault(x => x.Value.PreviewLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
 
         AddonActionsPreview.OpenWithActions(this, result.Value);
     }
@@ -1054,14 +1108,15 @@ public partial class OptimizedRecipeNote : ModuleBase
         SeString _
     )
     {
-        if (caculationResults.FirstOrDefault(x => x.Value.CopyLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result) return;
+        if (calculationResults.FirstOrDefault(x => x.Value.CopyLinkPayload.CommandId == id) is not { Value.RecipeID: > 0 } result)
+            return;
 
         var builder = new StringBuilder();
         foreach (var action in result.Value.Actions)
             builder.AppendLine($"/ac {LuminaWrapper.GetActionName(action)} <wait.3>");
         ImGui.SetClipboardText(builder.ToString());
 
-        NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}");
+        NotifyHelper.Toast(Lang.Get("OptimizedRecipeNote-Message-MacrosCopied"));
     }
 
     #endregion
@@ -1070,65 +1125,59 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private static void PrintActionsMessage
     (
-        CaculationResult result
+        CalculationResult result
     )
     {
-        var builder = new SeStringBuilder();
-        builder.AddText($"{Lang.Get("OptimizedRecipeNote-Message-CaculationResult")}")
-               .Add(NewLinePayload.Payload)
-               .AddText($"{Lang.Get("Recipe")}: ")
-               .AddItemLink(result.GetRecipe().ItemResult.RowId)
-               .AddText(" (")
-               .AddIcon(result.GetJob().ToBitmapFontIcon())
-               .AddText(result.GetJob().Name.ToString())
-               .AddText(")")
-               .Add(NewLinePayload.Payload)
-               .AddText($"{Lang.Get("Step")}: ")
-               .AddText($"{Lang.Get("OptimizedRecipeNote-Message-StepsInfo", result.Actions.Count, result.Actions.Count * 3)}")
-               .Add(NewLinePayload.Payload)
-               .AddText($"{Lang.Get("Operation")}: ")
-               .Add(RawPayload.LinkTerminator)
-               .Add(result.CopyLinkPayload)
-               .AddText("[")
-               .AddUiForeground(35)
-               .AddText($"{Lang.Get("Copy")}")
-               .AddUiForegroundOff()
-               .AddText("]")
-               .Add(RawPayload.LinkTerminator)
-               .AddText(" / ")
-               .Add(RawPayload.LinkTerminator)
-               .Add(result.PreviewLinkPayload)
-               .AddText("[")
-               .AddUiForeground(35)
-               .AddText($"{Lang.Get("Preview")}")
-               .AddUiForegroundOff()
-               .AddText("]")
-               .Add(RawPayload.LinkTerminator);
+        using var rented = new RentedSeStringBuilder();
 
-        // TODO: 改成 ReadOnlyString
-        NotifyHelper.Instance().Chat(builder.Build().Encode());
+        var classJobString = rented.AppendIcon((uint)result.GetJob().ToBitmapFontIcon())
+                                   .Append(result.GetJob().Name)
+                                   .ToReadOnlySeString();
+        rented.Clear();
+
+        rented.Append
+              (
+                  Lang.GetSe
+                  (
+                      "OptimizedRecipeNote-Message-SolveResult",
+                      new Dictionary<string, object>
+                      {
+                          ["classJob"] = classJobString,
+                          ["item"]     = ReadOnlySeString.CreateItemLink(result.GetRecipe().ItemResult.RowId, false),
+                          ["step"]     = result.Actions.Count,
+                          ["second"]   = result.Actions.Count * 3
+                      }
+                  )
+              )
+              .AppendNewLine()
+              .AppendDalamudSeString(result.CopyLinkPayload)
+              .Append("  \ue06f ")
+              .Append(Lang.Get("OptimizedRecipeNote-Message-CopyAsMacro"))
+              .PopLink()
+              .AppendNewLine()
+              .AppendDalamudSeString(result.PreviewLinkPayload)
+              .Append("  \ue06f ")
+              .Append(Lang.Get("OptimizedRecipeNote-Message-PreviewSteps"))
+              .PopLink();
+
+        NotifyHelper.Instance().Chat(rented.ToReadOnlySeString());
     }
 
     private void PrintInstallRaphaelPluginMessage()
     {
         installRaphaelLinkPayload ??= LinkPayloadManager.Instance().Reg(OnClickInstallRaphaelPayload, out _);
 
-        var message = new SeStringBuilder().AddIcon(BitmapFontIcon.Warning)
-                                           .AddText($" {Lang.Get("OptimizedRecipeNote-Message-InstallRapheal")}")
-                                           .Add(NewLinePayload.Payload)
-                                           .AddText($"{Lang.Get("Operation")}: ")
-                                           .Add(RawPayload.LinkTerminator)
-                                           .Add(installRaphaelLinkPayload)
-                                           .AddText("[")
-                                           .AddUiForeground(35)
-                                           .AddText($"{Lang.Get("Enable")} / {Lang.Get("Install")}")
-                                           .AddUiForegroundOff()
-                                           .AddText("]")
-                                           .Add(RawPayload.LinkTerminator)
-                                           .Build();
+        using var rented = new RentedSeStringBuilder();
+        rented.AppendIcon((uint)BitmapFontIcon.Warning)
+              .Append(Lang.Get("OptimizedRecipeNote-Message-InstallRaphael"))
+              .AppendNewLine()
+              .AppendDalamudSeString(installRaphaelLinkPayload)
+              .Append("  \ue06f ")
+              .Append(Lang.Get("OptimizedRecipeNote-Message-ToInstall"))
+              .PopLink();
 
-        // TODO: 改成 ReadOnlyString
-        NotifyHelper.Instance().Chat(message.Encode());
+        NotifyHelper.Instance().Chat(rented.ToReadOnlySeString());
+        NotifyHelper.ToastError(Lang.Get("OptimizedRecipeNote-Message-InstallRaphael"));
     }
 
     #endregion
@@ -1208,7 +1257,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     #endregion
 
     #region 工具
-    
+
     private static unsafe bool TryGetCurrentRecipe
     (
         out uint   recipeID,
@@ -1233,6 +1282,12 @@ public partial class OptimizedRecipeNote : ModuleBase
         return true;
     }
 
+    private static int GetRecipeMaxProgress
+    (
+        Recipe recipe
+    ) =>
+        (int)(GetRecipeLevelTable(recipe).Difficulty * (float)recipe.DifficultyFactor / 100f);
+
     private static int GetRecipeMaxQuality
     (
         Recipe recipe
@@ -1249,9 +1304,11 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     #endregion
 
-    private record CaculationResult
+    private record CalculationResult
     (
         List<uint>         Actions,
+        int                FinalProgress,
+        int                FinalQuality,
         uint               RecipeID,
         int                CraftPoint,
         int                Craftmanship,
