@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using Dalamud.Game.Text;
 using Newtonsoft.Json.Linq;
 using OmenTools.OmenService;
@@ -75,13 +75,25 @@ public partial class AutoReplyChatBot
         }
 
         ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.SliderInt(Lang.Get("AutoReplyChatBot-MaxTokens"), ref config.MaxTokens, 256, 8192))
+
+        if (ImGui.InputInt(Lang.Get("AutoReplyChatBot-MaxTokens"), ref config.MaxTokens, 256, 1024))
+        {
+            config.MaxTokens = Math.Max(1, config.MaxTokens);
             RequestSaveConfig();
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-MaxTokens-Help"));
 
-        ImGui.SetNextItemWidth(fieldW);
-        if (ImGui.SliderFloat(Lang.Get("AutoReplyChatBot-Temperature"), ref config.Temperature, 0.0f, 2.0f))
+        if (ImGui.Checkbox($"{Lang.Get("AutoReplyChatBot-SendTemperature")}##Main", ref config.SendTemperature))
             RequestSaveConfig();
+
+        using (ImRaii.Disabled(!config.SendTemperature))
+        {
+            ImGui.SetNextItemWidth(fieldW);
+            if (ImGui.SliderFloat(Lang.Get("AutoReplyChatBot-Temperature"), ref config.Temperature, 0.0f, 2.0f))
+                RequestSaveConfig();
+        }
+
         ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-Temperature-Help"));
     }
 
@@ -95,13 +107,20 @@ public partial class AutoReplyChatBot
         using (ImRaii.PushIndent())
         {
             var currentProvider = config.Provider;
+
             if (ImGui.RadioButton("OpenAI", currentProvider == APIProvider.OpenAI))
+            {
                 config.Provider = APIProvider.OpenAI;
+                RequestSaveConfig();
+            }
 
             ImGui.SameLine();
+
             if (ImGui.RadioButton("Ollama", currentProvider == APIProvider.Ollama))
+            {
                 config.Provider = APIProvider.Ollama;
-            RequestSaveConfig();
+                RequestSaveConfig();
+            }
         }
 
         ImGui.NewLine();
@@ -118,6 +137,13 @@ public partial class AutoReplyChatBot
         ImGui.SetNextItemWidth(fieldW);
         if (ImGui.InputText(Lang.Get("AutoReplyChatBot-Model"), ref config.Model, 128))
             RequestSaveConfig();
+
+        if (config.Provider == APIProvider.OpenAI)
+        {
+            if (ImGui.Checkbox($"{Lang.Get("AutoReplyChatBot-UseMaxCompletionTokens")}##Main", ref config.UseMaxCompletionTokens))
+                RequestSaveConfig();
+            ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-UseMaxCompletionTokens-Help"));
+        }
     }
 
     private void DrawFilterTab
@@ -137,6 +163,22 @@ public partial class AutoReplyChatBot
             if (ImGui.InputText($"{Lang.Get("AutoReplyChatBot-Model")}##FilterModelInput", ref config.FilterModel, 128))
                 RequestSaveConfig();
             ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-FiterModelChoice-Help"));
+
+            ImGui.SetNextItemWidth(fieldW);
+
+            if (ImGui.InputInt($"{Lang.Get("AutoReplyChatBot-MaxTokens")}##FilterMaxTokens", ref config.FilterMaxTokens, 256, 1024))
+            {
+                config.FilterMaxTokens = Math.Max(1, config.FilterMaxTokens);
+                RequestSaveConfig();
+            }
+
+            if (config.Provider == APIProvider.OpenAI &&
+                ImGui.Checkbox($"{Lang.Get("AutoReplyChatBot-UseMaxCompletionTokens")}##Filter", ref config.FilterUseMaxCompletionTokens))
+                RequestSaveConfig();
+
+            if (ImGui.Checkbox($"{Lang.Get("AutoReplyChatBot-SendTemperature")}##Filter", ref config.FilterSendTemperature))
+                RequestSaveConfig();
+            ImGuiOm.HelpMarker(Lang.Get("AutoReplyChatBot-FilterRequestOptions-Help"));
 
             ImGui.NewLine();
 
@@ -448,7 +490,7 @@ public partial class AutoReplyChatBot
         float promptH
     )
     {
-        var keys = conversationStore!.GetKeys().ToArray();
+        var keys = conversationStore.GetKeys().ToArray();
 
         var noneLabel   = Lang.Get("None");
         var displayKeys = new List<string>(keys.Length + 1) { string.Empty };
@@ -490,7 +532,7 @@ public partial class AutoReplyChatBot
             if (config.HistoryKeyIndex > 0)
             {
                 var currentKey = displayKeys[config.HistoryKeyIndex];
-                conversationStore!.DeleteConversation(currentKey);
+                conversationStore.DeleteConversation(currentKey);
             }
         }
 
@@ -498,7 +540,7 @@ public partial class AutoReplyChatBot
             return;
 
         var currentKey2 = displayKeys[config.HistoryKeyIndex];
-        var entries     = conversationStore!.GetTurns(currentKey2);
+        var entries     = conversationStore.GetTurns(currentKey2);
 
         using (ImRaii.Child("##HistoryViewer", new(promptW, promptH), true))
         {
@@ -528,7 +570,7 @@ public partial class AutoReplyChatBot
                             {
                                 try
                                 {
-                                    var delConv = conversationStore!.GetOrLoad(currentKey2);
+                                    var delConv = conversationStore.GetOrLoad(currentKey2);
                                     if (i < delConv.RecentTurns.Count)
                                         delConv.RecentTurns.RemoveAt(i);
                                     break;
