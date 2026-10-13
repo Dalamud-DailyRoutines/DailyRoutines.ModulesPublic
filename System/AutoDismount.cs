@@ -95,6 +95,9 @@ public unsafe class AutoDismount : ModuleBase
         // 技能当前不可用
         if (!actionManager->IsActionOffCooldown(actionType, actionID)) return false;
 
+        // 自动派生的原技能不下坐骑
+        if (actionType == ActionType.Action && actionRow.SecondaryCostType == 73) return false;
+
         // 可以自身或地面为目标的技能
         if (actionRow is { CanTargetSelf: true } or { TargetArea: true }) return true;
 
