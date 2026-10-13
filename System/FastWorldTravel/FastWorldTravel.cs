@@ -32,16 +32,15 @@ public partial class FastWorldTravel : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title = Lang.Get("FastWorldTravelTitle"),
-        Description = Lang.Get("FastWorldTravelDescription", COMMAND) +
-                      (!GameState.IsCN ?
-                           string.Empty :
-                           "\n支持快捷超域旅行并实时显示各服务器超域旅行拥挤度 [国服特供]"),
-        Category = ModuleCategory.System,
-        ModulesPair =
-        [
-            "InstantReturn",
-            "InstantTeleport"
-        ],
+        Description = Lang.Get
+        (
+            "FastWorldTravelDescription",
+            new Dictionary<string, object>
+            {
+                ["command"] = COMMAND
+            }
+        ),
+        Category            = ModuleCategory.System,
         ModulesPrerequisite = ["InstantLogout"]
     };
 
@@ -256,7 +255,7 @@ public partial class FastWorldTravel : ModuleBase
         NotifyHelper.Toast(message);
         
         // 跨大区
-        if (LuminaWrapper.GetWorldDC(worldID) != GameState.CurrentDataCenter)
+        if (GameState.IsCN && LuminaWrapper.GetWorldDC(worldID) != GameState.CurrentDataCenter)
         {
             EnqueueDCTravel(worldID);
             return;
@@ -569,11 +568,13 @@ public partial class FastWorldTravel : ModuleBase
         }
         
         // 非国服跨大区
-        if (!GameState.IsCN &&
-            LuminaWrapper.GetWorldDC(targetWorld) != GameState.CurrentDataCenter)
+        if (LuminaWrapper.GetWorldDC(targetWorld) != GameState.CurrentDataCenter)
         {
-            NotifyHelper.ToastError(Lang.Get("FastWorldTravel-Notification-CrossDCTravel"));
-            return true;
+            if (!AddonDRFastWorldTravel.IsAbleToCrossDC)
+            {
+                NotifyHelper.ToastError(Lang.Get("FastWorldTravel-Notification-CrossDCTravel"));
+                return true;
+            }
         }
         
         return false;
