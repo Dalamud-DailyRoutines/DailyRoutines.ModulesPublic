@@ -11,6 +11,7 @@ using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
@@ -27,7 +28,6 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using Action = System.Action;
-using AgentRetainer = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentRetainer;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 

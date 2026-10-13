@@ -6,6 +6,8 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
@@ -14,8 +16,6 @@ using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using AddonFreeShop = FFXIVClientStructs.Expansion.FFXIV.Client.UI.AddonFreeShop;
-using AgentFreeShop = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentFreeShop;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
@@ -121,7 +121,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
                         return true;
                     }
 
-                    if ((uint)index >= currentAgent->ItemCount || currentAgent->Items[index].ItemID != itemID)
+                    if ((uint)index >= currentAgent->ItemCount || currentAgent->Items[index].ItemId != itemID)
                     {
                         TaskHelper.Abort();
                         return true;
@@ -216,7 +216,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
             if (jobLayout == null || !HostAddon->IsAddonAndNodesReady()) return;
 
             var host        = (AddonFreeShop*)HostAddon;
-            var classJobs   = host->ClassJobIDs[..(int)host->ClassJobCount];
+            var classJobs   = host->ClassJobIds[..(int)host->ClassJobCount];
             var jobsChanged = jobItems.Count != classJobs.Length - 1;
 
             for (var i = 1; i < classJobs.Length; i++)
@@ -238,12 +238,12 @@ public unsafe class OptimizedFreeShop : ModuleBase
 
             foreach (var item in host->Items[..(int)host->ItemCount])
             {
-                if (!LuminaGetter.TryGetRow(item.ClassJobCategoryID, out ClassJobCategory category)) continue;
+                if (!LuminaGetter.TryGetRow(item.ClassJobCategoryId, out ClassJobCategory category)) continue;
 
                 foreach (var (classJobID, items) in jobItems)
                 {
                     if (category.IsClassJobIn(classJobID))
-                        items.Add((item.Index, item.ItemID));
+                        items.Add((item.Index, item.ItemId));
                 }
             }
 
@@ -380,7 +380,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
         {
             if (!HostAddon->IsAddonAndNodesReady()) return;
 
-            var selectedClassJobID = ((AddonFreeShop*)HostAddon)->SelectedClassJobID;
+            var selectedClassJobID = ((AddonFreeShop*)HostAddon)->SelectedClassJobId;
             if (highlightedClassJobID == selectedClassJobID) return;
 
             foreach (var (classJobID, highlight) in jobHighlights)
