@@ -321,7 +321,7 @@ public partial class FastWorldTravel
 
                 if (clientWorlds.FirstOrDefault(x => x.WorldID == worldID) is { WorldID: > 0 } clientWorldData)
                 {
-                    isAbleToGoTo = clientWorldData.LogMessageID == 1;
+                    isAbleToGoTo = clientWorldData.LogMessageID == 0;
                     if (clientWorldData.LogMessageID > 0)
                         tooltip = LuminaWrapper.GetLogMessageText(clientWorldData.LogMessageID);
                 }
