@@ -10,7 +10,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models.Native;
+using AgentTradeMultiple = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentTradeMultiple;
 using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -139,7 +139,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
                         if (node->Width == 300)
                             node->SetWidth(400);
 
-                        if (node->X == 267)
+                        if (node->X.Equals(267f))
                             node->SetPositionFloat(367, 6);
                     }
 

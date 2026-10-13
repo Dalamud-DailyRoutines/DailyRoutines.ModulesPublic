@@ -9,7 +9,6 @@ using Dalamud.Utility;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
-using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.CircleButton;
@@ -302,14 +301,14 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
 
             var hintNode = new TextNode
             {
-                Position         = new(0, contentHeight),
-                Size             = new(overlayWidth, 22),
-                FontSize         = 13,
-                TextFlags        = TextFlags.Edge,
-                TextColor        = ColorHelper.GetColor(7),
-                TextOutlineColor = ColorHelper.GetColor(28),
-                AlignmentType    = AlignmentType.Center,
-                String           = Lang.Get("AutoPreviewColorsInDye-Hint", getConflictKeyString())
+                Position           = new(0, contentHeight),
+                Size               = new(overlayWidth, 22),
+                FontSize           = 13,
+                TextFlags          = TextFlags.Edge,
+                TextColorID        = 7,
+                TextOutlineColorID = 28,
+                AlignmentType      = AlignmentType.Center,
+                String             = Lang.Get("AutoPreviewColorsInDye-Hint", getConflictKeyString())
             };
             hintNode.AttachNode(this);
             dynamicNodes.Add(hintNode);
@@ -730,7 +729,7 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
                 Position      = new(10, 5),
                 Size          = new(90, height),
                 FontSize      = 14,
-                TextColor     = ColorHelper.GetColor(2),
+                TextColorID   = 2,
                 AlignmentType = AlignmentType.Left,
                 String        = label
             };

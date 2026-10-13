@@ -13,11 +13,11 @@ using DailyRoutines.RemoteInteraction.ISPTranslation;
 using DailyRoutines.RemoteInteraction.ISPTranslation.Models.Responses;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
-using FFXIVClientStructs.FFXIV.Application.Network;
 using Newtonsoft.Json;
 using OmenTools.Dalamud;
 using OmenTools.OmenService;
 using Framework = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework;
+using NetworkModule = FFXIVClientStructs.Expansion.FFXIV.Application.Network.NetworkModule;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -418,7 +418,6 @@ public class AutoDisplayNetworkLatency : ModuleBase
             return changed;
         }
 
-        // TODO: 等待 FFCS 合并把 ZoneClient 变成 public
         private static unsafe ZoneEndpoint? GetZoneEndpoint()
         {
             var framework = Framework.Instance();
@@ -429,7 +428,9 @@ public class AutoDisplayNetworkLatency : ModuleBase
             if (networkModuleProxy == null || networkModuleProxy->NetworkModule == null)
                 return null;
 
-            var zoneClient = *(ZoneClient**)((byte*)networkModuleProxy->NetworkModule + 0xA70);
+            var module = (NetworkModule*)networkModuleProxy->NetworkModule;
+
+            var zoneClient = module->ZoneClient;
             if (zoneClient == null)
                 return null;
 

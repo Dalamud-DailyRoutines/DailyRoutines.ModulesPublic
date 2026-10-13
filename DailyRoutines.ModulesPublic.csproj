@@ -25,45 +25,37 @@
     </ItemDefinitionGroup>
 
     <ItemGroup>
-        <PackageReference Include="DailyRoutines.CodeAnalysis" Version="2.6.0" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+        <PackageReference Include="DailyRoutines.CodeAnalysis" Version="2.6.0" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive"/>
         <PackageReference Include="TimeAgo.Core" Version="1.1.0"/>
         <PackageReference Include="TinyPinyin" Version="1.1.0"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\DailyRoutines\DailyRoutines.csproj"
-                          Condition="Exists('..\DailyRoutines\DailyRoutines.csproj')"/>
-        <Reference Include="DailyRoutines"
-                   Condition="!Exists('..\DailyRoutines\DailyRoutines.csproj')">
+        <Reference Include="Iced" Private="false"/>
+
+        <ProjectReference Include="..\DailyRoutines\DailyRoutines.csproj" Condition="Exists('..\DailyRoutines\DailyRoutines.csproj')"/>
+        <Reference Include="DailyRoutines" Condition="!Exists('..\DailyRoutines\DailyRoutines.csproj')">
             <HintPath>$(DailyRoutinesLibPath)DailyRoutines.dll</HintPath>
         </Reference>
 
-        <ProjectReference Include="..\DailyRoutines.Common\DailyRoutines.Common.csproj"
-                          Condition="Exists('..\DailyRoutines.Common\DailyRoutines.Common.csproj')"/>
-        <Reference Include="DailyRoutines.Common"
-                   Condition="!Exists('..\DailyRoutines.Common\DailyRoutines.Common.csproj')">
+        <ProjectReference Include="..\DailyRoutines.Common\DailyRoutines.Common.csproj" Condition="Exists('..\DailyRoutines.Common\DailyRoutines.Common.csproj')"/>
+        <Reference Include="DailyRoutines.Common" Condition="!Exists('..\DailyRoutines.Common\DailyRoutines.Common.csproj')">
             <HintPath>$(DailyRoutinesLibPath)DailyRoutines.Common.dll</HintPath>
         </Reference>
 
-        <ProjectReference Include="..\lib\EdgeTTS\EdgeTTS.csproj"
-                          Condition="Exists('..\lib\EdgeTTS\EdgeTTS.csproj')"/>
-        <Reference Include="EdgeTTS"
-                   Condition="!Exists('..\lib\EdgeTTS\EdgeTTS.csproj')">
+        <ProjectReference Include="..\lib\EdgeTTS\EdgeTTS.csproj" Condition="Exists('..\lib\EdgeTTS\EdgeTTS.csproj')"/>
+        <Reference Include="EdgeTTS" Condition="!Exists('..\lib\EdgeTTS\EdgeTTS.csproj')">
             <HintPath>$(DailyRoutinesLibPath)EdgeTTS.dll</HintPath>
         </Reference>
 
-        <ProjectReference Include="..\lib\KamiToolKit\KamiToolKit.csproj"
-                          Condition="Exists('..\lib\KamiToolKit\KamiToolKit.csproj')"/>
-        <Reference Include="KamiToolKit"
-                   Condition="!Exists('..\lib\KamiToolKit\KamiToolKit.csproj')">
+        <ProjectReference Include="..\lib\KamiToolKit\KamiToolKit.csproj" Condition="Exists('..\lib\KamiToolKit\KamiToolKit.csproj')"/>
+        <Reference Include="KamiToolKit" Condition="!Exists('..\lib\KamiToolKit\KamiToolKit.csproj')">
             <HintPath>$(DailyRoutinesLibPath)KamiToolKit.dll</HintPath>
         </Reference>
-        <ProjectReference Include="..\lib\OmenTools.KamiToolKit\OmenTools.KamiToolKit.csproj" />
+        <ProjectReference Include="..\lib\OmenTools.KamiToolKit\OmenTools.KamiToolKit.csproj"/>
 
-        <ProjectReference Include="..\lib\OmenTools\OmenTools.csproj"
-                          Condition="Exists('..\lib\OmenTools\OmenTools.csproj')"/>
-        <Reference Include="OmenTools"
-                   Condition="!Exists('..\lib\OmenTools\OmenTools.csproj')">
+        <ProjectReference Include="..\lib\OmenTools\OmenTools.csproj" Condition="Exists('..\lib\OmenTools\OmenTools.csproj')"/>
+        <Reference Include="OmenTools" Condition="!Exists('..\lib\OmenTools\OmenTools.csproj')">
             <HintPath>$(DailyRoutinesLibPath)OmenTools.dll</HintPath>
         </Reference>
     </ItemGroup>

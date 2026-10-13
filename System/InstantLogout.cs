@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
-using AgentShowDelegate = OmenTools.Interop.Game.Models.Native.AgentShowDelegate;
+using AgentShowDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentShowDelegate;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -199,14 +199,14 @@ public unsafe class InstantLogout : ModuleBase
     )
     {
         taskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(167, ContentsFinderHelper.DefaultOption));
-        
+
         // 避免那边修改不到
         taskHelper.DelayNext(500);
-        
+
         // 实际上为帧数倒数 TODO：FFCS
         taskHelper.Enqueue
         (
-            () => AgentLobby.Instance()->HoveredCharacterIndex == 0 &&
+            () => AgentLobby.Instance()->FramesUntilLogout == 0 &&
                   !GameState.IsLoggedIn,
             timeoutMS: 5_000,
             timeoutAction: () =>

@@ -14,7 +14,7 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.Interop.Game.Models.Native;
+using GCShopEventHandler = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Event.GCShopEventHandler;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;
@@ -64,7 +64,7 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
     private GCShopReloadDelegate? GCShopReload;
 
     private (uint ItemID, int Count, byte SubCategory, byte Tier) pendingExchange;
-    
+
     private Config config = null!;
 
     private DRFastGCExchange? addon;
@@ -412,10 +412,10 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
     #region IPC
 
     [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.IsBusy")]
-    private bool IsCurrentlyBusy => TaskHelper?.IsBusy ?? false;
+    public bool IsCurrentlyBusy => TaskHelper?.IsBusy ?? false;
 
     [IPCProvider("DailyRoutines.Modules.FastGrandCompanyExchange.EnqueueByName")]
-    private bool EnqueueByNameIPC
+    public bool EnqueueByNameIPC
     (
         string itemName,
         int    itemCount
