@@ -91,32 +91,46 @@ public class ContentFinderCommand : ModuleBase
         if (arguments.Length is not (2 or 3)) return;
 
         if (!DutyTypes.TryGetValue(arguments[0], out var dutyType))
+        {
+            NotifyInvalidArgument(1, Lang.Get("ContentFinderCommand-DutyType"), args);
             return;
+        }
 
         if (!TryParseContent(arguments[1], dutyType.dutyType, out var contentIds))
+        {
+            NotifyInvalidArgument(2, Lang.Get("ModuleCategory-Duty"), args);
             return;
+        }
 
         var options = new ContentsFinderOption { Config817to820 = true };
         if (arguments.Length == 3 &&
             !TryParseContentSettings(arguments[2], dutyType.dutyType, ref options))
         {
-            NotifyHelper.Instance().ChatError
-            (
-                ISeStringEvaluator.Instance().EvaluateFromLogMessage
-                (
-                    3802,
-                    [
-                        1,
-                        LuminaWrapper.GetAddonText(9448),
-                        args
-                    ]
-                )
-            );
+            NotifyInvalidArgument(3, Lang.Get("ContentFinderCommand-Options"), args);
             return;
         }
 
         ExecuteDutyRequest(dutyType.dutyType, contentIds, options);
     }
+
+    private static void NotifyInvalidArgument
+    (
+        int    argumentIndex,
+        string argumentName,
+        string args
+    ) =>
+        NotifyHelper.Instance().ChatError
+        (
+            ISeStringEvaluator.Instance().EvaluateFromLogMessage
+            (
+                3802,
+                [
+                    argumentIndex,
+                    argumentName,
+                    args
+                ]
+            )
+        );
 
     private static void ExecuteDutyRequest
     (
