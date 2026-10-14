@@ -40,7 +40,7 @@ public unsafe class MacroIntoActionQueue : ModuleBase
         queueState                          = ActionManager.UseActionMode.Queue;
         ActionManager.Instance()->QueueType = ActionManager.UseActionMode.Queue;
 
-        // 冲刺重定向
+        // 冲刺
         if (actionType == ActionType.GeneralAction && actionID == 4)
         {
             actionType = ActionType.Action;
