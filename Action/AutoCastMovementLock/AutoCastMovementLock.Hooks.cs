@@ -2,6 +2,8 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Dalamud.Hooking;
 using OmenTools.Interop.Game.Models;
+using PlayerMoveControllerFlyControl = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.PlayerMoveControllerFlyControl;
+using PlayerMoveControllerWalk = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.PlayerMoveControllerWalk;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -10,45 +12,45 @@ public unsafe partial class AutoCastMovementLock
     private static readonly CompSig ReadWalkInputSig = new("E8 ?? ?? ?? ?? 80 7B 3E 00 48 8D 3D");
     private delegate void ReadWalkInputDelegate
     (
-        nint   self,
-        float* left,
-        float* forward,
-        float* turn,
-        byte*  backwardOrStrafe,
-        byte*  a6,
-        byte   additive
+        PlayerMoveControllerWalk* self,
+        float*                    left,
+        float*                    forward,
+        float*                    turn,
+        byte*                     backwardOrStrafe,
+        byte*                     a6,
+        byte                      additive
     );
     private Hook<ReadWalkInputDelegate> ReadWalkInputHook;
 
     private static readonly CompSig ReadFlyInputSig = new("E8 ?? ?? ?? ?? 0F B6 0D ?? ?? ?? ?? B8");
     private delegate void ReadFlyInputDelegate
     (
-        nint      self,
-        FlyInput* input
+        PlayerMoveControllerFlyControl* self,
+        FlyInput*                       input
     );
     private Hook<ReadFlyInputDelegate> ReadFlyInputHook;
 
     private static readonly CompSig MouseMovementSig = new("48 8B C4 48 89 70 18 48 89 78 20 55 41 56");
     private delegate void MouseMovementDelegate
     (
-        nint     self,
-        float    horizontal,
-        float    vertical,
-        char     a4,
-        byte     alignWithCamera,
-        Vector3* direction
+        PlayerMoveControllerWalk* self,
+        float                     horizontal,
+        float                     vertical,
+        char                      a4,
+        byte                      alignWithCamera,
+        Vector3*                  direction
     );
     private Hook<MouseMovementDelegate> MouseMovementHook;
 
     private void ReadWalkInputDetour
     (
-        nint   self,
-        float* left,
-        float* forward,
-        float* turn,
-        byte*  backwardOrStrafe,
-        byte*  a6,
-        byte   additive
+        PlayerMoveControllerWalk* self,
+        float*                    left,
+        float*                    forward,
+        float*                    turn,
+        byte*                     backwardOrStrafe,
+        byte*                     a6,
+        byte                      additive
     )
     {
         ReadWalkInputHook.Original(self, left, forward, turn, backwardOrStrafe, a6, additive);
@@ -64,8 +66,8 @@ public unsafe partial class AutoCastMovementLock
 
     private void ReadFlyInputDetour
     (
-        nint      self,
-        FlyInput* input
+        PlayerMoveControllerFlyControl* self,
+        FlyInput*                       input
     )
     {
         ReadFlyInputHook.Original(self, input);
@@ -82,18 +84,18 @@ public unsafe partial class AutoCastMovementLock
 
     private void MouseMovementDetour
     (
-        nint     self,
-        float    horizontal,
-        float    vertical,
-        char     a4,
-        byte     alignWithCamera,
-        Vector3* direction
+        PlayerMoveControllerWalk* self,
+        float                     horizontal,
+        float                     vertical,
+        char                      a4,
+        byte                      alignWithCamera,
+        Vector3*                  direction
     )
     {
         if (IObjectTable.Instance().LocalPlayer is not { } localPlayer)
             return;
 
-        if (*(byte*)(self + MOUSE_MOVEMENT_FLAG_OFFSET) != 0 &&
+        if (self->UnknownFlag63 &&
             inputInterceptor.ShouldBlockMovement(localPlayer))
             return;
 
@@ -110,10 +112,4 @@ public unsafe partial class AutoCastMovementLock
         [FieldOffset(8)]
         public float Up;
     }
-
-    #region 常量
-
-    private const int MOUSE_MOVEMENT_FLAG_OFFSET = 63;
-
-    #endregion
 }
