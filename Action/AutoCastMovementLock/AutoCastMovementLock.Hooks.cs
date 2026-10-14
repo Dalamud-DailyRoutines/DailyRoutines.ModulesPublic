@@ -1,7 +1,7 @@
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Dalamud.Hooking;
 using OmenTools.Interop.Game.Models;
+using FlyInput = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.FlyInput;
 using PlayerMoveControllerFlyControl = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.PlayerMoveControllerFlyControl;
 using PlayerMoveControllerWalk = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.PlayerMoveControllerWalk;
 
@@ -95,21 +95,10 @@ public unsafe partial class AutoCastMovementLock
         if (IObjectTable.Instance().LocalPlayer is not { } localPlayer)
             return;
 
-        if (self->UnknownFlag63 &&
+        if (self->IsCameraOrientationActive &&
             inputInterceptor.ShouldBlockMovement(localPlayer))
             return;
 
         MouseMovementHook.Original(self, horizontal, vertical, a4, alignWithCamera, direction);
-    }
-
-    [StructLayout(LayoutKind.Explicit, Size = 24)]
-    private struct FlyInput
-    {
-        [FieldOffset(0)]
-        public float Forward;
-        [FieldOffset(4)]
-        public float Left;
-        [FieldOffset(8)]
-        public float Up;
     }
 }
