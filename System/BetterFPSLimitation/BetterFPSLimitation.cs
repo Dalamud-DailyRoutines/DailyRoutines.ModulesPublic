@@ -164,10 +164,10 @@ public partial class BetterFPSLimitation : ModuleBase
                     (
                         ISeStringEvaluator.Instance().EvaluateFromLogMessage
                         (
-                            3802,
+                            3803,
                             [
                                 1,
-                                LuminaWrapper.GetAddonText(9448),
+                                Lang.Get("BetterFPSLimitation-MaxFPS"),
                                 args
                             ]
                         )
