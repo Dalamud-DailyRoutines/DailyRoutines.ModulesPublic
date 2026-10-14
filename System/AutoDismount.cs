@@ -29,19 +29,18 @@ public unsafe class AutoDismount : ModuleBase
 
     private static readonly CompSig IsActionUsableSig =
         new("48 89 5C 24 ?? 55 56 57 48 83 EC ?? 32 DB 41 8B F8 48 83 3D ?? ?? ?? ?? ?? 8B F2 48 8B E9");
-
     private delegate byte IsActionUsableDelegate
     (
         ActionManager* actionManager,
         ActionType     actionType,
         uint           actionID
     );
-
-    private static IsActionUsableDelegate IsActionUsable = null!;
+    private IsActionUsableDelegate IsActionUsable = null!;
 
     protected override void Init()
     {
         IsActionUsable = IsActionUsableSig.GetDelegate<IsActionUsableDelegate>();
+
         TaskHelper ??= new() { TimeoutMS = 1_500 };
 
         UseActionManager.Instance().RegPostUseAction(OnUseAction);
@@ -86,7 +85,7 @@ public unsafe class AutoDismount : ModuleBase
         );
     }
 
-    private static bool IsNeedToDismount
+    private bool IsNeedToDismount
     (
         ActionType actionType,
         uint       actionID,
