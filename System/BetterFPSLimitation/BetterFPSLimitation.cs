@@ -150,31 +150,15 @@ public partial class BetterFPSLimitation : ModuleBase
             
             case "on":
                 config.IsEnabled = true;
-                
-                var setMessage = Lang.Get
-                (
-                    "BetterFPSLimitationTitle-Notification-Set",
-                    new Dictionary<string, object>
-                    {
-                        ["fps"] = config.Limitation
-                    }
-                );
-                NotifyHelper.Instance().Chat(setMessage);
-                NotifyHelper.Toast(setMessage);
                 break;
             
             case "off":
                 config.IsEnabled = false;
-                
-                var unsetMessage = Lang.Get("BetterFPSLimitationTitle-Notification-Unset");
-                NotifyHelper.Instance().Chat(unsetMessage);
-                NotifyHelper.Toast(unsetMessage);
                 break;
             
             case "toggle":
-                if (config.IsEnabled)
-                    goto case "off";
-                goto case "on";
+                config.IsEnabled ^= true;
+                break;
                 
             default:
                 if (!short.TryParse(args, out var targetFPS) || targetFPS < 1)
@@ -195,9 +179,20 @@ public partial class BetterFPSLimitation : ModuleBase
                 }
 
                 config.Limitation = targetFPS;
-                config.IsEnabled  = true;
                 goto case "on";
         }
+        
+        var message = config.IsEnabled
+                          ? Lang.Get(
+                              "BetterFPSLimitationTitle-Notification-Set",
+                              new Dictionary<string, object>
+                              {
+                                  ["fps"] = config.Limitation
+                              }
+                          )
+                          : Lang.Get("BetterFPSLimitationTitle-Notification-Unset");
+        NotifyHelper.Instance().Chat(message);
+        NotifyHelper.Toast(message);
 
         if (previousSettings != (config.IsEnabled, config.Limitation))
             config.Save(this);
