@@ -172,11 +172,9 @@ public partial class BetterFPSLimitation : ModuleBase
                 break;
             
             case "toggle":
-                config.IsEnabled ^= true;
-                
                 if (config.IsEnabled)
-                    goto case "on";
-                goto case "off";
+                    goto case "off";
+                goto case "on";
                 
             default:
                 if (!short.TryParse(args, out var targetFPS) || targetFPS < 1)
