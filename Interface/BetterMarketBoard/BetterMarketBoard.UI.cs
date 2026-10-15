@@ -60,8 +60,8 @@ public unsafe partial class BetterMarketBoard
         using var table = ImRaii.Table("Table", 2, ImGuiTableFlags.Resizable);
         if (!table) return;
 
-        ImGui.TableSetupColumn("Left",  ImGuiTableColumnFlags.WidthFixed, 220f * GlobalUIScale);
-        ImGui.TableSetupColumn("Right", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("Left",  ImGuiTableColumnFlags.WidthStretch, 0.25f);
+        ImGui.TableSetupColumn("Right", ImGuiTableColumnFlags.WidthStretch, 1f);
 
         ImGui.TableNextRow();
 
