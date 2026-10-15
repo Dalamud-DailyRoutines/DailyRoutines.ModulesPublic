@@ -5,7 +5,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Utility;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
@@ -148,15 +147,37 @@ public partial class BetterFPSLimitation : ModuleBase
             case "":
                 ToggleAddon();
                 return;
+            
             case "on":
                 config.IsEnabled = true;
+                
+                var setMessage = Lang.Get
+                (
+                    "BetterFPSLimitationTitle-Notification-Set",
+                    new Dictionary<string, object>
+                    {
+                        ["fps"] = config.Limitation
+                    }
+                );
+                NotifyHelper.Instance().Chat(setMessage);
+                NotifyHelper.Toast(setMessage);
                 break;
+            
             case "off":
                 config.IsEnabled = false;
+                
+                var unsetMessage = Lang.Get("BetterFPSLimitationTitle-Notification-Unset");
+                NotifyHelper.Instance().Chat(unsetMessage);
+                NotifyHelper.Toast(unsetMessage);
                 break;
+            
             case "toggle":
                 config.IsEnabled ^= true;
-                break;
+                
+                if (config.IsEnabled)
+                    goto case "on";
+                goto case "off";
+                
             default:
                 if (!short.TryParse(args, out var targetFPS) || targetFPS < 1)
                 {
@@ -166,8 +187,8 @@ public partial class BetterFPSLimitation : ModuleBase
                         (
                             3803,
                             [
-                                1,
-                                Lang.Get("BetterFPSLimitation-MaxFPS"),
+                                2,
+                                Lang.Get("FPS"),
                                 args
                             ]
                         )
@@ -177,7 +198,7 @@ public partial class BetterFPSLimitation : ModuleBase
 
                 config.Limitation = targetFPS;
                 config.IsEnabled  = true;
-                break;
+                goto case "on";
         }
 
         if (previousSettings != (config.IsEnabled, config.Limitation))
@@ -198,10 +219,9 @@ public partial class BetterFPSLimitation : ModuleBase
         
         if (config.IsEnabled)
         {
-            using var rented  = new RentedSeStringBuilder();
-            var       builder = rented.Builder;
+            using var rented = new RentedSeStringBuilder();
             
-            text = builder
+            text = rented
                    .PushEdgeColorType(37)
                    .Append(text)
                    .PopEdgeColorType()
