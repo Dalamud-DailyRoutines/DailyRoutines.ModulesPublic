@@ -1,6 +1,7 @@
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Extensions;
+using Dalamud.Utility.Numerics;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -43,16 +44,15 @@ public partial class BetterFPSLimitation
         {
             if (table)
             {
-                DrawStatColumn("AVG", $"{averageFPS:F0}",        GetFPSColor(averageFPS));
-                DrawStatColumn("MIN", $"{minFPS:F0}",            GetFPSColor(minFPS));
-                DrawStatColumn("MAX", $"{maxFPS:F0}",            GetFPSColor(maxFPS));
-                DrawStatColumn("CAP", $"{config.Limitation:F0}", GetCapColor());
+                DrawStatColumn(Lang.Get("BetterFPSLimitationTitle-Stat-Avg"), $"{averageFPS:F0}", GetFPSColor(averageFPS));
+                DrawStatColumn(Lang.Get("BetterFPSLimitationTitle-Stat-Min"), $"{minFPS:F0}",     GetFPSColor(minFPS));
+                DrawStatColumn(Lang.Get("BetterFPSLimitationTitle-Stat-Max"), $"{maxFPS:F0}",     GetFPSColor(maxFPS));
             }
         }
 
         using (ImRaii.PushColor(ImPlotCol.AxisBg, new Vector4(0.05f)))
         using (ImRaii.PushColor(ImPlotCol.FrameBg, Vector4.Zero))
-        using (ImRaii.PushColor(ImPlotCol.AxisGrid, new Vector4(1f, 1f, 1f, 0.05f)))
+        using (ImRaii.PushColor(ImPlotCol.AxisGrid, Vector4.One.WithW(0.05f)))
         using (ImRaii.PushStyle(ImPlotStyleVar.FillAlpha, 0.25f))
         using (ImRaii.PushStyle(ImPlotStyleVar.LineWeight, 2f))
         using (var plot = ImRaii.Plot("##FPSPlot", new(-1), ImPlotFlags.CanvasOnly | ImPlotFlags.NoTitle))
