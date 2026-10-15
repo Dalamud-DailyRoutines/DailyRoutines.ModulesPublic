@@ -1,15 +1,15 @@
-using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -63,7 +63,8 @@ public unsafe class AutoDismount : ModuleBase
         if (!ICondition.Instance().IsOnMount) return;
 
         var adjustedActionID = ActionManager.Instance()->GetAdjustedActionId(actionID);
-        if (!IsNeedToDismount(actionType, adjustedActionID, targetID)) return;
+        if (!IsNeedToDismount(actionType, adjustedActionID, targetID))
+            return;
 
         TaskHelper.Abort();
 
@@ -71,7 +72,10 @@ public unsafe class AutoDismount : ModuleBase
         TaskHelper.Enqueue
         (() =>
             {
-                if (MovementManager.Instance().IsManagerBusy || ICondition.Instance()[ConditionFlag.Mounted]) return false;
+                if (MovementManager.Instance().IsManagerBusy ||
+                    ICondition.Instance()[ConditionFlag.Mounted])
+                    return false;
+
                 return UseActionManager.Instance().UseAction
                 (
                     actionType,
@@ -92,29 +96,36 @@ public unsafe class AutoDismount : ModuleBase
         ulong      actionTargetID
     )
     {
-        if (IObjectTable.Instance().LocalPlayer is not { } localPlayer) return false;
-        if (!LuminaGetter.TryGetRow<Action>(actionID, out var actionRow)) return false;
+        var localPlayer = Control.GetLocalPlayer();
+        if (localPlayer == null)
+            return false;
+        if (!LuminaGetter.TryGetRow<Action>(actionID, out var actionRow))
+            return false;
 
         var actionManager = ActionManager.Instance();
-        if (actionManager == null) return false;
+        if (actionManager == null)
+            return false;
 
         // 坐骑
-        if (actionType                                                                         == ActionType.Mount) return false;
+        if (actionType == ActionType.Mount)
+            return false;
         // 该技能无须下坐骑
-        if (actionManager->GetActionStatus(actionType, actionID, actionTargetID, false, false) == 0) return false;
+        if (actionManager->GetActionStatus(actionType, actionID, actionTargetID, false, false) == 0)
+            return false;
         // 必须下坐骑的技能类型
-        if (MustDismountActionTypes.Contains(actionType)) return true;
-
+        if (MustDismountActionTypes.Contains(actionType))
+            return true;
         // 技能当前不可用
-        if (!actionManager->IsActionOffCooldown(actionType, actionID)) return false;
-
-        // 检查技能本身的解锁、资源和附加条件，忽略骑乘状态限制
-        if (actionType == ActionType.Action && IsActionUsable(actionManager, actionType, actionID) == 0) return false;
-
+        if (!actionManager->IsActionOffCooldown(actionType, actionID))
+            return false;
+        // 技能本身还有一些额外发动限制
+        if (actionType == ActionType.Action && IsActionUsable(actionManager, actionType, actionID) == 0)
+            return false;
         // 可以自身或地面为目标的技能
-        if (actionRow is { CanTargetSelf: true } or { TargetArea: true }) return true;
+        if (actionRow is { CanTargetSelf: true } or { TargetArea: true })
+            return true;
 
-        var actionObject = IObjectTable.Instance().SearchByID(actionTargetID);
+        var actionObject = GameObjectManager.Instance()->Objects.GetObjectByGameObjectId(actionTargetID);
 
         // 技能必须要有目标
         if (actionRow.Range != 0)
@@ -123,13 +134,15 @@ public unsafe class AutoDismount : ModuleBase
             if (actionTargetID != 0xE0000000L && actionObject != null)
             {
                 // 562 - 看不到目标; 566 - 目标在射程外
-                if (ActionManager.GetActionInRangeOrLoS(actionID, (GameObject*)localPlayer.ToStruct(), actionObject.ToStruct()) is 562 or 566)
+                if (ActionManager.GetActionInRangeOrLoS(actionID, (GameObject*)localPlayer, actionObject) is 562 or 566)
                     return false;
 
                 // 无法对目标使用技能
-                if (!ActionManager.CanUseActionOnTarget(actionID, actionObject.ToStruct())) return false;
+                if (!ActionManager.CanUseActionOnTarget(actionID, actionObject))
+                    return false;
             }
-            else if (TargetManager.Target == null) return false;
+            else if (TargetSystem.Instance()->Target == null)
+                return false;
         }
 
         return true;
@@ -137,7 +150,7 @@ public unsafe class AutoDismount : ModuleBase
 
     #region 常量
 
-    private static readonly FrozenSet<ActionType> MustDismountActionTypes = [ActionType.Item, ActionType.Ornament];
+    private static readonly ActionType[] MustDismountActionTypes = [ActionType.Item, ActionType.Ornament];
 
     #endregion
 }
