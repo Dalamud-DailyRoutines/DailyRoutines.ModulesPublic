@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
@@ -8,9 +9,11 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Microsoft.VisualBasic.FileIO;
 using Newtonsoft.Json;
 using OmenTools.Dalamud;
 using OmenTools.OmenService;
+using SearchOption = System.IO.SearchOption;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -26,7 +29,6 @@ public class AutoBackupGameConfig : ModuleBase
     private Config     config     = null!;
     private HttpClient httpClient = null!;
 
-    // 界面
     private bool isConflictPending;
     private bool isPopupOpen;
 
@@ -59,7 +61,7 @@ public class AutoBackupGameConfig : ModuleBase
 
             ImGuiOm.HelpMarker(Lang.Get("AutoBackupGameConfig-DataFolderHelp"));
 
-            var folderValid = IsDataFolderValid();
+            var folderValid = IsDataFolderValid(config.DataFolderPath);
             ImGui.TextColored
             (
                 folderValid ?
@@ -73,10 +75,18 @@ public class AutoBackupGameConfig : ModuleBase
 
         ImGui.NewLine();
 
-        using (ImRaii.Heading1("GitHub Personal Acess Token (Classic)"))
+        using (ImRaii.Heading1("GitHub Personal Access Token (Classic)"))
         {
             ImGui.SetNextItemWidth(400f * GlobalUIScale);
+            var previousToken = config.Token;
             ImGui.InputText("###AutoBackupGameConfig-TokenInput", ref config.Token, 128, ImGuiInputTextFlags.Password);
+
+            if (config.Token != previousToken)
+            {
+                config.GistID         = string.Empty;
+                config.LastBackupTime = DateTimeOffset.MinValue;
+            }
+
             if (ImGui.IsItemDeactivatedAfterEdit())
                 config.Save(this);
 
@@ -88,11 +98,11 @@ public class AutoBackupGameConfig : ModuleBase
         using (ImRaii.Heading1(Lang.Get("AutoBackupGameConfig-ManualOperate")))
         {
             if (ImGui.Button(Lang.Get("AutoBackupGameConfig-Backup")))
-                EnqueueUpload();
+                EnqueueOperation(UploadAsync, "上传覆盖云端");
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("AutoBackupGameConfig-Restore")))
-                EnqueueRestore();
+                EnqueueOperation(RestoreAsync, "从云端恢复");
         }
 
         if (!string.IsNullOrEmpty(config.GistID))
@@ -127,14 +137,15 @@ public class AutoBackupGameConfig : ModuleBase
         if (ImGui.Button(Lang.Get("AutoBackupGameConfig-Backup")))
         {
             isPopupOpen = false;
-            EnqueueUpload();
+            EnqueueOperation(UploadAsync, "上传覆盖云端");
         }
 
         ImGui.SameLine();
+
         if (ImGui.Button(Lang.Get("AutoBackupGameConfig-Restore")))
         {
             isPopupOpen = false;
-            EnqueueRestore();
+            EnqueueOperation(RestoreAsync, "从云端恢复");
         }
 
         ImGui.SameLine();
@@ -142,303 +153,279 @@ public class AutoBackupGameConfig : ModuleBase
             isPopupOpen = false;
     }
 
-    private void OnLogin()
+    private void OnLogin() => EnqueueOperation(CheckAndBackupAsync, "登录后备份检查", false);
+
+    private void EnqueueOperation
+    (
+        Func<OperationContext, CancellationToken, Task> action,
+        string                                          name,
+        bool                                            notify = true
+    )
     {
+        var operation = new OperationContext
+        {
+            DataFolderPath = config.DataFolderPath,
+            Token          = config.Token,
+            GistID         = config.GistID,
+            Description    = GetDescription()
+        };
+
+        if (notify)
+        {
+            var message = Lang.Get("AutoBackupGameConfig-Notification-StartOperation");
+            NotifyHelper.Toast(message);
+            NotifyHelper.Instance().Chat(message);
+        }
+
         TaskHelper.Abort();
-        TaskHelper.EnqueueAsync(CheckAndBackupAsync, "登录后备份检查");
-    }
-    
-    private void EnqueueUpload()
-    {
-        var message = Lang.Get("AutoBackupGameConfig-Notification-StartOperation");
-        NotifyHelper.Toast(message);
-        NotifyHelper.Instance().Chat(message);
-        
-        TaskHelper.Abort();
-        TaskHelper.EnqueueAsync(UploadAsync, "上传覆盖云端");
-    }
-    
-    private void EnqueueRestore()
-    {
-        var message = Lang.Get("AutoBackupGameConfig-Notification-StartOperation");
-        NotifyHelper.Toast(message);
-        NotifyHelper.Instance().Chat(message);
-        
-        TaskHelper.Abort();
-        TaskHelper.EnqueueAsync(RestoreAsync, "从云端恢复");
+        TaskHelper.EnqueueAsync
+        (
+            async ct =>
+            {
+                try
+                {
+                    await action(operation, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                {
+                    HandleError(name, ex);
+                }
+            },
+            name
+        );
     }
 
     private async Task<string?> EnsureGistIDAsync
     (
+        OperationContext  operation,
         CancellationToken ct
     )
     {
-        if (!string.IsNullOrEmpty(config.GistID))
-            return config.GistID;
+        if (!string.IsNullOrEmpty(operation.GistID))
+            return operation.GistID;
 
-        var foundID = await FindGistAsync(ct);
+        var foundID = await FindGistAsync(operation, ct);
         if (string.IsNullOrEmpty(foundID))
             return null;
 
-        config.GistID = foundID;
-        config.Save(this);
-
+        operation.GistID = foundID;
+        SaveOperationConfig(operation);
         return foundID;
     }
 
     private async Task CheckAndBackupAsync
     (
+        OperationContext  operation,
         CancellationToken ct
     )
     {
-        try
+        if (!IsDataFolderValid(operation.DataFolderPath) || string.IsNullOrWhiteSpace(operation.Token))
+            return;
+
+        var backup = await Task.Run(() => CreateBackup(operation.DataFolderPath, ct), ct);
+        if (backup.Manifest.Files.Count == 0)
+            return;
+
+        var gistID = await EnsureGistIDAsync(operation, ct);
+
+        if (gistID != null)
         {
-            if (!IsDataFolderValid() ||
-                string.IsNullOrWhiteSpace(config.Token))
-                return;
+            var cloudManifest = await DownloadManifestAsync(operation, ct);
 
-            var localManifest = BuildManifest(config.DataFolderPath);
-            if (localManifest.Count == 0)
-                return;
-
-            if (await EnsureGistIDAsync(ct) == null)
+            if (cloudManifest != null)
             {
-                await UploadAsync(ct);
-                return;
-            }
+                if (RequiresDecision(backup.Manifest.Files, cloudManifest, Environment.MachineName, out var diffCount))
+                {
+                    isConflictPending = true;
+                    return;
+                }
 
-            var cloudManifest = await DownloadManifestAsync(ct);
-            if (cloudManifest == null)
-            {
-                await UploadAsync(ct);
-                return;
+                if (diffCount == 0)
+                    return;
             }
+        }
 
-            if (RequiresDecision(localManifest, cloudManifest, Environment.MachineName, out var diffCount))
-            {
-                isConflictPending = true;
-                return;
-            }
-
-            if (diffCount > 0)
-                await UploadAsync(ct);
-        }
-        catch (OperationCanceledException)
-        {
-            // ignored
-        }
-        catch (Exception ex)
-        {
-            HandleError("登录后备份检查失败", ex);
-        }
+        await UploadBackupAsync(operation, backup, ct);
     }
-    
+
     private async Task UploadAsync
     (
+        OperationContext  operation,
         CancellationToken ct
     )
     {
-        try
-        {
-            if (!IsDataFolderValid()) return;
+        if (!IsDataFolderValid(operation.DataFolderPath) || string.IsNullOrWhiteSpace(operation.Token))
+            return;
 
-            var manifest = BuildManifest(config.DataFolderPath);
-            if (manifest.Count == 0) return;
+        var backup = await Task.Run(() => CreateBackup(operation.DataFolderPath, ct), ct);
+        if (backup.Manifest.Files.Count == 0)
+            return;
 
-            var zipBytes = CreateBackupZip(config.DataFolderPath, manifest);
-            var files = new Dictionary<string, object>
-            {
-                ["manifest.json"] = new
-                {
-                    content = JsonConvert.SerializeObject
-                    (
-                        new GistManifest
-                        {
-                            Files   = manifest,
-                            Machine = Environment.MachineName
-                        },
-                        Formatting.Indented
-                    )
-                },
-                ["backup.zip"] = new { content = Convert.ToBase64String(zipBytes) }
-            };
-
-            var payload = JsonConvert.SerializeObject
-            (
-                new
-                {
-                    description = GetDescription(),
-                    @public     = false,
-                    files
-                }
-            );
-
-            await SaveGistAsync(payload, ct);
-            config.LastBackupTime = StandardTimeManager.Instance().UTCNowOffset;
-            config.Save(this);
-
-            var message = Lang.Get("AutoBackupGameConfig-Notification-UploadSuccess");
-            NotifyHelper.Instance().Chat(message);
-            NotifyHelper.Toast(message);
-        }
-        catch (OperationCanceledException)
-        {
-            // ignored
-        }
-        catch (Exception ex)
-        {
-            HandleError("备份至 GitHub Gist 失败", ex);
-        }
+        await UploadBackupAsync(operation, backup, ct);
     }
-    
+
+    private async Task UploadBackupAsync
+    (
+        OperationContext                         operation,
+        (GistManifest Manifest, byte[] ZipBytes) backup,
+        CancellationToken                        ct
+    )
+    {
+        var payload = await Task.Run
+                      (
+                          () => JsonConvert.SerializeObject
+                          (
+                              new
+                              {
+                                  description = operation.Description,
+                                  @public     = false,
+                                  files = new Dictionary<string, object>
+                                  {
+                                      ["manifest.json"] = new
+                                      {
+                                          content = JsonConvert.SerializeObject(backup.Manifest, Formatting.Indented)
+                                      },
+                                      ["backup.zip"] = new
+                                      {
+                                          content = Convert.ToBase64String(backup.ZipBytes)
+                                      }
+                                  }
+                              }
+                          ),
+                          ct
+                      );
+
+        await SaveGistAsync(operation, payload, ct);
+        SaveOperationConfig(operation, StandardTimeManager.Instance().UTCNowOffset);
+
+        var message = Lang.Get("AutoBackupGameConfig-Notification-UploadSuccess");
+        NotifyHelper.Instance().Chat(message);
+        NotifyHelper.Toast(message);
+    }
+
     private async Task RestoreAsync
     (
+        OperationContext  operation,
         CancellationToken ct
     )
     {
-        try
+        if (!IsDataFolderValid(operation.DataFolderPath))
         {
-            if (!IsDataFolderValid())
-            {
-                var message = Lang.Get("AutoBackupGameConfig-Notification-InvalidFolder");
-                NotifyHelper.Instance().ChatError(message);
-                NotifyHelper.ToastError(message);
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(config.Token)) return;
-
-            if (await EnsureGistIDAsync(ct) == null)
-            {
-                var message = Lang.Get("AutoBackupGameConfig-Notification-NoGist");
-                NotifyHelper.Instance().ChatError(message);
-                NotifyHelper.ToastError(message);
-                return;
-            }
-
-            var zipBytes = await DownloadBackupBytesAsync(ct);
-
-            using var       memoryStream = new MemoryStream(zipBytes);
-            await using var archive      = new ZipArchive(memoryStream, ZipArchiveMode.Read);
-
-            var folderFull = Path.GetFullPath(config.DataFolderPath);
-
-            foreach (var entry in archive.Entries)
-            {
-                if (entry.FullName.EndsWith('/'))
-                    continue;
-
-                var entryPath = Path.GetFullPath(Path.Join(folderFull, entry.FullName.Replace('/', Path.DirectorySeparatorChar)));
-
-                if (Path.GetRelativePath(folderFull, entryPath).StartsWith(".."))
-                    continue;
-
-                Directory.CreateDirectory(Path.GetDirectoryName(entryPath)!);
-
-                await using var entryStream = await entry.OpenAsync(ct);
-                await using var fileStream  = new FileStream(entryPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
-                await entryStream.CopyToAsync(fileStream, ct);
-            }
-
-            var successMessage = Lang.Get("AutoBackupGameConfig-Notification-RestoreSuccess");
-            NotifyHelper.Instance().Chat(successMessage);
-            NotifyHelper.Toast(successMessage);
+            var message = Lang.Get("AutoBackupGameConfig-Notification-InvalidFolder");
+            NotifyHelper.Instance().ChatError(message);
+            NotifyHelper.ToastError(message);
+            return;
         }
-        catch (OperationCanceledException)
+
+        if (string.IsNullOrWhiteSpace(operation.Token))
+            return;
+
+        if (await EnsureGistIDAsync(operation, ct) == null)
         {
-            // ignored
+            var message = Lang.Get("AutoBackupGameConfig-Notification-NoGist");
+            NotifyHelper.Instance().ChatError(message);
+            NotifyHelper.ToastError(message);
+            return;
         }
-        catch (Exception ex)
-        {
-            HandleError("从云端恢复失败", ex);
-        }
+
+        var zipBytes = await DownloadBackupBytesAsync(operation, ct);
+        await Task.Run(() => RestoreBackupAsync(operation.DataFolderPath, zipBytes, ct), ct);
+
+        var successMessage = Lang.Get("AutoBackupGameConfig-Notification-RestoreSuccess");
+        NotifyHelper.Instance().Chat(successMessage);
+        NotifyHelper.Toast(successMessage);
+    }
+
+    private void SaveOperationConfig
+    (
+        OperationContext operation,
+        DateTimeOffset?  backupTime = null
+    )
+    {
+        if (config.Token != operation.Token || config.DataFolderPath != operation.DataFolderPath)
+            return;
+
+        config.GistID = operation.GistID;
+        if (backupTime.HasValue)
+            config.LastBackupTime = backupTime.Value;
+
+        config.Save(this);
     }
 
     private async Task SaveGistAsync
     (
+        OperationContext  operation,
         string            payload,
         CancellationToken ct
     )
     {
-        if (string.IsNullOrEmpty(config.GistID))
+        if (await EnsureGistIDAsync(operation, ct) != null)
         {
-            await CreateGistAsync(payload, ct);
-            return;
+            using var response = await SendGistRequestAsync(operation, HttpMethod.Patch, $"{GIST_API}/{operation.GistID}", payload, ct);
+
+            if (response.StatusCode != HttpStatusCode.NotFound)
+            {
+                if (!response.IsSuccessStatusCode)
+                    throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"更新失败（HTTP {(int)response.StatusCode}）"));
+
+                return;
+            }
         }
 
-        var response = await SendGistRequestAsync(HttpMethod.Patch, $"{GIST_API}/{config.GistID}", payload, ct);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            config.GistID = string.Empty;
-            config.Save(this);
-            await CreateGistAsync(payload, ct);
-            return;
-        }
+        using var createResponse = await SendGistRequestAsync(operation, HttpMethod.Post, GIST_API, payload, ct);
+        if (!createResponse.IsSuccessStatusCode)
+            throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"创建失败（HTTP {(int)createResponse.StatusCode}）"));
 
-        if (!response.IsSuccessStatusCode)
-            throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"更新失败（HTTP {(int)response.StatusCode}）"));
+        var gist = JsonConvert.DeserializeObject<Gist>(await createResponse.Content.ReadAsStringAsync(ct));
+        if (string.IsNullOrEmpty(gist?.ID))
+            throw new Exception(Lang.Get("AutoBackupGameConfig-Error-NoData"));
+
+        operation.GistID = gist.ID;
     }
 
     private async Task<HttpResponseMessage> SendGistRequestAsync
     (
+        OperationContext  operation,
         HttpMethod        method,
         string            url,
         string?           payload,
         CancellationToken ct
     )
     {
-        using var request = CreateGistRequest(method, url, config.Token, payload);
+        using var request = CreateGistRequest(method, url, operation.Token, payload);
         return await httpClient.SendAsync(request, ct);
-    }
-
-    private async Task CreateGistAsync
-    (
-        string            payload,
-        CancellationToken ct
-    )
-    {
-        using var request  = CreateGistRequest(HttpMethod.Post, $"{GIST_API}", config.Token, payload);
-        using var response = await httpClient.SendAsync(request, ct);
-
-        if (!response.IsSuccessStatusCode)
-            throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"创建失败（HTTP {(int)response.StatusCode}）"));
-
-        var gist = JsonConvert.DeserializeObject<Gist>(await response.Content.ReadAsStringAsync(ct));
-        config.GistID = gist?.ID ?? string.Empty;
-        config.Save(this);
     }
 
     private async Task<GistManifest?> DownloadManifestAsync
     (
+        OperationContext  operation,
         CancellationToken ct
     )
     {
-        var gist = await GetGistAsync($"{GIST_API}/{config.GistID}", ct);
+        var gist = await GetGistAsync(operation, ct);
         if (gist == null)
             return null;
 
-        var manifestContent = gist.Files?["manifest.json"]?.Content;
-        if (string.IsNullOrEmpty(manifestContent))
-            return null;
-
-        return JsonConvert.DeserializeObject<GistManifest>(manifestContent);
+        var manifestContent = gist.Files?["manifest.json"].Content;
+        return string.IsNullOrEmpty(manifestContent) ?
+                   null :
+                   JsonConvert.DeserializeObject<GistManifest>(manifestContent);
     }
 
     private async Task<string?> FindGistAsync
     (
+        OperationContext  operation,
         CancellationToken ct
     )
     {
         for (var page = 1;; page++)
         {
-            var response = await SendGistRequestAsync(HttpMethod.Get, $"{GIST_API}?per_page=100&page={page}", null, ct);
-
+            using var response = await SendGistRequestAsync(operation, HttpMethod.Get, $"{GIST_API}?per_page=100&page={page}", null, ct);
             if (!response.IsSuccessStatusCode)
                 throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"获取列表失败（HTTP {(int)response.StatusCode}）"));
 
-            var gists = JsonConvert.DeserializeObject<List<Gist>>(await response.Content.ReadAsStringAsync(ct)) ?? [];
-
-            var gistID = gists.FirstOrDefault(gist => gist.Description == GetDescription())?.ID;
+            var gists  = JsonConvert.DeserializeObject<List<Gist>>(await response.Content.ReadAsStringAsync(ct)) ?? [];
+            var gistID = gists.FirstOrDefault(gist => gist.Description == operation.Description)?.ID;
             if (gistID != null)
                 return gistID;
 
@@ -449,39 +436,36 @@ public class AutoBackupGameConfig : ModuleBase
 
     private async Task<Gist?> GetGistAsync
     (
-        string          url,
+        OperationContext  operation,
         CancellationToken ct
     )
     {
-        var response = await SendGistRequestAsync(HttpMethod.Get, url, null, ct);
-
+        using var response = await SendGistRequestAsync(operation, HttpMethod.Get, $"{GIST_API}/{operation.GistID}", null, ct);
         if (response.StatusCode == HttpStatusCode.NotFound)
             return null;
 
-        if (!response.IsSuccessStatusCode)
-            throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"连接失败（HTTP {(int)response.StatusCode}）"));
-
-        return JsonConvert.DeserializeObject<Gist>(await response.Content.ReadAsStringAsync(ct));
+        return response.IsSuccessStatusCode ?
+                   JsonConvert.DeserializeObject<Gist>(await response.Content.ReadAsStringAsync(ct)) :
+                   throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"连接失败（HTTP {(int)response.StatusCode}）"));
     }
 
     private async Task<byte[]> DownloadBackupBytesAsync
     (
+        OperationContext  operation,
         CancellationToken ct
     )
     {
-        var gist = await GetGistAsync($"{GIST_API}/{config.GistID}", ct) ??
-                   throw new Exception(Lang.Get("AutoBackupGameConfig-Error-NoData"));
-
-        var rawURL = gist.Files?["backup.zip"]?.RawURL;
+        var gist   = await GetGistAsync(operation, ct) ?? throw new Exception(Lang.Get("AutoBackupGameConfig-Error-NoData"));
+        var rawURL = gist.Files?["backup.zip"].RawURL;
         if (string.IsNullOrEmpty(rawURL))
             throw new Exception(Lang.Get("AutoBackupGameConfig-Error-NoData"));
 
-        var response = await SendGistRequestAsync(HttpMethod.Get, rawURL, null, ct);
-
+        using var response = await SendGistRequestAsync(operation, HttpMethod.Get, rawURL, null, ct);
         if (!response.IsSuccessStatusCode)
             throw new Exception(Lang.Get("AutoBackupGameConfig-Error", $"下载失败（HTTP {(int)response.StatusCode}）"));
 
-        return Convert.FromBase64String(await response.Content.ReadAsStringAsync(ct));
+        var content = await response.Content.ReadAsStringAsync(ct);
+        return await Task.Run(() => Convert.FromBase64String(content), ct);
     }
 
     private static HttpRequestMessage CreateGistRequest
@@ -503,17 +487,157 @@ public class AutoBackupGameConfig : ModuleBase
         return request;
     }
 
-    private static Dictionary<string, string> BuildManifest
+    private static (GistManifest Manifest, byte[] ZipBytes) CreateBackup
     (
-        string folder
+        string            folder,
+        CancellationToken ct
     )
     {
-        var manifest = new Dictionary<string, string>(StringComparer.Ordinal);
+        var manifest = new GistManifest
+        {
+            Files   = new(StringComparer.Ordinal),
+            Machine = Environment.MachineName
+        };
+        using var stream = new MemoryStream();
+        var       buffer = ArrayPool<byte>.Shared.Rent(81920);
 
-        foreach (var (relativePath, filePath) in EnumerateBackupFiles(folder))
-            manifest[relativePath] = ComputeFileHash(filePath);
+        try
+        {
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, true))
+            {
+                foreach (var (relativePath, filePath) in EnumerateBackupFiles(folder))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    using var fileStream  = File.OpenRead(filePath);
+                    using var entryStream = archive.CreateEntry(relativePath, CompressionLevel.Optimal).Open();
+                    using var hash        = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
-        return manifest;
+                    int bytesRead;
+
+                    while ((bytesRead = fileStream.Read(buffer)) > 0)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        hash.AppendData(buffer, 0, bytesRead);
+                        entryStream.Write(buffer, 0, bytesRead);
+                    }
+
+                    manifest.Files.Add(relativePath, Convert.ToHexString(hash.GetHashAndReset()));
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            return (manifest, stream.ToArray());
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static async Task RestoreBackupAsync
+    (
+        string            folder,
+        byte[]            zipBytes,
+        CancellationToken ct
+    )
+    {
+        var             folderFull     = Path.GetFullPath(folder);
+        var             stagingFolder  = Path.Join(folderFull, $".DailyRoutines-Restore-{Guid.NewGuid():N}");
+        using var       memoryStream   = new MemoryStream(zipBytes);
+        await using var archive        = new ZipArchive(memoryStream, ZipArchiveMode.Read);
+        var             files          = new List<(string StagedPath, string TargetPath, string OriginalPath)>(archive.Entries.Count);
+        var             committedFiles = new List<(string StagedPath, string TargetPath, string? OriginalPath)>(archive.Entries.Count);
+        var             targets        = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            foreach (var entry in archive.Entries)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (entry.FullName.EndsWith('/'))
+                    continue;
+
+                var targetPath   = Path.GetFullPath(Path.Join(folderFull, entry.FullName.Replace('/', Path.DirectorySeparatorChar)));
+                var relativePath = Path.GetRelativePath(folderFull, targetPath);
+                if (Path.IsPathRooted(relativePath)                                                       ||
+                    relativePath == ".."                                                                  ||
+                    relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+                    !targets.Add(targetPath))
+                    throw new InvalidDataException($"备份文件路径无效：{entry.FullName}");
+
+                var stagedPath   = Path.Join(stagingFolder, "restored", relativePath);
+                var originalPath = Path.Join(stagingFolder, "original", relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(stagedPath));
+                Directory.CreateDirectory(Path.GetDirectoryName(originalPath));
+
+                await using var entryStream = await entry.OpenAsync(ct);
+                await using var fileStream = new FileStream
+                (
+                    stagedPath,
+                    new FileStreamOptions
+                    {
+                        Mode    = FileMode.CreateNew,
+                        Access  = FileAccess.Write,
+                        Share   = FileShare.None,
+                        Options = FileOptions.Asynchronous | FileOptions.SequentialScan
+                    }
+                );
+                await entryStream.CopyToAsync(fileStream, ct);
+                files.Add((stagedPath, targetPath, originalPath));
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            foreach (var file in files)
+            {
+                ct.ThrowIfCancellationRequested();
+                Directory.CreateDirectory(Path.GetDirectoryName(file.TargetPath));
+
+                if (File.Exists(file.TargetPath))
+                {
+                    File.Replace(file.StagedPath, file.TargetPath, file.OriginalPath);
+                    committedFiles.Add(file);
+                }
+                else
+                {
+                    File.Move(file.StagedPath, file.TargetPath);
+                    committedFiles.Add((file.StagedPath, file.TargetPath, null));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            var errors = new List<Exception> { ex };
+
+            for (var index = committedFiles.Count - 1; index >= 0; index--)
+            {
+                var file = committedFiles[index];
+
+                try
+                {
+                    if (file.OriginalPath != null)
+                        File.Move(file.OriginalPath, file.TargetPath, true);
+                    else
+                        File.Move(file.TargetPath, file.StagedPath);
+                }
+                catch (Exception rollbackError)
+                {
+                    errors.Add(rollbackError);
+                }
+            }
+
+            if (errors.Count > 1)
+                throw new AggregateException("恢复配置及还原原文件时发生错误，原文件保留在恢复临时目录或回收站中。", errors);
+
+            throw;
+        }
+        finally
+        {
+            if (Directory.Exists(stagingFolder))
+            {
+                FileSystem.DeleteDirectory(stagingFolder, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            }
+        }
     }
 
     private static IEnumerable<(string RelativePath, string FullPath)> EnumerateBackupFiles
@@ -567,38 +691,6 @@ public class AutoBackupGameConfig : ModuleBase
         return false;
     }
 
-    private static string ComputeFileHash
-    (
-        string filePath
-    )
-    {
-        using var stream = File.OpenRead(filePath);
-        return Convert.ToHexString(SHA256.HashData(stream));
-    }
-
-    private static byte[] CreateBackupZip
-    (
-        string                     folder,
-        Dictionary<string, string> manifest
-    )
-    {
-        using var stream = new MemoryStream();
-
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
-        {
-            foreach (var (relativePath, _) in manifest)
-            {
-                var entry = archive.CreateEntry(relativePath, CompressionLevel.Optimal);
-
-                using var entryStream = entry.Open();
-                using var fileStream  = File.OpenRead(Path.Join(folder, relativePath));
-                fileStream.CopyTo(entryStream);
-            }
-        }
-
-        return stream.ToArray();
-    }
-
     private static bool RequiresDecision
     (
         Dictionary<string, string> localManifest,
@@ -649,10 +741,13 @@ public class AutoBackupGameConfig : ModuleBase
         NotifyHelper.ToastError(message);
     }
 
-    private bool IsDataFolderValid() =>
-        !string.IsNullOrWhiteSpace(config.DataFolderPath) &&
-        Directory.Exists(config.DataFolderPath)           &&
-        File.Exists(Path.Join(config.DataFolderPath, "FFXIV.cfg"));
+    private static bool IsDataFolderValid
+    (
+        string folder
+    ) =>
+        !string.IsNullOrWhiteSpace(folder) &&
+        Directory.Exists(folder)           &&
+        File.Exists(Path.Join(folder, "FFXIV.cfg"));
 
     private static string GetDescription()
     {
@@ -663,17 +758,28 @@ public class AutoBackupGameConfig : ModuleBase
             clientAbbr = "KR";
         if (GameState.IsTC)
             clientAbbr = "TC";
-        
+
         return $"{GIST_DESCRIPTION} - {clientAbbr}";
     }
 
     #region 常量
 
-    private const string GIST_API          = "https://api.github.com/gists";
-    private const string GIST_DESCRIPTION  = "FFXIV Game Config Backup (DailyRoutines)";
-    private const string USER_AGENT        = "DailyRoutines-AutoBackupGameConfig";
+    private const string GIST_API         = "https://api.github.com/gists";
+    private const string GIST_DESCRIPTION = "FFXIV Game Config Backup (DailyRoutines)";
+    private const string USER_AGENT       = "DailyRoutines-AutoBackupGameConfig";
 
     #endregion
+
+    private class OperationContext
+    {
+        public required string DataFolderPath { get; init; }
+
+        public required string Token { get; init; }
+
+        public required string Description { get; init; }
+
+        public required string GistID { get; set; }
+    }
 
     private class GistFile
     {
