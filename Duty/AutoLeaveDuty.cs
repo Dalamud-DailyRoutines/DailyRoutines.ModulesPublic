@@ -175,6 +175,8 @@ public class AutoLeaveDuty : ModuleBase
         IDutyStateEventArgs args
     )
     {
+        TaskHelper.Abort();
+        
         if (manualLeaveKind != LeaveDutyKind.None)
         {
             switch (manualLeaveKind)
@@ -222,7 +224,6 @@ public class AutoLeaveDuty : ModuleBase
         TaskHelper.Abort();
     }
 
-    // 拦截一下那个信息
     private static void OnPreReceiveLogmessage
     (
         ref bool                isPrevented,
