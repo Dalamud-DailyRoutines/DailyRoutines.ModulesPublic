@@ -5,11 +5,10 @@ using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
+using AgentWorldTravel = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentWorldTravel;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -28,67 +27,57 @@ public unsafe class RealQueuePosition : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private static readonly CompSig AgentWorldTravelUpdaterSig = new("E8 ?? ?? ?? ?? 40 0A F8 B9 ?? ?? ?? ??");
-    private delegate bool AgentWorldTravelUpdateDelegate
-    (
-        AgentWorldTravel* agent,
-        NumberArrayData*  numberArray,
-        StringArrayData*  stringArray,
-        bool              a4
-    );
-    private Hook<AgentWorldTravelUpdateDelegate> AgentWorldTravelUpdateHook;
+    private Hook<AgentWorldTravel.Delegates.UpdateAddons> UpdateAddonsHook;
 
-    private static readonly CompSig UpdateWorldTravelDataSig = new("48 89 5C 24 ?? 57 48 83 EC 20 48 8B D9 48 8B FA 0F B6 4A 10");
-    private delegate void UpdateWorldTravelDataDelegate
-    (
-        nint a1,
-        nint a2
-    );
-    private Hook<UpdateWorldTravelDataDelegate> UpdateWorldTravelDataHook;
-
-    private static readonly CompSig ContentFinderQueuePositionDataSig = new("40 53 56 57 41 57 48 83 EC ?? 0F B6 41");
-    private delegate void ContentFinderQueuePositionDataDelegate
-    (
-        ContentsFinderQueueInfo* info,
-        ContentsFinderQueueState state,
-        QueueInfoState*          infoState
-    );
-    private Hook<ContentFinderQueuePositionDataDelegate>? ContentFinderQueuePositionDataHook;
+    private Hook<AgentWorldTravel.Delegates.OnWorldTravelStatusPacket> OnWorldTravelStatusPacketHook;
+    
+    private Hook<ContentsFinderQueueInfo.Delegates.ProcessInfoState>? ContentFinderQueuePositionDataHook;
 
     private DateTime eta = StandardTimeManager.Instance().Now;
 
     protected override void Init()
     {
-        AgentWorldTravelUpdateHook ??= AgentWorldTravelUpdaterSig.GetHook<AgentWorldTravelUpdateDelegate>(AgentWorldTravelUpdaterDetour);
-        AgentWorldTravelUpdateHook.Enable();
+        UpdateAddonsHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentWorldTravel.MemberFunctionPointers),
+            nameof(AgentWorldTravel.UpdateAddons),
+            (AgentWorldTravel.Delegates.UpdateAddons)UpdateAddonsDetour
+        );
+        UpdateAddonsHook.Enable();
 
-        UpdateWorldTravelDataHook ??= UpdateWorldTravelDataSig.GetHook<UpdateWorldTravelDataDelegate>(UpdateWorldTravelDataDetour);
-        UpdateWorldTravelDataHook.Enable();
-
-        ContentFinderQueuePositionDataHook ??= ContentFinderQueuePositionDataSig.GetHook<ContentFinderQueuePositionDataDelegate>
-            (ContentFinderQueuePositionDataDetour);
+        OnWorldTravelStatusPacketHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentWorldTravel.MemberFunctionPointers),
+            nameof(AgentWorldTravel.OnWorldTravelStatusPacket),
+            (AgentWorldTravel.Delegates.OnWorldTravelStatusPacket)UpdateWorldTravelDataDetour
+        );
+        OnWorldTravelStatusPacketHook.Enable();
+        
+        ContentFinderQueuePositionDataHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(ContentsFinderQueueInfo.MemberFunctionPointers),
+            nameof(ContentsFinderQueueInfo.ProcessInfoState),
+            (ContentsFinderQueueInfo.Delegates.ProcessInfoState)ContentFinderQueuePositionDataDetour
+        );
         ContentFinderQueuePositionDataHook.Enable();
     }
 
     private void UpdateWorldTravelDataDetour
     (
-        nint a1,
-        nint a2
+        AgentWorldTravel*                         agent,
+        AgentWorldTravel.WorldTravelStatusPacket* packet
     )
     {
-        var type = *(byte*)(a2 + 16);
-
-        if (type == 1)
+        if (packet->Status == AgentWorldTravel.WorldTravelStatus.InQueue)
         {
-            var position = *(int*)(a2 + 20);
+            var position = packet->QueuePosition;
             eta = StandardTimeManager.Instance().Now.AddSeconds(CalculateWaitTime(position));
         }
 
-        UpdateWorldTravelDataHook.Original(a1, a2);
+        OnWorldTravelStatusPacketHook.Original(agent, packet);
     }
 
-    // TODO: FFCS
-    private bool AgentWorldTravelUpdaterDetour
+    private bool UpdateAddonsDetour
     (
         AgentWorldTravel* agent,
         NumberArrayData*  numberArray,
@@ -96,13 +85,11 @@ public unsafe class RealQueuePosition : ModuleBase
         bool              a4
     )
     {
-        var agentData      = (nint)AgentWorldTravel.Instance();
-        var transportFlags = *(ushort*)(agentData + 0x120);
-        if (transportFlags == 0)
-            return AgentWorldTravelUpdateHook.Original(agent, numberArray, stringArray, a4);
+        if (agent->IsWorldTraveling == 0)
+            return UpdateAddonsHook.Original(agent, numberArray, stringArray, a4);
 
-        var result = AgentWorldTravelUpdateHook.Original(agent, numberArray, stringArray, a4);
-        if (!result) 
+        var result = UpdateAddonsHook.Original(agent, numberArray, stringArray, a4);
+        if (!result)
             return false;
 
         var index = 5;
@@ -110,13 +97,24 @@ public unsafe class RealQueuePosition : ModuleBase
         if (numberArray->IntArray[5] > 0)
             index = 6;
 
-        var       position    = *(uint*)(agentData + 0x12C);
-        var       positionStr = ISeStringEvaluator.Instance().EvaluateFromAddon(10039, [position]);
-        using var builder     = new RentedSeStringBuilder();
-        stringArray->SetValue(index, builder.Builder.Append(LuminaWrapper.GetAddonText(12522)).Append(positionStr).GetViewAsSpan());
+        var position    = agent->QueuePosition;
+        var positionStr = ISeStringEvaluator.Instance().EvaluateFromAddon(10039, [position]);
 
-        var queueTime = TimeSpan.FromSeconds(*(int*)(agentData + 0x128));
-        var info      = Lang.Get("RealQueuePosition-ETA", @$"{queueTime:mm\:ss}", @$"{eta - StandardTimeManager.Instance().Now:mm\:ss}");
+        using var builder = new RentedSeStringBuilder();
+        builder.Append(LuminaWrapper.GetAddonText(12522))
+               .Append(positionStr);
+        stringArray->SetValue(index, builder.GetViewAsSpan());
+
+        var queueTime = TimeSpan.FromSeconds(agent->ElapsedQueueTimeSecond);
+        var info = Lang.Get
+        (
+            "RealQueuePosition-ETA",
+            new Dictionary<string, object>
+            {
+                ["currentTimeText"]   = @$"{queueTime:mm\:ss}",
+                ["estimatedTimeText"] = @$"{eta - StandardTimeManager.Instance().Now:mm\:ss}"
+            }
+        );
         stringArray->SetValue(index + 1, info);
 
         return true;
@@ -142,7 +140,7 @@ public unsafe class RealQueuePosition : ModuleBase
 
     private static double CalculateWaitTime
     (
-        int position
+        uint position
     )
     {
         if (position <= 0) return 0;
