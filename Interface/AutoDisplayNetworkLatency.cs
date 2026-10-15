@@ -13,6 +13,7 @@ using DailyRoutines.RemoteInteraction.ISPTranslation;
 using DailyRoutines.RemoteInteraction.ISPTranslation.Models.Responses;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Utility.Numerics;
 using Newtonsoft.Json;
 using OmenTools.Dalamud;
 using OmenTools.OmenService;
@@ -201,7 +202,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
 
         using (ImRaii.PushColor(ImPlotCol.AxisBg, new Vector4(0.05f)))
         using (ImRaii.PushColor(ImPlotCol.FrameBg, Vector4.Zero))
-        using (ImRaii.PushColor(ImPlotCol.AxisGrid, new Vector4(1f, 1f, 1f, 0.05f)))
+        using (ImRaii.PushColor(ImPlotCol.AxisGrid, Vector4.One.WithW(0.05f)))
         using (ImRaii.PushStyle(ImPlotStyleVar.FillAlpha, 0.25f))
         using (ImRaii.PushStyle(ImPlotStyleVar.LineWeight, 2f))
         using (var plot = ImRaii.Plot("##LatencyPlot", new(-1), ImPlotFlags.CanvasOnly | ImPlotFlags.NoTitle))
