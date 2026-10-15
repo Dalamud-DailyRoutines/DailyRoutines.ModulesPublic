@@ -2,8 +2,10 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
-using OmenTools.Info.Game.Enums;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -29,11 +31,17 @@ public class LeaveDutyCommand : ModuleBase
         AllDefaultEnabled = true
     };
 
-    protected override void Init() =>
+    protected override void Init()
+    {
+        LogMessageManager.Instance().RegPre(OnPreReceiveLogMessage);
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("LeaveDutyCommand-CommandHelp") });
+    }
 
-    protected override void Uninit() =>
+    protected override void Uninit()
+    {
         CommandManager.Instance().RemoveSubCommand(COMMAND);
+        LogMessageManager.Instance().Unreg(OnPreReceiveLogMessage);
+    }
 
     protected override void ConfigUI()
     {
@@ -47,10 +55,44 @@ public class LeaveDutyCommand : ModuleBase
         string args
     )
     {
-        if (ICondition.Instance()[ConditionFlag.InCombat])
+        var isInCombat = ICondition.Instance()[ConditionFlag.InCombat];
+
+        if (GameState.IsDutyCompleted || IsInSoloDuty())
+        {
+            DutyCommand.Leave
+            (
+                isInCombat ?
+                    DutyCommand.LeaveDutyKind.Inactive :
+                    DutyCommand.LeaveDutyKind.Normal
+            );
+        }
+
+        if (isInCombat)
             return;
 
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty);
+        DutyCommand.Leave();
+    }
+
+    private static bool IsInSoloDuty()
+    {
+        if (IPartyList.Instance().Length > 1)
+            return false;
+        
+        if (PlayersManager.Instance().PlayersTargetingMe.Count > 0)
+            return false;
+        
+        return true;
+    }
+    
+    private static void OnPreReceiveLogMessage
+    (
+        ref bool                isPrevented,
+        ref uint                logMessageID,
+        ref LogMessageQueueItem values
+    )
+    {
+        if (logMessageID != 914) return;
+        isPrevented = true;
     }
 
     #region 常量
