@@ -7,6 +7,7 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 
@@ -26,8 +27,20 @@ public unsafe class AutoDismount : ModuleBase
         AllDefaultEnabled = true
     };
 
+    private static readonly CompSig IsActionUsableSig =
+        new("48 89 5C 24 ?? 55 56 57 48 83 EC ?? 32 DB 41 8B F8 48 83 3D ?? ?? ?? ?? ?? 8B F2 48 8B E9");
+    private delegate byte IsActionUsableDelegate
+    (
+        ActionManager* actionManager,
+        ActionType     actionType,
+        uint           actionID
+    );
+    private IsActionUsableDelegate IsActionUsable = null!;
+
     protected override void Init()
     {
+        IsActionUsable = IsActionUsableSig.GetDelegate<IsActionUsableDelegate>();
+
         TaskHelper ??= new() { TimeoutMS = 1_500 };
 
         UseActionManager.Instance().RegPostUseAction(OnUseAction);
@@ -72,7 +85,7 @@ public unsafe class AutoDismount : ModuleBase
         );
     }
 
-    private static bool IsNeedToDismount
+    private bool IsNeedToDismount
     (
         ActionType actionType,
         uint       actionID,
@@ -94,6 +107,9 @@ public unsafe class AutoDismount : ModuleBase
 
         // 技能当前不可用
         if (!actionManager->IsActionOffCooldown(actionType, actionID)) return false;
+
+        // 检查技能本身的解锁、资源和附加条件，忽略骑乘状态限制
+        if (actionType == ActionType.Action && IsActionUsable(actionManager, actionType, actionID) == 0) return false;
 
         // 可以自身或地面为目标的技能
         if (actionRow is { CanTargetSelf: true } or { TargetArea: true }) return true;
