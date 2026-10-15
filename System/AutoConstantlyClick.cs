@@ -19,7 +19,7 @@ public unsafe class AutoConstantlyClick : ModuleBase
         Author      = ["AtmoOmen", "KirisameVanilla"]
     };
 
-    private static readonly CompSig CheckHotbarClickedSig = 
+    private static readonly CompSig CheckHotbarClickedSig =
         new("E8 ?? ?? ?? ?? 48 8B 4F ?? 48 8B 01 FF 50 ?? 48 8B C8 E8 ?? ?? ?? ?? 84 C0 74");
     private delegate void CheckHotbarClickedDelegate
     (
@@ -28,7 +28,7 @@ public unsafe class AutoConstantlyClick : ModuleBase
     );
     private Hook<CheckHotbarClickedDelegate>? CheckHotbarClickedHook;
 
-    private static readonly CompSig CheckCrossHotbarClickedSig = 
+    private static readonly CompSig CheckCrossHotbarClickedSig =
         new("89 54 24 ?? 48 89 4C 24 ?? 56 41 55");
     private delegate void CheckCrossHotbarClickedDelegate
     (
@@ -49,9 +49,9 @@ public unsafe class AutoConstantlyClick : ModuleBase
         config = Config.Load(this) ?? new();
 
         for (var i = 0; i <= MAX_KEY; i++)
-            inputIDInfos[i] = new HeldInfo();
+            inputIDInfos[i] = new();
 
-        CheckHotbarClickedHook ??= CheckHotbarClickedSig.GetHook<CheckHotbarClickedDelegate>(CheckHotbarClickedDetour);
+        CheckHotbarClickedHook      ??= CheckHotbarClickedSig.GetHook<CheckHotbarClickedDelegate>(CheckHotbarClickedDetour);
         CheckCrossHotbarClickedHook ??= CheckCrossHotbarClickedSig.GetHook<CheckCrossHotbarClickedDelegate>(CheckCrossHotbarClickedDetour);
 
         var inputIDManager = InputIDManager.Instance();
@@ -85,7 +85,7 @@ public unsafe class AutoConstantlyClick : ModuleBase
 
         var changed = false;
 
-        changed |= ImGui.Checkbox(Lang.Get("AutoConstantlyClick-MouseMode"), ref config.MouseMode);
+        changed |= ImGui.Checkbox(Lang.Get("AutoConstantlyClick-MouseMode"),   ref config.MouseMode);
         changed |= ImGui.Checkbox(Lang.Get("AutoConstantlyClick-GamepadMode"), ref config.GamepadMode);
 
         if (changed)
@@ -115,7 +115,7 @@ public unsafe class AutoConstantlyClick : ModuleBase
         ref InputId key
     )
     {
-        if (!isHandlingHotbarClick) return;
+        if (!isHandlingHotbarClick || key == InputId.HOT_PAD_RD_R) return;
         if (key is not (>= InputId.HOTBAR_UP and <= InputId.HOTBAR_CONTENTS_ACT_R) and
             not (>= InputId.HOT_PAD_CONTENT and <= InputId.HOT_PAD_TOPAGE8)) return;
 
