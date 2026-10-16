@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -27,6 +28,7 @@ using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using TimeAgo;
@@ -54,12 +56,10 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     (
         "40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3 48 8D 48 ?? 48 83 C4 ?? 5B E9 ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3"
     );
-
     private delegate nint SubmarineReturnTimeDelegate
     (
         SubmarineReturnTimePacket* packet
     );
-
     private Hook<SubmarineReturnTimeDelegate>? SubmarineReturnTimeHook;
 
     private Config config = null!;
@@ -402,9 +402,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                     {
                         var row = new ItemDisplayNode(itemID, width)
                         {
-                            IsVisible   = true,
-                            Size        = new(width, 38),
-                            ItemTooltip = itemID
+                            Size = new(width, 38),
                         };
                         row.AddNodeFlags(NodeFlags.HasCollision);
 
@@ -749,7 +747,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestSubmarine, 1);
     }
 
-    private static string SantisizeText
+    private static string SanitizeText
     (
         string text
     )
@@ -781,77 +779,57 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
             IconNode = new()
             {
-                Size       = new(32),
-                IsVisible  = true,
-                IconId     = LuminaWrapper.GetItemIconID(ItemID),
-                FitTexture = true
+                Size   = new(42),
+                ItemID = ItemID,
+                OnClick = (_, _, _, _, data) =>
+                {
+                    if (!data->IsRightClick)
+                        return;
+
+                    ContextMenuManager.Instance().OpenItem(IconNode.ItemID);
+                }
             };
 
             AddNode(IconNode);
 
-            AddDummy(5);
+            AddDummy(8);
 
             NameNode = new()
             {
-                IsVisible = true,
-                Position  = new(0, 6),
-                TextFlags = TextFlags.AutoAdjustNodeSize,
-                FontSize  = 14,
-                String    = LuminaWrapper.GetItemName(ItemID)
+                Height        = 34,
+                Width         = width - 24 - 10,
+                AlignmentType = AlignmentType.Left,
+                TextFlags     = TextFlags.WordWrap | TextFlags.MultiLine,
+                FontSize      = 14,
+                String        = LuminaWrapper.GetItemName(ItemID)
             };
 
             AddNode(NameNode);
 
-            var itemCount   = LocalPlayerState.GetItemCount(ItemID);
-            var textBuilder = new SeStringBuilder();
-
-            if (itemCount <= 20)
-            {
-                textBuilder.AddIcon(BitmapFontIcon.ExclamationRectangle)
-                           .AddText(" ");
-            }
-
-            textBuilder.AddText($"{itemCount}");
-
+            var itemCount = LocalPlayerState.GetItemCount(ItemID);
             CountNode = new()
             {
-                IsVisible     = true,
-                TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge | TextFlags.Emboss,
+                TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                 FontType      = FontType.MiedingerMed,
-                AlignmentType = AlignmentType.TopRight,
-                Position      = new(width - 20, 4),
-                TextColorID   = 50,
-                TextOutlineColorID = (uint)(itemCount > 20 ?
-                                                28 :
-                                                17),
-                FontSize = 16,
-                String   = textBuilder.Build().Encode()
+                AlignmentType = AlignmentType.Right,
+                Height        = 34,
+                Position      = new(width - 24, 0),
+                FontSize      = 18,
+                String        = $"{itemCount}"
             };
+            AtkColors.ValueEmphasize.ApplyTo(CountNode);
             CountNode.AttachNode(this);
         }
 
-        public uint           ItemID    { get; init; }
-        public IconImageNode? IconNode  { get; private set; }
-        public TextNode?      NameNode  { get; private set; }
-        public TextNode?      CountNode { get; private set; }
+        public uint          ItemID    { get; init; }
+        public ItemIconNode? IconNode  { get; private set; }
+        public TextNode?     NameNode  { get; private set; }
+        public TextNode?     CountNode { get; private set; }
 
         public void UpdateItemCount()
         {
-            var itemCount   = LocalPlayerState.GetItemCount(ItemID);
-            var textBuilder = new SeStringBuilder();
-
-            if (itemCount <= 20)
-            {
-                textBuilder.AddIcon(BitmapFontIcon.ExclamationRectangle)
-                           .AddText(" ");
-            }
-
-            textBuilder.AddText($"{itemCount}");
-
-            CountNode.String = textBuilder.Build().Encode();
-            CountNode.TextOutlineColorID = (uint)(itemCount > 20 ?
-                                                      28 :
-                                                      17);
+            var itemCount = LocalPlayerState.GetItemCount(ItemID);
+            CountNode.String = $"{itemCount}";
         }
 
         protected override void Dispose
@@ -961,7 +939,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     [
         .. LuminaGetter.GetRowOrDefault<HouFixCompanySubmarine>(2).Text.ToDalamudString().Payloads
                        .Where(x => x.Type == PayloadType.RawText)
-                       .Select(text => SantisizeText((text as TextPayload).Text))
+                       .Select(text => SanitizeText((text as TextPayload).Text))
                        .Where(x => !string.IsNullOrWhiteSpace(x))
                        .ToList()
     ];
