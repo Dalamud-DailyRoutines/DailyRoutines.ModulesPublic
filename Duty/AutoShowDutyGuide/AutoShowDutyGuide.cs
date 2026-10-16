@@ -4,30 +4,55 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Utility;
+using OmenTools.ImGuiOm.Markdown;
+using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
-using OmenTools.Threading.TaskHelper;
-using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
-public class AutoShowDutyGuide : ModuleBase
+public partial class AutoShowDutyGuide : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
         Title       = "自动显示副本攻略",
-        Description = "进入副本后，自动以悬浮窗形式显示来自“新大陆见闻录”网站的副本攻略",
+        Description = "进入副本后，自动在悬浮窗内显示来自“新大陆见闻录”网站的攻略。",
         Category    = ModuleCategory.Duty
+    };
+
+    public override ModulePermission Permission { get; } = new()
+    {
+        CNDefaultEnabled = true, 
+        TCDefaultEnabled = true
     };
 
     private Config config = null!;
 
-    private List<string> guideData = [];
-    private bool         isOnDebug;
+    private string            guideData = string.Empty;
+    private MarkdownDocument? guideDocument;
+
+    private DutyGuideMarkdownExtension markdownExtension = null!;
+    private ImGuiMarkdown              markdown          = null!;
+
+    private bool isOnDebug;
 
     protected override void Init()
     {
         config     =   Config.Load(this) ?? new();
-        TaskHelper ??= new TaskHelper { TimeoutMS = 60_000 };
+        TaskHelper ??= new() { TimeoutMS = 60_000 };
+
+        markdownExtension = new();
+        markdown = new
+        (
+            [markdownExtension],
+            new MarkdownConfig
+            {
+                BaseURL          = "https://ff14.org",
+                BaseFontScale    = config.FontScale,
+                BreakSoftLines   = true,
+                JoinCJKSoftLines = true,
+                OnLinkClicked    = OpenGuideLink
+            }
+        );
 
         Overlay                 ??= new Overlay(this);
         Overlay.Flags           &=  ~ImGuiWindowFlags.NoTitleBar;
@@ -42,29 +67,35 @@ public class AutoShowDutyGuide : ModuleBase
     protected override void Uninit()
     {
         IClientState.Instance().TerritoryChanged -= OnZoneChange;
-        guideData.Clear();
+
+        guideData     = string.Empty;
+        guideDocument = null;
     }
 
     protected override void ConfigUI()
     {
         ImGui.SetNextItemWidth(100f * GlobalUIScale);
         ImGui.InputFloat(Lang.Get("FontScale"), ref config.FontScale);
+
         if (ImGui.IsItemDeactivatedAfterEdit())
+        {
             config.Save(this);
+            markdown.Config = markdown.Config with { BaseFontScale = config.FontScale };
+        }
 
         using (ImRaii.Disabled(ICondition.Instance().IsBoundByDuty))
         {
             if (ImGui.Checkbox("调试模式", ref isOnDebug))
             {
                 TaskHelper.Abort();
-                guideData.Clear();
+                guideData      = string.Empty;
                 Overlay.IsOpen = false;
 
                 if (isOnDebug)
                     TaskHelper.EnqueueAsync(() => GetDutyGuide(1));
             }
 
-            ImGuiOm.TooltipHover("进入调试模式需要拉取在线数据，请耐心等待，切勿频繁开关");
+            ImGuiOm.TooltipHover("进入调试模式需要拉取在线数据，请耐心等待，切勿频繁开关。");
         }
     }
 
@@ -73,16 +104,12 @@ public class AutoShowDutyGuide : ModuleBase
 
     protected override void OverlayPreDraw()
     {
-        if (!isOnDebug && (!ICondition.Instance().IsBoundByDuty || guideData.Count <= 0))
+        if (!isOnDebug && (!ICondition.Instance().IsBoundByDuty || string.IsNullOrEmpty(guideData)))
         {
             Overlay.IsOpen = false;
-            guideData.Clear();
+            guideData      = string.Empty;
             TaskHelper.Abort();
-            return;
         }
-
-        if (guideData.Count > 0)
-            Overlay.WindowName = $"{guideData[0]}###AutoShowDutyGuide-GuideWindow";
     }
 
     protected override void OverlayUI()
@@ -102,24 +129,8 @@ public class AutoShowDutyGuide : ModuleBase
         ImGui.Separator();
         ImGui.Spacing();
 
-        for (var i = 1; i < guideData.Count; i++)
-        {
-            var       text = guideData[i];
-            using var id   = ImRaii.PushId($"DutyGuideLine-{i}");
-
-            ImGui.TextWrapped(text);
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-
-            if (ImGui.IsItemClicked())
-            {
-                ImGui.SetClipboardText(text);
-                NotifyHelper.Instance().Chat("已将本段攻略内容复制至剪贴板");
-            }
-
-            ImGui.NewLine();
-        }
+        if (guideDocument is not null)
+            markdown.Draw(guideDocument);
     }
 
     private void OnZoneChange
@@ -128,7 +139,7 @@ public class AutoShowDutyGuide : ModuleBase
     )
     {
         TaskHelper.Abort();
-        guideData.Clear();
+        guideData      = string.Empty;
         Overlay.IsOpen = false;
 
         if (GameState.ContentFinderCondition == 0) return;
@@ -145,18 +156,40 @@ public class AutoShowDutyGuide : ModuleBase
         {
             var originalText = await HTTPClientHelper.Instance().Get().GetStringAsync(string.Format(FF14_ORG_LINK_BASE, dutyID));
 
-            var plainText = originalText.SanitizeMarkdown();
-
-            if (!string.IsNullOrWhiteSpace(plainText))
+            if (!string.IsNullOrWhiteSpace(originalText))
             {
-                guideData      = [.. plainText.Split('\n')];
-                Overlay.IsOpen = true;
+                await markdownExtension.LoadComponentsAsync(originalText);
+                guideDocument = markdown.Parse(originalText);
+                guideData     = originalText;
+
+                Overlay.WindowName = $"{LuminaWrapper.GetContentName(dutyID)}###AutoShowDutyGuide-GuideWindow";
+                Overlay.IsOpen     = true;
             }
         }
         catch
         {
             // ignored
         }
+    }
+
+    private static void OpenGuideLink
+    (
+        string url
+    )
+    {
+        var target = new Uri(new Uri("https://ff14.org"), url);
+
+        if (target.Host == "ff14.org" && target.AbsolutePath.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+        {
+            var builder = new UriBuilder(target)
+            {
+                Path = target.AbsolutePath[..^3] + ".htm"
+            };
+            target = builder.Uri;
+        }
+
+        if (target.Scheme is "http" or "https" or "mailto")
+            Util.OpenLink(target.AbsoluteUri);
     }
 
     private class Config : ModuleConfig
@@ -167,7 +200,7 @@ public class AutoShowDutyGuide : ModuleBase
     #region 常量
 
     private const string FF14_ORG_LINK_BASE =
-        "https://gh.atmoomen.top/raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/docs/duty/{0}.md";
+        "https://gh.atmoomen.top/raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/src/content/docs/duty/{0}.mdx";
 
     #endregion
 }
