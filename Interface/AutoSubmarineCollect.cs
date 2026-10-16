@@ -22,6 +22,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Info.Lumina.ExtraSheets;
@@ -136,14 +137,31 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         using (ImRaii.ItemWidth(100f * GlobalUIScale))
         {
-            if (ImGui.InputUInt($"{Lang.Get("AutoSubmarineCollect-NotifyCount", config.NotifyCount)}###NotifyCountInput", ref config.NotifyCount))
+            var notifyCountLabel = Lang.Get
+            (
+                "AutoSubmarineCollect-NotifyCount",
+                new Dictionary<string, object>
+                {
+                    ["count"] = config.NotifyCount
+                }
+            ); 
+            
+            if (ImGui.InputUInt($"{notifyCountLabel}###NotifyCountInput", ref config.NotifyCount))
                 config.NotifyCount = Math.Clamp(config.NotifyCount, 0, 4);
             if (ImGui.IsItemDeactivatedAfterEdit())
                 config.Save(this);
 
+            var autoCollectCountLabel = Lang.Get
+            (
+                "AutoSubmarineCollect-AutoCollectCountInput",
+                new Dictionary<string, object>
+                {
+                    ["count"] = config.AutoCollectCount
+                }
+            );
             if (ImGui.InputUInt
                 (
-                    $"{Lang.Get("AutoSubmarineCollect-AutoCollectCount", config.AutoCollectCount)}###AutoCollectCount",
+                    $"{autoCollectCountLabel}###AutoCollectCount",
                     ref config.AutoCollectCount
                 ))
                 config.NotifyCount = Math.Clamp(config.NotifyCount, 0, 4);
@@ -612,7 +630,10 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             var message = Lang.GetSe
             (
                 "AutoSubmarineCollect-LackSpecificItems",
-                SeString.CreateItemLink(itemLacked)
+                new Dictionary<string, object>
+                {
+                    ["item"] = ReadOnlySeString.CreateItemLink(itemLacked, false)
+                }
             );
 
             NotifyHelper.Instance().Chat(message);
@@ -710,8 +731,11 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                     Lang.Get
                     (
                         "AutoSubmarineCollect-Notification-AllReturned",
-                        returnTime.ToString("yyyy/MM/dd HH:mm:ss"),
-                        returnTime.TimeAgo()
+                        new Dictionary<string, object>
+                        {
+                            ["exactTimeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss"),
+                            ["timeAgoText"]   = returnTime.TimeAgo()
+                        }
                     )
                 ]
             );
@@ -725,11 +749,15 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         }
         else
         {
+
             var message = Lang.Get
             (
                 "AutoSubmarineCollect-Notification-SomeExploring",
-                maxCount - finishedCount,
-                returnTime.ToString("yyyy/MM/dd HH:mm:ss")
+                new Dictionary<string, object>
+                {
+                    ["count"]    = maxCount - finishedCount,
+                    ["timeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss")
+                }
             );
 
             NotifyHelper.Instance().Chat(message);
