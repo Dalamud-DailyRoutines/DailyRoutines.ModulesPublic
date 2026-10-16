@@ -153,7 +153,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
             var autoCollectCountLabel = Lang.Get
             (
-                "AutoSubmarineCollect-AutoCollectCountInput",
+                "AutoSubmarineCollect-AutoCollectCount",
                 new Dictionary<string, object>
                 {
                     ["count"] = config.AutoCollectCount
