@@ -16,9 +16,9 @@
       },
       "TimeAgo.Core": {
         "type": "Direct",
-        "requested": "[1.1.0, )",
-        "resolved": "1.1.0",
-        "contentHash": "vECozrzeWThMPPXtBdpATwfh+5eGqboZILOYYckSVZSn54JC6L+fdfB307Xu2UDtPvB4kx/tfwGy5+1VgkATfA=="
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "gOfmpSS9ZYdtgi5okTKmDHHfzEWtXm30M/MeEnAW3AP84WYbzazNE3P21LpI9JVkPABjmfU2igSWSWpnPTv1tA=="
       },
       "TinyPinyin": {
         "type": "Direct",
@@ -95,7 +95,7 @@
           "Otp.NET": "[1.4.1, )",
           "RSASharp": "[1.0.0, )",
           "System.Management": "[10.0.11, )",
-          "TimeAgo.Core": "[1.1.0, )",
+          "TimeAgo.Core": "[1.2.0, )",
           "TinyPinyin": "[1.1.0, )"
         }
       },
@@ -105,17 +105,11 @@
           "KamiToolKit": "[1.0.0, )",
           "Microsoft.CodeAnalysis.CSharp": "[5.9.0, )",
           "OmenTools": "[1.0.0, )",
-          "TimeAgo.Core": "[1.1.0, )",
+          "TimeAgo.Core": "[1.2.0, )",
           "TinyPinyin": "[1.1.0, )"
         }
       },
       "ffxivclientstructs.expansion": {
-        "type": "Project",
-        "dependencies": {
-          "FFXIVClientStructs.Expansion.Runtime": "[1.0.0, )"
-        }
-      },
-      "ffxivclientstructs.expansion.runtime": {
         "type": "Project"
       },
       "kamitoolkit": {
