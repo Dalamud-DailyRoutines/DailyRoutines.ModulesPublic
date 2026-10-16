@@ -5,11 +5,11 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Threading.TaskHelper;
 using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
 using GameCabinet = FFXIVClientStructs.FFXIV.Client.Game.UI.Cabinet;
 using ItemSheet = Lumina.Excel.Sheets.Item;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
-using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 
@@ -17,6 +17,70 @@ public unsafe partial class UnifiedGlamourManager
 {
     private readonly List<UnifiedItem> items = [];
     private          bool              isRefreshingItems;
+
+    private StoredItemSource lastLoadedStorageSources;
+    private bool             hasReadPrismBoxItems;
+    private bool             hasReadCabinetItems;
+
+    private bool         pendingStorageRefresh;
+    private UnifiedItem? pendingReselectItem;
+    private TaskHelper?  refreshTaskHelper;
+
+    private void EnsureStoredItemsLoaded()
+    {
+        if (!IClientState.Instance().IsLoggedIn)
+            return;
+
+        var loadedSources = StoredItemSource.None;
+        if (TryGetLoadedMirageManager(out _))
+            loadedSources |= StoredItemSource.PrismBox;
+        if (GetLoadedCabinet() != null)
+            loadedSources |= StoredItemSource.Cabinet;
+
+        UpdateStoredItemSources(loadedSources);
+    }
+
+    private void UpdateStoredItemSources
+    (
+        StoredItemSource loadedSources
+    )
+    {
+        if ((lastLoadedStorageSources & ~loadedSources) != StoredItemSource.None)
+        {
+            pendingReselectItem ??= selectedItem;
+            refreshTaskHelper?.Abort();
+            ClearStoredItems();
+            pendingStorageRefresh = true;
+        }
+
+        var newlyLoaded          = (loadedSources & ~lastLoadedStorageSources) != StoredItemSource.None;
+        lastLoadedStorageSources = loadedSources;
+        if (isRefreshingItems && refreshTaskHelper?.IsBusy != true)
+        {
+            isRefreshingItems    = false;
+            hasReadPrismBoxItems = false;
+            hasReadCabinetItems  = false;
+            InvalidateOwnedEquipment();
+            pendingStorageRefresh = true;
+        }
+
+        if (loadedSources != StoredItemSource.None &&
+            (newlyLoaded || (pendingStorageRefresh && refreshTaskHelper?.IsBusy != true)))
+            StartRefreshAll();
+    }
+
+    private void ClearStoredItems()
+    {
+        isRefreshingItems    = false;
+        hasReadPrismBoxItems = false;
+        hasReadCabinetItems  = false;
+        items.Clear();
+        filteredItems.Clear();
+        selectedItem = null;
+        InvalidateOwnedEquipment();
+        presetEditorItemsDirty = true;
+        MarkFilteredItemsDirty(true, true);
+    }
 
     private static bool TryGetLoadedMirageManager
     (
@@ -45,24 +109,43 @@ public unsafe partial class UnifiedGlamourManager
         UnifiedItem? reselectItem = null
     )
     {
-        var itemToReselect = reselectItem ?? selectedItem;
+        if (!IClientState.Instance().IsLoggedIn)
+            return;
 
-        TaskHelper ??= new()
+        pendingStorageRefresh = true;
+        pendingReselectItem   = reselectItem ?? pendingReselectItem ?? selectedItem;
+        refreshTaskHelper ??= new()
         {
             TimeoutMS = TASK_TIMEOUT_MS
         };
-        TaskHelper.Abort();
+        if (refreshTaskHelper.IsBusy)
+            return;
 
+        var prismLoaded   = TryGetLoadedMirageManager(out _);
+        var cabinetLoaded = GetLoadedCabinet() != null;
+        if (!prismLoaded && !cabinetLoaded)
+        {
+            lastLoadedStorageSources = StoredItemSource.None;
+            ClearStoredItems();
+            return;
+        }
+
+        pendingStorageRefresh    = false;
+        var itemToReselect       = pendingReselectItem;
+        pendingReselectItem      = null;
+        lastLoadedStorageSources = StoredItemSource.None;
+        if (prismLoaded)
+            lastLoadedStorageSources |= StoredItemSource.PrismBox;
+        if (cabinetLoaded)
+            lastLoadedStorageSources |= StoredItemSource.Cabinet;
+
+        ClearStoredItems();
         isRefreshingItems = true;
-        items.Clear();
-        filteredItems.Clear();
-        MarkFilteredItemsDirty(true, true);
-
-        TaskHelper.Enqueue(() => RunRefreshStep(LoadPrismBoxItems, nameof(LoadPrismBoxItems)), nameof(LoadPrismBoxItems));
-        TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
-        TaskHelper.Enqueue(() => RunRefreshStep(LoadCabinetItems, nameof(LoadCabinetItems)), nameof(LoadCabinetItems));
-        TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
-        TaskHelper.Enqueue
+        refreshTaskHelper.Enqueue(() => ReadStoredSource(ItemSource.PrismBox), nameof(LoadPrismBoxItems));
+        refreshTaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
+        refreshTaskHelper.Enqueue(() => ReadStoredSource(ItemSource.Cabinet), nameof(LoadCabinetItems));
+        refreshTaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
+        refreshTaskHelper.Enqueue
         (
             () =>
             {
@@ -80,7 +163,9 @@ public unsafe partial class UnifiedGlamourManager
                 }
                 finally
                 {
-                    isRefreshingItems = false;
+                    isRefreshingItems      = false;
+                    presetEditorItemsDirty = true;
+                    InvalidateOwnedEquipment();
                     MarkFilteredItemsDirty(true, true);
                 }
             },
@@ -88,19 +173,39 @@ public unsafe partial class UnifiedGlamourManager
         );
     }
 
-    private static void RunRefreshStep
+    private void ReadStoredSource
     (
-        Action action,
-        string stepName
+        ItemSource itemSource
     )
     {
+        var isPrismBox = itemSource == ItemSource.PrismBox;
+        if (isPrismBox ?
+                !TryGetLoadedMirageManager(out _) :
+                GetLoadedCabinet() == null)
+        {
+            return;
+        }
+
         try
         {
-            action();
+            if (isPrismBox)
+            {
+                LoadPrismBoxItems();
+                hasReadPrismBoxItems = true;
+            }
+            else
+            {
+                LoadCabinetItems();
+                hasReadCabinetItems = true;
+            }
         }
         catch (Exception ex)
         {
-            DLog.Error($"UnifiedGlamourManager refresh step failed: {stepName}", ex);
+            if (isPrismBox)
+                hasReadPrismBoxItems = false;
+            else
+                hasReadCabinetItems = false;
+            DLog.Error($"UnifiedGlamourManager refresh step failed: {itemSource}", ex);
         }
     }
 

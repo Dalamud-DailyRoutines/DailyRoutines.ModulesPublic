@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
@@ -28,11 +29,23 @@ public partial class UnifiedGlamourManager : ModuleBase
         config = Config.Load(this) ?? new();
         NormalizeConfig();
 
+        if (string.IsNullOrEmpty(glamaholicImportPath))
+        {
+            glamaholicImportPath = Path.Combine
+            (
+                IDalamudPluginInterface.Instance().ConfigFile.DirectoryName!,
+                "Glamaholic.json"
+            );
+        }
+
         selectedPreset = config.Presets
                                .OrderByDescending(x => x.CreatedAt)
                                .FirstOrDefault();
 
         TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
+        IClientState.Instance().Login += ResetStoredItemsSession;
+        IClientState.Instance().Logout += OnStoredItemsLogout;
+        StartRefreshAll();
 
         Overlay ??= new(this);
 
@@ -54,6 +67,19 @@ public partial class UnifiedGlamourManager : ModuleBase
 
     protected override void Uninit()
     {
+        IClientState.Instance().Login -= ResetStoredItemsSession;
+        IClientState.Instance().Logout -= OnStoredItemsLogout;
+        EndPresetEditing();
+        openItemSearchMenu      = false;
+        itemSearchOptions       = [];
+        enablePresetLivePreview = false;
+        TaskHelper?.Abort();
+        tryOnTaskHelper?.Dispose();
+        tryOnTaskHelper = null;
+        refreshTaskHelper?.Abort();
+        refreshTaskHelper?.Dispose();
+        refreshTaskHelper = null;
+        importReadTask    = null;
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
         IAddonLifecycle.Instance().UnregisterListener(OnInspectAddon);

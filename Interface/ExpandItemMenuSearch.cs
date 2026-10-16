@@ -8,6 +8,8 @@ using DailyRoutines.Extensions;
 using Dalamud.Utility;
 using Lumina.Data;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud.Attributes;
+using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -589,4 +591,63 @@ public class ExpandItemMenuSearch : ModuleBase
 
         #endregion
     }
+
+    #region IPC
+
+    [IPCProvider("DailyRoutines.Modules.ExpandItemMenuSearch.GetItemSearchOptions")]
+    private Dictionary<string, string> GetItemSearchOptions
+    (
+        uint itemID
+    )
+    {
+        if (!IsEnabled || !LuminaGetter.TryGetRow<Item>(ItemUtil.GetBaseId(itemID).ItemId, out _))
+            return [];
+
+        var args = new ContextMenuOpenedArgs { TargetItemID = ItemUtil.GetBaseId(itemID).ItemId };
+        var options = SearchMenuItems
+                      .Where(x => config.SearchMenuEnabledStates.GetValueOrDefault(x.ConfigKey, x.DefaultEnabled) &&
+                                  x.IsDisplay(args))
+                      .ToDictionary
+                      (
+                          x => x.ConfigKey,
+                          x => Lang.Get("ExpandItemMenuSearch-ContextMenu-Search", x.PlatformName)
+                      );
+
+        if (options.Count > 1)
+            options.Add("*", Lang.Get("ExpandItemMenuSearch-ContextMenu-SearchAll"));
+
+        return options;
+    }
+
+    [IPCProvider("DailyRoutines.Modules.ExpandItemMenuSearch.SearchItem")]
+    private bool SearchItem
+    (
+        uint   itemID,
+        string platformKey
+    )
+    {
+        if (!IsEnabled || !LuminaGetter.TryGetRow<Item>(ItemUtil.GetBaseId(itemID).ItemId, out _))
+            return false;
+
+        var args = new ContextMenuOpenedArgs { TargetItemID = ItemUtil.GetBaseId(itemID).ItemId };
+        var opened = false;
+
+        foreach (var search in SearchMenuItems)
+        {
+            if (platformKey != "*" && search.ConfigKey != platformKey)
+                continue;
+            if (!config.SearchMenuEnabledStates.GetValueOrDefault(search.ConfigKey, search.DefaultEnabled) ||
+                !search.IsDisplay(args))
+            {
+                continue;
+            }
+
+            search.OnClicked(args);
+            opened = true;
+        }
+
+        return opened;
+    }
+
+    #endregion
 }

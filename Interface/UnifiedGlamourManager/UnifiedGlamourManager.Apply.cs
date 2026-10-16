@@ -1,5 +1,7 @@
 using DailyRoutines.Extensions;
 using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
@@ -185,10 +187,11 @@ public unsafe partial class UnifiedGlamourManager
         };
 
         preset.Items.AddRange(items);
+        NormalizePresetEquipment(preset);
 
         // 保存预设，清空输入框
         config.Presets.Add(preset);
-        selectedPreset = preset;
+        SelectPreset(preset, true);
 
         config.Save(this);
         NotifyHelper.Instance().NotificationSuccess(Lang.Get("SavedSuccessfully"));
@@ -201,10 +204,12 @@ public unsafe partial class UnifiedGlamourManager
             selectedPreset == null)
             return false;
 
-        var entries = selectedPreset.Items
-                                    .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
-                                    .OrderBy(x => x.SlotIndex)
-                                    .ToList();
+        var applyPreset = CopyPreset(selectedPreset);
+        NormalizePresetEquipment(applyPreset);
+        var entries = applyPreset.Items
+                                 .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
+                                 .OrderBy(x => x.SlotIndex)
+                                 .ToList();
 
         missingApplyItems.Clear();
 
@@ -318,14 +323,41 @@ public unsafe partial class UnifiedGlamourManager
         return true;
     }
 
+    private static bool CanTryOnPreset()
+    {
+        if (!IClientState.Instance().IsLoggedIn)
+            return false;
+
+        if (AgentTryon.Instance() == null)
+            return false;
+
+        var condition = ICondition.Instance();
+        var manager   = RaptureAtkUnitManager.Instance();
+        var dresser   = manager == null ?
+                            null :
+                            manager->GetAddonByName(nameof(MiragePrismPrismBox));
+        var plateEditor = manager == null ?
+                              null :
+                              manager->GetAddonByName(PLATE_EDITOR_ADDON_NAME);
+        var glamourWindowVisible =
+            (dresser != null && dresser->IsVisible) || (plateEditor != null && plateEditor->IsVisible);
+        return !condition.IsBetweenAreas && (!condition.IsOccupiedInEvent || glamourWindowVisible);
+    }
+
     private bool StartTryOnPreset
     (
-        PlatePreset preset
+        PlatePreset? preset,
+        Func<bool>?  canContinue = null
     )
     {
-        if (ICondition.Instance().IsOccupiedInEvent ||
-            AgentTryon.Instance() == null)
+        if (preset == null || IsDisposed || (canContinue != null && !canContinue()))
+            return true;
+
+        if (!CanTryOnPreset())
             return false;
+
+        preset = CopyPreset(preset);
+        NormalizePresetEquipment(preset);
 
         var entries = preset.Items
                             .Where
@@ -339,22 +371,59 @@ public unsafe partial class UnifiedGlamourManager
 
         if (entries is not { Count: > 0 })
         {
-            TaskHelper.Abort();
-            return true;
+            if (!InventoryType.EquippedItems.TryGetItems
+                (
+                    x => x.ItemId != 0 && PlateSlots.Contains(x.Slot),
+                    out var equipped
+                ) || equipped.Count == 0)
+            {
+                return true;
+            }
+
+            var current = equipped[0];
+            entries.Add
+            (
+                new
+                (
+                    (uint)Array.IndexOf(PlateSlots, current.Slot),
+                    current.GlamourId != 0 ?
+                        current.GlamourId :
+                        current.ItemId,
+                    current.Stains[0],
+                    current.Stains[1]
+                )
+            );
         }
 
-        AgentTryon.Instance()->SaveDeleteOutfit = true;
-
+        tryOnTaskHelper ??= new()
+        {
+            TimeoutMS = TASK_TIMEOUT_MS
+        };
+        tryOnTaskHelper.Abort();
+        var firstItem = true;
         foreach (var entry in entries)
         {
-            TaskHelper.Enqueue
+            tryOnTaskHelper.Enqueue
             (() =>
                 {
-                    AgentTryon.TryOn(0, entry.ItemID, entry.Stain0ID, entry.Stain1ID);
+                    if (IsDisposed || (canContinue != null && !canContinue()))
+                        return true;
+
+                    if (!CanTryOnPreset())
+                    {
+                        tryOnTaskHelper.Abort();
+                        return true;
+                    }
+
+                    if (firstItem)
+                        AgentTryon.Instance()->SaveDeleteOutfit = false;
+                    AgentTryon.TryOn(0, ItemUtil.GetBaseId(entry.ItemID).ItemId, entry.Stain0ID, entry.Stain1ID);
+                    AgentTryon.Instance()->SaveDeleteOutfit = true;
+                    firstItem = false;
                     return true;
                 }
             );
-            TaskHelper.DelayNext(50);
+            tryOnTaskHelper.DelayNext(50);
         }
 
         return true;
