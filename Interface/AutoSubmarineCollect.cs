@@ -19,6 +19,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Enums;
@@ -376,17 +377,16 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
                     itemListLayout = new()
                     {
-                        IsVisible = true,
-                        Position  = new(22, 15)
+                        Position = new(22, 15)
                     };
                     itemListLayout.AttachNode(SelectString->RootNode);
 
                     autoCollectNode = new()
                     {
-                        IsVisible = true,
-                        Position  = new(-10, 0),
-                        Size      = new(width - 15, 30),
-                        String    = Info.Title,
+                        Position    = new(-10, 0),
+                        TextureType = ButtonTextureType.ButtonB,
+                        Size        = new(width - 18, 32),
+                        String      = Info.Title,
                         OnClick = () =>
                         {
                             TaskHelper.Abort();
