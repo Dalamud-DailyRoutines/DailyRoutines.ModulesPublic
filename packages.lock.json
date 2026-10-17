@@ -10,9 +10,9 @@
       },
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
-        "requested": "[1.2.39, )",
-        "resolved": "1.2.39",
-        "contentHash": "fcFN01tDTIQqDuTwr1jUQK/geofiwjG5DycJQOnC72i1SsLAk1ELe+apBOuZ11UMQG8YKFZG1FgvjZPbqHyatg=="
+        "requested": "[2.0.5, )",
+        "resolved": "2.0.5",
+        "contentHash": "8LrlvI1KpjjJ4VGSqZ16yoOCKlQnYS+Y8rYNifNrscmVh5anJcF9E4e0NiDP30BHBMUbkoJ5KdcxoRWM7Pz9Aw=="
       },
       "TimeAgo.Core": {
         "type": "Direct",
@@ -28,8 +28,8 @@
       },
       "AngleSharp": {
         "type": "Transitive",
-        "resolved": "1.8.0",
-        "contentHash": "vRW/0M11Jlfd7WkT5Kr0tXXmnWNVdxyII2S2b6AsgZCJEBGaXCUnti6nKIJTvAjmnmKcQbvn+SJ3lpt8dqoLIA=="
+        "resolved": "1.8.5",
+        "contentHash": "BUgFIpmkjwMPi6QneHUHaprjUOGSXoWEF/xi/2seHCpnI8XMHACNiC09rn9qL8jbxrP8jWyJ3DnOjsGvXWNGmw=="
       },
       "DalamudPackager": {
         "type": "Transitive",
@@ -43,8 +43,8 @@
       },
       "Markdig": {
         "type": "Transitive",
-        "resolved": "0.43.0",
-        "contentHash": "tbP3Y/GYC5pIUWXw6Iqf+R5CwBGA4VJswnlgS2x3TgcHoH4IlnGVmL7hfA1sXkZoCPm/4mhzS8cJUkWhQthaPg=="
+        "resolved": "1.4.1",
+        "contentHash": "laiWlBRnwVqQlY9eWR56+uteUVtR+LpGw0doMSpirFuxdplSi3V59UOGRTepJaE8hJvfKGcCoguIZ8jmUHcEnA=="
       },
       "MessageFormat": {
         "type": "Transitive",
@@ -73,6 +73,19 @@
           "Microsoft.CodeAnalysis.Common": "[5.9.0]"
         }
       },
+      "Microsoft.Extensions.DependencyInjection": {
+        "type": "Transitive",
+        "resolved": "10.0.13",
+        "contentHash": "4tnWU9vrU/A8NwYe9Z6wvieZ0EBb/uM82LAT+edNhdepOBWREZ7M7mzb941EIDPJaeOFdbVrDd5+7s9e89U6bQ==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.13"
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.13",
+        "contentHash": "G2GrGWNAPZBsii2F6AU8n+JT2tC1/I0Ml/e9ZyNCgPjf3hZqronP7o0X91aAynCmVeae8KkSIUNXXeXCNRmdVQ=="
+      },
       "Otp.NET": {
         "type": "Transitive",
         "resolved": "1.4.1",
@@ -80,8 +93,8 @@
       },
       "System.Management": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "xyNn8KGbWI88LoUwg3rB8qcpFFST6dr8Ro/qS8GBu2GOwR0v7J82kVFHTiiPtvEKS79VbMTxs/sIKQ+Cq1Zs1g=="
+        "resolved": "10.0.13",
+        "contentHash": "cL8qiJmJtlSIcAoZH4s07VTxTdddvEP12MFeM+KBZagn4CuD/0SFQsmKn5g9MLfiSrYjdAxIwOTO0kATY9A0UA=="
       },
       "dailyroutines": {
         "type": "Project",
@@ -94,7 +107,7 @@
           "OmenTools.KamiToolKit": "[1.0.0, )",
           "Otp.NET": "[1.4.1, )",
           "RSASharp": "[1.0.0, )",
-          "System.Management": "[10.0.11, )",
+          "System.Management": "[10.0.13, )",
           "TimeAgo.Core": "[1.2.0, )",
           "TinyPinyin": "[1.1.0, )"
         }
@@ -118,11 +131,12 @@
       "omentools": {
         "type": "Project",
         "dependencies": {
-          "AngleSharp": "[1.8.0, )",
+          "AngleSharp": "[1.8.5, )",
           "FFXIVClientStructs.Expansion": "[1.0.0, )",
           "GuerrillaNtp": "[3.1.0, )",
-          "Markdig": "[0.43.0, )",
+          "Markdig": "[1.4.1, )",
           "MessageFormat": "[8.0.0, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.13, )",
           "TinyPinyin": "[1.1.0, )"
         }
       },
