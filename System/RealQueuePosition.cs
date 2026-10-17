@@ -33,7 +33,8 @@ public unsafe class RealQueuePosition : ModuleBase
     
     private Hook<ContentsFinderQueueInfo.Delegates.ProcessInfoState>? ContentFinderQueuePositionDataHook;
 
-    private DateTime eta = StandardTimeManager.Instance().Now;
+    private uint     worldTravelPosition;
+    private DateTime worldTravelETA = StandardTimeManager.Instance().Now;
 
     protected override void Init()
     {
@@ -70,8 +71,8 @@ public unsafe class RealQueuePosition : ModuleBase
     {
         if (packet->Status == AgentWorldTravel.WorldTravelStatus.InQueue)
         {
-            var position = packet->QueuePosition;
-            eta = StandardTimeManager.Instance().Now.AddSeconds(CalculateWaitTime(position));
+            worldTravelPosition = packet->QueuePosition;
+            worldTravelETA      = StandardTimeManager.Instance().Now.AddSeconds(CalculateWaitTime(worldTravelPosition));
         }
 
         OnWorldTravelStatusPacketHook.Original(agent, packet);
@@ -96,13 +97,10 @@ public unsafe class RealQueuePosition : ModuleBase
 
         if (numberArray->IntArray[5] > 0)
             index = 6;
-
-        var position    = agent->QueuePosition;
-        var positionStr = ISeStringEvaluator.Instance().EvaluateFromAddon(10039, [position]);
-
+        
         using var builder = new RentedSeStringBuilder();
         builder.Append(LuminaWrapper.GetAddonText(12522))
-               .Append(positionStr);
+               .Append(ISeStringEvaluator.Instance().EvaluateFromAddon(10039, [worldTravelPosition]));
         stringArray->SetValue(index, builder.GetViewAsSpan());
 
         var queueTime = TimeSpan.FromSeconds(agent->ElapsedQueueTimeSecond);
@@ -112,7 +110,7 @@ public unsafe class RealQueuePosition : ModuleBase
             new Dictionary<string, object>
             {
                 ["currentTimeText"]   = @$"{queueTime:mm\:ss}",
-                ["estimatedTimeText"] = @$"{eta - StandardTimeManager.Instance().Now:mm\:ss}"
+                ["estimatedTimeText"] = @$"{worldTravelETA - StandardTimeManager.Instance().Now:mm\:ss}"
             }
         );
         stringArray->SetValue(index + 1, info);
