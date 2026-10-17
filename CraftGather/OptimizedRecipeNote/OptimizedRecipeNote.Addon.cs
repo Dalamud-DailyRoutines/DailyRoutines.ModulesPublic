@@ -325,7 +325,7 @@ public partial class OptimizedRecipeNote
 
                                 UpdateCraftRoundProgress(currentRound + 1, totalCraftRound);
 
-                                AgentId.RecipeNote.SendEvent(0, 8);
+                                RecipeNoteAddon->Callback(8);
                             }
                         );
 
