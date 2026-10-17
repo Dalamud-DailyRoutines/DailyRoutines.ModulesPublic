@@ -318,12 +318,11 @@ public class MoreMessageFilterPresets : ModuleBase
 
     private static unsafe int GetContextMenuTabIndex()
     {
-        var agent = AgentModule.Instance()->GetAgentChatLog();
-        if (agent == null) return -1;
+        var agent = AgentChatLog.Instance();
+        if (agent == null) 
+            return -1;
 
-        // AgentChatLog + 0x198: 右键菜单所对应的消息栏索引
-        // TODO：等待 FFCS 的 PR 合并到 AgentChatLog 里 ContextTabIndex
-        var index = MemoryHelper.Read<int>((nint)agent + 0x198);
+        var index = agent->ContextTabIndex;
 
         return index is >= 0 and < LOG_TAB_COUNT ? index : -1;
     }
