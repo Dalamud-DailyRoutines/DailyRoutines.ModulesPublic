@@ -203,7 +203,6 @@ public unsafe class InstantLogout : ModuleBase
         // 避免那边修改不到
         taskHelper.DelayNext(500);
 
-        // 实际上为帧数倒数 TODO：FFCS
         taskHelper.Enqueue
         (
             () => AgentLobby.Instance()->FramesUntilLogout == 0 &&
