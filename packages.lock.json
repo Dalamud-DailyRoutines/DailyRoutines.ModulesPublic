@@ -103,6 +103,7 @@
           "DalamudPackager": "[15.0.0, )",
           "KamiToolKit": "[1.0.0, )",
           "Microsoft.CodeAnalysis.CSharp": "[5.9.0, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.13, )",
           "OmenTools": "[1.0.0, )",
           "OmenTools.KamiToolKit": "[1.0.0, )",
           "Otp.NET": "[1.4.1, )",
