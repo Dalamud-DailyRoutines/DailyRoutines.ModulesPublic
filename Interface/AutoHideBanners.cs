@@ -9,7 +9,6 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -24,15 +23,7 @@ public unsafe class AutoHideBanners : ModuleBase
         Author      = ["XSZYYS"]
     };
     
-    private static readonly CompSig SetImageSig = new("48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 89 91");
-    private delegate void SetImageDelegate
-    (
-        AddonImage*   addon,
-        int           bannerID,
-        IconSubFolder folder,
-        int           soundEffectID
-    );
-    private Hook<SetImageDelegate>? SetImageHook;
+    private Hook<AddonImage.Delegates.SetImage>? SetImageHook;
 
     private Config config = null!;
 
@@ -44,14 +35,20 @@ public unsafe class AutoHideBanners : ModuleBase
 
         foreach (var bannerID in BannersData)
         {
-            if (!config.HiddenBanners.TryAdd(bannerID, DefaultEnabledBanners.Contains(bannerID))) continue;
+            if (!config.HiddenBanners.TryAdd(bannerID, DefaultEnabledBanners.Contains(bannerID))) 
+                continue;
             isAnyAdded = true;
         }
 
         if (isAnyAdded)
             config.Save(this);
 
-        SetImageHook = SetImageSig.GetHook<SetImageDelegate>(SetImageDetour);
+        SetImageHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AddonImage.MemberFunctionPointers),
+            nameof(AddonImage.SetImage),
+            (AddonImage.Delegates.SetImage)SetImageDetour
+        );
         SetImageHook.Enable();
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreDraw, "_WKSMissionChain", OnAddon);
