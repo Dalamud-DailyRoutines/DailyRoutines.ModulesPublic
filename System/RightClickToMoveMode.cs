@@ -159,7 +159,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.RadioButton(MoveModeTitles[moveMode], moveMode == moduleConfig.MoveMode))
                 {
                     moduleConfig.MoveMode = moveMode;
-                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.Save(this);
                 }
             }
 
@@ -187,7 +187,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.RadioButton(ControlModeTitles[controlMode], controlMode == moduleConfig.ControlMode))
                 {
                     moduleConfig.ControlMode = controlMode;
-                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.Save(this);
                 }
             }
 
@@ -213,7 +213,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.Selectable(keyToSelect.GetFancyName()))
                 {
                     moduleConfig.ComboKey = keyToSelect;
-                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.Save(this);
                 }
             }
         }
@@ -236,7 +236,7 @@ public class RightClickToMoveMode : ModuleBase
                 if (ImGui.RadioButton(IndicatorStyleTitles[indicatorStyle], indicatorStyle == moduleConfig.IndicatorStyle))
                 {
                     moduleConfig.IndicatorStyle = indicatorStyle;
-                    moduleConfig.Save(ModuleManager.Instance().GetModule<RightClickToMoveMode>());
+                    moduleConfig.Save(this);
                 }
             }
 

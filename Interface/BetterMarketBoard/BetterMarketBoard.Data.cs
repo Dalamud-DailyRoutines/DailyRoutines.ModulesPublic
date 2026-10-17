@@ -461,7 +461,7 @@ public unsafe partial class BetterMarketBoard
                                              .OrderByDescending(x => x.Value.AccessTime)
                                              .Take(50)
                                              .ToDictionary(x => x.Key, x => x.Value);
-            owner.config.Save(ModuleManager.Instance().GetModule<BetterMarketBoard>());
+            owner.config.Save(owner);
         }
 
         public void ClearAllData()

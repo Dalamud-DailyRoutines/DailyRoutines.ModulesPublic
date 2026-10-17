@@ -633,7 +633,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
                                         module.GetDisplayWeather() :
                                         originalSetting.WeatherID
                     };
-                    module.config.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
+                    module.config.Save(module);
 
                     NotifyHelper.ToastQuest
                     (
@@ -655,7 +655,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
                 {
                     if (module.config.ZoneSettings.Remove(GameState.TerritoryType))
                     {
-                        module.config.Save(ModuleManager.Instance().GetModule<FastSetWeatherTime>());
+                        module.config.Save(module);
                         NotifyHelper.ToastQuest(Lang.Get("FastSetWeatherTime-Notification-Cleard"));
                     }
                 }

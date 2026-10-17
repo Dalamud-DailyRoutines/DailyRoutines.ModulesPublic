@@ -134,7 +134,7 @@ public partial class AutoMarksFinder : ModuleBase
             {
                 config.Trains.Add(new(newListNameInput));
                 config.Trains = [.. config.Trains.OrderByDescending(x => x.GeneratedTime)];
-                config.Save(ModuleManager.Instance().GetModule<AutoMarksFinder>());
+                config.Save(this);
             }
         }
 

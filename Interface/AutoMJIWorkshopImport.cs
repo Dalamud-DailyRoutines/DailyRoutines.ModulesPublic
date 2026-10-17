@@ -120,7 +120,7 @@ public unsafe partial class AutoMJIWorkshopImport : ModuleBase
 
         ImGui.SameLine();
         if (ImGui.Checkbox("忽略 4 号工房", ref config.IgnoreFourthWorkshop))
-            config.Save(ModuleManager.Instance().GetModule<AutoMJIWorkshopImport>());
+            config.Save(this);
     }
 
     private void DrawBulkApplySection()

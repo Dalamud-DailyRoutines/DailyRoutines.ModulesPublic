@@ -830,7 +830,7 @@ public partial class AutoMarksFinder
                             if (parsed is not { Count: > 0 }) return;
 
                             config.ScanPoints = parsed;
-                            config.Save(ModuleManager.Instance().GetModule<AutoMarksFinder>());
+                            config.Save(this);
 
                             NotifyHelper.Instance().NotificationInfo
                             (
@@ -1040,7 +1040,7 @@ public partial class AutoMarksFinder
                 {
                     var result = scanner.FoundOnes.SelectMany(x => x.Value).Distinct().ToList();
                     config.Trains[selectedTrainIndex].MonstersFound.AddRange(result);
-                    config.Save(ModuleManager.Instance().GetModule<AutoMarksFinder>());
+                    config.Save(this);
 
                     NotifyHelper.Instance().NotificationInfo(Lang.Get("SavedSuccessfully"));
                 }

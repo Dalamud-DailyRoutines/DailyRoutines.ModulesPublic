@@ -176,7 +176,7 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
             OnClick = newState =>
             {
                 config.OnlyInactive = newState;
-                config.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
+                config.Save(this);
             },
             Position = new(0, 1)
         };
@@ -191,7 +191,7 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
             OnValueUpdate = newValue =>
             {
                 config.RefreshInterval = newValue;
-                config.Save(ModuleManager.Instance().GetModule<AutoRefreshPartyFinder>());
+                config.Save(this);
 
                 cooldown = config.RefreshInterval;
                 refreshTimer.Restart();

@@ -552,7 +552,7 @@ public partial class AutoReplyChatBot
 
         try
         {
-            config.Save(ModuleManager.Instance().GetModule<AutoReplyChatBot>());
+            config.Save(this);
         }
         catch
         {
