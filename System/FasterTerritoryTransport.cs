@@ -49,7 +49,7 @@ public class FasterTerritoryTransport : ModuleBase
         WarpType.Teleport,
         WarpType.Return,
         WarpType.Resurrection,
-        (WarpType)5, // 复活 TODO: FFCS WarpType.Revive
+        WarpType.Revive,
         WarpType.HousingTeleport,
         WarpType.TownTranslate,
         WarpType.WorldTransfer,
