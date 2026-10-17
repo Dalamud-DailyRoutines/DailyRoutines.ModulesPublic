@@ -3,13 +3,14 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using FFXIVClientStructs.Expansion.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using OmenTools.Interop.Game.Helpers;
-using OmenTools.Threading;
+using OmenTools.OmenService;
+using EventFramework = FFXIVClientStructs.FFXIV.Client.Game.Event.EventFramework;
+using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic.Duty;
 
-// TODO: 疑似失效，需要检查
 public unsafe class AutoShowFrontlineKillCount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -29,20 +30,8 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
 
     protected override void Init()
     {
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw, "PvPFrontlineGauge", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "PvPFrontlineGauge", OnAddon);
         IClientState.Instance().TerritoryChanged += OnZoneChanged;
-
-        if (PvPFrontlineGauge->IsAddonAndNodesReady())
-        {
-            try
-            {
-                lastKillCount = PvPFrontlineGauge->AtkValues[6].UInt;
-            }
-            catch
-            {
-                // ignored
-            }
-        }
     }
 
     protected override void Uninit()
@@ -75,25 +64,19 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         AddonArgs  args
     )
     {
-        if (PvPFrontlineGauge == null) return;
-        if (!Throttler.Shared.Throttle("AutoShowFrontlineKillCount-OnUpdate", 100)) return;
+        if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.Frontline) return;
 
-        var killCount = 0U;
+        var eventFramework = EventFramework.Instance();
+        if (eventFramework == null) return;
 
-        try
-        {
-            killCount = PvPFrontlineGauge->AtkValues[6].UInt;
-        }
-        catch
-        {
-            killCount = lastKillCount;
-        }
+        var director = eventFramework->DirectorModule.ActiveContentDirector;
+        if (director == null) return;
 
-        if (lastKillCount != killCount)
-        {
-            DisplayKillCount(killCount);
-            lastKillCount = killCount;
-        }
+        var killCount = (uint)((FrontlineDirector*)director)->KillCount;
+        if (lastKillCount == killCount) return;
+
+        DisplayKillCount(killCount);
+        lastKillCount = killCount;
     }
 
     private void OnZoneChanged
@@ -107,10 +90,10 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         uint killCount
     )
     {
-        if (AddonHelper.TryGetByName("_Streak", out var addon))
+        if (Streak != null)
         {
-            addon->IsVisible = false;
-            addon->Close(true);
+            Streak->IsVisible = false;
+            Streak->Close(true);
         }
 
         UIModule.Instance()->ShowStreak
