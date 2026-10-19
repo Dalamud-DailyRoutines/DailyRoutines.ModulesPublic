@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
+using Lumina.Text.ReadOnly;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -166,7 +167,7 @@ public class AutoTrackPlayers : ModuleBase
                 return null;
 
             var isTracked     = module.trackedPlayers.ContainsKey(contentID);
-            var playerPayload = new PlayerPayload(playerName, homeWorldID);
+            var playerPayload = ReadOnlySeString.CreatePlayerLink(playerName, homeWorldID);
 
             if (isTracked)
             {
@@ -186,7 +187,10 @@ public class AutoTrackPlayers : ModuleBase
                         var message = Lang.GetSe
                         (
                             "AutoTrackPlayers-Notification-NotToTrack",
-                            playerPayload
+                            new Dictionary<string, object>
+                            {
+                                ["player"] = playerPayload
+                            }
                         );
                         
                         NotifyHelper.Instance().Chat(message);
@@ -210,8 +214,11 @@ public class AutoTrackPlayers : ModuleBase
                     var message = Lang.GetSe
                     (
                         "AutoTrackPlayers-Notification-ToTrack",
-                        playerPayload,
-                        COMMAND
+                        new Dictionary<string, object>
+                        {
+                            ["player"]  = playerPayload,
+                            ["command"] = COMMAND
+                        }
                     );
                         
                     NotifyHelper.Instance().Chat(message);
@@ -300,7 +307,10 @@ public class AutoTrackPlayers : ModuleBase
                             var message = Lang.GetSe
                             (
                                 "AutoTrackPlayers-Notification-NotToTrack",
-                                new PlayerPayload(name, world)
+                                new Dictionary<string, object>
+                                {
+                                    ["player"] = ReadOnlySeString.CreatePlayerLink(name, world)
+                                }
                             );
                         
                             NotifyHelper.Instance().Chat(message);

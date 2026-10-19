@@ -6,6 +6,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
@@ -132,7 +133,15 @@ public unsafe class AutoUseItemStacks : ModuleBase
             if (finishRound == 0)
                 return;
 
-            var finishMessage = Lang.GetSe("AutoUseItemStacks-Notification-Finished", finishRound, SeString.CreateItemLink(itemID, false));
+            var finishMessage = Lang.GetSe
+            (
+                "AutoUseItemStacks-Notification-Finished",
+                new Dictionary<string, object>
+                {
+                    ["item"]  = ReadOnlySeString.CreateItemLink(itemID, false),
+                    ["count"] = finishRound
+                }
+            );
             NotifyHelper.Toast(finishMessage);
             NotifyHelper.Instance().Chat(finishMessage);
         }

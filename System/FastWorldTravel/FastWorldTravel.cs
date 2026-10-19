@@ -153,7 +153,10 @@ public partial class FastWorldTravel : ModuleBase
                 Prompt = Lang.GetSe
                 (
                     "FastWorldTravel-Notification-TravelBackConfirm",
-                    builder
+                    new Dictionary<string, object>
+                    {
+                        ["worldText"] = builder
+                    }
                 ),
                 Callback = (_, result) =>
                 {

@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Group;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.Interop;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -84,8 +85,11 @@ public unsafe class FastRidePillion : ModuleBase
             var message = Lang.GetSe
             (
                 "FastRidePillion-Notification-Rode",
-                new PlayerPayload(owner->NameString, owner->HomeWorld),
-                seatIndex + 1
+                new Dictionary<string, object>
+                {
+                    ["player"] = ReadOnlySeString.CreatePlayerLink(owner->NameString, owner->HomeWorld),
+                    ["seat"] = seatIndex + 1
+                }
             );
             NotifyHelper.Toast(message);
             return;
@@ -145,8 +149,11 @@ public unsafe class FastRidePillion : ModuleBase
         var message = Lang.GetSe
         (
             "FastRidePillion-Notification-Rode",
-            new PlayerPayload(owner->NameString, owner->HomeWorld),
-            seatIndex + 1
+            new Dictionary<string, object>
+            {
+                ["player"] = ReadOnlySeString.CreatePlayerLink(owner->NameString, owner->HomeWorld),
+                ["seat"]   = seatIndex + 1
+            }
         );
         NotifyHelper.Toast(message);
         return true;
