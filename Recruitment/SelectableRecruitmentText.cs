@@ -5,7 +5,6 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.KamiToolKit.Nodes;
 
@@ -29,12 +28,11 @@ public unsafe class SelectableRecruitmentText : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private TextMultiLineInputNode? recruitmentTextNode;
-    private ulong                   lastViewedListingID;
+    private TextMultiLineInputNode? inputNode;
 
     protected override void Init()
     {
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "LookingForGroupDetail", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "LookingForGroupDetail", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
 
         if (LookingForGroupDetail->IsAddonAndNodesReady())
@@ -45,8 +43,8 @@ public unsafe class SelectableRecruitmentText : ModuleBase
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
 
-        recruitmentTextNode?.Dispose();
-        recruitmentTextNode = null;
+        inputNode?.Dispose();
+        inputNode = null;
     }
 
     private void OnAddon
@@ -55,52 +53,59 @@ public unsafe class SelectableRecruitmentText : ModuleBase
         AddonArgs? args
     )
     {
+        var addonBase = args != null ?
+                            (AtkUnitBase*)args.Addon.Address :
+                            LookingForGroupDetail;
+        if (addonBase == null) return;
+
         switch (type)
         {
             case AddonEvent.PreFinalize:
-                recruitmentTextNode = null;
-                lastViewedListingID = 0;
+                if (inputNode is null ||
+                    inputNode.ParentAddon != addonBase)
+                    break;
+                
+                inputNode = null;
                 break;
 
-            case AddonEvent.PostDraw:
-                var addon = (AddonLookingForGroupDetail*)LookingForGroupDetail;
-                if (addon == null) return;
+            case AddonEvent.PostRefresh:
+                var addon = (AddonLookingForGroupDetail*)addonBase;
 
-                var origText = addon->DescriptionTextNode;
-                if (origText == null) return;
+                var descriptionTextNode = addon->DescriptionTextNode;
+                if (descriptionTextNode == null) return;
 
-                var origButton = addon->GetComponentButtonById(18);
-                if (origButton == null) return;
+                var joinButton = addon->GetComponentButtonById(18);
+                if (joinButton == null) return;
 
-                var textNodeContainer = addon->GetNodeById(19);
-                if (textNodeContainer == null) return;
-                
-                if (lastViewedListingID == AgentLookingForGroup.Instance()->LastViewedListing.ListingId)
-                    return;
-                lastViewedListingID = AgentLookingForGroup.Instance()->LastViewedListing.ListingId;
-                
-                origButton->OwnerNode->Timeline = null;
-                origButton->OwnerNode->ToggleVisibility(false);
-                
-                origText->Timeline = null;
-                origText->ToggleVisibility(false);
-                
-                textNodeContainer->Timeline = null;
-                textNodeContainer->ToggleVisibility(false);
-                
-                recruitmentTextNode?.Dispose();
-                recruitmentTextNode = new()
+                var textContainerNode = addon->GetNodeById(19);
+                if (textContainerNode == null) return;
+
+                var targetNode = joinButton->OwnerNode->ParentNode;
+                if (targetNode == null) return;
+
+                joinButton->OwnerNode->Timeline = null;
+                joinButton->OwnerNode->ToggleVisibility(false);
+
+                descriptionTextNode->Timeline = null;
+                descriptionTextNode->ToggleVisibility(false);
+
+                textContainerNode->Timeline = null;
+                textContainerNode->ToggleVisibility(false);
+
+                inputNode?.Dispose();
+                inputNode = new()
                 {
                     AutoUpdateHeight = false,
                     Size             = new(520, 60),
-                    Position         = new Vector2(origButton->OwnerNode->X, origButton->OwnerNode->Y) - new Vector2(10, 8),
-                    ShowLimitText    = false
+                    Position         = new Vector2(joinButton->OwnerNode->X, joinButton->OwnerNode->Y) - new Vector2(10, 8),
+                    ShowLimitText    = false,
+                    String           = [with(addon->RawDescription.AsSpan())]
                 };
-                recruitmentTextNode.Component->EnableCompletion = true;
-                recruitmentTextNode.CurrentTextNode.TextFlags |= TextFlags.WordWrap;
-                recruitmentTextNode.Component->SetText(addon->RawDescription);
-                
-                recruitmentTextNode.AttachNode(&addon->AtkUnitBase);
+                inputNode.Component->EnableCompletion =  true;
+                inputNode.CurrentTextNode.TextFlags   |= TextFlags.WordWrap;
+                inputNode.Component->SetText(addon->RawDescription);
+
+                inputNode.AttachNode(targetNode);
                 break;
         }
     }

@@ -32,24 +32,22 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         AllDefaultEnabled = true
     };
 
+    private TextButtonNode?   button;
     private SelectYesnoAddon? confirmAddon;
-
-    private TextButtonNode? button;
 
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 10_000 };
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreDraw,     "LookingForGroupDetail", OnAddon);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRefresh,  "LookingForGroupDetail", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "LookingForGroupDetail", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "LookingForGroupDetail", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "SelectYesno",           OnAddonYesno);
+
         if (LookingForGroupDetail->IsAddonAndNodesReady())
-            OnAddon(AddonEvent.PreRefresh, null);
+            OnAddon(AddonEvent.PostRefresh, null);
 
         if (LookingForGroup->IsAddonAndNodesReady())
             AgentId.LookingForGroup.SendEvent(1, 17);
-
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddonYesno);
     }
 
     protected override void Uninit()
@@ -79,18 +77,22 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         AddonArgs? args
     )
     {
+        var addonBase = args != null ?
+                            (AtkUnitBase*)args.Addon.Address :
+                            LookingForGroupDetail;
+        if (addonBase == null) return;
+
         switch (type)
         {
-            case AddonEvent.PreRefresh:
-                CreateButton(LookingForGroupDetail, TaskHelper);
-                break;
-
-            case AddonEvent.PreDraw:
-                UpdateOtherButtons(LookingForGroupDetail);
-                break;
-
             case AddonEvent.PreFinalize:
-                button = null;
+                if (button is not null && button.ParentAddon == addonBase)
+                    button = null;
+
+                break;
+
+            case AddonEvent.PostRefresh:
+                CreateButton(addonBase, TaskHelper);
+                UpdateOtherButtons(addonBase);
                 break;
         }
     }
@@ -101,21 +103,18 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         TaskHelper   taskHelper
     )
     {
-        if (addon == null || button != null) return;
-
         // 团队招募
         var partyCount = addon->AtkValues[19].UInt;
         if (partyCount != 1) return;
 
-        var agent = AgentLookingForGroup.Instance();
-
         // 自己开的招募
-        if (agent->ListingContentId == LocalPlayerState.ContentID) return;
+        if (AgentLookingForGroup.Instance()->ListingContentId == LocalPlayerState.ContentID) return;
 
         // 底部操作栏容器
         var containerNode = addon->GetNodeById(108);
         if (containerNode == null) return;
 
+        button?.Dispose();
         button = new()
         {
             Size      = new(140, 28),
@@ -126,6 +125,10 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
             OnClick = () =>
             {
                 confirmAddon?.Dispose();
+
+                var detailAddon = LookingForGroupDetail;
+                var agent       = AgentLookingForGroup.Instance();
+                if (detailAddon == null) return;
 
                 using var rented  = new RentedSeStringBuilder();
                 var       builder = rented.Builder;
@@ -149,11 +152,11 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
                             120,
                             [builder.ToReadOnlySeString()]
                         ),
-                        BlockedParentID = addon->Id,
-                        ParentID        = addon->Id,
+                        BlockedParentID = detailAddon->Id,
+                        ParentID        = detailAddon->Id,
                         Position = new
                         (
-                            addon->RootNode->GetNodeState().Center,
+                            detailAddon->RootNode->GetNodeState().Center,
                             AddonPositionAlignment.TopCenter
                         ),
                         Callback = (_, result) =>
@@ -178,8 +181,6 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         AtkUnitBase* addon
     )
     {
-        if (addon == null) return;
-
         // 团队招募
         var partyCount = addon->AtkValues[19].UInt;
         if (partyCount != 1) return;
