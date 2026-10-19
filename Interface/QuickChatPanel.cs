@@ -1,5 +1,6 @@
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -358,6 +359,8 @@ public unsafe class QuickChatPanel : ModuleBase
 
     private class Config : ModuleConfig
     {
+        public float OverlayScale = 10f;
+        
         public MacroDisplayMode         OverlayMacroDisplayMode = MacroDisplayMode.Buttons;
         public Vector2                  OverlayOffset           = new(0);
         public QuickChatTab             SelectedTab             = QuickChatTab.Messages;
@@ -433,6 +436,9 @@ public unsafe class QuickChatPanel : ModuleBase
             AtkUnitBase* addon
         )
         {
+            var scale = MathF.Max(instance.config.OverlayScale / 10f, 1f);
+            addon->RootNode->SetScale(scale, scale);
+            
             if (IKeyState.Instance()[VirtualKey.ESCAPE])
             {
                 Close();
@@ -1000,43 +1006,59 @@ public unsafe class QuickChatPanel : ModuleBase
                 OnToggle         = UpdateSettingsLayout
             };
 
+            var offsetLabel = new TextNode
+            {
+                Size          = new(contentWidth, labelHeight),
+                String        = Lang.Get("Offset"),
+                FontSize      = 16,
+                AlignmentType = AlignmentType.Left
+            };
+            AtkColors.Text.ApplyTo(offsetLabel);
+            
+            generalOverlay.AddNode(offsetLabel);
+
+            // 水平偏移
             generalOverlay.AddNode
             (
-                new TextNode
-                {
-                    Size          = new(contentWidth, labelHeight),
-                    String        = Lang.Get("Offset"),
-                    FontSize      = 13,
-                    AlignmentType = AlignmentType.Left
-                }
-            );
-
-            var offsetRow = new HorizontalListNode
-            {
-                Size               = new(contentWidth, controlHeight),
-                ItemSpacing        = gap,
-                FirstItemSpacing   = 0f,
-                FitToContentHeight = true
-            };
-            offsetRow.AddNode
-            (
-                OffsetInput
+                GetInputComponent
                 (
-                    "X",
+                    Lang.Get("QuickChatPanel-Offset-X"),
                     (int)instance.config.OverlayOffset.X,
                     value => instance.config.OverlayOffset = instance.config.OverlayOffset with { X = value }
                 )
             );
-            offsetRow.AddNode
+            
+            // 垂直偏移
+            generalOverlay.AddNode
             (
-                OffsetInput
+                GetInputComponent
                 (
-                    "Y",
+                    Lang.Get("QuickChatPanel-Offset-Y"),
                     (int)instance.config.OverlayOffset.Y,
                     value => instance.config.OverlayOffset = instance.config.OverlayOffset with { Y = value }
                 )
             );
-            generalOverlay.AddNode(offsetRow);
+            
+            var scaleLabel = new TextNode
+            {
+                Size          = new(contentWidth, labelHeight),
+                String        = Lang.Get("Scale"),
+                FontSize      = 16,
+                AlignmentType = AlignmentType.Left
+            };
+            AtkColors.Text.ApplyTo(scaleLabel);
+            
+            generalOverlay.AddNode(scaleLabel);
+            
+            generalOverlay.AddNode
+            (
+                GetInputComponent
+                (
+                    string.Empty,
+                    (int)instance.config.OverlayScale,
+                    value => instance.config.OverlayScale = value
+                )
+            );
 
             var messagesSection = new CollapsingHeaderNode
             {
@@ -1373,7 +1395,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 instance.config.Save(instance);
             }
 
-            HorizontalListNode OffsetInput
+            HorizontalListNode GetInputComponent
             (
                 string      label,
                 int         value,
@@ -1385,38 +1407,42 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 var row = new HorizontalListNode
                 {
+                    X                  = 20,
                     Size               = new(rowWidth, controlHeight),
                     ItemSpacing        = gap,
-                    FirstItemSpacing   = 0f,
                     FitToContentHeight = true
                 };
 
-                row.AddNode
-                (
-                    new TextNode
+                var input = new NumericInputNode
+                {
+                    Size  = new(rowWidth - labelWidth - gap, controlHeight),
+                    Min = short.MinValue,
+                    Max = short.MaxValue,
+                    Value = value,
+                    OnValueUpdate = i =>
                     {
+                        updateValue(i);
+                        instance.config.Save(instance);
+                    }
+                };
+                row.AddNode(input);
+
+                if (!string.IsNullOrEmpty(label))
+                {
+                    var labelNode = new TextNode
+                    {
+                        Y             = 6,
                         Size          = new(labelWidth, controlHeight),
                         TextFlags     = TextFlags.AutoAdjustNodeSize,
                         String        = label,
                         AlignmentType = AlignmentType.Left,
                         FontSize      = 14
-                    }
-                );
+                    };
+                    AtkColors.Label.ApplyTo(labelNode);
 
-                var input = new TextInputNode
-                {
-                    Size   = new(rowWidth - labelWidth - gap, controlHeight),
-                    String = value.ToString()
-                };
-                input.CurrentTextNode.FontSize = 14;
-                input.OnFocusLost = () =>
-                {
-                    if (!int.TryParse(input.String, out var newValue)) return;
-
-                    updateValue(newValue);
-                    instance.config.Save(instance);
-                };
-                row.AddNode(input);
+                    row.AddNode(labelNode);
+                }
+                
                 return row;
             }
         }
