@@ -1174,37 +1174,37 @@ public unsafe class QuickChatPanel : ModuleBase
                 Size             = new(contentWidth, controlHeight),
                 String           = Lang.Get("QuickChatPanel-Macro"),
                 IsCollapsed      = true,
-                FitWidth         = true,
                 ItemSpacing      = gap,
                 FirstItemSpacing = gap,
                 OnToggle         = UpdateSettingsLayout
             };
 
-            macrosSection.AddNode
-            (
-                new TextNode
-                {
-                    Size          = new(contentWidth, labelHeight),
-                    String        = Lang.Get("QuickChatPanel-MacroButton-DisplayType"),
-                    FontSize      = 13,
-                    AlignmentType = AlignmentType.Left
-                }
-            );
+            var displayTypeLabel = new TextNode
+            {
+                Size          = new(contentWidth, labelHeight),
+                String        = Lang.Get("QuickChatPanel-MacroButton-DisplayType"),
+                FontSize      = 16,
+                AlignmentType = AlignmentType.Left
+            };
+            AtkColors.Text.ApplyTo(displayTypeLabel);
+            
+            macrosSection.AddNode(displayTypeLabel);
 
             var dropdown = new StringDropDownNode
             {
-                Size           = new(contentWidth, controlHeight),
+                X              = 20,
+                Size           = new(contentWidth - 24, 24),
                 MaxListOptions = MacroDisplayModeLoc.Length,
-                Options        = [.. MacroDisplayModeLoc.Select(x => x.Text)]
-            };
-            dropdown.SelectedOption = MacroDisplayModeLoc.First(x => x.Mode == instance.config.OverlayMacroDisplayMode).Text;
-            dropdown.OnOptionSelected = text =>
-            {
-                var mode = MacroDisplayModeLoc.FirstOrDefault(x => x.Text == text).Mode;
-                if (mode == instance.config.OverlayMacroDisplayMode) return;
+                Options        = [.. MacroDisplayModeLoc.Select(x => x.Text)],
+                SelectedOption = MacroDisplayModeLoc.First(x => x.Mode == instance.config.OverlayMacroDisplayMode).Text,
+                OnOptionSelected = text =>
+                {
+                    var mode = MacroDisplayModeLoc.FirstOrDefault(x => x.Text == text).Mode;
+                    if (mode == instance.config.OverlayMacroDisplayMode) return;
 
-                instance.config.OverlayMacroDisplayMode = mode;
-                instance.config.Save(instance);
+                    instance.config.OverlayMacroDisplayMode = mode;
+                    instance.config.Save(instance);
+                }
             };
             macrosSection.AddNode(dropdown);
 
