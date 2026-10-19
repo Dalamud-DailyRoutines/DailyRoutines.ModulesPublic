@@ -719,33 +719,23 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
         var returnTime = packet->GetLatestReturnTime();
 
-        using var rented  = new RentedSeStringBuilder();
-        var       builder = rented.Builder;
-
         if (maxCount == finishedCount)
         {
-            var message = ISeStringEvaluator.Instance().EvaluateFromAddon
+            var message = ReadOnlySeString.FormatLink
             (
-                371,
-                [
-                    Lang.Get
-                    (
-                        "AutoSubmarineCollect-Notification-AllReturned",
-                        new Dictionary<string, object>
-                        {
-                            ["exactTimeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss"),
-                            ["timeAgoText"]   = returnTime.TimeAgo()
-                        }
-                    )
-                ]
+                collectSubmarinePayload,
+                Lang.Get
+                (
+                    "AutoSubmarineCollect-Notification-AllReturned",
+                    new Dictionary<string, object>
+                    {
+                        ["exactTimeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss"),
+                        ["timeAgoText"]   = returnTime.TimeAgo()
+                    }
+                )
             );
 
-            builder
-                .AppendDalamudSeString(collectSubmarinePayload)
-                .Append(message)
-                .AppendDalamudSeString(RawPayload.LinkTerminator);
-
-            NotifyHelper.Instance().Chat(builder.ToReadOnlySeString());
+            NotifyHelper.Instance().Chat(message);
         }
         else
         {
