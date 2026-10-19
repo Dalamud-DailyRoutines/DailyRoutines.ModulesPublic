@@ -2,8 +2,12 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
+using AgentTryon = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentTryon;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -35,73 +39,109 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
     protected override void Uninit() =>
         ContextMenuManager.Instance().Unreg(menuEntry);
 
-    private bool StartTryOn()
+    private bool TryOnAll()
     {
-        if (ICondition.Instance().IsOccupiedInEvent   ||
-            !CharacterInspect->IsAddonAndNodesReady() ||
-            AgentTryon.Instance() == null)
+        var agent = AgentTryon.Instance();
+        if (agent == null)
             return false;
-
-        // 判断当前玩家是否有可以试穿的装备
-        var entries = ReadInspectItems();
-
-        if (entries == null || entries.Count == 0)
+        
+        if (GetInspectItems() is not { Count: > 0 } entries)
         {
             TaskHelper.Abort();
             return true;
         }
 
-        // 保存试穿内容
-        AgentTryon.Instance()->SaveDeleteOutfit = true;
+        var tryOnItems = agent->TryOnItems;
 
-        foreach (var entry in entries)
+        if (!agent->IsAddonShown())
+            agent->Show();
+
+        agent->ClearTryOnItems();
+
+        var itemIndex = 0;
+        var glassesID = GetInspectGlassesID();
+
+        if (glassesID != 0)
         {
-            TaskHelper.Enqueue
-            (() =>
-                {
-                    // 种族/性别导致不能试穿的时候跳过继续下一步
-                    AgentTryon.TryOn(0, entry.TryOnItemID, entry.Stain0ID, entry.Stain1ID);
-                    return true;
-                }
-            );
-
-            TaskHelper.DelayNext(50);
+            ref var glassesItem = ref tryOnItems[itemIndex++];
+            glassesItem.EquipSlotCategory = 13;
+            glassesItem.Id                = glassesID;
+            glassesItem.IconId            = (uint)LuminaGetter.GetRowOrDefault<Glasses>(glassesID).Icon;
         }
+
+        for (var i = 0; i < entries.Count && itemIndex < tryOnItems.Length; i++)
+        {
+            ref var tryOnItem = ref tryOnItems[itemIndex++];
+            var     entry     = entries[i];
+
+            tryOnItem.EquipSlotCategory = (byte)entry.Slot;
+            tryOnItem.Id                = entry.ItemID;
+            tryOnItem.GlamourId         = entry.GlamourID;
+            tryOnItem.Stain0Id          = entry.Stain0ID;
+            tryOnItem.Stain1Id          = entry.Stain1ID;
+        }
+
+        agent->TryOnItemsChanged = true;
+        agent->RefreshAddon();
+        agent->CharaView.DoUpdate = true;
 
         return true;
     }
 
-    private static List<TryOnEntry>? ReadInspectItems()
+    private static List<TryOnEntry>? GetInspectItems()
     {
-        if (!InventoryType.Examine.TryGetItems
-            (
-                x => x.ItemId != 0 && TryOnSlots.Contains(x.Slot),
-                out var items
-            ))
+        var inspect = AgentInspect.Instance();
+        if (inspect == null)
             return null;
+
+        InventoryType.Examine.TryGetItems(_ => true, out var examineItems);
+        Dictionary<int, InventoryItem> examineSlots = [];
+
+        foreach (var examineItem in examineItems)
+            examineSlots[examineItem.Slot] = examineItem;
 
         List<TryOnEntry> entries = [];
 
-        foreach (var item in items)
+        for (var i = 0; i < inspect->Items.Length; i++)
         {
-            var itemID        = item.ItemId;
-            var glamourItemID = item.GlamourId;
+            if (!TryOnSlots.Contains(i))
+                continue;
 
-            // 有幻化→试穿幻化，无幻化→试穿原装备
-            var tryOnItemID = glamourItemID != 0 ?
-                                  glamourItemID :
-                                  itemID;
+            ref var data      = ref inspect->Items[i];
+            var     itemID    = data.ItemId;
+            var     glamourID = data.GlamourItemId;
 
-            if (tryOnItemID == 0) continue;
+            if (itemID == 0 && glamourID == 0)
+                continue;
+
+            var hasExamine = examineSlots.TryGetValue(i, out var examineItem);
+
+            var entryItemID = itemID != 0 ?
+                                  itemID :
+                                  glamourID;
+            var entryGlamourID = itemID != 0 ?
+                                     glamourID :
+                                     0;
+
+            if (hasExamine && examineItem.ItemId != 0)
+            {
+                entryItemID    = examineItem.GetItemId();
+                entryGlamourID = examineItem.GlamourId;
+            }
 
             entries.Add
             (
                 new()
                 {
-                    Slot        = item.Slot,
-                    TryOnItemID = tryOnItemID,
-                    Stain0ID    = item.Stains[0],
-                    Stain1ID    = item.Stains[1]
+                    Slot      = i,
+                    ItemID    = entryItemID,
+                    GlamourID = entryGlamourID,
+                    Stain0ID = hasExamine ?
+                                   examineItem.Stains[0] :
+                                   (byte)0,
+                    Stain1ID = hasExamine ?
+                                   examineItem.Stains[1] :
+                                   (byte)0
                 }
             );
         }
@@ -109,15 +149,44 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         return entries;
     }
 
+    private static ushort GetInspectGlassesID()
+    {
+        var inspect = AgentInspect.Instance();
+        if (inspect == null)
+            return 0;
+
+        var glassesID = inspect->CharaView.ModelData.GlassesIds[0];
+        if (glassesID != 0)
+            return glassesID;
+
+        var objectManager = ClientObjectManager.Instance();
+        if (objectManager == null)
+            return 0;
+
+        foreach (var entry in objectManager->BattleCharas)
+        {
+            var character = entry.BattleChara;
+            if (character == null || character->EntityId != inspect->CurrentEntityId)
+                continue;
+            return character->DrawData.GlassesIds[0];
+        }
+
+        return 0;
+    }
+
     private struct TryOnEntry
     {
         public int  Slot;
-        public uint TryOnItemID;
+        public uint ItemID;
+        public uint GlamourID;
         public byte Stain0ID;
         public byte Stain1ID;
     }
 
-    private class TryOnContextMenu(AutoTryOnPlayerOutfit module) : ContextMenuEntry
+    private class TryOnContextMenu
+    (
+        AutoTryOnPlayerOutfit module
+    ) : ContextMenuEntry
     {
         public override string Identifier =>
             nameof(AutoTryOnPlayerOutfit);
@@ -139,16 +208,15 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
                 {
                     if (module.TaskHelper.IsBusy)
                         return;
-                    module.TaskHelper.Enqueue(module.StartTryOn);
+                    module.TaskHelper.Enqueue(module.TryOnAll);
                 }
             };
         }
     }
-    
+
     #region 常量
-    
-    // 5 是腰带，13 是职业水晶
+
     private static readonly int[] TryOnSlots = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12];
-    
+
     #endregion
 }
