@@ -2,6 +2,7 @@ using DailyRoutines.Extensions;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
@@ -160,7 +161,6 @@ public unsafe partial class UnifiedGlamourManager
                         GetCurrentPlateItems();
         if (items.Count == 0) return;
 
-        // get目标对象的种族/性别
         if (isInspect)
         {
             sourceRace = (byte)AgentInspect.Instance()->CharaView.Race;
@@ -172,7 +172,6 @@ public unsafe partial class UnifiedGlamourManager
             sourceSex  = Control.GetLocalPlayer()->DrawData.CustomizeData.Sex;
         }
 
-        // 根据玩家设置的内容/时间生成一个新的预设
         PlatePreset preset = new()
         {
             Title = string.IsNullOrWhiteSpace(title) ?
@@ -186,12 +185,19 @@ public unsafe partial class UnifiedGlamourManager
 
         preset.Items.AddRange(items);
 
-        // 保存预设，清空输入框
         config.Presets.Add(preset);
         selectedPreset = preset;
 
         config.Save(this);
-        NotifyHelper.Instance().NotificationSuccess(Lang.Get("SavedSuccessfully"));
+        
+        NotifyHelper.Instance().Chat
+        (
+            ReadOnlySeString.FormatLink
+            (
+                openOverlayPlateTabPayload,
+                Lang.Get("UnifiedGlamourManager-Notification-SavedAsPlate")
+            )
+        );
     }
 
     private bool StartApplyPreset()

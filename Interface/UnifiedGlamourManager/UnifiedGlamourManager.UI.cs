@@ -16,6 +16,8 @@ public unsafe partial class UnifiedGlamourManager
     private string       editPresetTitleInput = string.Empty;
     private string       editPresetNoteInput  = string.Empty;
 
+    private int manualSelectedTabIndex = -1;
+
     protected override void ConfigUI()
     {
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Command"));
@@ -76,6 +78,12 @@ public unsafe partial class UnifiedGlamourManager
             (ImGui.GetContentRegionAvail().X - spacing) * 0.5f,
             ImGui.GetFrameHeight()
         );
+        
+        if (manualSelectedTabIndex != -1)
+        {
+            storage.SetInt(selectedTabID, manualSelectedTabIndex);
+            manualSelectedTabIndex = -1;
+        }
 
         using (ImRaii.PushStyle(ImGuiStyleVar.SelectableTextAlign, new Vector2(0.5f, 0.5f)))
         {
@@ -202,11 +210,11 @@ public unsafe partial class UnifiedGlamourManager
         var contentSize = ImGui.GetContentRegionAvail();
         if (contentSize.X <= 0f || contentSize.Y <= 0f) return;
 
-        var tableFlags = ImGuiTableFlags.BordersInnerV     |
-                         ImGuiTableFlags.SizingStretchProp |
-                         ImGuiTableFlags.Resizable;
+        const ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags.BordersInnerV     |
+                                            ImGuiTableFlags.SizingStretchProp |
+                                            ImGuiTableFlags.Resizable;
 
-        using var table = ImRaii.Table("##UnifiedMainTable", 3, tableFlags, contentSize);
+        using var table = ImRaii.Table("##UnifiedMainTable", 3, TABLE_FLAGS, contentSize);
         if (!table) return;
 
         ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(14370),                ImGuiTableColumnFlags.WidthStretch, 0.5f);

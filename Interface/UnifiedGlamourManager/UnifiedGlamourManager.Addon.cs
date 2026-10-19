@@ -1,14 +1,15 @@
 ﻿using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 
 public unsafe partial class UnifiedGlamourManager
 {
-    private TextButtonNode? inspectSaveButtonNode;
-    private TextButtonNode? plateSaveButtonNode;
+    private CircleButtonNode? inspectSaveButtonNode;
+    private CircleButtonNode? plateSaveButtonNode;
 
     private void OnPlateEditorAddon
     (
@@ -18,7 +19,10 @@ public unsafe partial class UnifiedGlamourManager
     {
         switch (type)
         {
-            case AddonEvent.PostSetup:
+            case AddonEvent.PostRefresh:
+                if (MiragePrismMiragePlate == null) 
+                    return;
+                
                 if (TryGetReadyPlateEditor(out var agent) &&
                     agent->Data->OpenMode == MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW)
                 {
@@ -26,34 +30,28 @@ public unsafe partial class UnifiedGlamourManager
                     StartRefreshAll();
                 }
 
-                break;
-
-            case AddonEvent.PostDraw:
-                if (!MiragePrismMiragePlate->IsAddonAndNodesReady()) return;
-
                 if (plateSaveButtonNode == null)
                 {
                     plateSaveButtonNode = new()
                     {
-                        Size     = new(200, 30),
-                        Position = new(200, 10)
+                        Size        = new(24),
+                        Position    = new(405, 40),
+                        TextTooltip = Lang.Get("UnifiedGlamourManager-Preset-SaveGlamourPreset"),
+                        Icon        = CircleButtonIcon.Document,
+                        OnClick     = () => SaveCurrentPlateAsPreset(string.Empty, string.Empty, PresetSource.Self)
                     };
 
                     plateSaveButtonNode.AttachNode(MiragePrismMiragePlate->RootNode);
                 }
-
-                if (Throttler.Shared.Throttle("UnifiedGlamourManager-Preset-plateSaveButton"))
-                {
-                    plateSaveButtonNode.IsEnabled = GetCurrentPlateItems().Count > 0;
-                    plateSaveButtonNode.String    = Lang.Get("UnifiedGlamourManager-Preset-SaveGlamourPreset");
-                    plateSaveButtonNode.OnClick   = () => SaveCurrentPlateAsPreset(string.Empty, string.Empty, PresetSource.Self);
-                }
+                
+                plateSaveButtonNode.IsEnabled = GetCurrentPlateItems().Count > 0;
 
                 break;
 
             case AddonEvent.PreFinalize:
                 plateSaveButtonNode = null;
                 TaskHelper?.Abort();
+                
                 Overlay.IsOpen = false;
                 break;
         }
@@ -67,29 +65,24 @@ public unsafe partial class UnifiedGlamourManager
     {
         switch (type)
         {
-            case AddonEvent.PostDraw:
-                if (!CharacterInspect->IsAddonAndNodesReady()) return;
-
-                var designButtonNode = CharacterInspect->GetNodeById(6);
-                if (designButtonNode == null) return;
+            case AddonEvent.PostRefresh:
+                if (CharacterInspect == null) return;
 
                 if (inspectSaveButtonNode == null)
                 {
                     inspectSaveButtonNode = new()
                     {
-                        Size     = new(designButtonNode->Width, designButtonNode->Height),
-                        Position = new(180, 10)
+                        Size        = new(24),
+                        Position    = new(220, 510),
+                        TextTooltip = Lang.Get("UnifiedGlamourManager-Preset-SaveGlamourPreset"),
+                        Icon        = CircleButtonIcon.Document,
+                        OnClick     = () => SaveCurrentPlateAsPreset(string.Empty, string.Empty, PresetSource.OtherPlayer)
                     };
 
                     inspectSaveButtonNode.AttachNode(CharacterInspect->RootNode);
                 }
-
-                if (Throttler.Shared.Throttle("UnifiedGlamourManager-Preset-InspectButton"))
-                {
-                    inspectSaveButtonNode.IsEnabled = GetInspectPlateItems().Count > 0;
-                    inspectSaveButtonNode.String    = Lang.Get("UnifiedGlamourManager-Preset-SaveGlamourPreset");
-                    inspectSaveButtonNode.OnClick   = () => SaveCurrentPlateAsPreset(string.Empty, string.Empty, PresetSource.OtherPlayer);
-                }
+                
+                inspectSaveButtonNode.IsEnabled = GetInspectPlateItems().Count > 0;
 
                 break;
 

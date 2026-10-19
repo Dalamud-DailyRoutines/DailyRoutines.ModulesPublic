@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Lumina.Excel.Sheets;
 using OmenTools.OmenService;
 
@@ -23,7 +24,9 @@ public partial class UnifiedGlamourManager : ModuleBase
         AllDefaultEnabled = true
     };
 
-    protected override void Init()
+    private DalamudLinkPayload? openOverlayPlateTabPayload;
+
+    protected override unsafe void Init()
     {
         config = Config.Load(this) ?? new();
         NormalizeConfig();
@@ -42,18 +45,34 @@ public partial class UnifiedGlamourManager : ModuleBase
         Overlay.WindowName =  $"{Info.Title}###UnifiedGlamourManagerOverlay";
 
         var addonLifecycle = IAddonLifecycle.Instance();
-        addonLifecycle.RegisterListener(AddonEvent.PostSetup,   PLATE_EDITOR_ADDON_NAME, OnPlateEditorAddon);
-        addonLifecycle.RegisterListener(AddonEvent.PostDraw,    PLATE_EDITOR_ADDON_NAME, OnPlateEditorAddon);
-        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, PLATE_EDITOR_ADDON_NAME, OnPlateEditorAddon);
+        addonLifecycle.RegisterListener(AddonEvent.PostRefresh, "MiragePrismMiragePlate", OnPlateEditorAddon);
+        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "MiragePrismMiragePlate", OnPlateEditorAddon);
+        if (MiragePrismMiragePlate->IsAddonAndNodesReady())
+            OnPlateEditorAddon(AddonEvent.PostRefresh, null);
 
-        addonLifecycle.RegisterListener(AddonEvent.PostDraw,    "CharacterInspect", OnInspectAddon);
+        addonLifecycle.RegisterListener(AddonEvent.PostRefresh, "CharacterInspect", OnInspectAddon);
         addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CharacterInspect", OnInspectAddon);
+        if (CharacterInspect->IsAddonAndNodesReady())
+            OnPlateEditorAddon(AddonEvent.PostRefresh, null);
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("UnifiedGlamourManager-CommandHelp") });
+
+        openOverlayPlateTabPayload = LinkPayloadManager.Instance().Reg
+        (
+            (_, _) =>
+            {
+                manualSelectedTabIndex = 1;
+                Overlay.IsOpen = true;
+            },
+            out _
+        );
     }
 
     protected override void Uninit()
     {
+        if (openOverlayPlateTabPayload != null)
+            LinkPayloadManager.Instance().Unreg(openOverlayPlateTabPayload.CommandId);
+        
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
         IAddonLifecycle.Instance().UnregisterListener(OnInspectAddon);

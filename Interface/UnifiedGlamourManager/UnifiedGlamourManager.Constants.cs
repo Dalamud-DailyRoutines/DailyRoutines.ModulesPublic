@@ -5,7 +5,6 @@ namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
 
 public partial class UnifiedGlamourManager
 {
-    private const string PLATE_EDITOR_ADDON_NAME = nameof(MiragePrismMiragePlate);
     private const byte   FEMALE_SEX              = 1;
     private const string COMMAND                 = "ugm";
 
