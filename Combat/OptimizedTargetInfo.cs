@@ -20,7 +20,6 @@ using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-// TODO：咏唱文本默认颜色改为和 EnemyList 一致
 public unsafe class OptimizedTargetInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -1075,11 +1074,11 @@ public unsafe class OptimizedTargetInfo : ModuleBase
     {
         public bool    AlignLeft;
         public bool    CastBarAlignLeft;
-        public Vector4 CastBarCustomColor = new(1, 1, 1, 0);
+        public Vector4 CastBarCustomColor = Vector4.One;
         public byte    CastBarFontSize    = 14;
 
         public bool    CastBarIsEnabled    = true;
-        public Vector4 CastBarOutlineColor = new(0, 0.372549f, 1, 1);
+        public Vector4 CastBarOutlineColor = new(0.6156863f, 0.5137255f, 0.3568628f, 1.0f);
         public Vector2 CastBarPosition     = new(0);
 
         public bool          ClearFocusIsEnabled = true;
@@ -1089,11 +1088,11 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         public string        DisplayFormatString = "{0} / {1}";
         public bool          FocusAlignLeft;
         public bool          FocusCastBarAlignLeft;
-        public Vector4       FocusCastBarCustomColor = new(1, 1, 1, 0);
+        public Vector4       FocusCastBarCustomColor = Vector4.One;
         public byte          FocusCastBarFontSize    = 14;
 
         public bool    FocusCastBarIsEnabled    = true;
-        public Vector4 FocusCastBarOutlineColor = new(0, 0.372549f, 1, 1);
+        public Vector4 FocusCastBarOutlineColor = new(0.6156863f, 0.5137255f, 0.3568628f, 1.0f);
         public Vector2 FocusCastBarPosition     = new(0);
         public Vector4 FocusCustomColor         = new(1, 1, 1, 0);
         public byte    FocusFontSize            = 14;
