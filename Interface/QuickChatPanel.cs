@@ -18,9 +18,12 @@ using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
+using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Addons.InputString;
 using OmenTools.KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 using Action = System.Action;
@@ -438,13 +441,6 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var scale = MathF.Max(instance.config.OverlayScale / 10f, 1f);
             addon->RootNode->SetScale(scale, scale);
-            
-            if (IKeyState.Instance()[VirtualKey.ESCAPE])
-            {
-                Close();
-                if (SystemMenu->IsAddonAndNodesReady())
-                    SystemMenu->Close(true);
-            }
 
             base.OnUpdate(addon);
         }
@@ -994,7 +990,6 @@ public unsafe class QuickChatPanel : ModuleBase
             var controlHeight = RowHeight;
             var labelHeight   = RowHeight    * 0.6f;
             var buttonWidth   = contentWidth * 0.2f;
-            var inputWidth    = contentWidth - buttonWidth - gap;
 
             var generalOverlay = new CollapsingHeaderNode
             {
@@ -1065,79 +1060,112 @@ public unsafe class QuickChatPanel : ModuleBase
                 Size             = new(contentWidth, controlHeight),
                 String           = Lang.Get("QuickChatPanel-Messages"),
                 IsCollapsed      = true,
-                FitWidth         = true,
                 FirstItemSpacing = gap,
                 ItemSpacing      = gap,
                 OnToggle         = UpdateSettingsLayout
             };
 
-            var messageRow = new HorizontalListNode
+            var addMessageButton = new CircleButtonNode
             {
-                Size               = new(contentWidth, controlHeight),
-                ItemSpacing        = gap,
-                FirstItemSpacing   = 0f,
-                FitToContentHeight = true
-            };
-
-            var messageInputNode = new TextInputNode
-            {
-                Size          = new(inputWidth, controlHeight),
-                MaxCharacters = 1000
-            };
-            messageRow.AddNode(messageInputNode);
-
-            var addMessageButton = new TextButtonNode
-            {
-                Size   = new(buttonWidth, controlHeight),
-                String = Lang.Get("Add"),
+                X           = contentWidth - 32,
+                Size        = new(28),
+                Icon        = CircleButtonIcon.Add,
+                TextTooltip = Lang.Get("Add"),
                 OnClick = () =>
                 {
-                    var text = messageInputNode.String.ToString();
-                    if (string.IsNullOrWhiteSpace(text) ||
-                        instance.config.SavedMessages.Contains(text))
-                        return;
+                    InputStringAddon.Open
+                    (
+                        new()
+                        {
+                            ParentID        = AddonId,
+                            BlockedParentID = AddonId,
+                            Prompt          = Lang.Get("QuickChatPanel-Message-InputPrompt"),
+                            Callback = (_, info) =>
+                            {
+                                if (info.Result != InputStringAddonResult.Confirmed)
+                                    return;
 
-                    instance.config.SavedMessages.Add(text);
-                    instance.config.Save(instance);
+                                var message = info.Value.ToString();
+                                if (string.IsNullOrWhiteSpace(message) ||
+                                    instance.config.SavedMessages.Contains(message))
+                                    return;
 
-                    AtkStage.Instance()->ClearFocus();
+                                instance.config.SavedMessages.Add(message);
+                                instance.config.Save(instance);
+
+                                AtkStage.Instance()->ClearFocus();
+                            }
+                        }
+                    );
                 }
             };
-            addMessageButton.LabelNode.AutoAdjustTextSize();
-            messageRow.AddNode(addMessageButton);
-            messagesSection.AddNode(messageRow);
+            messagesSection.AddNode(addMessageButton);
 
             foreach (var message in instance.config.SavedMessages.ToList())
             {
-                var row = new HorizontalListNode
+                var row = new ListButtonNode
                 {
-                    Size               = new(contentWidth, controlHeight),
-                    ItemSpacing        = gap,
-                    FirstItemSpacing   = 0f,
-                    FitToContentHeight = true
+                    Size   = new(contentWidth, controlHeight),
+                    String = message,
+                    OnClick = () => ContextMenuManager.Instance().Open
+                    (
+                        new ContextMenuOpenedArgs
+                        {
+                            Addon     = InternalAddon,
+                            AddonName = InternalAddon->NameString
+                        },
+                        [
+                            new ContextMenuEntryInfo
+                            (
+                                nameof(QuickChatPanel),
+                                _ =>
+                                [
+                                    new()
+                                    {
+                                        Name = Lang.Get("Delete"),
+                                        OnClicked = _ =>
+                                        {
+                                            instance.config.SavedMessages.Remove(message);
+                                            instance.config.Save(instance);
+                                        }
+                                    },
+                                    new()
+                                    {
+                                        Name = Lang.Get("Edit"),
+                                        OnClicked = _ =>
+                                        {
+                                            InputStringAddon.Open
+                                            (
+                                                new()
+                                                {
+                                                    ParentID        = AddonId,
+                                                    BlockedParentID = AddonId,
+                                                    Prompt          = Lang.Get("QuickChatPanel-Message-EditPrompt"),
+                                                    DefaultText     = message,
+                                                    Callback = (_, info) =>
+                                                    {
+                                                        if (info.Result != InputStringAddonResult.Confirmed)
+                                                            return;
+                                                        
+                                                        var edit = info.Value.ToString();
+                                                        if (string.IsNullOrWhiteSpace(edit) ||
+                                                            instance.config.SavedMessages.Contains(edit))
+                                                            return;
+
+                                                        instance.config.SavedMessages.Replace(message, edit);
+                                                        instance.config.Save(instance);
+
+                                                        AtkStage.Instance()->ClearFocus();
+                                                    }
+                                                }
+                                            );
+                                        }
+                                    },
+                                ]
+                            )
+                        ]
+                    )
                 };
-                row.AddNode
-                (
-                    new TextNode
-                    {
-                        Size          = new(inputWidth, controlHeight),
-                        String        = message,
-                        AlignmentType = AlignmentType.Left,
-                        FontSize      = 14
-                    }
-                );
-                var button = new TextButtonNode
-                {
-                    Size   = new(buttonWidth, controlHeight),
-                    String = Lang.Get("Delete"),
-                    OnClick = () =>
-                    {
-                        instance.config.SavedMessages.Remove(message);
-                        instance.config.Save(instance);
-                    }
-                };
-                button.LabelNode.AutoAdjustTextSize();
-                row.AddNode(button);
                 messagesSection.AddNode(row);
             }
 
