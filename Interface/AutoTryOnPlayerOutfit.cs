@@ -1,12 +1,9 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using KamiToolKit.Nodes;
-using OmenTools.Threading;
+using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
@@ -25,87 +22,23 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private TextButtonNode? tryOnButtonNode;
-
-    // 5是腰带，13 是职业水晶
-    private static readonly int[] TryOnSlots = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12];
+    private TryOnContextMenu? menuEntry;
 
     protected override void Init()
     {
         TaskHelper ??= new() { TimeoutMS = 10_000 };
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "CharacterInspect", OnAddonList);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "CharacterInspect", OnAddonList);
+        menuEntry = new(this);
+        ContextMenuManager.Instance().Reg(menuEntry);
     }
 
-    protected override void Uninit()
-    {
-        IAddonLifecycle.Instance().UnregisterListener(OnAddonList);
-
-        tryOnButtonNode?.Dispose();
-        tryOnButtonNode = null;
-    }
-
-    private void OnAddonList
-    (
-        AddonEvent type,
-        AddonArgs? args
-    )
-    {
-        switch (type)
-        {
-            case AddonEvent.PostDraw:
-                if (CharacterInspect == null) return;
-
-                // 设计搭配按钮
-                var designButtonNode = CharacterInspect->GetNodeById(6);
-                if (designButtonNode == null) return;
-
-                if (tryOnButtonNode == null)
-                {
-                    designButtonNode->SetHeight(24);
-
-                    tryOnButtonNode = new()
-                    {
-                        Size     = new(designButtonNode->Width, designButtonNode->Height),
-                        Position = new(designButtonNode->X, designButtonNode->Y + designButtonNode->Height + 4)
-                    };
-                    tryOnButtonNode.AttachNode(CharacterInspect->RootNode);
-                }
-
-                if (Throttler.Shared.Throttle("AutoTryOnPlayerOutfit-PostDraw"))
-                {
-                    if (TaskHelper.IsBusy)
-                    {
-                        tryOnButtonNode.String  = Lang.Get("Stop");
-                        tryOnButtonNode.OnClick = () => TaskHelper.Abort();
-                    }
-                    else
-                    {
-                        tryOnButtonNode.String  = Lang.Get("AutoTryOnPlayerOutfit-TryOnAll");
-                        tryOnButtonNode.OnClick = StartTryOnAll;
-                    }
-                }
-
-                break;
-            case AddonEvent.PreFinalize:
-                tryOnButtonNode = null;
-
-                TaskHelper?.Abort();
-                break;
-        }
-    }
-
-    private void StartTryOnAll()
-    {
-        if (TaskHelper.IsBusy) return;
-        TaskHelper.Enqueue(StartTryOn);
-    }
+    protected override void Uninit() =>
+        ContextMenuManager.Instance().Unreg(menuEntry);
 
     private bool StartTryOn()
     {
-        if (ICondition.Instance().IsOccupiedInEvent ||
-            !CharacterInspect->IsAddonAndNodesReady()       ||
+        if (ICondition.Instance().IsOccupiedInEvent   ||
+            !CharacterInspect->IsAddonAndNodesReady() ||
             AgentTryon.Instance() == null)
             return false;
 
@@ -183,4 +116,39 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         public byte Stain0ID;
         public byte Stain1ID;
     }
+
+    private class TryOnContextMenu(AutoTryOnPlayerOutfit module) : ContextMenuEntry
+    {
+        public override string Identifier =>
+            nameof(AutoTryOnPlayerOutfit);
+
+        public override ContextMenuItem? Create
+        (
+            ContextMenuOpenedArgs args
+        )
+        {
+            if (args.AddonName != "CharacterInspect")
+                return null;
+            if (args.TargetItemID == 0)
+                return null;
+
+            return new()
+            {
+                Name = Lang.Get("AutoTryOnPlayerOutfit-TryOnAll"),
+                OnClicked = _ =>
+                {
+                    if (module.TaskHelper.IsBusy)
+                        return;
+                    module.TaskHelper.Enqueue(module.StartTryOn);
+                }
+            };
+        }
+    }
+    
+    #region 常量
+    
+    // 5 是腰带，13 是职业水晶
+    private static readonly int[] TryOnSlots = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12];
+    
+    #endregion
 }
