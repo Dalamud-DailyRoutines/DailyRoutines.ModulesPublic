@@ -179,7 +179,7 @@ public unsafe class OptimizedWeeklyBingo : ModuleBase
             return;
 
         var agent = AgentWeeklyBingo.Instance();
-        if (agent == null || agent->ContentListAddonId != 0) return;
+        if (agent == null || agent->ContentListAddonID != 0) return;
 
         agent->SelectedDutySlotIndex = (uint)index;
 
@@ -189,9 +189,9 @@ public unsafe class OptimizedWeeklyBingo : ModuleBase
             return;
         }
 
-        agent->ContentListAddonId = 1;
+        agent->ContentListAddonID = 1;
         agent->OpenDutyOrContentList();
-        agent->ContentListAddonId = 0;
+        agent->ContentListAddonID = 0;
 
         switch (agent->ContentList.Count)
         {
@@ -200,7 +200,7 @@ public unsafe class OptimizedWeeklyBingo : ModuleBase
             case 1:
                 var contentsFinder = AgentContentsFinder.Instance();
                 if (contentsFinder != null)
-                    contentsFinder->OpenRegularDuty(agent->ContentList[0].ContentFinderConditionId);
+                    contentsFinder->OpenRegularDuty(agent->ContentList[0].ContentFinderConditionID);
                 break;
             default:
                 agent->OpenContentList();
