@@ -53,7 +53,7 @@ public partial class UnifiedGlamourManager : ModuleBase
         addonLifecycle.RegisterListener(AddonEvent.PostRefresh, "CharacterInspect", OnInspectAddon);
         addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CharacterInspect", OnInspectAddon);
         if (CharacterInspect->IsAddonAndNodesReady())
-            OnPlateEditorAddon(AddonEvent.PostRefresh, null);
+            OnInspectAddon(AddonEvent.PostRefresh, null);
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("UnifiedGlamourManager-CommandHelp") });
 
