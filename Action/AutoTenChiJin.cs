@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -40,13 +41,6 @@ public unsafe class AutoTenChiJin : ModuleBase
         cofig      =   Config.Load(this) ?? new();
         TaskHelper ??= new() { TimeoutMS = 2_000 };
 
-        addon ??= new()
-        {
-            InternalName = "DRNinJutsuActionsPreview",
-            Title        = LuminaWrapper.GetActionName(2260),
-            Size         = new(430f, 110f)
-        };
-
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
         GamePacketManager.Instance().RegPreSendPacket(OnPreSendActionPacket);
 
@@ -72,9 +66,7 @@ public unsafe class AutoTenChiJin : ModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Mode")}:");
-
-        using (ImRaii.PushIndent())
+        using (ImRaii.Heading1(Lang.Get("Mode")))
         {
             DrawModeOption(TenChiJinMode.Auto, Lang.Get("AutoMode"));
 
@@ -87,12 +79,18 @@ public unsafe class AutoTenChiJin : ModuleBase
             ImGui.NewLine();
 
             if (ImGui.Button(Lang.Get("AutoTenChiJin-OpenNijutsuActionsAddon")))
-                addon.Toggle();
+            {
+                addon?.Dispose();
+                addon = new()
+                {
+                    InternalName = "DRNinJutsuActionsPreview",
+                    Title        = LuminaWrapper.GetActionName(2260),
+                    Size         = new(430f, 110f)
+                };
+                addon.Open();
+            }
 
             ImGui.NewLine();
-
-            if (ImGui.Checkbox(Lang.Get("SendNotification"), ref cofig.SendNotification))
-                cofig.Save(this);
 
             if (ImGui.Checkbox(Lang.Get("AutoTenChiJin-AutoCastNinJiTsu"), ref cofig.AutoCastNinJiTsu))
                 cofig.Save(this);
@@ -244,7 +242,6 @@ public unsafe class AutoTenChiJin : ModuleBase
             if (!TenChiJinSequence.TryGetValue(actionID, out var tenChiJinSequence))
                 return;
 
-            NotifyNinjutsu(actionID);
             TaskHelper.Abort();
 
             foreach (var ninjutsu in tenChiJinSequence)
@@ -273,7 +270,6 @@ public unsafe class AutoTenChiJin : ModuleBase
         var hasKassatsuReplacement = Kassatsu.TryGetValue(actionID, out var kassatsuActionID);
         var isKassatsuActive       = localPlayer->StatusManager.HasStatus(497);
 
-        NotifyNinjutsu(actionID);
         TaskHelper.Abort();
 
         foreach (var (mudraActionID, index) in sequence.Select((value, index) => (value, index)))
@@ -322,15 +318,6 @@ public unsafe class AutoTenChiJin : ModuleBase
                 );
             }
         );
-    }
-
-    private void NotifyNinjutsu
-    (
-        uint actionID
-    )
-    {
-        if (cofig.SendNotification)
-            NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoTenChiJin-Notification", LuminaWrapper.GetActionName(actionID)));
     }
 
     private static bool SendMudraAction
@@ -398,7 +385,6 @@ public unsafe class AutoTenChiJin : ModuleBase
     {
         public TenChiJinMode Mode             = TenChiJinMode.Auto;
         public bool          AutoCastNinJiTsu = true;
-        public bool          SendNotification = true;
     }
 
     private enum TenChiJinMode
