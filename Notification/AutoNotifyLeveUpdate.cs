@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.OmenService;
+using TimeAgo;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -74,8 +75,9 @@ public unsafe class AutoNotifyLeveUpdate : ModuleBase
                 "AutoNotifyLeveUpdate-Notification",
                 new Dictionary<string, object>
                 {
-                    ["count"] = leveAllowances,
-                    ["date"]  = finishTime.ToLocalTime()
+                    ["count"]            = leveAllowances,
+                    ["date"]             = finishTime.ToLocalTime(),
+                    ["relativeTimeText"] = finishTime.TimeAgo()
                 }
             )
         );
