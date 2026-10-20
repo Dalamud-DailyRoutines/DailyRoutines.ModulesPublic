@@ -32,7 +32,11 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
     {
         Title       = Lang.Get("OptimizedFreeCompanyChestTitle"),
         Description = Lang.Get("OptimizedFreeCompanyChestDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedFreeCompanyChest/preview-1.png"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()
