@@ -30,6 +30,7 @@ public unsafe class AutoTenChiJin : ModuleBase
     };
 
     private Hook<RaptureHotbarModule.HotbarSlot.Delegates.IsSlotUsable>? IsSlotUsableHook;
+    private Hook<ActionManager.Delegates.GetHotbarCooldownInfo>?         GetHotbarCooldownInfoHook;
 
     private Config                         cofig = null!;
     private AddonDRNinJutsuActionsPreview? addon;
@@ -51,6 +52,14 @@ public unsafe class AutoTenChiJin : ModuleBase
             (RaptureHotbarModule.HotbarSlot.Delegates.IsSlotUsable)IsSlotUsableDetour
         );
         IsSlotUsableHook.Enable();
+
+        GetHotbarCooldownInfoHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(ActionManager.MemberFunctionPointers),
+            nameof(ActionManager.GetHotbarCooldownInfo),
+            (ActionManager.Delegates.GetHotbarCooldownInfo)GetHotbarCooldownInfoDetour
+        );
+        GetHotbarCooldownInfoHook.Enable();
     }
 
     protected override void Uninit()
@@ -121,25 +130,40 @@ public unsafe class AutoTenChiJin : ModuleBase
         uint                               id
     )
     {
-        if (cofig.Mode != TenChiJinMode.Auto || type != RaptureHotbarModule.HotbarSlotType.Action || !NinjutsuActions.Contains(id))
-            return IsSlotUsableHook!.Original(slot, type, id);
+        if (cofig.Mode != TenChiJinMode.Auto                        ||
+            type       != RaptureHotbarModule.HotbarSlotType.Action ||
+            !NinjutsuActions.Contains(id))
+            return IsSlotUsableHook.Original(slot, type, id);
 
         var localPlayer = Control.GetLocalPlayer();
-        if (localPlayer == null || localPlayer->ClassJob != 30)
+        if (localPlayer == null || localPlayer->ClassJob != CLASS_JOB_NINJA)
             return false;
 
         if (localPlayer->StatusManager.HasStatus(1186))
             return TenChiJinSequence.ContainsKey(id);
 
         var actionManager = ActionManager.Instance();
-        var charges       = actionManager->GetCurrentCharges(2261);
-        var cooldownLeft  = 21 - actionManager->GetRecastTimeElapsed(ActionType.Action, 2261);
-
-        slot->CostType        = 3;
-        slot->CostDisplayMode = 1;
-        slot->CostValue       = (uint)(charges != 0 ? charges : cooldownLeft <= 1 ? 1 : cooldownLeft);
+        var charges       = actionManager->GetCurrentCharges(MUDRA_ACTION_ID);
 
         return charges > 0 || localPlayer->StatusManager.HasStatus(497);
+    }
+
+    // 转发到地之印
+    private void GetHotbarCooldownInfoDetour
+    (
+        ActionManager*      actionManager,
+        HotbarCooldownInfo* cooldownInfo,
+        ActionType          actionType,
+        uint                actionID
+    )
+    {
+        if (cofig.Mode                == TenChiJinMode.Auto &&
+            actionType                == ActionType.Action  &&
+            LocalPlayerState.ClassJob == CLASS_JOB_NINJA    &&
+            NinjutsuActions.Contains(actionID))
+            actionID = MUDRA_ACTION_ID;
+
+        GetHotbarCooldownInfoHook.Original(actionManager, cooldownInfo, actionType, actionID);
     }
 
     private void OnPreUseAction
@@ -157,7 +181,7 @@ public unsafe class AutoTenChiJin : ModuleBase
             return;
 
         var localPlayer = Control.GetLocalPlayer();
-        if (localPlayer == null || localPlayer->ClassJob != 30)
+        if (localPlayer == null || localPlayer->ClassJob != CLASS_JOB_NINJA)
             return;
 
         if (actionType != ActionType.Action || !NinjutsuActions.Contains(actionID))
@@ -183,8 +207,8 @@ public unsafe class AutoTenChiJin : ModuleBase
             return;
         }
 
-        var ninjutsuCharges = actionManager->GetCurrentCharges(2261);
-        var mudraReady      = actionManager->IsActionOffCooldown(ActionType.Action, 2261);
+        var ninjutsuCharges = actionManager->GetCurrentCharges(MUDRA_ACTION_ID);
+        var mudraReady      = actionManager->IsActionOffCooldown(ActionType.Action, MUDRA_ACTION_ID);
         var isKassatsu      = localPlayer->StatusManager.HasStatus(497);
 
         if (ninjutsuCharges == 0 && !mudraReady && !isKassatsu)
@@ -205,7 +229,7 @@ public unsafe class AutoTenChiJin : ModuleBase
         if (cofig.Mode != TenChiJinMode.Manual || opcode != UpstreamOpcode.UseActionOpcode)
             return;
 
-        if (LocalPlayerState.ClassJob != 30)
+        if (LocalPlayerState.ClassJob != CLASS_JOB_NINJA)
             return;
 
         var data = (UseActionPacket*)packet;
@@ -434,6 +458,13 @@ public unsafe class AutoTenChiJin : ModuleBase
     private static readonly FrozenSet<uint> NinjutsuActions     = [2265, 2266, 2267, 2268, 2269, 2270, 2271, 16491, 16492];
     private static readonly FrozenSet<uint> MudraStartActions   = [2259, 2261, 2263];
     private static readonly FrozenSet<uint> MudraProcessActions = [18805, 18806, 18807];
+
+    #endregion
+
+    #region 常量
+
+    private const uint MUDRA_ACTION_ID = 2261;
+    private const uint CLASS_JOB_NINJA = 30;
 
     #endregion
 }
