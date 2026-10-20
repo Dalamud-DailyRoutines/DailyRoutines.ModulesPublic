@@ -13,7 +13,6 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -29,16 +28,7 @@ public unsafe class AutoTenChiJin : ModuleBase
         Category    = ModuleCategory.Action
     };
 
-    private static readonly CompSig IsSlotUsableSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 F2 48 8B D9 41 8B F8");
-
-    private delegate byte IsSlotUsableDelegate
-    (
-        RaptureHotbarModule.HotbarSlot*    slot,
-        RaptureHotbarModule.HotbarSlotType type,
-        uint                               id
-    );
-
-    private Hook<IsSlotUsableDelegate>? IsSlotUsableHook;
+    private Hook<RaptureHotbarModule.HotbarSlot.Delegates.IsSlotUsable>? IsSlotUsableHook;
 
     private Config                         cofig = null!;
     private AddonDRNinJutsuActionsPreview? addon;
@@ -60,7 +50,12 @@ public unsafe class AutoTenChiJin : ModuleBase
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
         GamePacketManager.Instance().RegPreSendPacket(OnPreSendActionPacket);
 
-        IsSlotUsableHook ??= IsSlotUsableSig.GetHook<IsSlotUsableDelegate>(IsSlotUsableDetour);
+        IsSlotUsableHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(RaptureHotbarModule.HotbarSlot.MemberFunctionPointers),
+            nameof(RaptureHotbarModule.HotbarSlot.IsSlotUsable),
+            (RaptureHotbarModule.HotbarSlot.Delegates.IsSlotUsable)IsSlotUsableDetour
+        );
         IsSlotUsableHook.Enable();
     }
 
@@ -121,7 +116,7 @@ public unsafe class AutoTenChiJin : ModuleBase
         cofig.Save(this);
     }
 
-    private byte IsSlotUsableDetour
+    private bool IsSlotUsableDetour
     (
         RaptureHotbarModule.HotbarSlot*    slot,
         RaptureHotbarModule.HotbarSlotType type,
@@ -133,12 +128,10 @@ public unsafe class AutoTenChiJin : ModuleBase
 
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null || localPlayer->ClassJob != 30)
-            return 0;
+            return false;
 
         if (localPlayer->StatusManager.HasStatus(1186))
-            return (byte)(TenChiJinSequence.ContainsKey(id) ?
-                              1 :
-                              0);
+            return TenChiJinSequence.ContainsKey(id);
 
         var actionManager = ActionManager.Instance();
         var charges       = actionManager->GetCurrentCharges(2261);
@@ -148,9 +141,7 @@ public unsafe class AutoTenChiJin : ModuleBase
         slot->CostDisplayMode = 1;
         slot->CostValue       = (uint)(charges != 0 ? charges : cooldownLeft <= 1 ? 1 : cooldownLeft);
 
-        return (byte)(charges > 0 || localPlayer->StatusManager.HasStatus(497) ?
-                          1 :
-                          0);
+        return charges > 0 || localPlayer->StatusManager.HasStatus(497);
     }
 
     private void OnPreUseAction
@@ -383,7 +374,6 @@ public unsafe class AutoTenChiJin : ModuleBase
                 var dragDropNode = new DragDropNode
                 {
                     Size         = new(44f),
-                    IsVisible    = true,
                     IconId       = action.Icon,
                     AcceptedType = DragDropType.Everything,
                     IsDraggable  = true,
@@ -392,7 +382,7 @@ public unsafe class AutoTenChiJin : ModuleBase
                         Type = DragDropType.Action,
                         Int2 = (int)actionID
                     },
-                    IsClickable   = false,
+                    IsClickable   = true,
                     ActionTooltip = actionID
                 };
 
