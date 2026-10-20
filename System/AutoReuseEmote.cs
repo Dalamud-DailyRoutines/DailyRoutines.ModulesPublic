@@ -19,10 +19,17 @@ public class AutoReuseEmote : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("AutoReuseEmoteTitle"),
-        Description = Lang.Get("AutoReuseEmoteDescription", COMMAND),
-        Category    = ModuleCategory.System,
-        Author      = ["Xww"]
+        Title = Lang.Get("AutoReuseEmoteTitle"),
+        Description = Lang.Get
+        (
+            "AutoReuseEmoteDescription",
+            new Dictionary<string, object>
+            {
+                ["command"] = COMMAND
+            }
+        ),
+        Category = ModuleCategory.System,
+        Author   = ["Xww"]
     };
 
     public override ModulePermission Permission { get; } = new()
