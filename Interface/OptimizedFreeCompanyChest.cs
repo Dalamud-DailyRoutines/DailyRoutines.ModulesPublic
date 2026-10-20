@@ -4,12 +4,13 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
 using Dalamud.Utility;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -21,7 +22,6 @@ using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
-using OmenTools.Threading;
 using AgentFreeCompanyChest = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentFreeCompanyChest;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -40,7 +40,8 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private static readonly CompSig SendInventoryRefreshSig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 8B DA 48 8B F1 33 D2 0F B7 FA");
+    private static readonly CompSig SendInventoryRefreshSig =
+        new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 8B DA 48 8B F1 33 D2 0F B7 FA");
     private delegate bool SendInventoryRefreshDelegate
     (
         InventoryManager* instance,
@@ -48,163 +49,168 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
     );
     private Hook<SendInventoryRefreshDelegate>? SendInventoryRefreshHook;
 
-    private delegate nint MoveItemDelegate
-    (
-        void*         agent,
-        InventoryType srcInv,
-        uint          srcSlot,
-        InventoryType dstInv,
-        uint          dstSlot
-    );
-    private MoveItemDelegate moveItem = null!;
-
     private Config config = null!;
 
     private CheckboxNode? fastMoveNode;
-
-    private CheckboxNode? defaultPageNode;
-
+    
     private HorizontalListNode? componentNode;
     private IconImageNode?      gilIconNode;
     private TextNode?           gilItemsValueCountNode;
 
-    private bool isNeedToClose;
     private long lastTotalPrice;
+
+    private IAddonEventHandle[] handles = new IAddonEventHandle[6];
 
     protected override void Init()
     {
-        moveItem = new CompSig("40 53 55 56 57 41 57 48 83 EC ?? 45 33 FF").GetDelegate<MoveItemDelegate>();
-        config   = Config.Load(this) ?? new();
+        config = Config.Load(this) ?? new();
 
         SendInventoryRefreshHook ??= SendInventoryRefreshSig.GetHook<SendInventoryRefreshDelegate>(SendInventoryRefreshDetour);
         SendInventoryRefreshHook.Enable();
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "FreeCompanyChest", OnAddonChest);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "FreeCompanyChest", OnAddonChest);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreSetup,    "FreeCompanyChest", OnAddonChest);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "FreeCompanyChest", OnAddonChest);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "FreeCompanyChest", OnAddonChest);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "InputNumeric",     OnAddonInput);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreDraw,     "ContextMenu",      OnAddonContextMenu);
+        if (FreeCompanyChest->IsAddonAndNodesReady())
+            OnAddonChest(AddonEvent.PostRefresh, null);
 
-        IContextMenu.Instance().OnMenuOpened += OnContextMenuOpened;
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "InputNumeric", OnAddonInput);
+
+        ContextMenuManager.Instance().RegPre(OnContextMenuOpened);
     }
 
     protected override void Uninit()
     {
-        IContextMenu.Instance().OnMenuOpened -= OnContextMenuOpened;
+        ContextMenuManager.Instance().Unreg(OnContextMenuOpened);
 
-        IAddonLifecycle.Instance().UnregisterListener(OnAddonContextMenu);
         IAddonLifecycle.Instance().UnregisterListener(OnAddonChest);
         IAddonLifecycle.Instance().UnregisterListener(OnAddonInput);
 
-        ClearNodes();
+        fastMoveNode?.Dispose();
+        fastMoveNode = null;
 
-        isNeedToClose = false;
+        componentNode?.Dispose();
+        componentNode = null;
+
+        gilIconNode?.Dispose();
+        gilIconNode = null;
+
+        gilItemsValueCountNode?.Dispose();
+        gilItemsValueCountNode = null;
+
+        foreach (var handle in handles)
+            IAddonEventManager.Instance().RemoveEvent(handle);
     }
 
-    // 打开部队储物柜时请求所有页面数据, 并生成 Node
     private void OnAddonChest
     (
         AddonEvent type,
         AddonArgs  args
     )
     {
+        var addon = (AddonFreeCompanyChest*)FreeCompanyChest;
+        var agent = AgentFreeCompanyChest.Instance();
+        
         switch (type)
         {
-            case AddonEvent.PostSetup:
-                if (FreeCompanyChest == null) return;
+            case AddonEvent.PreFinalize:
+                fastMoveNode           = null;
+                componentNode          = null;
+                gilIconNode            = null;
+                gilItemsValueCountNode = null;
+                
+                foreach (var handle in handles)
+                    IAddonEventManager.Instance().RemoveEvent(handle);
+                break;
+
+            case AddonEvent.PreSetup:
+                if (addon == null)
+                    return;
 
                 if (config.DefaultPage != InventoryType.Invalid)
                 {
                     if (config.DefaultPage == InventoryType.FreeCompanyCrystals)
-                        IFramework.Instance().Run(() => ((AtkComponentRadioButton*)FreeCompanyChest->GetComponentByNodeId(15))->Click());
+                    {
+                        agent->TabType  = 1;
+                        agent->TabIndex = 0;
+                    }
                     else
                     {
-                        if ((int)config.DefaultPage < 20000) return;
+                        var defaultPageInt = (int)config.DefaultPage;
+                        if (defaultPageInt < 20000)
+                            return;
 
-                        var index = (int)config.DefaultPage % 20000;
-                        if (index > 5) return;
+                        var index = defaultPageInt % 20000;
+                        if (index > 5)
+                            return;
 
-                        IFramework.Instance().Run(() => ((AtkComponentRadioButton*)FreeCompanyChest->GetComponentByNodeId((uint)(10 + index)))->Click());
+                        agent->TabType  = 0;
+                        agent->TabIndex = (byte)index;
                     }
                 }
 
                 break;
-            case AddonEvent.PostDraw:
-                if (FreeCompanyChest == null) return;
+
+            case AddonEvent.PostRefresh:
+            {
+                if (addon == null)
+                    return;
 
                 if (fastMoveNode == null)
                 {
                     fastMoveNode = new()
                     {
-                        Size      = new(160.0f, 28.0f),
-                        Position  = new(5, 210),
-                        IsVisible = true,
-                        IsChecked = config.FastMoveItem,
-                        IsEnabled = true,
                         String    = Lang.Get("OptimizedFreeCompanyChest-FastMove"),
+                        Size      = new(160, 28),
+                        Position  = new(5, 208),
+                        IsChecked = config.FastMoveItem,
                         OnClick = newState =>
                         {
                             config.FastMoveItem = newState;
                             config.Save(this);
-
-                            isNeedToClose = false;
                         },
-                        TextTooltip = new SeStringBuilder().AddIcon(BitmapFontIcon.ExclamationRectangle)
-                                                           .Append($" {Lang.Get("OptimizedFreeCompanyChest-FastMoveHelp")}")
-                                                           .Build()
-                                                           .Encode()
+                        TextTooltip = Lang.Get("OptimizedFreeCompanyChest-FastMoveHelp")
                     };
                     fastMoveNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
-                fastMoveNode.IsChecked = config.FastMoveItem;
-                fastMoveNode.IsVisible = FreeCompanyChest->AtkValues[1].UInt == 0;
+                fastMoveNode.Label.TextFlags |= TextFlags.WordWrap | TextFlags.MultiLine;
+                fastMoveNode.IsChecked       =  config.FastMoveItem;
+                fastMoveNode.IsVisible       =  agent->TabType == 0;
 
-                if (defaultPageNode == null)
+                // 标记收藏的页面
+                using var rented = new RentedSeStringBuilder();
+                for (var i = 0; i < addon->ItemTabButtons.Length; i++)
                 {
-                    defaultPageNode = new()
-                    {
-                        Size      = new(160.0f, 28.0f),
-                        Position  = new(5, 156),
-                        IsVisible = true,
-                        IsChecked = false,
-                        IsEnabled = true,
-                        String    = Lang.Get("OptimizedFreeCompanyChest-DefaultPage"),
-                        OnClick = newState =>
-                        {
-                            switch (newState)
-                            {
-                                case true when TryGetCurrentFCPage(out var currentPage):
-                                    config.DefaultPage = currentPage;
-                                    config.Save(this);
-                                    break;
-                                case false:
-                                    config.DefaultPage = InventoryType.Invalid;
-                                    config.Save(this);
-                                    break;
-                            }
+                    var buttonsPtr = addon->ItemTabButtons[i];
+                    if (buttonsPtr.IsNull) continue;
 
-                            UpdateDefaultPageTooltip();
-                            defaultPageNode.HideTooltip();
-                            defaultPageNode.ShowTooltip();
-                        }
-                    };
-                    UpdateDefaultPageTooltip();
-                    defaultPageNode.AttachNode(FreeCompanyChest->GetNodeById(9));
+                    var button = buttonsPtr.Value;
+                    AddNodeEvents(button, i, false);
+
+                    rented.Clear();
+                    
+                    var numberChar = (char)('\ue090' + i);
+                    var text       = $"{numberChar} {LuminaWrapper.GetFCChestName(0)}";
+                    rented.Append(text);
+
+                    if (config.DefaultPage != InventoryType.FreeCompanyCrystals && (int)config.DefaultPage % 20000 == i)
+                        rented.AppendIcon((uint)BitmapFontIcon.GoldStar);
+                    
+                    button->ButtonTextNode->SetText(rented.GetViewAsSpan());
                 }
-
-                var gilRadioButton = FreeCompanyChest->GetNodeById(16);
-                if (gilRadioButton != null)
-                    gilRadioButton->SetPositionFloat(0, 185);
-
-                if (Throttler.Shared.Throttle("OptimizedFreeCompanyChest-OnUpdateDefaultPage", 100))
-                    defaultPageNode.IsChecked = TryGetCurrentFCPage(out var currentPage) && config.DefaultPage == currentPage;
-
+                
+                rented.Clear();
+                rented.Append(LuminaWrapper.GetAddonText(2990));
+                if (config.DefaultPage == InventoryType.FreeCompanyCrystals)
+                    rented.AppendIcon((uint)BitmapFontIcon.GoldStar);
+                addon->CrystalTabButton->ButtonTextNode->SetText(rented.GetViewAsSpan());
+                AddNodeEvents(addon->CrystalTabButton, 5, true);
+                
                 if (componentNode == null)
                 {
                     componentNode = new()
                     {
-                        IsVisible   = true,
                         Position    = new(380, -38),
                         Size        = new(0, 60),
                         ItemSpacing = 4,
@@ -214,7 +220,6 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
                     gilIconNode = new()
                     {
-                        IsVisible  = true,
                         IconId     = 65002,
                         Size       = new(32),
                         FitTexture = true
@@ -237,73 +242,111 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                     componentNode.AttachNode(FreeCompanyChest->GetNodeById(9));
                 }
 
-                if (Throttler.Shared.Throttle("OptimizedFreeCompanyChest-OnUpdateGilItemsValue", 100))
-                {
-                    lastTotalPrice = TryGetTotalPrice(out var totalPrice) ?
-                                         totalPrice :
-                                         0;
+                lastTotalPrice = TryGetTotalPrice(out var totalPrice) ?
+                                     totalPrice :
+                                     0;
 
-                    gilItemsValueCountNode.String = $"{lastTotalPrice.ToChineseString()}\ue049";
-                    gilItemsValueCountNode.Width  = gilItemsValueCountNode.GetTextDrawSize(false).X - 8;
+                gilItemsValueCountNode.String = $"{lastTotalPrice.ToChineseString()}\ue049";
+                gilItemsValueCountNode.Width  = gilItemsValueCountNode.GetTextDrawSize(false).X - 8;
 
-                    componentNode.RecalculateLayout();
+                componentNode.RecalculateLayout();
 
-                    componentNode.IsVisible = lastTotalPrice > 0;
-                }
-
+                componentNode.IsVisible = lastTotalPrice > 0;
                 break;
-            case AddonEvent.PreFinalize:
-                isNeedToClose = false;
-
-                ClearNodes();
-                break;
+            }
         }
-
+        
         return;
 
-        void UpdateDefaultPageTooltip()
+        void AddNodeEvents
+        (
+            AtkComponentRadioButton* button,
+            int                      index,
+            bool                     isCrystal
+        )
         {
-            using var rented  = new RentedSeStringBuilder();
-            var       builder = rented.Builder;
+            button->OwnerNode->NodeFlags.Add(NodeFlags.RespondToMouse, NodeFlags.HasCollision);
+            IAddonEventManager.Instance().RemoveEvent(handles[index]);
+            handles[index] = IAddonEventManager.Instance().AddEvent
+            (
+                (nint)addon,
+                (nint)button->OwnerNode,
+                AddonEventType.MouseClick,
+                (_, eventData) =>
+                {
+                    if (!eventData.IsRightClick)
+                    {
+                        if (isCrystal)
+                            agent->SetTab(1, 0);
+                        else
+                            agent->SetTab(0, (byte)index);
+                        
+                        return;
+                    }
 
-            defaultPageNode.TextTooltip =
-                builder.AppendIcon((uint)BitmapFontIcon.ExclamationRectangle)
-                       .Append($" {Lang.Get("OptimizedFreeCompanyChest-DefaultPageHelp")}")
-                       .AppendNewLine()
-                       .AppendNewLine()
-                       .Append
-                       (
-                           $"{Lang.Get("Current")}: {DefaultPages.GetValueOrDefault(config.DefaultPage, LuminaWrapper.GetAddonText(7))}"
-                       )
-                       .ToReadOnlySeString();
+                    var targetInventoryType = isCrystal ?
+                                                  InventoryType.FreeCompanyCrystals :
+                                                  (InventoryType)(index + 20000);
+                    ContextMenuManager.Instance().Open
+                    (
+                        new()
+                        {
+                            Addon     = FreeCompanyChest,
+                            AddonName = "FreeCompanyChest"
+                        },
+                        [
+                            new ContextMenuEntryInfo
+                            (
+                                nameof(OptimizedFreeCompanyChest),
+                                _ => new ContextMenuItem
+                                {
+                                    Name      = Lang.Get("OptimizedFreeCompanyChest-DefaultPage"),
+                                    IsEnabled = targetInventoryType != config.DefaultPage,
+                                    OnClicked = _ =>
+                                    {
+                                        config.DefaultPage = targetInventoryType;
+                                        config.Save(this);
+
+                                        OnAddonChest(AddonEvent.PostRefresh, null);
+                                    }
+                                },
+                                omitPrefix: true
+                            )
+                        ]
+                    );
+                }
+            );
         }
     }
 
     // 快捷存取
     private void OnContextMenuOpened
     (
-        IMenuOpenedArgs args
+        ref bool              isPrevented,
+        ContextMenuOpenedArgs args
     )
     {
-        if (FreeCompanyChest == null || !config.FastMoveItem) return;
+        if (FreeCompanyChest == null || !config.FastMoveItem) 
+            return;
 
         var agent = AgentFreeCompanyChest.Instance();
         if (agent == null) return;
 
         // 取出
-        if (args.AddonName              == "FreeCompanyChest" &&
-            agent->ContextInventoryType != InventoryType.Invalid)
+        if (args.AddonName               == "FreeCompanyChest" &&
+            agent->ContextItem.Container != InventoryType.Invalid)
         {
             var contextItem = agent->GetContextInventoryItem();
-            if (contextItem == null || contextItem->ItemId == 0) return;
+            if (contextItem == null || contextItem->ItemId == 0)
+                return;
 
             foreach (var playerInventory in Inventories.Player)
             {
                 if (TryFindFirstSuitableSlot(playerInventory, contextItem, out var slot))
                 {
-                    isNeedToClose = true;
-                    moveItem(agent, agent->ContextInventoryType, (uint)agent->ContextInventorySlot, playerInventory, (uint)slot);
-                    agent->ContextInventoryType = InventoryType.Invalid;
+                    agent->MoveItemInChest(agent->ContextItem.Container, (uint)agent->ContextItem.Slot, playerInventory, (uint)slot);
+                    agent->ContextItem.Container = InventoryType.Invalid;
+                    isPrevented                  = true;
                     return;
                 }
             }
@@ -313,29 +356,19 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
         // 存入
         if (args.AddonName.StartsWith("Inventory") &&
-            args.Target is MenuTargetInventory { TargetItem: { } inventoryItem })
-        {
-            if (!TryGetSelectedItemSource(out var sourceInventory, out var sourceSlot)) return;
-            if (!TryGetCurrentFCPage(out var page) || page == InventoryType.FreeCompanyCrystals) return;
-            if (!TryFindFirstSuitableSlot(page, (InventoryItem*)inventoryItem.Address, out var slot)) return;
+            args.TargetInventoryItem is { } inventoryItem)
+        { 
+            if (!TryGetSelectedItemSource(out var sourceInventory, out var sourceSlot)) 
+                return;
+            if (!AgentFreeCompanyChest.Instance()->TryGetCurrentInventoryType(out var page) || 
+                page == InventoryType.FreeCompanyCrystals) 
+                return;
+            if (!TryFindFirstSuitableSlot(page, &inventoryItem, out var slot)) 
+                return;
 
-            isNeedToClose = true;
-            moveItem(agent, sourceInventory, sourceSlot, page, (uint)slot);
+            agent->MoveItemInChest(sourceInventory, sourceSlot, page, (uint)slot);
+            isPrevented = true;
         }
-    }
-
-    // 处理存取后的右键菜单关闭
-    private void OnAddonContextMenu
-    (
-        AddonEvent type,
-        AddonArgs  args
-    )
-    {
-        if (!isNeedToClose || ContextMenuAddon == null) return;
-
-        ContextMenuAddon->IsVisible = false;
-        ContextMenuAddon->Close(true);
-        isNeedToClose = false;
     }
 
     // 自动确认数量
@@ -345,8 +378,21 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         AddonArgs  args
     )
     {
-        if (!config.FastMoveItem || InputNumeric == null || !FreeCompanyChest->IsAddonAndNodesReady()) return;
-
+        if (!config.FastMoveItem) 
+            return;
+        
+        var addon = args.Addon.ToStruct();
+        if (addon == null)
+            return;
+        
+        var agent = AgentFreeCompanyChest.Instance();
+        if (agent == null)
+            return;
+        
+        if (agent->InputNumericAddonID == 0 ||
+            addon->Id != agent->InputNumericAddonID)
+            return;
+        
         InputNumeric->Callback((int)InputNumeric->AtkValues[3].UInt);
     }
 
@@ -360,24 +406,6 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         // 直接返回 true 防锁
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestInventory, (uint)inventoryType);
         return true;
-    }
-
-    private void ClearNodes()
-    {
-        fastMoveNode?.Dispose();
-        fastMoveNode = null;
-
-        defaultPageNode?.Dispose();
-        defaultPageNode = null;
-
-        componentNode?.Dispose();
-        componentNode = null;
-
-        gilIconNode?.Dispose();
-        gilIconNode = null;
-
-        gilItemsValueCountNode?.Dispose();
-        gilItemsValueCountNode = null;
     }
 
     #region 工具
@@ -401,26 +429,6 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
         sourceInventory = agent->TargetInventoryId;
         sourceSlot      = (ushort)agent->TargetInventorySlotId;
-        return true;
-    }
-
-    private static bool TryGetCurrentFCPage
-    (
-        out InventoryType page
-    )
-    {
-        page = InventoryType.Invalid;
-
-        if (FreeCompanyChest == null || FreeCompanyChest->GetNodeById(106)->GetVisibility())
-            return false;
-
-        if (FreeCompanyChest->AtkValues[1].UInt != 0)
-        {
-            page = InventoryType.FreeCompanyCrystals;
-            return true;
-        }
-
-        page = (InventoryType)(20000 + FreeCompanyChest->AtkValues[2].UInt);
         return true;
     }
 
@@ -488,17 +496,22 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         var manager = InventoryManager.Instance();
         if (manager == null) return false;
 
-        if (!TryGetCurrentFCPage(out var fcPage) || fcPage == InventoryType.FreeCompanyCrystals) return false;
+        var agent = AgentFreeCompanyChest.Instance();
+        if (!agent->TryGetCurrentInventoryType(out var fcPage) ||
+            fcPage == InventoryType.FreeCompanyCrystals ||
+            !fcPage.TryGetItems(x => x.GetBaseItemId() > 0, out var items))
+            return false;
 
-        foreach (var item in ItemIDs)
+        foreach (var item in items)
         {
-            if (!LuminaGetter.TryGetRow(item, out Item itemData)) continue;
-
-            var itemCount = manager->GetItemCountInContainer(item, fcPage);
-            if (itemCount == 0) continue;
-
-            var price = itemData.PriceLow;
-            totalPrice += itemCount * price;
+            var itemID = item.GetBaseItemId();
+            if (!LuminaGetter.TryGetRow(itemID, out Item itemRow))
+                continue;
+            if (!SellableItemIDs.Contains(itemID))
+                continue;
+            
+            var price = itemRow.PriceLow;
+            totalPrice += item.GetQuantity() * price;
         }
 
         return totalPrice > 0;
@@ -508,29 +521,18 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public InventoryType DefaultPage  = InventoryType.Invalid;
+        public InventoryType DefaultPage  = InventoryType.FreeCompanyPage1;
         public bool          FastMoveItem = true;
     }
 
     #region 常量
 
-    private static readonly uint[] ItemIDs =
+    private static readonly FrozenSet<uint> SellableItemIDs =
     [
         .. LuminaGetter.Get<Item>()
                        .Where(x => x.ItemSortCategory.Value.Param == 150)
                        .Select(x => x.RowId)
     ];
-
-    private static readonly FrozenDictionary<InventoryType, string> DefaultPages = new Dictionary<InventoryType, string>
-    {
-        [InventoryType.FreeCompanyPage1]    = $"{LuminaWrapper.GetFCChestName(0)} \ue090",
-        [InventoryType.FreeCompanyPage2]    = $"{LuminaWrapper.GetFCChestName(0)} \ue091",
-        [InventoryType.FreeCompanyPage3]    = $"{LuminaWrapper.GetFCChestName(0)} \ue092",
-        [InventoryType.FreeCompanyPage4]    = $"{LuminaWrapper.GetFCChestName(0)} \ue093",
-        [InventoryType.FreeCompanyPage5]    = $"{LuminaWrapper.GetFCChestName(0)} \ue094",
-        [InventoryType.FreeCompanyCrystals] = $"{LuminaWrapper.GetAddonText(2990)}",
-        [InventoryType.Invalid]             = $"{LuminaWrapper.GetAddonText(7)}"
-    }.ToFrozenDictionary();
 
     #endregion
 }
