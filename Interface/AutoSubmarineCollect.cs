@@ -221,8 +221,17 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             TaskHelper.Enqueue(task);
     }
 
-    private static bool TeleportToHouseZone() =>
-        Throttler.Shared.Throttle("AutoSubmarineCollect-TeleportToHouseZone") && Telepo.Instance()->Teleport(96, 0);
+    private static bool TeleportToHouseZone()
+    {
+        if (!Throttler.Shared.Throttle("AutoSubmarineCollect-TeleportToHouseZone"))
+            return false;
+
+        if (AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x is { IsHouse: true, HouseType: EstateType.FreeCompanyEstate }) is not
+            { } freeCompanyAetheryte)
+            return false;
+        
+        return Telepo.Instance()->Teleport(freeCompanyAetheryte.RowID, 0);
+    }
 
     private static bool TeleportToHouseEntry()
     {
