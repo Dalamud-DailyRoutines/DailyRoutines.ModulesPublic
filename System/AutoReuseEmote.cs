@@ -6,6 +6,7 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Addons.InputNumeric;
@@ -30,7 +31,7 @@ public class AutoReuseEmote : ModuleBase
     };
 
     private Config config = null!;
-    
+
     private AutoReuseEmoteMenuItem menuItem = null!;
 
     private uint currentEmoteID;
@@ -82,14 +83,48 @@ public class AutoReuseEmote : ModuleBase
             return;
         }
 
-        var splitted = args.Split(' ');
-        if (splitted.Length is not (1 or 2)) return;
+        var emoteName      = args;
+        var repeatInterval = config.DefaultInterval;
 
-        var emoteName = splitted[0];
-        var repeatInterval = splitted.Length == 2 && uint.TryParse(splitted[1], out var repeatIntervalTime) ?
-                                 repeatIntervalTime :
-                                 config.DefaultInterval;
-        if (!TryParseEmoteByName(emoteName, out var emoteID)) return;
+        var intervalStartIndex = args.LastIndexOf(' ');
+        if (intervalStartIndex > 0                                                  &&
+            uint.TryParse(args[(intervalStartIndex + 1)..], out var parsedInterval))
+        {
+            if (parsedInterval <= 0)
+            {
+                NotifyHelper.Instance().ChatError
+                (
+                    ReadOnlySeString.FormatIncorrectCommandParamLogMessage
+                    (
+                        2,
+                        Lang.Get("Interval"),
+                        parsedInterval.ToString()
+                    )
+                );
+                return;
+            }
+
+            emoteName = args[..intervalStartIndex].TrimEnd()
+                                                  .Trim("\"")
+                                                  .Trim("“")
+                                                  .Trim("”")
+                                                  .ToString();
+            repeatInterval = parsedInterval;
+        }
+
+        if (!TryParseEmoteByName(emoteName, out var emoteID))
+        {
+            NotifyHelper.Instance().ChatError
+            (
+                ReadOnlySeString.FormatNotFoundCommandParamLogMessage
+                (
+                    1,
+                    Lang.Get("Emote"),
+                    emoteName
+                )
+            );
+            return;
+        }
 
         StartReuse(emoteID, repeatInterval);
     }
@@ -100,28 +135,39 @@ public class AutoReuseEmote : ModuleBase
         out ushort id
     )
     {
-        id   = 0;
-        name = name.Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(name)) return false;
+        id = 0;
 
-        var first = LuminaGetter
-                    .Get<Emote>()
-                    .Where
-                    (x => !string.IsNullOrWhiteSpace(x.Name.ToString()) &&
-                          x.TextCommand.ValueNullable != null
-                    )
-                    .FirstOrDefault
-                    (x => x.Name.ToString().Equals(name, StringComparison.InvariantCultureIgnoreCase) ||
-                          x.TextCommand.Value.Command.ToString().ToLowerInvariant().Trim('/') ==
-                          name
-                    );
-        if (first.RowId == 0) return false;
-        // 情感动作需要解锁
-        if (first.UnlockLink != 0 && !UIState.Instance()->IsUnlockLinkUnlockedOrQuestCompleted(first.UnlockLink))
-            return false;
+        var query = name.AsSpan().Trim();
+        if (query.IsEmpty) return false;
 
-        id = (ushort)first.RowId;
-        return true;
+        foreach (var emote in LuminaGetter.Get<Emote>())
+        {
+            var textCommand = emote.TextCommand;
+            if (textCommand.ValueNullable is null) 
+                continue;
+
+            var emoteName = emote.Name.ToString().AsSpan().Trim();
+            if (emoteName.IsEmpty) 
+                continue;
+
+            if (!emoteName.Equals(query, StringComparison.OrdinalIgnoreCase))
+            {
+                var commandName = textCommand.Value.Command.ToString().AsSpan().Trim('/');
+                if (!commandName.Equals(query, StringComparison.OrdinalIgnoreCase)) 
+                    continue;
+            }
+
+            // 情感动作需要解锁
+            var unlockLink = emote.UnlockLink;
+            if (unlockLink != 0 &&
+                !UIState.Instance()->IsUnlockLinkUnlockedOrQuestCompleted(unlockLink))
+                return false;
+
+            id = (ushort)emote.RowId;
+            return true;
+        }
+
+        return false;
     }
 
     private void StartReuse
@@ -157,7 +203,7 @@ public class AutoReuseEmote : ModuleBase
     {
         TaskHelper.Abort();
         currentEmoteID = 0;
-        
+
         var message = Lang.Get("AutoReuseEmote-Notification-Stop");
         NotifyHelper.Instance().Chat(message);
         NotifyHelper.Toast(message);
@@ -221,7 +267,7 @@ public class AutoReuseEmote : ModuleBase
                 return null;
 
             List<ContextMenuItem> items = [];
-            
+
             if (module.currentEmoteID == emoteID)
             {
                 items.Add
@@ -244,40 +290,43 @@ public class AutoReuseEmote : ModuleBase
                     }
                 );
             }
-            
-            items.Add(new()
-            {
-                Name = Lang.Get("AutoReuseEmote-ConfigureDefualtInterval"),
-                OnClicked = _ =>
-                {
-                    InputNumericAddon.Open
-                    (
-                        new()
-                        {
-                            Prompt          = Lang.Get("AutoReuseEmote-ConfigureDefualtInterval-PleaseInput"),
-                            Value           = (int)module.config.DefaultInterval,
-                            Min             = 100,
-                            Max             = int.MaxValue,
-                            Step            = 1000,
-                            BlockedParentID = addon->Id,
-                            ParentID        = addon->Id,
-                            Callback = (_, info) =>
-                            {
-                                if (info.Result != InputNumericAddonResult.Confirmed)
-                                    return;
 
-                                module.config.DefaultInterval = (uint)info.Value;
-                                module.config.Save(module);
-                            },
-                            Position = new
-                            (
-                                args.Addon->RootNode->GetNodeState().Center,
-                                AddonPositionAlignment.TopCenter
-                            )
-                        }
-                    );
+            items.Add
+            (
+                new()
+                {
+                    Name = Lang.Get("AutoReuseEmote-ConfigureDefualtInterval"),
+                    OnClicked = _ =>
+                    {
+                        InputNumericAddon.Open
+                        (
+                            new()
+                            {
+                                Prompt          = Lang.Get("AutoReuseEmote-ConfigureDefualtInterval-PleaseInput"),
+                                Value           = (int)module.config.DefaultInterval,
+                                Min             = 100,
+                                Max             = int.MaxValue,
+                                Step            = 1000,
+                                BlockedParentID = addon->Id,
+                                ParentID        = addon->Id,
+                                Callback = (_, info) =>
+                                {
+                                    if (info.Result != InputNumericAddonResult.Confirmed)
+                                        return;
+
+                                    module.config.DefaultInterval = (uint)info.Value;
+                                    module.config.Save(module);
+                                },
+                                Position = new
+                                (
+                                    args.Addon->RootNode->GetNodeState().Center,
+                                    AddonPositionAlignment.TopCenter
+                                )
+                            }
+                        );
+                    }
                 }
-            });
+            );
 
             return items;
         }
