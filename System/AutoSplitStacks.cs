@@ -406,14 +406,14 @@ public unsafe class AutoSplitStacks : ModuleBase
                             Value  = 1,
                             Min    = 1,
                             Max    = (int)Math.Min(998, quantity),
-                            Callback = (addon, result) =>
+                            Callback = (_, info) =>
                             {
                                 module.drInputNumeric = null;
 
-                                if (result != InputNumericAddonResult.Confirmed)
+                                if (info.Result != InputNumericAddonResult.Confirmed)
                                     return;
 
-                                module.EnqueueSplitByInfo(args.TargetItemID, addon.Value);
+                                module.EnqueueSplitByInfo(args.TargetItemID, info.Value);
                             },
                             Position = new
                             (

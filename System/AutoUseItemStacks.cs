@@ -184,11 +184,11 @@ public unsafe class AutoUseItemStacks : ModuleBase
                             Value  = (int)quantity,
                             Min    = 1,
                             Max    = (int)quantity,
-                            Callback = (addon, result) =>
+                            Callback = (_, info) =>
                             {
                                 module.drInputNumeric = null;
 
-                                if (result != InputNumericAddonResult.Confirmed)
+                                if (info.Result != InputNumericAddonResult.Confirmed)
                                     return;
 
                                 module.EnqueueOpenCoffers
@@ -196,7 +196,7 @@ public unsafe class AutoUseItemStacks : ModuleBase
                                     itemID,
                                     item.Container,
                                     (ushort)item.Slot,
-                                    (uint)Math.Max(quantity - addon.Value, 0),
+                                    (uint)Math.Max(quantity - info.Value, 0),
                                     0
                                 );
                             },
