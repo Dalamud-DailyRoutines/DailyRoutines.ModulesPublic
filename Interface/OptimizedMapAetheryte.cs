@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using KamiToolKit.Controllers;
 using KamiToolKit.MapOverlay;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
@@ -16,12 +17,12 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
-public unsafe class ClickableAethernet : ModuleBase
+public unsafe class OptimizedMapAetheryte : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("ClickableAethernetTitle"),
-        Description = Lang.Get("ClickableAethernetDescription"),
+        Title       = Lang.Get("OptimizedMapAetheryteTitle"),
+        Description = Lang.Get("OptimizedMapAetheryteDescription"),
         Category    = ModuleCategory.Interface
     };
 
@@ -30,15 +31,22 @@ public unsafe class ClickableAethernet : ModuleBase
         AllDefaultEnabled = true
     };
 
+    private MemoryPatch aetheryteTopPatch = null!;
+
     private AddonController<AddonAreaMap>? areaMapController;
     private MapOverlayController?          mapOverlayController;
-
-    private SelectYesnoAddon? drSelectYesno;
 
     private uint lastMapID;
 
     protected override void Init()
     {
+        aetheryteTopPatch = new
+        (
+            "80 BB 10 5B 00 00 00 74 1B 83 F9 03 75 16 48 83 FD 14",
+            [0xEB, 0x07, 0x90, 0x90, 0x90, 0x90, 0x90]
+        );
+        aetheryteTopPatch.Enable();
+
         mapOverlayController = new();
         mapOverlayController.Enable();
 
@@ -55,18 +63,15 @@ public unsafe class ClickableAethernet : ModuleBase
     protected override void Uninit()
     {
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
-        
+
         areaMapController?.Dispose();
         areaMapController = null;
 
         mapOverlayController?.RemoveAllMarkers();
         mapOverlayController?.Dispose();
         mapOverlayController = null;
-
-        drSelectYesno?.Dispose();
-        drSelectYesno = null;
     }
-    
+
     private void OnZoneChanged
     (
         uint zone
@@ -144,8 +149,7 @@ public unsafe class ClickableAethernet : ModuleBase
                             if (addon->NumBlockingAddons != 0)
                                 return;
 
-                            drSelectYesno?.Dispose();
-                            drSelectYesno = SelectYesnoAddon.Open
+                            SelectYesnoAddon.Open
                             (
                                 new()
                                 {
@@ -159,8 +163,6 @@ public unsafe class ClickableAethernet : ModuleBase
                                     ),
                                     Callback = (_, result) =>
                                     {
-                                        drSelectYesno = null;
-
                                         if (result != SelectYesnoAddonResult.Yes)
                                             return;
 
