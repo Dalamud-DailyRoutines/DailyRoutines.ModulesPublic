@@ -7,7 +7,6 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Text;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
@@ -55,6 +54,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
         if (config.SoundEffectNotes.Count <= 0)
         {
+            DLog.Debug("测试替换");
             for (var i = 1U; i < 17; i++)
                 config.SoundEffectNotes[i] = $"<se.{i}>";
         }
@@ -1223,40 +1223,74 @@ public unsafe class QuickChatPanel : ModuleBase
                 ItemSpacing      = gap,
                 OnToggle         = UpdateSettingsLayout
             };
-
-            var soundLabelWidth = RowHeight * 1.6f;
-
+            
             foreach (var (key, value) in instance.config.SoundEffectNotes.OrderBy(x => x.Key))
             {
-                var row = new HorizontalListNode
+                var origText  = $"<se.{key}>";
+                var isDefault = string.IsNullOrWhiteSpace(value) || origText == value;
+                var row = new ListButtonNode
                 {
-                    Size               = new(contentWidth, controlHeight),
-                    ItemSpacing        = gap,
-                    FirstItemSpacing   = 0f,
-                    FitToContentHeight = true
-                };
-                row.AddNode
-                (
-                    new TextNode
-                    {
-                        Size          = new(soundLabelWidth, controlHeight),
-                        String        = $"<se.{key}>",
-                        AlignmentType = AlignmentType.Left,
-                        FontSize      = 14
-                    }
-                );
+                    Size = new(contentWidth, controlHeight),
+                    String = isDefault ?
+                                 origText :
+                                 $"{value}（{origText}）",
+                    OnClick = () => ContextMenuManager.Instance().Open
+                    (
+                        new ContextMenuOpenedArgs
+                        {
+                            Addon     = InternalAddon,
+                            AddonName = InternalAddon->NameString
+                        },
+                        [
+                            new ContextMenuEntryInfo
+                            (
+                                nameof(QuickChatPanel),
+                                _ =>
+                                [
+                                    new()
+                                    {
+                                        Name = Lang.Get("Edit"),
+                                        OnClicked = _ =>
+                                        {
+                                            InputStringAddon.Open
+                                            (
+                                                new()
+                                                {
+                                                    ParentID        = AddonId,
+                                                    BlockedParentID = AddonId,
+                                                    Prompt = Lang.Get
+                                                    (
+                                                        "QuickChatPanel-SystemSound-EditPrompt",
+                                                        new Dictionary<string, object>
+                                                        {
+                                                            ["soundEffectIndex"] = key
+                                                        }
+                                                    ),
+                                                    DefaultText = value,
+                                                    Callback = (_, info) =>
+                                                    {
+                                                        if (info.Result != InputStringAddonResult.Confirmed)
+                                                            return;
 
-                var input = new TextInputNode
-                {
-                    Size          = new(contentWidth - soundLabelWidth - gap, controlHeight),
-                    String        = value,
-                    MaxCharacters = 32
+                                                        var edit = info.Value.ToString();
+                                                        if (string.IsNullOrWhiteSpace(edit))
+                                                            return;
+
+                                                        instance.config.SoundEffectNotes[key] = edit;
+                                                        instance.config.Save(instance);
+
+                                                        AtkStage.Instance()->ClearFocus();
+                                                    }
+                                                }
+                                            );
+                                        }
+                                    },
+                                ]
+                            )
+                        ]
+                    )
                 };
-                input.OnInputReceived          = text => instance.config.SoundEffectNotes[key] = text.ToString();
-                input.OnInputComplete          = text => SaveSoundEffectNote(key, text.ToString());
-                input.OnFocusLost              = () => SaveSoundEffectNote(key,   input.String.ToString());
-                input.CurrentTextNode.FontSize = 14;
-                row.AddNode(input);
+                
                 sounds.AddNode(row);
             }
 
@@ -1279,21 +1313,22 @@ public unsafe class QuickChatPanel : ModuleBase
             {
                 var module = RaptureMacroModule.Instance();
 
-                macrosSection.AddNode
-                (
-                    new TextNode
-                    {
-                        Size = new(contentWidth, labelHeight),
-                        String = LuminaWrapper.GetAddonText
-                        (
-                            isIndividual ?
-                                17337U :
-                                17338
-                        ),
-                        FontSize      = 13,
-                        AlignmentType = AlignmentType.Left
-                    }
-                );
+                var titleLabel = new TextNode
+                {
+                    Size = new(contentWidth, labelHeight),
+                    String = LuminaWrapper.GetAddonText
+                    (
+                        isIndividual ?
+                            17337U :
+                            17338
+                    ),
+                    FontSize      = 16,
+                    AlignmentType = AlignmentType.Left
+                };
+                AtkColors.Text.ApplyTo(titleLabel);
+                
+                macrosSection.AddNode(titleLabel);
+                
                 var span = isIndividual ?
                                module->Individual :
                                module->Shared;
@@ -1316,11 +1351,11 @@ public unsafe class QuickChatPanel : ModuleBase
                         IconID         = macro->IconId,
                         LastUpdateTime = StandardTimeManager.Instance().Now
                     };
-                    macrosSection.AddNode(MacroRow(savedMacro));
+                    macrosSection.AddNode(GetMacroRow(savedMacro));
                 }
             }
 
-            HorizontalListNode MacroRow
+            HorizontalListNode GetMacroRow
             (
                 SavedMacro macro
             )
@@ -1328,46 +1363,29 @@ public unsafe class QuickChatPanel : ModuleBase
                 var isSaved = instance.config.SavedMacros.Contains(macro);
                 var row = new HorizontalListNode
                 {
-                    Size               = new(contentWidth, controlHeight),
+                    X                  = 20,
+                    Size               = new(contentWidth - 20, controlHeight),
                     ItemSpacing        = gap,
-                    FirstItemSpacing   = 0f,
-                    FitToContentHeight = true
                 };
-
-                var buttonCount = isSaved ?
-                                      2 :
-                                      1;
-
-                var info = new SimpleComponentNode
-                {
-                    Size = new
-                    (
-                        contentWidth - (buttonCount * (buttonWidth + gap)),
-                        controlHeight
-                    )
-                };
-
-                var iconSize = RowHeight * 0.75f;
-
+                
                 var icon = new IconImageNode
                 {
-                    Position   = new(gap / 2f, (info.Height - iconSize) / 2f),
-                    Size       = new(iconSize),
+                    Size       = new(controlHeight * 0.8f),
                     IconId     = macro.IconID,
                     FitTexture = true
                 };
-                icon.AttachNode(info);
+                row.AddNode(icon);
 
-                new TextNode
+                var name = new TextNode
                 {
-                    Position      = new(icon.Position.X + iconSize        + gap, 0f),
-                    Size          = new(info.Width      - icon.Position.X - iconSize - gap, controlHeight),
-                    String        = macro.Name,
+                    TextFlags     = TextFlags.Bold | TextFlags.AutoAdjustNodeSize,
+                    Height        = controlHeight * 0.8f,
                     AlignmentType = AlignmentType.Left,
+                    String        = macro.Name,
                     FontSize      = 14,
-                    TextFlags     = TextFlags.Bold
-                }.AttachNode(info);
-                row.AddNode(info);
+                };
+                AtkColors.ListRow.ApplyTo(name);
+                row.AddNode(name);
 
                 if (isSaved)
                 {
@@ -1409,18 +1427,6 @@ public unsafe class QuickChatPanel : ModuleBase
                 toggleButton.LabelNode.AutoAdjustTextSize();
                 row.AddNode(toggleButton);
                 return row;
-            }
-
-            void SaveSoundEffectNote
-            (
-                uint   key,
-                string value
-            )
-            {
-                if (instance.config.SoundEffectNotes.GetValueOrDefault(key) == value) return;
-
-                instance.config.SoundEffectNotes[key] = value;
-                instance.config.Save(instance);
             }
 
             HorizontalListNode GetInputComponent
