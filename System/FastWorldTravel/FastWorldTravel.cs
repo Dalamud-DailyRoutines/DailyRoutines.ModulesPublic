@@ -113,7 +113,7 @@ public partial class FastWorldTravel : ModuleBase
 
     #region 事件
 
-    private void OnDTRClick
+    private unsafe void OnDTRClick
     (
         DtrInteractionEvent param
     )
@@ -133,8 +133,6 @@ public partial class FastWorldTravel : ModuleBase
             return;
         }
         
-        selectYesnoAddon?.Dispose();
-
         using var rented  = new RentedSeStringBuilder();
         var       builder = rented.Builder;
 
@@ -145,11 +143,14 @@ public partial class FastWorldTravel : ModuleBase
             builder.AppendIcon((uint)BitmapFontIcon.CrossWorld)
                    .Append(GameState.HomeDataCenterData.Name);
         }
-
+        
+        selectYesnoAddon?.Dispose();
         selectYesnoAddon = SelectYesnoAddon.Open
         (
             new()
             {
+                ParentID        = DTR->Id,
+                BlockedParentID = DTR->Id,
                 Prompt = Lang.GetSe
                 (
                     "FastWorldTravel-Notification-TravelBackConfirm",
