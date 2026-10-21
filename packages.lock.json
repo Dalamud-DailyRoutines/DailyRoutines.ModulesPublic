@@ -127,7 +127,10 @@
         "type": "Project"
       },
       "kamitoolkit": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "FFXIVClientStructs.Expansion": "[1.0.0, )"
+        }
       },
       "omentools": {
         "type": "Project",
