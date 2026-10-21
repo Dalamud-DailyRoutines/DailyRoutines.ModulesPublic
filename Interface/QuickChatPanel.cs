@@ -24,7 +24,6 @@ using OmenTools.KamiToolKit.Addons.InputString;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
-using OmenTools.Threading.TaskHelper;
 using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic.Interface;
@@ -163,6 +162,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     (config.SavedMessages[i], config.SavedMessages[dropMessageIndex]);
                 dropMessageIndex = -1;
                 config.Save(this);
+                chatPanelAddon?.RebuildTab(QuickChatTab.Messages);
             }
         }
 
@@ -210,6 +210,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     (config.SavedMacros[i], config.SavedMacros[dropMacroIndex]);
                 dropMacroIndex = -1;
                 config.Save(this);
+                chatPanelAddon?.RebuildTab(QuickChatTab.Macros);
             }
         }
     }
@@ -374,7 +375,7 @@ public unsafe class QuickChatPanel : ModuleBase
     private class Config : ModuleConfig
     {
         public float OverlayScale = 10f;
-        
+
         public MacroDisplayMode         OverlayMacroDisplayMode = MacroDisplayMode.Buttons;
         public Vector2                  OverlayOffset           = new(0);
         public QuickChatTab             SelectedTab             = QuickChatTab.Messages;
@@ -394,13 +395,15 @@ public unsafe class QuickChatPanel : ModuleBase
         protected override bool AutoOpenAddon =>
             false;
 
-        private readonly Dictionary<QuickChatTab, ListButtonNode>                  tabButtons      = [];
-        private readonly Dictionary<QuickChatTab, ResNode>                         tabRoots        = [];
-        private readonly Dictionary<QuickChatTab, ScrollingNode<VerticalListNode>> tabContentLists = [];
+        private readonly Dictionary<QuickChatTab, ListButtonNode>                                           tabButtons      = [];
+        private readonly Dictionary<QuickChatTab, ResNode>                                                  tabRoots        = [];
+        private readonly Dictionary<QuickChatTab, ScrollingNode<VerticalListNode>>                          tabContentLists = [];
+        private readonly Dictionary<string, TextButtonNode>                                                 messageButtons  = [];
+        private readonly Dictionary<uint, TextButtonNode>                                                   soundButtons    = [];
+        private readonly Dictionary<SavedMacro, (TextButtonNode Button, IconImageNode Icon, TextNode Name)> macroButtons    = [];
 
         private readonly LuminaSearcher<Item> searcher;
         private readonly QuickChatPanel       instance;
-        private readonly TaskHelper           taskHelper = new();
 
         private QuickChatTab         selectedTab;
         private SimpleComponentNode? contentPanel;
@@ -423,7 +426,8 @@ public unsafe class QuickChatPanel : ModuleBase
             QuickChatPanel instance
         ) : base("ChatLog")
         {
-            this.instance = instance;
+            this.instance   = instance;
+            ScaleMultiplier = MathF.Max(instance.config.OverlayScale / 10f, 1f);
             selectedTab = Enum.IsDefined(instance.config.SelectedTab) ?
                               instance.config.SelectedTab :
                               QuickChatTab.Messages;
@@ -439,23 +443,6 @@ public unsafe class QuickChatPanel : ModuleBase
             );
         }
 
-        public override void Dispose()
-        {
-            taskHelper.Dispose();
-            base.Dispose();
-        }
-
-        protected override void OnUpdate
-        (
-            AtkUnitBase* addon
-        )
-        {
-            var scale = MathF.Max(instance.config.OverlayScale / 10f, 1f);
-            addon->RootNode->SetScale(scale, scale);
-
-            base.OnUpdate(addon);
-        }
-
         protected override void OnSetup
         (
             AtkUnitBase*   addon,
@@ -465,6 +452,9 @@ public unsafe class QuickChatPanel : ModuleBase
             tabButtons.Clear();
             tabRoots.Clear();
             tabContentLists.Clear();
+            messageButtons.Clear();
+            soundButtons.Clear();
+            macroButtons.Clear();
             itemSearchInput = string.Empty;
 
             var gap      = Gap;
@@ -522,7 +512,23 @@ public unsafe class QuickChatPanel : ModuleBase
 
             body.AttachNode(this);
 
-            ShowTab(selectedTab);
+            EnsureTabBuilt(selectedTab);
+        }
+
+        protected override void OnFinalize
+        (
+            AtkUnitBase* addon
+        )
+        {
+            tabButtons.Clear();
+            tabRoots.Clear();
+            tabContentLists.Clear();
+            messageButtons.Clear();
+            soundButtons.Clear();
+            macroButtons.Clear();
+            contentPanel           = null;
+            contentPanelBackground = null;
+            base.OnFinalize(addon);
         }
 
         public void TogglePanel()
@@ -547,7 +553,10 @@ public unsafe class QuickChatPanel : ModuleBase
             instance.config.SelectedTab = tab;
             instance.config.Save(instance);
             RefreshTabButtons();
-            ShowTab(tab);
+            EnsureTabBuilt(tab);
+
+            foreach (var (tabType, root) in tabRoots)
+                root.IsVisible = tabType == tab;
         }
 
         private void RefreshTabButtons()
@@ -561,7 +570,7 @@ public unsafe class QuickChatPanel : ModuleBase
             QuickChatTab tab
         )
         {
-            if (tabRoots.ContainsKey(tab)) return;
+            if (tabContentLists.ContainsKey(tab)) return;
             if (contentPanel == null) return;
 
             var gap = Gap;
@@ -589,6 +598,20 @@ public unsafe class QuickChatPanel : ModuleBase
 
             BuildTab(tab, contentList);
             contentList.RecalculateSizes();
+        }
+
+        public void RebuildTab
+        (
+            QuickChatTab tab
+        )
+        {
+            if (!tabContentLists.TryGetValue(tab, out var contentList)) return;
+
+            var scrollPosition = contentList.ScrollBarNode.ScrollPosition;
+            contentList.ContentNode.Clear();
+            BuildTab(tab, contentList);
+            contentList.RecalculateSizes();
+            contentList.ScrollBarNode.ScrollPosition = Math.Clamp(scrollPosition, 0, contentList.ScrollBarNode.ScrollMaxPosition);
         }
 
         private void BuildTab
@@ -620,20 +643,6 @@ public unsafe class QuickChatPanel : ModuleBase
             }
         }
 
-        private void ShowTab
-        (
-            QuickChatTab tab
-        ) =>
-            taskHelper.Enqueue
-            (() =>
-                {
-                    EnsureTabBuilt(tab);
-
-                    foreach (var (otherTab, root) in tabRoots)
-                        root.IsVisible = otherTab == tab;
-                }
-            );
-
         private ListButtonNode CreateNavButton
         (
             QuickChatTab tab,
@@ -659,6 +668,8 @@ public unsafe class QuickChatPanel : ModuleBase
             ScrollingNode<VerticalListNode> contentList
         )
         {
+            messageButtons.Clear();
+
             if (instance.config.SavedMessages.Count == 0)
             {
                 AddEmptyState
@@ -679,22 +690,28 @@ public unsafe class QuickChatPanel : ModuleBase
 
             foreach (var message in instance.config.SavedMessages)
             {
-                contentList.ContentNode.AddNode
+                var button = new TextButtonNode
+                {
+                    Size        = new(contentList.ContentNode.Width, RowHeight),
+                    String      = message,
+                    TextTooltip = Lang.Get("QuickChatPanel-SendMessageHelp")
+                };
+                button.OnClick                 = () => CopyText(button.String.ToString());
+                button.LabelNode.AlignmentType = AlignmentType.Left;
+                button.LabelNode.FontSize      = 14;
+                button.AddEvent
                 (
-                    CreateTextActionRow
-                    (
-                        contentList,
-                        message,
-                        Lang.Get("QuickChatPanel-SendMessageHelp"),
-                        () => CopyText(message),
-                        (_, _, _, _, data) =>
-                        {
-                            if (data->IsRightClick) instance.SendSavedMessage(message);
-                            else if (data->IsLeftClick)
-                                CopyText(message);
-                        }
-                    )
+                    AtkEventType.MouseClick,
+                    (_, _, _, _, data) =>
+                    {
+                        if (data->IsRightClick)
+                            instance.SendSavedMessage(button.String.ToString());
+                        else if (data->IsLeftClick)
+                            CopyText(button.String.ToString());
+                    }
                 );
+                messageButtons[message] = button;
+                contentList.ContentNode.AddNode(button);
             }
         }
 
@@ -703,6 +720,8 @@ public unsafe class QuickChatPanel : ModuleBase
             ScrollingNode<VerticalListNode> contentList
         )
         {
+            macroButtons.Clear();
+
             if (instance.config.SavedMacros.Count == 0)
             {
                 AddEmptyState
@@ -744,8 +763,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 (
                     CreateMacroListButton
                     (
-                        macro.IconID,
-                        macro.Name,
+                        macro,
                         (_, _, _, _, _) => instance.ExecuteMacro(macro)
                     )
                 );
@@ -755,8 +773,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
             TextButtonNode CreateMacroListButton
             (
-                uint                                     iconID,
-                string                                   title,
+                SavedMacro                               macro,
                 AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
             )
             {
@@ -764,7 +781,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 {
                     Size        = new(rowWidth, rowHeight),
                     String      = string.Empty,
-                    TextTooltip = title
+                    TextTooltip = macro.Name
                 };
 
                 button.LabelNode.IsVisible = false;
@@ -773,7 +790,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 {
                     Size        = new(iconSize),
                     TextureSize = new(iconSize),
-                    IconId      = iconID,
+                    IconId      = macro.IconID,
                     FitTexture  = true
                 };
 
@@ -783,7 +800,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 var text = new TextNode
                 {
                     Position      = new(icon.Position.X + icon.Size.X + gap, 0f),
-                    String        = title,
+                    String        = macro.Name,
                     AlignmentType = AlignmentType.Left,
                     FontSize      = 14,
                     TextFlags     = TextFlags.Bold
@@ -795,6 +812,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 if (onMouseClick != null)
                     button.AddEvent(AtkEventType.MouseClick, onMouseClick);
 
+                macroButtons[macro] = (button, icon, text);
                 return button;
             }
         }
@@ -848,7 +866,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 icon.AttachNode(button);
 
-                new TextNode
+                var text = new TextNode
                 {
                     Position      = new(0f, size   * 0.58f),
                     Size          = new(size, size * 0.22f),
@@ -856,8 +874,10 @@ public unsafe class QuickChatPanel : ModuleBase
                     AlignmentType = AlignmentType.Center,
                     FontSize      = 12,
                     TextFlags     = TextFlags.Bold
-                }.AttachNode(button);
+                };
+                text.AttachNode(button);
 
+                macroButtons[macro] = (button, icon, text);
                 return button;
             }
         }
@@ -867,6 +887,8 @@ public unsafe class QuickChatPanel : ModuleBase
             ScrollingNode<VerticalListNode> contentList
         )
         {
+            soundButtons.Clear();
+
             var rowWidth = contentList.ContentNode.Width;
 
             var (columns, buttonWidth) = GetGridLayout(rowWidth, Gap, rowWidth / 2.1f);
@@ -877,26 +899,25 @@ public unsafe class QuickChatPanel : ModuleBase
 
                 foreach (var (key, value) in chunk)
                 {
-                    row.AddNode
+                    var button = CreateCompactTextButton
                     (
-                        CreateCompactTextButton
-                        (
-                            value,
-                            new(buttonWidth, RowHeight),
-                            Lang.Get("QuickChatPanel-SystemSoundHelp"),
-                            () => UIGlobals.PlayChatSoundEffect(key),
-                            (_, _, _, _, data) =>
+                        value,
+                        new(buttonWidth, RowHeight),
+                        Lang.Get("QuickChatPanel-SystemSoundHelp"),
+                        () => UIGlobals.PlayChatSoundEffect(key),
+                        (_, _, _, _, data) =>
+                        {
+                            if (data->IsRightClick)
                             {
-                                if (data->IsRightClick)
-                                {
-                                    ChatManager.Instance().SendMessage($"<se.{key}><se.{key}>");
-                                    return;
-                                }
-
-                                UIGlobals.PlayChatSoundEffect(key);
+                                ChatManager.Instance().SendMessage($"<se.{key}><se.{key}>");
+                                return;
                             }
-                        )
+
+                            UIGlobals.PlayChatSoundEffect(key);
+                        }
                     );
+                    soundButtons[key] = button;
+                    row.AddNode(button);
                 }
 
                 contentList.ContentNode.AddNode(row);
@@ -1028,7 +1049,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 AlignmentType = AlignmentType.Left
             };
             AtkColors.Text.ApplyTo(offsetLabel);
-            
+
             generalOverlay.AddNode(offsetLabel);
 
             // 水平偏移
@@ -1041,7 +1062,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     value => instance.config.OverlayOffset = instance.config.OverlayOffset with { X = value }
                 )
             );
-            
+
             // 垂直偏移
             generalOverlay.AddNode
             (
@@ -1052,7 +1073,7 @@ public unsafe class QuickChatPanel : ModuleBase
                     value => instance.config.OverlayOffset = instance.config.OverlayOffset with { Y = value }
                 )
             );
-            
+
             var scaleLabel = new TextNode
             {
                 Size          = new(contentWidth, labelHeight),
@@ -1061,16 +1082,21 @@ public unsafe class QuickChatPanel : ModuleBase
                 AlignmentType = AlignmentType.Left
             };
             AtkColors.Text.ApplyTo(scaleLabel);
-            
+
             generalOverlay.AddNode(scaleLabel);
-            
+
             generalOverlay.AddNode
             (
                 GetInputComponent
                 (
                     string.Empty,
                     (int)instance.config.OverlayScale,
-                    value => instance.config.OverlayScale = value
+                    value =>
+                    {
+                        instance.config.OverlayScale = value;
+                        ScaleMultiplier              = MathF.Max(value / 10f, 1f);
+                    },
+                    10
                 )
             );
 
@@ -1111,6 +1137,9 @@ public unsafe class QuickChatPanel : ModuleBase
 
                                 instance.config.SavedMessages.Add(message);
                                 instance.config.Save(instance);
+                                RebuildTab(QuickChatTab.Messages);
+                                messagesSection.AddNode(CreateMessageRow(message));
+                                UpdateSettingsLayout(!messagesSection.IsCollapsed);
 
                                 AtkStage.Instance()->ClearFocus();
                             }
@@ -1120,73 +1149,8 @@ public unsafe class QuickChatPanel : ModuleBase
             };
             messagesSection.AddNode(addMessageButton);
 
-            foreach (var message in instance.config.SavedMessages.ToList())
-            {
-                var row = new ListButtonNode
-                {
-                    Size   = new(contentWidth, controlHeight),
-                    String = message,
-                    OnClick = () => ContextMenuManager.Instance().Open
-                    (
-                        new ContextMenuOpenedArgs
-                        {
-                            Addon     = InternalAddon,
-                            AddonName = InternalAddon->NameString
-                        },
-                        [
-                            new ContextMenuEntryInfo
-                            (
-                                nameof(QuickChatPanel),
-                                _ =>
-                                [
-                                    new()
-                                    {
-                                        Name = Lang.Get("Delete"),
-                                        OnClicked = _ =>
-                                        {
-                                            instance.config.SavedMessages.Remove(message);
-                                            instance.config.Save(instance);
-                                        }
-                                    },
-                                    new()
-                                    {
-                                        Name = Lang.Get("Edit"),
-                                        OnClicked = _ =>
-                                        {
-                                            InputStringAddon.Open
-                                            (
-                                                new()
-                                                {
-                                                    ParentID        = AddonId,
-                                                    BlockedParentID = AddonId,
-                                                    Prompt          = Lang.Get("QuickChatPanel-Message-EditPrompt"),
-                                                    DefaultText     = message,
-                                                    Callback = (_, info) =>
-                                                    {
-                                                        if (info.Result != InputStringAddonResult.Confirmed)
-                                                            return;
-                                                        
-                                                        var edit = info.Value.ToString();
-                                                        if (string.IsNullOrWhiteSpace(edit) ||
-                                                            instance.config.SavedMessages.Contains(edit))
-                                                            return;
-
-                                                        instance.config.SavedMessages.Replace(message, edit);
-                                                        instance.config.Save(instance);
-
-                                                        AtkStage.Instance()->ClearFocus();
-                                                    }
-                                                }
-                                            );
-                                        }
-                                    },
-                                ]
-                            )
-                        ]
-                    )
-                };
-                messagesSection.AddNode(row);
-            }
+            foreach (var message in instance.config.SavedMessages)
+                messagesSection.AddNode(CreateMessageRow(message));
 
             var macrosSection = new CollapsingHeaderNode
             {
@@ -1206,7 +1170,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 AlignmentType = AlignmentType.Left
             };
             AtkColors.Text.ApplyTo(displayTypeLabel);
-            
+
             macrosSection.AddNode(displayTypeLabel);
 
             var dropdown = new StringDropDownNode
@@ -1218,11 +1182,15 @@ public unsafe class QuickChatPanel : ModuleBase
                 SelectedOption = MacroDisplayModeLoc.First(x => x.Mode == instance.config.OverlayMacroDisplayMode).Text,
                 OnOptionSelected = text =>
                 {
+                    DLog.Debug($"测试选择: {text}");
+
                     var mode = MacroDisplayModeLoc.FirstOrDefault(x => x.Text == text).Mode;
                     if (mode == instance.config.OverlayMacroDisplayMode) return;
 
+                    DLog.Debug($"测试赋值: {mode}");
                     instance.config.OverlayMacroDisplayMode = mode;
                     instance.config.Save(instance);
+                    RebuildTab(QuickChatTab.Macros);
                 }
             };
             macrosSection.AddNode(dropdown);
@@ -1242,7 +1210,7 @@ public unsafe class QuickChatPanel : ModuleBase
                 ItemSpacing      = gap,
                 OnToggle         = UpdateSettingsLayout
             };
-            
+
             foreach (var (key, value) in instance.config.SoundEffectNotes.OrderBy(x => x.Key))
             {
                 var origText  = $"<se.{key}>";
@@ -1252,69 +1220,161 @@ public unsafe class QuickChatPanel : ModuleBase
                     Size = new(contentWidth, controlHeight),
                     String = isDefault ?
                                  origText :
-                                 $"{value}（{origText}）",
-                    OnClick = () => ContextMenuManager.Instance().Open
-                    (
-                        new ContextMenuOpenedArgs
-                        {
-                            Addon     = InternalAddon,
-                            AddonName = InternalAddon->NameString
-                        },
-                        [
-                            new ContextMenuEntryInfo
-                            (
-                                nameof(QuickChatPanel),
-                                _ =>
-                                [
-                                    new()
-                                    {
-                                        Name = Lang.Get("Edit"),
-                                        OnClicked = _ =>
-                                        {
-                                            InputStringAddon.Open
-                                            (
-                                                new()
-                                                {
-                                                    ParentID        = AddonId,
-                                                    BlockedParentID = AddonId,
-                                                    Prompt = Lang.Get
-                                                    (
-                                                        "QuickChatPanel-SystemSound-EditPrompt",
-                                                        new Dictionary<string, object>
-                                                        {
-                                                            ["soundEffectIndex"] = key
-                                                        }
-                                                    ),
-                                                    DefaultText = value,
-                                                    Callback = (_, info) =>
-                                                    {
-                                                        if (info.Result != InputStringAddonResult.Confirmed)
-                                                            return;
-
-                                                        var edit = info.Value.ToString();
-                                                        if (string.IsNullOrWhiteSpace(edit))
-                                                            return;
-
-                                                        instance.config.SoundEffectNotes[key] = edit;
-                                                        instance.config.Save(instance);
-
-                                                        AtkStage.Instance()->ClearFocus();
-                                                    }
-                                                }
-                                            );
-                                        }
-                                    },
-                                ]
-                            )
-                        ]
-                    )
+                                 $"{value}（{origText}）"
                 };
-                
+                row.OnClick = () => ContextMenuManager.Instance().Open
+                (
+                    new ContextMenuOpenedArgs
+                    {
+                        Addon     = InternalAddon,
+                        AddonName = InternalAddon->NameString
+                    },
+                    [
+                        new ContextMenuEntryInfo
+                        (
+                            nameof(QuickChatPanel),
+                            _ =>
+                            [
+                                new()
+                                {
+                                    Name = Lang.Get("Edit"),
+                                    OnClicked = _ =>
+                                    {
+                                        InputStringAddon.Open
+                                        (
+                                            new()
+                                            {
+                                                ParentID        = AddonId,
+                                                BlockedParentID = AddonId,
+                                                Prompt = Lang.Get
+                                                (
+                                                    "QuickChatPanel-SystemSound-EditPrompt",
+                                                    new Dictionary<string, object>
+                                                    {
+                                                        ["soundEffectIndex"] = key
+                                                    }
+                                                ),
+                                                DefaultText = instance.config.SoundEffectNotes[key],
+                                                Callback = (_, info) =>
+                                                {
+                                                    if (info.Result != InputStringAddonResult.Confirmed)
+                                                        return;
+
+                                                    var edit = info.Value.ToString();
+                                                    if (string.IsNullOrWhiteSpace(edit))
+                                                        return;
+
+                                                    instance.config.SoundEffectNotes[key] = edit;
+                                                    instance.config.Save(instance);
+                                                    row.String = edit == origText ?
+                                                                     origText :
+                                                                     $"{edit}（{origText}）";
+
+                                                    if (soundButtons.TryGetValue(key, out var button))
+                                                    {
+                                                        button.String = edit;
+                                                        button.LabelNode.AutoAdjustTextSize();
+                                                    }
+
+                                                    AtkStage.Instance()->ClearFocus();
+                                                }
+                                            }
+                                        );
+                                    }
+                                }
+                            ]
+                        )
+                    ]
+                );
+
                 sounds.AddNode(row);
             }
 
             contentList.ContentNode.AddNode([generalOverlay, messagesSection, macrosSection, sounds]);
             return;
+
+            ListButtonNode CreateMessageRow
+            (
+                string message
+            )
+            {
+                var row = new ListButtonNode
+                {
+                    Size   = new(contentWidth, controlHeight),
+                    String = message
+                };
+                row.OnClick = () => ContextMenuManager.Instance().Open
+                (
+                    new ContextMenuOpenedArgs
+                    {
+                        Addon     = InternalAddon,
+                        AddonName = InternalAddon->NameString
+                    },
+                    [
+                        new ContextMenuEntryInfo
+                        (
+                            nameof(QuickChatPanel),
+                            _ =>
+                            [
+                                new()
+                                {
+                                    Name = Lang.Get("Delete"),
+                                    OnClicked = _ =>
+                                    {
+                                        instance.config.SavedMessages.Remove(message);
+                                        instance.config.Save(instance);
+                                        RebuildTab(QuickChatTab.Messages);
+                                        messagesSection.RemoveNode(row);
+                                        UpdateSettingsLayout(!messagesSection.IsCollapsed);
+                                    }
+                                },
+                                new()
+                                {
+                                    Name = Lang.Get("Edit"),
+                                    OnClicked = _ =>
+                                    {
+                                        InputStringAddon.Open
+                                        (
+                                            new()
+                                            {
+                                                ParentID        = AddonId,
+                                                BlockedParentID = AddonId,
+                                                Prompt          = Lang.Get("QuickChatPanel-Message-EditPrompt"),
+                                                DefaultText     = message,
+                                                Callback = (_, info) =>
+                                                {
+                                                    if (info.Result != InputStringAddonResult.Confirmed)
+                                                        return;
+
+                                                    var edit = info.Value.ToString();
+                                                    if (string.IsNullOrWhiteSpace(edit) ||
+                                                        instance.config.SavedMessages.Contains(edit))
+                                                        return;
+
+                                                    instance.config.SavedMessages.Replace(message, edit);
+                                                    instance.config.Save(instance);
+
+                                                    if (messageButtons.Remove(message, out var button))
+                                                    {
+                                                        button.String        = edit;
+                                                        messageButtons[edit] = button;
+                                                    }
+
+                                                    message    = edit;
+                                                    row.String = edit;
+
+                                                    AtkStage.Instance()->ClearFocus();
+                                                }
+                                            }
+                                        );
+                                    }
+                                }
+                            ]
+                        )
+                    ]
+                );
+                return row;
+            }
 
             void UpdateSettingsLayout
             (
@@ -1345,9 +1405,9 @@ public unsafe class QuickChatPanel : ModuleBase
                     AlignmentType = AlignmentType.Left
                 };
                 AtkColors.Text.ApplyTo(titleLabel);
-                
+
                 macrosSection.AddNode(titleLabel);
-                
+
                 var span = isIndividual ?
                                module->Individual :
                                module->Shared;
@@ -1382,11 +1442,11 @@ public unsafe class QuickChatPanel : ModuleBase
                 var isSaved = instance.config.SavedMacros.Contains(macro);
                 var row = new HorizontalListNode
                 {
-                    X                  = 20,
-                    Size               = new(contentWidth - 20, controlHeight),
-                    ItemSpacing        = gap,
+                    X           = 20,
+                    Size        = new(contentWidth - 20, controlHeight),
+                    ItemSpacing = gap
                 };
-                
+
                 var icon = new IconImageNode
                 {
                     Size       = new(controlHeight * 0.8f),
@@ -1401,30 +1461,46 @@ public unsafe class QuickChatPanel : ModuleBase
                     Height        = controlHeight * 0.8f,
                     AlignmentType = AlignmentType.Left,
                     String        = macro.Name,
-                    FontSize      = 14,
+                    FontSize      = 14
                 };
                 AtkColors.ListRow.ApplyTo(name);
                 row.AddNode(name);
 
-                if (isSaved)
+                var refreshButton = new TextButtonNode
                 {
-                    var refreshButton = new TextButtonNode
-                    {
-                        Size        = new(buttonWidth, controlHeight),
-                        String      = Lang.Get("Refresh"),
-                        TextTooltip = $"{Lang.Get("QuickChatPanel-LastUpdateTime")}: {instance.config.SavedMacros.Find(x => x.Equals(macro))?.LastUpdateTime}"
-                    };
-                    refreshButton.OnClick = () =>
-                    {
-                        var currentIndex = instance.config.SavedMacros.IndexOf(macro);
-                        if (currentIndex < 0) return;
+                    Size        = new(buttonWidth, controlHeight),
+                    String      = Lang.Get("Refresh"),
+                    IsVisible   = isSaved,
+                    TextTooltip = $"{Lang.Get("QuickChatPanel-LastUpdateTime")}: {instance.config.SavedMacros.Find(x => x.Equals(macro))?.LastUpdateTime}"
+                };
+                refreshButton.OnClick = () =>
+                {
+                    var currentIndex = instance.config.SavedMacros.IndexOf(macro);
+                    if (currentIndex < 0) return;
 
-                        instance.config.SavedMacros[currentIndex] = macro;
-                        instance.config.Save(instance);
-                    };
-                    refreshButton.LabelNode.AutoAdjustTextSize();
-                    row.AddNode(refreshButton);
-                }
+                    var gameMacro = RaptureMacroModule.Instance()->GetMacro(macro.Category, (uint)macro.Position);
+                    macro.Name                                = gameMacro->Name.ToString();
+                    macro.IconID                              = gameMacro->IconId;
+                    macro.LastUpdateTime                      = StandardTimeManager.Instance().Now;
+                    instance.config.SavedMacros[currentIndex] = macro;
+                    instance.config.Save(instance);
+                    name.String               = macro.Name;
+                    icon.IconId               = macro.IconID;
+                    refreshButton.TextTooltip = $"{Lang.Get("QuickChatPanel-LastUpdateTime")}: {macro.LastUpdateTime}";
+
+                    if (string.IsNullOrWhiteSpace(macro.Name) || !macroButtons.TryGetValue(macro, out var nodes))
+                        RebuildTab(QuickChatTab.Macros);
+                    else
+                    {
+                        nodes.Button.TextTooltip = macro.Name;
+                        nodes.Icon.IconId        = macro.IconID;
+                        nodes.Name.String        = macro.Name;
+                    }
+
+                    UpdateSettingsLayout(!macrosSection.IsCollapsed);
+                };
+                refreshButton.LabelNode.AutoAdjustTextSize();
+                row.AddNode(refreshButton);
 
                 var toggleButton = new TextButtonNode
                 {
@@ -1438,10 +1514,26 @@ public unsafe class QuickChatPanel : ModuleBase
                 };
                 toggleButton.OnClick = () =>
                 {
-                    if (!instance.config.SavedMacros.Remove(macro))
+                    isSaved = !instance.config.SavedMacros.Remove(macro);
+
+                    if (isSaved)
+                    {
+                        macro.LastUpdateTime = StandardTimeManager.Instance().Now;
                         instance.config.SavedMacros.Add(macro);
+                    }
 
                     instance.config.Save(instance);
+                    RebuildTab(QuickChatTab.Macros);
+                    toggleButton.String = Lang.Get
+                    (
+                        isSaved ?
+                            "Delete" :
+                            "Add"
+                    );
+                    toggleButton.LabelNode.AutoAdjustTextSize();
+                    refreshButton.IsVisible   = isSaved;
+                    refreshButton.TextTooltip = $"{Lang.Get("QuickChatPanel-LastUpdateTime")}: {macro.LastUpdateTime}";
+                    UpdateSettingsLayout(!macrosSection.IsCollapsed);
                 };
                 toggleButton.LabelNode.AutoAdjustTextSize();
                 row.AddNode(toggleButton);
@@ -1452,7 +1544,8 @@ public unsafe class QuickChatPanel : ModuleBase
             (
                 string      label,
                 int         value,
-                Action<int> updateValue
+                Action<int> updateValue,
+                int         minValue = short.MinValue
             )
             {
                 var rowWidth   = (contentWidth - gap) / 2f;
@@ -1469,8 +1562,8 @@ public unsafe class QuickChatPanel : ModuleBase
                 var input = new NumericInputNode
                 {
                     Size  = new(rowWidth - labelWidth - gap, controlHeight),
-                    Min = short.MinValue,
-                    Max = short.MaxValue,
+                    Min   = minValue,
+                    Max   = short.MaxValue,
                     Value = value,
                     OnValueUpdate = i =>
                     {
@@ -1495,7 +1588,7 @@ public unsafe class QuickChatPanel : ModuleBase
 
                     row.AddNode(labelNode);
                 }
-                
+
                 return row;
             }
         }
@@ -1569,32 +1662,6 @@ public unsafe class QuickChatPanel : ModuleBase
             var cellSize = (rowWidth - ((columns - 1) * gap)) / columns;
 
             return (columns, cellSize);
-        }
-
-        private TextButtonNode CreateTextActionRow
-        (
-            ScrollingNode<VerticalListNode>          contentList,
-            string                                   text,
-            string                                   tooltip,
-            Action                                   onClick,
-            AtkEventListener.Delegates.ReceiveEvent? onMouseClick = null
-        )
-        {
-            var button = new TextButtonNode
-            {
-                Size        = new(contentList.ContentNode.Width, RowHeight),
-                String      = text,
-                TextTooltip = tooltip,
-                OnClick     = onClick
-            };
-
-            button.LabelNode.AlignmentType = AlignmentType.Left;
-            button.LabelNode.FontSize      = 14;
-
-            if (onMouseClick != null)
-                button.AddEvent(AtkEventType.MouseClick, onMouseClick);
-
-            return button;
         }
 
         private static TextButtonNode CreateCompactTextButton
