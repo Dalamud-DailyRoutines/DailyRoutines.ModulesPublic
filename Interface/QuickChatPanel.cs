@@ -337,7 +337,18 @@ public unsafe class QuickChatPanel : ModuleBase
     )
     {
         ImGui.SetClipboardText(text);
-        NotifyHelper.Instance().NotificationSuccess($"{Lang.Get("CopiedToClipboard")}: {text}");
+
+        NotifyHelper.Instance().Chat
+        (
+            Lang.Get
+            (
+                "QuickChatPanel-Notification-Copied",
+                new Dictionary<string, object>
+                {
+                    ["text"] = text
+                }
+            )
+        );
     }
 
     private void SendSavedMessage
@@ -858,7 +869,7 @@ public unsafe class QuickChatPanel : ModuleBase
         {
             var rowWidth = contentList.ContentNode.Width;
 
-            var (columns, buttonWidth) = GetGridLayout(rowWidth, Gap, RowHeight * 3f);
+            var (columns, buttonWidth) = GetGridLayout(rowWidth, Gap, rowWidth / 2.1f);
 
             foreach (var chunk in instance.config.SoundEffectNotes.OrderBy(x => x.Key).Chunk(columns))
             {
@@ -876,7 +887,7 @@ public unsafe class QuickChatPanel : ModuleBase
                             () => UIGlobals.PlayChatSoundEffect(key),
                             (_, _, _, _, data) =>
                             {
-                                if (data->MouseData.ButtonId == 1)
+                                if (data->IsRightClick)
                                 {
                                     ChatManager.Instance().SendMessage($"<se.{key}><se.{key}>");
                                     return;
@@ -966,10 +977,18 @@ public unsafe class QuickChatPanel : ModuleBase
 
                     var button = new TextButtonNode
                     {
-                        Size        = new(buttonWidth, RowHeight),
-                        String      = text,
-                        TextTooltip = $"0x{(int)icon:X4}",
-                        OnClick     = () => CopyText(text)
+                        Size   = new(buttonWidth, RowHeight),
+                        String = text,
+                        TextTooltip = Lang.Get
+                        (
+                            "QuickChatPanel-SpecialChar-Copy",
+                            new Dictionary<string, object>
+                            {
+                                ["text"]    = text,
+                                ["hexText"] = $"0x{(int)icon:X4}"
+                            }
+                        ),
+                        OnClick = () => CopyText(text)
                     };
 
                     button.LabelNode.FontSize = 18;
