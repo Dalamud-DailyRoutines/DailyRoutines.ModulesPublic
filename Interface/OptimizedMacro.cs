@@ -46,7 +46,6 @@ public unsafe class OptimizedMacro : ModuleBase
         CStringPointer    evaluatedString,
         int               eventKind
     );
-
     private Hook<InputCallbackDelegate>? InputCallbackHook;
 
     private AddonController? macroController;
