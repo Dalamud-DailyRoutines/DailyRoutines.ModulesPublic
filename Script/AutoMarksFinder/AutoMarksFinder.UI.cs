@@ -6,6 +6,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
+using OmenTools.Dalamud;
 using OmenTools.ImGuiOm.Widgets.MapRenderer;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
@@ -26,6 +27,27 @@ public partial class AutoMarksFinder
         EnableResizeGrip     = false,
         EnableDefaultMarkers = true
     };
+
+    private readonly ImGuiMapRenderer recorderRouteMapRenderer = new()
+    {
+        Zoomable             = true,
+        Pannable             = true,
+        EnableResizeGrip     = false,
+        EnableDefaultMarkers = true
+    };
+
+    private const float RECORDER_MIN_DISTANCE = 10f;
+
+    private const string UPSTREAM_POINTS_URL =
+        "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
+
+    private const string UPSTREAM_POINTS_URL_FALLBACK =
+        "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
+
+
+    private bool recorderRecording;
+    private int  recorderSelectedPointIndex = -1;
+    private uint recorderZoneID;
 
     protected override void ConfigUI()
     {
@@ -53,6 +75,8 @@ public partial class AutoMarksFinder
         DrawTabItemTrain();
 
         DrawTabItemScanner();
+
+        DrawTabItemRecorder();
 
         DrawTabItemSettings();
     }
@@ -470,10 +494,6 @@ public partial class AutoMarksFinder
         if (!tabScanner) return;
         if (IObjectTable.Instance().LocalPlayer == null) return;
 
-        DrawScanPointSection();
-
-        ImGui.NewLine();
-
         DrawScannerSection();
     }
 
@@ -495,7 +515,7 @@ public partial class AutoMarksFinder
         {
             var (scanZoneID, scanPoints, currentIndex) = scanner.GetCurrentScanState();
             if (scanZoneID != 0 && scanPoints.Count > 0)
-                DrawScanRouteMap(scanZoneID, scanPoints, currentIndex);
+                DrawScanRouteMap(scanRouteMapRenderer, scanZoneID, scanPoints, currentIndex);
 
             ImGui.End();
         }
@@ -503,6 +523,7 @@ public partial class AutoMarksFinder
 
     private void DrawScanRouteMap
     (
+        ImGuiMapRenderer                renderer,
         uint                            zoneID,
         List<NotoriousMonsterScanPoint> points,
         int                             currentIndex = -1
@@ -512,11 +533,11 @@ public partial class AutoMarksFinder
             !LuminaGetter.TryGetRow<Map>(territory.Map.RowId, out var mapData))
             return;
 
-        scanRouteMapRenderer.SetMap(mapData.RowId);
+        renderer.SetMap(mapData.RowId);
 
         currentIndex--;
 
-        scanRouteMapRenderer.OnCustomMapDraw = (r, drawList) =>
+        renderer.OnCustomMapDraw = (r, drawList) =>
         {
             if (points.Count > 1)
             {
@@ -534,7 +555,7 @@ public partial class AutoMarksFinder
             }
         };
 
-        scanRouteMapRenderer.OnCustomForegroundDraw = (r, drawList) =>
+        renderer.OnCustomForegroundDraw = (r, drawList) =>
         {
             if (IObjectTable.Instance().LocalPlayer is { } localPlayer &&
                 GameState.TerritoryType == zoneID)
@@ -546,7 +567,7 @@ public partial class AutoMarksFinder
             }
         };
 
-        scanRouteMapRenderer.ClearMarkers();
+        renderer.ClearMarkers();
 
         for (var i = 0; i < points.Count; i++)
         {
@@ -570,10 +591,10 @@ public partial class AutoMarksFinder
                 ShowTooltip = true,
                 TooltipText = $"#{i + 1} {point.Position:F0}"
             };
-            scanRouteMapRenderer.AddMarker(marker);
+            renderer.AddMarker(marker);
         }
 
-        scanRouteMapRenderer.Draw(ScaledVector2(300f));
+        renderer.Draw(ScaledVector2(300f));
     }
 
     private void DrawTabItemSettings()
@@ -785,67 +806,335 @@ public partial class AutoMarksFinder
         }
     }
 
-    private void DrawScanPointSection()
+    private void DrawTabItemRecorder()
     {
-        var isZoneValid = config.ScanPoints.TryGetValue(GameState.TerritoryType, out var infos);
+        using var tabRecorder = ImRaii.TabItem(Lang.Get("AutoMarksFinder-Recorder"));
+        if (!tabRecorder) return;
+        if (IObjectTable.Instance().LocalPlayer == null) return;
+
+        var zoneID   = GameState.TerritoryType;
+        var isLocked = scanner != null;
+
+        if (recorderZoneID != zoneID)
+        {
+            recorderZoneID             = zoneID;
+            recorderRecording          = false;
+            recorderSelectedPointIndex = -1;
+        }
 
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("CurrentZone")}:");
 
         ImGui.SameLine();
-        ImGui.TextUnformatted($"{LuminaWrapper.GetZonePlaceName(GameState.TerritoryType)} ({GameState.TerritoryType})");
+        ImGui.TextUnformatted($"{LuminaWrapper.GetZonePlaceName(zoneID)} ({zoneID})");
 
-        ImGui.SameLine(0, 8f * GlobalUIScale);
+        ImGui.SameLine(0f, 8f * GlobalUIScale);
         ImGui.TextDisabled("|");
-
-        ImGui.SameLine(0, 8f * GlobalUIScale);
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-ScanPoints")}:");
-
-        ImGui.SameLine();
-        ImGui.TextUnformatted
+        ImGui.SameLine(0f, 8f * GlobalUIScale);
+        ImGui.TextColored
         (
-            isZoneValid ?
-                infos.Count.ToString() :
-                "0"
+            KnownColor.Orange.ToVector4(),
+            Lang.Get(config.UseUpstreamPoints ? "AutoMarksFinder-ScanSourceUpstream" : "AutoMarksFinder-ScanSourceLocal")
         );
 
-        ImGui.SameLine(0, 8f * GlobalUIScale);
+        ImGui.NewLine();
 
-        using (ImRaii.Disabled(spawnPointUpdateTask is { IsCompleted: false }))
+        if (!config.ScanRoutes.TryGetValue(zoneID, out var route))
         {
-            if (ImGui.SmallButton(Lang.Get("AutoMarksFinder-UpdateSpawnPoints")))
+            using (ImRaii.Disabled(isLocked))
             {
-                spawnPointUpdateTask = Task.Run
-                (async () =>
+                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Plus, Lang.Get("AutoMarksFinder-NewRoute")))
+                {
+                    var now = StandardTimeManager.Instance().UTCNowOffset.ToUnixTimeMilliseconds();
+
+                    config.ScanRoutes[zoneID] = new()
                     {
-                        try
-                        {
-                            const string URL =
-                                "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
+                        Name        = LuminaWrapper.GetZonePlaceName(zoneID),
+                        ZoneID      = zoneID,
+                        CreatedTime = now,
+                        UpdatedTime = now
+                    };
+                    config.Save(this);
+                }
+            }
 
-                            var content = await HTTPClientHelper.Instance().Get().GetStringAsync(URL).ConfigureAwait(false);
+            ImGui.NewLine();
+            ImGui.TextDisabled(Lang.Get("AutoMarksFinder-NoPoints"));
+            return;
+        }
 
-                            var parsed = JsonConvert.DeserializeObject<Dictionary<uint, List<NotoriousMonsterScanPoint>>>
-                                (content, JsonSerializerSettings.GetShared());
-                            if (parsed is not { Count: > 0 }) return;
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RouteName")}:");
 
-                            config.ScanPoints = parsed;
-                            config.Save(this);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(220f * GlobalUIScale);
 
-                            NotifyHelper.Instance().NotificationInfo
-                            (
-                                Lang.Get("AutoMarksFinder-UpdateSpawnPointsRet", parsed.SelectMany(x => x.Value).Count()),
-                                Lang.Get("AutoMarksFinderTitle")
-                            );
-                        }
-                        catch
-                        {
-                            // ignored
-                        }
-                    }
-                ).ContinueWith(_ => spawnPointUpdateTask = null);
+        using (ImRaii.Disabled(isLocked))
+        {
+            ImGui.InputText("###AutoMarksFinderRouteName", ref route.Name, 64);
+
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                SaveRecorderRoute(route);
+        }
+
+        ImGui.SameLine();
+
+        using (ImRaii.Disabled(isLocked))
+        {
+            if (ImGuiOm.ButtonIcon("AutoMarksFinder-DeleteRoute", FontAwesomeIcon.Trash, Lang.Get("AutoMarksFinder-DeleteRoute")))
+            {
+                config.ScanRoutes.Remove(zoneID);
+                config.SelectedZones.Remove(zoneID);
+                config.Save(this);
+
+                recorderRecording          = false;
+                recorderSelectedPointIndex = -1;
+                return;
             }
         }
+
+        ImGui.NewLine();
+
+        using (ImRaii.Disabled(isLocked))
+        {
+            if (ImGuiOm.ButtonIconWithText
+                (
+                    recorderRecording ? FontAwesomeIcon.Stop : FontAwesomeIcon.Circle,
+                    Lang.Get(recorderRecording ? "AutoMarksFinder-StopRecording" : "AutoMarksFinder-StartRecording")
+                ))
+                recorderRecording = !recorderRecording;
+
+            ImGui.SameLine();
+
+            using (ImRaii.Disabled(!recorderRecording))
+            {
+                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.MapMarkerAlt, Lang.Get("AutoMarksFinder-AddPoint")))
+                    AddRecorderPoint(route);
+            }
+
+            ImGui.SameLine();
+
+            using (ImRaii.Disabled(route.Points.Count == 0))
+            {
+                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Undo, Lang.Get("AutoMarksFinder-UndoPoint")))
+                {
+                    route.Points.RemoveAt(route.Points.Count - 1);
+                    recorderSelectedPointIndex = route.Points.Count - 1;
+                    SaveRecorderRoute(route);
+                }
+            }
+
+            ImGui.SameLine();
+
+            using (ImRaii.Disabled(route.Points.Count == 0))
+            {
+                if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Eraser, Lang.Get("AutoMarksFinder-ClearZonePoints")))
+                {
+                    route.Points.Clear();
+                    recorderSelectedPointIndex = -1;
+                    SaveRecorderRoute(route);
+                }
+            }
+        }
+
+        ImGui.NewLine();
+
+        using (ImRaii.Disabled(isLocked || route.Points.Count <= 1))
+        {
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.SortAmountUp, Lang.Get("AutoMarksFinder-AutoSort")))
+            {
+                route.Points               = SortPoints(route.Points);
+                recorderSelectedPointIndex = -1;
+                SaveRecorderRoute(route);
+            }
+
+            ImGui.SameLine();
+
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.ExchangeAlt, Lang.Get("AutoMarksFinder-ReverseSort")))
+            {
+                route.Points.Reverse();
+                recorderSelectedPointIndex = -1;
+                SaveRecorderRoute(route);
+            }
+
+            ImGui.SameLine();
+        }
+
+        using (ImRaii.Disabled(isLocked))
+        {
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Save, Lang.Get("AutoMarksFinder-SaveRoute")))
+            {
+                SaveRecorderRoute(route);
+                NotifyHelper.Instance().NotificationInfo(Lang.Get("AutoMarksFinder-RouteSaved"), Lang.Get("AutoMarksFinderTitle"));
+            }
+        }
+
+        ImGui.SameLine(0f, 8f * GlobalUIScale);
+
+        using (ImRaii.Disabled(isLocked || recorderRecording || config.ScanRoutes.Count == 0))
+        {
+            if (ImGuiOm.ButtonIcon
+                (
+                    "AutoMarksFinder-ExportRoutes",
+                    FontAwesomeIcon.FileExport,
+                    Lang.Get("AutoMarksFinder-ExportRoutes")
+                ))
+                ExportToClipboard(config.ScanRoutes);
+        }
+
+        ImGui.SameLine();
+
+        using (ImRaii.Disabled(isLocked || recorderRecording))
+        {
+            if (ImGuiOm.ButtonIcon
+                (
+                    "AutoMarksFinder-ImportRoutes",
+                    FontAwesomeIcon.FileImport,
+                    Lang.Get("AutoMarksFinder-ImportRoutes")
+                ))
+            {
+                if (ImportFromClipboard<Dictionary<uint, ScanRoute>>() is { } imported)
+                {
+                    foreach (var (importedZoneID, importedRoute) in imported)
+                    {
+                        if (importedRoute == null) continue;
+
+                        importedRoute.ZoneID = importedZoneID;
+                        importedRoute.Name   = string.IsNullOrWhiteSpace(importedRoute.Name) ?
+                                                    LuminaWrapper.GetZonePlaceName(importedZoneID) :
+                                                    importedRoute.Name;
+                        importedRoute.Points ??= [];
+
+                        config.ScanRoutes[importedZoneID] = importedRoute;
+                    }
+
+                    config.Save(this);
+
+                    NotifyHelper.Instance().NotificationInfo
+                        (Lang.Get("AutoMarksFinder-RoutesImported", imported.Count), Lang.Get("AutoMarksFinderTitle"));
+                }
+            }
+        }
+
+        ImGui.NewLine();
+
+        using (var pointsList = ImRaii.Child("###AutoMarksFinderRecorderPoints", new Vector2(0f, 220f * GlobalUIScale), true))
+        {
+            if (pointsList)
+            {
+                for (var i = 0; i < route.Points.Count; i++)
+                {
+                    ImGui.PushID(i);
+
+                    var point = route.Points[i];
+
+                    if (ImGui.Selectable
+                        (
+                            $"#{i + 1}  ({point.Position.X:F1}, {point.Position.Y:F1}, {point.Position.Z:F1})",
+                            recorderSelectedPointIndex == i,
+                            ImGuiSelectableFlags.None,
+                            new Vector2(300f * GlobalUIScale, 0f)
+                        ))
+                        recorderSelectedPointIndex = i;
+
+                    ImGui.SameLine();
+
+                    using (ImRaii.Disabled(isLocked || i == 0))
+                    {
+                        if (ImGuiOm.ButtonIcon("Up", FontAwesomeIcon.ArrowUp, Lang.Get("MoveUp")))
+                        {
+                            (route.Points[i - 1], route.Points[i]) = (route.Points[i], route.Points[i - 1]);
+                            recorderSelectedPointIndex             = i - 1;
+                            SaveRecorderRoute(route);
+                        }
+                    }
+
+                    ImGui.SameLine();
+
+                    using (ImRaii.Disabled(isLocked || i >= route.Points.Count - 1))
+                    {
+                        if (ImGuiOm.ButtonIcon("Down", FontAwesomeIcon.ArrowDown, Lang.Get("MoveDown")))
+                        {
+                            (route.Points[i + 1], route.Points[i]) = (route.Points[i], route.Points[i + 1]);
+                            recorderSelectedPointIndex             = i + 1;
+                            SaveRecorderRoute(route);
+                        }
+                    }
+
+                    ImGui.SameLine();
+
+                    using (ImRaii.Disabled(isLocked))
+                    {
+                        if (ImGuiOm.ButtonIcon("Delete", FontAwesomeIcon.Trash, Lang.Get("Delete")))
+                        {
+                            route.Points.RemoveAt(i);
+                            recorderSelectedPointIndex = Math.Min(recorderSelectedPointIndex, route.Points.Count - 1);
+                            SaveRecorderRoute(route);
+
+                            ImGui.PopID();
+                            break;
+                        }
+                    }
+
+                    ImGui.PopID();
+                }
+            }
+        }
+
+        ImGui.NewLine();
+
+        if (route.Points.Count > 0)
+            DrawScanRouteMap(recorderRouteMapRenderer, zoneID, route.Points, recorderSelectedPointIndex + 1);
+        else
+            ImGui.TextDisabled(Lang.Get("AutoMarksFinder-NoPoints"));
+    }
+
+    private void AddRecorderPoint
+    (
+        ScanRoute route
+    )
+    {
+        if (IObjectTable.Instance().LocalPlayer is not { } localPlayer) return;
+
+        var rawPosition = localPlayer.Position;
+        var position = vnavmeshIPC.QueryNearestPointOnMesh(rawPosition, 10, 10000) is { } meshPosition ?
+                           new Vector3(meshPosition.X, rawPosition.Y, meshPosition.Z) :
+                           rawPosition;
+
+        if (route.Points.Count > 0 &&
+            Vector2.Distance(route.Points[^1].Position.ToVector2(), position.ToVector2()) < RECORDER_MIN_DISTANCE)
+        {
+            NotifyHelper.Instance().NotificationWarning
+            (
+                Lang.Get("AutoMarksFinder-PointTooClose", RECORDER_MIN_DISTANCE),
+                Lang.Get("AutoMarksFinderTitle")
+            );
+            return;
+        }
+
+        route.Points.Add
+        (
+            new()
+            {
+                Zone            = route.ZoneID,
+                Position        = position,
+                CancelAnimation = true
+            }
+        );
+
+        recorderSelectedPointIndex = route.Points.Count - 1;
+        SaveRecorderRoute(route);
+    }
+
+    private void SaveRecorderRoute
+    (
+        ScanRoute route
+    )
+    {
+        route.UpdatedTime = StandardTimeManager.Instance().UTCNowOffset.ToUnixTimeMilliseconds();
+
+        config.ScanRoutes[route.ZoneID] = route;
+        config.Save(this);
     }
 
     private void DrawScannerSection()
@@ -870,9 +1159,15 @@ public partial class AutoMarksFinder
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
             {
-                ClearScanner();
-                scanner = new(this, config.SelectedRanks, config.SelectedZones);
-                scanner.StartScan();
+                config.SelectedZones.RemoveWhere(zoneID => !TryGetZonePoints(zoneID, out _));
+                config.Save(this);
+
+                if (config.SelectedZones.Count > 0)
+                {
+                    ClearScanner();
+                    scanner = new(this, config.SelectedRanks, config.SelectedZones);
+                    scanner.StartScan();
+                }
             }
         }
 
@@ -935,23 +1230,54 @@ public partial class AutoMarksFinder
             }
         }
 
-        var data = config.ScanPoints
-                         .Select
-                         (x => new
-                             {
-                                 Zone   = LuminaGetter.GetRow<TerritoryType>(x.Key).GetValueOrDefault(),
-                                 Points = x.Value.Count
-                             }
-                         )
-                         .GroupBy(x => x.Zone.ExVersion.RowId)
-                         .OrderBy(x => x.Key)
-                         .ToDictionary(x => x.Key, x => x.ToList());
+        using (ImRaii.Disabled(scanner != null))
+        {
+            if (ImGui.Checkbox($"{Lang.Get("AutoMarksFinder-UseUpstreamPoints")}###AutoMarksFinder-UseUpstreamPoints", ref config.UseUpstreamPoints))
+            {
+                config.SelectedZones.Clear();
+                config.Save(this);
+
+                if (config.UseUpstreamPoints && config.UpstreamScanPoints.Count == 0)
+                    StartUpdateUpstreamPoints();
+            }
+        }
+
+        if (config.UseUpstreamPoints)
+        {
+            ImGui.SameLine();
+
+            using (ImRaii.Disabled(scanner != null || spawnPointUpdateTask is { IsCompleted: false }))
+            {
+                if (ImGui.SmallButton(Lang.Get("AutoMarksFinder-UpdateSpawnPoints")))
+                    StartUpdateUpstreamPoints();
+            }
+
+            ImGui.SameLine();
+            ImGui.TextDisabled
+            (
+                config.UpstreamScanPoints.Count == 0 ?
+                    Lang.Get("AutoMarksFinder-NoUpstreamPoints") :
+                    Lang.Get("AutoMarksFinder-UpstreamPointsInfo", config.UpstreamScanPoints.Count, config.UpstreamScanPoints.Sum(x => x.Value.Count))
+            );
+        }
+
+        var data = (config.UseUpstreamPoints ?
+                        config.UpstreamScanPoints
+                              .Where(x => x.Value.Count > 0)
+                              .Select(x => new { ZoneID = x.Key, Label = string.Empty, Count = x.Value.Count }) :
+                        config.ScanRoutes.Values
+                              .OrderBy(x => x.CreatedTime)
+                              .Select(x => new { ZoneID = x.ZoneID, Label = x.Name, Count = x.Points.Count }))
+                   .Select(x => new { x.ZoneID, x.Label, x.Count, Zone = LuminaGetter.GetRow<TerritoryType>(x.ZoneID).GetValueOrDefault() })
+                   .GroupBy(x => x.Zone.ExVersion.RowId)
+                   .OrderBy(x => x.Key)
+                   .ToDictionary(x => x.Key, x => x.ToList());
         ImGui.SetNextItemWidth(250f * GlobalUIScale);
 
         using (var combo = ImRaii.Combo
                (
-                   $"{Lang.Get("AutoMarksFinder-TargetZones")}###ZoneSelectCombo",
-                   Lang.Get("AutoMarksFinder-SelectedZonePreview", config.SelectedZones.Count),
+                   $"{Lang.Get(config.UseUpstreamPoints ? "AutoMarksFinder-TargetZones" : "AutoMarksFinder-RouteConfig")}###ZoneSelectCombo",
+                   Lang.Get(config.UseUpstreamPoints ? "AutoMarksFinder-SelectedZonePreview" : "AutoMarksFinder-SelectedRoutePreview", config.SelectedZones.Count),
                    ImGuiComboFlags.HeightLarge
                ))
         {
@@ -979,29 +1305,89 @@ public partial class AutoMarksFinder
 
                     if (ImGui.IsItemClicked())
                     {
-                        var zonesToOperate = zones.Select(x => x.Zone.RowId).ToArray();
-                        if (config.SelectedZones.ContainsAny(zonesToOperate))
-                            config.SelectedZones.RemoveRange(zonesToOperate);
-                        else
-                            config.SelectedZones.AddRange(zonesToOperate);
+                        var routesToOperate = zones.Where(x => x.Count > 0)
+                                                   .Select(x => x.ZoneID)
+                                                   .ToArray();
 
-                        config.Save(this);
-                    }
-
-                    foreach (var zone in zones)
-                    {
-                        if (ImGui.Selectable
-                                ($"{zone.Zone.ExtractPlaceName()}", config.SelectedZones.Contains(zone.Zone.RowId), ImGuiSelectableFlags.DontClosePopups))
+                        if (routesToOperate.Length > 0)
                         {
-                            if (!config.SelectedZones.Remove(zone.Zone.RowId))
-                                config.SelectedZones.Add(zone.Zone.RowId);
+                            if (config.SelectedZones.ContainsAny(routesToOperate))
+                                config.SelectedZones.RemoveRange(routesToOperate);
+                            else
+                                config.SelectedZones.AddRange(routesToOperate);
 
                             config.Save(this);
+                        }
+                    }
+
+                    foreach (var entry in zones)
+                    {
+                        using (ImRaii.Disabled(entry.Count == 0))
+                        {
+                            if (ImGui.Selectable
+                                (
+                                    $"{(string.IsNullOrEmpty(entry.Label) ? string.Empty : $"{entry.Label} - ")}{entry.Zone.ExtractPlaceName()} ({entry.Count})",
+                                    config.SelectedZones.Contains(entry.ZoneID),
+                                    ImGuiSelectableFlags.DontClosePopups
+                                ))
+                            {
+                                if (!config.SelectedZones.Remove(entry.ZoneID))
+                                    config.SelectedZones.Add(entry.ZoneID);
+
+                                config.Save(this);
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private void StartUpdateUpstreamPoints()
+    {
+        if (spawnPointUpdateTask is { IsCompleted: false }) return;
+
+        spawnPointUpdateTask = Task.Run
+        (async () =>
+            {
+                try
+                {
+                    string json;
+
+                    try
+                    {
+                        json = await HTTPClientHelper.Instance().Get().GetStringAsync(UPSTREAM_POINTS_URL)
+                                                    .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        json = await HTTPClientHelper.Instance().Get().GetStringAsync(UPSTREAM_POINTS_URL_FALLBACK)
+                                                    .ConfigureAwait(false);
+                    }
+
+                    var points = JsonConvert.DeserializeObject<Dictionary<uint, List<NotoriousMonsterScanPoint>>>
+                        (json, JsonSerializerSettings.GetShared());
+
+                    if (points is not { Count: > 0 }) return;
+
+                    points = points.Where(x => x.Value is { Count: > 0 }).ToDictionary();
+                    if (points.Count == 0) return;
+
+                    config.UpstreamScanPoints = points;
+                    config.Save(this);
+
+                    NotifyHelper.Instance().NotificationInfo
+                    (
+                        Lang.Get("AutoMarksFinder-UpdateSpawnPointsRet", points.Sum(x => x.Value.Count)),
+                        Lang.Get("AutoMarksFinderTitle")
+                    );
+                }
+                catch
+                {
+                    // Keep the previous cache when the request fails; the user can retry manually
+                }
+            }
+        ).ContinueWith(_ => spawnPointUpdateTask = null);
     }
 
     private unsafe void DrawScanResult()

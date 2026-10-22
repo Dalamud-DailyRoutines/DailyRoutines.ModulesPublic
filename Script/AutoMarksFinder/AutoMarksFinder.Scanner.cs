@@ -38,6 +38,7 @@ public partial class AutoMarksFinder
         private const float DETECTION_RADIUS  = 100f;
 
         private readonly AutoMarksFinder module;
+        private readonly List<uint>      remainingZones;
 
         private ScanState                       currentState;
         private uint                            currentScanZone;
@@ -62,6 +63,17 @@ public partial class AutoMarksFinder
 
             module.config.SelectedRanks = ranks.Distinct().ToHashSet();
             module.config.SelectedZones = zones.Distinct().ToHashSet();
+
+            remainingZones = module.config.UseUpstreamPoints ?
+                                 module.config.UpstreamScanPoints
+                                       .Where(x => x.Value.Count > 0 && module.config.SelectedZones.Contains(x.Key))
+                                       .Select(x => x.Key)
+                                       .ToList() :
+                                 module.config.ScanRoutes.Values
+                                       .Where(route => module.config.SelectedZones.Contains(route.ZoneID))
+                                       .OrderBy(route => route.CreatedTime)
+                                       .Select(route => route.ZoneID)
+                                       .ToList();
 
             currentState = ScanState.Idle;
 
@@ -142,16 +154,16 @@ public partial class AutoMarksFinder
         {
             var currentZone = GameState.TerritoryType;
 
-            if (!module.config.SelectedZones.Contains(currentZone))
+            if (!remainingZones.Contains(currentZone))
             {
                 currentState = ScanState.SwitchingZone;
                 EnqueueCheckState("当前区域不在扫描列表，切换区域");
                 return;
             }
 
-            if (!module.config.ScanPoints.TryGetValue(currentZone, out var points) || points.Count == 0)
+            if (!module.TryGetZonePoints(currentZone, out var points))
             {
-                module.config.SelectedZones.Remove(currentZone);
+                remainingZones.Remove(currentZone);
                 currentState = ScanState.SwitchingZone;
                 EnqueueCheckState("当前区域无扫描点，切换区域");
                 return;
@@ -160,7 +172,7 @@ public partial class AutoMarksFinder
             currentScanZone       = currentZone;
             currentInstance       = InstancesManager.CurrentInstance;
             currentScanPointIndex = 0;
-            currentSortedPoints   = SortPoints(points);
+            currentSortedPoints   = [.. points];
 
             currentState = ScanState.MovingToPoint;
             EnqueueCheckState("初始化完成，开始移动");
@@ -348,15 +360,15 @@ public partial class AutoMarksFinder
         {
             var currentZone = GameState.TerritoryType;
 
-            if (module.config.SelectedZones.Contains(currentZone))
+            if (remainingZones.Contains(currentZone))
             {
                 vnavmeshIPC.StopPathfind();
                 module.TaskHelper.Abort();
 
-                module.config.SelectedZones.Remove(currentZone);
+                remainingZones.Remove(currentZone);
             }
 
-            var targetZone = module.config.SelectedZones.FirstOrDefault();
+            var targetZone = remainingZones.FirstOrDefault();
 
             if (targetZone == 0)
             {
@@ -365,9 +377,9 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            if (!module.config.ScanPoints.TryGetValue(targetZone, out var points) || points.Count == 0)
+            if (!module.TryGetZonePoints(targetZone, out _))
             {
-                module.config.SelectedZones.Remove(targetZone);
+                remainingZones.Remove(targetZone);
                 EnqueueCheckState("目标区域无扫描点，移除并重新检查");
                 return;
             }
@@ -467,7 +479,7 @@ public partial class AutoMarksFinder
             var currentZone     = GameState.TerritoryType;
             var currentInstance = InstancesManager.CurrentInstance;
 
-            if (!module.config.SelectedZones.Contains(currentZone) || !module.config.ScanPoints.TryGetValue(currentZone, out var _))
+            if (!remainingZones.Contains(currentZone) || !module.TryGetZonePoints(currentZone, out var zonePoints) || zonePoints.Count == 0)
                 return;
 
             var foundNewMonster = false;
@@ -526,7 +538,7 @@ public partial class AutoMarksFinder
                 }
             }
 
-            if (!module.config.SelectedZones.Any() && !module.TaskHelper.IsBusy)
+            if (!remainingZones.Any() && !module.TaskHelper.IsBusy)
                 module.StopScanner();
         }
 
@@ -713,50 +725,5 @@ public partial class AutoMarksFinder
                 "上坐骑"
             );
 
-        private static List<NotoriousMonsterScanPoint> SortPoints
-        (
-            List<NotoriousMonsterScanPoint> points
-        )
-        {
-            if (points.Count == 0) return [];
-
-            var sorted    = new List<NotoriousMonsterScanPoint>();
-            var remaining = new List<NotoriousMonsterScanPoint>(points);
-
-            var current = LocalPlayerState.Object?.Position ?? Vector3.Zero;
-
-            while (remaining.Count > 0)
-            {
-                var nearest = remaining.OrderBy(p => Vector3.DistanceSquared(current, p.Position)).First();
-                sorted.Add(nearest);
-                remaining.Remove(nearest);
-                current = nearest.Position;
-            }
-
-            for (var iteration = 0; iteration < 500; iteration++)
-            {
-                var improved = false;
-
-                for (var i = 0; i < sorted.Count - 1; i++)
-                for (var j = i + 1; j < sorted.Count; j++)
-                {
-                    var currentDistance = Vector3.Distance(sorted[i].Position, sorted[i + 1].Position) +
-                                          Vector3.Distance(sorted[j].Position, sorted[(j + 1) % sorted.Count].Position);
-
-                    var newDistance = Vector3.Distance(sorted[i].Position,     sorted[j].Position) +
-                                      Vector3.Distance(sorted[i + 1].Position, sorted[(j + 1) % sorted.Count].Position);
-
-                    if (newDistance < currentDistance)
-                    {
-                        sorted.Reverse(i + 1, j - i);
-                        improved = true;
-                    }
-                }
-
-                if (!improved) break;
-            }
-
-            return sorted;
-        }
     }
 }

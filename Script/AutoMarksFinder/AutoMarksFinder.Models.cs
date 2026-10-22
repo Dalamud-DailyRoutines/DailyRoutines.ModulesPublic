@@ -218,6 +218,15 @@ public partial class AutoMarksFinder
         public override string ToString() => $"NotoriousMonsterList_{Name}_{GeneratedTime}";
     }
 
+    private sealed class ScanRoute
+    {
+        public string Name        = string.Empty;
+        public uint   ZoneID;
+        public long   CreatedTime;
+        public long   UpdatedTime;
+        public List<NotoriousMonsterScanPoint> Points = [];
+    }
+
     private sealed class NotoriousMonsterScanPoint : IEquatable<NotoriousMonsterScanPoint>
     {
         public uint    Zone            { get; set; }

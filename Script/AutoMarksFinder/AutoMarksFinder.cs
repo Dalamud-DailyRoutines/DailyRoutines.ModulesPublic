@@ -46,6 +46,15 @@ public partial class AutoMarksFinder : ModuleBase
     protected override void Init()
     {
         config     =   Config.Load(this) ?? new();
+
+        if (config.ScanPoints.Count > 0)
+        {
+            config.UpstreamScanPoints = config.ScanPoints;
+            config.ScanPoints         = [];
+            config.UseUpstreamPoints  = true;
+            config.Save(this);
+        }
+
         TaskHelper ??= new() { TimeoutMS = 180_000, ShowDebug = IS_SHOW_DEBUG };
 
         overlaySmallCard       =  new(DrawSmallCard, Lang.Get("AutoMarksFinder-SmallCardTitle"));
@@ -71,6 +80,10 @@ public partial class AutoMarksFinder : ModuleBase
 
         WindowManager.Instance().RemoveWindow(overlaySmallCard);
         CommandManager.Instance().RemoveCommand(COMMAND);
+
+        recorderRecording          = false;
+        recorderSelectedPointIndex = -1;
+        recorderZoneID             = 0;
 
         selectedTrainIndex  = 0;
         smallCardMobIndex   = 0;
@@ -175,6 +188,31 @@ public partial class AutoMarksFinder : ModuleBase
     )
         => string.Format(pattern, args);
 
+    private bool TryGetZonePoints
+    (
+        uint                                zoneID,
+        out List<NotoriousMonsterScanPoint> points
+    )
+    {
+        if (config.UseUpstreamPoints)
+        {
+            if (config.UpstreamScanPoints.TryGetValue(zoneID, out points) && points.Count > 0)
+                return true;
+
+            points = [];
+            return false;
+        }
+
+        if (!config.ScanRoutes.TryGetValue(zoneID, out var route) || route.Points.Count == 0)
+        {
+            points = [];
+            return false;
+        }
+
+        points = route.Points;
+        return true;
+    }
+
     private static List<NotoriousMonsterScanPoint> SortPoints
     (
         List<NotoriousMonsterScanPoint> points
@@ -183,9 +221,9 @@ public partial class AutoMarksFinder : ModuleBase
         if (points is not { Count: > 0 })
             return [];
 
-        var currentPath     = new List<NotoriousMonsterScanPoint>(points.Count);
-        var remainingPoints = new List<NotoriousMonsterScanPoint>(points);
-        var currentPosition = IObjectTable.Instance().LocalPlayer.Position;
+        var currentPath     = new List<NotoriousMonsterScanPoint>(points.Count) { points[0] };
+        var remainingPoints = new List<NotoriousMonsterScanPoint>(points.Skip(1));
+        var currentPosition = points[0].Position;
 
         while (remainingPoints.Count > 0)
         {
@@ -321,11 +359,14 @@ public partial class AutoMarksFinder : ModuleBase
 
         public string RelayMacroPattern = "检测到恶名精英 {1} 于 {0} {2}";
 
-        public Dictionary<uint, List<NotoriousMonsterScanPoint>> ScanPoints       = [];
-        public HashSet<NotoriousMonsterRank>                     SelectedRanks    = [];
-        public HashSet<uint>                                     SelectedZones    = [];
-        public List<NotoriousMonsterList>                        Trains           = [];
-        public float                                             UIScale          = 0.6f;
-        public string                                            WaitMacroPattern = "请在 {0} {2} 稍作等候";
+        public Dictionary<uint, List<NotoriousMonsterScanPoint>> ScanPoints         = [];
+        public Dictionary<uint, ScanRoute>                       ScanRoutes         = [];
+        public HashSet<NotoriousMonsterRank>                     SelectedRanks      = [];
+        public HashSet<uint>                                     SelectedZones      = [];
+        public List<NotoriousMonsterList>                        Trains             = [];
+        public float                                             UIScale            = 0.6f;
+        public Dictionary<uint, List<NotoriousMonsterScanPoint>> UpstreamScanPoints = [];
+        public bool                                              UseUpstreamPoints  = false;
+        public string                                            WaitMacroPattern   = "请在 {0} {2} 稍作等候";
     }
 }
