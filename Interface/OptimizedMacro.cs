@@ -1,15 +1,21 @@
+using System.Text;
 using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Hooking;
+using ExpansionAtkResNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkResNode;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using InteropGenerator.Runtime;
 using KamiToolKit.Controllers;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons.InputString;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
+using OmenTools.KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
 
@@ -32,6 +38,17 @@ public unsafe class OptimizedMacro : ModuleBase
 
     private Config config = null!;
 
+    private delegate InputCallbackResult InputCallbackDelegate
+    (
+        AtkUnitBase*      addon,
+        InputCallbackType type,
+        CStringPointer    rawString,
+        CStringPointer    evaluatedString,
+        int               eventKind
+    );
+
+    private Hook<InputCallbackDelegate>? InputCallbackHook;
+
     private AddonController? macroController;
 
     private HorizontalListNode? controlListNode;
@@ -40,6 +57,9 @@ public unsafe class OptimizedMacro : ModuleBase
     private CircleButtonNode? loadButtonNode;
     private CircleButtonNode? saveButtonNode;
     private CircleButtonNode? deleteButtonNode;
+
+    private TextMultiLineInputNode? lineNumberContainerNode;
+    private int?                    lastLineCount;
 
     protected override void Init()
     {
@@ -58,9 +78,9 @@ public unsafe class OptimizedMacro : ModuleBase
         {
             AddonName  = "Macro",
             OnSetup    = OnAddonSetup,
+            OnRefresh  = OnAddonRefresh,
             OnFinalize = OnAddonFinalize
         };
-
         macroController.Enable();
     }
 
@@ -92,6 +112,21 @@ public unsafe class OptimizedMacro : ModuleBase
         LoadPreset(args);
     }
 
+    private InputCallbackResult InputCallbackDetour
+    (
+        AtkUnitBase*      addon,
+        InputCallbackType type,
+        CStringPointer    rawString,
+        CStringPointer    evaluatedString,
+        int               eventKind
+    )
+    {
+        var orig = InputCallbackHook.Original(addon, type, rawString, evaluatedString, eventKind);
+        if (type is InputCallbackType.TextChanged)
+            OnAddonRefresh(addon);
+        return orig;
+    }
+
     private void OnAddonSetup
     (
         AtkUnitBase* addon
@@ -100,6 +135,7 @@ public unsafe class OptimizedMacro : ModuleBase
         if (addon == null) return;
 
         var nodeMacroIndexLabel = addon->GetNodeById(115);
+
         if (nodeMacroIndexLabel != null)
         {
             nodeMacroIndexLabel->X = 440;
@@ -107,6 +143,7 @@ public unsafe class OptimizedMacro : ModuleBase
         }
 
         var nodeMacroIndex = addon->GetNodeById(116);
+
         if (nodeMacroIndex != null)
         {
             nodeMacroIndex->X = 515;
@@ -114,11 +151,52 @@ public unsafe class OptimizedMacro : ModuleBase
         }
 
         var nodeMacroCount = addon->GetNodeById(117);
+
         if (nodeMacroCount != null)
         {
             nodeMacroCount->X = 372;
             nodeMacroCount->Y = 522;
         }
+
+        var nodeMacroInput = (AtkComponentTextInput*)addon->GetComponentByNodeId(119);
+
+        if (nodeMacroInput != null)
+        {
+            var ownerNode = nodeMacroInput->OwnerNode;
+            var oldWidth  = ownerNode->Width;
+            var oldHeight = ownerNode->Height;
+
+            ownerNode->SetXFloat(478);
+            ownerNode->SetWidth(302);
+
+            ((ExpansionAtkResNode*)ownerNode)->ApplyResizeAnchors(oldWidth, oldHeight, ownerNode->Width, ownerNode->Height, false);
+
+            InputCallbackHook?.Dispose();
+            InputCallbackHook = IGameInteropProvider.Instance().HookFromAddress
+            (
+                (nint)nodeMacroInput->Callback,
+                (InputCallbackDelegate)InputCallbackDetour
+            );
+            InputCallbackHook.Enable();
+        }
+
+        lineNumberContainerNode = new()
+        {
+            Position  = new(457, 114),
+            Size      = new(32, 400),
+            IsVisible = false
+        };
+        lineNumberContainerNode.BackgroundNode.IsVisible = false;
+        var textNode = lineNumberContainerNode.CurrentTextNode;
+        textNode.RemoveTextFlags(TextFlags.OverflowHidden);
+        textNode.RemoveTextFlags(TextFlags.WordWrap);
+        textNode.AlignmentType = AlignmentType.TopRight;
+        textNode.FontType      = FontType.MiedingerMed;
+        AtkColors.ListFooter.ApplyTo(textNode);
+
+        lineNumberContainerNode.AttachNode(addon);
+
+        lastLineCount = null;
 
         controlListNode = new()
         {
@@ -290,6 +368,49 @@ public unsafe class OptimizedMacro : ModuleBase
 
         controlListNode?.Dispose();
         controlListNode = null;
+
+        lineNumberContainerNode?.Dispose();
+        lineNumberContainerNode = null;
+        lastLineCount           = null;
+
+        InputCallbackHook?.Dispose();
+        InputCallbackHook = null;
+    }
+
+    private void OnAddonRefresh
+    (
+        AtkUnitBase* addon
+    )
+    {
+        if (addon == null)
+            return;
+        var nodeMacroInput = (AtkComponentTextInput*)addon->GetComponentByNodeId(119);
+        if (nodeMacroInput == null)
+            return;
+        if (lineNumberContainerNode == null)
+            return;
+
+        var macro = nodeMacroInput->EvaluatedString.ToString();
+        var lines = string.IsNullOrWhiteSpace(macro) ?
+                        0 :
+                        macro.Split('\r').Length;
+
+        if (lines == lastLineCount)
+            return;
+
+        lastLineCount = lines;
+
+        if (lines == 0)
+        {
+            lineNumberContainerNode.IsVisible = false;
+            return;
+        }
+
+        var builder = new StringBuilder();
+        for (var i = 0; i < lines; i++)
+            builder.AppendLine($"{i + 1}");
+        lineNumberContainerNode.String    = builder.ToString().Trim();
+        lineNumberContainerNode.IsVisible = true;
     }
 
     #endregion
