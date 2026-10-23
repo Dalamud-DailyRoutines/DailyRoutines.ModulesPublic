@@ -23,8 +23,8 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/AutoShowItemNPCShopInfo-UI.png",
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/AutoShowItemNPCShopInfo-Tooltip.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/preview-1.webp",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/preview-2.webp"
         ]
     };
 
@@ -72,18 +72,19 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
                 Text   = new()
             }
         );
-        
+
         if (kind is ItemKind.Collectible or ItemKind.EventItem)
             return;
 
         const int    MAX_DISPLAY_COUNT = 5;
         const string SPACING           = "    ";
-        
+
         using var builder = new RentedSeStringBuilder();
 
         var isAnyValid = false;
 
         var sourceResult = ItemSourceInfo.Query(itemID);
+
         if (sourceResult is { State: ItemSourceQueryState.Ready, Data: { } sourceInfo })
         {
             isAnyValid = true;
@@ -95,7 +96,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
                                      .SelectMany(x => x.CostInfos)
                                      .DistinctBy(x => x.ItemID)
                                      .ToList();
-            
+
             for (var i = 0; i < shopInfo.Count; i++)
             {
                 if (i >= MAX_DISPLAY_COUNT)
@@ -105,7 +106,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
                            .Append($"{SPACING}{Lang.Get("AutoShowItemNPCShopInfo-Tooltip-Source-More", shopInfo.Count - MAX_DISPLAY_COUNT)}");
                     break;
                 }
-                
+
                 var costInfo = shopInfo[i];
                 builder.Builder
                        .AppendNewLine()
@@ -138,6 +139,7 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
         }
 
         var destinationResult = ItemSourceInfo.QueryExchangeItems(itemID);
+
         if (destinationResult is { State: ItemSourceQueryState.Ready, Data: { } destinationInfo })
         {
             var message = Lang.Get
@@ -150,9 +152,9 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
 
             if (isAnyValid)
                 builder.Builder.AppendNewLine();
-            
+
             builder.Builder.Append($"{(isAnyValid ? SPACING : string.Empty)}{message}");
-            
+
             isAnyValid = true;
         }
 

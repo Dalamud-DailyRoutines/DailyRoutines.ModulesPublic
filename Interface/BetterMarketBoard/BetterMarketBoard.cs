@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -24,7 +25,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         ModulesPair         = ["AutoRefreshMarketSearchResult"],
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterMarketBoard/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterMarketBoard/preview-1.webp"
         ]
     };
 
@@ -342,6 +343,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     [IPCSubscriber("DailyRoutines.Modules.AutoShowItemNPCShopInfo.OpenByItemID")]
     private static IPCSubscriber<uint, bool> OpenShopListByItemIDIPC;
 
+    [SuppressMessage("ReSharper", "UnusedMember.Local")]
     [IPCProvider("DailyRoutines.Modules.BetterMarketBoard.SearchItem")]
     private bool SearchItemIPC
     (
@@ -355,6 +357,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         return true;
     }
 
+    [SuppressMessage("ReSharper", "UnusedMember.Local")]
     [IPCProvider("DailyRoutines.Modules.BetterMarketBoard.ToggleOverlay")]
     private bool ToggleOverlayIPC
     (

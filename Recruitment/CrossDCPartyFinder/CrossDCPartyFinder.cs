@@ -21,7 +21,7 @@ public partial class CrossDCPartyFinder : ModuleBase
         Category    = ModuleCategory.Recruitment,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/CrossDCPartyFinder/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/CrossDCPartyFinder/preview-1.webp"
         ]
     };
 
@@ -104,6 +104,6 @@ public partial class CrossDCPartyFinder : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public int PageSize = 100;
+        public int PageSize { get; set; } = 100;
     }
 }

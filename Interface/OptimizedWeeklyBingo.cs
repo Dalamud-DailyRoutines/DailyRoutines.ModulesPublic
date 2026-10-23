@@ -27,7 +27,7 @@ public unsafe class OptimizedWeeklyBingo : ModuleBase
         Author      = ["Due"],
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedWeeklyBingo/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedWeeklyBingo/preview-1.webp"
         ]
     };
 
@@ -45,7 +45,7 @@ public unsafe class OptimizedWeeklyBingo : ModuleBase
     protected override void Init()
     {
         probabilityCalculator = new();
-        
+
         DutySlotReceiveEventHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(DutySlot.MemberFunctionPointers),

@@ -39,7 +39,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
         Category    = ModuleCategory.Duty,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterMKDSupportJobList/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterMKDSupportJobList/preview-1.webp"
         ]
     };
 

@@ -27,7 +27,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoCollectableExchange/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoCollectableExchange/preview-1.webp"
         ]
     };
 
@@ -65,12 +65,12 @@ public unsafe class AutoCollectableExchange : ModuleBase
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
-        
+
         LogMessageManager.Instance().Unreg(OnLogMessage);
 
         exchangeEvent?.Dispose();
         exchangeEvent = null;
-        
+
         scripExchangeButton?.Dispose();
         scripExchangeButton = null;
 
@@ -88,13 +88,13 @@ public unsafe class AutoCollectableExchange : ModuleBase
             case AddonEvent.PreFinalize:
                 exchangeEvent?.Dispose();
                 exchangeEvent = null;
-        
+
                 scripExchangeButton = null;
                 currentExchangeText = null;
                 break;
-            
+
             case AddonEvent.PostUpdate:
-                if (!CollectablesShopAddon->IsAddonAndNodesReady()) 
+                if (!CollectablesShopAddon->IsAddonAndNodesReady())
                     return;
 
                 var exchangeButton = CollectablesShopAddon->GetComponentButtonById(51);
@@ -151,7 +151,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
                 break;
         }
     }
-    
+
     private void OnLogMessage
     (
         ref bool                isPrevented,
@@ -178,9 +178,9 @@ public unsafe class AutoCollectableExchange : ModuleBase
         if (PluginConfig.Instance().ConflictKeyBinding.IsPressed())
         {
             var list = CollectablesShopAddon->GetComponentNodeById(31)->GetAsAtkComponentList();
-            if (list == null) 
+            if (list == null)
                 return;
-            
+
             EnqueueExchange(-1, 0);
             return;
         }
@@ -211,7 +211,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
 
         if (text == currentExchangeText)
             return;
-        
+
         if (hideTooltip)
             AtkStage.Instance()->TooltipManager.HideTooltip(CollectablesShopAddon->Id);
         else if (currentExchangeText != null)
@@ -221,7 +221,10 @@ public unsafe class AutoCollectableExchange : ModuleBase
         exchangeButton->SetText(text);
     }
 
-    private void UpdateScripExchangeButton(AtkResNode* exchangeNode)
+    private void UpdateScripExchangeButton
+    (
+        AtkResNode* exchangeNode
+    )
     {
         if (scripExchangeButton == null)
         {
@@ -246,7 +249,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
     {
         if (LocalPlayerState.Object is not { } localPlayer)
             return;
-        
+
         if (!EventFramework.Instance()->TryGetNearestEventID
             (
                 x => x.EventId.ContentId is EventHandlerContent.PreHandler,
@@ -262,7 +265,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
             NotifyHelper.ToastError(Lang.Get("AutoCollectableExchange-Notification-NoInclusionShop"));
             return;
         }
-        
+
         TaskHelper.Enqueue
         (() =>
             {
@@ -270,7 +273,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
                     CollectablesShopAddon->Close(true);
             }
         );
-        
+
         TaskHelper.Enqueue(() => !ICondition.Instance().IsOccupiedInEvent);
 
         TaskHelper.Enqueue
@@ -278,13 +281,17 @@ public unsafe class AutoCollectableExchange : ModuleBase
          (
              localPlayer.EntityID,
              eventID
-         ).Send());
+         ).Send()
+        );
     }
 
-    private void EnqueueExchange(int lastListLength, uint finishedRound) =>
+    private void EnqueueExchange
+    (
+        int  lastListLength,
+        uint finishedRound
+    ) =>
         TaskHelper.Enqueue
-        (
-            () =>
+        (() =>
             {
                 if (CollectablesShopAddon == null || SelectYesno->IsAddonAndNodesReady())
                 {
@@ -293,16 +300,17 @@ public unsafe class AutoCollectableExchange : ModuleBase
                 }
 
                 var list = CollectablesShopAddon->GetComponentNodeById(31)->GetAsAtkComponentList();
-                if (list == null) 
+                if (list == null)
                     return false;
 
                 var currentListLength = list->ListLength;
+
                 if (currentListLength <= 0)
                 {
                     NotifyFinishAndAbort();
                     return true;
                 }
-                
+
                 if (list->ListLength == lastListLength)
                     return false;
 
@@ -311,7 +319,7 @@ public unsafe class AutoCollectableExchange : ModuleBase
                 finishedRound += 1;
                 TaskHelper.Enqueue(() => EnqueueExchange(currentListLength, finishedRound), "EnqueueNewRound");
                 return true;
-                
+
                 void NotifyFinishAndAbort()
                 {
                     TaskHelper.Abort();
@@ -326,18 +334,22 @@ public unsafe class AutoCollectableExchange : ModuleBase
                             ["count"] = finishedRound
                         }
                     );
-                    
+
                     NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoCollectableExchange-Notification"));
                     NotifyHelper.Instance().Chat(message);
                 }
             }
         );
 
-    private static void ShowTooltip(AtkUnitBase* addon, AtkComponentButton* button)
+    private static void ShowTooltip
+    (
+        AtkUnitBase*        addon,
+        AtkComponentButton* button
+    )
     {
         if (!button->IsEnabled)
             return;
-        
+
         AtkStage.Instance()->TooltipManager.ShowTooltip
         (
             addon->Id,

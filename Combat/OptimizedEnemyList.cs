@@ -34,7 +34,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         Category    = ModuleCategory.Combat,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedEnemyList/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedEnemyList/preview-1.webp"
         ],
         ModulesPair = ["AutoDisplayHiddenCast"]
     };
@@ -471,7 +471,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 var interruptibleColor = gameObj->CastInfo.Interruptible ?
                                              KnownColor.Red.ToVector4().ToVector3() :
                                              Vector3.Zero;
-                
+
                 // 可打断边缘发红光
                 castBarNode.AddColor = interruptibleColor;
                 castNode.AddColor    = interruptibleColor;
@@ -658,14 +658,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
         float      remainingTime
     )
     {
-        var actionName = string.Empty;
-
-        switch (type)
+        var actionName = type switch
         {
-            case ActionType.Action:
-                actionName = LuminaWrapper.GetActionName(actionID);
-                break;
-        }
+            ActionType.Action => LuminaWrapper.GetActionName(actionID),
+            _                 => string.Empty
+        };
 
         if (string.IsNullOrEmpty(actionName))
             actionName = LuminaWrapper.GetAddonText(16482);

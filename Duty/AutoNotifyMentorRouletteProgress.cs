@@ -21,7 +21,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
         Category    = ModuleCategory.Duty,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/AtmoOmen/StaticAssets/main/DailyRoutines/image/AutoNotifyMentorRouletteProgress-UI.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoNotifyMentorRouletteProgress/preview-1.webp"
         ]
     };
 
@@ -29,7 +29,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
     protected override void Init()
     {
         TaskHelper ??= new();
@@ -87,7 +87,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
 
                 using var rented  = new RentedSeStringBuilder();
                 var       builder = rented.Builder;
-                
+
                 builder.Append(Lang.Get("AutoNotifyMentorRouletteProgres-Notification-Title"))
                        .AppendNewLine()
                        .Append($"{Lang.Get("AutoNotifyMentorRouletteProgres-Notification-CurrentProgress")}：{firstIncomplete.Current}/{firstIncomplete.Max}")
@@ -100,7 +100,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
                     builder.AppendNewLine()
                            .Append
                            (
-                               $"{Lang.Get("AutoNotifyMentorRouletteProgres-Notification-AchievementReward")}："          +
+                               $"{Lang.Get("AutoNotifyMentorRouletteProgres-Notification-AchievementReward")}："            +
                                $"{(LocalPlayerState.Sex == 0 ? titleRowRef.Value.Masculine : titleRowRef.Value.Feminine)}" +
                                $"（{LuminaWrapper.GetAddonText(14119)}）" // 称号
                            );

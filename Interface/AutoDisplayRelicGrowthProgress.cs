@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.Info;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -18,7 +18,7 @@ public unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayRelicGrowthProgress/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayRelicGrowthProgress/preview-1.webp"
         ]
     };
 
@@ -29,20 +29,20 @@ public unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
 
     private TextNode? progressLabelNode;
     private TextNode? progressNode;
-    
+
     protected override void Init()
     {
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw, "Relic2Glass", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "Relic2Glass", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "Relic2Glass", OnAddon);
     }
 
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
-        
+
         progressNode?.Dispose();
         progressNode = null;
-        
+
         progressLabelNode?.Dispose();
         progressLabelNode = null;
     }
@@ -59,7 +59,7 @@ public unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
                 progressNode      = null;
                 progressLabelNode = null;
                 break;
-            
+
             case AddonEvent.PostDraw:
                 if (Relic2Glass == null)
                     return;
@@ -86,7 +86,7 @@ public unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
                 };
                 AtkColors.ValueEmphasize.ApplyTo(progressNode);
                 progressNode.AttachNode(componentNode);
-                
+
                 progressLabelNode = new()
                 {
                     TextFlags     = TextFlags.Edge,
@@ -99,7 +99,7 @@ public unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
                 };
                 AtkColors.ListHeader.ApplyTo(progressLabelNode);
                 progressLabelNode.AttachNode(componentNode);
-                
+
                 break;
         }
     }

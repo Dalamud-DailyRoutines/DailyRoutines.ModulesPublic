@@ -31,7 +31,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayNetworkLatency/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayNetworkLatency/preview-1.webp"
         ]
     };
 
@@ -131,7 +131,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
         var lossRate = totalSamples > 0 ?
                            (float)lossCount / totalSamples :
                            0f;
-        if (min == 9999f)
+        if (min.Equals(9999f))
             min = 0f;
 
         var currentPing = monitor.LastPing;
@@ -255,10 +255,10 @@ public class AutoDisplayNetworkLatency : ModuleBase
         )
         {
             ImGui.TableNextColumn();
-            
+
             ImGui.Spacing();
             ImGui.TextDisabled(label);
-            
+
             ImGui.SameLine(0, 8f * GlobalUIScale);
             ImGui.SetCursorPosY(ImGui.GetCursorPosY() - ImGui.GetStyle().FramePadding.Y);
             using (FontManager.Instance().UIFont140.Push())

@@ -49,9 +49,9 @@ public partial class OptimizedRecipeNote : ModuleBase
         ModulesPrerequisite = ["AutoShowItemNPCShopInfo"],
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-2.png",
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-1.png"
-        ],
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-2.webp",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()

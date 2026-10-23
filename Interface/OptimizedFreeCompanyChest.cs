@@ -36,7 +36,7 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedFreeCompanyChest/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedFreeCompanyChest/preview-1.webp"
         ]
     };
 
@@ -92,7 +92,7 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
         IAddonLifecycle.Instance().UnregisterListener(OnAddonChest);
         IAddonLifecycle.Instance().UnregisterListener(OnAddonInput);
-        
+
         LogMessageManager.Instance().Unreg(OnLogMessage);
 
         fastMoveNode?.Dispose();
@@ -110,7 +110,7 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         foreach (var handle in handles)
             IAddonEventManager.Instance().RemoveEvent(handle);
     }
-    
+
     private static void OnLogMessage
     (
         ref bool                isPrevented,

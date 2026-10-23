@@ -19,7 +19,7 @@ public unsafe class SelectableRecruitmentText : ModuleBase
         Category    = ModuleCategory.Recruitment,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/SelectableRecruitmentText/preview-1.png"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/SelectableRecruitmentText/preview-1.webp"
         ]
     };
 
@@ -64,7 +64,7 @@ public unsafe class SelectableRecruitmentText : ModuleBase
                 if (inputNode is null ||
                     inputNode.ParentAddon != addonBase)
                     break;
-                
+
                 inputNode = null;
                 break;
 
