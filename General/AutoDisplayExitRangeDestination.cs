@@ -1,7 +1,6 @@
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Models;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
@@ -17,6 +16,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Nodes.Background;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
+using OrientedBounds = FFXIVClientStructs.FFXIV.Common.Math.OrientedBounds;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -77,9 +77,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
     {
         LayerInitializeHook?.Disable();
         LayerDeinitializeHook?.Disable();
-        
+
         FrameworkManager.Instance().Unreg(RefreshInstancePairs);
-        
+
         sceneRefreshPending = false;
         frameState.Active   = false;
         frameState.Ready    = false;
@@ -202,7 +202,8 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                     if (line.IsNull)
                         continue;
 
-                    var transform       = ((LineVfxLayoutInstance*)line.Value)->Transform;
+                    var instance        = (LineVfxLayoutInstance*)line.Value;
+                    var transform       = instance->Transform;
                     var destination     = string.Empty;
                     var nearestDistance = float.MaxValue;
 
@@ -223,7 +224,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                         overlayController.AddNode(labelNode);
                     }
 
-                    labelNode.UpdateLayout(transform, destination);
+                    OrientedBounds bounds;
+                    instance->GetOrientedBoundsImpl(&bounds);
+                    labelNode.UpdateLayout(transform, bounds.Transform.M42 + bounds.HalfExtents.Y - 1f, destination);
                     currentInstances.Add(instanceID);
                 }
             }
@@ -262,15 +265,20 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         public Vector3 PlayerPosition;
         public Vector3 CameraPosition;
         public uint    PlayerRevision;
+        public uint    HeightRevision;
         public uint    ProjectionRevision;
+        public float   FlightHeightBlend;
         public float   RenderDistance;
         public float   RenderDistanceSquared;
         public float   FadeStartDistanceSquared;
         public float   FadeDistanceInverse;
 
         private Matrix4x4 viewProjection;
+        private Matrix4x4 cameraView;
+        private Matrix4x4 cameraProjection;
         private Vector2   viewportHalfSize;
         private Vector2   viewportCenter;
+        private float     flightTransitionProgress = 1f;
 
         public override OverlayLayer OverlayLayer      => OverlayLayer.Foreground;
         public override bool         HideWithNativeUi  => false;
@@ -286,12 +294,36 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
             var control = Control.Instance();
             var player  = control->LocalPlayer;
-            var camera  = control->CameraManager.Camera;
+            var camera  = control->CameraManager.GetActiveCamera();
             if (player == null || camera == null)
                 return;
 
+            var sceneCamera = &camera->CameraBase.SceneCamera;
+            if (sceneCamera->RenderCamera == null)
+                return;
+
             Vector3 playerPosition = player->Position;
-            var     isFlying       = ICondition.Instance()[ConditionFlag.InFlight];
+            var     isFlying       = player->MoveController.IsFlying();
+            var     deltaTime      = GameState.DeltaTime;
+
+            if (PlayerRevision == 0)
+                FlightHeightBlend = isFlying ?
+                                        1f :
+                                        0f;
+            else if (IsFlying != isFlying)
+                flightTransitionProgress = 0f;
+
+            if (flightTransitionProgress < 1f)
+            {
+                flightTransitionProgress = MathF.Min(1f, flightTransitionProgress + (deltaTime * 0.4f));
+                var progress        = flightTransitionProgress;
+                var progressSquared = progress                          * progress;
+                var blend           = (progress + 1f - progressSquared) * progress;
+                FlightHeightBlend = isFlying ?
+                                        blend :
+                                        1f - blend;
+                HeightRevision++;
+            }
 
             if (PlayerRevision == 0 || IsFlying != isFlying)
             {
@@ -313,21 +345,24 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 PlayerRevision++;
             }
 
-            Matrix4x4 projection = control->ViewProjectionMatrix;
+            Matrix4x4 view       = sceneCamera->ViewMatrix;
+            Matrix4x4 projection = sceneCamera->RenderCamera->ProjectionMatrix;
             var       device     = Device.Instance();
             var       halfSize   = new Vector2(device->Width * 0.5f, device->Height * 0.5f);
             var       center     = ImGui.GetMainViewport().Pos + halfSize;
 
-            if (viewProjection != projection || viewportHalfSize != halfSize || viewportCenter != center)
+            if (cameraView != view || cameraProjection != projection || viewportHalfSize != halfSize || viewportCenter != center)
             {
-                viewProjection   = projection;
+                cameraView       = view;
+                cameraProjection = projection;
+                viewProjection   = view * projection;
                 viewportHalfSize = halfSize;
                 viewportCenter   = center;
                 ProjectionRevision++;
             }
 
-            CameraPosition = camera->CameraBase.SceneCamera.Position;
-            FadeStep       = GameState.DeltaTime * FADE_SPEED;
+            CameraPosition = sceneCamera->Position;
+            FadeStep       = deltaTime * FADE_SPEED;
             Now            = Environment.TickCount64;
             Ready          = true;
         }
@@ -366,13 +401,16 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         private Vector3   heights;
         private Vector3   worldPosition;
         private Vector2   screenOffset;
+        private float     maximumAnchorHeight;
         private float     groundCullDistanceSquared;
         private float     flightCullDistanceSquared;
         private string    text = string.Empty;
 
         private long  nextGroundUpdate;
         private long  nextOcclusionUpdate;
+        private int   groundRetryInterval;
         private uint  playerRevision;
+        private uint  heightRevision;
         private uint  projectionRevision;
         private int   anchorIndex        = 1;
         private int   desiredAnchorIndex = 1;
@@ -430,6 +468,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         public void UpdateLayout
         (
             Transform value,
+            float     maximumHeight,
             string    destination
         )
         {
@@ -451,9 +490,12 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 occlusionAlpha            = 1f;
             }
 
+            maximumAnchorHeight = maximumHeight;
             spatialDirty        = true;
             projectionDirty     = true;
             groundResolved      = false;
+            groundHeights       = new(float.NaN);
+            groundRetryInterval = GROUND_RETRY_INITIAL_INTERVAL;
             nextGroundUpdate    = 0;
             nextOcclusionUpdate = 0;
 
@@ -506,30 +548,44 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
             if (!groundResolved && frameState.Now >= nextGroundUpdate)
             {
-                var hasLeft   = RaycastHelper.TryGetGroundHeight(leftAnchor,            out var leftHeight);
-                var hasCenter = RaycastHelper.TryGetGroundHeight(transform.Translation, out var centerHeight);
-                var hasRight  = RaycastHelper.TryGetGroundHeight(rightAnchor,           out var rightHeight);
-                groundHeights = new
-                (
-                    hasLeft ?
-                        leftHeight :
-                        float.NaN,
-                    hasCenter ?
-                        centerHeight :
-                        float.NaN,
-                    hasRight ?
-                        rightHeight :
-                        float.NaN
-                );
-                groundResolved   = hasLeft && hasCenter && hasRight;
-                nextGroundUpdate = frameState.Now + GROUND_UPDATE_INTERVAL;
-                spatialDirty     = true;
+                var groundUpdated = false;
+
+                if (float.IsNaN(groundHeights.X) && RaycastHelper.TryGetGroundHeight(leftAnchor, out var leftHeight))
+                {
+                    groundHeights.X = leftHeight;
+                    groundUpdated   = true;
+                }
+
+                if (float.IsNaN(groundHeights.Y) && RaycastHelper.TryGetGroundHeight(transform.Translation, out var centerHeight))
+                {
+                    groundHeights.Y = centerHeight;
+                    groundUpdated   = true;
+                }
+
+                if (float.IsNaN(groundHeights.Z) && RaycastHelper.TryGetGroundHeight(rightAnchor, out var rightHeight))
+                {
+                    groundHeights.Z = rightHeight;
+                    groundUpdated   = true;
+                }
+
+                if (groundUpdated)
+                {
+                    spatialDirty        = true;
+                    groundRetryInterval = GROUND_RETRY_INITIAL_INTERVAL;
+                }
+
+                groundResolved = !float.IsNaN(groundHeights.X) &&
+                                 !float.IsNaN(groundHeights.Y) &&
+                                 !float.IsNaN(groundHeights.Z);
+                nextGroundUpdate    = frameState.Now + groundRetryInterval;
+                groundRetryInterval = Math.Min(groundRetryInterval * 2, 1000);
             }
 
-            if (playerChanged || spatialDirty)
+            if (playerChanged || spatialDirty || heightRevision != frameState.HeightRevision)
             {
-                RefreshAnchor();
-                UpdateAnchorPosition();
+                heightRevision = frameState.HeightRevision;
+                if (RefreshAnchor(playerChanged))
+                    UpdateAnchorPosition();
                 spatialDirty = false;
             }
 
@@ -612,15 +668,23 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             IsVisible = lastAlpha > 0;
         }
 
-        private void RefreshAnchor()
+        private bool RefreshAnchor
+        (
+            bool playerChanged
+        )
         {
             var playerPosition = frameState.PlayerPosition;
-            heights = new
+            var nextHeights = new Vector3
             (
-                GetAnchorHeight(groundHeights.X, playerPosition.Y, frameState.IsFlying),
-                GetAnchorHeight(groundHeights.Y, playerPosition.Y, frameState.IsFlying),
-                GetAnchorHeight(groundHeights.Z, playerPosition.Y, frameState.IsFlying)
+                GetAnchorHeight(groundHeights.X, playerPosition.Y, frameState.FlightHeightBlend),
+                GetAnchorHeight(groundHeights.Y, playerPosition.Y, frameState.FlightHeightBlend),
+                GetAnchorHeight(groundHeights.Z, playerPosition.Y, frameState.FlightHeightBlend)
             );
+
+            if (!playerChanged && !spatialDirty && heights == nextHeights)
+                return false;
+
+            heights = nextHeights;
 
             var centerOffset = playerPosition - transform.Translation;
             centerOffset.Y = 0;
@@ -649,10 +713,11 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             }
 
             if (anchorInitialized)
-                return;
+                return true;
 
             anchorInitialized = true;
             anchorIndex       = desiredAnchorIndex;
+            return true;
         }
 
         private void UpdateAnchorPosition()
@@ -680,19 +745,18 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 distanceAlpha = (frameState.RenderDistance - MathF.Sqrt(distanceSquared)) * frameState.FadeDistanceInverse;
         }
 
-        private static float GetAnchorHeight
+        private float GetAnchorHeight
         (
             float groundHeight,
             float playerHeight,
-            bool  isFlying
+            float flightBlend
         )
         {
             if (float.IsNaN(groundHeight))
                 return playerHeight;
 
-            return isFlying ?
-                       MathF.Max(playerHeight, groundHeight) :
-                       groundHeight;
+            var height = groundHeight + ((playerHeight - groundHeight) * flightBlend);
+            return MathF.Max(groundHeight, MathF.Min(height, maximumAnchorHeight));
         }
 
         protected override void OnSizeChanged() =>
@@ -700,15 +764,15 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
         #region 常量
 
-        private const float PADDING_X                 = 6f;
-        private const float PADDING_Y                 = 2f;
-        private const float ICON_SIZE                 = 48f;
-        private const float ICON_GAP                  = 8f;
-        private const uint  DESTINATION_ICON_ID       = 60441;
-        private const ulong OCCLUSION_MATERIAL        = 0x4000;
-        private const float ANCHOR_HEIGHT_TOLERANCE   = 0.5f;
-        private const long  GROUND_UPDATE_INTERVAL    = 1000;
-        private const long  OCCLUSION_UPDATE_INTERVAL = 100;
+        private const float PADDING_X                     = 6f;
+        private const float PADDING_Y                     = 2f;
+        private const float ICON_SIZE                     = 48f;
+        private const float ICON_GAP                      = 8f;
+        private const uint  DESTINATION_ICON_ID           = 60441;
+        private const ulong OCCLUSION_MATERIAL            = 0x4000;
+        private const float ANCHOR_HEIGHT_TOLERANCE       = 0.5f;
+        private const int   GROUND_RETRY_INITIAL_INTERVAL = 100;
+        private const long  OCCLUSION_UPDATE_INTERVAL     = 100;
 
         #endregion
     }
