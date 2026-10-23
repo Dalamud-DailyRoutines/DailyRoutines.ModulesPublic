@@ -289,9 +289,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
         private float flightTransitionProgress = 1f;
 
-        public override OverlayLayer OverlayLayer      => OverlayLayer.Foreground;
-        public override bool         HideWithNativeUi  => false;
-        public override bool         HideWithUiToggled => false;
+        public override OverlayLayer OverlayLayer      => OverlayLayer.Background;
+        public override bool         HideWithNativeUi  => true;
+        public override bool         HideWithUiToggled => true;
 
         public ExitRangeFrameState() => IsVisible = false;
 
@@ -431,9 +431,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         private float anchorAlpha    = 1f;
         private float occlusionAlpha = 1f;
 
-        public override OverlayLayer OverlayLayer      => OverlayLayer.Foreground;
-        public override bool         HideWithNativeUi  => false;
-        public override bool         HideWithUiToggled => false;
+        public override OverlayLayer OverlayLayer      => frameState.OverlayLayer;
+        public override bool         HideWithNativeUi  => frameState.HideWithNativeUi;
+        public override bool         HideWithUiToggled => frameState.HideWithUiToggled;
 
         public ExitRangeLabelNode
         (
