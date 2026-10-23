@@ -226,7 +226,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
                     OrientedBounds bounds;
                     instance->GetOrientedBoundsImpl(&bounds);
-                    labelNode.UpdateLayout(transform, bounds.Transform.M42 + bounds.HalfExtents.Y - 1f, destination);
+                    labelNode.UpdateLayout(bounds, destination);
                     currentInstances.Add(instanceID);
                 }
             }
@@ -355,6 +355,16 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         }
     }
 
+    private struct ExitRangeAnchor
+    {
+        public Vector3 Top;
+        public Vector3 Bottom;
+        public Vector3 GroundPosition;
+        public long    NextGroundUpdate;
+        public int     GroundRetryInterval;
+        public bool    GroundResolved;
+    }
+
     private sealed class ExitRangeLabelNode : OverlayNode
     {
         private readonly ExitRangeFrameState frameState;
@@ -362,34 +372,35 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         private readonly IconImageNode       iconNode;
         private readonly TextNode            textNode;
 
-        private Transform transform;
-        private Vector3   leftAnchor;
-        private Vector3   rightAnchor;
-        private Vector3   groundHeights;
-        private Vector3   heights;
-        private Vector3   worldPosition;
-        private Vector2   screenOffset;
-        private float     maximumAnchorHeight;
-        private float     groundCullDistanceSquared;
-        private float     flightCullDistanceSquared;
-        private string    text = string.Empty;
+        private ExitRangeAnchor[] anchors = [];
+        private Matrix4x4         boundsTransform;
+        private Vector3           boundsHalfExtents;
+        private Vector3           lineStart;
+        private Vector3           lineDirection;
+        private Vector3           worldPosition;
+        private Vector2           screenOffset;
+        private float             inverseLineLengthSquared;
+        private float             lineDistanceSquared;
+        private string            text = string.Empty;
 
-        private long  nextGroundUpdate;
+        private long  nextAnchorUpdate;
         private long  nextOcclusionUpdate;
-        private int   groundRetryInterval;
         private uint  playerRevision;
         private uint  heightRevision;
         private uint  projectionRevision;
-        private int   anchorIndex        = 1;
-        private int   desiredAnchorIndex = 1;
+        private uint  anchorPlayerRevision;
+        private uint  anchorProjectionRevision;
+        private uint  anchorHeightRevision;
+        private int   nearestAnchorIndex;
+        private int   anchorIndex        = -1;
+        private int   desiredAnchorIndex = -1;
         private int   lastAlpha          = -1;
         private bool  spatialDirty       = true;
         private bool  projectionDirty    = true;
         private bool  alphaDirty         = true;
         private bool  inRange;
         private bool  onScreen;
-        private bool  groundResolved;
-        private bool  anchorInitialized;
+        private bool  occlusionInitialized;
         private bool  occluded;
         private float distanceAlpha;
         private float anchorAlpha    = 1f;
@@ -435,36 +446,63 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
         public void UpdateLayout
         (
-            Transform value,
-            float     maximumHeight,
-            string    destination
+            OrientedBounds bounds,
+            string         destination
         )
         {
-            if (transform.Translation != value.Translation ||
-                transform.Rotation    != value.Rotation    ||
-                transform.Scale       != value.Scale)
-            {
-                transform = value;
+            Matrix4x4 transform   = bounds.Transform;
+            Vector3   halfExtents = bounds.HalfExtents;
 
-                var axis             = Vector3.Normalize(Vector3.Transform(Vector3.UnitX, value.Rotation) with { Y = 0 });
-                var offset           = axis * (value.Scale.X * 0.5f);
-                var horizontalRadius = offset.Length();
-                leftAnchor                = value.Translation - offset;
-                rightAnchor               = value.Translation + offset;
-                groundCullDistanceSquared = (RENDER_DISTANCE        + horizontalRadius) * (RENDER_DISTANCE        + horizontalRadius);
-                flightCullDistanceSquared = (FLIGHT_RENDER_DISTANCE + horizontalRadius) * (FLIGHT_RENDER_DISTANCE + horizontalRadius);
-                anchorInitialized         = false;
-                anchorAlpha               = 1f;
-                occlusionAlpha            = 1f;
+            if (boundsTransform != transform || boundsHalfExtents != halfExtents)
+            {
+                boundsTransform   = transform;
+                boundsHalfExtents = halfExtents;
+
+                var left  = Vector3.Transform(new(-halfExtents.X, 0f, 0f), transform);
+                var right = Vector3.Transform(new(halfExtents.X, 0f, 0f),  transform);
+                lineStart     = left with { Y = 0f };
+                lineDirection = (right - left) with { Y = 0f };
+
+                var lengthSquared = lineDirection.LengthSquared();
+                inverseLineLengthSquared = lengthSquared > 0f ?
+                                               1f / lengthSquared :
+                                               0f;
+                var count = Math.Max(1, (int)MathF.Ceiling(MathF.Sqrt(lengthSquared) / ANCHOR_SPACING));
+                anchors = new ExitRangeAnchor[count];
+
+                for (var i = 0; i < count; i++)
+                {
+                    var localX = halfExtents.X * (((i + 0.5f) / count * 2f) - 1f);
+                    var top    = Vector3.Transform(new(localX, halfExtents.Y, 0f),  transform);
+                    var bottom = Vector3.Transform(new(localX, -halfExtents.Y, 0f), transform);
+                    anchors[i] = new()
+                    {
+                        Top                 = top,
+                        Bottom              = bottom,
+                        GroundPosition      = bottom,
+                        GroundRetryInterval = SPATIAL_UPDATE_INTERVAL
+                    };
+                }
+
+                anchorIndex          = -1;
+                desiredAnchorIndex   = -1;
+                anchorAlpha          = 1f;
+                occlusionAlpha       = 1f;
+                occlusionInitialized = false;
+            }
+            else
+            {
+                foreach (ref var anchor in anchors.AsSpan())
+                {
+                    anchor.GroundResolved      = false;
+                    anchor.GroundRetryInterval = SPATIAL_UPDATE_INTERVAL;
+                    anchor.NextGroundUpdate    = 0;
+                }
             }
 
-            maximumAnchorHeight = maximumHeight;
             spatialDirty        = true;
             projectionDirty     = true;
-            groundResolved      = false;
-            groundHeights       = new(float.NaN);
-            groundRetryInterval = GROUND_RETRY_INITIAL_INTERVAL;
-            nextGroundUpdate    = 0;
+            nextAnchorUpdate    = 0;
             nextOcclusionUpdate = 0;
 
             if (text == destination)
@@ -491,7 +529,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         protected override void OnUpdate()
         {
             IsVisible = false;
-            if (!frameState.Ready)
+            if (!frameState.Ready || anchors.Length == 0)
                 return;
 
             var playerChanged = playerRevision != frameState.PlayerRevision;
@@ -499,61 +537,45 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             if (playerChanged || spatialDirty)
             {
                 playerRevision = frameState.PlayerRevision;
-                var offset = frameState.PlayerPosition - transform.Translation;
-                offset.Y = 0;
+                var offset = frameState.PlayerPosition - lineStart;
+                offset.Y = 0f;
+                var ratio = Math.Clamp(Vector3.Dot(offset, lineDirection) * inverseLineLengthSquared, 0f, 1f);
+                lineDistanceSquared = (offset - (lineDirection * ratio)).LengthSquared();
+                nearestAnchorIndex  = Math.Min((int)(ratio * anchors.Length), anchors.Length - 1);
+                inRange             = lineDistanceSquared < frameState.RenderDistanceSquared;
 
-                var cullDistanceSquared = frameState.IsFlying ?
-                                              flightCullDistanceSquared :
-                                              groundCullDistanceSquared;
-                inRange = offset.LengthSquared() <= cullDistanceSquared;
+                if (!inRange)
+                    distanceAlpha = 0f;
+                else if (lineDistanceSquared <= frameState.FadeStartDistanceSquared)
+                    distanceAlpha = 1f;
+                else
+                    distanceAlpha = (frameState.RenderDistance - MathF.Sqrt(lineDistanceSquared)) * frameState.FadeDistanceInverse;
+
+                alphaDirty = true;
             }
 
             if (!inRange)
             {
-                spatialDirty = false;
+                anchorIndex        = -1;
+                desiredAnchorIndex = -1;
+                nextAnchorUpdate   = 0;
+                spatialDirty       = false;
                 return;
             }
 
-            if (!groundResolved && frameState.Now >= nextGroundUpdate)
-            {
-                var groundUpdated = false;
-
-                if (float.IsNaN(groundHeights.X) && RaycastHelper.TryGetGroundHeight(leftAnchor, out var leftHeight))
-                {
-                    groundHeights.X = leftHeight;
-                    groundUpdated   = true;
-                }
-
-                if (float.IsNaN(groundHeights.Y) && RaycastHelper.TryGetGroundHeight(transform.Translation, out var centerHeight))
-                {
-                    groundHeights.Y = centerHeight;
-                    groundUpdated   = true;
-                }
-
-                if (float.IsNaN(groundHeights.Z) && RaycastHelper.TryGetGroundHeight(rightAnchor, out var rightHeight))
-                {
-                    groundHeights.Z = rightHeight;
-                    groundUpdated   = true;
-                }
-
-                if (groundUpdated)
-                {
-                    spatialDirty        = true;
-                    groundRetryInterval = GROUND_RETRY_INITIAL_INTERVAL;
-                }
-
-                groundResolved = !float.IsNaN(groundHeights.X) &&
-                                 !float.IsNaN(groundHeights.Y) &&
-                                 !float.IsNaN(groundHeights.Z);
-                nextGroundUpdate    = frameState.Now + groundRetryInterval;
-                groundRetryInterval = Math.Min(groundRetryInterval * 2, 1000);
-            }
+            if (frameState.Now >= nextAnchorUpdate &&
+                (anchorIndex < 0                                           ||
+                 spatialDirty                                              ||
+                 anchorPlayerRevision     != frameState.PlayerRevision     ||
+                 anchorProjectionRevision != frameState.ProjectionRevision ||
+                 anchorHeightRevision     != frameState.HeightRevision     ||
+                 !anchors[desiredAnchorIndex].GroundResolved))
+                RefreshAnchorSelection();
 
             if (playerChanged || spatialDirty || heightRevision != frameState.HeightRevision)
             {
                 heightRevision = frameState.HeightRevision;
-                if (RefreshAnchor(playerChanged))
-                    UpdateAnchorPosition();
+                UpdateAnchorPosition();
                 spatialDirty = false;
             }
 
@@ -564,8 +586,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
                 if (anchorAlpha <= 0f)
                 {
-                    anchorIndex         = desiredAnchorIndex;
-                    nextOcclusionUpdate = 0;
+                    anchorIndex          = desiredAnchorIndex;
+                    nextOcclusionUpdate  = 0;
+                    occlusionInitialized = false;
                     UpdateAnchorPosition();
                 }
             }
@@ -602,7 +625,16 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                                    MaterialValue = OCCLUSION_MATERIAL
                                }
                            );
-                nextOcclusionUpdate = frameState.Now + OCCLUSION_UPDATE_INTERVAL;
+                nextOcclusionUpdate = frameState.Now + SPATIAL_UPDATE_INTERVAL;
+
+                if (!occlusionInitialized)
+                {
+                    occlusionInitialized = true;
+                    occlusionAlpha = occluded ?
+                                         0f :
+                                         1f;
+                    alphaDirty = true;
+                }
             }
 
             var nextOcclusionAlpha = occlusionAlpha switch
@@ -636,67 +668,89 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             IsVisible = lastAlpha > 0;
         }
 
-        private bool RefreshAnchor
-        (
-            bool playerChanged
-        )
+        private void RefreshAnchorSelection()
         {
-            var playerPosition = frameState.PlayerPosition;
-            var nextHeights = new Vector3
-            (
-                GetAnchorHeight(groundHeights.X, playerPosition.Y, frameState.FlightHeightBlend),
-                GetAnchorHeight(groundHeights.Y, playerPosition.Y, frameState.FlightHeightBlend),
-                GetAnchorHeight(groundHeights.Z, playerPosition.Y, frameState.FlightHeightBlend)
-            );
+            nextAnchorUpdate         = frameState.Now + SPATIAL_UPDATE_INTERVAL;
+            anchorPlayerRevision     = frameState.PlayerRevision;
+            anchorProjectionRevision = frameState.ProjectionRevision;
+            anchorHeightRevision     = frameState.HeightRevision;
+            spatialDirty             = true;
 
-            if (!playerChanged && !spatialDirty && heights == nextHeights)
-                return false;
+            var first               = Math.Max(0, nearestAnchorIndex - 1);
+            var last                = Math.Min(anchors.Length        - 1, nearestAnchorIndex + 1);
+            var bestIndex           = nearestAnchorIndex;
+            var bestDistanceSquared = float.PositiveInfinity;
+            var bestOnScreen        = false;
 
-            heights = nextHeights;
-
-            var centerOffset = playerPosition - transform.Translation;
-            centerOffset.Y = 0;
-            var nearestDistance = centerOffset.LengthSquared();
-            desiredAnchorIndex = 1;
-
-            if (MathF.Abs(heights.X - heights.Y) > ANCHOR_HEIGHT_TOLERANCE)
+            for (var i = first; i <= last; i++)
             {
-                var leftOffset = playerPosition - leftAnchor;
-                leftOffset.Y = 0;
-                var distance = leftOffset.LengthSquared();
+                RefreshGroundSample(i);
+                var position        = GetAnchorPosition(i);
+                var distanceSquared = Vector3.DistanceSquared(frameState.PlayerPosition, position);
+                var visible         = frameState.Projection.WorldToScreen(position, out _);
 
-                if (distance <= nearestDistance)
+                if ((visible                 && !bestOnScreen) ||
+                    (visible == bestOnScreen && distanceSquared < bestDistanceSquared))
                 {
-                    desiredAnchorIndex = 0;
-                    nearestDistance    = distance;
+                    bestIndex           = i;
+                    bestDistanceSquared = distanceSquared;
+                    bestOnScreen        = visible;
                 }
             }
 
-            if (MathF.Abs(heights.Z - heights.Y) > ANCHOR_HEIGHT_TOLERANCE)
+            var retainedIndex = desiredAnchorIndex;
+
+            if (retainedIndex >= first && retainedIndex <= last && retainedIndex != bestIndex)
             {
-                var rightOffset = playerPosition - rightAnchor;
-                rightOffset.Y = 0;
-                if (rightOffset.LengthSquared() < nearestDistance)
-                    desiredAnchorIndex = 2;
+                var retainedPosition        = GetAnchorPosition(retainedIndex);
+                var retainedOnScreen        = frameState.Projection.WorldToScreen(retainedPosition, out _);
+                var retainedDistanceSquared = Vector3.DistanceSquared(frameState.PlayerPosition, retainedPosition);
+
+                if (retainedOnScreen &&
+                    (!bestOnScreen ||
+                     MathF.Sqrt(bestDistanceSquared) + (ANCHOR_SPACING * 0.2f) >= MathF.Sqrt(retainedDistanceSquared)))
+                    bestIndex = retainedIndex;
             }
 
-            if (anchorInitialized)
-                return true;
+            desiredAnchorIndex = bestIndex;
 
-            anchorInitialized = true;
-            anchorIndex       = desiredAnchorIndex;
-            return true;
+            if (anchorIndex < 0 || distanceAlpha <= 0f || !frameState.Projection.WorldToScreen(GetAnchorPosition(anchorIndex), out _))
+            {
+                if (anchorIndex != bestIndex)
+                {
+                    anchorAlpha = anchorIndex < 0 ?
+                                      1f :
+                                      0f;
+                    anchorIndex          = bestIndex;
+                    nextOcclusionUpdate  = 0;
+                    occlusionInitialized = false;
+                }
+            }
+        }
+
+        private void RefreshGroundSample
+        (
+            int index
+        )
+        {
+            ref var anchor = ref anchors[index];
+            if (anchor.GroundResolved || frameState.Now < anchor.NextGroundUpdate)
+                return;
+
+            if (RaycastHelper.TryRaycastBetween(anchor.Top, anchor.Bottom, out var hit))
+            {
+                anchor.GroundPosition = hit.Point;
+                anchor.GroundResolved = true;
+                return;
+            }
+
+            anchor.NextGroundUpdate    = frameState.Now + anchor.GroundRetryInterval;
+            anchor.GroundRetryInterval = Math.Min(anchor.GroundRetryInterval * 2, 1000);
         }
 
         private void UpdateAnchorPosition()
         {
-            alphaDirty = true;
-            var position = anchorIndex switch
-            {
-                0 => leftAnchor with { Y = heights.X            + 1f },
-                2 => rightAnchor with { Y = heights.Z           + 1f },
-                _ => transform.Translation with { Y = heights.Y + 1f }
-            };
+            var position = GetAnchorPosition(anchorIndex);
 
             if (worldPosition != position)
             {
@@ -704,27 +758,18 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 projectionDirty = true;
             }
 
-            var distanceSquared = Vector3.DistanceSquared(frameState.PlayerPosition, position);
-            if (distanceSquared >= frameState.RenderDistanceSquared)
-                distanceAlpha = 0f;
-            else if (distanceSquared <= frameState.FadeStartDistanceSquared)
-                distanceAlpha = 1f;
-            else
-                distanceAlpha = (frameState.RenderDistance - MathF.Sqrt(distanceSquared)) * frameState.FadeDistanceInverse;
         }
 
-        private float GetAnchorHeight
+        private Vector3 GetAnchorPosition
         (
-            float groundHeight,
-            float playerHeight,
-            float flightBlend
+            int index
         )
         {
-            if (float.IsNaN(groundHeight))
-                return playerHeight;
-
-            var height = groundHeight + ((playerHeight - groundHeight) * flightBlend);
-            return MathF.Max(groundHeight, MathF.Min(height, maximumAnchorHeight));
+            ref var anchor   = ref anchors[index];
+            var     position = anchor.GroundPosition;
+            var     height   = position.Y + ((frameState.PlayerPosition.Y - position.Y) * frameState.FlightHeightBlend);
+            position.Y = MathF.Max(position.Y, MathF.Min(height, anchor.Top.Y - 1f)) + 1f;
+            return position;
         }
 
         protected override void OnSizeChanged() =>
@@ -732,15 +777,14 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
         #region 常量
 
-        private const float PADDING_X                     = 6f;
-        private const float PADDING_Y                     = 2f;
-        private const float ICON_SIZE                     = 48f;
-        private const float ICON_GAP                      = 8f;
-        private const uint  DESTINATION_ICON_ID           = 60441;
-        private const ulong OCCLUSION_MATERIAL            = 0x4000;
-        private const float ANCHOR_HEIGHT_TOLERANCE       = 0.5f;
-        private const int   GROUND_RETRY_INITIAL_INTERVAL = 100;
-        private const long  OCCLUSION_UPDATE_INTERVAL     = 100;
+        private const float PADDING_X               = 6f;
+        private const float PADDING_Y               = 2f;
+        private const float ICON_SIZE               = 48f;
+        private const float ICON_GAP                = 8f;
+        private const uint  DESTINATION_ICON_ID     = 60441;
+        private const ulong OCCLUSION_MATERIAL      = 0x4000;
+        private const float ANCHOR_SPACING          = 12f;
+        private const int   SPATIAL_UPDATE_INTERVAL = 100;
 
         #endregion
     }
