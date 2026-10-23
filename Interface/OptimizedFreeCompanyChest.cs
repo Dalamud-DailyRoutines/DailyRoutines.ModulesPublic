@@ -167,6 +167,9 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
                     }
                 }
 
+                foreach (var inventoryType in FreeCompanyChestTypes)
+                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestInventory, (uint)inventoryType);
+
                 break;
 
             case AddonEvent.PostRefresh:
@@ -551,6 +554,12 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         .. LuminaGetter.Get<Item>()
                        .Where(x => x.ItemSortCategory.Value.Param == 150)
                        .Select(x => x.RowId)
+    ];
+
+    private static InventoryType[] FreeCompanyChestTypes =
+    [
+        .. Enum.GetValues<InventoryType>()
+               .Where(x => x.ToString().Contains("FreeCompany"))
     ];
 
     #endregion
