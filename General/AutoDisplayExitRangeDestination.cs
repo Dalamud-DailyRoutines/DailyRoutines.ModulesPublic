@@ -1,8 +1,7 @@
-﻿using System.Numerics;
+using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine.Layer;
@@ -25,7 +24,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
     private List<ExitRangePair> instancePairs = [];
 
     private Dictionary<Vector3, AnchorDisplayState> anchorStates = [];
@@ -362,6 +361,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
     private sealed class ExitRangeLabelNode : ResNode
     {
         private readonly BackgroundNode backgroundNode;
+        private readonly IconImageNode  iconNode;
         private readonly TextNode       textNode;
 
         private Vector2 labelSize;
@@ -373,17 +373,25 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
             backgroundNode = new BackgroundNode
             {
-                Type = BackgroundType.HorizontalBar,
+                Type = BackgroundType.HorizontalBar
             };
             backgroundNode.AttachNode(this);
+
+            iconNode = new IconImageNode
+            {
+                IconId     = DESTINATION_ICON_ID,
+                FitTexture = true,
+                Size       = new(ICON_SIZE)
+            };
+            iconNode.AttachNode(this);
 
             textNode = new TextNode
             {
                 FontSize           = 20,
                 LineSpacing        = 20,
-                TextFlags          = TextFlags.Bold,
+                TextFlags          = TextFlags.Bold | TextFlags.Edge,
                 TextColorID        = 535,
-                Position           = new(PADDING_X, PADDING_Y)
+                TextOutlineColorID = 0
             };
             textNode.AttachNode(this);
         }
@@ -405,11 +413,19 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 var textSize = textNode.GetTextDrawSize(false);
                 textNode.Size = textSize;
 
-                labelSize = textSize + new Vector2(PADDING_X * 2f, PADDING_Y * 2f);
-                Size      = labelSize;
+                labelSize = new
+                (
+                    MathF.Max(textSize.X, ICON_SIZE)                  + (PADDING_X              * 2f),
+                    ICON_SIZE                        - (2 * ICON_GAP) + textSize.Y + (PADDING_Y * 4f)
+                );
+                Size = labelSize;
+
+                iconNode.Position = new((labelSize.X - ICON_SIZE)  * 0.5f, PADDING_Y             - ICON_GAP);
+                textNode.Position = new((labelSize.X - textSize.X) * 0.5f, PADDING_Y + ICON_SIZE - (2 * ICON_GAP));
             }
 
-            Position             = screenPosition - new Vector2(labelSize.X * Scale.X * 0.5f, 0f);
+            Position             = screenPosition - (labelSize * Scale * 0.5f);
+            iconNode.Alpha       = alpha;
             textNode.Alpha       = alpha;
             backgroundNode.Alpha = alpha;
         }
@@ -421,6 +437,11 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
         private const float PADDING_X = 6f;
         private const float PADDING_Y = 2f;
+
+        private const float ICON_SIZE = 48f;
+        private const float ICON_GAP  = 8f;
+
+        private const uint DESTINATION_ICON_ID = 60441;
 
         #endregion
     }
