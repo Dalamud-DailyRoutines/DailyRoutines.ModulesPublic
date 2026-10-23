@@ -2,7 +2,6 @@ using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
-using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine.Layer;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -13,6 +12,7 @@ using KamiToolKit.UiOverlay;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Nodes.Background;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -273,12 +273,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         public float   FadeStartDistanceSquared;
         public float   FadeDistanceInverse;
 
-        private Matrix4x4 viewProjection;
-        private Matrix4x4 cameraView;
-        private Matrix4x4 cameraProjection;
-        private Vector2   viewportHalfSize;
-        private Vector2   viewportCenter;
-        private float     flightTransitionProgress = 1f;
+        public GameViewProjection Projection;
+
+        private float flightTransitionProgress = 1f;
 
         public override OverlayLayer OverlayLayer      => OverlayLayer.Foreground;
         public override bool         HideWithNativeUi  => false;
@@ -299,7 +296,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 return;
 
             var sceneCamera = &camera->CameraBase.SceneCamera;
-            if (sceneCamera->RenderCamera == null)
+            if (!GameViewHelper.TryGetProjection(out var projection))
                 return;
 
             Vector3 playerPosition = player->Position;
@@ -345,19 +342,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 PlayerRevision++;
             }
 
-            Matrix4x4 view       = sceneCamera->ViewMatrix;
-            Matrix4x4 projection = sceneCamera->RenderCamera->ProjectionMatrix;
-            var       device     = Device.Instance();
-            var       halfSize   = new Vector2(device->Width * 0.5f, device->Height * 0.5f);
-            var       center     = ImGui.GetMainViewport().Pos + halfSize;
-
-            if (cameraView != view || cameraProjection != projection || viewportHalfSize != halfSize || viewportCenter != center)
+            if (Projection != projection)
             {
-                cameraView       = view;
-                cameraProjection = projection;
-                viewProjection   = view * projection;
-                viewportHalfSize = halfSize;
-                viewportCenter   = center;
+                Projection = projection;
                 ProjectionRevision++;
             }
 
@@ -365,25 +352,6 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             FadeStep       = deltaTime * FADE_SPEED;
             Now            = Environment.TickCount64;
             Ready          = true;
-        }
-
-        public bool TryProject
-        (
-            Vector3     position,
-            out Vector2 screenPosition
-        )
-        {
-            var clip = Vector4.Transform(new Vector4(position, 1f), viewProjection);
-
-            if (clip.W <= 0f || MathF.Abs(clip.X) >= clip.W || MathF.Abs(clip.Y) >= clip.W)
-            {
-                screenPosition = default;
-                return false;
-            }
-
-            var inverseW = 1f                              / clip.W;
-            screenPosition = (new Vector2(clip.X, -clip.Y) * inverseW * viewportHalfSize) + viewportCenter;
-            return true;
         }
     }
 
@@ -614,7 +582,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             {
                 projectionDirty    = false;
                 projectionRevision = frameState.ProjectionRevision;
-                onScreen           = frameState.TryProject(worldPosition, out var screenPosition);
+                onScreen           = frameState.Projection.WorldToScreen(worldPosition, out var screenPosition);
                 if (onScreen)
                     Position = screenPosition - screenOffset;
             }

@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.Text.SeStringHandling;
@@ -6,6 +6,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -91,6 +92,7 @@ public unsafe partial class AutoCountPlayers
                         }
                     }
                 }
+
                 ImGui.End();
             }
         }
@@ -146,13 +148,15 @@ public unsafe partial class AutoCountPlayers
         string?          extraInfo = null
     )
     {
-        var gameGUI  = IGameGui.Instance();
+        if (!GameViewHelper.TryGetProjection(out var projection))
+            return;
+
         var viewport = ImGui.GetMainViewport();
 
-        if (!gameGUI.WorldToScreen(LocalPlayerState.Object.Position, out var localScreenPos, out _))
+        if (!projection.WorldToScreen(LocalPlayerState.Object.Position, out var localScreenPos, out _))
             localScreenPos = viewport.Pos + viewport.Size with { X = viewport.Size.X * 0.5f };
 
-        gameGUI.WorldToScreen(player.Position, out var screenPos, out var isInView);
+        projection.WorldToScreen(player.Position, out var screenPos, out var isInView);
 
         var linePositions = GetLinePositions
         (

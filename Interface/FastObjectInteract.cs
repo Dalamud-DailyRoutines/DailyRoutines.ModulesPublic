@@ -6,7 +6,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
@@ -15,6 +14,7 @@ using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using Aetheryte = Lumina.Excel.Sheets.Aetheryte;
@@ -515,6 +515,10 @@ public unsafe partial class FastObjectInteract : ModuleBase
         var mgr = GameObjectManager.Instance();
         if (mgr == null) return;
 
+        GameViewProjection projection = default;
+        if (config.OnlyDisplayInViewRange && !GameViewHelper.TryGetProjection(out projection))
+            return;
+
         isOnWorldTraveling = ICondition.Instance().Any
         (
             ConditionFlag.ReadyingVisitOtherWorld,
@@ -571,11 +575,8 @@ public unsafe partial class FastObjectInteract : ModuleBase
                 }
             }
 
-            if (config.OnlyDisplayInViewRange)
-            {
-                if (!GameViewHelper.WorldToScreen(obj->Position, out _, out var view) || !view)
-                    continue;
-            }
+            if (config.OnlyDisplayInViewRange && !projection.WorldToScreen(obj->Position, out _))
+                continue;
 
             currentObjects.Add(new(obj, name, kind, distSq));
         }
@@ -602,10 +603,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
         if (config.WindowInvisibleWhenInteract && ICondition.Instance().IsOccupiedInEvent)
             return false;
 
-        if (config.WindowInvisibleWhenCombat && ICondition.Instance()[ConditionFlag.InCombat])
-            return false;
-
-        return true;
+        return !config.WindowInvisibleWhenCombat || !ICondition.Instance()[ConditionFlag.InCombat];
     }
 
     private void InteractWithObject
@@ -730,9 +728,9 @@ public unsafe partial class FastObjectInteract : ModuleBase
     )
     {
         var c = x.DistanceSq.CompareTo(y.DistanceSq);
-        if (c != 0) return c;
-
-        return GetKindPriority(x.Kind).CompareTo(GetKindPriority(y.Kind));
+        return c != 0 ?
+                   c :
+                   GetKindPriority(x.Kind).CompareTo(GetKindPriority(y.Kind));
     }
 
     private static int GetKindPriority

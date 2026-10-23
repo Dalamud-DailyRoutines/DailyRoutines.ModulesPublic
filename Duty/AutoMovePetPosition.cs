@@ -250,7 +250,7 @@ public class AutoMovePetPosition : ModuleBase
                     if ((ImGui.IsKeyDown(ImGuiKey.LeftAlt)  || ImGui.IsKeyDown(ImGuiKey.RightAlt)) &&
                         (ImGui.IsKeyDown(ImGuiKey.LeftCtrl) || ImGui.IsKeyDown(ImGuiKey.RightCtrl)))
                     {
-                        if (IGameGui.Instance().ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
+                        if (GameViewHelper.ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
                         {
                             var currentPickingZone  = currentPickingRow?.territoryKey ?? 0;
                             var currentPickingIndex = currentPickingRow?.index        ?? -1;
@@ -445,7 +445,7 @@ public class AutoMovePetPosition : ModuleBase
         public string  Note     { get; set; } = string.Empty;
         public int     DelayS   { get; set; }
         public Vector2 Position { get; set; }
-        public string  GUID     { get; set; } = guid;
+        public string  GUID     { get; init; } = guid;
 
         public bool Equals
         (
@@ -473,11 +473,8 @@ public class AutoMovePetPosition : ModuleBase
         public override bool Equals
         (
             object? obj
-        )
-        {
-            if (obj is not PositionSchedule other) return false;
-            return Equals(other);
-        }
+        ) =>
+            obj is PositionSchedule other && Equals(other);
 
         public override int GetHashCode() =>
             GUID.GetHashCode();

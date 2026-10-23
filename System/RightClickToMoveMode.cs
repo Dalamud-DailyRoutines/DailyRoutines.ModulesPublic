@@ -6,7 +6,6 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
@@ -17,7 +16,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class RightClickToMoveMode : ModuleBase
+public partial class RightClickToMoveMode : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -49,7 +48,7 @@ public class RightClickToMoveMode : ModuleBase
         TargetIndicatorRenderer.Reset();
 
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
-        WindowManager.Instance().PostDraw                -= OnDraw;
+        WindowManager.Instance().PostDraw        -= OnDraw;
 
         movementController.Dispose();
     }
@@ -297,8 +296,8 @@ public class RightClickToMoveMode : ModuleBase
 
     #endregion
 
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState
+    [LibraryImport("user32.dll")]
+    private static partial short GetAsyncKeyState
     (
         int vKey
     );
@@ -462,7 +461,7 @@ public class RightClickToMoveMode : ModuleBase
         {
             targetPosition = default;
 
-            if (!IGameGui.Instance().ScreenToWorld(clientPosition, out var worldPosition))
+            if (!GameViewHelper.ScreenToWorld(clientPosition, out var worldPosition))
                 return false;
 
             if (IsNavmeshAvailable() && vnavmeshIPC.QueryNearestPointOnMesh(worldPosition, 3f, 10f) is { } meshPosition)
@@ -530,7 +529,7 @@ public class RightClickToMoveMode : ModuleBase
         {
             if (!IsPulseActive) return;
 
-            if (!IGameGui.Instance().WorldToScreen(PulseTarget, out var screenPosition))
+            if (!GameViewHelper.WorldToScreen(PulseTarget, out var screenPosition))
             {
                 ResetPulse();
                 return;
@@ -565,7 +564,7 @@ public class RightClickToMoveMode : ModuleBase
             Vector3 targetPosition
         )
         {
-            if (!IGameGui.Instance().WorldToScreen(targetPosition, out var screenPosition))
+            if (!GameViewHelper.WorldToScreen(targetPosition, out var screenPosition))
                 return;
 
             var radius    = MARKER_RADIUS * GlobalUIScale;

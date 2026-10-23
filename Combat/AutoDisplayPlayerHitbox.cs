@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.UiOverlay;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
@@ -21,7 +22,7 @@ public unsafe class AutoDisplayPlayerHitbox : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Due"]
     };
-    
+
     private Config            config     = null!;
     private OverlayController controller = null!;
 
@@ -143,7 +144,7 @@ public unsafe class AutoDisplayPlayerHitbox : ModuleBase
             float cos    = MathF.Cos(angle), sin = MathF.Sin(angle);
 
             var rotatedOffset = new Vector3((cos * offset.X) - (sin * offset.Z), offset.Y, (sin * offset.X) + (cos * offset.Z));
-            IGameGui.Instance().WorldToScreen(localPlayer.Position + rotatedOffset, out var screenPos);
+            GameViewHelper.WorldToScreen(localPlayer.Position + rotatedOffset, out var screenPos);
 
             Position = screenPos - (imageNode.Size / 2f);
         }

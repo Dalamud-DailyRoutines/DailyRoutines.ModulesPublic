@@ -17,6 +17,7 @@ using OmenTools.Info.Game;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.OmenService.ZoneIndicator;
 using OmenTools.Threading;
@@ -52,7 +53,7 @@ public partial class OccultCrescentHelper
 
             ExecuteCommandManager.Instance().RegPost(OnPostReceivedCommand);
             LogMessageManager.Instance().RegPost(OnPostReceivedMessage);
-            GameState.Instance().Logout       += OnLogout;
+            GameState.Instance().Logout += OnLogout;
             FrameworkManager.Instance().Reg(OnPathfindingUpdate, throttleMS: 100);
             WindowManager.Instance().PostDraw += OnPathfindingDraw;
 
@@ -90,7 +91,7 @@ public partial class OccultCrescentHelper
             LogMessageManager.Instance().Unreg(OnPostReceivedMessage);
             IClientState.Instance().TerritoryChanged -= OnZoneChanged;
             FrameworkManager.Instance().Unreg(OnPathfindingUpdate);
-            WindowManager.Instance().PostDraw                -= OnPathfindingDraw;
+            WindowManager.Instance().PostDraw -= OnPathfindingDraw;
 
             fateHandle?.Unreg();
             fateHandle = null;
@@ -200,7 +201,7 @@ public partial class OccultCrescentHelper
                             ))
                             MainModule.config.Save(MainModule);
                     }
-                    
+
                     ImGui.NewLine();
 
                     ImGui.TextColored
@@ -279,10 +280,10 @@ public partial class OccultCrescentHelper
 
             allIslandEvents.Clear();
             knownCENames.Clear();
-            
+
             StopPathfinding();
 
-            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent) 
+            if (GameState.TerritoryIntendedUse != TerritoryIntendedUse.OccultCrescent)
                 return;
 
             fateHandle = ZoneIndicatorRenderer.Instance().RegTemporary
@@ -537,8 +538,8 @@ public partial class OccultCrescentHelper
             IslandEventData data
         )
         {
-            if (!CanStartPathfinding(data)                                    ||
-                IObjectTable.Instance().LocalPlayer is null            ||
+            if (!CanStartPathfinding(data)                  ||
+                IObjectTable.Instance().LocalPlayer is null ||
                 ceTaskHelper is not { } taskHelper)
                 return;
 
@@ -793,8 +794,8 @@ public partial class OccultCrescentHelper
                 (rankedAetherytes[0] == CrescentAetheryte.UnhallowedHamlet ||
                  rankedAetherytes[1] == CrescentAetheryte.UnhallowedHamlet))
             {
-                var secondAetheryte       = rankedAetherytes[1];
-                var firstPathfindingTask  = vnavmeshIPC.PathfindCancelable
+                var secondAetheryte = rankedAetherytes[1];
+                var firstPathfindingTask = vnavmeshIPC.PathfindCancelable
                     (bestAetheryte.Position, destination, false, cancellationToken);
                 var secondPathfindingTask = vnavmeshIPC.PathfindCancelable
                     (secondAetheryte.Position, destination, false, cancellationToken);
@@ -830,9 +831,9 @@ public partial class OccultCrescentHelper
 
         private static float CalculatePathDistance
         (
-            Vector3                origin,
-            Vector3                destination,
-            IReadOnlyList<Vector3> path
+            Vector3       origin,
+            Vector3       destination,
+            List<Vector3> path
         )
         {
             var distance = Vector3.Distance(origin, path[0]);
@@ -902,6 +903,7 @@ public partial class OccultCrescentHelper
 
             var playerPosition = localPlayer.Position.ToVector2();
             var isFate         = session.Data.Event.Type is CrescentEventType.FATE or CrescentEventType.MagicPot;
+
             if (isFate && session.TravelStage == PathfindingTravelStage.Pathfinding)
             {
                 if (session.FateMonsterID == 0)
@@ -923,20 +925,21 @@ public partial class OccultCrescentHelper
                                   25f :
                                   session.Data.Event.Radius;
 
-            var isInsideEvent = !isFate &&
+            var isInsideEvent = !isFate          &&
                                 eventRadius > 0f &&
                                 Vector2.DistanceSquared
                                 (
                                     playerPosition,
                                     session.Data.Event.Position.ToVector2()
-                                ) <= eventRadius * eventRadius;
+                                ) <=
+                                eventRadius * eventRadius;
             var completionDistanceSquared = PATHFINDING_COMPLETION_DISTANCE * PATHFINDING_COMPLETION_DISTANCE;
             if (session.FateMonsterID != 0)
                 completionDistanceSquared += session.FateMonsterRadius * session.FateMonsterRadius;
 
             var isAtDestination = Vector2.DistanceSquared
-                (playerPosition, session.Destination.ToVector2()) <=
-                completionDistanceSquared;
+                                      (playerPosition, session.Destination.ToVector2()) <=
+                                  completionDistanceSquared;
 
             if (isInsideEvent || (isAtDestination && (!isFate || session.FateMonsterID != 0)))
             {
@@ -959,7 +962,7 @@ public partial class OccultCrescentHelper
 
                 if (session.PathfindingTaskDestination != session.Destination)
                 {
-                    session.Path = [];
+                    session.Path                       = [];
                     session.IsAtPathfindingDestination = false;
                     return;
                 }
@@ -988,6 +991,7 @@ public partial class OccultCrescentHelper
                 }
 
                 session.IsAtPathfindingDestination = false;
+
                 if (!session.IsMovementInterrupted)
                 {
                     vnavmeshIPC.SetPathfindTolerance(0.1f);
@@ -1045,13 +1049,12 @@ public partial class OccultCrescentHelper
             PathfindingSession session
         ) =>
             IObjectTable.Instance()
-                    .SearchObjects
-                    (
-                        x => x is IBattleNPC { IsTargetable: true, IsDead: false } &&
-                             x.FateID == (ushort)session.Data.Event.DataID
-                    )
-                    .OrderBy(x => Vector3.DistanceSquared(x.Position, session.Destination))
-                    .FirstOrDefault();
+                        .SearchObjects
+                        (x => x is IBattleNPC { IsTargetable: true, IsDead: false } &&
+                              x.FateID == (ushort)session.Data.Event.DataID
+                        )
+                        .OrderBy(x => Vector3.DistanceSquared(x.Position, session.Destination))
+                        .FirstOrDefault();
 
         private static void EnsureFateMonsterSelected
         (
@@ -1087,17 +1090,18 @@ public partial class OccultCrescentHelper
         private void SetNavigationTarget
         (
             PathfindingSession session,
-            Vector3             destination
+            Vector3            destination
         )
         {
             if (session.Destination == destination) return;
 
-            session.Destination = destination;
+            session.Destination                = destination;
             session.IsAtPathfindingDestination = false;
-            session.Path = [];
+            session.Path                       = [];
             vnavmeshIPC.StopPathfind();
 
-            if (session.PathfindingTask == null && !session.IsMovementInterrupted &&
+            if (session.PathfindingTask == null &&
+                !session.IsMovementInterrupted  &&
                 IObjectTable.Instance().LocalPlayer is { } player)
                 StartNavigationPath(session, player.Position);
         }
@@ -1105,7 +1109,7 @@ public partial class OccultCrescentHelper
         private void StartNavigationPath
         (
             PathfindingSession session,
-            Vector3             origin
+            Vector3            origin
         )
         {
             if (session.PathfindingTask != null || session.IsMovementInterrupted) return;
@@ -1148,12 +1152,11 @@ public partial class OccultCrescentHelper
             List<Vector3> path
         )
         {
-            if (path.Count == 0) return;
+            if (path.Count == 0 || !GameViewHelper.TryGetProjection(out var projection)) return;
 
             var drawList           = ImGui.GetForegroundDrawList();
-            var gameGUI            = IGameGui.Instance();
             var previousWorldPoint = path[0];
-            var previousInFront    = gameGUI.WorldToScreen
+            var previousInFront = projection.WorldToScreen
             (
                 previousWorldPoint,
                 out var previousScreenPoint,
@@ -1163,16 +1166,20 @@ public partial class OccultCrescentHelper
             for (var i = 1; i < path.Count; i++)
             {
                 var worldPoint = path[i];
-                var isInFront  = gameGUI.WorldToScreen(worldPoint, out var screenPoint, out var isInView);
+                var isInFront  = projection.WorldToScreen(worldPoint, out var screenPoint, out var isInView);
 
                 DrawPathSegment
                 (
                     drawList,
-                    gameGUI,
+                    in projection,
                     previousWorldPoint,
                     worldPoint,
-                    previousInFront ? previousScreenPoint : null,
-                    isInFront ? screenPoint : null
+                    previousInFront ?
+                        previousScreenPoint :
+                        null,
+                    isInFront ?
+                        screenPoint :
+                        null
                 );
 
                 if (previousInView)
@@ -1190,36 +1197,41 @@ public partial class OccultCrescentHelper
 
         private static void DrawPathSegment
         (
-            ImDrawListPtr drawList,
-            IGameGui      gameGUI,
-            Vector3       worldStart,
-            Vector3       worldEnd,
-            Vector2?      screenStart,
-            Vector2?      screenEnd
+            ImDrawListPtr         drawList,
+            in GameViewProjection projection,
+            Vector3               worldStart,
+            Vector3               worldEnd,
+            Vector2?              screenStart,
+            Vector2?              screenEnd
         )
         {
-            if (screenStart is { } start && screenEnd is { } end)
+            switch (screenStart)
             {
-                drawList.AddLine(start, end, PathLineColor, PATH_LINE_THICKNESS * GlobalUIScale);
-                return;
+                case { } start when screenEnd is { } end:
+                    drawList.AddLine(start, end, PathLineColor, PATH_LINE_THICKNESS * GlobalUIScale);
+                    return;
+                case null when screenEnd is null:
+                    return;
             }
 
-            if (screenStart is null && screenEnd is null) return;
-
-            var inFrontWorldPoint  = screenStart is not null ? worldStart : worldEnd;
-            var behindWorldPoint   = screenStart is null ? worldStart : worldEnd;
+            var inFrontWorldPoint = screenStart is not null ?
+                                        worldStart :
+                                        worldEnd;
+            var behindWorldPoint = screenStart is null ?
+                                       worldStart :
+                                       worldEnd;
             var inFrontScreenPoint = screenStart ?? screenEnd!.Value;
 
-            if (TryClipPathSegmentToNearPlane(gameGUI, inFrontWorldPoint, behindWorldPoint, out var clippedScreenPoint))
+            if (TryClipPathSegmentToNearPlane(in projection, inFrontWorldPoint, behindWorldPoint, out var clippedScreenPoint))
                 drawList.AddLine(inFrontScreenPoint, clippedScreenPoint, PathLineColor, PATH_LINE_THICKNESS * GlobalUIScale);
         }
 
         private static bool TryClipPathSegmentToNearPlane
         (
-            IGameGui gameGUI,
-            Vector3  inFrontWorldPoint,
-            Vector3  behindWorldPoint,
-            out Vector2 clippedScreenPoint
+            in GameViewProjection projection,
+            Vector3               inFrontWorldPoint,
+            Vector3               behindWorldPoint,
+            out Vector2           clippedScreenPoint
         )
         {
             var inFrontRatio = 0f;
@@ -1229,13 +1241,13 @@ public partial class OccultCrescentHelper
             {
                 var ratio = (inFrontRatio + behindRatio) * 0.5f;
 
-                if (gameGUI.WorldToScreen(Vector3.Lerp(inFrontWorldPoint, behindWorldPoint, ratio), out _, out _))
+                if (projection.WorldToScreen(Vector3.Lerp(inFrontWorldPoint, behindWorldPoint, ratio), out _, out _))
                     inFrontRatio = ratio;
                 else
                     behindRatio = ratio;
             }
 
-            return gameGUI.WorldToScreen
+            return projection.WorldToScreen
             (
                 Vector3.Lerp(inFrontWorldPoint, behindWorldPoint, inFrontRatio),
                 out clippedScreenPoint,
@@ -1268,8 +1280,7 @@ public partial class OccultCrescentHelper
             if (ceTaskHelper is not { } taskHelper) return;
 
             taskHelper.Enqueue
-            (
-                () => !ICondition.Instance()[ConditionFlag.Mounted]
+            (() => !ICondition.Instance()[ConditionFlag.Mounted]
             );
             taskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/facetarget"));
             taskHelper.DelayNext(100);
@@ -1285,18 +1296,18 @@ public partial class OccultCrescentHelper
                               Interlocked.Exchange(ref pathfindingSession, null) :
                               Interlocked.CompareExchange(ref pathfindingSession, null, expectedSession);
 
-            if (expectedSession != null && !ReferenceEquals(session, expectedSession)) 
+            if (expectedSession != null && !ReferenceEquals(session, expectedSession))
                 return false;
 
             ceTaskHelper?.Abort();
 
-            if (session == null) 
+            if (session == null)
                 return true;
-            
+
             vnavmeshIPC.StopPathfind();
-            
+
             session.StopAetherytePathfinding?.Invoke();
-            
+
             session.CancellationTokenSource.Cancel();
             session.AetheryteRouteCancellationTokenSource?.Dispose();
             session.CancellationTokenSource.Dispose();
@@ -1403,21 +1414,21 @@ public partial class OccultCrescentHelper
             Vector3         destination
         )
         {
-            public IslandEventData          Data                                  { get; } = data;
-            public Vector3                  Destination                           { get; set; } = destination;
-            public CrescentAetheryte?       Aetheryte                             { get; set; }
-            public PathfindingTravelStage   TravelStage                           { get; set; }
-            public Action?                  StopAetherytePathfinding              { get; set; }
-            public CancellationTokenSource  CancellationTokenSource               { get; } = new();
-            public CancellationTokenSource? AetheryteRouteCancellationTokenSource { get; set; }
+            public IslandEventData           Data                                  { get; }      = data;
+            public Vector3                   Destination                           { get; set; } = destination;
+            public CrescentAetheryte?        Aetheryte                             { get; set; }
+            public PathfindingTravelStage    TravelStage                           { get; set; }
+            public Action?                   StopAetherytePathfinding              { get; set; }
+            public CancellationTokenSource   CancellationTokenSource               { get; } = new();
+            public CancellationTokenSource?  AetheryteRouteCancellationTokenSource { get; set; }
             public Task<CrescentAetheryte?>? AetheryteRoutePlanningTask            { get; set; }
-            public Task<List<Vector3>>?     PathfindingTask                       { get; set; }
-            public Vector3                  PathfindingTaskDestination             { get; set; }
-            public List<Vector3>            Path                                  { get; set; } = [];
-            public uint                     FateMonsterID                         { get; set; }
-            public float                    FateMonsterRadius                     { get; set; }
-            public bool                     IsAtPathfindingDestination            { get; set; }
-            public bool                     IsMovementInterrupted                 { get; set; }
+            public Task<List<Vector3>>?      PathfindingTask                       { get; set; }
+            public Vector3                   PathfindingTaskDestination            { get; set; }
+            public List<Vector3>             Path                                  { get; set; } = [];
+            public uint                      FateMonsterID                         { get; set; }
+            public float                     FateMonsterRadius                     { get; set; }
+            public bool                      IsAtPathfindingDestination            { get; set; }
+            public bool                      IsMovementInterrupted                 { get; set; }
         }
 
         private enum PathfindingTravelStage : byte
@@ -1603,7 +1614,7 @@ public partial class OccultCrescentHelper
                 IslandEventData? right
             ) => !Equals(left, right);
         }
-        
+
         #region 常量
 
         private const string COMMAND_FATE = "pfate";
