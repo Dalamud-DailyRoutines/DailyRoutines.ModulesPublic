@@ -133,6 +133,12 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
                 if (config.DefaultPage != InventoryType.Invalid)
                 {
+                    ExecuteCommandManager.Instance().ExecuteCommand
+                    (
+                        ExecuteCommandFlag.RequestInventory,
+                        (uint)config.DefaultPage
+                    );
+                    
                     if (config.DefaultPage == InventoryType.FreeCompanyCrystals)
                     {
                         agent->TabType  = 1;
