@@ -1,5 +1,6 @@
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
@@ -22,6 +23,17 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 {
+    public override ModuleInfo Info { get; } = new()
+    {
+        Title       = Lang.Get("AutoDisplayExitRangeDestinationTitle"),
+        Description = Lang.Get("AutoDisplayExitRangeDestinationDescription"),
+        Category    = ModuleCategory.General,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayExitRangeDestination/preview-1.png"
+        ]
+    };
+
     public override ModulePermission Permission { get; } = new()
     {
         AllDefaultEnabled = true
