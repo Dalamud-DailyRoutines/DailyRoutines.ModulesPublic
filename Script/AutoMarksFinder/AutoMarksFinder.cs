@@ -45,8 +45,7 @@ public partial class AutoMarksFinder : ModuleBase
 
     protected override void Init()
     {
-        config            = Config.Load(this) ?? new();
-        config.ScanRadius = Math.Clamp(config.ScanRadius, 0, 500);
+        config     = Config.Load(this) ?? new();
         TaskHelper ??= new() { TimeoutMS = 180_000, ShowDebug = IS_SHOW_DEBUG };
 
         overlaySmallCard       =  new(DrawSmallCard, Lang.Get("AutoMarksFinder-SmallCardTitle"));
@@ -88,9 +87,21 @@ public partial class AutoMarksFinder : ModuleBase
 
     private void StopScanner()
     {
-        vnavmeshIPC.StopPathfind();
-        TaskHelper.Abort();
-        scanner?.Dispose();
+        try
+        {
+            vnavmeshIPC.StopPathfind();
+        }
+        finally
+        {
+            try
+            {
+                TaskHelper?.Abort();
+            }
+            finally
+            {
+                scanner?.Dispose();
+            }
+        }
     }
 
     private void ClearScanner()
@@ -318,7 +329,6 @@ public partial class AutoMarksFinder : ModuleBase
     private class Config : ModuleConfig
     {
         public int             DelayMS       = 5000;
-        public int             ScanRadius    = 400;
         public HashSet<string> RelayCommands = [];
 
         public string RelayMacroPattern = "检测到恶名精英 {1} 于 {0} {2}";

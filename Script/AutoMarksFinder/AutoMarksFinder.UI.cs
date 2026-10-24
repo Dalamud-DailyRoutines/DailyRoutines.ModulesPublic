@@ -906,19 +906,6 @@ public partial class AutoMarksFinder
         ImGui.TextDisabled("|");
 
         ImGui.SameLine(0, 8f * GlobalUIScale);
-        ImGui.TextUnformatted(Lang.Get("AutoMarksFinder-ScanRadius"));
-
-        ImGui.SameLine(0, 4f * GlobalUIScale);
-        ImGui.SetNextItemWidth(90f * GlobalUIScale);
-        ImGui.InputInt("##AutoMarksFinder-ScanRadius", ref config.ScanRadius, 10);
-        config.ScanRadius = Math.Clamp(config.ScanRadius, 0, 500);
-        if (ImGui.IsItemDeactivatedAfterEdit())
-            config.Save(this);
-
-        ImGui.SameLine(0, 8f * GlobalUIScale);
-        ImGui.TextDisabled("|");
-
-        ImGui.SameLine(0, 8f * GlobalUIScale);
         ImGui.TextUnformatted($"{Lang.Get("AutoMarksFinder-TargetRank")}:");
 
         ImGui.SameLine(0, 8f * GlobalUIScale);
