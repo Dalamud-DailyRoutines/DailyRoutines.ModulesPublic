@@ -35,7 +35,6 @@ public partial class AutoMarksFinder
 
         private const float MOUNT_SPEED       = 12f;
         private const float TELEPORT_DURATION = 10f;
-        private const float DETECTION_RADIUS  = 100f;
 
         private readonly AutoMarksFinder module;
 
@@ -223,7 +222,7 @@ public partial class AutoMarksFinder
 
             var distance2D = LocalPlayerState.DistanceTo2D(currentTargetPoint.Value.ToVector2());
 
-            if (distance2D <= DETECTION_RADIUS)
+            if (distance2D <= module.config.ScanRadius)
             {
                 module.TaskHelper.DelayNext(500, "等待怪物加载");
                 module.TaskHelper.Enqueue
@@ -248,7 +247,7 @@ public partial class AutoMarksFinder
                     {
                         var currentDistance = LocalPlayerState.DistanceTo2D(currentTargetPoint.Value.ToVector2());
 
-                        if (currentDistance <= DETECTION_RADIUS)
+                        if (currentDistance <= module.config.ScanRadius)
                         {
                             vnavmeshIPC.StopPathfind();
                             module.TaskHelper.Abort();
