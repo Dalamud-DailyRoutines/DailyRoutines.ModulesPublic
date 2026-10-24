@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
+using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -35,9 +36,11 @@ public partial class AutoMarksFinder
 
         private const float MOUNT_SPEED       = 12f;
         private const float TELEPORT_DURATION = 10f;
-        private const float DETECTION_RADIUS  = 100f;
+        private const float DETECTION_RADIUS  = 300f;
 
         private readonly AutoMarksFinder module;
+        private uint? originalAroundRangeMode;
+        private bool disposed;
 
         private ScanState                       currentState;
         private uint                            currentScanZone;
@@ -68,20 +71,59 @@ public partial class AutoMarksFinder
             FrameworkManager.Instance().Reg(OnUpdate, 100);
         }
 
-        public void Dispose() =>
-            FrameworkManager.Instance().Unreg(OnUpdate);
+        public void Dispose()
+        {
+            if (disposed) return;
+
+            disposed = true;
+            currentState = ScanState.Idle;
+            try
+            {
+                FrameworkManager.Instance().Unreg(OnUpdate);
+            }
+            finally
+            {
+                if (originalAroundRangeMode is { } mode)
+                {
+                    IGameConfig.Instance().System.Set("DynamicAroundRangeMode", mode);
+                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, mode);
+                    originalAroundRangeMode = null;
+                }
+            }
+        }
 
         public (uint ZoneID, List<NotoriousMonsterScanPoint> Points, int CurrentIndex) GetCurrentScanState() =>
             (currentScanZone, currentSortedPoints, currentScanPointIndex);
 
         public void StartScan()
         {
-            currentState = ScanState.Initializing;
-            StateCheck();
+            if (disposed || currentState != ScanState.Idle) return;
+
+            try
+            {
+                if (IGameConfig.Instance().System.TryGetUInt("DynamicAroundRangeMode", out var mode) && mode <= 2)
+                {
+                    originalAroundRangeMode = mode;
+                    if (mode != 2)
+                    {
+                        IGameConfig.Instance().System.Set("DynamicAroundRangeMode", 2u);
+                        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, 2);
+                    }
+                }
+
+                currentState = ScanState.Initializing;
+                StateCheck();
+            }
+            catch
+            {
+                module.StopScanner();
+                throw;
+            }
         }
 
         private void StateCheck()
         {
+            if (disposed) return;
             module.TaskHelper.Abort();
 
             if (!CheckPreCondition())
@@ -464,6 +506,14 @@ public partial class AutoMarksFinder
             IFramework _
         )
         {
+            if (disposed) return;
+
+            if (currentState != ScanState.Idle && !module.TaskHelper.IsBusy)
+            {
+                module.StopScanner();
+                return;
+            }
+
             var currentZone     = GameState.TerritoryType;
             var currentInstance = InstancesManager.CurrentInstance;
 
