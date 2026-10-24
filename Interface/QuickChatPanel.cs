@@ -395,6 +395,9 @@ public unsafe class QuickChatPanel : ModuleBase
         protected override bool AutoOpenAddon =>
             false;
 
+        protected override bool CloseOnEsc =>
+            true;
+
         private readonly Dictionary<QuickChatTab, ListButtonNode>                                           tabButtons      = [];
         private readonly Dictionary<QuickChatTab, ResNode>                                                  tabRoots        = [];
         private readonly Dictionary<QuickChatTab, ScrollingNode<VerticalListNode>>                          tabContentLists = [];
