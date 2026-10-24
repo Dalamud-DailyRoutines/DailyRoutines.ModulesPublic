@@ -971,7 +971,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         private const float ICON_GAP                = 8f;
         private const uint  DESTINATION_ICON_ID     = 60441;
         private const ulong OCCLUSION_MATERIAL      = 0x4000;
-        private const float ANCHOR_SPACING          = 12f;
+        private const float ANCHOR_SPACING          = 10f;
         private const float GROUND_SAMPLE_SPACING   = 1f;
         private const float MAX_FLAT_GROUND_SLOPE   = 0.35f;
         private const float CENTER_HEIGHT_TOLERANCE = 1f;
