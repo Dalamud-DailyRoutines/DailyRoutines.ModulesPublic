@@ -104,6 +104,17 @@ public partial class AutoMarksFinder
             bool isAlive
         ) => IsAlive = isAlive;
 
+        public NotoriousMonsterFound Copy() =>
+            new()
+            {
+                DataID   = DataID,
+                Position = Position,
+                ZoneID   = ZoneID,
+                Instance = Instance,
+                Rank     = Rank,
+                IsAlive  = IsAlive
+            };
+
         public override string ToString() => $"NotoriousMonsterFound_{DataID}_{Position}";
 
         public override bool Equals

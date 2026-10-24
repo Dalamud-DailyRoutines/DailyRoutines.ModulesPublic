@@ -54,11 +54,15 @@ public partial class AutoMarksFinder : ModuleBase
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoMarksFinder-HelpMessage") });
 
         WindowManager.Instance().PostDraw += DrawScanRoutePreview;
+
+        RegisterAliveMonitor();
     }
 
     protected override void Uninit()
     {
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
+
+        UnregisterAliveMonitor();
 
         if (config != null)
             config.Save(this);
@@ -75,6 +79,8 @@ public partial class AutoMarksFinder : ModuleBase
         smallCardMobIndex   = 0;
         newListNameInput    = string.Empty;
         startAetheryteInput = string.Empty;
+        departTimeInput     = string.Empty;
+        StopAutoPilot();
     }
 
     private void OnCommand
@@ -131,8 +137,13 @@ public partial class AutoMarksFinder : ModuleBase
         {
             if (!string.IsNullOrWhiteSpace(newListNameInput))
             {
+                var selectedTrain = selected;
                 config.Trains.Add(new(newListNameInput));
                 config.Trains = [.. config.Trains.OrderByDescending(x => x.GeneratedTime)];
+                if (selectedTrain != null)
+                    selectedIndex = config.Trains.FindIndex(x => ReferenceEquals(x, selectedTrain));
+                else
+                    selectedIndex = -1;
                 config.Save(this);
             }
         }
@@ -149,6 +160,7 @@ public partial class AutoMarksFinder : ModuleBase
             {
                 selectedIndex = i;
                 changed       = true;
+                selected      = train;
             }
 
             ImGuiOm.TooltipHover(Lang.Get("AutoMarksFinder-CreationTime", train.GeneratedDateTime));
@@ -158,7 +170,22 @@ public partial class AutoMarksFinder : ModuleBase
             if (context)
             {
                 if (ImGui.MenuItem(Lang.Get("Delete")))
+                {
                     config.Trains.RemoveAt(i);
+                    ForgetTrainTracks(train);
+                    if (config.Trains.Count == 0)
+                        selectedIndex = -1;
+                    else if (selectedIndex > i)
+                        selectedIndex--;
+                    else if (ReferenceEquals(selected, train))
+                    {
+                        selectedIndex = Math.Min(i, config.Trains.Count - 1);
+                        ResetAutoPilot();
+                    }
+
+                    config.Save(this);
+                    return true;
+                }
             }
         }
 
@@ -315,8 +342,10 @@ public partial class AutoMarksFinder : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public int             DelayMS       = 5000;
-        public HashSet<string> RelayCommands = [];
+        public string          AutoPilotEndMacroPattern   = string.Empty;
+        public string          AutoPilotStartMacroPattern = string.Empty;
+        public int             DelayMS                    = 5000;
+        public HashSet<string> RelayCommands              = [];
 
         public string RelayMacroPattern = "检测到恶名精英 {1} 于 {0} {2}";
 
