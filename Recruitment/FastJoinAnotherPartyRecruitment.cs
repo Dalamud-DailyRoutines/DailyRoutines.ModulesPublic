@@ -196,12 +196,10 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         var button2 = addon->GetComponentButtonById(111);
         if (button0 == null || button1 == null || button2 == null) return;
 
-        // 在 ULD 中带有 Float2 Position 关键帧, 引擎每帧都会用关键帧插值回写节点坐标,
-        // 只有摘掉节点的 Timeline 才能让坐标立即生效
-        DetachTimelineAndSetPosition(containerNode,                   35,  56);
-        DetachTimelineAndSetPosition((AtkResNode*)button0->OwnerNode, -50, 0);
-        DetachTimelineAndSetPosition((AtkResNode*)button1->OwnerNode, 250, 0);
-        DetachTimelineAndSetPosition((AtkResNode*)button2->OwnerNode, 400, 0);
+        SetFixedPosition(containerNode,                   35,  56);
+        SetFixedPosition((AtkResNode*)button0->OwnerNode, -50, 0);
+        SetFixedPosition((AtkResNode*)button1->OwnerNode, 250, 0);
+        SetFixedPosition((AtkResNode*)button2->OwnerNode, 400, 0);
 
         if (button != null)
         {
@@ -210,14 +208,25 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         }
     }
 
-    private static void DetachTimelineAndSetPosition
+    private static void SetFixedPosition
     (
         AtkResNode* node,
         float       x,
         float       y
     )
     {
-        node->Timeline = null;
+        if (node->Timeline != null)
+        {
+            var resource = node->Timeline->Resource;
+
+            for (var animationIndex = 0; animationIndex < resource->AnimationCount; animationIndex++)
+            {
+                ref var positionGroup = ref resource->Animations[animationIndex].KeyGroups[0];
+                for (var keyFrameIndex = 0; keyFrameIndex < positionGroup.KeyFrameCount; keyFrameIndex++)
+                    positionGroup.KeyFrames[keyFrameIndex].Value.Float2 = new(x, y);
+            }
+        }
+
         node->SetPositionFloat(x, y);
     }
 
