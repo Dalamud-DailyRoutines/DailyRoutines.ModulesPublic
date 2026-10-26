@@ -1,4 +1,5 @@
 using System.Numerics;
+using Dalamud.Game.Config;
 using DailyRoutines.Extensions;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
@@ -39,7 +40,9 @@ public partial class AutoMarksFinder
         private const float DETECTION_RADIUS  = 300f;
 
         private readonly AutoMarksFinder module;
+
         private uint? originalAroundRangeMode;
+
         private bool disposed;
 
         private ScanState                       currentState;
@@ -85,7 +88,7 @@ public partial class AutoMarksFinder
             {
                 if (originalAroundRangeMode is { } mode)
                 {
-                    IGameConfig.Instance().System.Set("DynamicAroundRangeMode", mode);
+                    IGameConfig.Instance().System.Set(nameof(SystemConfigOption.DynamicAroundRangeMode), mode);
                     ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, mode);
                     originalAroundRangeMode = null;
                 }
@@ -101,12 +104,12 @@ public partial class AutoMarksFinder
 
             try
             {
-                if (IGameConfig.Instance().System.TryGetUInt("DynamicAroundRangeMode", out var mode) && mode <= 2)
+                if (IGameConfig.Instance().System.TryGetUInt(nameof(SystemConfigOption.DynamicAroundRangeMode), out var mode) && mode <= 2)
                 {
                     originalAroundRangeMode = mode;
                     if (mode != 2)
                     {
-                        IGameConfig.Instance().System.Set("DynamicAroundRangeMode", 2u);
+                        IGameConfig.Instance().System.Set(nameof(SystemConfigOption.DynamicAroundRangeMode), 2u);
                         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, 2);
                     }
                 }
@@ -117,7 +120,6 @@ public partial class AutoMarksFinder
             catch
             {
                 module.StopScanner();
-                throw;
             }
         }
 
