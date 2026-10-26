@@ -140,9 +140,9 @@ public class AutoTrackStatusOff : ModuleBase
                         "AutoTrackStatusOff-Notification",
                         new Dictionary<string, object>
                         {
-                            ["player"]            = ReadOnlySeString.CreatePlayerLink(player.Name, player.HomeWorld.RowId),
-                            ["estimatedTimeText"] = $"{expectedDuration:F1}",
-                            ["timeText"]          = $"{actualDuration:F1}"
+                            ["player"]        = ReadOnlySeString.CreatePlayerLink(player.Name, player.HomeWorld.RowId),
+                            ["estimatedTime"] = expectedDuration,
+                            ["time"]          = actualDuration
                         }
                     )
                 );
