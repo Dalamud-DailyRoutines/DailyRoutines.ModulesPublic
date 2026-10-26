@@ -40,9 +40,7 @@ public partial class AutoMarksFinder
         private const float DETECTION_RADIUS  = 300f;
 
         private readonly AutoMarksFinder module;
-
         private uint? originalAroundRangeMode;
-
         private bool disposed;
 
         private ScanState                       currentState;
