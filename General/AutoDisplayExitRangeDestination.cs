@@ -292,6 +292,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         public override OverlayLayer OverlayLayer      => OverlayLayer.Background;
         public override bool         HideWithNativeUi  => true;
         public override bool         HideWithUiToggled => true;
+        public override bool         IgnoreGlobalScale => false;
 
         public ExitRangeFrameState() => IsVisible = false;
 
@@ -434,15 +435,15 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         public override OverlayLayer OverlayLayer      => frameState.OverlayLayer;
         public override bool         HideWithNativeUi  => frameState.HideWithNativeUi;
         public override bool         HideWithUiToggled => frameState.HideWithUiToggled;
+        public override bool         IgnoreGlobalScale => frameState.IgnoreGlobalScale;
 
         public ExitRangeLabelNode
         (
-            ExitRangeFrameState frameState
+            ExitRangeFrameState inFrameState
         )
         {
-            this.frameState = frameState;
-            IsVisible       = false;
-            Scale           = new(1.5f);
+            frameState = inFrameState;
+            IsVisible  = false;
 
             backgroundNode = new BackgroundNode
             {
@@ -549,7 +550,8 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 ICON_SIZE - (2 * ICON_GAP)       + textSize.Y + (PADDING_Y * 4f)
             );
             Size         = labelSize;
-            screenOffset = labelSize * Scale * 0.5f;
+            screenOffset = labelSize * 0.5f;
+            Origin       = screenOffset;
 
             iconNode.Position = new((labelSize.X - ICON_SIZE)  * 0.5f, PADDING_Y             - ICON_GAP);
             textNode.Position = new((labelSize.X - textSize.X) * 0.5f, PADDING_Y + ICON_SIZE - (2 * ICON_GAP));
