@@ -42,6 +42,7 @@ public partial class AutoMarksFinder
         private readonly AutoMarksFinder module;
         
         private uint? originalAroundRangeMode;
+        
         private bool disposed;
 
         private ScanState                       currentState;
