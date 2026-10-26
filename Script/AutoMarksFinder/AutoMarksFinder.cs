@@ -87,21 +87,9 @@ public partial class AutoMarksFinder : ModuleBase
 
     private void StopScanner()
     {
-        try
-        {
-            vnavmeshIPC.StopPathfind();
-        }
-        finally
-        {
-            try
-            {
-                TaskHelper?.Abort();
-            }
-            finally
-            {
-                scanner?.Dispose();
-            }
-        }
+        vnavmeshIPC.StopPathfind();
+        TaskHelper.Abort();
+        scanner?.Dispose();
     }
 
     private void ClearScanner()
