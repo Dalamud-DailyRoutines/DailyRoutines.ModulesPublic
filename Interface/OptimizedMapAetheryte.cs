@@ -166,7 +166,11 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
                                         if (result != SelectYesnoAddonResult.Yes)
                                             return;
 
-                                        aetheryteRecord.TeleportTo();
+                                        if (aetheryteRecord.TeleportTo())
+                                        {
+                                            AgentMap.Instance()->HideAddon();
+                                            IAddonEventManager.Instance().ResetCursor();
+                                        }
                                     },
                                     Position = new
                                     (
