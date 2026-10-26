@@ -58,14 +58,14 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
     protected override void ConfigUI()
     {
         var questRow = LuminaGetter.GetRowOrDefault<Quest>(QUEST_ID);
-        
+
         if (Throttler.Shared.Throttle("AutoEliminateFishAwareness.UpdateQuest"))
             isQuestUnlocked = IUnlockState.Instance().IsQuestCompleted(questRow);
-            
+
         using (ImRaii.Heading1(Lang.Get("PreCondition")))
         {
             ImGui.Bullet();
-            
+
             ImGui.SameLine();
 
             using (ImRaii.Group())
@@ -81,8 +81,9 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
                         }
                     )
                 );
-                
+
                 ImGui.SameLine();
+
                 using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.LawnGreen.ToUInt(), isQuestUnlocked)
                              .Push(ImGuiCol.Text, KnownColor.OrangeRed.ToUInt(), !isQuestUnlocked))
                 {
@@ -94,7 +95,7 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
                     );
                 }
             }
-            
+
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
 
@@ -109,7 +110,7 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
                 );
             }
         }
-        
+
         ImGui.NewLine();
 
         using (ImRaii.Heading1(Lang.Get("BlacklistZones")))
@@ -305,7 +306,7 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
         if (!Throttler.Shared.Throttle("AutoEliminateFishAwareness-ExitDuty")) return false;
         if (GameState.ContentFinderCondition != targetContent) return false;
 
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.FinishTerritoryTransport);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.NotifyTerritoryReady);
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty);
         return true;
     }

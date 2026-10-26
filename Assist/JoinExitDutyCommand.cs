@@ -134,7 +134,7 @@ public unsafe class JoinExitDutyCommand : ModuleBase
     {
         if (GameMain.Instance()->CurrentContentFinderConditionId != targetContent) return false;
 
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.FinishTerritoryTransport);
+        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.NotifyTerritoryReady);
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.LeaveDuty);
         return true;
     }
