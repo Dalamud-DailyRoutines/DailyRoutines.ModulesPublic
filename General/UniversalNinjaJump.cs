@@ -3,8 +3,11 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Resource.Handle;
+using FFXIVClientStructs.Interop;
+using FFXIVClientStructs.STD;
 using InteropGenerator.Runtime;
 using OmenTools.Interop.Game.Models;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -25,12 +28,22 @@ public unsafe class UniversalNinjaJump : ModuleBase
     );
     private Hook<GetAnimationBindingDelegate>? GetAnimationBindingHook;
 
+    private PartialAnimationPackResourceHandle* humanNinjaPap;
+    private PartialAnimationPackResourceHandle* lalafellNinjaPap;
+
     protected override void Init()
     {
-        _ = GetNinjaPap();
+        humanNinjaPap    = LoadNinjaPap(HUMAN_NINJA_PAP_PATH);
+        lalafellNinjaPap = LoadNinjaPap(LALAFELL_NINJA_PAP_PATH);
 
         GetAnimationBindingHook = GetAnimationBindingSig.GetHook<GetAnimationBindingDelegate>(GetAnimationBindingDetour);
         GetAnimationBindingHook.Enable();
+    }
+
+    protected override void Uninit()
+    {
+        ReleaseNinjaPap(ref humanNinjaPap);
+        ReleaseNinjaPap(ref lalafellNinjaPap);
     }
 
     private nint GetAnimationBindingDetour
@@ -39,46 +52,32 @@ public unsafe class UniversalNinjaJump : ModuleBase
         byte*                               animationName
     )
     {
-        if (pap                          != null &&
-            pap->HavokAnimationContainer != null &&
-            animationName                != null &&
-            IsJumpAnimation(animationName))
-            ReplaceBinding(pap, animationName);
+        var binding = GetAnimationBindingHook.Original(pap, animationName);
 
-        return GetAnimationBindingHook.Original(pap, animationName);
-    }
+        if (binding                      == nint.Zero ||
+            pap                          == null      ||
+            pap->HavokAnimationContainer == null      ||
+            animationName                == null      ||
+            !IsJumpAnimation(animationName)           ||
+            !IsLocalPlayerAnimationPack(pap))
+            return binding;
 
-    private static void ReplaceBinding
-    (
-        PartialAnimationPackResourceHandle* pap,
-        byte*                               animationName
-    )
-    {
-        var ninjaPap = GetNinjaPap();
+        var ninjaPap = GetLocalPlayerNinjaPap();
+        if (ninjaPap                          == null ||
+            ninjaPap                          == pap  ||
+            ninjaPap->HavokAnimationContainer == null ||
+            ninjaPap->AnimationCount          == 0)
+            return binding;
 
-        if (ninjaPap == null ||
-            ninjaPap == pap)
-            return;
-        if (ninjaPap->AnimationCount          == 0 ||
-            ninjaPap->HavokAnimationContainer == null)
-            return;
-
-        var name  = new CStringPointer(animationName);
-        var index = pap->GetAnimationHavokIndex(name);
-        if (index < 0 ||
-            index >= pap->HavokAnimationContainer->Bindings.Length)
-            return;
-
-        var ninjaIndex = ninjaPap->GetAnimationHavokIndex(name);
+        var ninjaIndex = ninjaPap->GetAnimationHavokIndex(new CStringPointer(animationName));
         if (ninjaIndex < 0 ||
             ninjaIndex >= ninjaPap->HavokAnimationContainer->Bindings.Length)
-            return;
+            return binding;
 
         var ninjaBinding = ninjaPap->HavokAnimationContainer->Bindings.Data[ninjaIndex].ptr;
-        if (ninjaBinding == null)
-            return;
-
-        pap->HavokAnimationContainer->Bindings.Data[index].ptr = ninjaBinding;
+        return ninjaBinding == null ?
+                   binding :
+                   (nint)ninjaBinding;
     }
 
     private static bool IsJumpAnimation
@@ -95,12 +94,85 @@ public unsafe class UniversalNinjaJump : ModuleBase
                name.SequenceEqual("cbbm_jump_3"u8);
     }
 
-    private static PartialAnimationPackResourceHandle* GetNinjaPap() =>
-        (PartialAnimationPackResourceHandle*)ResourceHandle.GetSync(NINJA_PAP_PATH);
+    private static bool IsLocalPlayerAnimationPack
+    (
+        PartialAnimationPackResourceHandle* pap
+    )
+    {
+        var localPlayer = Control.GetLocalPlayer();
+        if (localPlayer == null)
+            return false;
+
+        var characterBase = localPlayer->GetCharacterBase();
+        if (characterBase == null)
+            return false;
+
+        foreach (var animationPack in characterBase->AnimationsToLoad.AsSpan())
+        {
+            if (animationPack.Value == pap)
+                return true;
+        }
+
+        foreach (var animationContainer in characterBase->SkeletonAnimationContainers)
+        {
+            if (ContainsAnimationPack(animationContainer.PapVector1, pap) ||
+                ContainsAnimationPack(animationContainer.PapVector2, pap) ||
+                ContainsAnimationPack(animationContainer.PapVector3, pap))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsAnimationPack
+    (
+        StdVector<Pointer<ResourceHandle>>  animationPacks,
+        PartialAnimationPackResourceHandle* pap
+    )
+    {
+        foreach (var animationPack in animationPacks.AsSpan())
+        {
+            if (animationPack.Value == (ResourceHandle*)pap)
+                return true;
+        }
+
+        return false;
+    }
+
+    private PartialAnimationPackResourceHandle* GetLocalPlayerNinjaPap()
+    {
+        var localPlayer = Control.GetLocalPlayer();
+        if (localPlayer == null)
+            return null;
+
+        return localPlayer->DrawData.CustomizeData.Race == LALAFELL_RACE ?
+                   lalafellNinjaPap :
+                   humanNinjaPap;
+    }
+
+    private static PartialAnimationPackResourceHandle* LoadNinjaPap
+    (
+        string path
+    ) =>
+        (PartialAnimationPackResourceHandle*)ResourceHandle.GetSync(path);
+
+    private static void ReleaseNinjaPap
+    (
+        ref PartialAnimationPackResourceHandle* pap
+    )
+    {
+        if (pap == null)
+            return;
+
+        pap->DecRef();
+        pap = null;
+    }
 
     #region 常量
 
-    private const string NINJA_PAP_PATH = "chara/human/c0101/animation/a0001/bt_nin_nin/resident/move_a.pap";
+    private const byte   LALAFELL_RACE           = 4;
+    private const string HUMAN_NINJA_PAP_PATH    = "chara/human/c0101/animation/a0001/bt_nin_nin/resident/move_a.pap";
+    private const string LALAFELL_NINJA_PAP_PATH = "chara/human/c1101/animation/a0001/bt_nin_nin/resident/move_a.pap";
 
     #endregion
 }

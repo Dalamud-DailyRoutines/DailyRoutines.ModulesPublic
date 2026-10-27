@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Gui.Dtr;
@@ -29,10 +28,10 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title            = Lang.Get("FastInstanceZoneChangeTitle"),
-        Description      = Lang.Get("FastInstanceZoneChangeDescription", COMMAND),
-        Category         = ModuleCategory.System,
-        Author           = ["AtmoOmen", "KirisameVanilla"],
+        Title       = Lang.Get("FastInstanceZoneChangeTitle"),
+        Description = Lang.Get("FastInstanceZoneChangeDescription", COMMAND),
+        Category    = ModuleCategory.System,
+        Author      = ["AtmoOmen", "KirisameVanilla"],
         ModulesPair = ["InstantTeleport"]
     };
 
@@ -217,11 +216,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
             TaskHelper.DelayNext(500, "等待传送开始", 2);
             TaskHelper.Enqueue
             (
-                () =>
-                {
-                    if (!Throttler.Shared.Throttle("FastInstanceZoneChange-WaitTeleportFinish")) return false;
-                    return IsAnyAetheryteNearby(out _);
-                },
+                () => Throttler.Shared.Throttle("FastInstanceZoneChange-WaitTeleportFinish") && IsAnyAetheryteNearby(out _),
                 "传送到目标区域最近以太之光",
                 weight: 2
             );
@@ -263,14 +258,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
         TaskHelper.Enqueue
         (
-            () =>
-            {
-                if (InstancesManager.CurrentInstance != targetInstance ||
-                    ICondition.Instance().IsBetweenAreas)
-                    return false;
-
-                return true;
-            },
+            () => InstancesManager.CurrentInstance == targetInstance && !ICondition.Instance().IsBetweenAreas,
             "等待切换完毕, 更新副本区信息"
         );
 
@@ -346,7 +334,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
 
                 if (ICondition.Instance()[ConditionFlag.BetweenAreas])
                 {
-                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.StartTerritoryTransport);
+                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.NotifyWarpComplete);
                     return false;
                 }
 

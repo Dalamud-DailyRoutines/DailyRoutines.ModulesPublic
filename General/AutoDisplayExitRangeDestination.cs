@@ -292,6 +292,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         public override OverlayLayer OverlayLayer      => OverlayLayer.Background;
         public override bool         HideWithNativeUi  => true;
         public override bool         HideWithUiToggled => true;
+        public override bool         IgnoreGlobalScale => false;
 
         public ExitRangeFrameState() => IsVisible = false;
 
@@ -428,21 +429,21 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         private bool  occlusionInitialized;
         private bool  occluded;
         private float distanceAlpha;
-        private float anchorAlpha    = 1f;
+        private float anchorAlpha;
         private float occlusionAlpha = 1f;
 
         public override OverlayLayer OverlayLayer      => frameState.OverlayLayer;
         public override bool         HideWithNativeUi  => frameState.HideWithNativeUi;
         public override bool         HideWithUiToggled => frameState.HideWithUiToggled;
+        public override bool         IgnoreGlobalScale => frameState.IgnoreGlobalScale;
 
         public ExitRangeLabelNode
         (
-            ExitRangeFrameState frameState
+            ExitRangeFrameState inFrameState
         )
         {
-            this.frameState = frameState;
-            IsVisible       = false;
-            Scale           = new(1.5f);
+            frameState = inFrameState;
+            IsVisible  = false;
 
             backgroundNode = new BackgroundNode
             {
@@ -512,7 +513,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
 
                 anchorIndex          = -1;
                 desiredAnchorIndex   = -1;
-                anchorAlpha          = 1f;
+                anchorAlpha          = 0f;
                 occlusionAlpha       = 1f;
                 occlusionInitialized = false;
             }
@@ -549,7 +550,8 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 ICON_SIZE - (2 * ICON_GAP)       + textSize.Y + (PADDING_Y * 4f)
             );
             Size         = labelSize;
-            screenOffset = labelSize * Scale * 0.5f;
+            screenOffset = labelSize * 0.5f;
+            Origin       = screenOffset;
 
             iconNode.Position = new((labelSize.X - ICON_SIZE)  * 0.5f, PADDING_Y             - ICON_GAP);
             textNode.Position = new((labelSize.X - textSize.X) * 0.5f, PADDING_Y + ICON_SIZE - (2 * ICON_GAP));
@@ -558,8 +560,12 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         protected override void OnUpdate()
         {
             IsVisible = false;
+
             if (!frameState.Ready || anchors.Length == 0)
+            {
+                anchorAlpha = 0f;
                 return;
+            }
 
             var playerChanged = playerRevision != frameState.PlayerRevision;
 
@@ -571,7 +577,12 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 var ratio = Math.Clamp(Vector3.Dot(offset, lineDirection) * inverseLineLengthSquared, 0f, 1f);
                 lineDistanceSquared = (offset - (lineDirection * ratio)).LengthSquared();
                 nearestAnchorIndex  = Math.Min((int)(ratio * anchors.Length), anchors.Length - 1);
-                inRange             = lineDistanceSquared < frameState.RenderDistanceSquared;
+                var isInRange = lineDistanceSquared < frameState.RenderDistanceSquared;
+
+                if (isInRange && !inRange)
+                    nextAnchorUpdate = 0;
+
+                inRange = isInRange;
 
                 if (!inRange)
                     distanceAlpha = 0f;
@@ -583,10 +594,13 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 alphaDirty = true;
             }
 
-            if (!inRange)
+            var groundSampleDistance = frameState.RenderDistance + (ANCHOR_SPACING * 2f);
+
+            if (lineDistanceSquared >= groundSampleDistance * groundSampleDistance)
             {
                 anchorIndex        = -1;
                 desiredAnchorIndex = -1;
+                anchorAlpha        = 0f;
                 nextAnchorUpdate   = 0;
                 spatialDirty       = false;
                 return;
@@ -601,8 +615,9 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                  frameState.Now           >= nextGroundUpdate))
                 RefreshAnchorSelection();
 
-            if (anchorIndex < 0)
+            if (!inRange || anchorIndex < 0)
             {
+                anchorAlpha  = 0f;
                 spatialDirty = false;
                 return;
             }
@@ -647,7 +662,10 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             }
 
             if (!onScreen)
+            {
+                anchorAlpha = 0f;
                 return;
+            }
 
             if (frameState.Now >= nextOcclusionUpdate)
             {
@@ -722,16 +740,23 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 last  = 2;
             }
 
-            var bestIndex           = -1;
-            var bestDistanceSquared = float.PositiveInfinity;
-            var bestOnScreen        = false;
-            var bestCentered        = false;
-            var raycastBudget       = 8;
+            var bestIndex             = -1;
+            var bestDistanceSquared   = float.PositiveInfinity;
+            var bestOnScreen          = false;
+            var bestCentered          = false;
+            var raycastBudget         = 8;
+            var groundSamplingPending = false;
+
+            for (var i = first; i <= last; i++)
+                groundSamplingPending |= anchors[i].NextGroundUpdate == 0;
 
             for (var i = first; i <= last; i++)
             {
-                RefreshGroundSample(i, ref raycastBudget);
                 ref var anchor = ref anchors[i];
+
+                if (!groundSamplingPending || anchor.NextGroundUpdate == 0)
+                    RefreshGroundSample(i, ref raycastBudget);
+
                 nextGroundUpdate = Math.Min(nextGroundUpdate, anchor.NextGroundUpdate);
                 if (!anchor.GroundResolved)
                     continue;
@@ -753,7 +778,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 }
             }
 
-            if (bestIndex < 0)
+            if (!inRange || bestIndex < 0 || (anchorIndex < 0 && nextGroundUpdate == 0))
                 return;
 
             var retainedIndex = desiredAnchorIndex;
@@ -780,9 +805,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             {
                 if (anchorIndex < 0 || activeAnchor.GroundPosition != anchors[bestIndex].GroundPosition)
                 {
-                    anchorAlpha = anchorIndex < 0 ?
-                                      1f :
-                                      0f;
+                    anchorAlpha          = 0f;
                     nextOcclusionUpdate  = 0;
                     occlusionInitialized = false;
                 }
@@ -802,19 +825,20 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             if (frameState.Now < anchor.NextGroundUpdate)
                 return;
 
-            var intervals   = groundSamples.Length - 1;
-            var sourceRatio = (index + 0.5f) / anchors.Length;
-            var sourceIndex = (int)MathF.Round(sourceRatio           * intervals);
-            var radius      = (int)MathF.Ceiling(ANCHOR_SPACING * 2f / GROUND_SAMPLE_SPACING);
-            var first       = Math.Max(0, sourceIndex         - radius);
-            var last        = Math.Min(intervals, sourceIndex + radius);
-            var nextUpdate  = long.MaxValue;
+            var intervals    = groundSamples.Length - 1;
+            var sourceRatio  = (index + 0.5f) / anchors.Length;
+            var sourceIndex  = (int)MathF.Round(sourceRatio           * intervals);
+            var radius       = (int)MathF.Ceiling(ANCHOR_SPACING * 2f / GROUND_SAMPLE_SPACING);
+            var first        = Math.Max(0, sourceIndex         - radius);
+            var last         = Math.Min(intervals, sourceIndex + radius);
+            var nextUpdate   = long.MaxValue;
+            var retrySamples = anchor.NextGroundUpdate != 0;
 
             for (var i = first; i <= last; i++)
             {
                 ref var sample = ref groundSamples[i];
 
-                if (!sample.Resolved && frameState.Now >= sample.NextUpdate)
+                if (!sample.Sampled || (retrySamples && !sample.Resolved && frameState.Now >= sample.NextUpdate))
                 {
                     if (raycastBudget <= 0)
                     {
@@ -839,7 +863,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                             sample.RetryInterval = SPATIAL_UPDATE_INTERVAL;
 
                         sample.NextUpdate    = frameState.Now + sample.RetryInterval;
-                        sample.RetryInterval = Math.Min(sample.RetryInterval * 2, 1000);
+                        sample.RetryInterval = Math.Min(sample.RetryInterval * 2, 500);
                     }
                 }
 
@@ -923,7 +947,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
                 if (!RaycastHelper.TryRaycastBetween(top, bottom, out var hit))
                 {
                     anchor.NextGroundUpdate    = frameState.Now + anchor.GroundRetryInterval;
-                    anchor.GroundRetryInterval = Math.Min(anchor.GroundRetryInterval * 2, 1000);
+                    anchor.GroundRetryInterval = Math.Min(anchor.GroundRetryInterval * 2, 500);
                     return;
                 }
 
@@ -971,7 +995,7 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
         private const float ICON_GAP                = 8f;
         private const uint  DESTINATION_ICON_ID     = 60441;
         private const ulong OCCLUSION_MATERIAL      = 0x4000;
-        private const float ANCHOR_SPACING          = 12f;
+        private const float ANCHOR_SPACING          = 10f;
         private const float GROUND_SAMPLE_SPACING   = 1f;
         private const float MAX_FLAT_GROUND_SLOPE   = 0.35f;
         private const float CENTER_HEIGHT_TOLERANCE = 1f;

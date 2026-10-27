@@ -916,7 +916,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
 
                 if (resp == null)
                 {
-                    DLog.Error("[AutoDisplayMitigationInfo] 远程减伤技能文件解析失败");
+                    DLog.Warning("[AutoDisplayMitigationInfo] 远程减伤技能文件解析失败");
                     return;
                 }
 
@@ -938,7 +938,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
             }
             catch (Exception ex)
             {
-                DLog.Error($"[AutoDisplayMitigationInfo] 远程减伤技能文件获取失败: {ex}");
+                DLog.Warning("[AutoDisplayMitigationInfo] 远程减伤技能文件获取失败。", ex);
             }
         }
     }

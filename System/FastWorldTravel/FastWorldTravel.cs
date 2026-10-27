@@ -19,7 +19,6 @@ using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.AgentEvent;
-using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
 using OmenTools.OmenService;
@@ -49,8 +48,8 @@ public partial class FastWorldTravel : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private Config?        config;
-    private IDtrBarEntry?  entry;
+    private Config            config = null!;
+    private IDtrBarEntry?     entry;
     private SelectYesnoAddon? selectYesnoAddon;
 
     protected override unsafe void Init()
@@ -78,9 +77,9 @@ public partial class FastWorldTravel : ModuleBase
 
         HandleDtrEntry(false);
 
-        AddonDRFastWorldTravel.Addon?.Dispose();
-        AddonDRFastWorldTravel.Addon = null;
-        
+        travelAddon?.Dispose();
+        travelAddon = null;
+
         selectYesnoAddon?.Dispose();
         selectYesnoAddon = null;
 
@@ -106,7 +105,7 @@ public partial class FastWorldTravel : ModuleBase
 
         if (ImGui.Checkbox(Lang.Get("FastWorldTravel-ReplaceOrigAddon"), ref config.ReplaceOrigAddon))
             config.Save(this);
-        
+
         if (ImGui.Checkbox(Lang.Get("FastWorldTravel-SkipTravelBackConfirm"), ref config.SkipReturnHomeConfirmation))
             config.Save(this);
     }
@@ -120,7 +119,7 @@ public partial class FastWorldTravel : ModuleBase
     {
         if (param.ClickType == MouseClickType.Left)
         {
-            AddonDRFastWorldTravel.Toggle(this);
+            OpenTravelAddon(true);
             return;
         }
 
@@ -132,7 +131,7 @@ public partial class FastWorldTravel : ModuleBase
             ChatManager.Instance().SendCommand($"/pdr worldtravel {GameState.HomeWorldData.Name}");
             return;
         }
-        
+
         using var rented  = new RentedSeStringBuilder();
         var       builder = rented.Builder;
 
@@ -143,7 +142,7 @@ public partial class FastWorldTravel : ModuleBase
             builder.AppendIcon((uint)BitmapFontIcon.CrossWorld)
                    .Append(GameState.HomeDataCenterData.Name);
         }
-        
+
         selectYesnoAddon?.Dispose();
         selectYesnoAddon = SelectYesnoAddon.Open
         (
@@ -215,7 +214,7 @@ public partial class FastWorldTravel : ModuleBase
 
         WorldTravelSelect->Close(true);
 
-        AddonDRFastWorldTravel.Open(this);
+        OpenTravelAddon();
     }
 
     // 指令
@@ -229,13 +228,14 @@ public partial class FastWorldTravel : ModuleBase
 
         if (args.Length == 0)
         {
-            AddonDRFastWorldTravel.Open(this);
+            OpenTravelAddon();
             return;
         }
 
         args = args.Trim().ToLowerInvariant();
 
         var worldID = 0U;
+
         if (uint.TryParse(args, out var parsedNumber))
         {
             if (LuminaGetter.TryGetRow(parsedNumber, out World _) &&
@@ -245,8 +245,16 @@ public partial class FastWorldTravel : ModuleBase
         else
             worldID = Sheets.Worlds.FirstOrDefault(x => x.Value.Name.ToString().Contains(args, StringComparison.OrdinalIgnoreCase)).Key;
 
+        TravelToWorld(worldID);
+    }
+
+    private bool TravelToWorld
+    (
+        uint worldID
+    )
+    {
         if (CheckAndNotifyIfNotValid(worldID))
-            return;
+            return false;
 
         var worldName = LuminaWrapper.GetWorldName(worldID);
         var message = Lang.Get
@@ -254,18 +262,19 @@ public partial class FastWorldTravel : ModuleBase
             "FastWorldTravel-Notification-TravelingTo",
             $"{char.ToUpper(worldName[0])}{worldName[1..]}"
         );
-        
+
         NotifyHelper.Instance().Chat(message, false);
         NotifyHelper.Toast(message);
-        
+
         // 跨大区
         if (GameState.IsCN && LuminaWrapper.GetWorldDC(worldID) != GameState.CurrentDataCenter)
         {
             EnqueueDCTravel(worldID);
-            return;
+            return true;
         }
 
         EnqueueWorldTravel(worldID);
+        return true;
     }
 
     #endregion
@@ -297,8 +306,8 @@ public partial class FastWorldTravel : ModuleBase
         if (!WorldTravelValidZones.Contains(GameState.TerritoryType))
         {
             var nearestAetheryte = IAetheryteList.Instance()
-                                           .Where(x => WorldTravelValidZones.Contains(x.TerritoryID))
-                                           .MinBy(x => x.GilCost);
+                                                 .Where(x => WorldTravelValidZones.Contains(x.TerritoryID))
+                                                 .MinBy(x => x.GilCost);
             if (nearestAetheryte == null) return;
 
             TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(nearestAetheryte.TerritoryID),        "传送回可跨服区域");
@@ -339,8 +348,7 @@ public partial class FastWorldTravel : ModuleBase
                 TargetWorldID  = targetWorldID,
                 ContentID      = LocalPlayerState.ContentID,
                 IsBack         = false,
-                Name           = LocalPlayerState.Name,
-                Description    = targetWorld.DataCenter.Value.Name.ToString()
+                Name           = LocalPlayerState.Name
             };
 
             EnqueueLogout();
@@ -357,8 +365,7 @@ public partial class FastWorldTravel : ModuleBase
                 TargetWorldID  = targetWorldID,
                 ContentID      = LocalPlayerState.ContentID,
                 IsBack         = true,
-                Name           = LocalPlayerState.Name,
-                Description    = targetWorld.DataCenter.Value.Name.ToString()
+                Name           = LocalPlayerState.Name
             };
 
             EnqueueLogout();
@@ -375,9 +382,7 @@ public partial class FastWorldTravel : ModuleBase
                 TargetWorldID  = targetWorldID,
                 ContentID      = LocalPlayerState.ContentID,
                 IsBack         = true,
-                Name           = LocalPlayerState.Name,
-                Description    = targetWorld.DataCenter.Value.Name.ToString(),
-                HomeWorldID    = GameState.HomeWorld
+                Name           = LocalPlayerState.Name
             };
 
             EnqueueLogout();
@@ -404,8 +409,7 @@ public partial class FastWorldTravel : ModuleBase
             TargetWorldID  = GameState.HomeWorld,
             ContentID      = LocalPlayerState.ContentID,
             IsBack         = true,
-            Name           = LocalPlayerState.Name,
-            Description    = targetWorld.DataCenter.Value.Name.ToString()
+            Name           = LocalPlayerState.Name
         };
 
         var travel1 = new Travel
@@ -414,8 +418,7 @@ public partial class FastWorldTravel : ModuleBase
             TargetWorldID  = targetWorldID,
             ContentID      = LocalPlayerState.ContentID,
             IsBack         = false,
-            Name           = LocalPlayerState.Name,
-            Description    = targetWorld.DataCenter.Value.Name.ToString()
+            Name           = LocalPlayerState.Name
         };
 
         EnqueueLogout();
@@ -529,9 +532,12 @@ public partial class FastWorldTravel : ModuleBase
     #endregion
 
     #region 工具
-    
+
     /// <returns>如果有任何报错, 则返回 true</returns>
-    private static bool CheckAndNotifyIfNotValid(uint targetWorld)
+    private static bool CheckAndNotifyIfNotValid
+    (
+        uint targetWorld
+    )
     {
         // 当前无法进行该操作。
         if (!GameState.IsLoggedIn           ||
@@ -548,7 +554,7 @@ public partial class FastWorldTravel : ModuleBase
             NotifyHelper.ToastError(ISeStringEvaluator.Instance().EvaluateFromLogMessage(7792));
             return true;
         }
-        
+
         // 无法指定当前服务器为目标。
         if (GameState.CurrentWorld == targetWorld)
         {
@@ -557,33 +563,34 @@ public partial class FastWorldTravel : ModuleBase
         }
 
         World targetWorldRow = default;
+
         // 无法指定  为目标服务器。
         if (!Sheets.Worlds.ContainsKey(targetWorld) ||
             !LuminaGetter.TryGetRow(targetWorld, out targetWorldRow))
         {
             var worldName = "???";
-            if (targetWorldRow.RowId != 0 &&
+            if (targetWorldRow.RowId != 0                             &&
                 targetWorldRow.Name.ToString() is var targetWorldName &&
                 !string.IsNullOrEmpty(targetWorldName))
                 worldName = targetWorldName;
-            
+
             NotifyHelper.ToastError(ISeStringEvaluator.Instance().EvaluateFromLogMessage(9408, [worldName]));
             return true;
         }
-        
+
         // 非国服跨大区
         if (LuminaWrapper.GetWorldDC(targetWorld) != GameState.CurrentDataCenter)
         {
-            if (!AddonDRFastWorldTravel.IsAbleToCrossDC)
+            if (!IsAbleToCrossDC())
             {
                 NotifyHelper.ToastError(Lang.Get("FastWorldTravel-Notification-CrossDCTravel"));
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     private static bool LeaveNonCrossWorldParty()
     {
         if (IPartyList.Instance().Length < 2 || ICondition.Instance()[ConditionFlag.ParticipatingInCrossWorldPartyOrAlliance])
@@ -595,24 +602,6 @@ public partial class FastWorldTravel : ModuleBase
         return IPartyList.Instance().Length < 2;
     }
 
-    private static (bool, uint) CheckCNDataCenterStatus
-    (
-        uint dcID
-    )
-    {
-        var worlds = Sheets.Worlds.Where(x => x.Value.DataCenter.RowId == dcID).Select(x => x.Key).ToList();
-
-        foreach (var world in worlds)
-        {
-            var time = GetDCTravelWaitTime.InvokeFunc(world);
-            if (time != 0) continue;
-
-            return (true, world);
-        }
-
-        return (false, 0);
-    }
-    
     private void HandleDtrEntry
     (
         bool isAdd
@@ -626,7 +615,7 @@ public partial class FastWorldTravel : ModuleBase
                 entry.Tooltip =   Lang.Get("FastWorldTravel-DtrEntryTooltip");
                 entry.Text    =   LuminaWrapper.GetAddonText(12510);
                 entry.Shown   =   true;
-                
+
                 IGameConfig.Instance().UiConfig.Set(nameof(UiConfigOption.InfoSettingDispWorldNameType), 0U);
                 return;
             case false when entry != null:
@@ -664,13 +653,11 @@ public partial class FastWorldTravel : ModuleBase
 
     private struct Travel
     {
-        public uint    CurrentWorldID;
-        public uint    HomeWorldID;
-        public uint    TargetWorldID;
-        public ulong   ContentID;
-        public bool    IsBack;
-        public string  Name;
-        public string? Description;
+        public uint   CurrentWorldID;
+        public uint   TargetWorldID;
+        public ulong  ContentID;
+        public bool   IsBack;
+        public string Name;
     }
 
     #region IPC

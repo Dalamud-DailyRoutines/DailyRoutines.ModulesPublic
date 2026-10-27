@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Numerics;
+using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Common.Interface.Widgets;
 using Dalamud.Utility.Numerics;
 using OmenTools.Interop.Game.Lumina;
@@ -17,7 +17,18 @@ public partial class BetterMarketBoard
         MarketBoardUIContext frame
     )
     {
-        if (allWorlds.Count == 0) return;
+        if (allWorlds.Count == 0)
+        {
+            var statusText = string.IsNullOrEmpty(catalogRequestError) ?
+                                 $"\ue031 {LuminaWrapper.GetAddonText(2717)}" :
+                                 Lang.Get("BetterMarketBoard-CatalogRequestFailed");
+            ImGui.TextDisabled(statusText);
+
+            if (!string.IsNullOrEmpty(catalogRequestError))
+                ImGuiOm.TooltipHover(catalogRequestError);
+
+            return;
+        }
 
         var ranks             = provider.GetWorldPriceRanks(frame.ItemID);
         var displayRegionName = provider.EffectiveRegionName;
@@ -34,8 +45,21 @@ public partial class BetterMarketBoard
             if (frame.ItemID != 0 && !string.IsNullOrEmpty(displayRegionName))
             {
                 ImGui.Spacing();
+                var status = provider.GetAggregatedRequestStatus();
+                var statusText = status switch
+                {
+                    RemoteSnapshotStatus.Failed => Lang.Get("BetterMarketBoard-Tooltip-RequestFailed"),
+                    RemoteSnapshotStatus.Ready  => LuminaWrapper.GetAddonText(1998),
+                    _                           => $"\ue031 {LuminaWrapper.GetAddonText(2717)}"
+                };
+
                 using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.Gray.ToUInt()))
-                    ImGuiOm.TextCentered($"\ue031 {LuminaWrapper.GetAddonText(2717)}");
+                {
+                    ImGuiOm.TextCentered(statusText);
+                    if (status is RemoteSnapshotStatus.Failed &&
+                        !string.IsNullOrWhiteSpace(provider.GetAggregatedRequestError()))
+                        ImGuiOm.TooltipHover(provider.GetAggregatedRequestError());
+                }
             }
 
             return;
@@ -43,11 +67,11 @@ public partial class BetterMarketBoard
 
         if (isAllWorldsPriceExpanded)
         {
-            DrawFullPriceTable(frame, displayRegionName);
+            DrawFullPriceTable(frame);
             return;
         }
 
-        DrawPriceOverviewTable(frame, displayRegionName, ranks.Current.MinPrice, ranks.Expensive, ranks.Cheapest);
+        DrawPriceOverviewTable(frame, ranks.Current.MinPrice, ranks.Expensive, ranks.Cheapest);
     }
 
     private enum OverviewCardType
@@ -60,7 +84,6 @@ public partial class BetterMarketBoard
     private void DrawPriceOverviewTable
     (
         MarketBoardUIContext               frame,
-        string                             displayRegionName,
         ulong                              currentWorldPrice,
         IReadOnlyList<RankedWorldPriceRow> expensiveWorlds,
         IReadOnlyList<RankedWorldPriceRow> cheapestWorlds
@@ -100,10 +123,8 @@ public partial class BetterMarketBoard
             DrawOverviewPriceCard
             (
                 frame,
-                displayRegionName,
                 singleWorld,
                 OverviewCardType.SingleOnly,
-                1,
                 1,
                 new Vector2(singleCardWidth, cardHeight),
                 currentWorldPrice
@@ -130,11 +151,9 @@ public partial class BetterMarketBoard
                 DrawOverviewPriceCard
                 (
                     frame,
-                    displayRegionName,
                     world,
                     OverviewCardType.Expensive,
                     rank,
-                    expCount,
                     new Vector2(cardWidth, cardHeight),
                     currentWorldPrice
                 );
@@ -162,11 +181,9 @@ public partial class BetterMarketBoard
                 DrawOverviewPriceCard
                 (
                     frame,
-                    displayRegionName,
                     world,
                     OverviewCardType.Cheapest,
                     rank,
-                    cheapCount,
                     new Vector2(cardWidth, cardHeight),
                     currentWorldPrice
                 );
@@ -181,11 +198,9 @@ public partial class BetterMarketBoard
     private void DrawOverviewPriceCard
     (
         MarketBoardUIContext frame,
-        string               displayRegionName,
         RankedWorldPriceRow  world,
         OverviewCardType     cardType,
         int                  rank,
-        int                  totalCount,
         Vector2              cardSize,
         ulong                currentWorldPrice
     )
@@ -513,10 +528,9 @@ public partial class BetterMarketBoard
 
         using (FontManager.Instance().UIFont60.Push())
         {
-            var dashText = "-";
-            var dashSize = ImGui.CalcTextSize(dashText);
+            var dashSize = ImGui.CalcTextSize("-");
             var dashPos  = new Vector2(startPos.X + ((slotSize.X - dashSize.X) / 2f), startPos.Y + ((slotSize.Y - dashSize.Y) / 2f));
-            drawList.AddText(dashPos, ImGui.GetColorU32(ImGuiCol.TextDisabled, 0.3f), dashText);
+            drawList.AddText(dashPos, ImGui.GetColorU32(ImGuiCol.TextDisabled, 0.3f), "-");
         }
     }
 
@@ -551,35 +565,29 @@ public partial class BetterMarketBoard
                 ImGui.TextDisabled("-");
             else
             {
-                ImGui.TextUnformatted($"{minPrice.ToChineseString()}\ue049");
+                ImGui.TextUnformatted
+                (
+                    $"{minPrice.ToChineseString()}\ue049"
+                );
 
                 if (!isCurrentWorld && currentWorldPrice != 0 && currentWorldPrice != ulong.MaxValue)
                 {
                     var diff        = (long)minPrice - (long)currentWorldPrice;
                     var diffPercent = (double)diff / currentWorldPrice * 100.0;
 
-                    switch (diff)
+                    if (diff != 0)
                     {
-                        case < 0:
-                        {
-                            var absDiff = (ulong)-diff;
-                            ImGui.TextColored
-                            (
-                                KnownColor.GreenYellow.ToVector4(),
-                                $"-{absDiff.ToChineseString()}\ue049 (-{Math.Abs(diffPercent):F1}%)"
-                            );
-                            break;
-                        }
-                        case > 0:
-                        {
-                            var absDiff = (ulong)diff;
-                            ImGui.TextColored
-                            (
+                        var sign = diff > 0 ?
+                                       "+" :
+                                       string.Empty;
+
+                        ImGui.TextColored
+                        (
+                            diff < 0 ?
+                                KnownColor.GreenYellow.ToVector4() :
                                 KnownColor.OrangeRed.ToVector4(),
-                                $"+{absDiff.ToChineseString()}\ue049 (+{diffPercent:F1}%)"
-                            );
-                            break;
-                        }
+                            $"{sign}{diff.ToChineseString()}\ue049 ({sign}{diffPercent:F1}%)"
+                        );
                     }
                 }
             }
@@ -604,7 +612,14 @@ public partial class BetterMarketBoard
                         ImGui.TextColored
                         (
                             KnownColor.LightSkyBlue.ToVector4(),
-                            Lang.Get("BetterMarketBoard-DailySales-Format", worldSales.ToString("0.#", CultureInfo.InvariantCulture))
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-DailySales-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["quantity"] = worldSales
+                                }
+                            )
                         );
                     }
 
@@ -612,7 +627,11 @@ public partial class BetterMarketBoard
                     {
                         ImGui.TextDisabled($"{Lang.Get("BetterMarketBoard-AveragePrice")}: ");
                         ImGui.SameLine();
-                        ImGui.TextColored(KnownColor.Orange.ToVector4(), $"{((ulong)Math.Round(worldAvgPrice.Value)).ToChineseString()}\ue049");
+                        ImGui.TextColored
+                        (
+                            KnownColor.Orange.ToVector4(),
+                            $"{((ulong)Math.Round(worldAvgPrice.Value)).ToChineseString()}\ue049"
+                        );
                     }
 
                     if (worldRecentPurchase is { Price: > 0, Timestamp: > 0 })
@@ -620,7 +639,10 @@ public partial class BetterMarketBoard
                         var timeAgoText = DateTimeOffset.FromUnixTimeMilliseconds(worldRecentPurchase.Timestamp.Value).LocalDateTime.TimeAgo();
                         ImGui.TextDisabled($"{Lang.Get("BetterMarketBoard-RecentPurchase")}: ");
                         ImGui.SameLine();
-                        ImGui.TextUnformatted($"{((ulong)Math.Round(worldRecentPurchase.Price.Value)).ToChineseString()}\ue049 ({timeAgoText})");
+                        ImGui.TextUnformatted
+                        (
+                            $"{((ulong)Math.Round(worldRecentPurchase.Price.Value)).ToChineseString()}\ue049 ({timeAgoText})"
+                        );
                     }
                 }
             }
@@ -692,8 +714,7 @@ public partial class BetterMarketBoard
 
     private void DrawFullPriceTable
     (
-        MarketBoardUIContext frame,
-        string               displayRegionName
+        MarketBoardUIContext frame
     )
     {
         var dcsInRegion = provider.GetWorldPriceRanks(frame.ItemID);
@@ -828,9 +849,9 @@ public partial class BetterMarketBoard
                     return null;
                 if (frame.Provider.MinPriceData.WorldID == world.WorldID && world.MinPrice != ulong.MaxValue)
                     return KnownColor.ForestGreen.ToVector4().WithW(0.35f);
-                if (world.WorldID == GameState.CurrentWorld)
-                    return KnownColor.DeepPink.ToVector4().WithW(0.25f);
-                return KnownColor.Black.ToVector4().WithW(0.30f);
+                return world.WorldID == GameState.CurrentWorld ?
+                           KnownColor.DeepPink.ToVector4().WithW(0.25f) :
+                           KnownColor.Black.ToVector4().WithW(0.30f);
             }
         }
 

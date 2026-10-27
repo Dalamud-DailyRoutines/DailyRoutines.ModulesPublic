@@ -225,7 +225,7 @@ public unsafe class AutoTalkSkip : ModuleBase
         {
             var addonName = addonNames[(int)addonNameID].AsSpan();
 
-            if (addonName.SequenceEqual("Talk"u8) || addonName.SequenceEqual("TalkSubtitle"u8))
+            if (addonName.SequenceEqual("Talk"u8))
                 return 0;
         }
 
