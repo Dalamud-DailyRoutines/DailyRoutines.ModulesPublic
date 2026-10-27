@@ -120,9 +120,8 @@ public unsafe partial class OptimizedFriendList : ModuleBase
                     searchInputNode ??= new()
                     {
                         Position      = new(10f, 425f),
-                        Size          = new(200.0f, 35f),
-                        MaxCharacters = 20,
-                        ShowLimitText = true,
+                        Size          = new(250f, 35f),
+                        MaxCharacters = 48,
                         OnInputReceived = x =>
                         {
                             searchString = x.ToString();
@@ -143,7 +142,7 @@ public unsafe partial class OptimizedFriendList : ModuleBase
 
                     searchSettingButtonNode ??= new()
                     {
-                        Position    = new(215f, 430f),
+                        Position    = new(250f + 15f, 430f),
                         Size        = new(25f, 25f),
                         IsChecked   = config.SearchName,
                         IsEnabled   = true,
