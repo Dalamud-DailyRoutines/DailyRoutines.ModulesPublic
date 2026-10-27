@@ -7,9 +7,11 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using ListRenderer = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkComponentListItemRenderer;
 using NumericInput = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkComponentNumericInput;
+using TreeList = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkComponentTreeList;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNumericInputMax : ModuleBase
 {
@@ -27,12 +29,17 @@ public unsafe class AutoNumericInputMax : ModuleBase
 
     private Hook<AtkComponentNumericInput.Delegates.InnerSetValue> InnerSetValueHook;
     private Hook<NumericInput.Delegates.ReceiveNumericEvent>       ReceiveNumericEventHook;
-    private Hook<NumericInput.Delegates.SetMaximum>                SetMaximumHook;
+    private Hook<ListRenderer.Delegates.Populate>                  PopulateListItemHook;
+    private Hook<TreeList.Delegates.PopulateItem>                  PopulateTreeItemHook;
+
+    private readonly Dictionary<ushort, InputState> inputStates    = [];
+    private readonly Stack<HashSet<InputState>>     inputScopePool = [];
+
+    private HashSet<InputState>? pendingInputs;
 
     private int  inputEventDepth;
     private bool isSettingMaximum;
     private bool isInitializingAddon;
-    private bool maximumChanged;
 
     protected override void Init()
     {
@@ -48,21 +55,36 @@ public unsafe class AutoNumericInputMax : ModuleBase
             nameof(NumericInput.ReceiveNumericEvent),
             (NumericInput.Delegates.ReceiveNumericEvent)ReceiveNumericEventDetour
         );
-        SetMaximumHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
+        PopulateListItemHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
-            typeof(NumericInput.MemberFunctionPointers),
-            nameof(NumericInput.SetMaximum),
-            (NumericInput.Delegates.SetMaximum)SetMaximumDetour
+            typeof(ListRenderer.MemberFunctionPointers),
+            nameof(ListRenderer.Populate),
+            (ListRenderer.Delegates.Populate)PopulateListItemDetour
+        );
+        PopulateTreeItemHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(TreeList.MemberFunctionPointers),
+            nameof(TreeList.PopulateItem),
+            (TreeList.Delegates.PopulateItem)PopulateTreeItemDetour
         );
 
         InnerSetValueHook.Enable();
         ReceiveNumericEventHook.Enable();
-        SetMaximumHook.Enable();
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, OnAddonSetup);
+        PopulateListItemHook.Enable();
+        PopulateTreeItemHook.Enable();
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreSetup,    OnAddonReset);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, OnAddonReset);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   OnAddonSetup);
     }
 
-    protected override void Uninit() =>
+    protected override void Uninit()
+    {
         IAddonLifecycle.Instance().UnregisterListener(OnAddonSetup);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddonReset);
+        inputStates.Clear();
+        inputScopePool.Clear();
+        pendingInputs = null;
+    }
 
     private void ReceiveNumericEventDetour
     (
@@ -85,24 +107,77 @@ public unsafe class AutoNumericInputMax : ModuleBase
         }
     }
 
-    private void SetMaximumDetour
+    private void PopulateListItemDetour
     (
-        NumericInput* component,
-        int           maximum,
-        bool          triggerCallback,
-        bool          playSoundEffect
+        ListRenderer* renderer,
+        void*         itemData,
+        ushort        itemIndex,
+        bool          skipPopulation
     )
     {
-        var previous = maximumChanged;
-        maximumChanged = component->Data.Max != maximum;
+        if (isSettingMaximum ||
+            skipPopulation)
+        {
+            PopulateListItemHook.Original(renderer, itemData, itemIndex, skipPopulation);
+            return;
+        }
+
+        var previous = pendingInputs;
+        if (!inputScopePool.TryPop(out var current))
+            current = [];
+
+        pendingInputs = current;
 
         try
         {
-            SetMaximumHook.Original(component, maximum, triggerCallback, playSoundEffect);
+            PopulateListItemHook.Original(renderer, itemData, itemIndex, skipPopulation);
+            pendingInputs = null;
+
+            if (current.Count > 0)
+                InitializeInputs(&renderer->UldManager, current);
         }
         finally
         {
-            maximumChanged = previous;
+            pendingInputs = previous;
+            current.Clear();
+            inputScopePool.Push(current);
+        }
+    }
+
+    private byte PopulateTreeItemDetour
+    (
+        TreeList*                     list,
+        uint                          itemIndex,
+        AtkComponentTreeListItem*     item,
+        AtkComponentListItemRenderer* renderer,
+        bool                          isHighlighted,
+        bool                          isDragging
+    )
+    {
+        if (isSettingMaximum)
+            return PopulateTreeItemHook.Original(list, itemIndex, item, renderer, isHighlighted, isDragging);
+
+        var previous = pendingInputs;
+        if (!inputScopePool.TryPop(out var current))
+            current = [];
+
+        pendingInputs = current;
+
+        try
+        {
+            var result = PopulateTreeItemHook.Original(list, itemIndex, item, renderer, isHighlighted, isDragging);
+            pendingInputs = null;
+
+            if (current.Count > 0)
+                InitializeInputs(&renderer->UldManager, current);
+
+            return result;
+        }
+        finally
+        {
+            pendingInputs = previous;
+            current.Clear();
+            inputScopePool.Push(current);
         }
     }
 
@@ -117,22 +192,9 @@ public unsafe class AutoNumericInputMax : ModuleBase
         var maximum = component->Data.Max;
 
         if (isSettingMaximum               ||
-            inputEventDepth > 0            ||
-            component->IsActive            ||
-            maximum                <= 1    ||
-            maximum                >= 9999 ||
             component->AtkTextNode == null ||
             component->OwnerNode   == null ||
-            component->AtkResNode  == null ||
-            !component->AtkResNode->NodeFlags.HasFlag(NodeFlags.Visible))
-        {
-            InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
-            return;
-        }
-
-        if (!isInitializingAddon &&
-            !maximumChanged      &&
-            value == component->Value)
+            component->AtkResNode  == null)
         {
             InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
             return;
@@ -140,11 +202,45 @@ public unsafe class AutoNumericInputMax : ModuleBase
 
         var addon = RaptureAtkUnitManager.Instance()->GetAddonByNode((AtkResNode*)component->OwnerNode);
 
-        if (addon == null                               ||
-            (!addon->IsVisible && !isInitializingAddon) ||
+        if (addon == null ||
             BlacklistAddons.Contains(addon->NameString))
         {
             InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
+            return;
+        }
+
+        if (!inputStates.TryGetValue(addon->Id, out var root))
+            inputStates[addon->Id] = root = new();
+
+        var state = GetInputState((AtkResNode*)component->OwnerNode, addon->RootNode, root);
+
+        if (pendingInputs != null)
+        {
+            InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
+
+            if (state.Initialized                 &&
+                state.Value   == component->Value &&
+                state.Maximum == component->Data.Max)
+                pendingInputs.Remove(state);
+            else
+                pendingInputs.Add(state);
+
+            return;
+        }
+
+        if (inputEventDepth > 0                                                   ||
+            (((NumericInput*)component)->IsEditingDigits && !isInitializingAddon) ||
+            maximum < 1                                                           ||
+            maximum >= 9999                                                       ||
+            (!addon->IsVisible && !isInitializingAddon)                           ||
+            !component->OwnerNode->IsVisible()                                    ||
+            (state.Initialized && state.Value == value && state.Maximum == maximum))
+        {
+            var previousValue = component->Value;
+            InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
+            state.Value       =  component->Value;
+            state.Maximum     =  component->Data.Max;
+            state.Initialized |= inputEventDepth > 0 && previousValue != component->Value;
             return;
         }
 
@@ -152,7 +248,27 @@ public unsafe class AutoNumericInputMax : ModuleBase
 
         try
         {
-            InnerSetValueHook.Original(component, maximum, true, false);
+            InnerSetValueHook.Original(component, maximum, false, false);
+            state.Value       = component->Value;
+            state.Maximum     = component->Data.Max;
+            state.Initialized = true;
+
+            var update = new AtkEventDispatcher.Event
+            {
+                State = new AtkEventState
+                {
+                    EventType = AtkEventType.ValueUpdate
+                },
+                EventData = new AtkEventData
+                {
+                    ValueData = new AtkEventData.AtkValueData
+                    {
+                        NewValue  = component->Value,
+                        LastValue = value
+                    }
+                }
+            };
+            component->OwnerNode->DispatchEvent(&update);
         }
         finally
         {
@@ -183,9 +299,17 @@ public unsafe class AutoNumericInputMax : ModuleBase
         }
     }
 
-    private static void InitializeInputs
+    private void OnAddonReset
     (
-        AtkUldManager* manager
+        AddonEvent type,
+        AddonArgs  args
+    ) =>
+        inputStates.Remove(args.Addon.ToStruct()->Id);
+
+    private void InitializeInputs
+    (
+        AtkUldManager*      manager,
+        HashSet<InputState> inputs = null
     )
     {
         for (var i = 0; i < manager->NodeListCount; i++)
@@ -202,11 +326,59 @@ public unsafe class AutoNumericInputMax : ModuleBase
             if (component->GetComponentType() == ComponentType.NumericInput)
             {
                 var numericInput = (AtkComponentNumericInput*)component;
+
+                if (inputs != null)
+                {
+                    var addon = RaptureAtkUnitManager.Instance()->GetAddonByNode((AtkResNode*)numericInput->OwnerNode);
+                    if (addon == null                                     ||
+                        !inputStates.TryGetValue(addon->Id, out var root) ||
+                        !inputs.Contains(GetInputState((AtkResNode*)numericInput->OwnerNode, addon->RootNode, root)))
+                        continue;
+                }
+
                 numericInput->InnerSetValue(numericInput->Value, false, false);
             }
             else
-                InitializeInputs(&component->UldManager);
+                InitializeInputs(&component->UldManager, inputs);
         }
+    }
+
+    private static InputState GetInputState
+    (
+        AtkResNode* node,
+        AtkResNode* root,
+        InputState  state
+    )
+    {
+        if (node == null ||
+            node == root)
+            return state;
+
+        var parent = GetInputState(node->ParentNode, root, state);
+        if (node->GetNodeType() < NodeType.Component)
+            return parent;
+
+        var component = ((AtkComponentNode*)node)->Component;
+        if (component == null)
+            return parent;
+
+        var key = (node->NodeId, -1);
+        if (component->GetComponentType() == ComponentType.ListItemRenderer)
+            key = (0, ((AtkComponentListItemRenderer*)component)->ListItemIndex);
+
+        if (!parent.Children.TryGetValue(key, out var child))
+            parent.Children[key] = child = new();
+
+        return child;
+    }
+
+    private sealed class InputState
+    {
+        public readonly Dictionary<(uint NodeID, int ItemIndex), InputState> Children = [];
+
+        public int  Value;
+        public int  Maximum;
+        public bool Initialized;
     }
 
     #region 常量
