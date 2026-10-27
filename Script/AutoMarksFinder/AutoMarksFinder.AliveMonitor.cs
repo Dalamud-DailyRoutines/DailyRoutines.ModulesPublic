@@ -12,44 +12,9 @@ namespace DailyRoutines.Modules.AutoMarksFinder;
 
 public partial class AutoMarksFinder
 {
-    private const float DAMAGED_HP_PERCENT        = 80f;
-    private const float MONSTER_MATCH_RADIUS      = 200f;
-    private const float MISSING_INFERENCE_RADIUS  = 80f;
-    private const long  MISSING_DEATH_GRACE_MS    = 2_000;
-    private const uint  ALIVE_MONITOR_INTERVAL    = 500;
-
-    private readonly Dictionary<NotoriousMonsterList, Dictionary<(uint DataID, uint ZoneID, uint Instance), AliveTrack>> aliveTracks = new(ReferenceEqualityComparer.Instance);
-    private       (uint ZoneID, uint Instance)                                                                        lastAliveStay;
-    private       NotoriousMonsterList?                                                                               lastActiveTrain;
-    private       bool                                                                                                aliveMonitorRegistered;
-
-    private sealed class AliveTrack
-    {
-        public bool HasBeenDamaged;
-        public bool SeenThisStay;
-        public bool AutoKilled;
-        public bool ManualAlive;
-        public long MissingSince;
-    }
-
-    private void RegisterAliveMonitor()
-    {
-        if (aliveMonitorRegistered) return;
-
-        FrameworkManager.Instance().Reg(OnAliveMonitorUpdate, ALIVE_MONITOR_INTERVAL);
-        aliveMonitorRegistered = true;
-    }
-
-    private void UnregisterAliveMonitor()
-    {
-        if (!aliveMonitorRegistered) return;
-
-        FrameworkManager.Instance().Unreg(OnAliveMonitorUpdate);
-        aliveMonitorRegistered = false;
-        aliveTracks.Clear();
-        lastActiveTrain = null;
-        lastAliveStay   = default;
-    }
+    private readonly Dictionary<NotoriousMonsterList, Dictionary<NotoriousMonsterFound, AliveTrack>> aliveTracks = new(ReferenceEqualityComparer.Instance);
+    private (uint ZoneID, uint Instance) lastAliveStay;
+    private NotoriousMonsterList? lastActiveTrain;
 
     private void OnAliveMonitorUpdate
     (
@@ -62,9 +27,10 @@ public partial class AutoMarksFinder
 
     private void UpdateTrainAliveStates()
     {
-        if (config?.Trains is not { Count: > 0 }) return;
-        if (IObjectTable.Instance().LocalPlayer is not { } localPlayer ||
-            !UIModule.IsScreenReady() || ICondition.Instance().IsBetweenAreas)
+        if (config.Trains.Count == 0) return;
+        if (LocalPlayerState.Object is not { } localPlayer ||
+            !UIModule.IsScreenReady() ||
+            ICondition.Instance().IsBetweenAreas)
         {
             // 加载期间的对象消失不应参与死亡推断。
             foreach (var tracks in aliveTracks.Values)
@@ -131,7 +97,7 @@ public partial class AutoMarksFinder
             var trainTracks = GetTrainTracks(train);
             var observableMonsters = train.MonstersFound
                                            .Where(monster => IsMonsterObservable(monster, currentZone, currentInstance))
-                                           .GroupBy(monster => (monster.DataID, monster.ZoneID, monster.Instance));
+                                           .GroupBy(monster => monster);
 
             foreach (var group in observableMonsters)
             {
@@ -167,14 +133,17 @@ public partial class AutoMarksFinder
                         changed          = true;
                     }
                 }
-                else if (track.SeenThisStay && track.HasBeenDamaged && !track.ManualAlive &&
+                else if (track.SeenThisStay &&
+                         track.HasBeenDamaged &&
+                         !track.ManualAlive &&
                          Vector3.DistanceSquared(localPlayer.Position, monster.Position) <= MISSING_INFERENCE_RADIUS * MISSING_INFERENCE_RADIUS)
                 {
                     if (track.MissingSince == 0)
                     {
                         track.MissingSince = Environment.TickCount64;
                     }
-                    else if (Environment.TickCount64 - track.MissingSince >= MISSING_DEATH_GRACE_MS && SetGroupState(group, false))
+                    else if (Environment.TickCount64 - track.MissingSince >= MISSING_DEATH_GRACE_MS &&
+                             SetGroupState(group, false))
                     {
                         track.AutoKilled = true;
                         changed          = true;
@@ -189,7 +158,7 @@ public partial class AutoMarksFinder
             config.Save(this);
     }
 
-    private Dictionary<(uint DataID, uint ZoneID, uint Instance), AliveTrack> GetTrainTracks
+    private Dictionary<NotoriousMonsterFound, AliveTrack> GetTrainTracks
     (
         NotoriousMonsterList train
     )
@@ -202,12 +171,6 @@ public partial class AutoMarksFinder
 
         return tracks;
     }
-
-    private void ForgetTrainTracks
-    (
-        NotoriousMonsterList train
-    ) => aliveTracks.Remove(train);
-
 
     private static bool IsMonsterObservable
     (
@@ -235,7 +198,7 @@ public partial class AutoMarksFinder
 
         foreach (var obj in objects)
         {
-            if (obj is not { ObjectKind: ObjectKind.BattleNpc } || obj is not IBattleChara chara)
+            if (obj is not IBattleChara { ObjectKind: ObjectKind.BattleNpc } chara)
                 continue;
 
             if (!result.TryGetValue(obj.DataID, out var entries))
@@ -252,10 +215,10 @@ public partial class AutoMarksFinder
 
     private static bool FindNearestState
     (
-        NotoriousMonsterFound                       monster,
+        NotoriousMonsterFound                         monster,
         IReadOnlyDictionary<uint, List<IBattleChara>> battleNPCs,
-        out float                                   hpPercent,
-        out bool                                    isDead
+        out float                                     hpPercent,
+        out bool                                      isDead
     )
     {
         hpPercent = 0f;
@@ -300,4 +263,23 @@ public partial class AutoMarksFinder
 
         return changed;
     }
+
+    private sealed class AliveTrack
+    {
+        public bool HasBeenDamaged;
+        public bool SeenThisStay;
+        public bool AutoKilled;
+        public bool ManualAlive;
+        public long MissingSince;
+    }
+
+    #region 常量
+
+    private const float DAMAGED_HP_PERCENT       = 80f;
+    private const float MONSTER_MATCH_RADIUS     = 200f;
+    private const float MISSING_INFERENCE_RADIUS = 80f;
+    private const long  MISSING_DEATH_GRACE_MS   = 2_000;
+    private const uint  ALIVE_MONITOR_INTERVAL   = 500;
+
+    #endregion
 }
