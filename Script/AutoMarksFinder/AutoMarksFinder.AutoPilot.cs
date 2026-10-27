@@ -10,6 +10,16 @@ namespace DailyRoutines.Modules.AutoMarksFinder;
 
 public partial class AutoMarksFinder
 {
+    private NotoriousMonsterList? SelectedTrain =>
+        selectedTrainIndex >= 0 && selectedTrainIndex < config.Trains.Count
+            ? config.Trains[selectedTrainIndex]
+            : null;
+
+    private DateTime CalibratedNow =>
+        timeCalibrated ?
+            DateTime.Now.AddSeconds(-timeCalibOffsetSec) :
+            DateTime.Now;
+
     private bool                  autoPilotOn;
     private bool                  autoPilotDeparted;
     private int                   autoPilotIndex;
@@ -28,11 +38,6 @@ public partial class AutoMarksFinder
     private const int AUTO_PILOT_FIRST_POINT_DELAY_SEC = 3;
     private const int AUTO_PILOT_NEXT_DELAY_SEC        = 1;
     private const int AUTO_PILOT_END_DELAY_SEC         = 2;
-
-    private NotoriousMonsterList? SelectedTrain =>
-        selectedTrainIndex >= 0 && selectedTrainIndex < config.Trains.Count
-            ? config.Trains[selectedTrainIndex]
-            : null;
 
     private void ToggleAutoPilot()
     {
@@ -113,11 +118,6 @@ public partial class AutoMarksFinder
 
         return true;
     }
-
-    private DateTime CalibratedNow =>
-        timeCalibrated ?
-            DateTime.Now.AddSeconds(-timeCalibOffsetSec) :
-            DateTime.Now;
 
     private void UpdateAutoPilot()
     {
