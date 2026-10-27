@@ -1,19 +1,16 @@
 using System.Collections.Frozen;
-using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Extensions;
-using DailyRoutines.Internal;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using OmenTools.Interop.Game.Models;
-using OmenTools.Threading;
+using NumericInput = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkComponentNumericInput;
 
 namespace DailyRoutines.ModulesPublic.Interface;
 
-// TODO：等待重构（每个界面一套处理逻辑）
 public unsafe class AutoNumericInputMax : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -25,120 +22,191 @@ public unsafe class AutoNumericInputMax : ModuleBase
 
     public override ModulePermission Permission { get; } = new()
     {
-        NeedAuth = true
+        AllDefaultEnabled = true
     };
 
-    private static readonly CompSig UldUpdateSig =
-        new("40 53 48 83 EC ?? 48 8B D9 48 83 C1 ?? E8 ?? ?? ?? ?? 80 BB ?? ?? ?? ?? ?? 74 ?? 48 8B CB");
-    private delegate nint UldUpdateDelegate
-    (
-        AtkComponentNumericInput* component
-    );
-    private Hook<UldUpdateDelegate>? UldUpdateHook;
+    private Hook<AtkComponentNumericInput.Delegates.InnerSetValue> InnerSetValueHook;
+    private Hook<NumericInput.Delegates.ReceiveNumericEvent>       ReceiveNumericEventHook;
+    private Hook<NumericInput.Delegates.SetMaximum>                SetMaximumHook;
 
-    private static readonly CompSig NumericSetValueSig = new
-        ("E8 ?? ?? ?? ?? C7 83 ?? ?? ?? ?? ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 8B 91");
-    private delegate void NumericSetValueDelegate
-    (
-        AtkComponentNumericInput* component,
-        int                       value,
-        bool                      a3,
-        bool                      a4
-    );
-    private NumericSetValueDelegate? NumericSetValue;
-
-    private          Config          config    = null!;
-    private readonly Throttler<nint> throttler = new();
-
-    private long lastInterruptTime;
-    private bool isBlocked;
+    private int  inputEventDepth;
+    private bool isSettingMaximum;
+    private bool isInitializingAddon;
+    private bool maximumChanged;
 
     protected override void Init()
     {
-        config ??= Config.Load(this) ?? new();
+        InnerSetValueHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AtkComponentNumericInput.MemberFunctionPointers),
+            nameof(AtkComponentNumericInput.InnerSetValue),
+            (AtkComponentNumericInput.Delegates.InnerSetValue)InnerSetValueDetour
+        );
+        ReceiveNumericEventHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(NumericInput.MemberFunctionPointers),
+            nameof(NumericInput.ReceiveNumericEvent),
+            (NumericInput.Delegates.ReceiveNumericEvent)ReceiveNumericEventDetour
+        );
+        SetMaximumHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(NumericInput.MemberFunctionPointers),
+            nameof(NumericInput.SetMaximum),
+            (NumericInput.Delegates.SetMaximum)SetMaximumDetour
+        );
 
-        NumericSetValue ??= Marshal.GetDelegateForFunctionPointer<NumericSetValueDelegate>(NumericSetValueSig.ScanText());
-
-        UldUpdateHook ??= IGameInteropProvider.Instance().HookFromSignature<UldUpdateDelegate>(UldUpdateSig.Get(), UldUpdateDetour);
-        UldUpdateHook.Enable();
+        InnerSetValueHook.Enable();
+        ReceiveNumericEventHook.Enable();
+        SetMaximumHook.Enable();
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, OnAddonSetup);
     }
 
-    protected override void ConfigUI()
-    {
-        ImGuiOm.ConflictKeyText();
-        ImGuiOm.HelpMarker(Lang.Get("AutoNumericInputMax-InterruptHelp"));
+    protected override void Uninit() =>
+        IAddonLifecycle.Instance().UnregisterListener(OnAddonSetup);
 
-        ImGui.Spacing();
-
-        if (ImGui.Checkbox(Lang.Get("AutoNumericInputMax-AdjustMax"), ref config.AdjustMaximumValue))
-            config.Save(this);
-        ImGuiOm.HelpMarker(Lang.Get("AutoNumericInputMax-AdjustMaxHelp"));
-
-        if (config.AdjustMaximumValue)
-        {
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            if (ImGui.InputInt(Lang.Get("AutoNumericInputMax-MaxValue"), ref config.MaxValue))
-                config.MaxValue = Math.Clamp(config.MaxValue, 1, 9999);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
-            ImGuiOm.HelpMarker(Lang.Get("AutoNumericInputMax-MaxValueInputHelp"));
-        }
-    }
-
-    private nint UldUpdateDetour
+    private void ReceiveNumericEventDetour
     (
-        AtkComponentNumericInput* component
+        NumericInput* component,
+        AtkEventType  eventType,
+        int           eventParam,
+        AtkEvent*     atkEvent,
+        AtkEventData* eventData
     )
     {
-        var result = UldUpdateHook.Original(component);
+        inputEventDepth++;
 
-        if (PluginConfig.Instance().ConflictKeyBinding.IsPressed())
-            lastInterruptTime = Environment.TickCount64;
-
-        if (Environment.TickCount64 - lastInterruptTime > 10000)
+        try
         {
-            if (throttler.Throttle(nint.Zero, 5000))
-            {
-                var focusedList = RaptureAtkModule.Instance()->AtkUnitManager->FocusedUnitsList.Entries;
-                if (focusedList.Length == 0) goto Out;
-                var focusedAddons = focusedList
-                                    .ToArray()
-                                    .Where(x => x != null && x.Value != null && !string.IsNullOrWhiteSpace(x.Value->NameString))
-                                    .Select(x => x.Value->NameString);
-                isBlocked = focusedAddons.Any(BlacklistAddons.Contains);
-            }
-
-            if (isBlocked || !throttler.Throttle((nint)component, 250)) goto Out;
-
-            var max = component->Data.Max;
-            if (component->AtkResNode == null) goto Out;
-            if (!component->AtkResNode->NodeFlags.HasFlag(NodeFlags.Visible) || max >= 9999)
-                goto Out;
-
-            switch (max)
-            {
-                case 1:
-                    goto Out;
-                case 99 when config.AdjustMaximumValue:
-                    max = config.MaxValue;
-                    break;
-            }
-
-            component->Data.Max = max;
-            NumericSetValue(component, max, true, false);
-            component->Value = max;
-            component->AtkTextNode->SetNumber(max);
+            ReceiveNumericEventHook.Original(component, eventType, eventParam, atkEvent, eventData);
         }
-
-        Out: ;
-        return result;
+        finally
+        {
+            inputEventDepth--;
+        }
     }
 
-    private class Config : ModuleConfig
+    private void SetMaximumDetour
+    (
+        NumericInput* component,
+        int           maximum,
+        bool          triggerCallback,
+        bool          playSoundEffect
+    )
     {
-        public bool AdjustMaximumValue = true;
-        public int  MaxValue           = 999;
+        var previous = maximumChanged;
+        maximumChanged = component->Data.Max != maximum;
+
+        try
+        {
+            SetMaximumHook.Original(component, maximum, triggerCallback, playSoundEffect);
+        }
+        finally
+        {
+            maximumChanged = previous;
+        }
+    }
+
+    private void InnerSetValueDetour
+    (
+        AtkComponentNumericInput* component,
+        int                       value,
+        bool                      triggerCallback,
+        bool                      playSoundEffect
+    )
+    {
+        var maximum = component->Data.Max;
+
+        if (isSettingMaximum               ||
+            inputEventDepth > 0            ||
+            component->IsActive            ||
+            maximum                <= 1    ||
+            maximum                >= 9999 ||
+            component->AtkTextNode == null ||
+            component->OwnerNode   == null ||
+            component->AtkResNode  == null ||
+            !component->AtkResNode->NodeFlags.HasFlag(NodeFlags.Visible))
+        {
+            InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
+            return;
+        }
+
+        if (!isInitializingAddon &&
+            !maximumChanged      &&
+            value == component->Value)
+        {
+            InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
+            return;
+        }
+
+        var addon = RaptureAtkUnitManager.Instance()->GetAddonByNode((AtkResNode*)component->OwnerNode);
+
+        if (addon == null                               ||
+            (!addon->IsVisible && !isInitializingAddon) ||
+            BlacklistAddons.Contains(addon->NameString))
+        {
+            InnerSetValueHook.Original(component, value, triggerCallback, playSoundEffect);
+            return;
+        }
+
+        isSettingMaximum = true;
+
+        try
+        {
+            InnerSetValueHook.Original(component, maximum, true, false);
+        }
+        finally
+        {
+            isSettingMaximum = false;
+        }
+    }
+
+    private void OnAddonSetup
+    (
+        AddonEvent type,
+        AddonArgs  args
+    )
+    {
+        var addon = args.Addon.ToStruct();
+        if (BlacklistAddons.Contains(addon->NameString))
+            return;
+
+        var previous = isInitializingAddon;
+        isInitializingAddon = true;
+
+        try
+        {
+            InitializeInputs(&addon->UldManager);
+        }
+        finally
+        {
+            isInitializingAddon = previous;
+        }
+    }
+
+    private static void InitializeInputs
+    (
+        AtkUldManager* manager
+    )
+    {
+        for (var i = 0; i < manager->NodeListCount; i++)
+        {
+            var node = manager->NodeList[i];
+            if (node                == null ||
+                node->GetNodeType() < NodeType.Component)
+                continue;
+
+            var component = ((AtkComponentNode*)node)->Component;
+            if (component == null)
+                continue;
+
+            if (component->GetComponentType() == ComponentType.NumericInput)
+            {
+                var numericInput = (AtkComponentNumericInput*)component;
+                numericInput->InnerSetValue(numericInput->Value, false, false);
+            }
+            else
+                InitializeInputs(&component->UldManager);
+        }
     }
 
     #region 常量
