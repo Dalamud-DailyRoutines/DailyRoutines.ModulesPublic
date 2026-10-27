@@ -56,14 +56,17 @@ public partial class AutoMarksFinder : ModuleBase
 
         WindowManager.Instance().PostDraw += DrawScanRoutePreview;
 
-        RegisterAliveMonitor();
+        FrameworkManager.Instance().Reg(OnAliveMonitorUpdate, ALIVE_MONITOR_INTERVAL);
     }
 
     protected override void Uninit()
     {
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
 
-        UnregisterAliveMonitor();
+        FrameworkManager.Instance().Unreg(OnAliveMonitorUpdate);
+        aliveTracks.Clear();
+        lastActiveTrain = null;
+        lastAliveStay   = default;
 
         if (config != null)
             config.Save(this);
@@ -173,7 +176,7 @@ public partial class AutoMarksFinder : ModuleBase
                 if (ImGui.MenuItem(Lang.Get("Delete")))
                 {
                     config.Trains.RemoveAt(i);
-                    ForgetTrainTracks(train);
+                    aliveTracks.Remove(train);
                     if (config.Trains.Count == 0)
                         selectedIndex = -1;
                     else if (selectedIndex > i)

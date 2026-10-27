@@ -108,7 +108,7 @@ public partial class AutoMarksFinder
                 config.Trains.Add(imported);
 
                 var importedTracks = GetTrainTracks(imported);
-                foreach (var key in imported.MonstersFound.Select(x => (x.DataID, x.ZoneID, x.Instance)).Distinct())
+                foreach (var key in imported.MonstersFound.Distinct())
                     importedTracks[key] = new AliveTrack { ManualAlive = true };
 
                 config.Save(this);
@@ -353,7 +353,7 @@ public partial class AutoMarksFinder
                 config.Trains.Add(imported);
 
                 var importedTracks = GetTrainTracks(imported);
-                foreach (var key in imported.MonstersFound.Select(x => (x.DataID, x.ZoneID, x.Instance)).Distinct())
+                foreach (var key in imported.MonstersFound.Distinct())
                     importedTracks[key] = new AliveTrack { ManualAlive = true };
 
                 config.Save(this);
@@ -574,13 +574,13 @@ public partial class AutoMarksFinder
         {
             if (ImGuiOm.ButtonIcon("切换存活状态", FontAwesomeIcon.HeartCircleBolt, Lang.Get("AutoMarksFinder-SwitchMarkAlive")))
             {
-                var key = (info.DataID, info.ZoneID, info.Instance);
+                var key = info;
                 var isAlive = !info.IsAlive;
 
                 if (train != null)
                 {
                     SetGroupState(train.MonstersFound
-                                       .Where(x => (x.DataID, x.ZoneID, x.Instance) == key), isAlive);
+                                       .Where(x => x.Equals(key)), isAlive);
 
                     var trainTracks = GetTrainTracks(train);
                     if (!trainTracks.TryGetValue(key, out var track))
