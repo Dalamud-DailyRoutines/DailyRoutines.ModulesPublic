@@ -19,7 +19,8 @@ public unsafe class AutoNumericInputMax : ModuleBase
     {
         Title       = Lang.Get("AutoNumericInputMaxTitle"),
         Description = Lang.Get("AutoNumericInputMaxDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        ModulesPair = ["AutoIncreaseBuyAmountLimit"]
     };
 
     public override ModulePermission Permission { get; } = new()
