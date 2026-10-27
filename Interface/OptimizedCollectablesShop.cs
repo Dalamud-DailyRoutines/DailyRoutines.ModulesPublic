@@ -54,11 +54,15 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
 
     protected override void Init()
     {
-        config                     =   Config.Load(this) ?? new();
-        controls                   =   new(this);
-        selection                  =   new(this);
-        TaskHelper                 ??= new();
-        TaskHelper.RetryIntervalMS =   100;
+        config = Config.Load(this) ?? new();
+        
+        controls  = new(this);
+        selection = new(this);
+
+        TaskHelper ??= new()
+        {
+            RetryIntervalMS = 100
+        };
 
         HandleEventHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
@@ -97,14 +101,16 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
     {
         selection.Save();
         exchange?.Stop();
+        
         var agent = AgentCollectablesShop.Instance();
         if (agent->Data != null)
             agent->Data->RefreshFlags |= AgentCollectablesShop.RefreshFlags.List;
+        
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
         IGameInventory.Instance().InventoryChanged -= OnInventoryChanged;
         LogMessageManager.Instance().Unreg(OnLogMessage);
+        
         var addon = (AddonCollectablesShop*)CollectablesShopAddon;
-
         controls.Dispose(addon);
     }
 
@@ -807,7 +813,7 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
         )
         {
             if (navigationConfigured &&
-                CollectablesShopAddon->IsAddonAndNodesReady())
+                ((AtkUnitBase*)addon)->IsAddonAndNodesReady())
             {
                 addon->CategoryList->CursorNavigationInfo = categoryListNavigation;
                 addon->SubmitButton->CursorNavigationInfo = submitButtonNavigation;
