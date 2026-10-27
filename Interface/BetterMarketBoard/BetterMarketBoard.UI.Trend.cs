@@ -44,28 +44,14 @@ public unsafe partial class BetterMarketBoard
             new
             (
                 Lang.Get("BetterMarketBoard-Trend-Max"),
-                Lang.Get
-                (
-                    "BetterMarketBoard-Price-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["price"] = actualMaxPrice
-                    }
-                ),
+                $"{actualMaxPrice.ToChineseString()}\ue049",
                 KnownColor.Salmon.ToVector4(),
                 null
             ),
             new
             (
                 Lang.Get("BetterMarketBoard-Trend-Min"),
-                Lang.Get
-                (
-                    "BetterMarketBoard-Price-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["price"] = actualMinPrice
-                    }
-                ),
+                $"{actualMinPrice.ToChineseString()}\ue049",
                 KnownColor.GreenYellow.ToVector4(),
                 null
             )
@@ -80,14 +66,7 @@ public unsafe partial class BetterMarketBoard
                     new
                     (
                         Lang.Get("BetterMarketBoard-AveragePrice-NQ"),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = data.AvgNQPrice
-                            }
-                        ),
+                        $"{data.AvgNQPrice.ToChineseString()}\ue049",
                         KnownColor.LightSkyBlue.ToVector4(),
                         null
                     )
@@ -101,14 +80,7 @@ public unsafe partial class BetterMarketBoard
                     new
                     (
                         Lang.Get("BetterMarketBoard-AveragePrice-HQ"),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = data.AvgHQPrice
-                            }
-                        ),
+                        $"{data.AvgHQPrice.ToChineseString()}\ue049",
                         KnownColor.Orange.ToVector4(),
                         null
                     )
@@ -122,14 +94,7 @@ public unsafe partial class BetterMarketBoard
                 new
                 (
                     Lang.Get("BetterMarketBoard-AveragePrice"),
-                    Lang.Get
-                    (
-                        "BetterMarketBoard-Price-Format",
-                        new Dictionary<string, object>
-                        {
-                            ["price"] = data.AvgHistoryPrice
-                        }
-                    ),
+                    $"{data.AvgHistoryPrice.ToChineseString()}\ue049",
                     KnownColor.Orange.ToVector4(),
                     null
                 )
@@ -263,14 +228,7 @@ public unsafe partial class BetterMarketBoard
             {
                 var p = yMin + (ySpan * i / (yTickCount - 1));
                 yTickValues[i] = p;
-                yTickLabels[i] = Lang.Get
-                (
-                    "BetterMarketBoard-Number-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["value"] = p
-                    }
-                );
+                yTickLabels[i] = ((ulong)Math.Round(p)).ToChineseString();
             }
 
             ImPlot.SetupAxisTicks(ImAxis.Y1, ref yTickValues[0], yTickCount, yTickLabels, false);
@@ -322,14 +280,7 @@ public unsafe partial class BetterMarketBoard
                     (
                         data.AvgNQPrice,
                         KnownColor.LightSkyBlue.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = data.AvgNQPrice
-                            }
-                        )
+                        $"{data.AvgNQPrice.ToChineseString()}\ue049"
                     );
                 }
 
@@ -345,14 +296,7 @@ public unsafe partial class BetterMarketBoard
                     (
                         data.AvgHQPrice,
                         KnownColor.Orange.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = data.AvgHQPrice
-                            }
-                        )
+                        $"{data.AvgHQPrice.ToChineseString()}\ue049"
                     );
                 }
 
@@ -404,14 +348,7 @@ public unsafe partial class BetterMarketBoard
                     (
                         data.AvgHistoryPrice,
                         KnownColor.Orange.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = data.AvgHistoryPrice
-                            }
-                        )
+                        $"{data.AvgHistoryPrice.ToChineseString()}\ue049"
                     );
                 }
 
@@ -487,28 +424,14 @@ public unsafe partial class BetterMarketBoard
                     ImGui.TextColored
                     (
                         KnownColor.Orange.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = hoverEntry.PricePerUnit
-                            }
-                        )
+                        $"{hoverEntry.PricePerUnit.ToChineseString()}\ue049"
                     );
 
                     ImGui.TextDisabled($"{Lang.Get("Amount")}: ");
                     ImGui.SameLine();
                     ImGui.TextUnformatted
                     (
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Number-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["value"] = hoverEntry.Quantity
-                            }
-                        )
+                        $"{hoverEntry.Quantity}"
                     );
 
                     ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(6936)}: ");
@@ -516,14 +439,7 @@ public unsafe partial class BetterMarketBoard
                     ImGui.TextColored
                     (
                         KnownColor.GreenYellow.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = hoverEntry.PricePerUnit * hoverEntry.Quantity
-                            }
-                        )
+                        $"{(hoverEntry.PricePerUnit * hoverEntry.Quantity).ToChineseString()}\ue049"
                     );
 
                     ImGui.Separator();

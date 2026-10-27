@@ -156,14 +156,7 @@ public partial class BetterMarketBoard
                .Append
                (
                    currentWorldMinPrice is > 0 ?
-                       Lang.Get
-                       (
-                           "BetterMarketBoard-Price-Format",
-                           new Dictionary<string, object>
-                           {
-                               ["price"] = currentWorldMinPrice.Value
-                           }
-                       ) :
+                       $"{currentWorldMinPrice.Value.ToChineseString()}\ue049" :
                        "-"
                )
                .PopColorType();
@@ -188,14 +181,7 @@ public partial class BetterMarketBoard
                .Append
                (
                    regionMinPrice is > 0 ?
-                       Lang.Get
-                       (
-                           "BetterMarketBoard-Price-Format",
-                           new Dictionary<string, object>
-                           {
-                               ["price"] = regionMinPrice.Value
-                           }
-                       ) :
+                       $"{regionMinPrice.Value.ToChineseString()}\ue049" :
                        "-"
                )
                .PopColorType();
@@ -215,7 +201,7 @@ public partial class BetterMarketBoard
                            "BetterMarketBoard-DailySales-Format",
                            new Dictionary<string, object>
                            {
-                               ["quantity"] = dailySales
+                               ["quantity"] = ((int)dailySales).ToChineseString()
                            }
                        ) :
                        "-"

@@ -123,16 +123,7 @@ public unsafe partial class BetterMarketBoard
             }
 
             var textContent = badge > 0 ?
-                                  Lang.Get
-                                  (
-                                      "BetterMarketBoard-TabLabel-Format",
-                                      new Dictionary<string, object>
-                                      {
-                                          ["icon"]  = icon,
-                                          ["label"] = label,
-                                          ["count"] = badge
-                                      }
-                                  ) :
+                                  $"{icon} {label} ({badge})" :
                                   $"{icon} {label}";
 
             using (FontManager.Instance().UIFont80.Push())
@@ -380,16 +371,7 @@ public unsafe partial class BetterMarketBoard
 
             if (ImGui.TreeNodeEx
                 (
-                    Lang.Get
-                    (
-                        "BetterMarketBoard-HistoryGroup-Format",
-                        new Dictionary<string, object>
-                        {
-                            ["date"]  = date,
-                            ["count"] = group.Count()
-                        }
-                    ) +
-                    $"##{date:yyyyMMdd}",
+                    $"{date:MM/dd} ({group.Count()})##{date:yyyyMMdd}",
                     ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanAvailWidth
                 ))
             {
@@ -552,14 +534,7 @@ public unsafe partial class BetterMarketBoard
 
         using (FontManager.Instance().UIFont60.Push())
         {
-            var ilvlText = Lang.Get
-            (
-                "BetterMarketBoard-ItemLevel-Format",
-                new Dictionary<string, object>
-                {
-                    ["level"] = item.LevelItem.RowId
-                }
-            );
+            var ilvlText = $"\ue033 {item.LevelItem.RowId}";
             curBadgeX = DrawItemCardBadge
             (
                 drawList,
@@ -828,14 +803,7 @@ public unsafe partial class BetterMarketBoard
         var contentTopY  = startPos.Y + padY + headerHeight + (5f * GlobalUIScale);
         var iconSize     = 36f * GlobalUIScale;
 
-        var priceText = Lang.Get
-        (
-            "BetterMarketBoard-PriceMonitor-Threshold-Format",
-            new Dictionary<string, object>
-            {
-                ["price"] = monitorItem.PriceThreshold
-            }
-        );
+        var     priceText = $"≤ {monitorItem.PriceThreshold.ToChineseString()}\ue049";
         Vector2 priceSize;
         using (FontManager.Instance().UIFont80.Push())
             priceSize = ImGui.CalcTextSize(priceText);
@@ -1083,22 +1051,14 @@ public unsafe partial class BetterMarketBoard
 
             ImGui.TextDisabled
             (
-                Lang.Get
-                (
-                    "BetterMarketBoard-HeldCount-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["label"]    = LuminaWrapper.GetAddonText(358),
-                        ["quantity"] = heldCount
-                    }
-                )
+                $"{LuminaWrapper.GetAddonText(358)}：{heldCount}"
             );
         }
     }
 
     private void DrawBenchmarkCardsGrid
     (
-        MonitorItem                                                             monitorItem,
+        MonitorItem                                                    monitorItem,
         List<(string Label, ulong? Price, Vector4 Color, string Icon)> benchmarks
     )
     {
@@ -1132,15 +1092,7 @@ public unsafe partial class BetterMarketBoard
                     ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                     ImGuiOm.TooltipHover
                     (
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-PriceMonitor-Quick-Tooltip",
-                            new Dictionary<string, object>
-                            {
-                                ["label"] = label,
-                                ["price"] = price!.Value
-                            }
-                        )
+                        $"{label}：{price!.Value.ToChineseString()}\ue049\n{Lang.Get("LeftClick")}：{Lang.Get("Apply")}"
                     );
                 }
 
@@ -1196,14 +1148,7 @@ public unsafe partial class BetterMarketBoard
                 using (FontManager.Instance().UIFont80.Push())
                 {
                     var priceText = isAvailable ?
-                                        Lang.Get
-                                        (
-                                            "BetterMarketBoard-Price-Format",
-                                            new Dictionary<string, object>
-                                            {
-                                                ["price"] = price!.Value
-                                            }
-                                        ) :
+                                        $"{price!.Value.ToChineseString()}\ue049" :
                                         "-";
                     var priceCol = isAvailable ?
                                        isSelected ?

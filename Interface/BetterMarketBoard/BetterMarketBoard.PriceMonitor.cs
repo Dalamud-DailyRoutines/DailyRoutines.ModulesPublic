@@ -1,5 +1,4 @@
 using DailyRoutines.Extensions;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -139,8 +138,8 @@ public unsafe partial class BetterMarketBoard
                         new Dictionary<string, object>
                         {
                             ["item"]      = ReadOnlySeString.CreateItem(monitorItem.ItemID, monitorItem.HQOnly),
-                            ["price"]     = listingsToSnipe.First().UnitPrice,
-                            ["threshold"] = monitorItem.PriceThreshold
+                            ["price"]     = listingsToSnipe.First().UnitPrice.ToChineseString(),
+                            ["threshold"] = monitorItem.PriceThreshold.ToChineseString()
                         }
                     );
 

@@ -103,14 +103,7 @@ public partial class BetterMarketBoard
     {
         ImGui.TextUnformatted
         (
-            Lang.Get
-            (
-                "BetterMarketBoard-Price-Format",
-                new Dictionary<string, object>
-                {
-                    ["price"] = price
-                }
-            )
+            $"{price.ToChineseString()}\ue049"
         );
         ImGuiOm.ClickToCopyAndNotify(price.ToString());
     }
@@ -151,7 +144,7 @@ public partial class BetterMarketBoard
                                 "BetterMarketBoard-AverageNPCPrice-Format",
                                 new Dictionary<string, object>
                                 {
-                                    ["price"] = avgPrice.Value
+                                    ["price"] = avgPrice.Value.ToChineseString()
                                 }
                             ),
                         Color = KnownColor.DarkOrange.ToVector4(),
@@ -161,9 +154,8 @@ public partial class BetterMarketBoard
                                 "BetterMarketBoard-AverageNPCPrice-Tooltip",
                                 new Dictionary<string, object>
                                 {
-                                    ["averagePrice"] = avgPrice.Value,
-                                    ["npcPrice"]     = npcGilPrice.Value,
-                                    ["shopInfo"]     = Lang.Get("BetterMarketBoard-NPCShopInfo")
+                                    ["averagePrice"] = avgPrice.Value.ToChineseString(),
+                                    ["npcPrice"]     = npcGilPrice.Value.ToChineseString()
                                 }
                             ),
                         OnClick = () => OpenShopListByItemIDIPC.InvokeFunc(itemID)
@@ -176,14 +168,7 @@ public partial class BetterMarketBoard
                     new()
                     {
                         Price = avgPrice!.Value,
-                        Badge = Lang.Get
-                        (
-                            "BetterMarketBoard-AveragePrice-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = avgPrice.Value
-                            }
-                        ),
+                        Badge = $"{Lang.Get("BetterMarketBoard-AveragePrice")}：{avgPrice.Value.ToChineseString()}\ue049",
                         Color = KnownColor.DeepSkyBlue.ToVector4()
                     }
                 );
@@ -202,7 +187,7 @@ public partial class BetterMarketBoard
                         "BetterMarketBoard-NPCPrice",
                         new Dictionary<string, object>
                         {
-                            ["price"] = npcGilPrice.Value
+                            ["price"] = npcGilPrice.Value.ToChineseString()
                         }
                     ),
                     Color   = KnownColor.OrangeRed.ToVector4(),

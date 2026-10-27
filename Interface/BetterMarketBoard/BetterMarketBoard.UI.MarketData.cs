@@ -242,14 +242,7 @@ public unsafe partial class BetterMarketBoard
                 new
                 (
                     Lang.Get("BetterMarketBoard-BatchPurchase-Total"),
-                    Lang.Get
-                    (
-                        "BetterMarketBoard-Price-Format",
-                        new Dictionary<string, object>
-                        {
-                            ["price"] = totalPrice
-                        }
-                    ),
+                    $"{totalPrice.ToChineseString()}\ue049",
                     KnownColor.Orange.ToVector4(),
                     null
                 )
@@ -318,14 +311,7 @@ public unsafe partial class BetterMarketBoard
                     new
                     (
                         LuminaWrapper.GetAddonText(358),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Number-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["value"] = itemCount
-                            }
-                        ),
+                        $"{itemCount}",
                         itemCount > 0 ?
                             KnownColor.LightSkyBlue.ToVector4() :
                             KnownColor.White.ToVector4(),
@@ -511,14 +497,7 @@ public unsafe partial class BetterMarketBoard
                     new
                     (
                         Lang.Get("BetterMarketBoard-AveragePrice-NQ"),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = data.AvgNQPrice
-                            }
-                        ),
+                        $"{data.AvgNQPrice.ToChineseString()}\ue049",
                         KnownColor.LightSkyBlue.ToVector4(),
                         null
                     )
@@ -531,14 +510,7 @@ public unsafe partial class BetterMarketBoard
                     new
                     (
                         Lang.Get("BetterMarketBoard-AveragePrice-HQ"),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = data.AvgHQPrice
-                            }
-                        ),
+                        $"{data.AvgHQPrice.ToChineseString()}\ue049",
                         KnownColor.Orange.ToVector4(),
                         null
                     )
@@ -568,14 +540,7 @@ public unsafe partial class BetterMarketBoard
                 new
                 (
                     Lang.Get("BetterMarketBoard-AveragePrice"),
-                    Lang.Get
-                    (
-                        "BetterMarketBoard-Price-Format",
-                        new Dictionary<string, object>
-                        {
-                            ["price"] = data.AvgPrice
-                        }
-                    ),
+                    $"{data.AvgPrice.ToChineseString()}\ue049",
                     KnownColor.Orange.ToVector4(),
                     null
                 )
@@ -782,14 +747,7 @@ public unsafe partial class BetterMarketBoard
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted
                 (
-                    Lang.Get
-                    (
-                        "BetterMarketBoard-Number-Format",
-                        new Dictionary<string, object>
-                        {
-                            ["value"] = listing.MateriaCount
-                        }
-                    )
+                    $"{listing.MateriaCount}"
                 );
             }
 
@@ -812,28 +770,14 @@ public unsafe partial class BetterMarketBoard
             (
                 listing.TotalTax == 0 ?
                     "-" :
-                    Lang.Get
-                    (
-                        "BetterMarketBoard-Price-Format",
-                        new Dictionary<string, object>
-                        {
-                            ["price"] = listing.TotalTax
-                        }
-                    )
+                    $"{listing.TotalTax.ToChineseString()}\ue049"
             );
             ImGuiOm.ClickToCopyAndNotify(listing.TotalTax.ToString());
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted
             (
-                Lang.Get
-                (
-                    "BetterMarketBoard-Number-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["value"] = listing.Quantity
-                    }
-                )
+                $"{listing.Quantity}"
             );
 
             var totalPrice = (listing.UnitPrice * listing.Quantity) + listing.TotalTax;
@@ -843,14 +787,7 @@ public unsafe partial class BetterMarketBoard
             {
                 if (ImGui.Selectable
                     (
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = totalPrice
-                            }
-                        ),
+                        $"{totalPrice.ToChineseString()}\ue049",
                         ImGui.IsPopupOpen($"ExecuteBuyPopup_{listing.ListingId}"),
                         ImGuiSelectableFlags.SpanAllColumns
                     ))
@@ -879,14 +816,7 @@ public unsafe partial class BetterMarketBoard
                     ImGui.TextColored
                     (
                         KnownColor.LightSkyBlue.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = listing.UnitPrice
-                            }
-                        )
+                        $"{listing.UnitPrice.ToChineseString()}\ue049"
                     );
 
                     ImGui.TextUnformatted($"{Lang.Get("Amount")}:");
@@ -895,14 +825,7 @@ public unsafe partial class BetterMarketBoard
                     ImGui.TextColored
                     (
                         KnownColor.LightSkyBlue.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Number-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["value"] = listing.Quantity
-                            }
-                        )
+                        $"{listing.Quantity}"
                     );
 
                     ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(6936)}:");
@@ -911,14 +834,7 @@ public unsafe partial class BetterMarketBoard
                     ImGui.TextColored
                     (
                         KnownColor.LightSkyBlue.ToVector4(),
-                        Lang.Get
-                        (
-                            "BetterMarketBoard-Price-Format",
-                            new Dictionary<string, object>
-                            {
-                                ["price"] = totalPrice
-                            }
-                        )
+                        $"{totalPrice.ToChineseString()}\ue049"
                     );
 
                     if (listing.TotalTax > 0)
@@ -926,14 +842,7 @@ public unsafe partial class BetterMarketBoard
                         ImGui.SameLine();
                         ImGui.TextUnformatted
                         (
-                            Lang.Get
-                            (
-                                "BetterMarketBoard-Tax-Format",
-                                new Dictionary<string, object>
-                                {
-                                    ["price"] = listing.TotalTax
-                                }
-                            )
+                            $"({Lang.Get("Tax")}: {listing.TotalTax.ToChineseString()}\ue049)"
                         );
                     }
 
@@ -1053,27 +962,13 @@ public unsafe partial class BetterMarketBoard
             ImGui.TableNextColumn();
             ImGui.TextUnformatted
             (
-                Lang.Get
-                (
-                    "BetterMarketBoard-Number-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["value"] = listing.Quantity
-                    }
-                )
+                $"{listing.Quantity}"
             );
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted
             (
-                Lang.Get
-                (
-                    "BetterMarketBoard-Price-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["price"] = listing.Total
-                    }
-                )
+                $"{listing.Total.ToChineseString()}\ue049"
             );
 
             ImGui.TableNextColumn();
@@ -1139,27 +1034,13 @@ public unsafe partial class BetterMarketBoard
             ImGui.TableNextColumn();
             ImGui.TextUnformatted
             (
-                Lang.Get
-                (
-                    "BetterMarketBoard-Number-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["value"] = sale.Quantity
-                    }
-                )
+                $"{sale.Quantity}"
             );
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted
             (
-                Lang.Get
-                (
-                    "BetterMarketBoard-Price-Format",
-                    new Dictionary<string, object>
-                    {
-                        ["price"] = sale.PricePerUnit
-                    }
-                )
+                $"{sale.PricePerUnit.ToChineseString()}\ue049"
             );
             ImGuiOm.ClickToCopyAndNotify(sale.PricePerUnit.ToString());
 

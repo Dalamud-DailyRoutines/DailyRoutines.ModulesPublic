@@ -445,14 +445,7 @@ public partial class BetterMarketBoard
                     case OverviewCardType.Expensive:
                         badgeText = isRank1 ?
                                         Lang.Get("Highest") :
-                                        Lang.Get
-                                        (
-                                            "BetterMarketBoard-Rank-Format",
-                                            new Dictionary<string, object>
-                                            {
-                                                ["rank"] = rank
-                                            }
-                                        );
+                                        $"#{rank}";
                         badgeColor = isRank1 ?
                                          KnownColor.OrangeRed.ToUInt() :
                                          ImGui.GetColorU32(ImGuiCol.TextDisabled);
@@ -460,14 +453,7 @@ public partial class BetterMarketBoard
                     case OverviewCardType.Cheapest:
                         badgeText = isRank1 ?
                                         Lang.Get("Lowest") :
-                                        Lang.Get
-                                        (
-                                            "BetterMarketBoard-Rank-Format",
-                                            new Dictionary<string, object>
-                                            {
-                                                ["rank"] = rank
-                                            }
-                                        );
+                                        $"#{rank}";
                         badgeColor = isRank1 ?
                                          KnownColor.GreenYellow.ToUInt() :
                                          ImGui.GetColorU32(ImGuiCol.TextDisabled);
@@ -506,14 +492,7 @@ public partial class BetterMarketBoard
 
         var priceText = world.MinPrice == ulong.MaxValue ?
                             "-" :
-                            Lang.Get
-                            (
-                                "BetterMarketBoard-Price-Format",
-                                new Dictionary<string, object>
-                                {
-                                    ["price"] = world.MinPrice
-                                }
-                            );
+                            $"{world.MinPrice.ToChineseString()}\ue049";
 
         using (FontManager.Instance().UIFont80.Push())
         {
@@ -588,14 +567,7 @@ public partial class BetterMarketBoard
             {
                 ImGui.TextUnformatted
                 (
-                    Lang.Get
-                    (
-                        "BetterMarketBoard-Price-Format",
-                        new Dictionary<string, object>
-                        {
-                            ["price"] = minPrice
-                        }
-                    )
+                    $"{minPrice.ToChineseString()}\ue049"
                 );
 
                 if (!isCurrentWorld && currentWorldPrice != 0 && currentWorldPrice != ulong.MaxValue)
@@ -605,23 +577,16 @@ public partial class BetterMarketBoard
 
                     if (diff != 0)
                     {
+                        var sign = diff > 0 ?
+                                       "+" :
+                                       string.Empty;
+
                         ImGui.TextColored
                         (
                             diff < 0 ?
                                 KnownColor.GreenYellow.ToVector4() :
                                 KnownColor.OrangeRed.ToVector4(),
-                            Lang.Get
-                            (
-                                "BetterMarketBoard-PriceDifference-Format",
-                                new Dictionary<string, object>
-                                {
-                                    ["price"]   = diff,
-                                    ["percent"] = diffPercent,
-                                    ["direction"] = diff > 0 ?
-                                                        "higher" :
-                                                        "lower"
-                                }
-                            )
+                            $"{sign}{diff.ToChineseString()}\ue049 ({sign}{diffPercent:F1}%)"
                         );
                     }
                 }
@@ -665,14 +630,7 @@ public partial class BetterMarketBoard
                         ImGui.TextColored
                         (
                             KnownColor.Orange.ToVector4(),
-                            Lang.Get
-                            (
-                                "BetterMarketBoard-Price-Format",
-                                new Dictionary<string, object>
-                                {
-                                    ["price"] = worldAvgPrice.Value
-                                }
-                            )
+                            $"{((ulong)Math.Round(worldAvgPrice.Value)).ToChineseString()}\ue049"
                         );
                     }
 
@@ -683,15 +641,7 @@ public partial class BetterMarketBoard
                         ImGui.SameLine();
                         ImGui.TextUnformatted
                         (
-                            Lang.Get
-                            (
-                                "BetterMarketBoard-RecentPurchase-Format",
-                                new Dictionary<string, object>
-                                {
-                                    ["price"]   = worldRecentPurchase.Price.Value,
-                                    ["timeAgo"] = timeAgoText
-                                }
-                            )
+                            $"{((ulong)Math.Round(worldRecentPurchase.Price.Value)).ToChineseString()}\ue049 ({timeAgoText})"
                         );
                     }
                 }
@@ -962,14 +912,7 @@ public partial class BetterMarketBoard
 
             var priceText = hasNoListing ?
                                 "-" :
-                                Lang.Get
-                                (
-                                    "BetterMarketBoard-Price-Format",
-                                    new Dictionary<string, object>
-                                    {
-                                        ["price"] = world.MinPrice
-                                    }
-                                );
+                                $"{world.MinPrice.ToChineseString()}\ue049";
 
             uint priceColor;
             if (hasNoListing)
