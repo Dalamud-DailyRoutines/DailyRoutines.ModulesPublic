@@ -84,7 +84,7 @@ public partial class AutoMarksFinder : ModuleBase
         newListNameInput    = string.Empty;
         startAetheryteInput = string.Empty;
         departTimeInput     = string.Empty;
-        StopAutoPilot();
+        StopAutoBroadcast();
     }
 
     private void OnCommand
@@ -184,7 +184,7 @@ public partial class AutoMarksFinder : ModuleBase
                     else if (ReferenceEquals(selected, train))
                     {
                         selectedIndex = Math.Min(i, config.Trains.Count - 1);
-                        ResetAutoPilot();
+                        ResetAutoBroadcast();
                     }
 
                     config.Save(this);
@@ -346,10 +346,10 @@ public partial class AutoMarksFinder : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public string          AutoPilotEndMacroPattern   = string.Empty;
-        public string          AutoPilotStartMacroPattern = string.Empty;
-        public int             DelayMS                    = 5000;
-        public HashSet<string> RelayCommands              = [];
+        public string          AutoBroadcastEndMacroPattern   = string.Empty;
+        public string          AutoBroadcastStartMacroPattern = string.Empty;
+        public int             DelayMS                        = 5000;
+        public HashSet<string> RelayCommands                  = [];
 
         public string RelayMacroPattern = "检测到恶名精英 {1} 于 {0} {2}";
 

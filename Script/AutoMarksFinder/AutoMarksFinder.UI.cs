@@ -76,7 +76,7 @@ public partial class AutoMarksFinder
         if (DrawTrainsSelectCombo(200f * GlobalUIScale, ref selectedTrainIndex))
         {
             smallCardMobIndex = 0;
-            ResetAutoPilot();
+            ResetAutoBroadcast();
             selected = SelectedTrain;
         }
 
@@ -276,7 +276,7 @@ public partial class AutoMarksFinder
         if (DrawTrainsSelectCombo(200f * GlobalUIScale, ref selectedTrainIndex))
         {
             smallCardMobIndex = 0;
-            ResetAutoPilot();
+            ResetAutoBroadcast();
             selected = SelectedTrain;
         }
 
@@ -322,14 +322,14 @@ public partial class AutoMarksFinder
                     if (ImGui.Button(Lang.Get("AutoMarksFinder-SortAccordingToStartingPoint")))
                     {
                         selected.Reorder();
-                        ResetAutoPilot();
+                        ResetAutoBroadcast();
                         config.Save(this);
                     }
                 }
             }
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
-            DrawAutoPilotButton();
+            DrawAutoBroadcastButton();
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
             ImGui.TextDisabled("|");
@@ -389,7 +389,7 @@ public partial class AutoMarksFinder
             if (ImGuiOm.ButtonIcon($"删除{info}", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
                 selected.MonstersFound.Remove(info);
-                ResetAutoPilot();
+                ResetAutoBroadcast();
                 config.Save(this);
             }
 
@@ -407,7 +407,7 @@ public partial class AutoMarksFinder
                         {
                             selected.MonstersFound.Swap(selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
                                                         selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i - 1])));
-                            ResetAutoPilot();
+                            ResetAutoBroadcast();
                             config.Save(this);
                         }
                     }
@@ -420,7 +420,7 @@ public partial class AutoMarksFinder
                         {
                             selected.MonstersFound.Swap(selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
                                                         selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i + 1])));
-                            ResetAutoPilot();
+                            ResetAutoBroadcast();
                             config.Save(this);
                         }
                     }
@@ -457,13 +457,13 @@ public partial class AutoMarksFinder
         }
     }
 
-    private void DrawAutoPilotButton()
+    private void DrawAutoBroadcastButton()
     {
-        var label     = autoPilotOn ? Lang.Get("AutoMarksFinder-AutoPilotOn") : Lang.Get("AutoMarksFinder-AutoPilot");
-        var tooltip   = autoPilotOn ? Lang.Get("AutoMarksFinder-AutoPilotTooltipStop") : Lang.Get("AutoMarksFinder-AutoPilotTooltipStart");
+        var label     = autoBroadcastOn ? Lang.Get("AutoMarksFinder-AutoBroadcastOn") : Lang.Get("AutoMarksFinder-AutoBroadcast");
+        var tooltip   = autoBroadcastOn ? Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStop") : Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStart");
         var clicked   = false;
 
-        if (autoPilotOn)
+        if (autoBroadcastOn)
         {
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.18f, 0.55f, 0.30f, 1f));
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.22f, 0.65f, 0.35f, 1f));
@@ -477,30 +477,30 @@ public partial class AutoMarksFinder
         }
 
         if (clicked)
-            ToggleAutoPilot();
+            ToggleAutoBroadcast();
 
         if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
-            ImGui.OpenPopup("AutoPilotPopup");
+            ImGui.OpenPopup("AutoBroadcastPopup");
 
-        using var popup = ImRaii.Popup("AutoPilotPopup");
+        using var popup = ImRaii.Popup("AutoBroadcastPopup");
         if (!popup) return;
 
-        ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotSettings"));
+        ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastSettings"));
 
         ImGui.Spacing();
-        ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotDepartTime"));
+        ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastDepartTime"));
         ImGui.SetNextItemWidth(160f * GlobalUIScale);
-        ImGui.InputText("###AutoPilotDepartTime", ref departTimeInput, 16);
+        ImGui.InputText("###AutoBroadcastDepartTime", ref departTimeInput, 16);
 
         ImGui.Spacing();
-        ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotLocalTime",
+        ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastLocalTime",
             new Dictionary<string, object> { ["timeText"] = DateTime.Now.ToString("HH:mm:ss") }));
 
         if (timeCalibrated)
         {
-            ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotServerTime",
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTime",
                 new Dictionary<string, object> { ["timeText"] = CalibratedNow.ToString("HH:mm:ss") }));
-            ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotCalibOffset",
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastCalibOffset",
                 new Dictionary<string, object>
                 {
                     ["offsetText"] = timeCalibOffsetSec.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)
@@ -508,27 +508,27 @@ public partial class AutoMarksFinder
         }
         else
         {
-            ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotServerTimeUncalibrated"));
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTimeUncalibrated"));
         }
 
-        if (autoPilotOn && !autoPilotDeparted)
+        if (autoBroadcastOn && !autoBroadcastDeparted)
         {
             var remain = departAt - CalibratedNow;
             if (remain > TimeSpan.Zero)
-                ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotRemain",
+                ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastRemain",
                     new Dictionary<string, object> { ["remainingTimeText"] = remain.ToString("hh\\:mm\\:ss") }));
             else
-                ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotDepartNow"));
+                ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastDepartNow"));
         }
-        else if (autoPilotOn && autoPilotDeparted)
+        else if (autoBroadcastOn && autoBroadcastDeparted)
         {
-            ImGui.Text(Lang.Get("AutoMarksFinder-AutoPilotProgress",
-                new Dictionary<string, object> { ["pointIndex"] = autoPilotIndex + 1 }));
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastProgress",
+                new Dictionary<string, object> { ["pointIndex"] = autoBroadcastIndex + 1 }));
         }
 
         ImGui.Spacing();
 
-        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoPilotCalibrate")))
+        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastCalibrate")))
         {
             var serverNow = Framework.GetServerTime()
                                     .ToUTCDateTimeFromUnixSeconds()
@@ -536,26 +536,26 @@ public partial class AutoMarksFinder
             timeCalibOffsetSec = (DateTime.Now - serverNow).TotalSeconds;
             timeCalibrated     = true;
 
-            if (autoPilotOn && !autoPilotDeparted && TryParseDepartTime(out var parsed))
+            if (autoBroadcastOn && !autoBroadcastDeparted && TryParseDepartTime(out var parsed))
                 departAt = parsed;
         }
 
         ImGui.SameLine();
-        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoPilotApply")))
+        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastApply")))
         {
             if (!TryParseDepartTime(out var parsed))
             {
                 NotifyHelper.Instance().NotificationWarning
-                    (Lang.Get("AutoMarksFinder-AutoPilotInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoPilot"));
+                    (Lang.Get("AutoMarksFinder-AutoBroadcastInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoBroadcast"));
                 return;
             }
 
             departAt = parsed;
             NotifyHelper.Instance().NotificationInfo
             (
-                Lang.Get("AutoMarksFinder-AutoPilotDepartTimeSet",
+                Lang.Get("AutoMarksFinder-AutoBroadcastDepartTimeSet",
                     new Dictionary<string, object> { ["timeText"] = departAt.ToString("HH:mm:ss") }),
-                Lang.Get("AutoMarksFinder-AutoPilot")
+                Lang.Get("AutoMarksFinder-AutoBroadcast")
             );
             ImGui.CloseCurrentPopup();
         }
@@ -824,35 +824,35 @@ public partial class AutoMarksFinder
         }
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoPilotStart")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoBroadcastStart")}:");
 
         ImGui.SameLine();
-        ImGui.InputText("###RelayAutoPilotStartMacro", ref config.AutoPilotStartMacroPattern, 255);
+        ImGui.InputText("###RelayAutoBroadcastStartMacro", ref config.AutoBroadcastStartMacroPattern, 255);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
 
         ImGui.SameLine();
 
-        if (ImGuiOm.ButtonIcon("PreviewAutoPilotStart", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
+        if (ImGuiOm.ButtonIcon("PreviewAutoBroadcastStart", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
         {
-            if (!string.IsNullOrWhiteSpace(config.AutoPilotStartMacroPattern))
-                ChatManager.Instance().SendMessage($"/e {config.AutoPilotStartMacroPattern}");
+            if (!string.IsNullOrWhiteSpace(config.AutoBroadcastStartMacroPattern))
+                ChatManager.Instance().SendMessage($"/e {config.AutoBroadcastStartMacroPattern}");
         }
 
         ImGui.AlignTextToFramePadding();
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoPilotEnd")}:");
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoBroadcastEnd")}:");
 
         ImGui.SameLine();
-        ImGui.InputText("###RelayAutoPilotEndMacro", ref config.AutoPilotEndMacroPattern, 255);
+        ImGui.InputText("###RelayAutoBroadcastEndMacro", ref config.AutoBroadcastEndMacroPattern, 255);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
 
         ImGui.SameLine();
 
-        if (ImGuiOm.ButtonIcon("PreviewAutoPilotEnd", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
+        if (ImGuiOm.ButtonIcon("PreviewAutoBroadcastEnd", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
         {
-            if (!string.IsNullOrWhiteSpace(config.AutoPilotEndMacroPattern))
-                ChatManager.Instance().SendMessage($"/e {config.AutoPilotEndMacroPattern}");
+            if (!string.IsNullOrWhiteSpace(config.AutoBroadcastEndMacroPattern))
+                ChatManager.Instance().SendMessage($"/e {config.AutoBroadcastEndMacroPattern}");
         }
 
         ImGui.AlignTextToFramePadding();
@@ -1245,7 +1245,7 @@ public partial class AutoMarksFinder
                     if (newOnes.Count > 0)
                     {
                         target.MonstersFound.AddRange(newOnes);
-                        ResetAutoPilot();
+                        ResetAutoBroadcast();
                         config.Save(this);
                     }
 
