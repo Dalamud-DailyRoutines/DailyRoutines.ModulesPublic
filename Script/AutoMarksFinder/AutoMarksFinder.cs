@@ -45,7 +45,7 @@ public partial class AutoMarksFinder : ModuleBase
 
     protected override void Init()
     {
-        config     =   Config.Load(this) ?? new();
+        config     = Config.Load(this) ?? new();
         TaskHelper ??= new() { TimeoutMS = 180_000, ShowDebug = IS_SHOW_DEBUG };
 
         overlaySmallCard       =  new(DrawSmallCard, Lang.Get("AutoMarksFinder-SmallCardTitle"));
