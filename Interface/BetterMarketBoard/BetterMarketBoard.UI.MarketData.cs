@@ -1,4 +1,5 @@
 using System.Globalization;
+using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -368,7 +369,14 @@ public unsafe partial class BetterMarketBoard
                 if (isOnlineView && onlineDataSet == null)
                 {
                     ImGui.Spacing();
-                    ImGui.TextColored(KnownColor.Gray.ToVector4(), $"\ue031 {LuminaWrapper.GetAddonText(2717)}");
+                    var requestStatus = provider.MarketRequestStatus;
+                    var statusText = requestStatus switch
+                    {
+                        RemoteSnapshotStatus.Failed => Lang.Get("BetterMarketBoard-Tooltip-RequestFailed"),
+                        RemoteSnapshotStatus.Ready  => LuminaWrapper.GetAddonText(1998),
+                        _                           => $"\ue031 {LuminaWrapper.GetAddonText(2717)}"
+                    };
+                    ImGui.TextColored(KnownColor.Gray.ToVector4(), statusText);
                 }
             }
         }
@@ -401,7 +409,13 @@ public unsafe partial class BetterMarketBoard
 
         if (data == null || data.Entries.Count == 0)
         {
-            ImGui.TextDisabled(LuminaWrapper.GetAddonText(1998));
+            var statusText = provider.HistoryRequestStatus switch
+            {
+                RemoteSnapshotStatus.Loading or RemoteSnapshotStatus.Empty => $"\ue031 {LuminaWrapper.GetAddonText(2717)}",
+                RemoteSnapshotStatus.Failed                                => Lang.Get("BetterMarketBoard-Tooltip-RequestFailed"),
+                _                                                          => LuminaWrapper.GetAddonText(1998)
+            };
+            ImGui.TextDisabled(statusText);
             return;
         }
 

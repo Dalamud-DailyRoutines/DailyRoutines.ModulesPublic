@@ -1,7 +1,5 @@
-using System.Globalization;
 using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Common.RemoteInteraction.Models;
-using DailyRoutines.RemoteInteraction.Universalis;
 using DailyRoutines.RemoteInteraction.Universalis.Models.Responses;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
@@ -23,35 +21,42 @@ public partial class BetterMarketBoard
     )
     {
         if (!config.AppendMarketStatsTooltip)
+        {
+            provider.ReleaseTooltipSubscription();
             return;
+        }
 
         if (kind is ItemKind.Collectible or ItemKind.EventItem)
+        {
+            provider.ReleaseTooltipSubscription();
             return;
+        }
 
         if (itemID == 0                                         ||
             !LuminaGetter.TryGetRow<Item>(itemID, out var item) ||
             item.ItemSearchCategory.RowId == 0                  ||
             GameState.CurrentWorld        == 0)
+        {
+            provider.ReleaseTooltipSubscription();
             return;
+        }
 
-        var hqOnly            = kind is ItemKind.Hq && item.CanBeHq;
-        var currentRegionName = GetCurrentRegionName();
-        var currentWorldName  = LuminaWrapper.GetWorldName(GameState.CurrentWorld);
+        var hqOnly           = kind is ItemKind.Hq && item.CanBeHq;
+        var currentWorldName = LuminaWrapper.GetWorldName(GameState.CurrentWorld);
         var currentWorldScope = string.IsNullOrEmpty(currentWorldName) ?
                                     GameState.CurrentWorld.ToString() :
                                     currentWorldName;
-        var requestTargets = string.IsNullOrEmpty(currentRegionName) ?
-                                 [currentWorldScope] :
-                                 new[] { currentWorldScope, currentRegionName };
 
-        foreach (var scope in requestTargets)
-            provider.RequestTooltipAggregatedScope(itemID, scope);
+        var currentWorldSnapshot   = provider.GetTooltipAggregatedSnapshot(itemID, currentWorldScope);
+        var marketStats            = CreateTooltipMarketStats(itemID, hqOnly, currentWorldSnapshot);
+        var isTooltipRequestFailed = currentWorldSnapshot.Status is RemoteSnapshotStatus.Failed;
 
-        var currentWorldSnapshot = RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], currentWorldScope);
-        var currentRegionSnapshot = string.IsNullOrEmpty(currentRegionName) ?
-                                        default :
-                                        RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], currentRegionName);
-        var marketStats = CreateTooltipMarketStats(itemID, hqOnly, currentWorldSnapshot, currentRegionSnapshot);
+        if (provider.CanRequestTooltipAggregatedScope())
+        {
+            QueueTooltipAggregatedRequests(itemID, currentWorldScope);
+        }
+        else
+            CancelQueuedTooltipRequest();
 
         modifications.Add
         (
@@ -62,6 +67,8 @@ public partial class BetterMarketBoard
                 Text = BuildItemTooltipMarketText
                 (
                     marketStats == null,
+                    isTooltipRequestFailed,
+                    currentWorldSnapshot.Status is RemoteSnapshotStatus.Ready,
                     marketStats?.CurrentWorldMinPrice,
                     marketStats?.CurrentWorldTimeText,
                     marketStats?.RegionMinWorldName ?? string.Empty,
@@ -73,9 +80,34 @@ public partial class BetterMarketBoard
         );
     }
 
+    private void QueueTooltipAggregatedRequests
+    (
+        uint   itemID,
+        string scope
+    )
+    {
+        if (tooltipRequestDebouncer.IsPending &&
+            tooltipRequestItemID == itemID    &&
+            tooltipRequestScope  == scope)
+            return;
+
+        tooltipRequestItemID = itemID;
+        tooltipRequestScope  = scope;
+        tooltipRequestDebouncer.Debounce();
+    }
+
+    private void CancelQueuedTooltipRequest()
+    {
+        tooltipRequestDebouncer.Cancel();
+        tooltipRequestScope  = string.Empty;
+        tooltipRequestItemID = 0;
+    }
+
     private static ReadOnlySeString BuildItemTooltipMarketText
     (
         bool    isRequesting,
+        bool    isFailed,
+        bool    isComplete,
         ulong?  currentWorldMinPrice,
         string? currentWorldTimeText,
         string  regionMinWorldName,
@@ -92,11 +124,16 @@ public partial class BetterMarketBoard
 
         if (isRequesting)
         {
-            builder
-                .AppendNewLine()
-                .PushColorType(32)
-                .Append($"    \ue031 {LuminaWrapper.GetAddonText(2717)}")
-                .PopColorType();
+            var statusText = $"\ue031 {LuminaWrapper.GetAddonText(2717)}";
+            if (isFailed)
+                statusText = Lang.Get("BetterMarketBoard-Tooltip-RequestFailed");
+            else if (isComplete)
+                statusText = LuminaWrapper.GetAddonText(1998);
+
+            builder.AppendNewLine()
+                   .PushColorType(32)
+                   .Append($"    {statusText}")
+                   .PopColorType();
 
             return builder.ToReadOnlySeString();
         }
@@ -170,31 +207,22 @@ public partial class BetterMarketBoard
     (
         uint                                                    itemID,
         bool                                                    hqOnly,
-        RemoteSnapshot<UniversalisAggregatedMarketDataResponse> currentWorldSnapshot,
-        RemoteSnapshot<UniversalisAggregatedMarketDataResponse> currentRegionSnapshot
+        RemoteSnapshot<UniversalisAggregatedMarketDataResponse> snapshot
     )
     {
-        if (!TryGetAggregatedResult(currentWorldSnapshot, itemID, out var currentWorldResult))
+        if (!TryGetAggregatedResult(snapshot, itemID, out var result))
             return null;
 
-        if (!TryGetAggregatedResult(currentRegionSnapshot, itemID, out var currentRegionResult))
-            return null;
-
-        var currentWorldData     = GetAggregatedMarketScope(currentWorldResult,  hqOnly);
-        var currentRegionData    = GetAggregatedMarketScope(currentRegionResult, hqOnly);
+        var currentWorldData     = GetAggregatedMarketScope(result, hqOnly);
         var currentWorldMinPrice = ToPrice(currentWorldData.MinListing.World.Price);
         var currentWorldTimeText = ToTimeAgo(currentWorldData.RecentPurchase.World.Timestamp);
-        var regionMinListing     = currentRegionData.MinListing.Region;
+        var regionMinListing     = currentWorldData.MinListing.Region;
         var regionMinPrice       = ToPrice(regionMinListing.Price);
         var regionMinWorldName = regionMinListing.WorldID is > 0 ?
                                      LuminaWrapper.GetWorldName(regionMinListing.WorldID.Value) :
                                      string.Empty;
-        var regionTimeText = ToTimeAgo(currentRegionData.RecentPurchase.Region.Timestamp);
-        var dailySales     = currentRegionData.DailySaleVelocity.Region.Quantity ?? 0;
-
-        if (currentWorldSnapshot.Status is not (RemoteSnapshotStatus.Ready or RemoteSnapshotStatus.Refreshing) ||
-            currentRegionSnapshot.Status is not (RemoteSnapshotStatus.Ready or RemoteSnapshotStatus.Refreshing))
-            return null;
+        var regionTimeText = ToTimeAgo(currentWorldData.RecentPurchase.Region.Timestamp);
+        var dailySales     = currentWorldData.DailySaleVelocity.Region.Quantity ?? 0;
 
         return new(currentWorldMinPrice, currentWorldTimeText, regionMinWorldName, regionMinPrice, regionTimeText, dailySales);
 
@@ -250,4 +278,10 @@ public partial class BetterMarketBoard
         string? RegionTimeText,
         float   DailySales
     );
+
+    #region 常量
+
+    private const int TOOLTIP_REQUEST_DELAY_MS = 400;
+
+    #endregion
 }

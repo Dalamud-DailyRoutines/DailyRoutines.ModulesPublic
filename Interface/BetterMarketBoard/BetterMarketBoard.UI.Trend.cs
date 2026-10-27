@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using DailyRoutines.Common.RemoteInteraction.Enums;
 using Dalamud.Utility.Numerics;
 using OmenTools.Interop.Game.Lumina;
 using TimeAgo;
@@ -20,7 +21,13 @@ public unsafe partial class BetterMarketBoard
 
         if (data == null || data.Entries.Count == 0)
         {
-            ImGui.TextDisabled(LuminaWrapper.GetAddonText(1998));
+            var statusText = provider.HistoryRequestStatus switch
+            {
+                RemoteSnapshotStatus.Loading or RemoteSnapshotStatus.Empty => $"\ue031 {LuminaWrapper.GetAddonText(2717)}",
+                RemoteSnapshotStatus.Failed                                => Lang.Get("BetterMarketBoard-Tooltip-RequestFailed"),
+                _                                                          => LuminaWrapper.GetAddonText(1998)
+            };
+            ImGui.TextDisabled(statusText);
             return;
         }
 
@@ -119,19 +126,22 @@ public unsafe partial class BetterMarketBoard
             )
             {
                 if (isCrossYear)
-                    return totalDays > 365 ? "yyyy-MM" : compact ? "yy-MM-dd" : "yyyy-MM-dd";
-
-                if (totalDays >= 7)
-                    return "MM-dd";
-
-                if (totalDays >= 1)
                 {
+                    if (totalDays > 365)
+                        return "yyyy-MM";
+
                     return compact ?
-                               "MM-dd" :
-                               "MM-dd HH:mm";
+                               "yy-MM-dd" :
+                               "yyyy-MM-dd";
                 }
 
-                return "HH:mm";
+                return totalDays switch
+                {
+                    >= 7              => "MM-dd",
+                    >= 1 when compact => "MM-dd",
+                    >= 1              => "MM-dd HH:mm",
+                    _                 => "HH:mm"
+                };
             }
 
             var plotWidth       = ImGui.GetContentRegionAvail().X;
@@ -311,8 +321,10 @@ public unsafe partial class BetterMarketBoard
             for (var i = 0; i < historyEntries.Count; i++)
             {
                 var entry = historyEntries[i];
-                if (entry.IsHQ  && !isHQVisible) continue;
-                if (!entry.IsHQ && !isNQVisible) continue;
+                if (!(entry.IsHQ ?
+                          isHQVisible :
+                          isNQVisible))
+                    continue;
 
                 var dx     = (entry.X            - mouse.X) / xRange;
                 var dy     = (entry.PricePerUnit - mouse.Y) / yRange;

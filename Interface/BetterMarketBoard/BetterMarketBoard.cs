@@ -4,6 +4,10 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.RemoteInteraction.Universalis;
+using DailyRoutines.RemoteInteraction.Universalis.Handlers;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Abstractions;
@@ -37,11 +41,15 @@ public unsafe partial class BetterMarketBoard : ModuleBase
 
     private static InfoProxyItemSearch* InfoProxy => InfoProxyItemSearch.Instance();
 
-    private MarketDataProvider   provider        = null!;
-    private PriceMonitorProvider monitorProvider = null!;
-    private Config               config          = null!;
-    private LuminaSearcher<Item> searcher        = null!;
-    private SearchInMarketMenu   contextMenu     = null!;
+    private MarketDataProvider   provider                = null!;
+    private PriceMonitorProvider monitorProvider         = null!;
+    private Config               config                  = null!;
+    private LuminaSearcher<Item> searcher                = null!;
+    private SearchInMarketMenu   contextMenu             = null!;
+    private IDebouncer           tooltipRequestDebouncer = null!;
+    private IDebouncer           tooltipRetryDebouncer   = null!;
+    private string               tooltipRequestScope     = string.Empty;
+    private uint                 tooltipRequestItemID;
 
     // Region Name - DC Name - World ID - World Name
     private Dictionary<string, Dictionary<string, Dictionary<uint, string>>> allWorlds = [];
@@ -96,8 +104,14 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         foreach (var (catID, itemList) in itemsWithCategory)
             searchCategoryToItems[catID] = itemList;
 
-        provider        = new(this);
-        monitorProvider = new(this);
+        provider                = new(this);
+        monitorProvider         = new(this);
+        tooltipRequestDebouncer = IFramework.Instance().CreateDebouncer(TimeSpan.FromMilliseconds(TOOLTIP_REQUEST_DELAY_MS), OnTooltipRequestDelayElapsed);
+        tooltipRetryDebouncer = IFramework.Instance().CreateDebouncer
+        (
+            UniversalisAggregatedMarketDataQueryHandler.FailureTTL + TimeSpan.FromMilliseconds(TOOLTIP_REQUEST_DELAY_MS),
+            () => TooltipManager.Instance().TriggerItemDetailUpdate()
+        );
 
         provider.AnchorWorld();
         lastWorldID = GameState.CurrentWorld;
@@ -176,6 +190,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         FrameworkManager.Instance().Reg(OnWorldWatch,    1_000);
 
         TooltipManager.Instance().RegItem(OnItemTooltipUpdate);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreHide, "ItemDetail", OnItemTooltipHide);
 
         contextMenu = new(this);
         ContextMenuManager.Instance().Reg(contextMenu);
@@ -183,6 +198,11 @@ public unsafe partial class BetterMarketBoard : ModuleBase
 
     protected override void Uninit()
     {
+        provider.ReleaseTooltipSubscription();
+        tooltipRequestDebouncer.Dispose();
+        tooltipRetryDebouncer.Dispose();
+
+        IAddonLifecycle.Instance().UnregisterListener(OnItemTooltipHide);
         ContextMenuManager.Instance().Unreg(contextMenu);
         TooltipManager.Instance().Unreg(OnItemTooltipUpdate);
         FrameworkManager.Instance().Unreg(OnMonitorUpdate, OnWorldWatch);
@@ -198,6 +218,27 @@ public unsafe partial class BetterMarketBoard : ModuleBase
     }
 
     #region 事件
+
+    private void OnItemTooltipHide
+    (
+        AddonEvent type,
+        AddonArgs  args
+    ) =>
+        provider.ReleaseTooltipSubscription();
+
+    private void OnTooltipRequestDelayElapsed()
+    {
+        var itemID = tooltipRequestItemID;
+        if (itemID == 0)
+            return;
+
+        var scope = tooltipRequestScope;
+        tooltipRequestScope  = string.Empty;
+        tooltipRequestItemID = 0;
+
+        provider.RequestTooltipAggregatedScope(itemID, scope);
+        TooltipManager.Instance().TriggerItemDetailUpdate();
+    }
 
     private void OnCommand
     (
@@ -244,6 +285,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
 
         if (worldID != lastWorldID)
         {
+            provider.ReleaseTooltipSubscription();
             lastWorldID = worldID;
 
             if (worldID != 0)
