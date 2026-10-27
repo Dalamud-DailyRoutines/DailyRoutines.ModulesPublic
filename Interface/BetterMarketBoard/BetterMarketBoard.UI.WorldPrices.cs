@@ -599,7 +599,7 @@ public partial class BetterMarketBoard
                 if (aggResult != null)
                 {
                     var scope               = GetAggregatedMarketScope(aggResult, frame.HQOnly);
-                    var worldSales          = scope.DailySaleVelocity.World.Quantity ?? 0;
+                    var worldSales          = MathF.Round(scope.DailySaleVelocity.World.Quantity ?? 0, 1);
                     var worldAvgPrice       = scope.AverageSalePrice.World.Price;
                     var worldRecentPurchase = scope.RecentPurchase.World;
 

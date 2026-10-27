@@ -1325,7 +1325,7 @@ public unsafe partial class BetterMarketBoard
                 }
             }
 
-            return (dailySales, avgPrice, recentPurchase);
+            return (MathF.Round(dailySales, 1), avgPrice, recentPurchase);
         }
 
         public ulong? GetSelectedWorldMinPrice

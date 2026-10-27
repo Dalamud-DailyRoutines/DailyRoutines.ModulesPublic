@@ -363,7 +363,7 @@ public unsafe partial class BetterMarketBoard
 
                     if (totalQty > 0)
                     {
-                        var turnoverDays = totalQty / dailySales;
+                        var turnoverDays = MathF.Round(totalQty / dailySales, 1);
                         metrics.Add
                         (
                             new
