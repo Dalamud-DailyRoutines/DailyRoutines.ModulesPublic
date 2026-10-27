@@ -380,13 +380,15 @@ public unsafe partial class BetterMarketBoard : ModuleBase
                 args.TargetItemRow.Value.ItemSearchCategory.RowId == 0)
                 return null;
 
+            var isHQ = args.TargetInventoryItem?.IsHighQuality() ?? false;
+            
             return new()
             {
                 Name = Lang.Get("BetterMarketBoard-SearchInMarket"),
                 OnClicked = _ =>
                 {
                     module.ToggleOverlay(true);
-                    module.provider.SelectItem(args.TargetItemID);
+                    module.provider.SelectItem(args.TargetItemID, hqOnly: isHQ);
                 }
             };
         }
