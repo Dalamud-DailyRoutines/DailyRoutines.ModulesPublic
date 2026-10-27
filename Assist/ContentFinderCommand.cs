@@ -91,17 +91,46 @@ public class ContentFinderCommand : ModuleBase
         if (arguments.Length is not (2 or 3)) return;
 
         if (!DutyTypes.TryGetValue(arguments[0], out var dutyType))
+        {
+            NotifyInvalidArgument(1, Lang.Get("ContentFinderCommand-DutyType"), args);
             return;
+        }
 
         if (!TryParseContent(arguments[1], dutyType.dutyType, out var contentIds))
+        {
+            NotifyInvalidArgument(2, Lang.Get("ModuleCategory-Duty"), args);
             return;
+        }
 
         var options = new ContentsFinderOption { Config817to820 = true };
-        if (dutyType.dutyType == DutyType.Normal && arguments.Length == 3 && !TryParseContentSettings(arguments[2], ref options))
+        if (arguments.Length == 3 &&
+            !TryParseContentSettings(arguments[2], dutyType.dutyType, ref options))
+        {
+            NotifyInvalidArgument(3, Lang.Get("ContentFinderCommand-Options"), args);
             return;
+        }
 
         ExecuteDutyRequest(dutyType.dutyType, contentIds, options);
     }
+
+    private static void NotifyInvalidArgument
+    (
+        int    argumentIndex,
+        string argumentName,
+        string args
+    ) =>
+        NotifyHelper.Instance().ChatError
+        (
+            ISeStringEvaluator.Instance().EvaluateFromLogMessage
+            (
+                3802,
+                [
+                    argumentIndex,
+                    argumentName,
+                    args
+                ]
+            )
+        );
 
     private static void ExecuteDutyRequest
     (
@@ -238,6 +267,7 @@ public class ContentFinderCommand : ModuleBase
     private static bool TryParseContentSettings
     (
         string                   input,
+        DutyType                 dutyType,
         ref ContentsFinderOption options
     )
     {
@@ -250,6 +280,16 @@ public class ContentFinderCommand : ModuleBase
         {
             if (!OptionSetters.TryGetValue(part, out var setter))
                 return false;
+
+            var isAllowed = dutyType switch
+            {
+                DutyType.Normal   => true,
+                DutyType.Roulette => part is "supply" or "sync" or "limitleveling",
+                _                 => false
+            };
+
+            if (!isAllowed) return false;
+
             setter.action(wrapper);
         }
 
