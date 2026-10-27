@@ -133,6 +133,8 @@ public unsafe partial class BetterMarketBoard
         public bool                 HQOnly;
         public RemoteSnapshotStatus MarketRequestStatus  { get; private set; }
         public RemoteSnapshotStatus HistoryRequestStatus { get; private set; }
+        public string               MarketRequestError   { get; private set; } = string.Empty;
+        public string               HistoryRequestError  { get; private set; } = string.Empty;
 
         public uint SelectedItemID { get; private set; }
 
@@ -157,6 +159,7 @@ public unsafe partial class BetterMarketBoard
         private readonly Dictionary<(uint ItemID, uint WorldID), UniversalisAggregatedMarketDataResponse> onlineAggregatedCache       = [];
         private readonly Dictionary<(uint ItemID, uint WorldID), IDisposable>                             aggregatedSubscriptionCache = [];
         private readonly Dictionary<uint, RemoteSnapshotStatus>                                           aggregatedRequestStatuses   = [];
+        private readonly Dictionary<uint, string>                                                         aggregatedRequestErrors     = [];
 
         private readonly Dictionary<(uint ItemID, uint WorldID), UniversalisMarketHistoryResponse> onlineHistoryCache       = [];
         private readonly Dictionary<(uint ItemID, uint WorldID), IDisposable>                      historySubscriptionCache = [];
@@ -456,8 +459,11 @@ public unsafe partial class BetterMarketBoard
             onlineAggregatedCache.Clear();
             onlineHistoryCache.Clear();
             aggregatedRequestStatuses.Clear();
+            aggregatedRequestErrors.Clear();
             MarketRequestStatus  = RemoteSnapshotStatus.Empty;
             HistoryRequestStatus = RemoteSnapshotStatus.Empty;
+            MarketRequestError   = string.Empty;
+            HistoryRequestError  = string.Empty;
             ClearDerivedCaches();
             cachedDCWorldPrices.Clear();
             worldPriceRanks          = null;
@@ -557,7 +563,9 @@ public unsafe partial class BetterMarketBoard
                 foreach (var (worldID, worldName) in dc)
                 {
                     var aggregatedCacheKey = (itemID, worldID);
-                    aggregatedRequestStatuses[worldID] = RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], worldName).Status;
+                    var aggregatedSnapshot = RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], worldName);
+                    aggregatedRequestStatuses[worldID] = aggregatedSnapshot.Status;
+                    aggregatedRequestErrors[worldID]   = aggregatedSnapshot.Error?.Message ?? string.Empty;
 
                     if (!aggregatedSubscriptionCache.ContainsKey(aggregatedCacheKey))
                     {
@@ -571,6 +579,7 @@ public unsafe partial class BetterMarketBoard
                                     return;
 
                                 aggregatedRequestStatuses[worldID] = snapshot.Status;
+                                aggregatedRequestErrors[worldID]   = snapshot.Error?.Message ?? string.Empty;
 
                                 if (!snapshot.HasValue || snapshot.Value is not { } data)
                                 {
@@ -599,7 +608,9 @@ public unsafe partial class BetterMarketBoard
                 return;
 
             var marketCacheKey = (itemID, SelectedWorldID, hqOnly);
-            MarketRequestStatus = RemoteUniversalisMarket.GetOrRequest([itemID], selectedWorldName, marketParam).Status;
+            var marketSnapshot = RemoteUniversalisMarket.GetOrRequest([itemID], selectedWorldName, marketParam);
+            MarketRequestStatus = marketSnapshot.Status;
+            MarketRequestError  = marketSnapshot.Error?.Message ?? string.Empty;
 
             if (!subscriptionCache.ContainsKey(marketCacheKey))
             {
@@ -614,7 +625,10 @@ public unsafe partial class BetterMarketBoard
 
                         if (SelectedWorldID == marketCacheKey.SelectedWorldID &&
                             HQOnly          == hqOnly)
+                        {
                             MarketRequestStatus = snapshot.Status;
+                            MarketRequestError  = snapshot.Error?.Message ?? string.Empty;
+                        }
 
                         if (!snapshot.HasValue || snapshot.Value is not { } data)
                             return;
@@ -632,7 +646,9 @@ public unsafe partial class BetterMarketBoard
             }
 
             var historyCacheKey = (itemID, SelectedWorldID);
-            HistoryRequestStatus = RemoteUniversalisHistory.GetOrRequest([itemID], selectedWorldName, historyParam).Status;
+            var historySnapshot = RemoteUniversalisHistory.GetOrRequest([itemID], selectedWorldName, historyParam);
+            HistoryRequestStatus = historySnapshot.Status;
+            HistoryRequestError  = historySnapshot.Error?.Message ?? string.Empty;
 
             if (!historySubscriptionCache.ContainsKey(historyCacheKey))
             {
@@ -646,7 +662,10 @@ public unsafe partial class BetterMarketBoard
                             return;
 
                         if (SelectedWorldID == historyCacheKey.SelectedWorldID)
+                        {
                             HistoryRequestStatus = snapshot.Status;
+                            HistoryRequestError  = snapshot.Error?.Message ?? string.Empty;
+                        }
 
                         if (!snapshot.HasValue || snapshot.Value is not { } data)
                             return;
@@ -1535,16 +1554,22 @@ public unsafe partial class BetterMarketBoard
             tooltipAggregatedFailedAtUTC  = default;
         }
 
+        public string GetTooltipRequestError() => tooltipAggregatedSnapshot.Error?.Message ?? string.Empty;
+
+        public string GetAggregatedRequestError() =>
+            aggregatedRequestErrors.Values.FirstOrDefault(static error => !string.IsNullOrWhiteSpace(error)) ?? string.Empty;
+
         public RemoteSnapshotStatus GetAggregatedRequestStatus()
         {
+            if (aggregatedRequestStatuses.Values.Any(static status => status is RemoteSnapshotStatus.Failed))
+                return RemoteSnapshotStatus.Failed;
+
             if (aggregatedRequestStatuses.Count == 0 ||
                 aggregatedRequestStatuses.Values.Any
-                    (status => status is RemoteSnapshotStatus.Empty or RemoteSnapshotStatus.Loading or RemoteSnapshotStatus.Refreshing))
+                    (static status => status is RemoteSnapshotStatus.Empty or RemoteSnapshotStatus.Loading or RemoteSnapshotStatus.Refreshing))
                 return RemoteSnapshotStatus.Loading;
 
-            return aggregatedRequestStatuses.Values.Any(status => status is RemoteSnapshotStatus.Failed) ?
-                       RemoteSnapshotStatus.Failed :
-                       RemoteSnapshotStatus.Ready;
+            return RemoteSnapshotStatus.Ready;
         }
 
         #endregion

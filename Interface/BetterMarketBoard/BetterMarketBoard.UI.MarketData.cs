@@ -377,6 +377,9 @@ public unsafe partial class BetterMarketBoard
                         _                           => $"\ue031 {LuminaWrapper.GetAddonText(2717)}"
                     };
                     ImGui.TextColored(KnownColor.Gray.ToVector4(), statusText);
+                    if (requestStatus is RemoteSnapshotStatus.Failed &&
+                        !string.IsNullOrWhiteSpace(provider.MarketRequestError))
+                        ImGuiOm.TooltipHover(provider.MarketRequestError);
                 }
             }
         }
@@ -416,6 +419,10 @@ public unsafe partial class BetterMarketBoard
                 _                                                          => LuminaWrapper.GetAddonText(1998)
             };
             ImGui.TextDisabled(statusText);
+            if (provider.HistoryRequestStatus is RemoteSnapshotStatus.Failed &&
+                !string.IsNullOrWhiteSpace(provider.HistoryRequestError))
+                ImGuiOm.TooltipHover(provider.HistoryRequestError);
+
             return;
         }
 

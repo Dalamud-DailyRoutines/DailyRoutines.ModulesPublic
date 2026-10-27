@@ -21,8 +21,15 @@ public unsafe partial class BetterMarketBoard : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title               = Lang.Get("BetterMarketBoardTitle"),
-        Description         = Lang.Get("BetterMarketBoardDescription", COMMAND),
+        Title = Lang.Get("BetterMarketBoardTitle"),
+        Description = Lang.Get
+        (
+            "BetterMarketBoardDescription",
+            new Dictionary<string, object>
+            {
+                ["command"] = COMMAND
+            }
+        ),
         Category            = ModuleCategory.Interface,
         Author              = ["Fragile", "AtmoOmen"],
         ModulesPrerequisite = ["FastWorldTravel", "AutoShowItemNPCShopInfo"],
@@ -58,7 +65,8 @@ public unsafe partial class BetterMarketBoard : ModuleBase
 
     private readonly Dictionary<uint, uint> itemIDToPayloadID = [];
 
-    private uint lastWorldID;
+    private uint   lastWorldID;
+    private string catalogRequestError = string.Empty;
 
     protected override void Init()
     {
@@ -129,14 +137,17 @@ public unsafe partial class BetterMarketBoard : ModuleBase
 
         TaskHelper = new()
         {
-            TaskIntervalMS = 500
+            TaskIntervalMS  = 500,
+            RetryIntervalMS = 500,
+            TimeoutMS       = 0
         };
 
         TaskHelper.Enqueue
         (() =>
             {
-                _ = RemoteUniversalisCatalog.GetDataCentersOrRequest();
-                _ = RemoteUniversalisCatalog.GetWorldsOrRequest();
+                var dataCentersSnapshot = RemoteUniversalisCatalog.GetDataCentersOrRequest();
+                var worldsSnapshot      = RemoteUniversalisCatalog.GetWorldsOrRequest();
+                catalogRequestError = dataCentersSnapshot.Error?.Message ?? worldsSnapshot.Error?.Message ?? string.Empty;
 
                 if (!RemoteUniversalisCatalog.TryGetDataCenters(out var dataCenters) ||
                     !RemoteUniversalisCatalog.TryGetWorlds(out var worlds))
@@ -160,8 +171,9 @@ public unsafe partial class BetterMarketBoard : ModuleBase
                                 )
                         );
 
-                allWorlds        = newAllWorlds;
-                config.AllWorlds = newAllWorlds;
+                allWorlds           = newAllWorlds;
+                catalogRequestError = string.Empty;
+                config.AllWorlds    = newAllWorlds;
                 config.Save(this);
 
                 provider.AnchorRegion();

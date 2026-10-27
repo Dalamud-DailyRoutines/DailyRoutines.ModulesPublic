@@ -28,6 +28,10 @@ public unsafe partial class BetterMarketBoard
                 _                                                          => LuminaWrapper.GetAddonText(1998)
             };
             ImGui.TextDisabled(statusText);
+            if (provider.HistoryRequestStatus is RemoteSnapshotStatus.Failed &&
+                !string.IsNullOrWhiteSpace(provider.HistoryRequestError))
+                ImGuiOm.TooltipHover(provider.HistoryRequestError);
+
             return;
         }
 

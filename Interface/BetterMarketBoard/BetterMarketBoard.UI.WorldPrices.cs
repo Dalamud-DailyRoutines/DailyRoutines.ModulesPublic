@@ -18,7 +18,18 @@ public partial class BetterMarketBoard
         MarketBoardUIContext frame
     )
     {
-        if (allWorlds.Count == 0) return;
+        if (allWorlds.Count == 0)
+        {
+            var statusText = string.IsNullOrEmpty(catalogRequestError) ?
+                                 $"\ue031 {LuminaWrapper.GetAddonText(2717)}" :
+                                 Lang.Get("BetterMarketBoard-CatalogRequestFailed");
+            ImGui.TextDisabled(statusText);
+
+            if (!string.IsNullOrEmpty(catalogRequestError))
+                ImGuiOm.TooltipHover(catalogRequestError);
+
+            return;
+        }
 
         var ranks             = provider.GetWorldPriceRanks(frame.ItemID);
         var displayRegionName = provider.EffectiveRegionName;
@@ -42,8 +53,14 @@ public partial class BetterMarketBoard
                     RemoteSnapshotStatus.Ready  => LuminaWrapper.GetAddonText(1998),
                     _                           => $"\ue031 {LuminaWrapper.GetAddonText(2717)}"
                 };
+
                 using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.Gray.ToUInt()))
+                {
                     ImGuiOm.TextCentered(statusText);
+                    if (status is RemoteSnapshotStatus.Failed &&
+                        !string.IsNullOrWhiteSpace(provider.GetAggregatedRequestError()))
+                        ImGuiOm.TooltipHover(provider.GetAggregatedRequestError());
+                }
             }
 
             return;

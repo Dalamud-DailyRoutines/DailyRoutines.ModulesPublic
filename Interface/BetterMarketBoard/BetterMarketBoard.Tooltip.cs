@@ -69,6 +69,7 @@ public partial class BetterMarketBoard
                     marketStats == null,
                     isTooltipRequestFailed,
                     currentWorldSnapshot.Status is RemoteSnapshotStatus.Ready,
+                    provider.GetTooltipRequestError(),
                     marketStats?.CurrentWorldMinPrice,
                     marketStats?.CurrentWorldTimeText,
                     marketStats?.RegionMinWorldName ?? string.Empty,
@@ -108,6 +109,7 @@ public partial class BetterMarketBoard
         bool    isRequesting,
         bool    isFailed,
         bool    isComplete,
+        string  errorMessage,
         ulong?  currentWorldMinPrice,
         string? currentWorldTimeText,
         string  regionMinWorldName,
@@ -134,6 +136,9 @@ public partial class BetterMarketBoard
                    .PushColorType(32)
                    .Append($"    {statusText}")
                    .PopColorType();
+
+            if (isFailed && !string.IsNullOrWhiteSpace(errorMessage))
+                builder.AppendNewLine().Append($"    {errorMessage[..Math.Min(errorMessage.Length, 160)]}");
 
             return builder.ToReadOnlySeString();
         }
