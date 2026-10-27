@@ -22,7 +22,7 @@ public partial class AutoMarksFinder
     )
     {
         UpdateTrainAliveStates();
-        UpdateAutoPilot();
+        UpdateAutoBroadcast();
     }
 
     private void UpdateTrainAliveStates()
