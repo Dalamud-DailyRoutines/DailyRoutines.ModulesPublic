@@ -5,7 +5,7 @@ using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface.AutoShowItemNPCShopInfo;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoShowItemNPCShopInfo
 {

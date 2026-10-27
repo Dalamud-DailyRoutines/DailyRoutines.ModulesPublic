@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 using EventFramework = FFXIVClientStructs.FFXIV.Client.Game.Event.EventFramework;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoShowFrontlineKillCount : ModuleBase
 {

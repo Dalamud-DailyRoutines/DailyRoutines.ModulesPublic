@@ -11,7 +11,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
 using OmenTools.KamiToolKit.Nodes;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class OptimizedFriendList
 {

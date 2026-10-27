@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Common.Runtime.Hosts;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using DailyRoutines.Verification;
 using Dalamud.Interface.Windowing;
 using Dalamud.Utility.Numerics;
@@ -18,7 +17,7 @@ using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
-namespace DailyRoutines.ModulesPublic.Interface.BetterTeleport;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterTeleport : ModuleBase
 {

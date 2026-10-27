@@ -37,7 +37,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.CraftGather;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OptimizedRecipeNote : ModuleBase
 {

@@ -1,4 +1,4 @@
-namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class UnifiedGlamourManager
 {

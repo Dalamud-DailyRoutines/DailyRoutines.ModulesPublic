@@ -10,7 +10,7 @@ using FFXIVClientStructs.FFXIV.Component.Text;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Models;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedChatBubble : ModuleBase
 {

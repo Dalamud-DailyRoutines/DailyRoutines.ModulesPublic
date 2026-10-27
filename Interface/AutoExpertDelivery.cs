@@ -27,7 +27,7 @@ using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;
 using GrandCompany = FFXIVClientStructs.FFXIV.Client.UI.Agent.GrandCompany;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoExpertDelivery : ModuleBase
 {

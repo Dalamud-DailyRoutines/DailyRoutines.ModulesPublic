@@ -20,7 +20,7 @@ using OmenTools.OmenService;
 using Framework = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework;
 using NetworkModule = FFXIVClientStructs.Expansion.FFXIV.Application.Network.NetworkModule;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoDisplayNetworkLatency : ModuleBase
 {

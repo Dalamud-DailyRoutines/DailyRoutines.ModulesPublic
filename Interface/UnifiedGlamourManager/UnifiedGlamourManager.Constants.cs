@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager
 {

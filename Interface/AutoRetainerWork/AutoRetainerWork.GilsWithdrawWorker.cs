@@ -1,9 +1,9 @@
 using DailyRoutines.Extensions;
-using OmenTools.Interop.Game.AddonEvent;
 using KamiToolKit.Nodes;
+using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Threading.TaskHelper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWork
 {

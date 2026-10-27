@@ -1,12 +1,12 @@
 using System.Numerics;
-using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Common.Interface.Widgets;
+using DailyRoutines.Common.RemoteInteraction.Enums;
 using Dalamud.Utility.Numerics;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using TimeAgo;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class BetterMarketBoard
 {

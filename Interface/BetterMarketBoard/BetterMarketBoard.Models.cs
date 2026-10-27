@@ -3,7 +3,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class BetterMarketBoard
 {

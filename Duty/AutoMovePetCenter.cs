@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMovePetCenter : ModuleBase
 {

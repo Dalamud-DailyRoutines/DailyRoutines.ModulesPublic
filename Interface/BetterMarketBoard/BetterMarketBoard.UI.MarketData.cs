@@ -7,7 +7,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using TimeAgo;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {

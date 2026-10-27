@@ -28,7 +28,7 @@ using Action = Lumina.Excel.Sheets.Action;
 using AgentShowDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentShowDelegate;
 using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class BetterMKDSupportJobList : ModuleBase
 {

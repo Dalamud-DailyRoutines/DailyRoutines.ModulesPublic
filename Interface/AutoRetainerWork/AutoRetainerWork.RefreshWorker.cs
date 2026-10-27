@@ -2,7 +2,7 @@ using DailyRoutines.Extensions;
 using KamiToolKit.Nodes;
 using OmenTools.Threading.TaskHelper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoRetainerWork
 {

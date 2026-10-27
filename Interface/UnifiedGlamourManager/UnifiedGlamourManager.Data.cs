@@ -11,7 +11,7 @@ using ItemSheet = Lumina.Excel.Sheets.Item;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
 using Action = System.Action;
 
-namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class UnifiedGlamourManager
 {

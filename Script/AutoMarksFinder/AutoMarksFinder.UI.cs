@@ -1,6 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -15,7 +14,7 @@ using Map = Lumina.Excel.Sheets.Map;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 using Task = System.Threading.Tasks.Task;
 
-namespace DailyRoutines.Modules.AutoMarksFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {

@@ -6,7 +6,7 @@ using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.Modules.AutoMarksFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {

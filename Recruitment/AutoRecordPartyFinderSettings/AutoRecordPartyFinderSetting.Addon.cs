@@ -10,7 +10,7 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.AutoRecordPartyFinderSettings;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRecordPartyFinderSetting
 {

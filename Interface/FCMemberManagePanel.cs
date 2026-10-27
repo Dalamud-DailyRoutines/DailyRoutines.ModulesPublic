@@ -15,7 +15,7 @@ using AgentFreeCompany = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.Agen
 using AgentFreeCompanyProfile = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentFreeCompanyProfile;
 using InfoProxyFreeCompany = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Info.InfoProxyFreeCompany;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FCMemberManagePanel : ModuleBase
 {

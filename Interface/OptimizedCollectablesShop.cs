@@ -1,8 +1,8 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Internal;
 using DailyRoutines.Extensions;
+using DailyRoutines.Internal;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -25,7 +25,7 @@ using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ShopData = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentCollectablesShop.CollectablesShopData;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedCollectablesShop : ModuleBase
 {

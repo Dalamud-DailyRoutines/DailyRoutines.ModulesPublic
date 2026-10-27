@@ -3,7 +3,7 @@ using OmenTools.Interop.Game.Lumina;
 using ItemSource = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData.ItemSource;
 using ItemSheet = Lumina.Excel.Sheets.Item;
 
-namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager
 {

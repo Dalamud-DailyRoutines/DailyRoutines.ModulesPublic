@@ -9,7 +9,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNotifyDutyConfirm : ModuleBase
 {

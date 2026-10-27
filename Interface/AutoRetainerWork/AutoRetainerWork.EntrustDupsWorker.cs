@@ -2,12 +2,12 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
-using KamiToolKit.Nodes;
 using OmenTools.Threading.TaskHelper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWork
 {

@@ -12,7 +12,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class PlayerTargetInfoExpand : ModuleBase
 {

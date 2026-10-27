@@ -9,7 +9,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using AgentTryon = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentTryon;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoTryOnPlayerOutfit : ModuleBase
 {

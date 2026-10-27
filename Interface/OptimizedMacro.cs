@@ -6,7 +6,6 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
-using ExpansionAtkResNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkResNode;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
@@ -18,8 +17,9 @@ using OmenTools.KamiToolKit.Addons.SelectYesno;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
+using ExpansionAtkResNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkResNode;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedMacro : ModuleBase
 {

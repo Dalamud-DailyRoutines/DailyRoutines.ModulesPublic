@@ -23,7 +23,7 @@ using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 using Treasure = FFXIVClientStructs.FFXIV.Client.Game.Object.Treasure;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class FastObjectInteract : ModuleBase
 {

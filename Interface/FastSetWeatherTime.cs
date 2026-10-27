@@ -3,7 +3,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
@@ -20,7 +19,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastSetWeatherTime : ModuleBase
 {

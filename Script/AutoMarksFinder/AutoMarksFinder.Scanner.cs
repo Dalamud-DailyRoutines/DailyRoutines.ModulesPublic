@@ -1,9 +1,8 @@
 using System.Numerics;
-using Dalamud.Game.Config;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.Game.Config;
 using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
@@ -18,7 +17,7 @@ using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using OmenTools.Threading.TaskHelper.Enums;
 
-namespace DailyRoutines.Modules.AutoMarksFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {

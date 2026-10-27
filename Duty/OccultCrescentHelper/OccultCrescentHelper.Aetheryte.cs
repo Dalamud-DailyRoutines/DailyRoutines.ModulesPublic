@@ -1,6 +1,5 @@
 using System.Numerics;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Plugin;
 using FFXIVClientStructs.FFXIV.Client.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
@@ -13,7 +12,7 @@ using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {

@@ -17,7 +17,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 // TODO：之后重写成新模块，现在并不需要自己维护一个 ImGui 界面了
 public class BetterFateProgressUI : ModuleBase

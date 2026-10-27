@@ -1,6 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
@@ -8,7 +7,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.UiOverlay;
-using OmenTools.Dalamud;
 using OmenTools.Info.Game;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
@@ -17,7 +15,7 @@ using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {

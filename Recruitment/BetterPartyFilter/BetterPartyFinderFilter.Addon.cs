@@ -16,7 +16,7 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class BetterPartyFinderFilter
 {

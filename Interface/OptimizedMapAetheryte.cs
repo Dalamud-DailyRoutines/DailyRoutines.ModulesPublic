@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedMapAetheryte : ModuleBase
 {

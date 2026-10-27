@@ -14,7 +14,7 @@ using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 using DObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class SastashaHelper : ModuleBase
 {

@@ -4,10 +4,10 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentReceiveEventDelegate;
 using OmenTools.OmenService;
+using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentReceiveEventDelegate;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoBlockEmptyXBMParty : ModuleBase
 {

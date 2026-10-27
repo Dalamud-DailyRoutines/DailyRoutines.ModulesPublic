@@ -9,14 +9,14 @@ using KamiToolKit.Controllers;
 using KamiToolKit.Enums;
 using KamiToolKit.MapOverlay;
 using KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.CircleButton;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface.CustomizeMapMarker;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class CustomizeMapMarker : ModuleBase
 {

@@ -4,7 +4,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.CrossDCPartyFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class CrossDCPartyFinder
 {

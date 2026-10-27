@@ -13,13 +13,13 @@ using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using PlayerController = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.PlayerController;
 using OmenTools.OmenService;
 using OmenTools.OmenService.ZoneIndicator;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
+using PlayerController = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.PlayerController;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {

@@ -5,7 +5,7 @@ using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.Interop.Game.Models;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class NoHideHotbars : ModuleBase
 {

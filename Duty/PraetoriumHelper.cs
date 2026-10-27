@@ -7,7 +7,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class PraetoriumHelper : ModuleBase
 {

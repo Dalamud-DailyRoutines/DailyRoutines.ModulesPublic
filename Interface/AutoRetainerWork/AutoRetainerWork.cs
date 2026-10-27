@@ -18,7 +18,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.Threading;
 using Action = System.Action;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWork : ModuleBase
 {

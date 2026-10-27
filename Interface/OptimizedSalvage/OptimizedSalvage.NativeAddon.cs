@@ -12,7 +12,7 @@ using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class OptimizedSalvage
 {

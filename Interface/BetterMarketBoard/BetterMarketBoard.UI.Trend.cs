@@ -4,7 +4,7 @@ using Dalamud.Utility.Numerics;
 using OmenTools.Interop.Game.Lumina;
 using TimeAgo;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {

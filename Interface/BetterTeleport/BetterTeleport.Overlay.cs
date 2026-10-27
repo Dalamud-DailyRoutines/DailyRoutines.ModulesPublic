@@ -9,7 +9,7 @@ using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Game.AetheryteRecord.Enums;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface.BetterTeleport;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterTeleport
 {

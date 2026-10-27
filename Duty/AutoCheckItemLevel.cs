@@ -13,7 +13,7 @@ using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoCheckItemLevel : ModuleBase
 {

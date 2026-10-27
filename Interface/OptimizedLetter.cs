@@ -17,7 +17,7 @@ using OmenTools.Threading.TaskHelper;
 using TinyPinyin;
 using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class OptimizedLetter : ModuleBase
 {

@@ -8,7 +8,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ShopDisplayRealItemIcon : ModuleBase
 {

@@ -7,7 +7,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoVeryEasyQuestBattle : ModuleBase
 {

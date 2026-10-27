@@ -16,7 +16,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
-namespace DailyRoutines.ModulesPublic.CraftGather;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoEliminateFishAwareness : ModuleBase
 {

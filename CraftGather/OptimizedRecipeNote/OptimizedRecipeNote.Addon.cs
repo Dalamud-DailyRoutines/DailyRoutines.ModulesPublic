@@ -20,9 +20,8 @@ using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.KamiToolKit.Nodes.GaugeBarCraft;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
-using AgentId = Dalamud.Game.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.CraftGather;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OptimizedRecipeNote
 {

@@ -10,7 +10,7 @@ using OmenTools.Interop.Windows.Helpers;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoQTE : ModuleBase
 {

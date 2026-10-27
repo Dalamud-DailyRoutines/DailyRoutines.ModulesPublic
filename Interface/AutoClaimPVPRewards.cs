@@ -9,7 +9,7 @@ using OmenTools.Info.Game.Enums;
 using OmenTools.OmenService;
 using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoClaimPVPRewards : ModuleBase
 {

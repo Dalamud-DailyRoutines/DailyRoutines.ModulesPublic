@@ -13,7 +13,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
 using OmenTools.Interop.Game.Models;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class CustomizeInterfaceText : ModuleBase
 {

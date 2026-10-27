@@ -25,7 +25,7 @@ using OmenTools.Threading.TaskHelper;
 using OmenTools.Threading.TaskHelper.Enums;
 using FateState = Dalamud.Game.ClientState.Fates.FateState;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {

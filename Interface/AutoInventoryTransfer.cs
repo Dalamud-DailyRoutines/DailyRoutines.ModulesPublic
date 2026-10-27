@@ -7,7 +7,7 @@ using Dalamud.Game.Gui.ContextMenu;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoInventoryTransfer : ModuleBase
 {

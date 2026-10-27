@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {

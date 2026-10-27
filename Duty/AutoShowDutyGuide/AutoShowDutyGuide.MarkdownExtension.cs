@@ -21,7 +21,7 @@ using GameAction = Lumina.Excel.Sheets.Action;
 using GameItem = Lumina.Excel.Sheets.Item;
 using GameStatus = Lumina.Excel.Sheets.Status;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoShowDutyGuide
 {

@@ -4,7 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.DutyState;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyDutyStart : ModuleBase
 {

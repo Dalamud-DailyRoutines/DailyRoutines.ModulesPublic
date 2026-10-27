@@ -20,7 +20,7 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedFreeShop : ModuleBase
 {

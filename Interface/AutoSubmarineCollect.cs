@@ -37,7 +37,7 @@ using TimeAgo;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoSubmarineCollect : ModuleBase
 {

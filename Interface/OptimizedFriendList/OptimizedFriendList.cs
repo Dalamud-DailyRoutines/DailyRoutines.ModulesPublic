@@ -17,7 +17,7 @@ using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class OptimizedFriendList : ModuleBase
 {

@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
-namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class UnifiedGlamourManager
 {

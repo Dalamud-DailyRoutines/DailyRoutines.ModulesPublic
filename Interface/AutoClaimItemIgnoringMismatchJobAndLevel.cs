@@ -6,7 +6,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
 {

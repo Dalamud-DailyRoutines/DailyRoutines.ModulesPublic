@@ -4,7 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using OmenTools.Info.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyDutyName : ModuleBase
 {

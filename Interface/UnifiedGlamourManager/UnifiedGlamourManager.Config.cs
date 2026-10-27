@@ -4,7 +4,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using ItemSheet = Lumina.Excel.Sheets.Item;
 
-namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager
 {

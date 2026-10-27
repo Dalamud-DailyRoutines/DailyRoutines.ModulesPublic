@@ -15,7 +15,7 @@ using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard : ModuleBase
 {

@@ -1,8 +1,8 @@
-using DailyRoutines.Extensions;
 using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Common.RemoteInteraction.Models;
-using DailyRoutines.RemoteInteraction.Universalis.Handlers;
+using DailyRoutines.Extensions;
 using DailyRoutines.RemoteInteraction.Universalis;
+using DailyRoutines.RemoteInteraction.Universalis.Handlers;
 using DailyRoutines.RemoteInteraction.Universalis.Models.Requests;
 using DailyRoutines.RemoteInteraction.Universalis.Models.Responses;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -14,7 +14,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {

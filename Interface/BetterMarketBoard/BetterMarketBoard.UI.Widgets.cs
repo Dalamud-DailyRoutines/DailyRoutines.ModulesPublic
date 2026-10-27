@@ -3,7 +3,7 @@ using DailyRoutines.Extensions;
 using Dalamud.Utility.Numerics;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class BetterMarketBoard
 {

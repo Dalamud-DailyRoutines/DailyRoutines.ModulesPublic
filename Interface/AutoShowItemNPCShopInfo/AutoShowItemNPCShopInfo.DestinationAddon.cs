@@ -6,7 +6,7 @@ using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface.AutoShowItemNPCShopInfo;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoShowItemNPCShopInfo
 {

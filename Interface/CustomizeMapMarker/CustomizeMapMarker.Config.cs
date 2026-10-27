@@ -2,7 +2,7 @@ using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface.CustomizeMapMarker;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class CustomizeMapMarker
 {
