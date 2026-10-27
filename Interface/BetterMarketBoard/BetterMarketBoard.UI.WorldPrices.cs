@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Numerics;
 using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Common.Interface.Widgets;
@@ -446,7 +445,14 @@ public partial class BetterMarketBoard
                     case OverviewCardType.Expensive:
                         badgeText = isRank1 ?
                                         Lang.Get("Highest") :
-                                        $"#{rank}";
+                                        Lang.Get
+                                        (
+                                            "BetterMarketBoard-Rank-Format",
+                                            new Dictionary<string, object>
+                                            {
+                                                ["rank"] = rank
+                                            }
+                                        );
                         badgeColor = isRank1 ?
                                          KnownColor.OrangeRed.ToUInt() :
                                          ImGui.GetColorU32(ImGuiCol.TextDisabled);
@@ -454,7 +460,14 @@ public partial class BetterMarketBoard
                     case OverviewCardType.Cheapest:
                         badgeText = isRank1 ?
                                         Lang.Get("Lowest") :
-                                        $"#{rank}";
+                                        Lang.Get
+                                        (
+                                            "BetterMarketBoard-Rank-Format",
+                                            new Dictionary<string, object>
+                                            {
+                                                ["rank"] = rank
+                                            }
+                                        );
                         badgeColor = isRank1 ?
                                          KnownColor.GreenYellow.ToUInt() :
                                          ImGui.GetColorU32(ImGuiCol.TextDisabled);
@@ -493,7 +506,14 @@ public partial class BetterMarketBoard
 
         var priceText = world.MinPrice == ulong.MaxValue ?
                             "-" :
-                            $"{world.MinPrice.ToChineseString()}\ue049";
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-Price-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["price"] = world.MinPrice
+                                }
+                            );
 
         using (FontManager.Instance().UIFont80.Push())
         {
@@ -566,35 +586,43 @@ public partial class BetterMarketBoard
                 ImGui.TextDisabled("-");
             else
             {
-                ImGui.TextUnformatted($"{minPrice.ToChineseString()}\ue049");
+                ImGui.TextUnformatted
+                (
+                    Lang.Get
+                    (
+                        "BetterMarketBoard-Price-Format",
+                        new Dictionary<string, object>
+                        {
+                            ["price"] = minPrice
+                        }
+                    )
+                );
 
                 if (!isCurrentWorld && currentWorldPrice != 0 && currentWorldPrice != ulong.MaxValue)
                 {
                     var diff        = (long)minPrice - (long)currentWorldPrice;
                     var diffPercent = (double)diff / currentWorldPrice * 100.0;
 
-                    switch (diff)
+                    if (diff != 0)
                     {
-                        case < 0:
-                        {
-                            var absDiff = (ulong)-diff;
-                            ImGui.TextColored
-                            (
-                                KnownColor.GreenYellow.ToVector4(),
-                                $"-{absDiff.ToChineseString()}\ue049 (-{Math.Abs(diffPercent):F1}%)"
-                            );
-                            break;
-                        }
-                        case > 0:
-                        {
-                            var absDiff = (ulong)diff;
-                            ImGui.TextColored
-                            (
+                        ImGui.TextColored
+                        (
+                            diff < 0 ?
+                                KnownColor.GreenYellow.ToVector4() :
                                 KnownColor.OrangeRed.ToVector4(),
-                                $"+{absDiff.ToChineseString()}\ue049 (+{diffPercent:F1}%)"
-                            );
-                            break;
-                        }
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-PriceDifference-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["price"]   = diff,
+                                    ["percent"] = diffPercent,
+                                    ["direction"] = diff > 0 ?
+                                                        "higher" :
+                                                        "lower"
+                                }
+                            )
+                        );
                     }
                 }
             }
@@ -619,7 +647,14 @@ public partial class BetterMarketBoard
                         ImGui.TextColored
                         (
                             KnownColor.LightSkyBlue.ToVector4(),
-                            Lang.Get("BetterMarketBoard-DailySales-Format", worldSales.ToString("0.#", CultureInfo.InvariantCulture))
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-DailySales-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["quantity"] = worldSales
+                                }
+                            )
                         );
                     }
 
@@ -627,7 +662,18 @@ public partial class BetterMarketBoard
                     {
                         ImGui.TextDisabled($"{Lang.Get("BetterMarketBoard-AveragePrice")}: ");
                         ImGui.SameLine();
-                        ImGui.TextColored(KnownColor.Orange.ToVector4(), $"{((ulong)Math.Round(worldAvgPrice.Value)).ToChineseString()}\ue049");
+                        ImGui.TextColored
+                        (
+                            KnownColor.Orange.ToVector4(),
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-Price-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["price"] = worldAvgPrice.Value
+                                }
+                            )
+                        );
                     }
 
                     if (worldRecentPurchase is { Price: > 0, Timestamp: > 0 })
@@ -635,7 +681,18 @@ public partial class BetterMarketBoard
                         var timeAgoText = DateTimeOffset.FromUnixTimeMilliseconds(worldRecentPurchase.Timestamp.Value).LocalDateTime.TimeAgo();
                         ImGui.TextDisabled($"{Lang.Get("BetterMarketBoard-RecentPurchase")}: ");
                         ImGui.SameLine();
-                        ImGui.TextUnformatted($"{((ulong)Math.Round(worldRecentPurchase.Price.Value)).ToChineseString()}\ue049 ({timeAgoText})");
+                        ImGui.TextUnformatted
+                        (
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-RecentPurchase-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["price"]   = worldRecentPurchase.Price.Value,
+                                    ["timeAgo"] = timeAgoText
+                                }
+                            )
+                        );
                     }
                 }
             }
@@ -905,7 +962,14 @@ public partial class BetterMarketBoard
 
             var priceText = hasNoListing ?
                                 "-" :
-                                $"{world.MinPrice.ToChineseString()}\ue049";
+                                Lang.Get
+                                (
+                                    "BetterMarketBoard-Price-Format",
+                                    new Dictionary<string, object>
+                                    {
+                                        ["price"] = world.MinPrice
+                                    }
+                                );
 
             uint priceColor;
             if (hasNoListing)

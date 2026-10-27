@@ -153,7 +153,19 @@ public partial class BetterMarketBoard
 
         builder.Append(": ")
                .PushColorType(32)
-               .Append(FormatPrice(currentWorldMinPrice))
+               .Append
+               (
+                   currentWorldMinPrice is > 0 ?
+                       Lang.Get
+                       (
+                           "BetterMarketBoard-Price-Format",
+                           new Dictionary<string, object>
+                           {
+                               ["price"] = currentWorldMinPrice.Value
+                           }
+                       ) :
+                       "-"
+               )
                .PopColorType();
 
         if (!string.IsNullOrEmpty(currentWorldTimeText))
@@ -173,7 +185,19 @@ public partial class BetterMarketBoard
 
         builder.Append(": ")
                .PushColorType(32)
-               .Append(FormatPrice(regionMinPrice))
+               .Append
+               (
+                   regionMinPrice is > 0 ?
+                       Lang.Get
+                       (
+                           "BetterMarketBoard-Price-Format",
+                           new Dictionary<string, object>
+                           {
+                               ["price"] = regionMinPrice.Value
+                           }
+                       ) :
+                       "-"
+               )
                .PopColorType();
 
         if (!string.IsNullOrEmpty(regionTimeText))
@@ -183,26 +207,23 @@ public partial class BetterMarketBoard
         builder.AppendNewLine()
                .Append($"    {Lang.Get("BetterMarketBoard-Tooltip-DailySales")}: ")
                .PushColorType(45)
-               .Append(FormatSales(dailySales))
+               .Append
+               (
+                   dailySales > 0 ?
+                       Lang.Get
+                       (
+                           "BetterMarketBoard-DailySales-Format",
+                           new Dictionary<string, object>
+                           {
+                               ["quantity"] = dailySales
+                           }
+                       ) :
+                       "-"
+               )
                .PopColorType();
 
         return builder.ToReadOnlySeString();
 
-        static string FormatPrice
-        (
-            ulong? price
-        ) =>
-            price is > 0 ?
-                $"{price.Value.ToChineseString()}\ue049" :
-                "-";
-
-        static string FormatSales
-        (
-            float sales
-        ) =>
-            sales > 0 ?
-                ((int)MathF.Ceiling(sales)).ToChineseString() :
-                "-";
     }
 
     private string GetCurrentRegionName() =>

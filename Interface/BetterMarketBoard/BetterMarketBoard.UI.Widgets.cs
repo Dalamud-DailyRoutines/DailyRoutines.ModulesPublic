@@ -28,11 +28,10 @@ public partial class BetterMarketBoard
             valueHeight = ImGui.GetTextLineHeight();
 
         var cardHeight = (paddingY * 2) + labelHeight + valueHeight + (3f * GlobalUIScale);
-        var cursorPos  = ImGui.GetCursorScreenPos();
 
         var drawList = ImGui.GetWindowDrawList();
-        var min      = cursorPos;
-        var max      = cursorPos + new Vector2(contentWidth, cardHeight);
+        var min      = ImGui.GetCursorScreenPos();
+        var max      = min + new Vector2(contentWidth, cardHeight);
 
         drawList.AddRectFilled(min, max, ImGui.GetColorU32(ImGuiCol.FrameBg, 0.45f), 4f * GlobalUIScale);
         drawList.AddRect(min, max, ImGui.GetColorU32(ImGuiCol.Border,        0.25f), 4f * GlobalUIScale);
@@ -102,7 +101,17 @@ public partial class BetterMarketBoard
         ulong price
     )
     {
-        ImGui.TextUnformatted($"{price.ToChineseString()}\ue049");
+        ImGui.TextUnformatted
+        (
+            Lang.Get
+            (
+                "BetterMarketBoard-Price-Format",
+                new Dictionary<string, object>
+                {
+                    ["price"] = price
+                }
+            )
+        );
         ImGuiOm.ClickToCopyAndNotify(price.ToString());
     }
 
@@ -137,10 +146,26 @@ public partial class BetterMarketBoard
                     {
                         Price = avgPrice.Value,
                         Badge =
-                            $"{Lang.Get("BetterMarketBoard-AveragePrice")} & {Lang.Get("BetterMarketBoard-NPCPrice", $"{avgPrice.Value.ToChineseString()}\ue049")}",
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-AverageNPCPrice-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["price"] = avgPrice.Value
+                                }
+                            ),
                         Color = KnownColor.DarkOrange.ToVector4(),
                         Tooltip =
-                            $"{Lang.Get("BetterMarketBoard-AveragePrice")}：{avgPrice.Value.ToChineseString()}\ue049\n{Lang.Get("BetterMarketBoard-NPCPrice", $"{npcGilPrice.Value.ToChineseString()}\ue049")}\n{Lang.Get("BetterMarketBoard-NPCShopInfo")}",
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-AverageNPCPrice-Tooltip",
+                                new Dictionary<string, object>
+                                {
+                                    ["averagePrice"] = avgPrice.Value,
+                                    ["npcPrice"]     = npcGilPrice.Value,
+                                    ["shopInfo"]     = Lang.Get("BetterMarketBoard-NPCShopInfo")
+                                }
+                            ),
                         OnClick = () => OpenShopListByItemIDIPC.InvokeFunc(itemID)
                     }
                 );
@@ -151,7 +176,14 @@ public partial class BetterMarketBoard
                     new()
                     {
                         Price = avgPrice!.Value,
-                        Badge = $"{Lang.Get("BetterMarketBoard-AveragePrice")}：{avgPrice.Value.ToChineseString()}\ue049",
+                        Badge = Lang.Get
+                        (
+                            "BetterMarketBoard-AveragePrice-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = avgPrice.Value
+                            }
+                        ),
                         Color = KnownColor.DeepSkyBlue.ToVector4()
                     }
                 );
@@ -164,8 +196,15 @@ public partial class BetterMarketBoard
             (
                 new()
                 {
-                    Price   = npcGilPrice!.Value,
-                    Badge   = $"{Lang.Get("BetterMarketBoard-NPCPrice", $"{npcGilPrice.Value.ToChineseString()}\ue049")}",
+                    Price = npcGilPrice!.Value,
+                    Badge = Lang.Get
+                    (
+                        "BetterMarketBoard-NPCPrice",
+                        new Dictionary<string, object>
+                        {
+                            ["price"] = npcGilPrice.Value
+                        }
+                    ),
                     Color   = KnownColor.OrangeRed.ToVector4(),
                     Tooltip = Lang.Get("BetterMarketBoard-NPCShopInfo"),
                     OnClick = () => OpenShopListByItemIDIPC.InvokeFunc(itemID)

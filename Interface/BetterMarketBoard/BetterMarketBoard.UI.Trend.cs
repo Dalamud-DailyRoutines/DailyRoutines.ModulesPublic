@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Numerics;
 using DailyRoutines.Common.RemoteInteraction.Enums;
 using Dalamud.Utility.Numerics;
@@ -42,8 +41,34 @@ public unsafe partial class BetterMarketBoard
 
         var trendMetrics = new List<MetricItem>
         {
-            new(Lang.Get("BetterMarketBoard-Trend-Max"), $"{actualMaxPrice.ToChineseString()}\ue049", KnownColor.Salmon.ToVector4(), null),
-            new(Lang.Get("BetterMarketBoard-Trend-Min"), $"{actualMinPrice.ToChineseString()}\ue049", KnownColor.GreenYellow.ToVector4(), null)
+            new
+            (
+                Lang.Get("BetterMarketBoard-Trend-Max"),
+                Lang.Get
+                (
+                    "BetterMarketBoard-Price-Format",
+                    new Dictionary<string, object>
+                    {
+                        ["price"] = actualMaxPrice
+                    }
+                ),
+                KnownColor.Salmon.ToVector4(),
+                null
+            ),
+            new
+            (
+                Lang.Get("BetterMarketBoard-Trend-Min"),
+                Lang.Get
+                (
+                    "BetterMarketBoard-Price-Format",
+                    new Dictionary<string, object>
+                    {
+                        ["price"] = actualMinPrice
+                    }
+                ),
+                KnownColor.GreenYellow.ToVector4(),
+                null
+            )
         };
 
         if (data.IsCanBeHQ)
@@ -51,19 +76,64 @@ public unsafe partial class BetterMarketBoard
             if (data.AvgNQPrice > 0)
             {
                 trendMetrics.Add
-                    (new(Lang.Get("BetterMarketBoard-AveragePrice-NQ"), $"{data.AvgNQPrice.ToChineseString()}\ue049", KnownColor.LightSkyBlue.ToVector4(), null));
+                (
+                    new
+                    (
+                        Lang.Get("BetterMarketBoard-AveragePrice-NQ"),
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Price-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = data.AvgNQPrice
+                            }
+                        ),
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        null
+                    )
+                );
             }
 
             if (data.AvgHQPrice > 0)
             {
                 trendMetrics.Add
-                    (new(Lang.Get("BetterMarketBoard-AveragePrice-HQ"), $"{data.AvgHQPrice.ToChineseString()}\ue049", KnownColor.Orange.ToVector4(), null));
+                (
+                    new
+                    (
+                        Lang.Get("BetterMarketBoard-AveragePrice-HQ"),
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Price-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = data.AvgHQPrice
+                            }
+                        ),
+                        KnownColor.Orange.ToVector4(),
+                        null
+                    )
+                );
             }
         }
         else
         {
             trendMetrics.Add
-                (new(Lang.Get("BetterMarketBoard-AveragePrice"), $"{data.AvgHistoryPrice.ToChineseString()}\ue049", KnownColor.Orange.ToVector4(), null));
+            (
+                new
+                (
+                    Lang.Get("BetterMarketBoard-AveragePrice"),
+                    Lang.Get
+                    (
+                        "BetterMarketBoard-Price-Format",
+                        new Dictionary<string, object>
+                        {
+                            ["price"] = data.AvgHistoryPrice
+                        }
+                    ),
+                    KnownColor.Orange.ToVector4(),
+                    null
+                )
+            );
         }
 
         trendMetrics.Add
@@ -71,7 +141,15 @@ public unsafe partial class BetterMarketBoard
             new
             (
                 Lang.Get("BetterMarketBoard-Trend-Volume"),
-                Lang.Get("BetterMarketBoard-Samples-Format", data.Entries.Count, data.Entries.Sum(x => x.Quantity)),
+                Lang.Get
+                (
+                    "BetterMarketBoard-Samples-Format",
+                    new Dictionary<string, object>
+                    {
+                        ["count"]    = data.Entries.Count,
+                        ["quantity"] = data.Entries.Sum(x => x.Quantity)
+                    }
+                ),
                 KnownColor.LightSkyBlue.ToVector4(),
                 null
             )
@@ -84,7 +162,14 @@ public unsafe partial class BetterMarketBoard
                 new
                 (
                     Lang.Get("BetterMarketBoard-Tooltip-DailySales"),
-                    Lang.Get("BetterMarketBoard-DailySales-Format", dailySales.ToString("0.#", CultureInfo.InvariantCulture)),
+                    Lang.Get
+                    (
+                        "BetterMarketBoard-DailySales-Format",
+                        new Dictionary<string, object>
+                        {
+                            ["quantity"] = dailySales
+                        }
+                    ),
                     KnownColor.White.ToVector4(),
                     null
                 )
@@ -178,7 +263,14 @@ public unsafe partial class BetterMarketBoard
             {
                 var p = yMin + (ySpan * i / (yTickCount - 1));
                 yTickValues[i] = p;
-                yTickLabels[i] = ((ulong)Math.Round(p)).ToChineseString();
+                yTickLabels[i] = Lang.Get
+                (
+                    "BetterMarketBoard-Number-Format",
+                    new Dictionary<string, object>
+                    {
+                        ["value"] = p
+                    }
+                );
             }
 
             ImPlot.SetupAxisTicks(ImAxis.Y1, ref yTickValues[0], yTickCount, yTickLabels, false);
@@ -226,7 +318,19 @@ public unsafe partial class BetterMarketBoard
                     using (ImRaii.PushStyle(ImPlotStyleVar.LineWeight, 1.2f))
                         ImPlot.PlotLine(Lang.Get("BetterMarketBoard-AveragePrice-NQ"), ref avgXs[0], ref avgYs[0], 2);
 
-                    ImPlot.TagY(data.AvgNQPrice, KnownColor.LightSkyBlue.ToVector4(), $"{data.AvgNQPrice.ToChineseString()}\ue049");
+                    ImPlot.TagY
+                    (
+                        data.AvgNQPrice,
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Price-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = data.AvgNQPrice
+                            }
+                        )
+                    );
                 }
 
                 if (data.AvgHQPrice > 0 && isHQVisible)
@@ -237,7 +341,19 @@ public unsafe partial class BetterMarketBoard
                     using (ImRaii.PushStyle(ImPlotStyleVar.LineWeight, 1.2f))
                         ImPlot.PlotLine(Lang.Get("BetterMarketBoard-AveragePrice-HQ"), ref avgXs[0], ref avgYs[0], 2);
 
-                    ImPlot.TagY(data.AvgHQPrice, KnownColor.Orange.ToVector4(), $"{data.AvgHQPrice.ToChineseString()}\ue049");
+                    ImPlot.TagY
+                    (
+                        data.AvgHQPrice,
+                        KnownColor.Orange.ToVector4(),
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Price-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = data.AvgHQPrice
+                            }
+                        )
+                    );
                 }
 
                 if (nqCount > 0)
@@ -284,7 +400,19 @@ public unsafe partial class BetterMarketBoard
                     using (ImRaii.PushStyle(ImPlotStyleVar.LineWeight, 1.2f))
                         ImPlot.PlotLine(Lang.Get("BetterMarketBoard-AveragePrice"), ref avgXs[0], ref avgYs[0], 2);
 
-                    ImPlot.TagY(data.AvgHistoryPrice, KnownColor.Orange.ToVector4(), $"{data.AvgHistoryPrice.ToChineseString()}\ue049");
+                    ImPlot.TagY
+                    (
+                        data.AvgHistoryPrice,
+                        KnownColor.Orange.ToVector4(),
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Price-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = data.AvgHistoryPrice
+                            }
+                        )
+                    );
                 }
 
                 var xs = new double[historyEntries.Count];
@@ -356,15 +484,47 @@ public unsafe partial class BetterMarketBoard
 
                     ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(357)}: ");
                     ImGui.SameLine();
-                    ImGui.TextColored(KnownColor.Orange.ToVector4(), $"{hoverEntry.PricePerUnit.ToChineseString()}\ue049");
+                    ImGui.TextColored
+                    (
+                        KnownColor.Orange.ToVector4(),
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Price-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = hoverEntry.PricePerUnit
+                            }
+                        )
+                    );
 
                     ImGui.TextDisabled($"{Lang.Get("Amount")}: ");
                     ImGui.SameLine();
-                    ImGui.TextUnformatted($"{hoverEntry.Quantity}");
+                    ImGui.TextUnformatted
+                    (
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Number-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["value"] = hoverEntry.Quantity
+                            }
+                        )
+                    );
 
                     ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(6936)}: ");
                     ImGui.SameLine();
-                    ImGui.TextColored(KnownColor.GreenYellow.ToVector4(), $"{(hoverEntry.PricePerUnit * hoverEntry.Quantity).ToChineseString()}\ue049");
+                    ImGui.TextColored
+                    (
+                        KnownColor.GreenYellow.ToVector4(),
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Price-Format",
+                            new Dictionary<string, object>
+                            {
+                                ["price"] = hoverEntry.PricePerUnit * hoverEntry.Quantity
+                            }
+                        )
+                    );
 
                     ImGui.Separator();
 

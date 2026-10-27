@@ -1,4 +1,5 @@
 using System.Numerics;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Extensions;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
@@ -36,10 +37,18 @@ public unsafe partial class BetterMarketBoard
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Command"));
-
-        using (ImRaii.PushIndent())
-            ImGui.TextUnformatted($"/pdr {COMMAND} → {Lang.Get("BetterMarketBoard-CommandHelp")}");
+        using (ImRaii.Heading1(Lang.Get("Command")))
+        {
+            var command = Lang.Get
+            (
+                "BetterMarketBoard-CommandHelp",
+                new Dictionary<string, object>
+                {
+                    ["command"] = COMMAND
+                }
+            );
+            ImGui.TextUnformatted($"/pdr {COMMAND} {command}");
+        }
 
         ImGui.NewLine();
 

@@ -185,7 +185,21 @@ public unsafe partial class BetterMarketBoard : ModuleBase
             }
         );
 
-        CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BetterMarketBoard-CommandHelp") });
+        CommandManager.Instance().AddSubCommand
+        (
+            COMMAND,
+            new(OnCommand)
+            {
+                HelpMessage = Lang.Get
+                (
+                    "BetterMarketBoard-CommandHelp",
+                    new Dictionary<string, object>
+                    {
+                        ["command"] = COMMAND
+                    }
+                )
+            }
+        );
 
         if (IsAbleToSearchMarket()                                              &&
             InfoProxy               != null                                     &&
