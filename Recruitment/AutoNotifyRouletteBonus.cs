@@ -456,19 +456,6 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         }
 
         NotifyHelper.Instance().Chat(rented.ToReadOnlySeString());
-
-        NotifyHelper.Instance().TrayInfo
-        (
-            Lang.Get
-            (
-                "AutoNotifyRouletteBonus-Notification-TrayContent",
-                new Dictionary<string, object>
-                {
-                    ["count"] = bonuses.Count
-                }
-            ),
-            Lang.Get("AutoNotifyRouletteBonus-Notification-TrayTitle")
-        );
     }
 
     private DalamudLinkPayload GetRouletteLinkPayload
