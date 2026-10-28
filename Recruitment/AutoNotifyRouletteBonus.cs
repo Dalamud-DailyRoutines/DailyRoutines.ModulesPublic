@@ -8,6 +8,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using Dalamud.Interface.Textures.TextureWraps;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Interop.Game.Lumina;
@@ -28,7 +29,8 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         Author      = ["BoxingBunny"]
     };
     
-    private static readonly CompSig SetContentRouletteRoleBonusSig = new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
+    private static readonly CompSig SetContentRouletteRoleBonusSig = 
+        new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
     private delegate void SetContentRouletteRoleBonusDelegate
     (
         AgentContentsFinder* instance,
@@ -59,30 +61,25 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         SetContentRouletteRoleBonusHook.Enable();
 
         IClientState.Instance().TerritoryChanged += OnZoneChanged;
+        if (GameState.IsLoggedIn)
+            OnZoneChanged(0);
     }
 
     protected override void Uninit()
     {
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
+        
         foreach (var payload in rouletteLinkPayloads.Values)
             LinkPayloadManager.Instance().Unreg(payload.CommandId);
+        
         rouletteLinkPayloads.Clear();
         rouletteLinkPayloadIDs.Clear();
     }
 
+    #region 界面
+
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
-            config.Save(this);
-
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
-            config.Save(this);
-
-        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref config.SendTTS))
-            config.Save(this);
-
-        ImGui.NewLine();
-
         using var table = ImRaii.Table
         (
             "RouletteConfigTable",
@@ -191,6 +188,54 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
             }
         }
     }
+    
+    private static void DrawRoleBonusHeaderIcon
+    (
+        IDalamudTextureWrap? texture,
+        Vector2              invTexSize
+    )
+    {
+        if (texture == null)
+        {
+            ImGui.TextUnformatted("-");
+            return;
+        }
+
+        DrawIcon(texture, invTexSize, new(888f, 0f), new(56f, 56f));
+    }
+
+    private static void DrawRoleBonusCellIcon
+    (
+        IDalamudTextureWrap? texture,
+        Vector2              invTexSize,
+        ContentsRouletteRole role
+    )
+    {
+        if (texture == null || (byte)role > 2)
+        {
+            ImGui.TextUnformatted("-");
+            return;
+        }
+
+        DrawIcon(texture, invTexSize, new(40f * (byte)role, 216f), new(40f, 40f));
+    }
+
+    private static void DrawIcon
+    (
+        IDalamudTextureWrap texture,
+        Vector2             invTexSize,
+        Vector2             iconPosPx,
+        Vector2             sizePx
+    )
+    {
+        var uv0 = iconPosPx            * invTexSize;
+        var uv1 = (iconPosPx + sizePx) * invTexSize;
+        ImGui.Image(texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()), uv0, uv1);
+    }
+
+    #endregion
+
+    #region 事件
 
     private void SetContentRouletteRoleBonusDetour
     (
@@ -221,7 +266,7 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
             }
         );
     }
-
+    
     private void OnClickRouletteLinkPayload
     (
         uint     id,
@@ -273,8 +318,12 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
             bonuses.Add((rowID, currentRole));
         }
 
+        bonuses = [.. bonuses.OrderBy(x => x.Role)];
+
         NotifyRoleBonuses(bonuses);
     }
+
+    #endregion
 
     private void NotifyRoleBonuses
     (
@@ -283,69 +332,47 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
     {
         if (bonuses.Count == 0) return;
 
-        Dictionary<ContentsRouletteRole, List<(uint RowID, string RouletteName)>> groupedBonuses = [];
-
-        foreach (var bonus in bonuses)
-        {
-            if (!LuminaGetter.TryGetRow<ContentRoulette>(bonus.RowID, out var roulette))
-                continue;
-            if (bonus.Role > ContentsRouletteRole.Dps) continue;
-
-            if (!groupedBonuses.TryGetValue(bonus.Role, out var grouped))
-            {
-                grouped                    = [];
-                groupedBonuses[bonus.Role] = grouped;
-            }
-
-            if (grouped.Any(x => x.RowID == bonus.RowID)) continue;
-            grouped.Add((bonus.RowID, roulette.Name.ToString()));
-        }
-
-        if (groupedBonuses.Count == 0) return;
-
-        if (config.SendChat)
-        {
-            var chatBuilder = new SeStringBuilder();
-            chatBuilder.AddText(Lang.Get("AutoNotifyRouletteBonusTitle"));
-
-            foreach (var (role, grouped) in groupedBonuses)
-            {
-                chatBuilder.Add(NewLinePayload.Payload);
-                chatBuilder.AddText(GetRoleBonusText(role));
-                if (RoleIcons.TryGetValue(role, out var roleIcon))
-                    chatBuilder.AddText(" ").AddIcon(roleIcon);
-
-                chatBuilder.Add(NewLinePayload.Payload)
-                           .AddText($"{Lang.Get("Operation")}: ");
-
-                foreach (var (rowID, rouletteName) in grouped)
+        using var rented = new RentedSeStringBuilder();
+        rented.Append
+        (
+            Lang.Get
+            (
+                "AutoNotifyRouletteBonus-Notification-ChatTitle",
+                new Dictionary<string, object>
                 {
-                    chatBuilder.Add(RawPayload.LinkTerminator)
-                               .Add(GetRouletteLinkPayload(rowID))
-                               .AddText("[")
-                               .AddUiForeground(rouletteName, 35)
-                               .AddText("]")
-                               .Add(RawPayload.LinkTerminator);
+                    ["count"] = bonuses.Count
                 }
-            }
+            )
+        );
 
-            // TODO: 改成 ReadOnlyString
-            NotifyHelper.Instance().Chat(chatBuilder.Build().Encode());
+        foreach (var (rowID, role) in bonuses)
+        {
+            rented.AppendNewLine();
+
+            rented.AppendDalamudSeString(GetRouletteLinkPayload(rowID))
+                  .Append("  \ue06f ")
+                  .Append(LuminaWrapper.GetContentRouletteName(rowID))
+                  .Append("（")
+                  .AppendIcon(role.GetIcon())
+                  .Append(role.GetName())
+                  .Append("）")
+                  .PopLink();
         }
 
-        var notificationLines = new List<string>();
-        foreach (var (role, grouped) in groupedBonuses)
-            notificationLines.Add($"{GetRoleBonusText(role)} {string.Concat(grouped.Select(x => $"[{x.RouletteName}]"))}");
+        NotifyHelper.Instance().Chat(rented.ToReadOnlySeString());
 
-        if (notificationLines.Count == 0) return;
-
-        var notificationString = string.Join('\n', notificationLines);
-
-        if (config.SendNotification)
-            NotifyHelper.Instance().NotificationInfo(notificationString, Lang.Get("AutoNotifyRouletteBonusTitle"));
-
-        if (config.SendTTS)
-            NotifyHelper.Speak(notificationString);
+        NotifyHelper.Instance().TrayInfo
+        (
+            Lang.Get
+            (
+                "AutoNotifyRouletteBonus-Notification-TrayContent",
+                new Dictionary<string, object>
+                {
+                    ["count"] = bonuses.Count
+                }
+            ),
+            Lang.Get("AutoNotifyRouletteBonus-Notification-TrayTitle")
+        );
     }
 
     private static bool IsRouletteComplete
@@ -358,20 +385,6 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         return instanceContent->IsRouletteComplete((byte)rowID);
     }
 
-    private static string GetRoleBonusText
-    (
-        ContentsRouletteRole role
-    ) =>
-        LuminaWrapper.GetAddonText
-        (
-            role switch
-            {
-                ContentsRouletteRole.Tank   => 10997,
-                ContentsRouletteRole.Healer => 10998,
-                ContentsRouletteRole.Dps    => 10999
-            }
-        );
-
     private DalamudLinkPayload GetRouletteLinkPayload
     (
         uint rowID
@@ -383,50 +396,6 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         rouletteLinkPayloads[rowID] = linkPayload;
         rouletteLinkPayloadIDs[id]  = (byte)rowID;
         return linkPayload;
-    }
-
-    private static void DrawRoleBonusHeaderIcon
-    (
-        IDalamudTextureWrap? texture,
-        Vector2              invTexSize
-    )
-    {
-        if (texture == null)
-        {
-            ImGui.TextUnformatted("-");
-            return;
-        }
-
-        DrawIcon(texture, invTexSize, new(888f, 0f), new(56f, 56f));
-    }
-
-    private static void DrawRoleBonusCellIcon
-    (
-        IDalamudTextureWrap? texture,
-        Vector2              invTexSize,
-        ContentsRouletteRole role
-    )
-    {
-        if (texture == null || (byte)role > 2)
-        {
-            ImGui.TextUnformatted("-");
-            return;
-        }
-
-        DrawIcon(texture, invTexSize, new(40f * (byte)role, 216f), new(40f, 40f));
-    }
-
-    private static void DrawIcon
-    (
-        IDalamudTextureWrap texture,
-        Vector2             invTexSize,
-        Vector2             iconPosPx,
-        Vector2             sizePx
-    )
-    {
-        var uv0 = iconPosPx            * invTexSize;
-        var uv1 = (iconPosPx + sizePx) * invTexSize;
-        ImGui.Image(texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()), uv0, uv1);
     }
 
     private static void GetTextureInfo
@@ -450,9 +419,6 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
     private class Config : ModuleConfig
     {
         public Dictionary<uint, RouletteConfig> Roulettes = [];
-        public bool                             SendChat;
-        public bool                             SendNotification;
-        public bool                             SendTTS;
     }
 
     private class RouletteConfig
@@ -469,22 +435,24 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
 
     private static readonly FrozenDictionary<byte, uint> RouletteIndexToRowID = new Dictionary<byte, uint>
     {
-        [1] = 1, [2] = 2, [3] = 3, [4] = 4, [5]   = 5,
-        [6] = 6, [7] = 8, [8] = 9, [9] = 15, [10] = 17
-    }.ToFrozenDictionary();
-
-    private static readonly FrozenDictionary<ContentsRouletteRole, BitmapFontIcon> RoleIcons = new Dictionary<ContentsRouletteRole, BitmapFontIcon>
-    {
-        [ContentsRouletteRole.Tank]   = BitmapFontIcon.Tank,
-        [ContentsRouletteRole.Healer] = BitmapFontIcon.Healer,
-        [ContentsRouletteRole.Dps]    = BitmapFontIcon.DPS
+        [1]  = 1,
+        [2]  = 2,
+        [3]  = 3,
+        [4]  = 4,
+        [5]  = 5,
+        [6]  = 6,
+        [7]  = 8,
+        [8]  = 9,
+        [9]  = 15,
+        [10] = 17
     }.ToFrozenDictionary();
 
     private static readonly ContentRoulette[] CachedRoulettes =
-        LuminaGetter.Get<ContentRoulette>()
-                    .Where(x => x is { RowId: > 0, ContentRouletteRoleBonus.RowId: > 0 })
-                    .OrderBy(x => x.ContentRouletteRoleBonus.RowId)
-                    .ToArray();
+    [
+        .. LuminaGetter.Get<ContentRoulette>()
+                       .Where(x => x is { RowId: > 0, ContentRouletteRoleBonus.RowId: > 0 })
+                       .OrderBy(x => x.ContentRouletteRoleBonus.RowId)
+    ];
 
     #endregion
 }
