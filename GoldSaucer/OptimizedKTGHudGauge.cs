@@ -9,7 +9,6 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -38,11 +37,6 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
 
     protected override void Init()
     {
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "KTGHudGaugeHp", OnGaugeAddon);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "KTGHudGaugeHp", OnGaugeAddon);
-        if (KTGHudGaugeHp->IsAddonAndNodesReady())
-            OnGaugeAddon(AddonEvent.PostRefresh, null);
-
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "KTGHudScore", OnScoreAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "KTGHudScore", OnScoreAddon);
         if (KTGHudScore->IsAddonAndNodesReady())
@@ -55,23 +49,25 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
     {
         AchievementManager.Instance().AchievementReceived -= OnAchievementReceived;
 
-        IAddonLifecycle.Instance().UnregisterListener(OnGaugeAddon, OnScoreAddon);
+        IAddonLifecycle.Instance().UnregisterListener(OnScoreAddon);
 
-        OnGaugeAddon(AddonEvent.PreFinalize, null);
         OnScoreAddon(AddonEvent.PreFinalize, null);
     }
 
-    private void OnGaugeAddon
+    private void OnScoreAddon
     (
         AddonEvent type,
         AddonArgs? args
     )
     {
-        var addon = (AddonKTGHudGaugeHp*)(args?.Addon.Address ?? (nint)KTGHudGaugeHp);
+        var addon = (AddonKTGHudScore*)(args?.Addon.Address ?? (nint)KTGHudScore);
 
         switch (type)
         {
             case AddonEvent.PreFinalize:
+                bonusTimeText?.Dispose();
+                bonusTimeText = null;
+
                 infoNode?.Dispose();
                 infoNode = null;
 
@@ -87,18 +83,31 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
 
                 if (infoNode != null)
                 {
+                    UpdateBonusTime();
                     UpdateStats();
                     return;
                 }
 
-                var source = addon->GaugeBar->GetTextNodeById(2);
-                if (source == null)
-                    return;
+                var source = addon->BonusTextNode;
+                var gauge  = addon->ProgressGaugeBar->OwnerNode;
+                bonusTimeText = new()
+                {
+                    Y                = gauge->Y + gauge->Height - 10f,
+                    Size             = new(addon->RootNode->Width, 24),
+                    FontType         = FontType.Axis,
+                    FontSize         = 16,
+                    TextFlags        = source->TextFlags,
+                    TextColor        = source->TextColor.ToVector4(),
+                    TextOutlineColor = source->EdgeColor.ToVector4(),
+                    AlignmentType    = AlignmentType.Right
+                };
+                bonusTimeText.AttachNode((AtkUnitBase*)addon);
+                UpdateBonusTime();
 
                 infoNode = new VerticalListNode
                 {
-                    Y           = addon->RootNode->Height + 4,
-                    Width       = addon->RootNode->Width,
+                    Y           = bonusTimeText.Y + bonusTimeText.Height + 4f,
+                    Width       = bonusTimeText.Width,
                     ItemSpacing = 6f,
                     FitContents = true
                 };
@@ -143,50 +152,6 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
         }
     }
 
-    private void OnScoreAddon
-    (
-        AddonEvent type,
-        AddonArgs? args
-    )
-    {
-        var addon = (AddonKTGHudScore*)(args?.Addon.Address ?? (nint)KTGHudScore);
-
-        switch (type)
-        {
-            case AddonEvent.PreFinalize:
-                bonusTimeText?.Dispose();
-                bonusTimeText = null;
-                break;
-
-            case AddonEvent.PostRefresh:
-                if (!addon->AtkUnitBase.IsAddonAndNodesReady())
-                    return;
-
-                if (bonusTimeText != null)
-                {
-                    UpdateBonusTime();
-                    return;
-                }
-
-                var source = addon->BonusTextNode;
-                var gauge  = addon->ProgressGaugeBar->OwnerNode;
-                bonusTimeText = new()
-                {
-                    Y                = gauge->Y + gauge->Height - 2f,
-                    Size             = new(addon->RootNode->Width, 24),
-                    FontType         = FontType.Axis,
-                    FontSize         = 16,
-                    TextFlags        = source->TextFlags,
-                    TextColor        = source->TextColor.ToVector4(),
-                    TextOutlineColor = source->EdgeColor.ToVector4(),
-                    AlignmentType    = AlignmentType.Right
-                };
-                bonusTimeText.AttachNode((AtkUnitBase*)addon);
-                UpdateBonusTime();
-                break;
-        }
-    }
-
     private void OnAchievementReceived
     (
         AchievementInfo info
@@ -208,7 +173,7 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
 
         mgpStats?.StatsTextNode.String =
             $"{LocalPlayerState.GetItemCount(MGP_ITEM_ID).ToChineseString()}/{9999999.ToChineseString()}";
-        
+
         treasureStats?.StatsTextNode.String =
             $"{LocalPlayerState.GetItemCount(TREASURE_ITEM_ID).ToChineseString()}";
 
@@ -293,7 +258,7 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
                 TextFlags        = source->TextFlags,
                 TextColor        = source->TextColor.ToVector4(),
                 TextOutlineColor = source->EdgeColor.ToVector4(),
-                AlignmentType    = AlignmentType.Left,
+                AlignmentType    = AlignmentType.Right,
                 String           = iconName
             };
 
@@ -306,10 +271,10 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
                 TextFlags        = source->TextFlags,
                 TextColor        = source->TextColor.ToVector4(),
                 TextOutlineColor = source->EdgeColor.ToVector4(),
-                AlignmentType    = AlignmentType.Left
+                AlignmentType    = AlignmentType.Right
             };
 
-            firstRow.AddNode([iconNode, iconTextNode]);
+            firstRow.AddNode([iconTextNode, iconNode]);
             AddNode([firstRow, StatsTextNode]);
         }
     }
