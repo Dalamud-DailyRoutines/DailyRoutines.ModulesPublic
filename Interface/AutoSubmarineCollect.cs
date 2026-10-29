@@ -45,7 +45,11 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         Description         = Lang.Get("AutoSubmarineCollectDescription"),
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoCutsceneSkip"],
-        ModulesPair         = ["OptimizedInteraction"]
+        ModulesPair         = ["OptimizedInteraction"],
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoSubmarineCollect/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
