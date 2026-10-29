@@ -776,8 +776,10 @@ public unsafe partial class UnifiedGlamourManager
     // UI - Preset
     private void DrawStatusBar()
     {
-        var mirageLoaded  = TryGetLoadedMirageManager(out _);
-        var cabinetLoaded = GetLoadedCabinet() is not null;
+        var (mirageLoaded, cabinetLoaded) = GetStorageStatus(LocalPlayerState.ContentID);
+        var readyText                     = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheReady");
+        var unknownText                   = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheUnknown");
+        var unavailableColor              = KnownColor.Goldenrod;
 
         // 投影台状态
         ImGui.AlignTextToFramePadding();
@@ -787,10 +789,10 @@ public unsafe partial class UnifiedGlamourManager
         (
             (mirageLoaded ?
                  KnownColor.LimeGreen :
-                 KnownColor.Red).ToVector4(),
+                 unavailableColor).ToVector4(),
             mirageLoaded ?
-                Lang.Get("Connected") :
-                Lang.Get("Disconnected")
+                readyText :
+                unknownText
         );
 
         ImGui.SameLine();
@@ -801,10 +803,10 @@ public unsafe partial class UnifiedGlamourManager
         (
             (cabinetLoaded ?
                  KnownColor.LimeGreen :
-                 KnownColor.Red).ToVector4(),
+                 unavailableColor).ToVector4(),
             cabinetLoaded ?
-                Lang.Get("Connected") :
-                Lang.Get("Disconnected")
+                readyText :
+                unknownText
         );
     }
 
