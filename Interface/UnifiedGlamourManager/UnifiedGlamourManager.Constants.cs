@@ -26,6 +26,9 @@ public partial class UnifiedGlamourManager
     private const uint MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW = 0;
     private const uint PRISM_BOX_CAPACITY                = 800;
 
+    private static readonly uint[] EmperorItemIDs =
+        [0, 0, 10032, 10033, 10034, 10035, 10036, 9293, 9292, 9294, 9295, 9295];
+
     private static readonly SourceFilter[] SourceFilters =
     [
         SourceFilter.All,
@@ -89,18 +92,18 @@ public partial class UnifiedGlamourManager
 
     private static readonly PlateSlotDefinition[] PlateSlotDefinitions =
     [
-        new(11960, static x => x.MainHand != 0),
-        new(11961, static x => x.OffHand != 0 && x.MainHand == 0),
-        new(11962, static x => x.Head   != 0),
-        new(11963, static x => x.Body   != 0),
-        new(11964, static x => x.Gloves != 0),
-        new(11965, static x => x.Legs   != 0),
-        new(11966, static x => x.Feet   != 0),
-        new(11968, static x => x.Ears   != 0),
-        new(11967, static x => x.Neck   != 0),
-        new(11969, static x => x.Wrists != 0),
-        new(750, static x => x.FingerL != 0 || x.FingerR != 0),
-        new(749, static x => x.FingerL != 0 || x.FingerR != 0)
+        new(11960, static x => x.MainHand > 0),
+        new(11961, static x => x.OffHand > 0 && x.MainHand == 0),
+        new(11962, static x => x.Head   > 0),
+        new(11963, static x => x.Body   > 0),
+        new(11964, static x => x.Gloves > 0),
+        new(11965, static x => x.Legs   > 0),
+        new(11966, static x => x.Feet   > 0),
+        new(11968, static x => x.Ears   > 0),
+        new(11967, static x => x.Neck   > 0),
+        new(11969, static x => x.Wrists > 0),
+        new(750, static x => x.FingerL > 0 || x.FingerR > 0),
+        new(749, static x => x.FingerL > 0 || x.FingerR > 0)
     ];
 
     private static string[] SortModeNames

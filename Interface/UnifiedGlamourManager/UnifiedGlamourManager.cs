@@ -80,6 +80,10 @@ public partial class UnifiedGlamourManager : ModuleBase
     {
         GameState.Instance().Login  -= ResetStoredItemsSession;
         GameState.Instance().Logout -= ResetStoredItemsSession;
+        EndPresetEditing();
+        presetItemRows?.Dispose();
+        presetItemRows = null;
+        presetItemIndex.Clear();
         ResetStoredItemsSession();
 
         if (openOverlayPlateTabPayload != null)
