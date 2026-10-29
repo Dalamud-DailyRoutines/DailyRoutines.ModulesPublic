@@ -18,7 +18,6 @@ using OmenTools.KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.Background;
 using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.KamiToolKit.Nodes.GaugeBarCraft;
-using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
@@ -78,7 +77,6 @@ public partial class OptimizedRecipeNote
         public const float ACTION_BLOCK_SIZE              = 50f;
         public const float COPY_MACRO_BUTTON_SIZE         = 28f;
         public const float COPY_MACRO_BUTTON_SPACING      = 5f;
-        public const float ITEM_INFO_SIZE                 = 48f;
         public const int   MACRO_ACTION_COUNT             = 15;
 
         public const float ACTION_USED_ALPHA   = 0.2f;
@@ -430,7 +428,7 @@ public partial class OptimizedRecipeNote
 
             ItemInfoContainer = new()
             {
-                Size        = new(ActionContainer.Width, 36f),
+                Size        = new(ActionContainer.Width, 32f),
                 ItemSpacing = ACTION_BLOCK_SPACING
             };
             ActionContainer.AddNode(ItemInfoContainer);
@@ -440,7 +438,7 @@ public partial class OptimizedRecipeNote
             ItemIcon = new()
             {
                 IconId = resultItem.Icon,
-                Size   = new(ITEM_INFO_SIZE),
+                Size   = new(32f),
                 ItemID = resultItem.RowId,
                 OnClick = (_, _, _, _, atkEventData) =>
                 {
@@ -453,7 +451,7 @@ public partial class OptimizedRecipeNote
             ItemName = new()
             {
                 String        = resultItem.Name,
-                Size          = new(400f, 40f),
+                Size          = new(400f, 32f),
                 FontSize      = 16,
                 AlignmentType = AlignmentType.Left,
                 TextFlags     = TextFlags.MultiLine | TextFlags.WordWrap
@@ -463,7 +461,7 @@ public partial class OptimizedRecipeNote
 
             MacroStats = new()
             {
-                Size          = new(0f, 40f),
+                Size          = new(0f, 32f),
                 AlignmentType = AlignmentType.Right,
                 String = Lang.Get
                 (
@@ -481,7 +479,7 @@ public partial class OptimizedRecipeNote
             {
                 Icon     = CircleButtonIcon.Document,
                 Size     = new(COPY_MACRO_BUTTON_SIZE),
-                Position = new(ActionContainer.Width - COPY_MACRO_BUTTON_SIZE, 6f),
+                Position = new(ActionContainer.Width - COPY_MACRO_BUTTON_SIZE, 0f),
                 OnClick  = OpenCopyMacroContextMenu
             };
             CopyMacroButton.AttachNode(ActionContainer);
@@ -573,7 +571,8 @@ public partial class OptimizedRecipeNote
 
                 var dragDropNode = new DragDropNode
                 {
-                    Size         = new(ACTION_BLOCK_SIZE),
+                    Size         = new(ACTION_BLOCK_SIZE - (2 * ACTION_BLOCK_SPACING)),
+                    Position     = new(ACTION_BLOCK_SPACING),
                     IconId       = iconID,
                     AcceptedType = DragDropType.Nothing,
                     IsDraggable  = true,
