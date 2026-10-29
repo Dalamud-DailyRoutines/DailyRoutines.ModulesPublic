@@ -18,7 +18,11 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
     {
         Title       = Lang.Get("OptimizedKTGHudGaugeTitle"),
         Description = Lang.Get("OptimizedKTGHudGaugeDescription"),
-        Category    = ModuleCategory.GoldSaucer
+        Category    = ModuleCategory.GoldSaucer,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedKTGHudGauge/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()

@@ -20,7 +20,11 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
     {
         Title       = "自动支持魔光键影拼音输入",
         Description = "在副本“魔光键影”中，使输入判定支持拼音，且自动在词条上方显示对应的拼音。",
-        Category    = ModuleCategory.GoldSaucer
+        Category    = ModuleCategory.GoldSaucer,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoSupportKeyboundBrawlerPinyin/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()
