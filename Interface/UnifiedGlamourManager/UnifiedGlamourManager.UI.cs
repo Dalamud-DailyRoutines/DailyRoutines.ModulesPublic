@@ -104,7 +104,25 @@ public unsafe partial class UnifiedGlamourManager
         }
         else
         {
-            DrawStatusBar();
+            using (var status = ImRaii.Table("##PresetStatusAndImport", 2, ImGuiTableFlags.SizingStretchProp))
+            {
+                if (status)
+                {
+                    ImGui.TableSetupColumn("##ConnectionStatus", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("##BatchImport", ImGuiTableColumnFlags.WidthFixed);
+                    ImGui.TableNextColumn();
+                    DrawStatusBar();
+                    ImGui.TableNextColumn();
+
+                    var importIcon = glamaholicImportExpanded ?
+                                         FontAwesomeIcon.CaretDown :
+                                         FontAwesomeIcon.CaretRight;
+                    if (ImGuiOm.ButtonIconWithText(importIcon, Lang.Get("UnifiedGlamourManager-Editor-ImportGlamaholic")))
+                        glamaholicImportExpanded = !glamaholicImportExpanded;
+                }
+            }
+
+            DrawGlamaholicImport();
             DrawPresetSearchAndFilterBar();
             ImGui.Separator();
 

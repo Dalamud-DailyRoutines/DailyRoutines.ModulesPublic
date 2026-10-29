@@ -12,6 +12,8 @@ public partial class UnifiedGlamourManager
 
     private sealed class Config : ModuleConfig
     {
+        public string GlamaholicImportPath = string.Empty;
+
         public bool            UseGridView = true;
         public List<SavedItem> Favorites   = [];
 
@@ -22,6 +24,8 @@ public partial class UnifiedGlamourManager
 
     private void NormalizeConfig()
     {
+        config.GlamaholicImportPath ??= string.Empty;
+
         config.Favorites = config.Favorites
                                  .Where(static x => x.ItemID != 0 && LuminaGetter.TryGetRow<ItemSheet>(x.ItemID, out _))
                                  .Select
