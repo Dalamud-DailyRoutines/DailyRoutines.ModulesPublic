@@ -33,7 +33,11 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
     {
         Title       = Lang.Get("OptimizedCollectablesShopTitle"),
         Description = Lang.Get("OptimizedCollectablesShopDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedCollectablesShop/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()
