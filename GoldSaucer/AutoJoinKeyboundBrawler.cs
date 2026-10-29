@@ -73,7 +73,7 @@ public class AutoJoinKeyboundBrawler : ModuleBase
 
         ImGui.NewLine();
 
-        using (ImRaii.Disabled(isRunning || GameState.TerritoryType != TERRITORY_ID))
+        using (ImRaii.Disabled(isRunning))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
             {
