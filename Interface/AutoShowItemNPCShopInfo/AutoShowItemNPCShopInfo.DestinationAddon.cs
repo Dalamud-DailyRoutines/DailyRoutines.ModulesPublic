@@ -4,7 +4,6 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.KamiToolKit.Nodes;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -122,14 +121,14 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             slot.ItemHeader = new HorizontalListNode
             {
-                Size        = new(contentWidth, 36),
+                Size        = new(contentWidth, 32),
                 ItemSpacing = 6
             };
             slot.Content.AddNode(slot.ItemHeader);
 
             slot.ItemIcon = new ItemIconNode
             {
-                Size = new(42)
+                Size = new(slot.ItemHeader.Height)
             };
             slot.ItemIcon.OnClick = (_, _, _, _, data) =>
             {
@@ -151,6 +150,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             slot.CostRow = new HorizontalListNode
             {
                 ItemSpacing        = 4,
+                Height             = slot.ItemHeader.Height,
                 FitToContentWidth  = true,
                 FitToContentHeight = true,
                 IsVisible          = false
@@ -164,7 +164,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             {
                 slot.CostIcons[i] = new ItemIconNode
                 {
-                    Size = new(36)
+                    Size = new(slot.ItemHeader.Height - 6f)
                 };
                 var indexCopy = i;
                 slot.CostIcons[i].OnClick = (_, _, _, _, data) =>
@@ -173,15 +173,13 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     ContextMenuManager.Instance().OpenItem(slot.CostIcons[indexCopy].ItemID, AddonId);
                 };
                 slot.CostRow.AddNode(slot.CostIcons[i]);
-
-                slot.CostRow.AddDummy();
-
+                
                 slot.CostTexts[i] = new TextNode
                 {
                     FontSize      = 14,
                     TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                     AlignmentType = AlignmentType.Left,
-                    Height        = 28
+                    Height        = slot.CostIcons[i].Height
                 };
                 AtkColors.ValueEmphasize.ApplyTo(slot.CostTexts[i]);
 

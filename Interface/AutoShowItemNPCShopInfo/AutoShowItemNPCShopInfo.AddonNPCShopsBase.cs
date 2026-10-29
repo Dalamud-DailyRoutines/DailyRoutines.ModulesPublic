@@ -9,7 +9,6 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Nodes;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -32,7 +31,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
         private TSectionSlot[]? sectionSlots;
 
-        private NPCRowNode? selectedSlot; 
+        private NPCRowNode? selectedSlot;
 
         [SetsRequiredMembers]
         protected AddonNPCShopsBase
@@ -93,7 +92,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
 
             var itemInfoRow = new HorizontalListNode
             {
-                Size        = new(headerNode.Width, 48f),
+                Size        = new(headerNode.Width, 36f),
                 ItemSpacing = 4f
             };
             headerNode.AddNode(itemInfoRow);
@@ -101,7 +100,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             var itemIconNode = new ItemIconNode
             {
                 ItemID = HeaderItemID,
-                Size   = new(50f),
+                Size   = new(36f),
                 OnClick = (_, _, _, _, data) =>
                 {
                     if (!data->IsRightClick) return;
@@ -115,7 +114,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                 TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
                 String        = LuminaWrapper.GetItemName(HeaderItemID),
                 FontSize      = 24,
-                Height        = 42f,
+                Height        = 36f,
                 AlignmentType = AlignmentType.Left
             };
             AtkColors.Label.ApplyTo(itemNameNode);
@@ -243,7 +242,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             IEnumerable<NPCDisplayInfo> npcInfos
         ) =>
         [
-            .. npcInfos.Where(x => x.Location               != null)
+            .. npcInfos.Where(x => x.Location != null)
                        .DistinctBy(x => $"{x.Location.TerritoryID}_{x.Name}")
                        .OrderBy(x => x.Location.TerritoryID == 282)
                        .ThenBy(x => x.Location.TerritoryID)
@@ -301,10 +300,10 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     slot.NPCRows[i].SetNPCInfo(pageNpcs[i]);
                     slot.NPCRows[i].IsVisible = true;
                 }
-                else 
+                else
                     slot.NPCRows[i].IsVisible = false;
             }
-            
+
             selectedSlot?.Selected = false;
             selectedSlot           = null;
 
@@ -348,7 +347,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
             if (sectionSlots == null) return;
 
             selectedSlot?.Selected = false;
-            
+
             row.Selected = true;
             selectedSlot = row;
         }
