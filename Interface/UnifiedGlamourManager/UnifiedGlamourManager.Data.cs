@@ -446,6 +446,7 @@ public unsafe partial class UnifiedGlamourManager
     private void ResetStoredItemsSession()
     {
         TaskHelper?.Abort();
+        InvalidatePresetPreview();
         isRefreshingItems = false;
         prismBoxStains.Clear();
         items.Clear();
