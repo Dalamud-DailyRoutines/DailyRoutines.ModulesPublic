@@ -23,7 +23,6 @@ using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 using AgentShowDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentShowDelegate;
 using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
@@ -74,8 +73,10 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
         if (isAnyNewJobOrder)
             config.Save(this);
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "MKDInfo", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "MKDInfo", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "MKDInfo", OnAddon);
+        if (MKDInfo->IsAddonAndNodesReady())
+            OnAddon(AddonEvent.PostRefresh, null);
 
         mkdJobListAddon ??= new(this)
         {
@@ -190,8 +191,12 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
     {
         switch (type)
         {
-            case AddonEvent.PostDraw:
+            case AddonEvent.PostRefresh:
                 if (MKDInfo == null) return;
+
+                var notificationNode = MKDInfo->GetNodeById(25);
+                if (notificationNode != null)
+                    notificationNode->SetAlpha(0);
 
                 if (jobChangeButton == null)
                 {
@@ -954,7 +959,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             AddonDRMKDJobList addon
         ) : SimpleComponentNode
         {
-            public SimpleNineGridNode      BackgroundNode       { get; private set; }
+            public SimpleNineGridNode?     BackgroundNode       { get; private set; }
             public SimpleNineGridNode      BorderNode           { get; private set; }
             public SimpleNineGridNode      HeaderBackgroundNode { get; private set; }
             public SimpleNineGridNode      HeaderBorderNode     { get; private set; }
@@ -968,7 +973,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             (
                 BetterMKDSupportJobList module,
                 CrescentSupportJob      presetJob,
-                bool                    isCurrentFoucused
+                bool                    isCurrentFocused
             )
             {
                 BackgroundNode = new SimpleNineGridNode
@@ -979,7 +984,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     IsVisible          = true,
                     Size               = Size + new Vector2(50, 0),
                     Position           = new(-2),
-                    Alpha = isCurrentFoucused ?
+                    Alpha = isCurrentFocused ?
                                 0.9f :
                                 0.6f
                 };
@@ -1021,7 +1026,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     Position           = new(-8.5f, -5),
                     Alpha              = 0.9f,
                     Offsets            = new(24),
-                    AddColor = isCurrentFoucused ?
+                    AddColor = isCurrentFocused ?
                                    new(0.19607843f) :
                                    new(-0.19607843f)
                 };
@@ -1074,7 +1079,6 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     {
                         String        = $"\ue06a {jobLevel.ToSESmallCount()}: {action.Name.ToString()}",
                         FontSize      = 14,
-                        IsVisible     = true,
                         Size          = new(Size.X - 20f, 40f),
                         AlignmentType = AlignmentType.Left,
                         TextColor     = ColorHelper.GetColor(50),
@@ -1084,7 +1088,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                                        32 :
                                        4)
                         ),
-                        TextFlags = TextFlags.Glare
+                        TextFlags = TextFlags.Glare | TextFlags.WordWrap | TextFlags.MultiLine
                     };
                     row.AddNode(actionTextNode);
 
@@ -1111,7 +1115,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
 
                     var dragDropNode = new DragDropNode
                     {
-                        Size         = new(44f),
+                        Size         = new(40f),
                         IsVisible    = true,
                         IconId       = (uint)traitRow.Icon,
                         AcceptedType = DragDropType.Nothing,
@@ -1141,8 +1145,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     {
                         String        = $"\ue06a {jobLevel.ToSESmallCount()}: {traitRow.Name.ToString()}",
                         FontSize      = 14,
-                        IsVisible     = true,
-                        Size          = new(Size.X - 20f, 44f),
+                        Size          = new(Size.X - 20f, 40f),
                         AlignmentType = AlignmentType.Left,
                         TextColor     = ColorHelper.GetColor(50),
                         TextOutlineColor = ColorHelper.GetColor
@@ -1151,9 +1154,8 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                                        32 :
                                        4)
                         ),
-                        TextFlags = TextFlags.Glare
+                        TextFlags = TextFlags.Glare | TextFlags.WordWrap | TextFlags.MultiLine
                     };
-                    traitTextNode.AutoAdjustTextSize();
                     row.AddNode(traitTextNode);
 
                     ActionListNode.AddNode(row);
@@ -1289,7 +1291,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                         .Build()
                 );
 
-                OnFocusChanged(isCurrentFoucused);
+                OnFocusChanged(isCurrentFocused);
             }
 
             public void OnFocusChanged
@@ -1306,6 +1308,8 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
 
             public class SupportActionNode : DragDropNode
             {
+                private bool isLayoutInitialized;
+
                 [Flags]
                 public enum ActionSlotHiddenFlag : byte
                 {
@@ -1338,9 +1342,7 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     {
                         TexturePath        = "ui/uld/ContentsReplaySetting_hr1.tex",
                         TextureCoordinates = new(36, 44),
-                        TextureSize        = new(36),
-                        Size               = new(22),
-                        Position           = new(22, 24)
+                        TextureSize        = new(36)
                     };
                     DefaultIconNode.AttachNode(this);
 
@@ -1348,11 +1350,12 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                     {
                         TexturePath        = "ui/uld/MKDWindow_hr1.tex",
                         TextureCoordinates = new(64, 82),
-                        TextureSize        = new(20),
-                        Size               = new(22),
-                        Position           = new(22, 24)
+                        TextureSize        = new(20)
                     };
                     HiddenIconNode.AttachNode(this);
+
+                    isLayoutInitialized = true;
+                    OnSizeChanged();
 
                     UpdateActionInfo();
 
@@ -1376,6 +1379,23 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
                 public static byte                 DefaultAction     { get; private set; }
                 public static ActionSlotHiddenFlag ActionHiddenFlags { get; private set; }
                 public static HashSet<byte>        HiddenActions     { get; private set; } = [];
+
+                protected override void OnSizeChanged()
+                {
+                    base.OnSizeChanged();
+
+                    if (!isLayoutInitialized)
+                        return;
+
+                    var indicatorSize     = Size / 2.0f;
+                    var indicatorPosition = Size - indicatorSize;
+
+                    DefaultIconNode.Size     = indicatorSize;
+                    DefaultIconNode.Position = indicatorPosition;
+
+                    HiddenIconNode.Size     = indicatorSize;
+                    HiddenIconNode.Position = indicatorPosition;
+                }
 
                 public void Toggle
                 (
