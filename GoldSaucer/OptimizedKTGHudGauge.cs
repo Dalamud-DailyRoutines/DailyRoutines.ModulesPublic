@@ -106,7 +106,7 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
 
                 infoNode = new VerticalListNode
                 {
-                    Y           = bonusTimeText.Y + bonusTimeText.Height + 4f,
+                    Y           = bonusTimeText.Y + bonusTimeText.Height + 8f,
                     Width       = bonusTimeText.Width,
                     ItemSpacing = 6f,
                     FitContents = true
