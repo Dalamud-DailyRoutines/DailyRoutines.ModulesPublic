@@ -447,7 +447,9 @@ public unsafe partial class UnifiedGlamourManager
     {
         TaskHelper?.Abort();
         InvalidatePresetPreview();
-        isRefreshingItems = false;
+        openItemSearchMenu = false;
+        itemSearchOptions  = [];
+        isRefreshingItems  = false;
         prismBoxStains.Clear();
         items.Clear();
         filteredItems.Clear();
