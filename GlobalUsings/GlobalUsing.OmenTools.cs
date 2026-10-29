@@ -5,6 +5,8 @@
 global using OmenTools;
 global using OmenTools.ImGuiOm;
 global using OmenTools.Extensions;
+global using OmenTools.Info.Game.Enums;
+global using OmenTools.OmenService;
 global using IAetheryteList = OmenTools.Dalamud.Services.Game.UI.Abstractions.IAetheryteList;
 global using IAetheryteEntry = OmenTools.Dalamud.Services.Game.UI.Abstractions.IAetheryteEntry;
 global using IPlayerCharacter = OmenTools.Dalamud.Services.Game.Object.Abstractions.ObjectKinds.IPlayerCharacter;
