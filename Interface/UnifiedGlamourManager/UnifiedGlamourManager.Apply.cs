@@ -1,5 +1,7 @@
 using DailyRoutines.Extensions;
 using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
@@ -65,6 +67,24 @@ public unsafe partial class UnifiedGlamourManager
                                  item.ParentSetItemID :
                                  item.ItemID;
         if (ItemUtil.GetBaseId(rawItemID).ItemId != expectedItemID) return false;
+        if (item.IsSetPart && !GetSetParts(expectedItemID).Any(x => x.ItemID == item.ItemID && manager->IsSetSlotUnlocked(item.PrismBoxIndex, x.SlotIndex)))
+            return false;
+
+        if (!item.IsSetPart)
+        {
+            item.RawItemID = rawItemID;
+            item.Stain0ID  = manager->PrismBoxStain0Ids[(int)item.PrismBoxIndex];
+            item.Stain1ID  = manager->PrismBoxStain1Ids[(int)item.PrismBoxIndex];
+        }
+        if (item.IsSetPart && !GetSetParts(expectedItemID).Any(x => x.ItemID == item.ItemID && manager->IsSetSlotUnlocked(item.PrismBoxIndex, x.SlotIndex)))
+            return false;
+
+        if (!item.IsSetPart)
+        {
+            item.RawItemID = rawItemID;
+            item.Stain0ID  = manager->PrismBoxStain0Ids[(int)item.PrismBoxIndex];
+            item.Stain1ID  = manager->PrismBoxStain1Ids[(int)item.PrismBoxIndex];
+        }
 
         var itemID = !item.IsSetPart && item.RawItemID != 0 ?
                          item.RawItemID :
@@ -184,9 +204,10 @@ public unsafe partial class UnifiedGlamourManager
         };
 
         preset.Items.AddRange(items);
+        NormalizePresetWithNotice(preset);
 
         config.Presets.Add(preset);
-        selectedPreset = preset;
+        SelectPreset(preset, false);
 
         config.Save(this);
         
@@ -207,10 +228,12 @@ public unsafe partial class UnifiedGlamourManager
             selectedPreset == null)
             return false;
 
-        var entries = selectedPreset.Items
-                                    .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
-                                    .OrderBy(x => x.SlotIndex)
-                                    .ToList();
+        var applyPreset = CopyPreset(selectedPreset);
+        NormalizePresetEquipment(applyPreset);
+        var entries = applyPreset.Items
+                                 .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
+                                 .OrderBy(x => x.SlotIndex)
+                                 .ToList();
 
         missingApplyItems.Clear();
 
@@ -323,6 +346,8 @@ public unsafe partial class UnifiedGlamourManager
 
         return true;
     }
+
+    private static bool CanTryOnPreset() => AgentTryon.Instance() != null && !ICondition.Instance().IsOccupiedInEvent;
 
     private bool StartTryOnPreset
     (

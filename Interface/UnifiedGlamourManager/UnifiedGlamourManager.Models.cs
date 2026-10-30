@@ -1,4 +1,5 @@
 using Lumina.Excel.Sheets;
+using Newtonsoft.Json;
 using OmenTools.Interop.Game.Lumina;
 using ItemSource = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData.ItemSource;
 using ItemSheet = Lumina.Excel.Sheets.Item;
@@ -7,6 +8,12 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager
 {
+    private readonly record struct PresetItemCandidate
+    (
+        uint   ItemID,
+        string Name
+    );
+
     private enum SourceFilter
     {
         All,
@@ -245,6 +252,9 @@ public partial class UnifiedGlamourManager
     // 预设模版
     private sealed class PlatePreset
     {
+        [JsonIgnore]
+        public readonly string UIID = Guid.NewGuid().ToString();
+
         // 玩家设置的标题/备注
         public string Title = string.Empty;
         public string Note  = string.Empty;

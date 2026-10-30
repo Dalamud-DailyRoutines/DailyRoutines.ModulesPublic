@@ -35,7 +35,12 @@ public partial class UnifiedGlamourManager : ModuleBase
                                .OrderByDescending(x => x.CreatedAt)
                                .FirstOrDefault();
 
-        TaskHelper ??= new() { TimeoutMS = TASK_TIMEOUT_MS };
+        TaskHelper = new() { TimeoutMS = TASK_TIMEOUT_MS };
+
+        GameState.Instance().Login  += ResetStoredItemsSession;
+        GameState.Instance().Logout += ResetStoredItemsSession;
+        if (GameState.IsLoggedIn)
+            StartRefreshAll();
 
         Overlay ??= new(this);
 
@@ -55,6 +60,9 @@ public partial class UnifiedGlamourManager : ModuleBase
         if (CharacterInspect->IsAddonAndNodesReady())
             OnInspectAddon(AddonEvent.PostRefresh, null);
 
+        addonLifecycle.RegisterListener(AddonEvent.PostSetup,   ["MiragePrismPrismBox", "Cabinet"], OnStorageAddon);
+        addonLifecycle.RegisterListener(AddonEvent.PostRefresh, ["MiragePrismPrismBox", "Cabinet"], OnStorageAddon);
+
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("UnifiedGlamourManager-CommandHelp") });
 
         openOverlayPlateTabPayload = LinkPayloadManager.Instance().Reg
@@ -70,6 +78,14 @@ public partial class UnifiedGlamourManager : ModuleBase
 
     protected override void Uninit()
     {
+        GameState.Instance().Login  -= ResetStoredItemsSession;
+        GameState.Instance().Logout -= ResetStoredItemsSession;
+        EndPresetEditing();
+        presetItemRows?.Dispose();
+        presetItemRows = null;
+        presetItemIndex.Clear();
+        ResetStoredItemsSession();
+
         if (openOverlayPlateTabPayload != null)
             LinkPayloadManager.Instance().Unreg(openOverlayPlateTabPayload.CommandId);
         
@@ -77,6 +93,7 @@ public partial class UnifiedGlamourManager : ModuleBase
 
         IAddonLifecycle.Instance().UnregisterListener(OnInspectAddon);
         IAddonLifecycle.Instance().UnregisterListener(OnPlateEditorAddon);
+        IAddonLifecycle.Instance().UnregisterListener(OnStorageAddon);
 
         inspectSaveButtonNode?.Dispose();
         inspectSaveButtonNode = null;
@@ -89,7 +106,11 @@ public partial class UnifiedGlamourManager : ModuleBase
     (
         string command,
         string arguments
-    ) => Overlay!.IsOpen = true;
+    )
+    {
+        StartRefreshAll();
+        Overlay.IsOpen = true;
+    }
 
     private static bool IsEquipSlotCategoryCompatibleWithPlateSlot
     (
