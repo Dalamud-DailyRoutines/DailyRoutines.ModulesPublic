@@ -2,14 +2,15 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.OmenService;
 using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
 using GameCabinet = FFXIVClientStructs.FFXIV.Client.Game.UI.Cabinet;
 using ItemSheet = Lumina.Excel.Sheets.Item;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
-using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -17,6 +18,123 @@ public unsafe partial class UnifiedGlamourManager
 {
     private readonly List<UnifiedItem> items = [];
     private          bool              isRefreshingItems;
+
+    private readonly Dictionary<uint, (uint ItemID, uint Stain0ID, uint Stain1ID)> prismBoxStains = [];
+
+    private static bool IsStorageOwner
+    (
+        ulong contentID
+    )
+    {
+        var finder = ItemFinderModule.Instance();
+        return finder != null && contentID != 0 && finder->CharacterContentId == contentID;
+    }
+
+    private static (bool PrismBox, bool Cabinet) GetStorageStatus
+    (
+        ulong contentID
+    )
+    {
+        if (!IsStorageOwner(contentID))
+            return (false, false);
+
+        var finder = ItemFinderModule.Instance();
+        return (finder->IsGlamourDresserCached, finder->CabinetState == (byte)GameCabinet.CabinetState.Loaded);
+    }
+
+    private static bool SyncCabinetCache
+    (
+        ulong              contentID,
+        ReadOnlySpan<uint> unlockBits
+    )
+    {
+        var finder = ItemFinderModule.Instance();
+        if (!IsStorageOwner(contentID) || unlockBits.Length != finder->CabinetItemUnlockBits.Length)
+            return false;
+
+        if (finder->CabinetState == (byte)GameCabinet.CabinetState.Loaded && unlockBits.SequenceEqual(finder->CabinetItemUnlockBits))
+            return false;
+
+        unlockBits.CopyTo(finder->CabinetItemUnlockBits);
+        finder->CabinetState = (byte)GameCabinet.CabinetState.Loaded;
+        finder->HasChanges   = true;
+        return true;
+    }
+
+    private static bool RefreshCabinetCache()
+    {
+        if (!GameState.IsLoggedIn || ICondition.Instance().IsBetweenAreas)
+            return false;
+
+        var contentID = LocalPlayerState.ContentID;
+        if (!IsStorageOwner(contentID))
+            return false;
+
+        var cabinet = GetLoadedCabinet();
+        if (cabinet == null)
+            return false;
+
+        var        finder     = ItemFinderModule.Instance();
+        Span<uint> unlockBits = stackalloc uint[finder->CabinetItemUnlockBits.Length];
+        unlockBits.Clear();
+
+        foreach (var cabinetID in CabinetItems.Keys)
+        {
+            var word = cabinetID / 32;
+            if (word < unlockBits.Length && cabinet->IsItemInCabinet(cabinetID))
+                unlockBits[(int)word] |= 1u << (int)(cabinetID % 32);
+        }
+
+        return SyncCabinetCache(contentID, unlockBits);
+    }
+
+    private static List<(uint RawItemID, uint Index, ushort? MissingSlots)> GetPrismBoxItems
+    (
+        ulong contentID
+    )
+    {
+        if (!IsStorageOwner(contentID))
+            return null;
+
+        var                                                      finder = ItemFinderModule.Instance();
+        List<(uint RawItemID, uint Index, ushort? MissingSlots)> result = [];
+
+        for (var index = 0; index < finder->GlamourDresserItemIds.Length; index++)
+        {
+            var rawItemID = finder->GlamourDresserItemIds[index];
+            if (rawItemID != 0)
+            {
+                ushort? missingSlots = finder->IsGlamourDresserCached ?
+                                           finder->GlamourDresserItemSetUnlockBits[index] :
+                                           null;
+                result.Add((rawItemID, (uint)index, missingSlots));
+            }
+        }
+
+        return result;
+    }
+
+    private static List<(uint CabinetID, uint ItemID)> GetCabinetItems
+    (
+        ulong contentID
+    )
+    {
+        if (!IsStorageOwner(contentID))
+            return null;
+
+        var                                 finder = ItemFinderModule.Instance();
+        var                                 bits   = finder->CabinetItemUnlockBits;
+        List<(uint CabinetID, uint ItemID)> result = [];
+
+        foreach (var (cabinetID, itemID) in CabinetItems)
+        {
+            var word = cabinetID / 32;
+            if (word < bits.Length && (bits[(int)word] & (1u << (int)(cabinetID % 32))) != 0)
+                result.Add((cabinetID, itemID));
+        }
+
+        return result;
+    }
 
     private static bool TryGetLoadedMirageManager
     (
@@ -45,138 +163,152 @@ public unsafe partial class UnifiedGlamourManager
         UnifiedItem? reselectItem = null
     )
     {
+        if (!GameState.IsLoggedIn || ICondition.Instance().IsBetweenAreas)
+            return;
+
         var itemToReselect = reselectItem ?? selectedItem;
-
-        TaskHelper ??= new()
-        {
-            TimeoutMS = TASK_TIMEOUT_MS
-        };
-        TaskHelper.Abort();
-
-        isRefreshingItems = true;
-        items.Clear();
-        filteredItems.Clear();
-        MarkFilteredItemsDirty(true, true);
-
-        TaskHelper.Enqueue(() => RunRefreshStep(LoadPrismBoxItems, nameof(LoadPrismBoxItems)), nameof(LoadPrismBoxItems));
-        TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
-        TaskHelper.Enqueue(() => RunRefreshStep(LoadCabinetItems, nameof(LoadCabinetItems)), nameof(LoadCabinetItems));
-        TaskHelper.DelayNext(REFRESH_STEP_DELAY_MS);
         TaskHelper.Enqueue
-        (
-            () =>
+        (() =>
             {
+                isRefreshingItems = true;
                 try
                 {
+                    if (!GameState.IsLoggedIn ||
+                        ICondition.Instance().IsBetweenAreas ||
+                        !IsStorageOwner(LocalPlayerState.ContentID))
+                    {
+                        return;
+                    }
+
+                    RefreshCabinetCache();
+                    items.Clear();
+                    items.AddRange(LoadPrismBoxItems());
+                    items.AddRange(LoadCabinetItems());
                     MergeItems();
-                    selectedItem = itemToReselect != null ?
-                                       items.FirstOrDefault(x => x == itemToReselect) :
-                                       null;
+                    selectedItem = itemToReselect == null ?
+                                       null :
+                                       items.FirstOrDefault(x => x == itemToReselect);
                 }
                 catch (Exception ex)
                 {
-                    DLog.Error("UnifiedGlamourManager refresh merge failed", ex);
-                    selectedItem = null;
+                    DLog.Error("UnifiedGlamourManager refresh failed", ex);
                 }
                 finally
                 {
                     isRefreshingItems = false;
+                    InvalidateOwnedEquipment();
+                    presetEditorItemsDirty = true;
                     MarkFilteredItemsDirty(true, true);
                 }
-            },
-            nameof(MergeItems)
+            }
         );
     }
 
-    private static void RunRefreshStep
-    (
-        Action action,
-        string stepName
-    )
-    {
-        try
-        {
-            action();
-        }
-        catch (Exception ex)
-        {
-            DLog.Error($"UnifiedGlamourManager refresh step failed: {stepName}", ex);
-        }
-    }
-
     // 投影台/收藏柜数据读取
-    private void LoadPrismBoxItems()
+    private List<UnifiedItem> LoadPrismBoxItems()
     {
-        if (!TryGetLoadedMirageManager(out var manager)) return;
+        var contentID = LocalPlayerState.ContentID;
+        var cached    = GetPrismBoxItems(contentID);
+        if (cached == null)
+            return [];
+
+        var finder     = ItemFinderModule.Instance();
+        var liveLoaded = TryGetLoadedMirageManager(out var manager);
+
+        if (GetStorageStatus(contentID).PrismBox)
+        {
+            foreach (var index in prismBoxStains.Keys.ToArray())
+            {
+                if (index >= finder->GlamourDresserItemIds.Length || finder->GlamourDresserItemIds[(int)index] == 0)
+                    prismBoxStains.Remove(index);
+            }
+        }
+
+        List<UnifiedItem> result = [];
 
         var itemSheet = LuminaGetter.Get<ItemSheet>();
 
-        for (var i = 0U; i < PRISM_BOX_CAPACITY; i++)
+        foreach (var (rawItemID, index, missingSlots) in cached)
         {
-            var rawItemID = manager->PrismBoxItemIds[(int)i];
-            if (rawItemID == 0) continue;
-
             var itemID  = ItemUtil.GetBaseId(rawItemID).ItemId;
             var itemRow = itemSheet.GetRowOrDefault(itemID);
             if (itemRow == null || !TryGetItemName(itemRow.Value, out var name))
                 continue;
 
+            var stain0 = 0U;
+            var stain1 = 0U;
+            if (liveLoaded && ItemUtil.GetBaseId(manager->PrismBoxItemIds[(int)index]).ItemId == itemID)
+            {
+                stain0 = manager->PrismBoxStain0Ids[(int)index];
+                stain1 = manager->PrismBoxStain1Ids[(int)index];
+            }
+            else if (prismBoxStains.TryGetValue(index, out var old) && old.ItemID == itemID)
+            {
+                stain0 = old.Stain0ID;
+                stain1 = old.Stain1ID;
+            }
+
+            prismBoxStains[index] = (itemID, stain0, stain1);
+
             AddStoredItem
             (
+                result,
                 itemRow.Value,
                 name,
                 ItemSource.PrismBox,
                 itemID,
                 rawItemID,
-                i,
+                index,
                 0,
-                manager->PrismBoxStain0Ids[(int)i],
-                manager->PrismBoxStain1Ids[(int)i],
-                manager
+                stain0,
+                stain1,
+                missingSlots
             );
-
         }
 
+        return result;
     }
 
-    private void LoadCabinetItems()
+    private List<UnifiedItem> LoadCabinetItems()
     {
-        var cabinet = GetLoadedCabinet();
-        if (cabinet == null) return;
+        var cached = GetCabinetItems(LocalPlayerState.ContentID);
+        if (cached == null)
+            return [];
+
+        List<UnifiedItem> result = [];
 
         var itemSheet = LuminaGetter.Get<ItemSheet>();
 
-        foreach (var cabinetRow in LuminaGetter.Get<CabinetSheet>())
+        foreach (var (cabinetID, itemID) in cached)
         {
-            var cabinetID = cabinetRow.RowId;
-            var itemID    = cabinetRow.Item.RowId;
-            if (itemID == 0 || !cabinet->IsItemInCabinet(cabinetID)) continue;
-
             var itemRow = itemSheet.GetRowOrDefault(itemID);
             if (itemRow == null || !TryGetItemName(itemRow.Value, out var name))
                 continue;
 
-            AddStoredItem(itemRow.Value, name, ItemSource.Cabinet, itemID, itemID, 0, cabinetID);
+            AddStoredItem(result, itemRow.Value, name, ItemSource.Cabinet, itemID, itemID, 0, cabinetID);
         }
+
+        return result;
     }
 
     private void AddStoredItem
     (
-        ItemSheet      item,
-        string         name,
-        ItemSource     source,
-        uint           itemID,
-        uint           rawItemID,
-        uint           prismBoxIndex,
-        uint           cabinetID,
-        uint           stain0ID = 0,
-        uint           stain1ID = 0,
-        MirageManager* manager  = null
+        List<UnifiedItem> target,
+        ItemSheet         item,
+        string            name,
+        ItemSource        source,
+        uint              itemID,
+        uint              rawItemID,
+        uint              prismBoxIndex,
+        uint              cabinetID,
+        uint              stain0ID     = 0,
+        uint              stain1ID     = 0,
+        ushort?           missingSlots = 0
     )
     {
         var setParts = GetSetParts(itemID);
 
-        items.Add
+        target.Add
         (
             UnifiedItem.Create
             (
@@ -195,8 +327,8 @@ public unsafe partial class UnifiedGlamourManager
 
         foreach (var setPart in setParts)
         {
-            if (source != ItemSource.PrismBox || (manager != null && manager->IsSetSlotUnlocked(prismBoxIndex, setPart.SlotIndex)))
-                AddSetPartItem(setPart, rawItemID, prismBoxIndex, cabinetID, itemID, name, source);
+            if (IsSetSlotUnlocked(missingSlots, setPart.SlotIndex))
+                AddSetPartItem(target, setPart, rawItemID, prismBoxIndex, cabinetID, itemID, name, source);
         }
     }
 
@@ -310,4 +442,29 @@ public unsafe partial class UnifiedGlamourManager
             PresetSource.OtherPlayer => $"{Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")}-{LuminaWrapper.GetAddonText(7979)}",
             _                        => Lang.Get("UnifiedGlamourManager-Preset-UntitledPreset")
         };
+
+    private void ResetStoredItemsSession()
+    {
+        TaskHelper?.Abort();
+        InvalidatePresetPreview();
+        isRefreshingItems = false;
+        prismBoxStains.Clear();
+        items.Clear();
+        filteredItems.Clear();
+        selectedItem = null;
+        ownedEquipment.Clear();
+        ownedEquipmentComplete = false;
+        InvalidateOwnedEquipment();
+        presetEditorItemsDirty = true;
+        MarkFilteredItemsDirty(true, true);
+    }
+
+    #region 常量
+
+    private static readonly Dictionary<uint, uint> CabinetItems =
+        LuminaGetter.Get<CabinetSheet>()
+                    .Where(x => x.Item.RowId != 0)
+                    .ToDictionary(x => x.RowId, x => x.Item.RowId);
+
+    #endregion
 }
