@@ -4,9 +4,9 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -49,12 +49,26 @@ public class LeaveDutyCommand : ModuleBase
             ImGui.TextUnformatted($"/pdr {COMMAND} {Lang.Get("LeaveDutyCommand-CommandHelp")}");
     }
 
-    private static void OnCommand
+    private static unsafe void OnCommand
     (
         string command,
         string args
     )
     {
+        if (GameState.ContentFinderCondition == KEYBOUND_BRAWLER_CONTENT_ID)
+        {
+            var agent = AgentKTGResult.Instance();
+            if (agent == null   ||
+                !agent->IsShown ||
+                !agent->HasAddon)
+                return;
+
+            if (!agent->Finished)
+                agent->Finish(false);
+            
+            return;
+        }
+        
         var isInCombat = ICondition.Instance()[ConditionFlag.InCombat];
 
         if (GameState.IsDutyCompleted || IsInSoloDuty())
@@ -98,6 +112,8 @@ public class LeaveDutyCommand : ModuleBase
     #region 常量
 
     private const string COMMAND = "leaveduty";
+    
+    private const uint KEYBOUND_BRAWLER_CONTENT_ID = 1095;
 
     #endregion
 }

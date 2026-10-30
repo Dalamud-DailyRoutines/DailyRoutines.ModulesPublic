@@ -2,16 +2,13 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Interop.Game.Models;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ShopDisplayRealItemIcon : ModuleBase
 {
@@ -19,7 +16,12 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
     {
         Title       = Lang.Get("ShopDisplayRealItemIconTitle"),
         Description = Lang.Get("ShopDisplayRealItemIconDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        ModulesPair =
+        [
+            "OptimizedCollectablesShop",
+            "OptimizedFreeShop"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()
@@ -27,23 +29,8 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private static readonly CompSig CollectablesShopItemFillSig = new
-    (
-        "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B F9 49 8B F0 49 8B 08 48 8B EA"
-    );
-    private delegate void CollectablesShopItemFillDelegate
-    (
-        AtkUnitBase*                                addon,
-        AtkComponentListItemPopulator.ListItemInfo* itemInfo,
-        AtkResNode**                                nodeList
-    );
-    private Hook<CollectablesShopItemFillDelegate> CollectablesShopItemFillHook;
-
     protected override void Init()
     {
-        CollectablesShopItemFillHook = CollectablesShopItemFillSig.GetHook<CollectablesShopItemFillDelegate>(CollectablesShopItemFillDetour);
-        CollectablesShopItemFillHook.Enable();
-
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "Shop", OnShop);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRefresh,  "Shop", OnShop);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "Shop", OnShop);
@@ -59,25 +46,21 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
         IAddonLifecycle.Instance().RegisterListener
         (
             AddonEvent.PostSetup,
-            ["ShopExchangeCurrency", "ShopExchangeItem", "ShopExchangeCoin"],
+            ["ShopExchangeCurrency", "ShopExchangeItem"],
             OnShopExchange
         );
         IAddonLifecycle.Instance().RegisterListener
         (
             AddonEvent.PostRefresh,
-            ["ShopExchangeCurrency", "ShopExchangeItem", "ShopExchangeCoin"],
+            ["ShopExchangeCurrency", "ShopExchangeItem"],
             OnShopExchange
         );
         IAddonLifecycle.Instance().RegisterListener
         (
             AddonEvent.PreRefresh,
-            ["ShopExchangeCurrency", "ShopExchangeItem", "ShopExchangeCoin"],
+            ["ShopExchangeCurrency", "ShopExchangeItem"],
             OnShopExchange
         );
-
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "FreeShop", OnFreeShop);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRefresh,  "FreeShop", OnFreeShop);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "FreeShop", OnFreeShop);
     }
 
     protected override void Uninit()
@@ -86,50 +69,6 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
         IAddonLifecycle.Instance().UnregisterListener(OnInclusionShop);
         IAddonLifecycle.Instance().UnregisterListener(OnGrandCompanyExchange);
         IAddonLifecycle.Instance().UnregisterListener(OnShopExchange);
-        IAddonLifecycle.Instance().UnregisterListener(OnFreeShop);
-    }
-
-    private void CollectablesShopItemFillDetour
-    (
-        AtkUnitBase*                                addon,
-        AtkComponentListItemPopulator.ListItemInfo* itemInfo,
-        AtkResNode**                                nodeList
-    )
-    {
-        CollectablesShopItemFillHook.Original(addon, itemInfo, nodeList);
-
-        var listItem = itemInfo->ListItem;
-        if (listItem == null || listItem->UIntValues.Count < 3) return;
-
-        var itemID = listItem->UIntValues[2] % 50_0000;
-        if (itemID == 0 || !LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) return;
-
-        var imageNode = nodeList[0]->GetAsAtkImageNode();
-        if (imageNode == null) return;
-
-        imageNode->LoadIconTexture(itemRow.Icon, 0);
-    }
-
-    private static void OnFreeShop
-    (
-        AddonEvent type,
-        AddonArgs  args
-    )
-    {
-        var addon = args.Addon.ToStruct();
-        if (addon == null) return;
-
-        var itemCount = addon->AtkValues[76].UInt;
-        if (itemCount == 0) return;
-
-        for (var i = 0; i < itemCount; i++)
-        {
-            var itemID = addon->AtkValues[138 + i].UInt;
-            if (itemID == 0) continue;
-            if (!LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) continue;
-
-            addon->AtkValues[199 + i].SetUInt(itemRow.Icon);
-        }
     }
 
     private static void OnShopExchange

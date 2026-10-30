@@ -14,12 +14,12 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using GCShopEventHandler = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Event.GCShopEventHandler;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;
+using GCShopEventHandler = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Event.GCShopEventHandler;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastGrandCompanyExchange : ModuleBase
 {

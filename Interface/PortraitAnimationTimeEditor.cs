@@ -18,7 +18,7 @@ using ButtonBase = KamiToolKit.Nodes.ButtonBase;
 using CircleButtonIcon = OmenTools.KamiToolKit.Nodes.CircleButton.CircleButtonIcon;
 using CircleButtonNode = OmenTools.KamiToolKit.Nodes.CircleButton.CircleButtonNode;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class PortraitAnimationTimeEditor : ModuleBase
 {

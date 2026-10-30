@@ -25,7 +25,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using AgentFreeCompanyChest = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentFreeCompanyChest;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedFreeCompanyChest : ModuleBase
 {

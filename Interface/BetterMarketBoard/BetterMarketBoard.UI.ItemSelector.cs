@@ -6,7 +6,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {
@@ -258,7 +258,7 @@ public unsafe partial class BetterMarketBoard
 
         if (favoriteList == null || favoriteItemsCacheVersion != favoriteItemsVersion)
         {
-            favoriteItemsCache        = favoriteList = config.FavoriteItems.Values.ToList();
+            favoriteItemsCache        = favoriteList = [.. config.FavoriteItems.Values];
             favoriteItemsCacheVersion = favoriteItemsVersion;
         }
 
@@ -369,7 +369,11 @@ public unsafe partial class BetterMarketBoard
         {
             var date = group.Key;
 
-            if (ImGui.TreeNodeEx($"{date:MM/dd} ({group.Count()})##{date:yyyyMMdd}", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanAvailWidth))
+            if (ImGui.TreeNodeEx
+                (
+                    $"{date:MM/dd} ({group.Count()})##{date:yyyyMMdd}",
+                    ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanAvailWidth
+                ))
             {
                 var groupItems     = group.OrderByDescending(x => x.Value.AccessTime).ToList();
                 var historyClipper = new ImGuiListClipper();
@@ -397,12 +401,12 @@ public unsafe partial class BetterMarketBoard
         string?              note       = null
     )
     {
-        var isCurrentHQ = provider.SelectedItemID == item.RowId && provider.HQOnly;
+        var isCurrentHQ = frame.ItemID == item.RowId && frame.HQOnly;
         if (!ITextureProvider.Instance().TryGetFromGameIcon(new(item.Icon, isCurrentHQ), out var texture)) return;
 
         using var id = ImRaii.PushId($"{item.RowId}_{currentTab}");
 
-        var isSelected = provider.SelectedItemID == item.RowId;
+        var isSelected = frame.ItemID == item.RowId;
         var isFavorite = config.FavoriteItems.ContainsKey(item.RowId);
         var isMonitor  = config.CurrentMonitorItem?.ItemID == item.RowId;
 
@@ -577,7 +581,7 @@ public unsafe partial class BetterMarketBoard
 
                 if (curBadgeX < contentMaxX)
                 {
-                    drawList.PushClipRect(startPos, new Vector2(contentMaxX, maxPos.Y), true);
+                    drawList.PushClipRect(startPos, maxPos with { X = contentMaxX }, true);
                     DrawItemCardBadge
                     (
                         drawList,
@@ -992,7 +996,7 @@ public unsafe partial class BetterMarketBoard
                 config.Save(this);
             }
         }
-        
+
         ImGui.NewLine();
 
         ImGui.TextColored
@@ -1044,15 +1048,18 @@ public unsafe partial class BetterMarketBoard
                     10
                 ))
                 monitorProvider.SetQuantityLimit(quantityLimit);
-            
-            ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(358)}：{heldCount}");
+
+            ImGui.TextDisabled
+            (
+                $"{LuminaWrapper.GetAddonText(358)}：{heldCount}"
+            );
         }
     }
 
     private void DrawBenchmarkCardsGrid
     (
-        MonitorItem                                                             monitorItem,
-        IReadOnlyList<(string Label, ulong? Price, Vector4 Color, string Icon)> benchmarks
+        MonitorItem                                                    monitorItem,
+        List<(string Label, ulong? Price, Vector4 Color, string Icon)> benchmarks
     )
     {
         var cardWidth  = 190f * GlobalUIScale;
@@ -1083,7 +1090,10 @@ public unsafe partial class BetterMarketBoard
                 if (isHovered)
                 {
                     ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-                    ImGuiOm.TooltipHover($"{label}：{price!.Value.ToChineseString()}\ue049\n{Lang.Get("LeftClick")}：{Lang.Get("Apply")}");
+                    ImGuiOm.TooltipHover
+                    (
+                        $"{label}：{price!.Value.ToChineseString()}\ue049\n{Lang.Get("LeftClick")}：{Lang.Get("Apply")}"
+                    );
                 }
 
                 var min      = ImGui.GetItemRectMin();

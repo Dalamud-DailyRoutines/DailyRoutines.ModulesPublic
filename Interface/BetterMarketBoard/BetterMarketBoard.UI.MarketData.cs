@@ -1,4 +1,4 @@
-using System.Globalization;
+using DailyRoutines.Common.RemoteInteraction.Enums;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -7,7 +7,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using TimeAgo;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {
@@ -227,11 +227,25 @@ public unsafe partial class BetterMarketBoard
                 new
                 (
                     Lang.Get("Selected"),
-                    Lang.Get("BetterMarketBoard-Samples-Format", provider.SelectedListings.Count, totalCount),
+                    Lang.Get
+                    (
+                        "BetterMarketBoard-Samples-Format",
+                        new Dictionary<string, object>
+                        {
+                            ["count"]    = provider.SelectedListings.Count,
+                            ["quantity"] = totalCount
+                        }
+                    ),
                     KnownColor.LightSkyBlue.ToVector4(),
                     null
                 ),
-                new(Lang.Get("BetterMarketBoard-BatchPurchase-Total"), $"{totalPrice.ToChineseString()}\ue049", KnownColor.Orange.ToVector4(), null)
+                new
+                (
+                    Lang.Get("BetterMarketBoard-BatchPurchase-Total"),
+                    $"{totalPrice.ToChineseString()}\ue049",
+                    KnownColor.Orange.ToVector4(),
+                    null
+                )
             };
 
             DrawMetricDashboard(selectedMetrics, metricsWidth);
@@ -312,7 +326,15 @@ public unsafe partial class BetterMarketBoard
                         new
                         (
                             Lang.Get("BetterMarketBoard-InStock"),
-                            Lang.Get("BetterMarketBoard-Samples-Format", totalListings, totalQty),
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-Samples-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["count"]    = totalListings,
+                                    ["quantity"] = totalQty
+                                }
+                            ),
                             KnownColor.LightSkyBlue.ToVector4(),
                             null
                         )
@@ -326,7 +348,14 @@ public unsafe partial class BetterMarketBoard
                         new
                         (
                             Lang.Get("BetterMarketBoard-Tooltip-DailySales"),
-                            Lang.Get("BetterMarketBoard-DailySales-Format", dailySales.ToString("0.#", CultureInfo.InvariantCulture)),
+                            Lang.Get
+                            (
+                                "BetterMarketBoard-DailySales-Format",
+                                new Dictionary<string, object>
+                                {
+                                    ["quantity"] = dailySales
+                                }
+                            ),
                             KnownColor.GreenYellow.ToVector4(),
                             null
                         )
@@ -334,13 +363,20 @@ public unsafe partial class BetterMarketBoard
 
                     if (totalQty > 0)
                     {
-                        var turnoverDays = totalQty / dailySales;
+                        var turnoverDays = MathF.Round(totalQty / dailySales, 1);
                         metrics.Add
                         (
                             new
                             (
                                 Lang.Get("BetterMarketBoard-Turnover"),
-                                Lang.Get("BetterMarketBoard-Turnover-Format", turnoverDays.ToString("0.#", CultureInfo.InvariantCulture)),
+                                Lang.Get
+                                (
+                                    "BetterMarketBoard-Turnover-Format",
+                                    new Dictionary<string, object>
+                                    {
+                                        ["days"] = turnoverDays
+                                    }
+                                ),
                                 KnownColor.Goldenrod.ToVector4(),
                                 Lang.Get("BetterMarketBoard-Turnover-Help")
                             )
@@ -368,7 +404,17 @@ public unsafe partial class BetterMarketBoard
                 if (isOnlineView && onlineDataSet == null)
                 {
                     ImGui.Spacing();
-                    ImGui.TextColored(KnownColor.Gray.ToVector4(), $"\ue031 {LuminaWrapper.GetAddonText(2717)}");
+                    var requestStatus = provider.MarketRequestStatus;
+                    var statusText = requestStatus switch
+                    {
+                        RemoteSnapshotStatus.Failed => Lang.Get("BetterMarketBoard-Tooltip-RequestFailed"),
+                        RemoteSnapshotStatus.Ready  => LuminaWrapper.GetAddonText(1998),
+                        _                           => $"\ue031 {LuminaWrapper.GetAddonText(2717)}"
+                    };
+                    ImGui.TextColored(KnownColor.Gray.ToVector4(), statusText);
+                    if (requestStatus is RemoteSnapshotStatus.Failed &&
+                        !string.IsNullOrWhiteSpace(provider.MarketRequestError))
+                        ImGuiOm.TooltipHover(provider.MarketRequestError);
                 }
             }
         }
@@ -401,7 +447,17 @@ public unsafe partial class BetterMarketBoard
 
         if (data == null || data.Entries.Count == 0)
         {
-            ImGui.TextDisabled(LuminaWrapper.GetAddonText(1998));
+            var statusText = provider.HistoryRequestStatus switch
+            {
+                RemoteSnapshotStatus.Loading or RemoteSnapshotStatus.Empty => $"\ue031 {LuminaWrapper.GetAddonText(2717)}",
+                RemoteSnapshotStatus.Failed                                => Lang.Get("BetterMarketBoard-Tooltip-RequestFailed"),
+                _                                                          => LuminaWrapper.GetAddonText(1998)
+            };
+            ImGui.TextDisabled(statusText);
+            if (provider.HistoryRequestStatus is RemoteSnapshotStatus.Failed &&
+                !string.IsNullOrWhiteSpace(provider.HistoryRequestError))
+                ImGuiOm.TooltipHover(provider.HistoryRequestError);
+
             return;
         }
 
@@ -418,7 +474,15 @@ public unsafe partial class BetterMarketBoard
             new
             (
                 Lang.Get("BetterMarketBoard-History-Samples"),
-                Lang.Get("BetterMarketBoard-Samples-Format", data.TotalCount, data.TotalQty),
+                Lang.Get
+                (
+                    "BetterMarketBoard-Samples-Format",
+                    new Dictionary<string, object>
+                    {
+                        ["count"]    = data.TotalCount,
+                        ["quantity"] = data.TotalQty
+                    }
+                ),
                 KnownColor.LightSkyBlue.ToVector4(),
                 null
             )
@@ -429,17 +493,58 @@ public unsafe partial class BetterMarketBoard
             if (data.AvgNQPrice > 0)
             {
                 metrics.Add
-                    (new(Lang.Get("BetterMarketBoard-AveragePrice-NQ"), $"{data.AvgNQPrice.ToChineseString()}\ue049", KnownColor.LightSkyBlue.ToVector4(), null));
+                (
+                    new
+                    (
+                        Lang.Get("BetterMarketBoard-AveragePrice-NQ"),
+                        $"{data.AvgNQPrice.ToChineseString()}\ue049",
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        null
+                    )
+                );
             }
 
             if (data.AvgHQPrice > 0)
-                metrics.Add(new(Lang.Get("BetterMarketBoard-AveragePrice-HQ"), $"{data.AvgHQPrice.ToChineseString()}\ue049", KnownColor.Orange.ToVector4(), null));
+                metrics.Add
+                (
+                    new
+                    (
+                        Lang.Get("BetterMarketBoard-AveragePrice-HQ"),
+                        $"{data.AvgHQPrice.ToChineseString()}\ue049",
+                        KnownColor.Orange.ToVector4(),
+                        null
+                    )
+                );
 
             metrics.Add
-                (new(Lang.Get("BetterMarketBoard-HQRatio"), Lang.Get("BetterMarketBoard-Percent-Format", data.HQPercent), KnownColor.Goldenrod.ToVector4(), null));
+            (
+                new
+                (
+                    Lang.Get("BetterMarketBoard-HQRatio"),
+                    Lang.Get
+                    (
+                        "BetterMarketBoard-Percent-Format",
+                        new Dictionary<string, object>
+                        {
+                            ["percent"] = data.HQPercent
+                        }
+                    ),
+                    KnownColor.Goldenrod.ToVector4(),
+                    null
+                )
+            );
         }
         else
-            metrics.Add(new(Lang.Get("BetterMarketBoard-AveragePrice"), $"{data.AvgPrice.ToChineseString()}\ue049", KnownColor.Orange.ToVector4(), null));
+            metrics.Add
+            (
+                new
+                (
+                    Lang.Get("BetterMarketBoard-AveragePrice"),
+                    $"{data.AvgPrice.ToChineseString()}\ue049",
+                    KnownColor.Orange.ToVector4(),
+                    null
+                )
+            );
 
         if (dailySales > 0)
         {
@@ -448,7 +553,14 @@ public unsafe partial class BetterMarketBoard
                 new
                 (
                     Lang.Get("BetterMarketBoard-Tooltip-DailySales"),
-                    Lang.Get("BetterMarketBoard-DailySales-Format", dailySales.ToString("0.#", CultureInfo.InvariantCulture)),
+                    Lang.Get
+                    (
+                        "BetterMarketBoard-DailySales-Format",
+                        new Dictionary<string, object>
+                        {
+                            ["quantity"] = dailySales
+                        }
+                    ),
                     KnownColor.GreenYellow.ToVector4(),
                     null
                 )
@@ -633,7 +745,10 @@ public unsafe partial class BetterMarketBoard
             if (isAnyMateriaEquipped)
             {
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.MateriaCount}");
+                ImGui.TextUnformatted
+                (
+                    $"{listing.MateriaCount}"
+                );
             }
 
             if (isAnyOnMannequin)
@@ -660,7 +775,10 @@ public unsafe partial class BetterMarketBoard
             ImGuiOm.ClickToCopyAndNotify(listing.TotalTax.ToString());
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{listing.Quantity}");
+            ImGui.TextUnformatted
+            (
+                $"{listing.Quantity}"
+            );
 
             var totalPrice = (listing.UnitPrice * listing.Quantity) + listing.TotalTax;
             ImGui.TableNextColumn();
@@ -695,22 +813,37 @@ public unsafe partial class BetterMarketBoard
                     ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(357)}:");
 
                     ImGui.SameLine();
-                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{listing.UnitPrice.ToChineseString()}\ue049");
+                    ImGui.TextColored
+                    (
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        $"{listing.UnitPrice.ToChineseString()}\ue049"
+                    );
 
                     ImGui.TextUnformatted($"{Lang.Get("Amount")}:");
 
                     ImGui.SameLine();
-                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{listing.Quantity}");
+                    ImGui.TextColored
+                    (
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        $"{listing.Quantity}"
+                    );
 
                     ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(6936)}:");
 
                     ImGui.SameLine();
-                    ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{totalPrice.ToChineseString()}\ue049");
+                    ImGui.TextColored
+                    (
+                        KnownColor.LightSkyBlue.ToVector4(),
+                        $"{totalPrice.ToChineseString()}\ue049"
+                    );
 
                     if (listing.TotalTax > 0)
                     {
                         ImGui.SameLine();
-                        ImGui.TextUnformatted($"({Lang.Get("Tax")}: {listing.TotalTax.ToChineseString()}\ue049)");
+                        ImGui.TextUnformatted
+                        (
+                            $"({Lang.Get("Tax")}: {listing.TotalTax.ToChineseString()}\ue049)"
+                        );
                     }
 
                     ImGui.Separator();
@@ -718,7 +851,17 @@ public unsafe partial class BetterMarketBoard
 
                     if (ImGui.MenuItem(LuminaWrapper.GetAddonText(9275)))
                         MarketDataProvider.SendBuyRequest(listing);
-                    ImGuiOm.TooltipHover(Lang.Get("BetterMarketBoard-Purchase-Help", PluginConfig.Instance().ConflictKeyBinding));
+                    ImGuiOm.TooltipHover
+                    (
+                        Lang.Get
+                        (
+                            "BetterMarketBoard-Purchase-Help",
+                            new Dictionary<string, object>
+                            {
+                                ["key"] = PluginConfig.Instance().ConflictKeyBinding
+                            }
+                        )
+                    );
                 }
             }
 
@@ -817,10 +960,16 @@ public unsafe partial class BetterMarketBoard
             DrawMarketPrice(listing.PricePerUnit);
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{listing.Quantity}");
+            ImGui.TextUnformatted
+            (
+                $"{listing.Quantity}"
+            );
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{listing.Total.ToChineseString()}\ue049");
+            ImGui.TextUnformatted
+            (
+                $"{listing.Total.ToChineseString()}\ue049"
+            );
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{listing.RetainerName}");
@@ -883,10 +1032,16 @@ public unsafe partial class BetterMarketBoard
             }
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{sale.Quantity}");
+            ImGui.TextUnformatted
+            (
+                $"{sale.Quantity}"
+            );
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{sale.PricePerUnit.ToChineseString()}\ue049");
+            ImGui.TextUnformatted
+            (
+                $"{sale.PricePerUnit.ToChineseString()}\ue049"
+            );
             ImGuiOm.ClickToCopyAndNotify(sale.PricePerUnit.ToString());
 
             ImGui.TableNextColumn();

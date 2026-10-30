@@ -10,7 +10,7 @@ using FFXIVClientStructs.Interop;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ScrollableTabs : ModuleBase
 {

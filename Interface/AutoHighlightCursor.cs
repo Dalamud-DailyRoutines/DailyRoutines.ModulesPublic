@@ -13,7 +13,7 @@ using KamiToolKit.Timelines;
 using KamiToolKit.UiOverlay;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoHighlightCursor : ModuleBase
 {

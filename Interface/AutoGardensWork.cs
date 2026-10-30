@@ -18,7 +18,7 @@ using OmenTools.OmenService;
 using Action = System.Action;
 using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoGardensWork : ModuleBase
 {

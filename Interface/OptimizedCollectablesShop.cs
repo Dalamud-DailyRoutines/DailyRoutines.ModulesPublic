@@ -1,8 +1,8 @@
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Internal;
 using DailyRoutines.Extensions;
+using DailyRoutines.Internal;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -25,7 +25,7 @@ using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ShopData = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentCollectablesShop.CollectablesShopData;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedCollectablesShop : ModuleBase
 {
@@ -33,7 +33,11 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
     {
         Title       = Lang.Get("OptimizedCollectablesShopTitle"),
         Description = Lang.Get("OptimizedCollectablesShopDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedCollectablesShop/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()
@@ -41,9 +45,10 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private Hook<AgentCollectablesShop.Delegates.HandleEvent>? HandleEventHook;
-    private Hook<AgentCollectablesShop.Delegates.HandIn>?      HandInHook;
-    private Hook<AgentCollectablesShop.Delegates.EndData>?     EndDataHook;
+    private Hook<AddonCollectablesShop.Delegates.RenderListItemCommon> RenderListItemCommonHook;
+    private Hook<AgentCollectablesShop.Delegates.HandleEvent>?         HandleEventHook;
+    private Hook<AgentCollectablesShop.Delegates.HandIn>?              HandInHook;
+    private Hook<AgentCollectablesShop.Delegates.EndData>?             EndDataHook;
 
     private Config config = null!;
 
@@ -63,6 +68,14 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
         {
             RetryIntervalMS = 100
         };
+
+        RenderListItemCommonHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AddonCollectablesShop.MemberFunctionPointers),
+            nameof(AddonCollectablesShop.RenderListItemCommon),
+            (AddonCollectablesShop.Delegates.RenderListItemCommon)RenderListItemCommonDetour
+        );
+        RenderListItemCommonHook.Enable();
 
         HandleEventHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
@@ -195,6 +208,27 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
             isPrevented = true;
     }
 
+    private void RenderListItemCommonDetour
+    (
+        AddonCollectablesShop*                      addon,
+        AtkComponentListItemPopulator.ListItemInfo* itemInfo,
+        AtkResNode**                                nodeList
+    )
+    {
+        RenderListItemCommonHook.Original(addon, itemInfo, nodeList);
+
+        var listItem = itemInfo->ListItem;
+        if (listItem == null || listItem->UIntValues.Count < 3) return;
+
+        var itemID = listItem->UIntValues[2] % 50_0000;
+        if (itemID == 0 || !LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) return;
+
+        var imageNode = nodeList[0]->GetAsAtkImageNode();
+        if (imageNode == null) return;
+
+        imageNode->LoadIconTexture(itemRow.Icon, 0);
+    }
+    
     private bool HandleEventDetour
     (
         AgentCollectablesShop* agent,

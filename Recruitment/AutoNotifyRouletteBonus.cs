@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -8,6 +7,8 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using Dalamud.Interface.Textures.TextureWraps;
+using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Interop.Game.Lumina;
@@ -27,69 +28,101 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["BoxingBunny"]
     };
-    
-    private static readonly CompSig SetContentRouletteRoleBonusSig = new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
+
+    private static readonly CompSig SetContentRouletteRoleBonusSig =
+        new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
     private delegate void SetContentRouletteRoleBonusDelegate
     (
         AgentContentsFinder* instance,
-        void*                data,
-        uint                 bonusIndex
+        byte*                roleIDs,
+        uint                 roleCount
     );
     private Hook<SetContentRouletteRoleBonusDelegate>? SetContentRouletteRoleBonusHook;
 
+    private static readonly CompSig UpdateRouletteCompletionSig = new("0F B6 11 4C 8D 05 ?? ?? ?? ?? 8B 41");
+    private delegate uint UpdateRouletteCompletionDelegate
+    (
+        void* packet
+    );
+    private Hook<UpdateRouletteCompletionDelegate>? UpdateRouletteCompletionHook;
+
     private Config config = null!;
 
-    private ContentsRouletteRole[] lastKnownRoles = [];
+    private readonly ContentsRouletteRole[]                 currentRoles  = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];
+    private readonly Dictionary<uint, ContentsRouletteRole> notifiedRoles = [];
+
+    private bool hasRoleData;
 
     private readonly Dictionary<uint, DalamudLinkPayload> rouletteLinkPayloads   = [];
     private readonly Dictionary<uint, byte>               rouletteLinkPayloadIDs = [];
 
     protected override void Init()
     {
-        config     =   Config.Load(this) ?? new();
-        TaskHelper ??= new();
-
-        if (lastKnownRoles.Length != ROULETTE_BONUS_ARRAY_SIZE)
+        config = Config.Load(this) ?? new();
+        TaskHelper ??= new()
         {
-            lastKnownRoles = new ContentsRouletteRole[ROULETTE_BONUS_ARRAY_SIZE];
-            Array.Fill(lastKnownRoles, ContentsRouletteRole.None);
+            RetryIntervalMS = 250,
+            TimeoutMS       = 0
+        };
+
+        Array.Fill(currentRoles, ContentsRouletteRole.None);
+        notifiedRoles.Clear();
+        hasRoleData = false;
+
+        var configChanged = false;
+
+        foreach (var roulette in CachedRoulettes)
+        {
+            configChanged |= config.Roulettes.TryAdd(roulette.RowId, new());
         }
+
+        if (configChanged)
+            config.Save(this);
 
         SetContentRouletteRoleBonusHook ??= SetContentRouletteRoleBonusSig.GetHook<SetContentRouletteRoleBonusDelegate>(SetContentRouletteRoleBonusDetour);
         SetContentRouletteRoleBonusHook.Enable();
 
+        UpdateRouletteCompletionHook ??= UpdateRouletteCompletionSig.GetHook<UpdateRouletteCompletionDelegate>(UpdateRouletteCompletionDetour);
+        UpdateRouletteCompletionHook.Enable();
+
+        IClientState.Instance().Login            += QueueEvaluation;
+        IClientState.Instance().Logout           += OnLogout;
         IClientState.Instance().TerritoryChanged += OnZoneChanged;
+
+        if (GameState.IsLoggedIn)
+            QueueEvaluation();
     }
 
     protected override void Uninit()
     {
+        IClientState.Instance().Login            -= QueueEvaluation;
+        IClientState.Instance().Logout           -= OnLogout;
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
+
+        TaskHelper.Abort();
+        hasRoleData = false;
+        Array.Fill(currentRoles, ContentsRouletteRole.None);
+        notifiedRoles.Clear();
+
         foreach (var payload in rouletteLinkPayloads.Values)
             LinkPayloadManager.Instance().Unreg(payload.CommandId);
+
         rouletteLinkPayloads.Clear();
         rouletteLinkPayloadIDs.Clear();
     }
 
+    #region 界面
+
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
-            config.Save(this);
-
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
-            config.Save(this);
-
-        if (ImGui.Checkbox(Lang.Get("SendTTS"), ref config.SendTTS))
-            config.Save(this);
-
-        ImGui.NewLine();
-
         using var table = ImRaii.Table
         (
             "RouletteConfigTable",
             6,
             ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp
         );
-        if (!table) return;
+        if (!table)
+            return;
 
         ImGui.TableSetupColumn("##Roulette",       ImGuiTableColumnFlags.None,          0.3f);
         ImGui.TableSetupColumn("##Tank",           ImGuiTableColumnFlags.None,          0.1f);
@@ -135,12 +168,7 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         {
             var rowID = roulette.RowId;
 
-            if (!config.Roulettes.TryGetValue(rowID, out var rouletteConfig))
-            {
-                rouletteConfig          = new RouletteConfig();
-                config.Roulettes[rowID] = rouletteConfig;
-                config.Save(this);
-            }
+            var rouletteConfig = config.Roulettes[rowID];
 
             var isEnabled = rouletteConfig.Tank || rouletteConfig.Healer || rouletteConfig.DPS;
 
@@ -165,224 +193,43 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
                     {
                         switch (role)
                         {
-                            case 0: rouletteConfig.Tank   = check; break;
-                            case 1: rouletteConfig.Healer = check; break;
-                            case 2: rouletteConfig.DPS    = check; break;
+                            case 0:
+                                rouletteConfig.Tank = check;
+                                break;
+                            case 1:
+                                rouletteConfig.Healer = check;
+                                break;
+                            case 2:
+                                rouletteConfig.DPS = check;
+                                break;
                         }
 
                         config.Save(this);
+                        QueueEvaluation();
                     }
                 }
 
                 ImGui.TableNextColumn();
+
                 if (ImGui.Checkbox($"##Incomplete_{rowID}", ref rouletteConfig.OnlyIncomplete))
+                {
                     config.Save(this);
+                    QueueEvaluation();
+                }
 
                 ImGui.TableNextColumn();
                 var bonusIndex = roulette.ContentRouletteRoleBonus.RowId;
 
-                if (bonusIndex is > 0 and < ROULETTE_BONUS_ARRAY_SIZE)
+                if (hasRoleData &&
+                    bonusIndex < currentRoles.Length)
                 {
-                    var currentRole = lastKnownRoles[bonusIndex];
+                    var currentRole = currentRoles[bonusIndex];
                     DrawRoleBonusCellIcon(roleBonusTexture, roleBonusInvTexSize, currentRole);
                 }
                 else
                     ImGui.TextUnformatted("-");
             }
         }
-    }
-
-    private void SetContentRouletteRoleBonusDetour
-    (
-        AgentContentsFinder* instance,
-        void*                data,
-        uint                 bonusIndex
-    )
-    {
-        SetContentRouletteRoleBonusHook.Original(instance, data, bonusIndex);
-        OnRoleBonusUpdated();
-    }
-
-    private void OnZoneChanged
-    (
-        uint u
-    )
-    {
-        TaskHelper.Abort();
-        TaskHelper.Enqueue(() => UIModule.IsScreenReady() && !ICondition.Instance().IsBetweenAreas);
-        TaskHelper.Enqueue
-        (() =>
-            {
-                var agent = AgentContentsFinder.Instance();
-                if (agent is null) return false;
-
-                agent->Refresh();
-                return true;
-            }
-        );
-    }
-
-    private void OnClickRouletteLinkPayload
-    (
-        uint     id,
-        SeString _
-    )
-    {
-        if (!rouletteLinkPayloadIDs.TryGetValue(id, out var rouletteRowID)) return;
-        if (GameState.ContentFinderCondition != 0) return;
-
-        var agent = AgentContentsFinder.Instance();
-        if (agent == null) return;
-
-        agent->OpenRouletteDuty(rouletteRowID);
-    }
-
-    private void OnRoleBonusUpdated()
-    {
-        if (!GameState.IsLoggedIn) return;
-        if (GameState.ContentFinderCondition != 0) return;
-        var agent = AgentContentsFinder.Instance();
-        if (agent is null) return;
-
-        var currentRoles = agent->ContentRouletteRoleBonuses.ToArray();
-        var bonuses      = new List<(uint RowID, ContentsRouletteRole Role)>();
-
-        for (byte index = 1; index < ROULETTE_BONUS_ARRAY_SIZE; index++)
-        {
-            var currentRole = currentRoles[index];
-            var lastRole    = lastKnownRoles[index];
-
-            if (currentRole == lastRole) continue;
-
-            lastKnownRoles[index] = currentRole;
-            if (lastRole == ContentsRouletteRole.None) continue;
-            if (!RouletteIndexToRowID.TryGetValue(index, out var rowID)) continue;
-            if (!config.Roulettes.TryGetValue(rowID, out var rouletteConfig)) continue;
-            if (currentRole > ContentsRouletteRole.Dps) continue;
-
-            var shouldAlert = currentRole switch
-            {
-                ContentsRouletteRole.Tank   => rouletteConfig.Tank,
-                ContentsRouletteRole.Healer => rouletteConfig.Healer,
-                ContentsRouletteRole.Dps    => rouletteConfig.DPS
-            };
-
-            if (!shouldAlert) continue;
-            if (rouletteConfig.OnlyIncomplete && IsRouletteComplete(rowID)) continue;
-
-            bonuses.Add((rowID, currentRole));
-        }
-
-        NotifyRoleBonuses(bonuses);
-    }
-
-    private void NotifyRoleBonuses
-    (
-        List<(uint RowID, ContentsRouletteRole Role)> bonuses
-    )
-    {
-        if (bonuses.Count == 0) return;
-
-        Dictionary<ContentsRouletteRole, List<(uint RowID, string RouletteName)>> groupedBonuses = [];
-
-        foreach (var bonus in bonuses)
-        {
-            if (!LuminaGetter.TryGetRow<ContentRoulette>(bonus.RowID, out var roulette))
-                continue;
-            if (bonus.Role > ContentsRouletteRole.Dps) continue;
-
-            if (!groupedBonuses.TryGetValue(bonus.Role, out var grouped))
-            {
-                grouped                    = [];
-                groupedBonuses[bonus.Role] = grouped;
-            }
-
-            if (grouped.Any(x => x.RowID == bonus.RowID)) continue;
-            grouped.Add((bonus.RowID, roulette.Name.ToString()));
-        }
-
-        if (groupedBonuses.Count == 0) return;
-
-        if (config.SendChat)
-        {
-            var chatBuilder = new SeStringBuilder();
-            chatBuilder.AddText(Lang.Get("AutoNotifyRouletteBonusTitle"));
-
-            foreach (var (role, grouped) in groupedBonuses)
-            {
-                chatBuilder.Add(NewLinePayload.Payload);
-                chatBuilder.AddText(GetRoleBonusText(role));
-                if (RoleIcons.TryGetValue(role, out var roleIcon))
-                    chatBuilder.AddText(" ").AddIcon(roleIcon);
-
-                chatBuilder.Add(NewLinePayload.Payload)
-                           .AddText($"{Lang.Get("Operation")}: ");
-
-                foreach (var (rowID, rouletteName) in grouped)
-                {
-                    chatBuilder.Add(RawPayload.LinkTerminator)
-                               .Add(GetRouletteLinkPayload(rowID))
-                               .AddText("[")
-                               .AddUiForeground(rouletteName, 35)
-                               .AddText("]")
-                               .Add(RawPayload.LinkTerminator);
-                }
-            }
-
-            // TODO: 改成 ReadOnlyString
-            NotifyHelper.Instance().Chat(chatBuilder.Build().Encode());
-        }
-
-        var notificationLines = new List<string>();
-        foreach (var (role, grouped) in groupedBonuses)
-            notificationLines.Add($"{GetRoleBonusText(role)} {string.Concat(grouped.Select(x => $"[{x.RouletteName}]"))}");
-
-        if (notificationLines.Count == 0) return;
-
-        var notificationString = string.Join('\n', notificationLines);
-
-        if (config.SendNotification)
-            NotifyHelper.Instance().NotificationInfo(notificationString, Lang.Get("AutoNotifyRouletteBonusTitle"));
-
-        if (config.SendTTS)
-            NotifyHelper.Speak(notificationString);
-    }
-
-    private static bool IsRouletteComplete
-    (
-        uint rowID
-    )
-    {
-        if (rowID > byte.MaxValue) return false;
-        var instanceContent = InstanceContent.Instance();
-        return instanceContent->IsRouletteComplete((byte)rowID);
-    }
-
-    private static string GetRoleBonusText
-    (
-        ContentsRouletteRole role
-    ) =>
-        LuminaWrapper.GetAddonText
-        (
-            role switch
-            {
-                ContentsRouletteRole.Tank   => 10997,
-                ContentsRouletteRole.Healer => 10998,
-                ContentsRouletteRole.Dps    => 10999
-            }
-        );
-
-    private DalamudLinkPayload GetRouletteLinkPayload
-    (
-        uint rowID
-    )
-    {
-        if (rouletteLinkPayloads.TryGetValue(rowID, out var payload)) return payload;
-
-        var linkPayload = LinkPayloadManager.Instance().Reg(OnClickRouletteLinkPayload, out var id);
-        rouletteLinkPayloads[rowID] = linkPayload;
-        rouletteLinkPayloadIDs[id]  = (byte)rowID;
-        return linkPayload;
     }
 
     private static void DrawRoleBonusHeaderIcon
@@ -407,7 +254,8 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         ContentsRouletteRole role
     )
     {
-        if (texture == null || (byte)role > 2)
+        if (texture    == null ||
+            (byte)role > 2)
         {
             ImGui.TextUnformatted("-");
             return;
@@ -427,6 +275,201 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         var uv0 = iconPosPx            * invTexSize;
         var uv1 = (iconPosPx + sizePx) * invTexSize;
         ImGui.Image(texture.Handle, new(ImGui.GetTextLineHeightWithSpacing()), uv0, uv1);
+    }
+
+    #endregion
+
+    #region 事件
+
+    private void SetContentRouletteRoleBonusDetour
+    (
+        AgentContentsFinder* instance,
+        byte*                roleIDs,
+        uint                 roleCount
+    )
+    {
+        SetContentRouletteRoleBonusHook.Original(instance, roleIDs, roleCount);
+
+        var roles = instance->ContentRouletteRoleBonuses;
+        var count = (int)Math.Min(roleCount, (uint)roles.Length);
+        if (count == 0)
+            return;
+
+        roles[..count].CopyTo(currentRoles);
+        hasRoleData = true;
+        QueueEvaluation();
+    }
+
+    private uint UpdateRouletteCompletionDetour
+    (
+        void* packet
+    )
+    {
+        var result = UpdateRouletteCompletionHook.Original(packet);
+        QueueEvaluation();
+        return result;
+    }
+
+    private void OnLogout
+    (
+        int type,
+        int code
+    )
+    {
+        TaskHelper.Abort();
+        hasRoleData = false;
+        Array.Fill(currentRoles, ContentsRouletteRole.None);
+        notifiedRoles.Clear();
+    }
+
+    private void OnZoneChanged
+    (
+        uint territory
+    ) => QueueEvaluation();
+
+    private void QueueEvaluation()
+    {
+        TaskHelper.Abort();
+        TaskHelper.Enqueue(EvaluateBonuses);
+    }
+
+    private void OnClickRouletteLinkPayload
+    (
+        uint     id,
+        SeString _
+    )
+    {
+        if (!rouletteLinkPayloadIDs.TryGetValue(id, out var rouletteRowID))
+            return;
+        if (GameState.ContentFinderCondition != 0)
+            return;
+
+        var agent = AgentContentsFinder.Instance();
+        if (agent == null)
+            return;
+
+        agent->OpenRouletteDuty(rouletteRowID);
+    }
+
+    private bool EvaluateBonuses()
+    {
+        if (!GameState.IsLoggedIn             ||
+            !PlayerState.Instance()->IsLoaded ||
+            !UIModule.IsScreenReady()         ||
+            ICondition.Instance().IsBetweenAreas)
+            return false;
+
+        if (!hasRoleData)
+        {
+            var agent = AgentContentsFinder.Instance();
+            if (agent == null)
+                return false;
+
+            agent->ContentRouletteRoleBonuses.CopyTo(currentRoles);
+            hasRoleData = true;
+        }
+
+        var instanceContent = InstanceContent.Instance();
+        var bonuses         = new List<(uint RowID, ContentsRouletteRole Role)>();
+
+        foreach (var roulette in CachedRoulettes)
+        {
+            var rowID          = roulette.RowId;
+            var bonusIndex     = roulette.ContentRouletteRoleBonus.RowId;
+            var currentRole    = currentRoles[bonusIndex];
+            var rouletteConfig = config.Roulettes[rowID];
+            var shouldAlert = currentRole switch
+            {
+                ContentsRouletteRole.Tank   => rouletteConfig.Tank,
+                ContentsRouletteRole.Healer => rouletteConfig.Healer,
+                ContentsRouletteRole.Dps    => rouletteConfig.DPS,
+                _                           => false
+            };
+
+            if (!shouldAlert ||
+                (rouletteConfig.OnlyIncomplete && !instanceContent->IsRouletteIncomplete((byte)rowID)))
+            {
+                notifiedRoles.Remove(rowID);
+                continue;
+            }
+
+            if (!notifiedRoles.TryGetValue(rowID, out var notifiedRole) ||
+                notifiedRole != currentRole)
+                bonuses.Add((rowID, currentRole));
+        }
+
+        if (GameState.ContentFinderCondition != 0)
+            return true;
+
+        bonuses.Sort
+        ((left, right) =>
+            {
+                var roleOrder = left.Role.CompareTo(right.Role);
+                return roleOrder != 0 ?
+                           roleOrder :
+                           left.RowID.CompareTo(right.RowID);
+            }
+        );
+        NotifyRoleBonuses(bonuses);
+
+        foreach (var (rowID, role) in bonuses)
+            notifiedRoles[rowID] = role;
+
+        return true;
+    }
+
+    #endregion
+
+    private void NotifyRoleBonuses
+    (
+        List<(uint RowID, ContentsRouletteRole Role)> bonuses
+    )
+    {
+        if (bonuses.Count == 0)
+            return;
+
+        using var rented = new RentedSeStringBuilder();
+        rented.Append
+        (
+            Lang.Get
+            (
+                "AutoNotifyRouletteBonus-Notification-ChatTitle",
+                new Dictionary<string, object>
+                {
+                    ["count"] = bonuses.Count
+                }
+            )
+        );
+
+        foreach (var (rowID, role) in bonuses)
+        {
+            rented.AppendNewLine();
+
+            rented.AppendDalamudSeString(GetRouletteLinkPayload(rowID))
+                  .Append("  \ue06f ")
+                  .Append(LuminaWrapper.GetContentRouletteName(rowID))
+                  .Append("（")
+                  .AppendIcon(role.GetIcon())
+                  .Append(role.GetName())
+                  .Append("）")
+                  .PopLink();
+        }
+
+        NotifyHelper.Instance().Chat(rented.ToReadOnlySeString());
+    }
+
+    private DalamudLinkPayload GetRouletteLinkPayload
+    (
+        uint rowID
+    )
+    {
+        if (rouletteLinkPayloads.TryGetValue(rowID, out var payload))
+            return payload;
+
+        var linkPayload = LinkPayloadManager.Instance().Reg(OnClickRouletteLinkPayload, out var id);
+        rouletteLinkPayloads[rowID] = linkPayload;
+        rouletteLinkPayloadIDs[id]  = (byte)rowID;
+        return linkPayload;
     }
 
     private static void GetTextureInfo
@@ -450,9 +493,6 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
     private class Config : ModuleConfig
     {
         public Dictionary<uint, RouletteConfig> Roulettes = [];
-        public bool                             SendChat;
-        public bool                             SendNotification;
-        public bool                             SendTTS;
     }
 
     private class RouletteConfig
@@ -467,24 +507,12 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
 
     private const int ROULETTE_BONUS_ARRAY_SIZE = 11;
 
-    private static readonly FrozenDictionary<byte, uint> RouletteIndexToRowID = new Dictionary<byte, uint>
-    {
-        [1] = 1, [2] = 2, [3] = 3, [4] = 4, [5]   = 5,
-        [6] = 6, [7] = 8, [8] = 9, [9] = 15, [10] = 17
-    }.ToFrozenDictionary();
-
-    private static readonly FrozenDictionary<ContentsRouletteRole, BitmapFontIcon> RoleIcons = new Dictionary<ContentsRouletteRole, BitmapFontIcon>
-    {
-        [ContentsRouletteRole.Tank]   = BitmapFontIcon.Tank,
-        [ContentsRouletteRole.Healer] = BitmapFontIcon.Healer,
-        [ContentsRouletteRole.Dps]    = BitmapFontIcon.DPS
-    }.ToFrozenDictionary();
-
     private static readonly ContentRoulette[] CachedRoulettes =
-        LuminaGetter.Get<ContentRoulette>()
-                    .Where(x => x is { RowId: > 0, ContentRouletteRoleBonus.RowId: > 0 })
-                    .OrderBy(x => x.ContentRouletteRoleBonus.RowId)
-                    .ToArray();
+    [
+        .. LuminaGetter.Get<ContentRoulette>()
+                       .Where(x => x is { RowId: > 0 and <= byte.MaxValue, ContentRouletteRoleBonus.RowId: > 0 and < ROULETTE_BONUS_ARRAY_SIZE })
+                       .OrderBy(x => x.ContentRouletteRoleBonus.RowId)
+    ];
 
     #endregion
 }

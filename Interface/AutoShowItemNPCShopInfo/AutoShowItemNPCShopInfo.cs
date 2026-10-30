@@ -12,7 +12,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
 
-namespace DailyRoutines.ModulesPublic.Interface.AutoShowItemNPCShopInfo;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
 {

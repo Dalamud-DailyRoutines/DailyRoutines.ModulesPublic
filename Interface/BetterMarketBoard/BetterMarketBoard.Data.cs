@@ -1,6 +1,8 @@
+using DailyRoutines.Common.RemoteInteraction.Enums;
+using DailyRoutines.Common.RemoteInteraction.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using DailyRoutines.RemoteInteraction.Universalis;
+using DailyRoutines.RemoteInteraction.Universalis.Handlers;
 using DailyRoutines.RemoteInteraction.Universalis.Models.Requests;
 using DailyRoutines.RemoteInteraction.Universalis.Models.Responses;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -12,7 +14,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {
@@ -34,7 +36,6 @@ public unsafe partial class BetterMarketBoard
         public int                TotalCount;
         public uint               TotalQty;
         public ulong              AvgPrice;
-        public int                HQCount;
         public int                HQPercent;
         public bool               IsCanBeHQ;
         public bool               IsAnyHQ;
@@ -99,20 +100,19 @@ public unsafe partial class BetterMarketBoard
         if (prices.Length == 0) return (0, 100);
 
         Array.Sort(prices);
-        var sorted = prices;
-        var min    = (double)sorted[0];
-        var max    = (double)sorted[^1];
+        var min = (double)prices[0];
+        var max = (double)prices[^1];
 
-        if (sorted.Length < 4)
+        if (prices.Length < 4)
             return (min, max);
 
-        var q1Index = (int)(sorted.Length * 0.25);
-        var q3Index = (int)(sorted.Length * 0.75);
-        var q1      = (double)sorted[q1Index];
-        var q3      = (double)sorted[q3Index];
+        var q1Index = (int)(prices.Length * 0.25);
+        var q3Index = (int)(prices.Length * 0.75);
+        var q1      = (double)prices[q1Index];
+        var q3      = (double)prices[q3Index];
         var iqr     = q3 - q1;
 
-        var median = (double)sorted[sorted.Length / 2];
+        var median = (double)prices[prices.Length / 2];
         var upperFence = iqr > 0 ?
                              q3 + (3.0 * iqr) :
                              median * 3.0;
@@ -128,9 +128,13 @@ public unsafe partial class BetterMarketBoard
         BetterMarketBoard owner
     )
     {
-        public uint   SelectedWorldID     { get; private set; }
-        public string EffectiveRegionName { get; private set; } = string.Empty;
-        public bool   HQOnly;
+        public uint                 SelectedWorldID     { get; private set; }
+        public string               EffectiveRegionName { get; private set; } = string.Empty;
+        public bool                 HQOnly;
+        public RemoteSnapshotStatus MarketRequestStatus  { get; private set; }
+        public RemoteSnapshotStatus HistoryRequestStatus { get; private set; }
+        public string               MarketRequestError   { get; private set; } = string.Empty;
+        public string               HistoryRequestError  { get; private set; } = string.Empty;
 
         public uint SelectedItemID { get; private set; }
 
@@ -154,11 +158,17 @@ public unsafe partial class BetterMarketBoard
 
         private readonly Dictionary<(uint ItemID, uint WorldID), UniversalisAggregatedMarketDataResponse> onlineAggregatedCache       = [];
         private readonly Dictionary<(uint ItemID, uint WorldID), IDisposable>                             aggregatedSubscriptionCache = [];
+        private readonly Dictionary<uint, RemoteSnapshotStatus>                                           aggregatedRequestStatuses   = [];
+        private readonly Dictionary<uint, string>                                                         aggregatedRequestErrors     = [];
 
         private readonly Dictionary<(uint ItemID, uint WorldID), UniversalisMarketHistoryResponse> onlineHistoryCache       = [];
         private readonly Dictionary<(uint ItemID, uint WorldID), IDisposable>                      historySubscriptionCache = [];
 
-        private readonly Dictionary<(uint ItemID, string Scope), IDisposable> tooltipAggregatedSubscriptionCache = [];
+        private IDisposable?                                            tooltipAggregatedSubscription;
+        private (uint ItemID, string Scope)                             tooltipAggregatedKey;
+        private RemoteSnapshot<UniversalisAggregatedMarketDataResponse> tooltipAggregatedSnapshot;
+        private DateTime                                                tooltipAggregatedFailedAtUTC;
+        private int                                                     tooltipEpoch;
 
         private readonly Dictionary<string, List<WorldPriceRow>> cachedDCWorldPrices = [];
         private          WorldPriceRanks?                        worldPriceRanks;
@@ -259,33 +269,6 @@ public unsafe partial class BetterMarketBoard
                 else
                     info->ClearListData();
             }
-        }
-
-        public bool FollowLocalSearch
-        (
-            uint itemID
-        )
-        {
-            var info = InfoProxy;
-            if (info == null || itemID == 0) return false;
-
-            var isItemChanged = SelectedItemID != itemID;
-
-            if (isItemChanged)
-            {
-                itemEpoch++;
-                HQOnly = false;
-                selectedListings.Clear();
-            }
-
-            SelectedItemID = itemID;
-            LastSelectTime = Environment.TickCount64;
-
-            info->SearchItemId = itemID;
-
-            if (!IsViewingCurrentWorld) return false;
-
-            return RequestLocalSearchData(itemID);
         }
 
         public void SelectWorld
@@ -472,10 +455,15 @@ public unsafe partial class BetterMarketBoard
             subscriptionCache.Clear();
             historySubscriptionCache.Clear();
             aggregatedSubscriptionCache.Clear();
-            tooltipAggregatedSubscriptionCache.Clear();
             onlineDataCache.Clear();
             onlineAggregatedCache.Clear();
             onlineHistoryCache.Clear();
+            aggregatedRequestStatuses.Clear();
+            aggregatedRequestErrors.Clear();
+            MarketRequestStatus  = RemoteSnapshotStatus.Empty;
+            HistoryRequestStatus = RemoteSnapshotStatus.Empty;
+            MarketRequestError   = string.Empty;
+            HistoryRequestError  = string.Empty;
             ClearDerivedCaches();
             cachedDCWorldPrices.Clear();
             worldPriceRanks          = null;
@@ -525,38 +513,24 @@ public unsafe partial class BetterMarketBoard
         private void DisposeAllSubscriptions()
         {
             foreach (var subscription in subscriptionCache.Values)
-            {
-                if (subscription != null)
-                    subscription.Dispose();
-            }
+                subscription.Dispose();
 
             foreach (var subscription in historySubscriptionCache.Values)
-            {
-                if (subscription != null)
-                    subscription.Dispose();
-            }
+                subscription.Dispose();
 
             foreach (var subscription in aggregatedSubscriptionCache.Values)
-            {
-                if (subscription != null)
-                    subscription.Dispose();
-            }
+                subscription.Dispose();
 
-            foreach (var subscription in tooltipAggregatedSubscriptionCache.Values)
-            {
-                if (subscription != null)
-                    subscription.Dispose();
-            }
         }
 
-        private bool RequestAllWorldsData
+        private void RequestAllWorldsData
         (
             uint    itemID,
             string? regionName = null,
             bool    hqOnly     = false
         )
         {
-            if (owner.allWorlds.Count == 0) return false;
+            if (owner.allWorlds.Count == 0) return;
 
             Dictionary<string, Dictionary<uint, string>>? targetRegion = null;
             var targetRegionName = !string.IsNullOrEmpty(regionName) ?
@@ -569,7 +543,7 @@ public unsafe partial class BetterMarketBoard
             targetRegion ??= owner.allWorlds.Values.FirstOrDefault(r => r.Values.Any(dc => dc.ContainsKey(GameState.CurrentWorld)));
 
             if (targetRegion == null)
-                return false;
+                return;
 
             var historyParam = new UniversalisMarketHistoryRequestParams
             {
@@ -582,15 +556,16 @@ public unsafe partial class BetterMarketBoard
                 HQ = hqOnly
             };
 
-            var epoch  = itemEpoch;
-            var result = false;
+            var epoch = itemEpoch;
 
             foreach (var dc in targetRegion.Values)
             {
                 foreach (var (worldID, worldName) in dc)
                 {
                     var aggregatedCacheKey = (itemID, worldID);
-                    _ = RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], worldName);
+                    var aggregatedSnapshot = RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], worldName);
+                    aggregatedRequestStatuses[worldID] = aggregatedSnapshot.Status;
+                    aggregatedRequestErrors[worldID]   = aggregatedSnapshot.Error?.Message ?? string.Empty;
 
                     if (!aggregatedSubscriptionCache.ContainsKey(aggregatedCacheKey))
                     {
@@ -603,8 +578,14 @@ public unsafe partial class BetterMarketBoard
                                 if (epoch != itemEpoch)
                                     return;
 
+                                aggregatedRequestStatuses[worldID] = snapshot.Status;
+                                aggregatedRequestErrors[worldID]   = snapshot.Error?.Message ?? string.Empty;
+
                                 if (!snapshot.HasValue || snapshot.Value is not { } data)
+                                {
+                                    TooltipManager.Instance().TriggerItemDetailUpdate();
                                     return;
+                                }
 
                                 if (data.Results.All(x => x.ItemID != itemID))
                                     return;
@@ -615,7 +596,6 @@ public unsafe partial class BetterMarketBoard
                             }
                         );
 
-                        result = true;
                     }
                 }
             }
@@ -625,10 +605,12 @@ public unsafe partial class BetterMarketBoard
                                                 .Value;
 
             if (string.IsNullOrEmpty(selectedWorldName))
-                return result;
+                return;
 
             var marketCacheKey = (itemID, SelectedWorldID, hqOnly);
-            _ = RemoteUniversalisMarket.GetOrRequest([itemID], selectedWorldName, marketParam);
+            var marketSnapshot = RemoteUniversalisMarket.GetOrRequest([itemID], selectedWorldName, marketParam);
+            MarketRequestStatus = marketSnapshot.Status;
+            MarketRequestError  = marketSnapshot.Error?.Message ?? string.Empty;
 
             if (!subscriptionCache.ContainsKey(marketCacheKey))
             {
@@ -640,6 +622,13 @@ public unsafe partial class BetterMarketBoard
                     {
                         if (epoch != itemEpoch)
                             return;
+
+                        if (SelectedWorldID == marketCacheKey.SelectedWorldID &&
+                            HQOnly          == hqOnly)
+                        {
+                            MarketRequestStatus = snapshot.Status;
+                            MarketRequestError  = snapshot.Error?.Message ?? string.Empty;
+                        }
 
                         if (!snapshot.HasValue || snapshot.Value is not { } data)
                             return;
@@ -654,11 +643,12 @@ public unsafe partial class BetterMarketBoard
                     marketParam
                 );
 
-                result = true;
             }
 
             var historyCacheKey = (itemID, SelectedWorldID);
-            _ = RemoteUniversalisHistory.GetOrRequest([itemID], selectedWorldName, historyParam);
+            var historySnapshot = RemoteUniversalisHistory.GetOrRequest([itemID], selectedWorldName, historyParam);
+            HistoryRequestStatus = historySnapshot.Status;
+            HistoryRequestError  = historySnapshot.Error?.Message ?? string.Empty;
 
             if (!historySubscriptionCache.ContainsKey(historyCacheKey))
             {
@@ -670,6 +660,12 @@ public unsafe partial class BetterMarketBoard
                     {
                         if (epoch != itemEpoch)
                             return;
+
+                        if (SelectedWorldID == historyCacheKey.SelectedWorldID)
+                        {
+                            HistoryRequestStatus = snapshot.Status;
+                            HistoryRequestError  = snapshot.Error?.Message ?? string.Empty;
+                        }
 
                         if (!snapshot.HasValue || snapshot.Value is not { } data)
                             return;
@@ -684,10 +680,8 @@ public unsafe partial class BetterMarketBoard
                     historyParam
                 );
 
-                result = true;
             }
 
-            return result;
         }
 
         #endregion
@@ -812,7 +806,6 @@ public unsafe partial class BetterMarketBoard
                 TotalCount = totalCount,
                 TotalQty   = totalQty,
                 AvgPrice   = avgPrice,
-                HQCount    = hqCount,
                 HQPercent  = hqPercent,
                 IsCanBeHQ  = isCanBeHQ,
                 IsAnyHQ    = isAnyHQ,
@@ -910,7 +903,7 @@ public unsafe partial class BetterMarketBoard
 
             var nqCount = historyEntries.Count - hqCount;
 
-            var (visualMinPrice, visualMaxPrice) = CalculateVisualPriceRange(historyEntries.Select(x => x.PricePerUnit).ToArray());
+            var (visualMinPrice, visualMaxPrice) = CalculateVisualPriceRange([.. historyEntries.Select(x => x.PricePerUnit)]);
             var yMin = visualMinPrice;
             var yMax = visualMaxPrice;
 
@@ -1198,7 +1191,7 @@ public unsafe partial class BetterMarketBoard
                         worldPricesList.Add(new(worldID, worldName, minPrice));
                     }
 
-                    cachedDCWorldPrices[dcName] = worldPricesList.OrderBy(w => w.WorldName).ToList();
+                    cachedDCWorldPrices[dcName] = [.. worldPricesList.OrderBy(w => w.WorldName)];
                 }
 
                 var allPrices = cachedDCWorldPrices.SelectMany(x => x.Value).ToList();
@@ -1332,7 +1325,7 @@ public unsafe partial class BetterMarketBoard
                 }
             }
 
-            return (dailySales, avgPrice, recentPurchase);
+            return (MathF.Round(dailySales, 1), avgPrice, recentPurchase);
         }
 
         public ulong? GetSelectedWorldMinPrice
@@ -1375,12 +1368,11 @@ public unsafe partial class BetterMarketBoard
                 !marketData.Items.TryGetValue(itemID, out var itemData))
                 return null;
 
-            var onlineMinPrice = itemData.Listings?
+            var onlineMinPrice = itemData.Listings
                                          .Where(x => x.PricePerUnit > 0 && (x.HQ || !hqOnly))
                                          .Select(x => x.PricePerUnit)
                                          .DefaultIfEmpty()
-                                         .Min() ??
-                                 0;
+                                         .Min();
             return onlineMinPrice > 0 ?
                        onlineMinPrice :
                        null;
@@ -1490,40 +1482,94 @@ public unsafe partial class BetterMarketBoard
             return price;
         }
 
-        public bool RequestTooltipAggregatedScope
+        public void RequestTooltipAggregatedScope
         (
             uint   itemID,
             string scope
         )
         {
-            if (string.IsNullOrWhiteSpace(scope))
-                return false;
+            if (tooltipAggregatedKey != (itemID, scope))
+                return;
 
-            var cacheKey = (itemID, scope);
+            tooltipAggregatedSnapshot = RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], scope);
+        }
 
-            _ = RemoteUniversalisAggregatedMarket.GetOrRequest([itemID], scope);
-            if (tooltipAggregatedSubscriptionCache.ContainsKey(cacheKey))
-                return false;
+        public RemoteSnapshot<UniversalisAggregatedMarketDataResponse> GetTooltipAggregatedSnapshot
+        (
+            uint   itemID,
+            string scope
+        )
+        {
+            if (tooltipAggregatedKey == (itemID, scope))
+                return tooltipAggregatedSnapshot;
 
-            var epoch = itemEpoch;
-
-            tooltipAggregatedSubscriptionCache[cacheKey] = RemoteUniversalisAggregatedMarket.Observe
+            ReleaseTooltipSubscription();
+            tooltipAggregatedKey = (itemID, scope);
+            var epoch = tooltipEpoch;
+            tooltipAggregatedSubscription = RemoteUniversalisAggregatedMarket.Observe
             (
                 [itemID],
                 scope,
                 snapshot =>
                 {
-                    if (epoch != itemEpoch)
+                    if (epoch != tooltipEpoch)
                         return;
 
-                    if (!snapshot.HasValue)
-                        return;
+                    if (snapshot.Status is RemoteSnapshotStatus.Failed &&
+                        tooltipAggregatedSnapshot.Status is not RemoteSnapshotStatus.Failed)
+                    {
+                        tooltipAggregatedFailedAtUTC = StandardTimeManager.Instance().UTCNow;
+                        owner.tooltipRetryDebouncer.Debounce();
+                    }
 
+                    tooltipAggregatedSnapshot = snapshot;
                     TooltipManager.Instance().TriggerItemDetailUpdate();
                 }
             );
 
-            return true;
+            return tooltipAggregatedSnapshot;
+        }
+
+        public bool CanRequestTooltipAggregatedScope()
+        {
+            var nowUTC = StandardTimeManager.Instance().UTCNow;
+            return tooltipAggregatedSnapshot.Status switch
+            {
+                RemoteSnapshotStatus.Empty  => true,
+                RemoteSnapshotStatus.Ready  => nowUTC - tooltipAggregatedSnapshot.UpdatedAtUTC > UniversalisAggregatedMarketDataQueryHandler.TTL,
+                RemoteSnapshotStatus.Failed => nowUTC - tooltipAggregatedFailedAtUTC           >= UniversalisAggregatedMarketDataQueryHandler.FailureTTL,
+                _                           => false
+            };
+        }
+
+        public void ReleaseTooltipSubscription()
+        {
+            owner.CancelQueuedTooltipRequest();
+            owner.tooltipRetryDebouncer.Cancel();
+            tooltipEpoch++;
+            tooltipAggregatedSubscription?.Dispose();
+            tooltipAggregatedSubscription = null;
+            tooltipAggregatedKey          = default;
+            tooltipAggregatedSnapshot     = default;
+            tooltipAggregatedFailedAtUTC  = default;
+        }
+
+        public string GetTooltipRequestError() => tooltipAggregatedSnapshot.Error?.Message ?? string.Empty;
+
+        public string GetAggregatedRequestError() =>
+            aggregatedRequestErrors.Values.FirstOrDefault(static error => !string.IsNullOrWhiteSpace(error)) ?? string.Empty;
+
+        public RemoteSnapshotStatus GetAggregatedRequestStatus()
+        {
+            if (aggregatedRequestStatuses.Values.Any(static status => status is RemoteSnapshotStatus.Failed))
+                return RemoteSnapshotStatus.Failed;
+
+            if (aggregatedRequestStatuses.Count == 0 ||
+                aggregatedRequestStatuses.Values.Any
+                    (static status => status is RemoteSnapshotStatus.Empty or RemoteSnapshotStatus.Loading or RemoteSnapshotStatus.Refreshing))
+                return RemoteSnapshotStatus.Loading;
+
+            return RemoteSnapshotStatus.Ready;
         }
 
         #endregion

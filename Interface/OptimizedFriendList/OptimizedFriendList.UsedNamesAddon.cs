@@ -11,13 +11,13 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Interfaces;
 using KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.Dalamud;
 using OmenTools.KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
 using TimeAgo;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class OptimizedFriendList
 {

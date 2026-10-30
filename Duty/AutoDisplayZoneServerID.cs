@@ -8,7 +8,7 @@ using Dalamud.Utility;
 using OmenTools.OmenService;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoDisplayZoneServerID : ModuleBase
 {

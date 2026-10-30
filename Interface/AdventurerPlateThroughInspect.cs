@@ -8,7 +8,7 @@ using KamiToolKit.Nodes;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AdventurerPlateThroughInspect : ModuleBase
 {

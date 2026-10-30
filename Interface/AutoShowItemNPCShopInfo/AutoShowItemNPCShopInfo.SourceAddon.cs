@@ -5,9 +5,8 @@ using KamiToolKit.Nodes;
 using OmenTools.Info.Game.ItemSource;
 using OmenTools.Info.Game.ItemSource.Models;
 using OmenTools.KamiToolKit.Nodes;
-using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface.AutoShowItemNPCShopInfo;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoShowItemNPCShopInfo
 {
@@ -147,14 +146,14 @@ public unsafe partial class AutoShowItemNPCShopInfo
             {
                 slot.CostRows[i] = new HorizontalListNode
                 {
-                    Size        = new(contentWidth, 36),
+                    Size        = new(contentWidth, 32),
                     ItemSpacing = 6f
                 };
                 slot.Content.AddNode(slot.CostRows[i]);
 
                 slot.CostIcons[i] = new ItemIconNode
                 {
-                    Size = new(42)
+                    Size = new(slot.CostRows[i].Height)
                 };
                 var indexCopy = i;
                 slot.CostIcons[i].OnClick = (_, _, _, _, data) =>
@@ -169,7 +168,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     TextFlags     = TextFlags.Edge | TextFlags.MultiLine | TextFlags.WordWrap,
                     FontSize      = 16,
                     AlignmentType = AlignmentType.Left,
-                    Size          = new(contentWidth - 32 - 6 - 38, 34)
+                    Size          = new(contentWidth - slot.CostIcons[i].Width - slot.CostRows[i].ItemSpacing - 38, slot.CostRows[i].Height)
                 };
                 AtkColors.Label.ApplyTo(slot.CostNames[i]);
                 slot.CostRows[i].AddNode(slot.CostNames[i]);
@@ -179,7 +178,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                     FontSize      = 16,
                     Position      = new(contentWidth - 10, 5),
-                    Size          = new(70, 20),
+                    Size          = new(70, slot.CostRows[i].Height),
                     AlignmentType = AlignmentType.Right
                 };
                 AtkColors.ValueEmphasize.ApplyTo(slot.CostQuantities[i]);

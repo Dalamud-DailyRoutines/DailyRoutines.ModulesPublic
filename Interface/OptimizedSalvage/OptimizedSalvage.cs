@@ -10,7 +10,7 @@ using OmenTools.Info.Game.Data;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class OptimizedSalvage : ModuleBase
 {

@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class BrayfloxsLongstopHelper : ModuleBase
 {

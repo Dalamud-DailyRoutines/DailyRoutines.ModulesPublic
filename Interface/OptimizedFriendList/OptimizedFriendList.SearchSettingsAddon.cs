@@ -6,7 +6,7 @@ using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Threading.TaskHelper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class OptimizedFriendList
 {

@@ -16,7 +16,7 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class BetterPartyFinderFilter
 {
@@ -173,7 +173,8 @@ public partial class BetterPartyFinderFilter
 
         private void RefreshGeneralPanel()
         {
-            if (!isPanelReady) return;
+            if (!isPanelReady)
+                return;
 
             var flags = FlagStatusModule.Instance();
             orderRadioGroup.SelectedButton = (flags->UIFlags[4] & 2) == 0 ?
@@ -189,12 +190,8 @@ public partial class BetterPartyFinderFilter
             if (notifyIntervalInput.Value != notifyInterval)
                 notifyIntervalInput.Value = notifyInterval;
 
-            if (notifyLayout.IsVisible != notifyCheckbox.IsChecked)
-            {
-                notifyLayout.IsVisible = notifyCheckbox.IsChecked;
-                notifyLayout.RecalculateLayout();
-                RecalculatePanel(generalPanel);
-            }
+            notifyLayout.IsVisible = notifyCheckbox.IsChecked;
+            RecalculatePanel(generalPanel);
         }
 
         private void RefreshDisplaySettings
@@ -291,7 +288,7 @@ public partial class BetterPartyFinderFilter
                 ItemSpacing      = 8f,
                 FirstItemSpacing = 16f,
                 FitContents      = true,
-                Alignment        = VerticalListAlignment.Right,
+                Alignment        = VerticalListAlignment.Left,
                 Size             = ContentSize
             };
 
@@ -368,7 +365,16 @@ public partial class BetterPartyFinderFilter
             };
             displayLayout.AddNode(lockedCheckbox);
 
-            generalPanel.AddNode(displayLayout);
+            generalPanel.AddNode
+            (
+                new HorizontalListNode
+                {
+                    Width              = ContentSize.X,
+                    FirstItemSpacing   = ROW_INDENT,
+                    FitToContentHeight = true,
+                    InitialNodes       = [displayLayout]
+                }
+            );
 
             var notifyLabel = new LabelTextNode
             {
@@ -383,7 +389,7 @@ public partial class BetterPartyFinderFilter
             var notifyLabelLayout = new VerticalListNode
             {
                 FitContents      = true,
-                Alignment        = VerticalListAlignment.Right,
+                Alignment        = VerticalListAlignment.Left,
                 FirstItemSpacing = 8f,
                 Size             = ContentSize with { X = ContentSize.X - ROW_INDENT }
             };
@@ -433,7 +439,16 @@ public partial class BetterPartyFinderFilter
             notifyLayout.AddDummy(12f);
             notifyLayout.AddNode(noNotifyWhenZeroCheckbox);
 
-            notifyLabelLayout.AddNode(notifyLayout);
+            notifyLabelLayout.AddNode
+            (
+                new HorizontalListNode
+                {
+                    Width              = notifyLabelLayout.Width,
+                    FirstItemSpacing   = ROW_INDENT,
+                    FitToContentHeight = true,
+                    InitialNodes       = [notifyLayout]
+                }
+            );
 
             var notifyInfoLabel = new LabelTextNode
             {
@@ -449,7 +464,16 @@ public partial class BetterPartyFinderFilter
             notifyLabelLayout.AddNode(notifyInfoLabel);
             notifyLabelLayout.AddDummy(12f);
 
-            generalPanel.AddNode(notifyLabelLayout);
+            generalPanel.AddNode
+            (
+                new HorizontalListNode
+                {
+                    Width              = ContentSize.X,
+                    FirstItemSpacing   = ROW_INDENT,
+                    FitToContentHeight = true,
+                    InitialNodes       = [notifyLabelLayout]
+                }
+            );
 
             generalPanel.AttachNode(this);
         }
@@ -462,7 +486,7 @@ public partial class BetterPartyFinderFilter
                 ItemSpacing      = 4f,
                 FirstItemSpacing = 8f,
                 FitContents      = true,
-                Alignment        = VerticalListAlignment.Right,
+                Alignment        = VerticalListAlignment.Left,
                 Size             = ContentSize
             };
 
@@ -621,7 +645,16 @@ public partial class BetterPartyFinderFilter
 
             filterRoleCountLayout.AddNode(numLayout);
 
-            highEndPanel.AddNode(filterRoleCountLayout);
+            highEndPanel.AddNode
+            (
+                new HorizontalListNode
+                {
+                    Width              = ContentSize.X,
+                    FirstItemSpacing   = ROW_INDENT,
+                    FitToContentHeight = true,
+                    InitialNodes       = [filterRoleCountLayout]
+                }
+            );
 
             highEndPanel.AttachNode(this);
         }
@@ -892,11 +925,19 @@ public partial class BetterPartyFinderFilter
             LayoutListNode panel
         )
         {
-            if (panel is not { IsVisible: true }) return;
+            if (panel is not { IsVisible: true })
+                return;
 
             panel.RecalculateLayout();
 
-            SetWindowSize(Size.X, ContentStartPosition.Y + tabBar1.Height + tabBar2.Height + panel.Height + 24f);
+            var windowSize = new Vector2(Size.X, ContentStartPosition.Y + tabBar1.Height + tabBar2.Height + panel.Height + 24f);
+
+            if (Size != windowSize)
+            {
+                SetWindowSize(windowSize);
+                panel.RecalculateLayout();
+            }
+
             panel.Position   = ContentStartPosition + new Vector2(0f, 62f);
             tabBar1.Position = ContentStartPosition;
             tabBar1.Width    = ContentSize.X;
@@ -934,7 +975,6 @@ public partial class BetterPartyFinderFilter
             {
                 case 0:
                     RefreshGeneralPanel();
-                    RecalculatePanel(generalPanel);
                     break;
                 case 1:
                     UpdateHighEndContainerVisibility();
@@ -986,7 +1026,6 @@ public partial class BetterPartyFinderFilter
             modeRadioGroup.IsVisible = enabled;
             numLayout.IsVisible      = enabled;
 
-            numLayout.RecalculateLayout();
             RecalculatePanel(highEndPanel);
         }
 
@@ -1034,7 +1073,6 @@ public partial class BetterPartyFinderFilter
             paginationBar.NextPageButtonNode.IsEnabled     = currentPageIndex < totalPages - 1;
             paginationBar.IndicatorTextNode.String         = $"{currentPageIndex + 1} / {totalPages}";
 
-            listContainer.RecalculateLayout();
             RecalculatePanel(descriptionPanel);
         }
 

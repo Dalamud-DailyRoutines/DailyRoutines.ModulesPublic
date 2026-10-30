@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using DailyRoutines.Verification;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -24,7 +23,7 @@ using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using Map = Lumina.Excel.Sheets.Map;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMarkAetherCurrents : ModuleBase
 {

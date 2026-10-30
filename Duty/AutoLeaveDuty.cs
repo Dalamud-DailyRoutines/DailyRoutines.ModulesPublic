@@ -5,6 +5,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.DutyState;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using OmenTools.ImGuiOm.Widgets.Combos;
@@ -12,7 +13,7 @@ using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoLeaveDuty : ModuleBase
 {
@@ -176,14 +177,18 @@ public class AutoLeaveDuty : ModuleBase
     )
     {
         TaskHelper.Abort();
-        
+
+        TaskHelper.RetryIntervalMS = GameState.ContentFinderCondition == KEYBOUND_BRAWLER_CONTENT_ID ?
+                                         100 :
+                                         0;
+
         if (manualLeaveKind != LeaveDutyKind.None)
         {
             switch (manualLeaveKind)
             {
                 case LeaveDutyKind.InstantLeave:
-                    TaskHelper.Enqueue(() => DutyCommand.Leave(DutyCommand.LeaveDutyKind.Inactive));
-                    break;
+                    TaskHelper.Enqueue(() => TryLeaveDuty(DutyCommand.LeaveDutyKind.Inactive));
+                    return;
 
                 case LeaveDutyKind.NoLeave:
                     return;
@@ -195,7 +200,7 @@ public class AutoLeaveDuty : ModuleBase
 
         if (config.ImmediateLeaveContent.Contains(GameState.ContentFinderCondition))
         {
-            TaskHelper.Enqueue(() => DutyCommand.Leave(DutyCommand.LeaveDutyKind.Inactive));
+            TaskHelper.Enqueue(() => TryLeaveDuty(DutyCommand.LeaveDutyKind.Inactive));
             return;
         }
 
@@ -209,10 +214,33 @@ public class AutoLeaveDuty : ModuleBase
         if (!config.ForceToLeave)
         {
             TaskHelper.Enqueue(() => !ICondition.Instance()[ConditionFlag.InCombat]);
-            TaskHelper.Enqueue(() => DutyCommand.Leave());
+            TaskHelper.Enqueue(() => TryLeaveDuty());
         }
         else
-            TaskHelper.Enqueue(() => DutyCommand.Leave(DutyCommand.LeaveDutyKind.Inactive));
+            TaskHelper.Enqueue(() => TryLeaveDuty(DutyCommand.LeaveDutyKind.Inactive));
+    }
+
+    private static unsafe bool TryLeaveDuty
+    (
+        DutyCommand.LeaveDutyKind kind = DutyCommand.LeaveDutyKind.Normal
+    )
+    {
+        if (GameState.ContentFinderCondition != KEYBOUND_BRAWLER_CONTENT_ID)
+        {
+            DutyCommand.Leave(kind);
+            return true;
+        }
+
+        var agent = AgentKTGResult.Instance();
+        if (agent == null   ||
+            !agent->IsShown ||
+            !agent->HasAddon)
+            return false;
+
+        if (!agent->Finished)
+            agent->Finish(false);
+
+        return true;
     }
 
     private void OnZoneChanged
@@ -257,6 +285,8 @@ public class AutoLeaveDuty : ModuleBase
     #region 常量
 
     private const string COMMAND = "autoleaveduty";
+
+    private const uint KEYBOUND_BRAWLER_CONTENT_ID = 1095;
 
     #endregion
 }

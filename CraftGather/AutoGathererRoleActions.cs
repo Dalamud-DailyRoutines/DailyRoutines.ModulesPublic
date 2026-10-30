@@ -5,7 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
-namespace DailyRoutines.ModulesPublic.CraftGather;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoGathererRoleActions : ModuleBase
 {

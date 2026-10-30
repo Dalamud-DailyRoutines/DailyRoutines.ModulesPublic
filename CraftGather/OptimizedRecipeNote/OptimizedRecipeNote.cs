@@ -37,7 +37,7 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.CraftGather;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OptimizedRecipeNote : ModuleBase
 {
@@ -480,8 +480,8 @@ public partial class OptimizedRecipeNote : ModuleBase
         clearSearchButton = new()
         {
             IsVisible          = true,
-            Position           = new(130, 25),
-            Size               = new(28),
+            Position           = new(130, 26),
+            Size               = new(24),
             TexturePath        = "ui/uld/WindowA_Button_hr1.tex",
             TextureCoordinates = Vector2.Zero,
             TextureSize        = new(28),

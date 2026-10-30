@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Lumina;
 using AddonWeeklyBingo = FFXIVClientStructs.FFXIV.Client.UI.AddonWeeklyBingo;
 using AgentWeeklyBingo = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentWeeklyBingo;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedWeeklyBingo : ModuleBase
 {

@@ -9,7 +9,7 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Text.ReadOnly;
 
-namespace DailyRoutines.ModulesPublic.AutoRecordPartyFinderSettings;
+namespace DailyRoutines.ModulesPublic;
 
 // TODO: 可以加个备注, 以后的 KPI
 public unsafe partial class AutoRecordPartyFinderSetting : ModuleBase

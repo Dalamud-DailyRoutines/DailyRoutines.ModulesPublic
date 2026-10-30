@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedCharacterClass : ModuleBase
 {

@@ -6,7 +6,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.CraftGather;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoBlockAgelessWordsAndSolidReason : ModuleBase
 {

@@ -12,7 +12,7 @@ using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoRestoreFurniture : ModuleBase
 {

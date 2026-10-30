@@ -11,7 +11,7 @@ using OmenTools.OmenService;
 using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public class DungeonLoggerUploader : ModuleBase
 {

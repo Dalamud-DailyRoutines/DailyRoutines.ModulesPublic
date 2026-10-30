@@ -4,7 +4,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
@@ -14,7 +13,7 @@ using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
-namespace DailyRoutines.Modules.AutoMarksFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder : ModuleBase
 {
@@ -45,7 +44,7 @@ public partial class AutoMarksFinder : ModuleBase
 
     protected override void Init()
     {
-        config     =   Config.Load(this) ?? new();
+        config     = Config.Load(this) ?? new();
         TaskHelper ??= new() { TimeoutMS = 180_000, ShowDebug = IS_SHOW_DEBUG };
 
         overlaySmallCard       =  new(DrawSmallCard, Lang.Get("AutoMarksFinder-SmallCardTitle"));

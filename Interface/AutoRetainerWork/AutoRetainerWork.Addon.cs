@@ -5,7 +5,7 @@ using KamiToolKit.BaseTypes.ComponentNode;
 using KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Addons;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWork
 {

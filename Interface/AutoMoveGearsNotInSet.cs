@@ -11,7 +11,7 @@ using KamiToolKit.Nodes.Simplified;
 using OmenTools.Info.Game.Data;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoMoveGearsNotInSet : ModuleBase
 {

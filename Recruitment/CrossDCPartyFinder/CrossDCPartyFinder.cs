@@ -10,7 +10,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.CrossDCPartyFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class CrossDCPartyFinder : ModuleBase
 {

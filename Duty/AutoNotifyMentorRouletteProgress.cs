@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 using AchievementInfo = OmenTools.OmenService.AchievementInfo;
 using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
 {

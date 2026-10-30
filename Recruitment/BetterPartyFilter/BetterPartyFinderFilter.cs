@@ -9,7 +9,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.BetterPartyFilter;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class BetterPartyFinderFilter : ModuleBase
 {

@@ -21,7 +21,7 @@ using OmenTools.OmenService;
 using OmenTools.Utils.FuzzyMatcher;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
-namespace DailyRoutines.ModulesPublic.Interface.BetterTeleport;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterTeleport
 {

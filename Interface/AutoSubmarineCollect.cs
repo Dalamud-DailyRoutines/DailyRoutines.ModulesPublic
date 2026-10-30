@@ -23,7 +23,6 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Info.Lumina.ExtraSheets;
 using OmenTools.Interop.Game.AddonEvent;
@@ -31,13 +30,12 @@ using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Nodes;
-using OmenTools.OmenService;
 using OmenTools.Threading;
 using TimeAgo;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoSubmarineCollect : ModuleBase
 {
@@ -47,7 +45,11 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         Description         = Lang.Get("AutoSubmarineCollectDescription"),
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoCutsceneSkip"],
-        ModulesPair         = ["OptimizedInteraction"]
+        ModulesPair         = ["OptimizedInteraction"],
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoSubmarineCollect/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new() { NeedAuth = true };
@@ -69,7 +71,6 @@ public unsafe class AutoSubmarineCollect : ModuleBase
     private DalamudLinkPayload? collectSubmarinePayload;
 
     private          VerticalListNode?     itemListLayout;
-    private readonly List<ItemDisplayNode> itemRenderers = [];
     private          TextButtonNode?       autoCollectNode;
 
     private bool isNextNotifyIgnoreTime;
@@ -115,10 +116,6 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         autoCollectNode?.Dispose();
         autoCollectNode = null;
 
-        foreach (var x in itemRenderers)
-            x.Dispose();
-        itemRenderers.Clear();
-
         FrameworkManager.Instance().Unreg(OnUpdate);
         GameState.Instance().Login -= OnLogin;
 
@@ -144,8 +141,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                 {
                     ["count"] = config.NotifyCount
                 }
-            ); 
-            
+            );
+
             if (ImGui.InputUInt($"{notifyCountLabel}###NotifyCountInput", ref config.NotifyCount))
                 config.NotifyCount = Math.Clamp(config.NotifyCount, 0, 4);
             if (ImGui.IsItemDeactivatedAfterEdit())
@@ -226,11 +223,9 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         if (!Throttler.Shared.Throttle("AutoSubmarineCollect-TeleportToHouseZone"))
             return false;
 
-        if (AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x is { IsHouse: true, HouseType: EstateType.FreeCompanyEstate }) is not
-            { } freeCompanyAetheryte)
-            return false;
-        
-        return Telepo.Instance()->Teleport(freeCompanyAetheryte.RowID, 0);
+        return AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x is { IsHouse: true, HouseType: EstateType.FreeCompanyEstate }) is
+                   { } freeCompanyAetheryte &&
+               Telepo.Instance()->Teleport(freeCompanyAetheryte.RowID, 0);
     }
 
     private static bool TeleportToHouseEntry()
@@ -393,7 +388,6 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             case AddonEvent.PreFinalize:
                 itemListLayout  = null;
                 autoCollectNode = null;
-                itemRenderers.Clear();
                 break;
             case AddonEvent.PostDraw:
                 if (SelectString == null) return;
@@ -404,7 +398,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
                     itemListLayout = new()
                     {
-                        Position = new(22, 15)
+                        Position    = new(22, 15),
+                        ItemSpacing = 4f
                     };
                     itemListLayout.AttachNode(SelectString->RootNode);
 
@@ -420,21 +415,15 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                             EnqueueSubmarineCollect();
                         }
                     };
-
                     itemListLayout.AddNode(autoCollectNode);
-
-                    itemListLayout.AddDummy(5);
-
+                    
                     foreach (var itemID in SubmarineItems)
                     {
-                        var row = new ItemDisplayNode(itemID, width)
-                        {
-                            Size = new(width, 38),
-                        };
+                        var row = new ItemDisplayNode(itemID, width);
                         row.AddNodeFlags(NodeFlags.HasCollision);
 
                         itemListLayout.AddNode(row);
-                        itemRenderers.Add(row);
+                        itemListLayout.AddDummy();
                     }
 
                     var textNode = SelectString->GetTextNodeById(2);
@@ -462,8 +451,11 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
                 if (itemListLayout != null && Throttler.Shared.Throttle("AutoSubmarineCollect-UpdateCount"))
                 {
-                    foreach (var item in itemRenderers)
-                        item.UpdateItemCount();
+                    foreach (var item in itemListLayout.Nodes)
+                    {
+                        if (item is not ItemDisplayNode displayNode) continue;
+                        displayNode.UpdateItemCount();
+                    }
                 }
 
                 break;
@@ -802,11 +794,13 @@ public unsafe class AutoSubmarineCollect : ModuleBase
             float width
         )
         {
+            Size = new(width, 32f);
+            
             ItemID = itemID;
 
             IconNode = new()
             {
-                Size   = new(42),
+                Size   = new(Height),
                 ItemID = ItemID,
                 OnClick = (_, _, _, _, data) =>
                 {
@@ -823,8 +817,8 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
             NameNode = new()
             {
-                Height        = 34,
-                Width         = width - 24 - 10,
+                Height        = Height,
+                Width         = width - IconNode.Width - 8 - 10,
                 AlignmentType = AlignmentType.Left,
                 TextFlags     = TextFlags.WordWrap | TextFlags.MultiLine,
                 FontSize      = 14,
@@ -839,7 +833,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                 TextFlags     = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                 FontType      = FontType.MiedingerMed,
                 AlignmentType = AlignmentType.Right,
-                Height        = 34,
+                Height        = Height,
                 Position      = new(width - 24, 0),
                 FontSize      = 18,
                 String        = $"{itemCount}"

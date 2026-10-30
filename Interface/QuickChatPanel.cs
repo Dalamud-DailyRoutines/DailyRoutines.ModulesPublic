@@ -26,7 +26,7 @@ using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
 using Action = System.Action;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class QuickChatPanel : ModuleBase
 {

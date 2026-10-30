@@ -11,15 +11,15 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.CircleButton;
 using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.UiOverlay;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.OmenService;
 using Action = System.Action;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoPreviewColorsInDye : ModuleBase
 {

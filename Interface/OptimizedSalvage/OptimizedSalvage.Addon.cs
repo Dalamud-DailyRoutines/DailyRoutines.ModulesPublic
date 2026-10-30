@@ -5,7 +5,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Addons;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OptimizedSalvage
 {

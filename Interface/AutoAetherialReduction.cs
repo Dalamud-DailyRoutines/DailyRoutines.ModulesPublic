@@ -12,7 +12,7 @@ using KamiToolKit.Nodes;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Info.Game.Data;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoAetherialReduction : ModuleBase
 {

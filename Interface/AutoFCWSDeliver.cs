@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 using OmenTools.Threading;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoFCWSDeliver : ModuleBase
 {

@@ -12,7 +12,7 @@ using OmenTools.Threading.TaskHelper;
 using Action = Lumina.Excel.Sheets.Action;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class OccultCrescentHelper
 {

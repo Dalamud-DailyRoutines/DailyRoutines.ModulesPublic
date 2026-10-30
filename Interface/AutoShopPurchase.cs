@@ -13,7 +13,7 @@ using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using Exception = System.Exception;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoShopPurchase : ModuleBase
 {

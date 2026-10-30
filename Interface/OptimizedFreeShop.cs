@@ -20,7 +20,7 @@ using OmenTools.KamiToolKit.Addons;
 using OmenTools.OmenService;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class OptimizedFreeShop : ModuleBase
 {
@@ -69,12 +69,40 @@ public unsafe class OptimizedFreeShop : ModuleBase
             Title        = Info.Title,
             Size         = new(230f, 128f)
         };
+        
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "FreeShop", OnFreeShop);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRefresh,  "FreeShop", OnFreeShop);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "FreeShop", OnFreeShop);
     }
 
     protected override void Uninit()
     {
+        IAddonLifecycle.Instance().UnregisterListener(OnFreeShop);
+        
         addon?.Dispose();
         addon = null;
+    }
+    
+    private static void OnFreeShop
+    (
+        AddonEvent type,
+        AddonArgs  args
+    )
+    {
+        var addon = args.Addon.ToStruct();
+        if (addon == null) return;
+
+        var itemCount = addon->AtkValues[76].UInt;
+        if (itemCount == 0) return;
+
+        for (var i = 0; i < itemCount; i++)
+        {
+            var itemID = addon->AtkValues[138 + i].UInt;
+            if (itemID == 0) continue;
+            if (!LuminaGetter.TryGetRow<Item>(itemID, out var itemRow)) continue;
+
+            addon->AtkValues[199 + i].SetUInt(itemRow.Icon);
+        }
     }
 
     private byte CheckItemBarterDetour

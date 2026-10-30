@@ -10,10 +10,10 @@ using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
-using AgentTradeMultiple = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentTradeMultiple;
 using OmenTools.Threading;
+using AgentTradeMultiple = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentTradeMultiple;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoMateriaTransmutation : ModuleBase
 {

@@ -8,7 +8,7 @@ using OmenTools.ImGuiOm.Markdown;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoShowDutyGuide : ModuleBase
 {

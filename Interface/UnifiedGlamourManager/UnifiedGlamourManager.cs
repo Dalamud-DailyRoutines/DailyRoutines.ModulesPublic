@@ -7,7 +7,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Lumina.Excel.Sheets;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface.UnifiedGlamourManager;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager : ModuleBase
 {

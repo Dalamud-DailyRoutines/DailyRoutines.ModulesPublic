@@ -19,7 +19,7 @@ using OmenTools.OmenService;
 using OmenTools.Utils;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class ExpandPlayerMenuSearch : ModuleBase
 {

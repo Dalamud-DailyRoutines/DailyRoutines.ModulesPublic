@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -14,7 +15,6 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
@@ -373,8 +373,7 @@ public unsafe class AutoTenChiJin : ModuleBase
             {
                 Width          = 60 * NormalSequence.Count,
                 AlignmentFlags = FlexFlags.FitContentHeight | FlexFlags.CenterVertically | FlexFlags.CenterHorizontally,
-                Position       = new(20, 40),
-                IsVisible      = true
+                Position       = ContentStartPosition + new Vector2(6, 6),
             };
 
             foreach (var actionID in NormalSequence.Keys)
@@ -384,7 +383,7 @@ public unsafe class AutoTenChiJin : ModuleBase
 
                 var dragDropNode = new DragDropNode
                 {
-                    Size         = new(44f),
+                    Size         = new(40f),
                     IconId       = action.Icon,
                     AcceptedType = DragDropType.Everything,
                     IsDraggable  = true,

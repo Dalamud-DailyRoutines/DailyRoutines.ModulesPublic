@@ -9,7 +9,7 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoPreserveCollectable : ModuleBase
 {

@@ -21,7 +21,7 @@ using Decoder = Iced.Intel.Decoder;
 using AtkUIColorHolder = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkUIColorHolder;
 using ExpansionTextNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkTextNode;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ColorThemeHotReload : ModuleBase
 {

@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 using OmenTools.Threading;
 using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoOpenNeedGreed : ModuleBase
 {

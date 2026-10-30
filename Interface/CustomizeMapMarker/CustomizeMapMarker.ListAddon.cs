@@ -6,10 +6,10 @@ using KamiToolKit.BaseTypes;
 using KamiToolKit.Enums;
 using KamiToolKit.Interfaces;
 using KamiToolKit.Nodes;
-using OmenTools.KamiToolKit.Nodes.CircleButton;
 using Lumina.Text.ReadOnly;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 
-namespace DailyRoutines.ModulesPublic.Interface.CustomizeMapMarker;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class CustomizeMapMarker
 {

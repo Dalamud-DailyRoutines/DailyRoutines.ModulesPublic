@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
-namespace DailyRoutines.ModulesPublic.Duty;
+namespace DailyRoutines.ModulesPublic;
 
 public class AutoNotifyChaoticRaidBonus : ModuleBase
 {

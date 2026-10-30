@@ -10,7 +10,7 @@ using Lumina.Data;
 using Lumina.Excel.Sheets;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public class ExpandItemMenuSearch : ModuleBase
 {

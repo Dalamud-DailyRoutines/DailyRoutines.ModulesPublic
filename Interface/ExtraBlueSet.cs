@@ -10,7 +10,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using Action = Lumina.Excel.Sheets.Action;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class ExtraBlueSet : ModuleBase
 {

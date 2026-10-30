@@ -13,7 +13,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons;
 using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoStoreToCabinet : ModuleBase
 {

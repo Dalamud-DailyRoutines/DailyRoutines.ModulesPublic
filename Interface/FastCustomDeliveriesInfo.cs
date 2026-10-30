@@ -12,7 +12,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe class FastCustomDeliveriesInfo : ModuleBase
 {

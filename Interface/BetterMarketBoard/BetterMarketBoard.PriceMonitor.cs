@@ -1,5 +1,4 @@
 using DailyRoutines.Extensions;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -9,7 +8,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
-namespace DailyRoutines.ModulesPublic.Interface;
+namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class BetterMarketBoard
 {
@@ -81,8 +80,8 @@ public unsafe partial class BetterMarketBoard
                 itemData.ItemSearchCategory.RowId == 0)
                 return;
 
-            if (!IsAbleToSearchMarket()     ||
-                owner.Overlay.IsOpen        ||
+            if (!IsAbleToSearchMarket() ||
+                owner.Overlay.IsOpen    ||
                 GameState.TerritoryIntendedUse != TerritoryIntendedUse.Town)
                 return;
 
@@ -136,9 +135,12 @@ public unsafe partial class BetterMarketBoard
                     var message0 = Lang.GetSe
                     (
                         "BetterMarketBoard-PriceMonitor-Notification-Found",
-                        ReadOnlySeString.CreateItem(monitorItem.ItemID, monitorItem.HQOnly),
-                        listingsToSnipe.First().UnitPrice.ToChineseString(),
-                        monitorItem.PriceThreshold.ToChineseString()
+                        new Dictionary<string, object>
+                        {
+                            ["item"]      = ReadOnlySeString.CreateItem(monitorItem.ItemID, monitorItem.HQOnly),
+                            ["price"]     = listingsToSnipe.First().UnitPrice.ToChineseString(),
+                            ["threshold"] = monitorItem.PriceThreshold.ToChineseString()
+                        }
                     );
 
                     var message1 = ISeStringEvaluator.Instance().EvaluateFromAddon(371, [message0]);
@@ -159,7 +161,7 @@ public unsafe partial class BetterMarketBoard
                         var quantityLimit = owner.config.AutoBuyQuantityLimit == 0 ?
                                                 uint.MaxValue :
                                                 owner.config.AutoBuyQuantityLimit;
-                        
+
                         if (heldCount <= quantityLimit)
                         {
                             var totalCount        = 0U;
@@ -172,23 +174,30 @@ public unsafe partial class BetterMarketBoard
 
                                 if (totalCount + heldCount > quantityLimit)
                                     break;
-                                
-                                owner.TaskHelper.Enqueue(() =>
-                                {
-                                    if (MarketDataProvider.SendBuyRequest(listing))
-                                        return;
-                                    
-                                    taskHelper.Abort();
-                                }, weight: 1);
+
+                                owner.TaskHelper.Enqueue
+                                (
+                                    () =>
+                                    {
+                                        if (MarketDataProvider.SendBuyRequest(listing))
+                                            return;
+
+                                        taskHelper.Abort();
+                                    },
+                                    weight: 1
+                                );
                             }
 
                             // 自动购买通知
                             var autoBuyMessage = Lang.GetSe
                             (
                                 "BetterMarketBoard-PriceMonitor-Notification-AutoBuy",
-                                SeString.CreateItemLink(monitorItem.ItemID, monitorItem.HQOnly),
-                                totalListingCount,
-                                totalCount
+                                new Dictionary<string, object>
+                                {
+                                    ["item"]     = ReadOnlySeString.CreateItemLink(monitorItem.ItemID, monitorItem.HQOnly),
+                                    ["count"]    = totalListingCount,
+                                    ["quantity"] = totalCount
+                                }
                             );
 
                             NotifyHelper.Toast(autoBuyMessage);
