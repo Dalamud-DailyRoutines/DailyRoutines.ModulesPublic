@@ -9,6 +9,13 @@ public unsafe partial class UnifiedGlamourManager
     private CircleButtonNode? inspectSaveButtonNode;
     private CircleButtonNode? plateSaveButtonNode;
 
+    private void OnStorageAddon
+    (
+        AddonEvent type,
+        AddonArgs  args
+    ) =>
+        StartRefreshAll();
+
     private void OnPlateEditorAddon
     (
         AddonEvent type,

@@ -7,6 +7,14 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager
 {
+    // 未读取时位图未知；已读取的位为 1 表示该套装部件缺失。
+    private static bool IsSetSlotUnlocked
+    (
+        ushort? missingSlots,
+        int     slot
+    ) =>
+        missingSlots.HasValue && slot >= 0 && slot < 11 && (missingSlots.Value & (1 << slot)) == 0;
+
     private static List<SetPartInfo> GetSetParts
     (
         uint setItemID
@@ -51,20 +59,21 @@ public partial class UnifiedGlamourManager
 
     private void AddSetPartItem
     (
-        SetPartInfo setPart,
-        uint        rawItemID,
-        uint        prismBoxIndex,
-        uint        cabinetID,
-        uint        parentItemID,
-        string      parentName,
-        ItemSource  source
+        List<UnifiedItem> target,
+        SetPartInfo       setPart,
+        uint              rawItemID,
+        uint              prismBoxIndex,
+        uint              cabinetID,
+        uint              parentItemID,
+        string            parentName,
+        ItemSource        source
     )
     {
         if (!LuminaGetter.TryGetRow<ItemSheet>(setPart.ItemID, out var partRow) ||
             !TryGetItemName(partRow, out var partName))
             return;
 
-        items.Add
+        target.Add
         (
             UnifiedItem.Create
             (
