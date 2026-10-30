@@ -65,6 +65,24 @@ public unsafe partial class UnifiedGlamourManager
                                  item.ParentSetItemID :
                                  item.ItemID;
         if (ItemUtil.GetBaseId(rawItemID).ItemId != expectedItemID) return false;
+        if (item.IsSetPart && !GetSetParts(expectedItemID).Any(x => x.ItemID == item.ItemID && manager->IsSetSlotUnlocked(item.PrismBoxIndex, x.SlotIndex)))
+            return false;
+
+        if (!item.IsSetPart)
+        {
+            item.RawItemID = rawItemID;
+            item.Stain0ID  = manager->PrismBoxStain0Ids[(int)item.PrismBoxIndex];
+            item.Stain1ID  = manager->PrismBoxStain1Ids[(int)item.PrismBoxIndex];
+        }
+        if (item.IsSetPart && !GetSetParts(expectedItemID).Any(x => x.ItemID == item.ItemID && manager->IsSetSlotUnlocked(item.PrismBoxIndex, x.SlotIndex)))
+            return false;
+
+        if (!item.IsSetPart)
+        {
+            item.RawItemID = rawItemID;
+            item.Stain0ID  = manager->PrismBoxStain0Ids[(int)item.PrismBoxIndex];
+            item.Stain1ID  = manager->PrismBoxStain1Ids[(int)item.PrismBoxIndex];
+        }
 
         var itemID = !item.IsSetPart && item.RawItemID != 0 ?
                          item.RawItemID :
