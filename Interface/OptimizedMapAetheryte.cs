@@ -1,19 +1,21 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using FFXIVClientStructs.FFXIV.Client.UI;
+using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using KamiToolKit.Controllers;
-using KamiToolKit.MapOverlay;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
-using OmenTools.OmenService;
+using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentReceiveEventDelegate;
+using AgentMap = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentMap;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -30,13 +32,13 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     {
         AllDefaultEnabled = true
     };
+    
+    private Hook<AgentMap.Delegates.BuildMapMarkers> BuildMapMarkersHook;
 
-    private MemoryPatch aetheryteTopPatch = null!;
+    private Hook<AgentReceiveEventDelegate> AgentMapReceiveEventHook;
 
-    private AddonController<AddonAreaMap>? areaMapController;
-    private MapOverlayController?          mapOverlayController;
-
-    private uint lastMapID;
+    private MemoryPatch       aetheryteTopPatch = null!;
+    private SelectYesnoAddon? teleportConfirmation;
 
     protected override void Init()
     {
@@ -47,144 +49,157 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         );
         aetheryteTopPatch.Enable();
 
-        mapOverlayController = new();
-        mapOverlayController.Enable();
+        BuildMapMarkersHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentMap.MemberFunctionPointers),
+            nameof(AgentMap.BuildMapMarkers),
+            (AgentMap.Delegates.BuildMapMarkers)BuildMapMarkersDetour
+        );
+        BuildMapMarkersHook.Enable();
 
-        areaMapController = new()
-        {
-            AddonName = "AreaMap",
-            OnUpdate  = OnAddonUpdate
-        };
-        areaMapController.Enable();
-
-        IClientState.Instance().TerritoryChanged += OnZoneChanged;
+        AgentMapReceiveEventHook = AgentMap.Instance()->VirtualTable->HookVFuncFromName
+        (
+            "ReceiveEvent",
+            (AgentReceiveEventDelegate)AgentMapReceiveEventDetour
+        );
+        AgentMapReceiveEventHook.Enable();
     }
 
     protected override void Uninit()
     {
-        IClientState.Instance().TerritoryChanged -= OnZoneChanged;
-
-        areaMapController?.Dispose();
-        areaMapController = null;
-
-        mapOverlayController?.RemoveAllMarkers();
-        mapOverlayController?.Dispose();
-        mapOverlayController = null;
+        teleportConfirmation?.Dispose();
+        teleportConfirmation = null;
     }
 
-    private void OnZoneChanged
+    private uint BuildMapMarkersDetour
     (
-        uint zone
-    ) =>
-        lastMapID = 0;
-
-    private void OnAddonUpdate
-    (
-        AddonAreaMap* addon
+        AgentMap*        agent,
+        ExtendArrayData* array,
+        bool             omitAetherytes,
+        bool             onlyAetherytes
     )
     {
-        var agent = AgentMap.Instance();
+        Span<int> aethernetIndices = stackalloc int[agent->MapMarkerCount];
+        var       count            = 0;
 
-        var selectedMapID = GameState.IsLoggedIn && agent != null && agent->IsAgentActive() ?
-                                agent->SelectedMapId :
-                                0;
-
-        if (selectedMapID == lastMapID)
-            return;
-
-        lastMapID = selectedMapID;
-        mapOverlayController.RemoveAllMarkers();
-
-        if (selectedMapID != 0)
+        for (var index = 0; index < agent->MapMarkerCount; index++)
         {
-            var mapRow = LuminaGetter.GetRowOrDefault<Map>(agent->SelectedMapId);
+            ref var marker = ref agent->MapMarkers[index];
+            if (marker.DataType != 4)
+                continue;
 
-            var markers = mapRow.GetMapMarkers();
+            aethernetIndices[count++] = index;
+            marker.DataType           = 3;
+        }
 
-            var macroString =
-                LuminaGetter.GetRowOrDefault<Addon>(3217).Text.ToMacroString()
-                            .Replace
-                            (
-                                "Aetheryte,lnum1,8",
-                                "Aetheryte,lnum1,9"
-                            )
-                            .Replace
-                            (
-                                @"<kilo(lnum2,\,)>",
-                                "<string(lstr2)>"
-                            );
+        try
+        {
+            return BuildMapMarkersHook.Original(agent, array, omitAetherytes, onlyAetherytes);
+        }
+        finally
+        {
+            for (var index = 0; index < count; index++)
+                agent->MapMarkers[aethernetIndices[index]].DataType = 4;
+        }
+    }
 
-            foreach (var marker in markers)
+    private AtkValue* AgentMapReceiveEventDetour
+    (
+        AgentInterface* agent,
+        AtkValue*       returnValues,
+        AtkValue*       values,
+        uint            valueCount,
+        ulong           eventKind
+    )
+    {
+        if (eventKind            == 0 &&
+            valueCount           >= 2 &&
+            values[0].GetInt()   == 7 &&
+            values[1].UInt >> 24 == 2)
+        {
+            var mapAgent = (AgentMap*)agent;
+            var index    = (int)(values[1].UInt & 0xFFFFFF);
+
+            if (index < mapAgent->MapMarkerCount)
             {
-                // 城内以太之晶
-                if (marker.DataType != 4)
-                    continue;
+                var marker = mapAgent->MapMarkers[index];
+                var record = marker.DataType switch
+                {
+                    3 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+                    (x => x is { Group: < 252, IsHouse: false, IsAetheryte: true } &&
+                          x.RowID == marker.DataKey
+                    ),
+                    4 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+                    (x => x is { Group: < 252, IsHouse: false, IsAetheryte: false } &&
+                          LuminaGetter.TryGetRow<Aetheryte>(x.RowID, out var data) &&
+                          data.AethernetName.RowId == marker.DataKey
+                    ),
+                    _ => null
+                };
 
-                if (!LuminaGetter.TryGetRow<PlaceName>(marker.DataKey.RowId, out var placeNameRow))
-                    continue;
-
-                if (AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.GetData().AethernetName.RowId == placeNameRow.RowId)
-                    is not { } aetheryteRecord)
-                    continue;
-
-                var isSameGroup = AetheryteRecordManager.Instance().GetNearestAetheryte(GameState.TerritoryType, Vector3.Zero) is { } record &&
-                                  record.Group == aetheryteRecord.Group;
-
-                var cost = isSameGroup ?
-                               0 :
-                               aetheryteRecord.Cost;
-
-                mapOverlayController.AddMarker
-                (
-                    new MapMarkerNode
+                if (record != null)
+                {
+                    if (AreaMap->IsAddonAndNodesReady() &&
+                        AreaMap->NumBlockingAddons == 0)
                     {
-                        MapId       = agent->SelectedMapId,
-                        Position    = PositionHelper.TextureToWorld(marker.GetPosition(), mapRow),
-                        IconId      = marker.Icon,
-                        Size        = new(32),
-                        MarkerScale = 1f,
-                        TextTooltip = $"{aetheryteRecord.Name}\n({cost}\ue049)",
-                        OnClick = () =>
-                        {
-                            if (addon->NumBlockingAddons != 0)
-                                return;
+                        OpenTeleportConfirmation(record, AreaMap);
 
-                            SelectYesnoAddon.Open
-                            (
-                                new()
-                                {
-                                    Prompt = ISeStringEvaluator.Instance().EvaluateMacroString
-                                    (
-                                        macroString,
-                                        [
-                                            aetheryteRecord.RowID,
-                                            cost.ToChineseString()
-                                        ]
-                                    ),
-                                    Callback = (_, result) =>
-                                    {
-                                        if (result != SelectYesnoAddonResult.Yes)
-                                            return;
-
-                                        if (aetheryteRecord.TeleportTo())
-                                        {
-                                            AgentMap.Instance()->HideAddon();
-                                            IAddonEventManager.Instance().ResetCursor();
-                                        }
-                                    },
-                                    Position = new
-                                    (
-                                        addon->RootNode->GetNodeState().Center,
-                                        AddonPositionAlignment.TopCenter
-                                    ),
-                                    BlockedParentID = addon->Id,
-                                    ParentID        = addon->Id
-                                }
-                            );
-                        }
+                        returnValues->SetBool(false);
+                        return returnValues;
                     }
-                );
+                }
             }
         }
+
+        return AgentMapReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
+    }
+
+    private void OpenTeleportConfirmation(AetheryteRecord record, AtkUnitBase* addon)
+    {
+        record.Update();
+        var isSameGroup = AetheryteRecordManager.Instance().GetNearestAetheryte(GameState.TerritoryType, Vector3.Zero)
+                              is { } currentRecord &&
+                          currentRecord.Group == record.Group;
+        var cost = isSameGroup ?
+                       0 :
+                       record.Cost;
+
+        var macroString = LuminaGetter.GetRowOrDefault<Addon>(3217).Text.ToMacroString()
+                                      .Replace(@"<kilo(lnum2,\,)>", "<string(lstr2)>");
+        if (!record.IsAetheryte)
+            macroString = macroString.Replace("Aetheryte,lnum1,8", "Aetheryte,lnum1,9");
+
+        teleportConfirmation?.Dispose();
+        teleportConfirmation = SelectYesnoAddon.Open
+        (
+            new()
+            {
+                Prompt = ISeStringEvaluator.Instance().EvaluateMacroString
+                (
+                    macroString,
+                    [record.RowID, cost.ToChineseString()]
+                ),
+                Callback = (_, result) =>
+                {
+                    teleportConfirmation = null;
+                    
+                    if (result != SelectYesnoAddonResult.Yes)
+                        return;
+
+                    if (record.TeleportTo())
+                    {
+                        AgentMap.Instance()->Hide();
+                        IAddonEventManager.Instance().ResetCursor();
+                    }
+                },
+                Position = new
+                (
+                    addon->RootNode->GetNodeState().Center,
+                    AddonPositionAlignment.TopCenter
+                ),
+                BlockedParentID = addon->Id,
+                ParentID        = addon->Id
+            }
+        );
     }
 }
