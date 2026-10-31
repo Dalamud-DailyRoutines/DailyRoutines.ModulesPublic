@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Numerics;
-using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -20,7 +19,6 @@ using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.UiOverlay;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
@@ -87,6 +85,17 @@ public unsafe class OptimizedEnemyList : ModuleBase
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
+
+        foreach (var (_, textNode, heathTextNode, healthMarkerNode, backgroundNode, healthBackgroundNode, castBarNode, _, enemityNode) in nodes)
+        {
+            textNode?.Dispose();
+            heathTextNode?.Dispose();
+            healthMarkerNode?.Dispose();
+            backgroundNode?.Dispose();
+            healthBackgroundNode?.Dispose();
+            castBarNode?.Dispose();
+            enemityNode?.Dispose();
+        }
         
         nodes.Clear();
 
@@ -106,9 +115,13 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 if (ImGui.Checkbox(Lang.Get("OptimizedEnemyList-AlwaysUnlock"), ref config.AlwaysUnlock))
                     config.Save(this);
                 ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedEnemyList-AlwaysUnlock-Help"));
+
+                if (ImGui.Checkbox(Lang.Get("OptimizedEnemyList-SwapHealthStatus"), ref config.SwapHealthStatus))
+                    config.Save(this);
+                ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedEnemyList-SwapHealthStatus-Help"));
             }
         }
-        
+
         using (var item = ImRaii.TabItem(Lang.Get("Cast")))
         {
             if (item)
@@ -153,7 +166,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                     config.Save(this);
             }
         }
-        
+
         // 仇恨
         using (var item = ImRaii.TabItem(LuminaWrapper.GetAddonText(721)))
         {
@@ -176,7 +189,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                     config.Save(this);
             }
         }
-        
+
         // 状态效果
         using (var item = ImRaii.TabItem(LuminaWrapper.GetAddonText(721)))
         {
@@ -361,10 +374,20 @@ public unsafe class OptimizedEnemyList : ModuleBase
                                     0.5f;
 
             var nodeState = componentNode->GetNodeState();
-            statusNodes.Position = nodeState.TopRight -
-                                   lockImageNode->GetNodeState().Size.WithY(0) +
-                                   (StatusComponentOffset * statusNodes.Scale) +
-                                   config.StatusOffset;
+
+            if (config.SwapHealthStatus)
+            {
+                var statusOffset = StatusComponentOffset with { X = -statusNodes[0].Width };
+                statusNodes.Position = nodeState.TopRight -
+                                       nodeState.Size.WithY(0)            +
+                                       (statusOffset * statusNodes.Scale) +
+                                       config.StatusOffset;
+            }
+            else
+                statusNodes.Position = nodeState.TopRight -
+                                       lockImageNode->GetNodeState().Size.WithY(0) +
+                                       (StatusComponentOffset * statusNodes.Scale) +
+                                       config.StatusOffset;
 
             var counter = 0;
 
@@ -376,6 +399,11 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 if ((uint)status.SourceObject != LocalPlayerState.EntityID) continue;
 
                 var node = statusNodes[counter];
+                node.X = (node.Width + 2) *
+                         counter          *
+                         (config.SwapHealthStatus ?
+                              -1 :
+                              1);
                 node.IsVisible = true;
                 node.Update(status);
 
@@ -426,7 +454,9 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 var healthMarkerWidth   = healthMarkerNode.GetTextDrawSize(false).X;
                 var healthRightX        = HealthTextDefaultPosition.X + config.HealthTextOffset.X + healthBaseTextWidth - 3f + healthMarkerWidth;
 
-                healthNode.X = healthRightX                - healthTextWidth - HEALTH_TEXT_MARKER_PADDING - healthMarkerWidth;
+                healthNode.X = config.SwapHealthStatus ?
+                                   componentNode->Width - lockImageNode->Width + StatusComponentOffset.X + config.HealthTextOffset.X :
+                                   healthRightX                                - healthTextWidth         - HEALTH_TEXT_MARKER_PADDING - healthMarkerWidth;
                 healthNode.Y = HealthTextDefaultPosition.Y + config.HealthTextOffset.Y;
 
                 healthMarkerNode.X = healthNode.X                + healthTextWidth + HEALTH_TEXT_MARKER_PADDING;
@@ -719,6 +749,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         public Vector2 StatusOffset = Vector2.Zero;
 
         public bool AlwaysUnlock = true;
+        public bool SwapHealthStatus;
     }
 
     private sealed class EnemyListNode
