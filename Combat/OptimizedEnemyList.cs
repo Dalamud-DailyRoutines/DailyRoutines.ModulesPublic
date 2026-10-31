@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Numerics;
 using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
@@ -7,16 +6,17 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Utility.Numerics;
+using Dalamud.Utility;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
-using KamiToolKit.UiOverlay;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Threading;
@@ -49,7 +49,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
     private Config config = null!;
 
     private readonly List<EnemyListNode> nodes = [];
-    private          OverlayController?  controller;
+
+    private VerticalListNode? statusContainer;
 
     private bool isUpdating;
 
@@ -77,14 +78,28 @@ public unsafe class OptimizedEnemyList : ModuleBase
         enemyListClearSpellIDPatch.Enable();
         enemyListDisplayCastPatch.Enable();
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRequestedUpdate, "_EnemyList", OnAddon);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,           "_EnemyList", OnAddon);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,        "_EnemyList", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRequestedUpdate,  "_EnemyList", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "_EnemyList", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,            "_EnemyList", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "_EnemyList", OnAddon);
     }
 
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
+        DisposeNodes();
+    }
+
+    private void DisposeNodes()
+    {
+        var enemyList = EnemyList;
+        if (enemyList                                    != null &&
+            statusContainer                              != null &&
+            enemyList->AdditionalFocusableNodes[1].Value == statusContainer.ResNode)
+            enemyList->AdditionalFocusableNodes[1] = null;
+
+        statusContainer?.Dispose();
+        statusContainer = null;
 
         foreach (var (_, textNode, heathTextNode, healthMarkerNode, backgroundNode, healthBackgroundNode, castBarNode, _, enemityNode) in nodes)
         {
@@ -96,11 +111,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
             castBarNode?.Dispose();
             enemityNode?.Dispose();
         }
-        
-        nodes.Clear();
 
-        controller?.Dispose();
-        controller = null;
+        nodes.Clear();
     }
 
     protected override void ConfigUI()
@@ -224,22 +236,12 @@ public unsafe class OptimizedEnemyList : ModuleBase
                         enemyListArray->Enemies[i].LockedInList = false;
                 }
 
-                if (isUpdating)
-                    break;
-
-                try
-                {
-                    UpdateNodes();
-                }
-                finally
-                {
-                    isUpdating = false;
-                }
-
                 break;
 
+            case AddonEvent.PostRequestedUpdate:
             case AddonEvent.PostDraw:
-                if (!Throttler.Shared.Throttle("OptimizedEnemyList.UpdateEnemyList", 100))
+                if (type == AddonEvent.PostDraw &&
+                    !Throttler.Shared.Throttle("OptimizedEnemyList.UpdateEnemyList", 100))
                     return;
 
                 if (isUpdating)
@@ -247,6 +249,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
                 try
                 {
+                    isUpdating = true;
                     UpdateNodes();
                 }
                 finally
@@ -257,10 +260,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 break;
 
             case AddonEvent.PreFinalize:
-                nodes.Clear();
-
-                controller?.Dispose();
-                controller = null;
+                DisposeNodes();
                 break;
         }
     }
@@ -269,21 +269,36 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     private void UpdateNodes()
     {
+        var enemyList = EnemyList;
+        if (enemyList == null) return;
+
         var enemyListNumberArray = EnemyListNumberArray.Instance();
         if (enemyListNumberArray == null) return;
 
-        if (enemyListNumberArray->EnemyCount == 0) return;
-
         if (nodes is not { Count: > 0 })
         {
+            if (enemyListNumberArray->EnemyCount == 0) return;
+
             CreateNodes();
-            return;
+            if (nodes.Count == 0)
+                return;
         }
 
-        for (var i = 0; i < MathF.Min(enemyListNumberArray->EnemyCount, nodes.Count); i++)
-        {
-            var info = enemyListNumberArray->Enemies[i];
+        var firstComponent = enemyList->GetComponentNodeById(nodes[0].ComponentNodeID);
+        var lastComponent  = enemyList->GetComponentNodeById(nodes[^1].ComponentNodeID);
+        var lockNode       = firstComponent->Component->UldManager.SearchNodeById(14);
+        var statusWidth    = 0f;
+        var hasStatuses    = false;
 
+        statusContainer.Scale       = new(config.StatusScale);
+        statusContainer.ItemSpacing = ((lastComponent->Y - firstComponent->Y) / (nodes.Count - 1) / config.StatusScale) - 41;
+        statusContainer.Alignment = config.SwapHealthStatus ?
+                                        VerticalListAlignment.Right :
+                                        VerticalListAlignment.Left;
+        enemyList->AdditionalFocusableNodes[1] = statusContainer.ResNode;
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
             nodes[i].Deconstruct
             (
                 out var componentNodeID,
@@ -297,6 +312,13 @@ public unsafe class OptimizedEnemyList : ModuleBase
                 out var enemityNode
             );
 
+            if (i >= enemyListNumberArray->EnemyCount)
+            {
+                HideNodes();
+                continue;
+            }
+
+            var info     = enemyListNumberArray->Enemies[i];
             var entityID = (uint)info.EntityId;
 
             if (entityID is 0 or 0xE0000000)
@@ -315,7 +337,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             #region 原生节点隐藏
 
-            var componentNode = EnemyList->GetComponentNodeById(componentNodeID);
+            var componentNode = enemyList->GetComponentNodeById(componentNodeID);
 
             if (componentNode == null)
             {
@@ -357,7 +379,12 @@ public unsafe class OptimizedEnemyList : ModuleBase
             }
 
             var lockImageNode = componentNode->Component->UldManager.SearchNodeById(14);
-            if (lockImageNode == null) continue;
+
+            if (lockImageNode == null)
+            {
+                HideNodes();
+                continue;
+            }
 
             nativeCastBarNode->SetAlpha(0);
             nativeCastBarProgressNode->SetAlpha(0);
@@ -368,55 +395,34 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             #region 状态更新
 
-            statusNodes.Scale = (componentNode->GetScale() - new Vector2(0.1f)) * config.StatusScale;
-            statusNodes.Alpha = info.ActiveInList ?
-                                    1f :
-                                    0.5f;
-
-            var nodeState = componentNode->GetNodeState();
-
-            if (config.SwapHealthStatus)
-            {
-                var statusOffset = StatusComponentOffset with { X = -statusNodes[0].Width };
-                statusNodes.Position = nodeState.TopRight -
-                                       nodeState.Size.WithY(0)            +
-                                       (statusOffset * statusNodes.Scale) +
-                                       config.StatusOffset;
-            }
-            else
-                statusNodes.Position = nodeState.TopRight -
-                                       lockImageNode->GetNodeState().Size.WithY(0) +
-                                       (StatusComponentOffset * statusNodes.Scale) +
-                                       config.StatusOffset;
+            statusNodes.Alpha = componentNode->Color.A / 255f;
 
             var counter = 0;
 
             foreach (var status in gameObj->StatusManager.Status)
             {
-                if (counter == 5) break;
+                if (counter == STATUS_COUNT) break;
 
                 if (status.StatusId           == 0) continue;
                 if ((uint)status.SourceObject != LocalPlayerState.EntityID) continue;
 
-                var node = statusNodes[counter];
-                node.X = (node.Width + 2) *
-                         counter          *
-                         (config.SwapHealthStatus ?
-                              -1 :
-                              1);
-                node.IsVisible = true;
+                var node = (IconTextNode)statusNodes.Nodes[counter];
+                node.IsVisible = !GameState.IsInPVPInstance;
                 node.Update(status);
 
                 counter++;
             }
 
-            if (counter < 5)
+            if (counter < STATUS_COUNT)
             {
-                for (var d = counter; d < 5; d++)
-                    statusNodes[d].IsVisible = false;
+                for (var d = counter; d < STATUS_COUNT; d++)
+                    statusNodes.Nodes[d].IsVisible = false;
             }
 
-            statusNodes.ShouldBeVisible = counter > 0;
+            statusNodes.RecalculateLayout();
+            statusNodes.IsVisible =  true;
+            statusWidth           =  MathF.Max(statusWidth, statusNodes.Width);
+            hasStatuses           |= counter > 0 && !GameState.IsInPVPInstance;
 
             #endregion
 
@@ -566,22 +572,45 @@ public unsafe class OptimizedEnemyList : ModuleBase
             {
                 castNode.IsVisible             = false;
                 healthNode.IsVisible           = false;
+                healthMarkerNode.IsVisible     = false;
                 castBackgroundNode.IsVisible   = false;
                 healthBackgroundNode.IsVisible = false;
                 castBarNode.IsVisible          = false;
-                statusNodes.ShouldBeVisible    = false;
+                enemityNode.IsVisible          = false;
+                statusNodes.IsVisible          = i < enemyListNumberArray->EnemyCount;
+
+                foreach (var statusNode in statusNodes.Nodes)
+                    statusNode.IsVisible = false;
             }
         }
+
+        statusContainer.Width = statusWidth;
+        statusContainer.Position = new Vector2
+        (
+            firstComponent->X     +
+            config.StatusOffset.X +
+            (config.SwapHealthStatus ?
+                 -statusWidth * config.StatusScale :
+                 firstComponent->Width - lockNode->Width + StatusComponentOffset.X),
+            firstComponent->Y + StatusComponentOffset.Y + config.StatusOffset.Y
+        );
+        statusContainer.RecalculateLayout();
+        statusContainer.IsVisible = hasStatuses;
     }
 
     private void CreateNodes()
     {
-        if (EnemyList == null) return;
+        var enemyList = EnemyList;
+        if (enemyList == null) return;
         if (!TryFindButtonNodes(out var buttonNodesPtr)) return;
 
-        controller ??= new();
-
-        var counter = -1;
+        statusContainer = new VerticalListNode
+        {
+            FitContents = true,
+            IsVisible   = false
+        };
+        statusContainer.AttachNode((AtkResNode*)buttonNodesPtr[0], NodePosition.BeforeTarget);
+        enemyList->AdditionalFocusableNodes[1] = statusContainer.ResNode;
 
         foreach (var nodePtr in buttonNodesPtr)
         {
@@ -589,8 +618,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             var castTextNode = node->Component->UldManager.SearchNodeById(4)->GetAsAtkTextNode();
             if (castTextNode == null) continue;
-
-            counter++;
 
             var castNode = new TextNode
             {
@@ -657,8 +684,27 @@ public unsafe class OptimizedEnemyList : ModuleBase
             castBarNode.AttachNode(node);
             enemityNode.AttachNode(node);
 
-            var statusNodes = new IconTextNodesRow(5, node->NodeId, counter);
-            controller.AddNode(statusNodes);
+            var statusNodes = new HorizontalListNode
+            {
+                Height            = 41,
+                ItemSpacing       = 2,
+                FitToContentWidth = true,
+                IsVisible         = false
+            };
+
+            for (var i = 0; i < STATUS_COUNT; i++)
+            {
+                statusNodes.AddNode
+                (
+                    new IconTextNode
+                    {
+                        Size      = new(25, 41),
+                        IsVisible = false
+                    }
+                );
+            }
+
+            statusContainer.AddNode(statusNodes);
 
             nodes.Add
             (
@@ -761,7 +807,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         NineGridNode             castBackgroundNode,
         NineGridNode             healthBackgroundNode,
         ProgressBarEnemyCastNode castBarNode,
-        IconTextNodesRow         statusNodes,
+        HorizontalListNode       statusNodes,
         TextNode                 enemityNode
     )
     {
@@ -772,7 +818,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         public NineGridNode?             CastBackgroundNode   { get; set; } = castBackgroundNode;
         public NineGridNode?             HealthBackgroundNode { get; set; } = healthBackgroundNode;
         public ProgressBarEnemyCastNode? CastBarNode          { get; set; } = castBarNode;
-        public IconTextNodesRow?         StatusNodes          { get; set; } = statusNodes;
+        public HorizontalListNode?       StatusNodes          { get; set; } = statusNodes;
         public TextNode?                 EnemityNode          { get; set; } = enemityNode;
 
         public void Deconstruct
@@ -784,7 +830,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
             out NineGridNode?             castBackgroundNode,
             out NineGridNode?             healthBackgroundNode,
             out ProgressBarEnemyCastNode? castBarNode,
-            out IconTextNodesRow?         statusNodes,
+            out HorizontalListNode?       statusNodes,
             out TextNode?                 enemityNode
         )
         {
@@ -798,65 +844,6 @@ public unsafe class OptimizedEnemyList : ModuleBase
             statusNodes          = StatusNodes;
             enemityNode          = EnemityNode;
         }
-    }
-
-    private class IconTextNodesRow : OverlayNode, IEnumerable<IconTextNode>
-    {
-        public IconTextNodesRow
-        (
-            int  count,
-            uint nodeID,
-            int  index
-        )
-        {
-            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(count, 0);
-            ArgumentOutOfRangeException.ThrowIfLessThan(index, 0);
-
-            Count  = count;
-            NodeID = nodeID;
-            Index  = index;
-
-            for (var i = 0; i < count; i++)
-            {
-                var statusNode = new IconTextNode
-                {
-                    Size     = new(25, 41),
-                    Position = new((25 + 2) * i, 0)
-                };
-                statusNode.AttachNode(this);
-                Nodes.Add(statusNode);
-            }
-
-            Size = new(25 + ((25 + 2) * count), 41);
-        }
-
-        public int  Count  { get; init; }
-        public uint NodeID { get; init; }
-
-        public int Index { get; init; }
-
-        public override OverlayLayer OverlayLayer => OverlayLayer.Foreground;
-
-        public override bool HideWithNativeUi => true;
-
-        public bool ShouldBeVisible { get; set; }
-
-        public List<IconTextNode> Nodes { get; init; } = [];
-
-        public IconTextNode this
-        [
-            int index
-        ] => Nodes[index];
-
-        public IEnumerator<IconTextNode> GetEnumerator() => Nodes.GetEnumerator();
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-        protected override void OnUpdate() =>
-            IsVisible = ShouldBeVisible                   &&
-                        !GameState.IsInPVPInstance        &&
-                        EnemyList->IsAddonAndNodesReady() &&
-                        Index < EnemyListNumberArray.Instance()->EnemyCount;
     }
 
     private class IconTextNode : SimpleComponentNode
@@ -900,7 +887,10 @@ public unsafe class OptimizedEnemyList : ModuleBase
             IconNode.IconId = row.Icon;
             TextNode.SetNumber((int)status.RemainingTime);
 
-            TextTooltip = $"{row.Name}\n{row.Description}";
+            using var utf8String = new Utf8String();
+            _ = AgentHUD.Instance()->GetStatusTooltipText(&utf8String, status.StatusId, status.Param);
+            
+            TextTooltip = utf8String.AsReadOnlySeString();
         }
     }
 
@@ -914,6 +904,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     private const float HEALTH_TEXT_MARKER_PADDING   = 1f;
     private const float CAST_TEXT_BACKGROUND_PADDING = 5f;
+    private const int   STATUS_COUNT                 = 5;
 
     #endregion
 }
