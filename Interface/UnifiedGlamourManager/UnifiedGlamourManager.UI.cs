@@ -107,7 +107,6 @@ public unsafe partial class UnifiedGlamourManager
         }
         else
         {
-            DrawStatusBar();
             DrawPresetSearchAndFilterBar();
             ImGui.Separator();
 
@@ -180,10 +179,7 @@ public unsafe partial class UnifiedGlamourManager
             ImGuiWindowFlags.NoScrollbar
         );
         if (!child) return;
-
-        ImGui.AlignTextToFramePadding();
-        DrawStatusBar();
-
+        
         if (ImGui.Button(Lang.Get("Refresh")))
             StartRefreshAll();
 
@@ -770,43 +766,6 @@ public unsafe partial class UnifiedGlamourManager
 
         ImGui.Separator();
         ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-RightClickFavoriteHint"));
-    }
-
-    // UI - Preset
-    private void DrawStatusBar()
-    {
-        var (mirageLoaded, cabinetLoaded) = GetStorageStatus();
-        var readyText   = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheReady");
-        var unknownText = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheUnknown");
-
-        // 投影台状态
-        ImGui.AlignTextToFramePadding();
-        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(11910)}:");
-
-        ImGui.SameLine();
-        ImGui.TextColored
-        (
-            (mirageLoaded ?
-                 KnownColor.LimeGreen :
-                 KnownColor.Goldenrod).ToUInt(),
-            mirageLoaded ?
-                readyText :
-                unknownText
-        );
-
-        ImGui.SameLine();
-        // 收藏柜状态
-        ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(12216)}:");
-        ImGui.SameLine();
-        ImGui.TextColored
-        (
-            (cabinetLoaded ?
-                 KnownColor.LimeGreen :
-                 KnownColor.Goldenrod).ToUInt(),
-            cabinetLoaded ?
-                readyText :
-                unknownText
-        );
     }
 
     private void DrawPresetSearchAndFilterBar()

@@ -24,8 +24,6 @@ public unsafe partial class UnifiedGlamourManager
     private bool isRefreshingItems;
     private bool isStoredItemsRefreshPending;
     private uint storedItemsSession;
-    private bool isPrismBoxCacheAvailable;
-    private bool isCabinetCacheAvailable;
 
     private static bool TryGetStorageFinder
     (
@@ -44,11 +42,6 @@ public unsafe partial class UnifiedGlamourManager
                finder->CharacterContentId == contentID &&
                !finder->IsCacheResetPending;
     }
-
-    private (bool PrismBox, bool Cabinet) GetStorageStatus() =>
-        TryGetStorageFinder(out _) ?
-            (isPrismBoxCacheAvailable, isCabinetCacheAvailable) :
-            (false, false);
 
     private static bool TryGetLoadedMirageManager
     (
@@ -146,11 +139,7 @@ public unsafe partial class UnifiedGlamourManager
                                refreshedItems.FirstOrDefault(x => x == selectedItem);
             items.Clear();
             items.AddRange(refreshedItems);
-            isPrismBoxCacheAvailable = finder->IsGlamourDresserCached ||
-                                       finder->GlamourDresserItemIds.ContainsAnyExcept(0u);
-            isCabinetCacheAvailable = cabinet->State == GameCabinet.CabinetState.Loaded &&
-                                      (cabinet->AdditionalItemsState == GameCabinet.CabinetState.Loaded ||
-                                       finder->CabinetItemUnlockBits.ContainsAnyExcept(0u));
+
             MarkFilteredItemsDirty(true, true);
             retry = cabinet->State                == GameCabinet.CabinetState.Requested ||
                     cabinet->AdditionalItemsState == GameCabinet.CabinetState.Requested;
@@ -426,8 +415,6 @@ public unsafe partial class UnifiedGlamourManager
         TaskHelper?.Abort();
         isRefreshingItems           = false;
         isStoredItemsRefreshPending = false;
-        isPrismBoxCacheAvailable    = false;
-        isCabinetCacheAvailable     = false;
         Array.Clear(prismBoxStains);
         items.Clear();
         filteredItems.Clear();
