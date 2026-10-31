@@ -6,7 +6,6 @@ using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
@@ -35,12 +34,12 @@ public unsafe partial class UnifiedGlamourManager
             if (item.InPrismBox)
             {
                 if (TryApplyPrismBoxItem(agent, item))
-                    QueueApplyRetry(item, ItemSource.PrismBox);
+                    QueueApplyRetry(item, ItemSource.PrismBox, selectedSlot);
             }
             else if (item.InCabinet)
             {
                 if (TryApplyCabinetItem(agent, item))
-                    QueueApplyRetry(item, ItemSource.Cabinet);
+                    QueueApplyRetry(item, ItemSource.Cabinet, selectedSlot);
             }
         }
         catch (Exception ex)
@@ -49,14 +48,14 @@ public unsafe partial class UnifiedGlamourManager
         }
     }
 
-    private static bool TryApplyPrismBoxItem
+    private bool TryApplyPrismBoxItem
     (
         AgentMiragePrismMiragePlate* agent,
         UnifiedItem                  item
     )
     {
         if (!TryGetLoadedMirageManager(out var manager)) return false;
-        if (item.PrismBoxIndex >= PRISM_BOX_CAPACITY) return false;
+        if (item.PrismBoxIndex >= manager->PrismBoxItemIds.Length) return false;
 
         var rawItemID = manager->PrismBoxItemIds[(int)item.PrismBoxIndex];
         if (rawItemID == 0) return false;
@@ -65,28 +64,23 @@ public unsafe partial class UnifiedGlamourManager
                                  item.ParentSetItemID :
                                  item.ItemID;
         if (ItemUtil.GetBaseId(rawItemID).ItemId != expectedItemID) return false;
-        if (item.IsSetPart && !GetSetParts(expectedItemID).Any(x => x.ItemID == item.ItemID && manager->IsSetSlotUnlocked(item.PrismBoxIndex, x.SlotIndex)))
-            return false;
 
-        if (!item.IsSetPart)
+        if (item.IsSetPart)
         {
-            item.RawItemID = rawItemID;
-            item.Stain0ID  = manager->PrismBoxStain0Ids[(int)item.PrismBoxIndex];
-            item.Stain1ID  = manager->PrismBoxStain1Ids[(int)item.PrismBoxIndex];
+            if (!GetSetParts(expectedItemID).Any(x => x.ItemID == item.ItemID && manager->IsSetSlotUnlocked(item.PrismBoxIndex, x.SlotIndex)))
+                return false;
         }
-        if (item.IsSetPart && !GetSetParts(expectedItemID).Any(x => x.ItemID == item.ItemID && manager->IsSetSlotUnlocked(item.PrismBoxIndex, x.SlotIndex)))
-            return false;
-
-        if (!item.IsSetPart)
+        else
         {
-            item.RawItemID = rawItemID;
-            item.Stain0ID  = manager->PrismBoxStain0Ids[(int)item.PrismBoxIndex];
-            item.Stain1ID  = manager->PrismBoxStain1Ids[(int)item.PrismBoxIndex];
+            item.RawItemID                     = rawItemID;
+            item.Stain0ID                      = manager->PrismBoxStain0Ids[(int)item.PrismBoxIndex];
+            item.Stain1ID                      = manager->PrismBoxStain1Ids[(int)item.PrismBoxIndex];
+            prismBoxStains[item.PrismBoxIndex] = (rawItemID, item.Stain0ID, item.Stain1ID);
         }
 
-        var itemID = !item.IsSetPart && item.RawItemID != 0 ?
-                         item.RawItemID :
-                         item.ItemID;
+        var itemID = item.IsSetPart ?
+                         item.ItemID :
+                         rawItemID;
         var stain0 = (byte)(item.IsSetPart ?
                                 0 :
                                 item.Stain0ID);
@@ -105,9 +99,9 @@ public unsafe partial class UnifiedGlamourManager
         UnifiedItem                  item
     )
     {
-        var cabinet = GetLoadedCabinet();
+        var cabinet = GetLoadedCabinet(item.CabinetID);
         if (cabinet == null) return false;
-        if (item.CabinetID == 0 || !cabinet->IsItemInCabinet(item.CabinetID)) return false;
+        if (!cabinet->IsItemInCabinet(item.CabinetID)) return false;
 
         agent->SetSelectedItemData(ItemSource.Cabinet, item.CabinetID, item.ItemID, 0, 0);
         MarkPlateSelectionDirty(agent);
@@ -117,7 +111,8 @@ public unsafe partial class UnifiedGlamourManager
     private void QueueApplyRetry
     (
         UnifiedItem item,
-        ItemSource  source
+        ItemSource  source,
+        uint        selectedSlot
     )
     {
         var itemID          = item.ItemID;
@@ -125,12 +120,17 @@ public unsafe partial class UnifiedGlamourManager
         var cabinetID       = item.CabinetID;
         var isSetPart       = item.IsSetPart;
         var parentSetItemID = item.ParentSetItemID;
+        var session         = storedItemsSession;
 
         IFramework.Instance().RunOnTick
         (
             () =>
             {
-                if (IsDisposed || !TryGetReadyPlateEditor(out var retryAgent)) return;
+                if (IsDisposed                                  ||
+                    session != storedItemsSession               ||
+                    !TryGetReadyPlateEditor(out var retryAgent) ||
+                    retryAgent->Data->SelectedItemIndex != selectedSlot)
+                    return;
 
                 var retryItem = items.FirstOrDefault
                 (x =>
@@ -207,7 +207,7 @@ public unsafe partial class UnifiedGlamourManager
         selectedPreset = preset;
 
         config.Save(this);
-        
+
         NotifyHelper.Instance().Chat
         (
             ReadOnlySeString.FormatLink

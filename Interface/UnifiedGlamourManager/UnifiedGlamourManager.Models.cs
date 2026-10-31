@@ -26,40 +26,42 @@ public partial class UnifiedGlamourManager
 
     private enum SetRelationFilter
     {
-        All,
-        SetRelatedOnly,
-        NonSetOnly
+        All, SetRelatedOnly, NonSetOnly
     }
 
     // 模版来源
     private enum PresetSource
     {
-        Self,
-        OtherPlayer
+        Self, OtherPlayer
     }
 
     private sealed class UnifiedItem : IEquatable<UnifiedItem>
     {
-        public uint   ItemID                 { get; set; }
+        public uint   ItemID                 { get; init; }
         public uint   RawItemID              { get; set; }
         public uint   PrismBoxIndex          { get; set; }
         public uint   CabinetID              { get; set; }
-        public string Name                   { get; set; } = string.Empty;
+        public string Name                   { get; init; } = string.Empty;
         public uint   Stain0ID               { get; set; }
         public uint   Stain1ID               { get; set; }
-        public uint   EquipSlotCategoryRowID { get; set; }
-        public uint   ClassJobCategoryRowID  { get; set; }
-        public uint   IconID                 { get; set; }
-        public uint   LevelEquip             { get; set; }
+        public uint   EquipSlotCategoryRowID { get; init; }
+        public uint   ClassJobCategoryRowID  { get; init; }
+        public uint   IconID                 { get; init; }
+        public uint   LevelEquip             { get; init; }
         public bool   InPrismBox             { get; set; }
         public bool   InCabinet              { get; set; }
-        public bool   IsSetContainer         { get; set; }
-        public bool   IsSetPart              { get; set; }
-        public uint   ParentSetItemID        { get; set; }
-        public string ParentSetName          { get; set; } = string.Empty;
-        public string SetPartLabel           { get; set; } = string.Empty;
+        public bool   IsSetContainer         { get; init; }
+        public bool   IsSetPart              { get; init; }
+        public uint   ParentSetItemID        { get; init; }
+        public string ParentSetName          { get; init; } = string.Empty;
+        public string SetPartLabel           { get; init; } = string.Empty;
 
         public bool CanUseInPlate => (InPrismBox || InCabinet) && !IsSetContainer;
+
+        public (uint ItemID, uint ParentSetItemID, uint PrismBoxIndex, uint CabinetID) Identity =>
+            IsSetPart ?
+                (ItemID, ParentSetItemID, PrismBoxIndex, CabinetID) :
+                (ItemID, 0, 0, 0);
 
         public Stain? Stain0 => LuminaGetter.TryGetRow<Stain>(Stain0ID, out var stain) ?
                                     stain :
@@ -123,40 +125,19 @@ public partial class UnifiedGlamourManager
             UnifiedItem other
         )
         {
-            if (other is null) return;
             InPrismBox |= other.InPrismBox;
             InCabinet  |= other.InCabinet;
 
             if (other.InPrismBox)
             {
-                RawItemID              = other.RawItemID;
-                PrismBoxIndex          = other.PrismBoxIndex;
-                Stain0ID               = other.Stain0ID;
-                Stain1ID               = other.Stain1ID;
-                IconID                 = other.IconID;
-                EquipSlotCategoryRowID = other.EquipSlotCategoryRowID;
-                ClassJobCategoryRowID  = other.ClassJobCategoryRowID;
-                LevelEquip             = other.LevelEquip;
-                IsSetContainer         = other.IsSetContainer;
+                RawItemID     = other.RawItemID;
+                PrismBoxIndex = other.PrismBoxIndex;
+                Stain0ID      = other.Stain0ID;
+                Stain1ID      = other.Stain1ID;
             }
 
             if (other.InCabinet)
-            {
                 CabinetID = other.CabinetID;
-                IconID = IconID == 0 ?
-                             other.IconID :
-                             IconID;
-                EquipSlotCategoryRowID = EquipSlotCategoryRowID == 0 ?
-                                             other.EquipSlotCategoryRowID :
-                                             EquipSlotCategoryRowID;
-                ClassJobCategoryRowID = ClassJobCategoryRowID == 0 ?
-                                            other.ClassJobCategoryRowID :
-                                            ClassJobCategoryRowID;
-                LevelEquip = LevelEquip == 0 ?
-                                 other.LevelEquip :
-                                 LevelEquip;
-                IsSetContainer |= other.IsSetContainer;
-            }
         }
 
         public static UnifiedItem Create
@@ -205,10 +186,7 @@ public partial class UnifiedGlamourManager
         {
             if (other is null) return false;
             if (ReferenceEquals(this, other)) return true;
-            return ItemID          == other.ItemID        &&
-                   PrismBoxIndex   == other.PrismBoxIndex &&
-                   IsSetPart       == other.IsSetPart     &&
-                   ParentSetItemID == other.ParentSetItemID;
+            return Identity == other.Identity;
         }
 
         public override bool Equals
@@ -216,7 +194,7 @@ public partial class UnifiedGlamourManager
             object? obj
         ) => Equals(obj as UnifiedItem);
 
-        public override int GetHashCode() => HashCode.Combine(ItemID, PrismBoxIndex, IsSetPart, ParentSetItemID);
+        public override int GetHashCode() => Identity.GetHashCode();
 
         public static bool operator ==
         (
@@ -237,9 +215,9 @@ public partial class UnifiedGlamourManager
 
     private sealed class SavedItem
     {
-        public uint   ItemID  { get; set; }
-        public string Name    { get; set; } = string.Empty;
-        public long   AddedAt { get; set; }
+        public uint   ItemID  { get; init; }
+        public string Name    { get; init; } = string.Empty;
+        public long   AddedAt { get; init; }
     }
 
     // 预设模版
@@ -281,27 +259,4 @@ public partial class UnifiedGlamourManager
         byte Stain0ID,
         byte Stain1ID
     );
-
-    // UIOperation/AutoGlamourDresser.cs
-    // 投影台
-    private readonly record struct PrismBoxItemInfo
-    (
-        uint  Index,
-        uint  RawItemID,
-        uint  ItemID,
-        uint  Stain0ID,
-        uint  Stain1ID,
-        bool  IsGlamorous,
-        ulong ModelMain,
-        uint  EquipSlotCategoryRowID
-    )
-    {
-        public bool IsGlamourModelValid =>
-            IsGlamorous                 &&
-            ModelMain              != 0 &&
-            EquipSlotCategoryRowID != 0;
-
-        public bool IsStained =>
-            Stain0ID != 0 || Stain1ID != 0;
-    }
 }

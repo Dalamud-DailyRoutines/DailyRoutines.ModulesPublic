@@ -1,31 +1,10 @@
-﻿using System.Numerics;
+using System.Numerics;
 using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager
 {
-    private const byte   FEMALE_SEX              = 1;
-    private const string COMMAND                 = "ugm";
-
-    private const string STONE_SCRIPT_URL =
-        "https://greasyfork.org/en/scripts/580109-%E7%9F%B3%E4%B9%8B%E5%AE%B6%E5%B9%BB%E5%8C%96%E6%A8%A1%E6%9D%BF%E5%AF%BC%E5%85%A5dr";
-
-    private const string STONE_URL         = "https://ff14risingstones.web.sdo.com/pc/index.html#/glamour";
-    private const string FAVORITE_ICON_ON  = "★";
-    private const string FAVORITE_ICON_OFF = "☆";
-
-    private const int TASK_TIMEOUT_MS              = 30_000;
-    private const int APPLY_RETRY_DELAY_MS         = 50;
-    private const int DEFAULT_MIN_EQUIP_LEVEL      = 1;
-    private const int DEFAULT_MAX_EQUIP_LEVEL      = 100;
-    private const int MAX_EQUIP_LEVEL_INPUT        = 999;
-    private const int VIRTUALIZED_LIST_BUFFER_ROWS = 3;
-    private const int VIRTUALIZED_GRID_BUFFER_ROWS = 2;
-
-    private const uint MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW = 0;
-    private const uint PRISM_BOX_CAPACITY                = 800;
-
     private static readonly SourceFilter[] SourceFilters =
     [
         SourceFilter.All,
@@ -71,7 +50,7 @@ public partial class UnifiedGlamourManager
     // 5 是腰带，13 是职业水晶
     private static readonly int[] PlateSlots = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12];
 
-    private static string[] JobFilterNames
+    private string[] JobFilterNames
     {
         get
         {
@@ -103,7 +82,7 @@ public partial class UnifiedGlamourManager
         new(749, static x => x.FingerL != 0 || x.FingerR != 0)
     ];
 
-    private static string[] SortModeNames
+    private string[] SortModeNames
     {
         get
         {
@@ -147,4 +126,33 @@ public partial class UnifiedGlamourManager
     private static readonly Vector4 SelectedBorderColor    = KnownColor.Khaki.ToVector4();
     private static readonly Vector4 MutedBorderColor       = KnownColor.DarkGray.ToVector4();
     private static readonly Vector4 StarOffColor           = KnownColor.Gray.ToVector4();
+
+    #region 常量
+
+    private const byte FEMALE_SEX = 1;
+
+    private const string COMMAND = "ugm";
+
+    private const string STONE_SCRIPT_URL =
+        "https://greasyfork.org/en/scripts/580109-%E7%9F%B3%E4%B9%8B%E5%AE%B6%E5%B9%BB%E5%8C%96%E6%A8%A1%E6%9D%BF%E5%AF%BC%E5%85%A5dr";
+
+    private const string STONE_URL         = "https://ff14risingstones.web.sdo.com/pc/index.html#/glamour";
+    private const string FAVORITE_ICON_ON  = "★";
+    private const string FAVORITE_ICON_OFF = "☆";
+
+    private const int TASK_TIMEOUT_MS              = 30_000;
+    private const int APPLY_RETRY_DELAY_MS         = 50;
+    private const int STORAGE_REFRESH_INTERVAL_MS  = 250;
+    private const int STORAGE_REFRESH_ATTEMPTS     = TASK_TIMEOUT_MS / STORAGE_REFRESH_INTERVAL_MS;
+    private const int DEFAULT_MIN_EQUIP_LEVEL      = 1;
+    private const int DEFAULT_MAX_EQUIP_LEVEL      = 100;
+    private const int MAX_EQUIP_LEVEL_INPUT        = 999;
+    private const int VIRTUALIZED_LIST_BUFFER_ROWS = 3;
+    private const int VIRTUALIZED_GRID_BUFFER_ROWS = 2;
+
+    private const uint MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW = 0;
+    private const uint PRISM_BOX_CAPACITY                = 800;
+    private const uint CABINET_CACHE_FIRST_ROW_ID        = 1048;
+
+    #endregion
 }

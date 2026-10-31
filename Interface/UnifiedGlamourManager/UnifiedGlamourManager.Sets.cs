@@ -7,22 +7,21 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class UnifiedGlamourManager
 {
-    // 未读取时位图未知；已读取的位为 1 表示该套装部件缺失。
-    private static bool IsSetSlotUnlocked
-    (
-        ushort? missingSlots,
-        int     slot
-    ) =>
-        missingSlots.HasValue && slot >= 0 && slot < 11 && (missingSlots.Value & (1 << slot)) == 0;
+    private readonly Dictionary<uint, List<SetPartInfo>> setPartsCache = [];
 
-    private static List<SetPartInfo> GetSetParts
+    private List<SetPartInfo> GetSetParts
     (
         uint setItemID
     )
     {
-        if (!LuminaGetter.TryGetRow<MirageStoreSetItem>(setItemID, out var row)) return [];
+        if (setPartsCache.TryGetValue(setItemID, out var cached))
+            return cached;
 
         List<SetPartInfo> parts = [];
+        setPartsCache.Add(setItemID, parts);
+        if (!LuminaGetter.TryGetRow<MirageStoreSetItem>(setItemID, out var row))
+            return parts;
+
         AddSetPart(parts, row.MainHand.RowId,  0);
         AddSetPart(parts, row.OffHand.RowId,   1);
         AddSetPart(parts, row.Head.RowId,      2);
@@ -57,7 +56,7 @@ public partial class UnifiedGlamourManager
             parts.Add(new(itemID, label, slotIndex));
     }
 
-    private void AddSetPartItem
+    private static void AddSetPartItem
     (
         List<UnifiedItem> target,
         SetPartInfo       setPart,
@@ -106,32 +105,20 @@ public partial class UnifiedGlamourManager
                    categoryName;
     }
 
-    private void MergeItems()
-    {
-        var merged = items
-                     .GroupBy
-                     (static item => item.IsSetPart ?
-                                         $"set:{item.ParentSetItemID}:{item.PrismBoxIndex}:{item.ItemID}" :
-                                         $"item:{item.ItemID}"
-                     )
-                     .Select(MergeItemGroup)
-                     .ToList();
-
-        items.Clear();
-        items.AddRange(merged);
-    }
-
-    private static UnifiedItem MergeItemGroup
+    private static void MergeItems
     (
-        IGrouping<string, UnifiedItem> group
+        List<UnifiedItem> target
     )
     {
-        var first = group.First();
-        if (first.IsSetPart) return first;
+        Dictionary<(uint ItemID, uint ParentSetItemID, uint PrismBoxIndex, uint CabinetID), UnifiedItem> merged = new(target.Count);
 
-        foreach (var other in group.Skip(1))
-            first.MergeWith(other);
+        foreach (var item in target)
+        {
+            if (!merged.TryAdd(item.Identity, item))
+                merged[item.Identity].MergeWith(item);
+        }
 
-        return first;
+        target.Clear();
+        target.AddRange(merged.Values);
     }
 }

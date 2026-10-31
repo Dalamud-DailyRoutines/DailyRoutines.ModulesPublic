@@ -5,7 +5,6 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
@@ -78,7 +77,7 @@ public unsafe partial class UnifiedGlamourManager
             (ImGui.GetContentRegionAvail().X - spacing) * 0.5f,
             ImGui.GetFrameHeight()
         );
-        
+
         if (manualSelectedTabIndex != -1)
         {
             storage.SetInt(selectedTabID, manualSelectedTabIndex);
@@ -730,7 +729,7 @@ public unsafe partial class UnifiedGlamourManager
     {
         if (requestClearFavoritesConfirm)
         {
-            favoritesConfirmPopupOpen = true;
+            favoritesConfirmPopupOpen    = true;
             requestClearFavoritesConfirm = false;
         }
 
@@ -776,20 +775,20 @@ public unsafe partial class UnifiedGlamourManager
     // UI - Preset
     private void DrawStatusBar()
     {
-        var (mirageLoaded, cabinetLoaded) = GetStorageStatus(LocalPlayerState.ContentID);
-        var readyText                     = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheReady");
-        var unknownText                   = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheUnknown");
-        var unavailableColor              = KnownColor.Goldenrod;
+        var (mirageLoaded, cabinetLoaded) = GetStorageStatus();
+        var readyText   = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheReady");
+        var unknownText = Lang.Get("UnifiedGlamourManager-Editor-NativeCacheUnknown");
 
         // 投影台状态
         ImGui.AlignTextToFramePadding();
         ImGui.TextDisabled($"{LuminaWrapper.GetAddonText(11910)}:");
+
         ImGui.SameLine();
         ImGui.TextColored
         (
             (mirageLoaded ?
                  KnownColor.LimeGreen :
-                 unavailableColor).ToVector4(),
+                 KnownColor.Goldenrod).ToUInt(),
             mirageLoaded ?
                 readyText :
                 unknownText
@@ -803,7 +802,7 @@ public unsafe partial class UnifiedGlamourManager
         (
             (cabinetLoaded ?
                  KnownColor.LimeGreen :
-                 unavailableColor).ToVector4(),
+                 KnownColor.Goldenrod).ToUInt(),
             cabinetLoaded ?
                 readyText :
                 unknownText
