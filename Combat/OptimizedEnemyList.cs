@@ -87,18 +87,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
-
-        foreach (var (_, textNode, heathTextNode, healthMarkerNode, backgroundNode, healthBackgroundNode, castBarNode, _, enemityNode) in nodes)
-        {
-            textNode?.Dispose();
-            heathTextNode?.Dispose();
-            healthMarkerNode?.Dispose();
-            backgroundNode?.Dispose();
-            healthBackgroundNode?.Dispose();
-            castBarNode?.Dispose();
-            enemityNode?.Dispose();
-        }
-
+        
         nodes.Clear();
 
         controller?.Dispose();
@@ -107,93 +96,101 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
     protected override void ConfigUI()
     {
-        using (ImRaii.Heading1(Lang.Get("Cast")))
-        using (ImRaii.ItemWidth(200f * GlobalUIScale))
-        using (ImRaii.PushId("CastText"))
+        using var tabBar = ImRaii.TabBar("Config");
+        if (!tabBar) return;
+
+        using (var item = ImRaii.TabItem(Lang.Get("General")))
         {
-            ImGui.InputFloat2(Lang.Get("Offset"), ref config.TextOffset, format: "%.1f");
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+            if (item)
+            {
+                if (ImGui.Checkbox(Lang.Get("OptimizedEnemyList-AlwaysUnlock"), ref config.AlwaysUnlock))
+                    config.Save(this);
+                ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedEnemyList-AlwaysUnlock-Help"));
+            }
+        }
+        
+        using (var item = ImRaii.TabItem(Lang.Get("Cast")))
+        {
+            if (item)
+            {
+                ImGui.InputFloat2(Lang.Get("Offset"), ref config.TextOffset, format: "%.1f");
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.InputByte(Lang.Get("FontSize"), ref config.TextSize);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.InputByte(Lang.Get("FontSize"), ref config.TextSize);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.TextColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.TextColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.TextEdgeColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.TextEdgeColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
+            }
         }
 
-        ImGui.NewLine();
-
-        using (ImRaii.Heading1(LuminaWrapper.GetAddonText(11274)))
-        using (ImRaii.ItemWidth(200f * GlobalUIScale))
-        using (ImRaii.PushId("HealthText"))
+        // 体力
+        using (var item = ImRaii.TabItem(LuminaWrapper.GetAddonText(11274)))
         {
-            ImGui.InputFloat2(Lang.Get("Offset"), ref config.HealthTextOffset, format: "%.1f");
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+            if (item)
+            {
+                ImGui.InputFloat2(Lang.Get("Offset"), ref config.HealthTextOffset, format: "%.1f");
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.InputByte(Lang.Get("FontSize"), ref config.HealthTextSize);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.InputByte(Lang.Get("FontSize"), ref config.HealthTextSize);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.HealthTextColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.HealthTextColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.HealthTextEdgeColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.HealthTextEdgeColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
+            }
         }
-
-        ImGui.NewLine();
-
-        using (ImRaii.Heading1(LuminaWrapper.GetAddonText(721)))
-        using (ImRaii.ItemWidth(200f * GlobalUIScale))
-        using (ImRaii.PushId("EnemityText"))
+        
+        // 仇恨
+        using (var item = ImRaii.TabItem(LuminaWrapper.GetAddonText(721)))
         {
-            ImGui.InputFloat2(Lang.Get("Offset"), ref config.EnemityTextOffset, format: "%.1f");
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+            if (item)
+            {
+                ImGui.InputFloat2(Lang.Get("Offset"), ref config.EnemityTextOffset, format: "%.1f");
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.InputByte(Lang.Get("FontSize"), ref config.EnemityTextSize);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.InputByte(Lang.Get("FontSize"), ref config.EnemityTextSize);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.EnemityTextColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.ColorEdit4(Lang.Get("TextColor"), ref config.EnemityTextColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.EnemityTextEdgeColor);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.ColorEdit4(Lang.Get("EdgeColor"), ref config.EnemityTextEdgeColor);
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
+            }
         }
-
-        ImGui.NewLine();
-
-        using (ImRaii.Heading1(Lang.Get("Status")))
-        using (ImRaii.ItemWidth(200f * GlobalUIScale))
-        using (ImRaii.PushId("Status"))
+        
+        // 状态效果
+        using (var item = ImRaii.TabItem(LuminaWrapper.GetAddonText(721)))
         {
-            ImGui.InputFloat2(Lang.Get("Offset"), ref config.StatusOffset, format: "%.1f");
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+            if (item)
+            {
+                ImGui.InputFloat2(Lang.Get("Offset"), ref config.StatusOffset, format: "%.1f");
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
 
-            ImGui.InputFloat(Lang.Get("Scale"), ref config.StatusScale, format: "%.1f");
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
+                ImGui.InputFloat(Lang.Get("Scale"), ref config.StatusScale, format: "%.1f");
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    config.Save(this);
+            }
         }
-
-        ImGui.NewLine();
-
-        if (ImGui.Checkbox(Lang.Get("OptimizedEnemyList-AlwaysUnlock"), ref config.AlwaysUnlock))
-            config.Save(this);
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedEnemyList-AlwaysUnlock-Help"));
     }
 
     #region 事件
