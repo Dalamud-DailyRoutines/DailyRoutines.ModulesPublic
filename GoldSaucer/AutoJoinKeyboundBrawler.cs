@@ -8,7 +8,9 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.Game.Group;
+using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Packets.Upstream;
+using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -177,7 +179,8 @@ public class AutoJoinKeyboundBrawler : ModuleBase
 
         foreach (ref var member in group->PartyMembers[..group->MemberCount])
         {
-            if (member.TerritoryType != TERRITORY_ID)
+            if (!LuminaGetter.TryGetRow<TerritoryType>(member.TerritoryType, out var zoneRow) ||
+                zoneRow.ContentFinderCondition.RowId > 0)
                 return false;
         }
 
