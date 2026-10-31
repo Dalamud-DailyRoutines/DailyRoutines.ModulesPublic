@@ -13,7 +13,6 @@ using Newtonsoft.Json.Linq;
 using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
@@ -102,10 +101,12 @@ public unsafe partial class BetterTeleport : ModuleBase
     private void RefreshFavoritesInfo()
     {
         if (config.Favorites.Count == 0) return;
-        favorites = AetheryteRecordManager.Instance().AllRecords
-                                          .Where(x => config.Favorites.Contains(x.ToString()))
-                                          .OrderBy(x => x.RowID)
-                                          .ToList();
+        favorites =
+        [
+            .. AetheryteRecordManager.Instance().AllRecords
+                                     .Where(x => config.Favorites.Contains(x.ToString()))
+                                     .OrderBy(x => x.RowID)
+        ];
     }
 
     private void HandleTeleport
@@ -114,7 +115,10 @@ public unsafe partial class BetterTeleport : ModuleBase
         string?         searchText = null
     )
     {
-        if (GameState.ContentFinderCondition != 0) return;
+        if (GameState.ContentFinderCondition != 0                                ||
+            aetheryte is { Cost: uint.MaxValue, Group: not (252 or 253 or 254) } ||
+            !aetheryte.IsUnlocked())
+            return;
 
         var searchTerms = GetSearchSelectionTerms(searchText).ToList();
 
@@ -134,7 +138,14 @@ public unsafe partial class BetterTeleport : ModuleBase
         var distance2D = !isSameZone ?
                              999 :
                              Vector2.DistanceSquared(localPlayer->Position.ToVector2(), aetherytePos.ToVector2());
-        if (distance2D <= 900) return;
+        if (isSameZone             &&
+            aetheryte.Group == 252 &&
+            !hasRedirect)
+            return;
+
+        if (distance2D <= 900 &&
+            (aetheryte.Group != 252 || hasRedirect))
+            return;
 
         if (aetherytePos.Y == 0)
             aetherytePos = aetherytePos.WithY(500);
@@ -157,6 +168,13 @@ public unsafe partial class BetterTeleport : ModuleBase
                 IconId = 111
             }
         );
+
+        if (aetheryte.Group == 252 &&
+            hasRedirect)
+        {
+            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
+            return;
+        }
 
         TaskHelper.Enqueue(aetheryte.TeleportTo);
 
@@ -284,11 +302,13 @@ public unsafe partial class BetterTeleport : ModuleBase
         if (string.IsNullOrEmpty(normalized) || config.SearchSelections.Count == 0)
             return matches;
 
-        return matches.Select((record, index) => new { record, index, score = GetSearchSelectionScore(normalized, record) })
+        return
+        [
+            .. matches.Select((record, index) => new { record, index, score = GetSearchSelectionScore(normalized, record) })
                       .OrderByDescending(x => x.score)
                       .ThenBy(x => x.index)
                       .Select(x => x.record)
-                      .ToList();
+        ];
     }
 
     private double GetSearchSelectionScore
@@ -351,9 +371,9 @@ public unsafe partial class BetterTeleport : ModuleBase
     )
     {
         var byCount = b.Count.CompareTo(a.Count);
-        if (byCount != 0) return byCount;
-
-        return b.LastUsedUnixSeconds.CompareTo(a.LastUsedUnixSeconds);
+        return byCount != 0 ?
+                   byCount :
+                   b.LastUsedUnixSeconds.CompareTo(a.LastUsedUnixSeconds);
     }
 
     private static bool IsWithPermission() =>
@@ -549,8 +569,7 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     private enum PageType
     {
-        Search,
-        Full
+        Search, Full
     }
 
     private class Config : ModuleConfig

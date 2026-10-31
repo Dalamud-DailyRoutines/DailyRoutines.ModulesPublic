@@ -17,7 +17,6 @@ using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Game.AetheryteRecord.Enums;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
 using OmenTools.Utils.FuzzyMatcher;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
@@ -97,10 +96,10 @@ public unsafe partial class BetterTeleport
         }
         else
         {
-            if (config.DefaultPage == PageType.Search)
-                Overlay.IsOpen = true;
-            else
+            if (config.DefaultPage == PageType.Full)
                 fullWindow.IsOpen = true;
+            else
+                Overlay.IsOpen = true;
         }
     }
 
@@ -148,7 +147,10 @@ public unsafe partial class BetterTeleport
         // 1. 绘制其他水晶 Marker
         foreach (var record in siblings)
         {
-            if (record.RowID == aetheryte.RowID) continue;
+            if (record.Equals(aetheryte)) continue;
+            if (record.Group == 252 &&
+                !config.Positions.ContainsKey(record.ToString()))
+                continue;
 
             var recordPos = config.Positions.TryGetValue(record.ToString(), out var redirected) ?
                                 redirected :
@@ -167,7 +169,7 @@ public unsafe partial class BetterTeleport
                 Size        = ScaledVector2(28f),
                 ShowLabel   = false,
                 TooltipText = record.Name,
-                OnClick = m =>
+                OnClick = _ =>
                 {
                     if (isPinned)
                     {
@@ -181,39 +183,45 @@ public unsafe partial class BetterTeleport
         }
 
         // 2. 绘制当前主水晶 Marker (带高亮脉冲、Label)
-        var targetPos = config.Positions.TryGetValue(aetheryte.ToString(), out var redirectedPos) ?
-                            redirectedPos :
-                            aetheryte.Position;
-        var displayName = config.Remarks.TryGetValue(aetheryte.ToString(), out var remark) ?
-                              remark :
-                              aetheryte.Name;
+        var hasPosition = config.Positions.TryGetValue(aetheryte.ToString(), out var redirectedPos);
 
-        var mainMarker = new ImGuiMapMarker
+        if (aetheryte.Group != 252 ||
+            hasPosition)
         {
-            ID       = aetheryte.ToString(),
-            Position = targetPos,
-            IconID = aetheryte.IsAetheryte ?
-                         60453U :
-                         60430U,
-            Name        = aetheryte.Name,
-            Color       = 0xFFFFFFFF,
-            Size        = ScaledVector2(32f),
-            PulseEffect = true,
-            PulseColor  = ImGui.GetColorU32(ImGuiCol.CheckMark),
-            Label       = displayName,
-            ShowLabel   = true,
-            LabelColor  = KnownColor.LightSkyBlue.ToVector4().ToUInt(),
-            OnClick = m =>
+            var targetPos = hasPosition ?
+                                redirectedPos :
+                                aetheryte.Position;
+            var displayName = config.Remarks.TryGetValue(aetheryte.ToString(), out var remark) ?
+                                  remark :
+                                  aetheryte.Name;
+
+            var mainMarker = new ImGuiMapMarker
             {
-                if (isPinned)
+                ID       = aetheryte.ToString(),
+                Position = targetPos,
+                IconID = aetheryte.IsAetheryte ?
+                             60453U :
+                             60430U,
+                Name        = aetheryte.Name,
+                Color       = 0xFFFFFFFF,
+                Size        = ScaledVector2(32f),
+                PulseEffect = true,
+                PulseColor  = ImGui.GetColorU32(ImGuiCol.CheckMark),
+                Label       = displayName,
+                ShowLabel   = true,
+                LabelColor  = KnownColor.LightSkyBlue.ToVector4().ToUInt(),
+                OnClick = _ =>
                 {
-                    HandleTeleport(aetheryte);
-                    pinnedAetheryte = null;
-                    config.Save(this);
+                    if (isPinned)
+                    {
+                        HandleTeleport(aetheryte);
+                        pinnedAetheryte = null;
+                        config.Save(this);
+                    }
                 }
-            }
-        };
-        mapRenderer.AddMarker(mainMarker);
+            };
+            mapRenderer.AddMarker(mainMarker);
+        }
 
         // 3. 处理红旗 Marker (如果右键菜单打开了)
         if (ImGui.IsPopupOpen("BetterTeleport_Map_ContextMenu"))
@@ -357,11 +365,12 @@ public unsafe partial class BetterTeleport
         int category
     )
     {
-        var addon = (AddonTeleport*)RaptureAtkUnitManager.Instance()->GetAddonByName("Teleport");
+        var liveAddon = (AddonTeleport*)RaptureAtkUnitManager.Instance()->GetAddonByName("Teleport");
 
         var placeholder = default(AddonTeleport);
-        if (addon == null)
-            addon = &placeholder;
+        var addon = liveAddon != null ?
+                        liveAddon :
+                        &placeholder;
 
         var iconID = AddonTeleportGetRegionIconID(addon, category);
 
@@ -372,15 +381,46 @@ public unsafe partial class BetterTeleport
     }
 
     // 住宅区在客户端固定使用 2
-    private static int GetAetheryteCategory
+    private readonly Dictionary<(uint Version, uint Region), int> transportCategories = [];
+
+    private int GetAetheryteCategory
     (
         AetheryteRecord aetheryte
-    ) =>
-        aetheryte.GetZone().TerritoryIntendedUse.RowId == 13 ?
-            2 :
-            aetheryte.GetData().Unknown2;
+    )
+    {
+        var territory = aetheryte.GetZone();
+        if (territory.TerritoryIntendedUse.RowId == 13)
+            return 2;
 
-    private string GetAetheryteTabLabel
+        if (aetheryte.Group != 252)
+            return aetheryte.GetData().Unknown2;
+
+        var region = territory.PlaceNameRegion.RowId;
+        if (aetheryte.Version > 0 ||
+            region is not (22 or 23 or 24))
+            region = 0;
+
+        var key = (aetheryte.Version, region);
+        if (transportCategories.TryGetValue(key, out var category))
+            return category;
+
+        var source = LuminaGetter.Get<Aetheryte>()
+                                 .First
+                                 (x => x.IsAetheryte                                                     &&
+                                       x.Territory.Value.TerritoryIntendedUse.RowId != 13                &&
+                                       x.Territory.Value.ExVersion.RowId            == aetheryte.Version &&
+                                       (aetheryte.Version > 0 ||
+                                        (region           == 0 &&
+                                         x.AethernetGroup != 5 &&
+                                         x.Territory.Value.PlaceNameRegion.RowId is not (22 or 23 or 24)) ||
+                                        x.Territory.Value.PlaceNameRegion.RowId == region)
+                                 );
+        category = source.Unknown2;
+        transportCategories.Add(key, category);
+        return category;
+    }
+
+    private static string GetAetheryteTabLabel
     (
         AetheryteRecord aetheryte,
         string          tabName
@@ -486,10 +526,8 @@ public unsafe partial class BetterTeleport
                             return false;
 
                         MovementManager.Instance().TPGround();
-                        if (ICondition.Instance().IsBetweenAreas || ICondition.Instance()[ConditionFlag.Jumping])
-                            return false;
-
-                        return true;
+                        return !ICondition.Instance().IsBetweenAreas &&
+                               !ICondition.Instance()[ConditionFlag.Jumping];
                     }
                 );
             }
@@ -659,7 +697,7 @@ public unsafe partial class BetterTeleport
                DrawAetheryteIconPart(drawList, part, position, size);
     }
 
-    private bool DrawAetheryteTabRegionIcon
+    private void DrawAetheryteTabRegionIcon
     (
         ImDrawListPtr drawList,
         int           category,
@@ -669,11 +707,11 @@ public unsafe partial class BetterTeleport
     {
         EnsureAetheryteRegionIconsLoaded();
 
-        return aetheryteTabIcons.TryGetValue(GetAetheryteTabIconPartID(category), out var part) &&
-               DrawAetheryteIconPart(drawList, part, position, size);
+        if (aetheryteTabIcons.TryGetValue(GetAetheryteTabIconPartID(category), out var part))
+            DrawAetheryteIconPart(drawList, part, position, size);
     }
 
-    private bool DrawAetheryteSettingIcon
+    private void DrawAetheryteSettingIcon
     (
         ImDrawListPtr drawList,
         Vector2       position,
@@ -682,7 +720,8 @@ public unsafe partial class BetterTeleport
     {
         EnsureAetheryteRegionIconsLoaded();
 
-        return aetheryteSettingIcon is { } icon && DrawAetheryteIconPart(drawList, icon, position, size);
+        if (aetheryteSettingIcon is { } icon)
+            DrawAetheryteIconPart(drawList, icon, position, size);
     }
 
     private static bool DrawAetheryteIconPart
@@ -821,8 +860,15 @@ public unsafe partial class BetterTeleport
         ImGui.TextUnformatted(Lang.Get("Position"));
 
         var hasPosition = config.Positions.TryGetValue(aetheryte.ToString(), out var position);
+
         using (FontManager.Instance().UIFont60.Push())
-            ImGui.TextUnformatted($"{(hasPosition ? position : aetheryte.Position):F1}");
+        {
+            var positionText = $"{(hasPosition ? position : aetheryte.Position):F1}";
+            if (aetheryte.Group == 252 &&
+                !hasPosition)
+                positionText = "—";
+            ImGui.TextUnformatted(positionText);
+        }
 
         if (ImGui.MenuItem(Lang.Get("BetterTeleport-RedirectedToCurrentPos")))
         {
@@ -849,7 +895,10 @@ public unsafe partial class BetterTeleport
         string?         searchText      = null
     )
     {
-        if (config.HideAethernetInParty && !aetheryte.IsAetheryte && IPartyList.Instance().Length > 1)
+        if (config.HideAethernetInParty         &&
+            !aetheryte.IsAetheryte              &&
+            aetheryte.Group              != 252 &&
+            IPartyList.Instance().Length > 1)
             return;
 
         var hasRemark = config.Remarks.TryGetValue(aetheryte.ToString(), out var remark);
@@ -880,7 +929,7 @@ public unsafe partial class BetterTeleport
         DrawAetheryteContextMenu(aetheryte);
 
         // 统一 hover 状态进度动画
-        var key = (aetheryte.RowID, aetheryte.SubIndex);
+        var key = (aetheryte.RowID, aetheryte.SubIndex, aetheryte.Group);
         hoverProgress.TryAdd(key, 0f);
 
         var targetProgress = isHovered || isSelected ?
@@ -973,11 +1022,12 @@ public unsafe partial class BetterTeleport
 
         if (index.HasValue && drawHotkeyBadge)
         {
-            string? hotkeyLabel = null;
-            if (index.Value is >= 0 and < 8)
-                hotkeyLabel = $"Ctrl+{index.Value + 1}";
-            else if (index.Value == 8)
-                hotkeyLabel = "Ctrl+9";
+            var hotkeyLabel = index.Value switch
+            {
+                >= 0 and < 8 => $"Ctrl+{index.Value + 1}",
+                8            => "Ctrl+9",
+                _            => null
+            };
 
             if (hotkeyLabel != null)
             {
@@ -996,12 +1046,13 @@ public unsafe partial class BetterTeleport
             }
         }
 
-        var costText    = $"{cost}";
-        var costStrFull = $"{costText}\uE049";
-        var costSize    = ImGui.CalcTextSize(costStrFull);
-        var costPos     = new Vector2(rightEndX - costSize.X, startPos.Y + ((itemHeight - costSize.Y) / 2));
+        var costText = cost == uint.MaxValue ?
+                           "—" :
+                           $"{cost}\uE049";
+        var costSize = ImGui.CalcTextSize(costText);
+        var costPos  = new Vector2(rightEndX - costSize.X, startPos.Y + ((itemHeight - costSize.Y) / 2));
 
-        drawList.AddText(costPos, ImGui.GetColorU32(ImGuiCol.Text), costStrFull);
+        drawList.AddText(costPos, ImGui.GetColorU32(ImGuiCol.Text), costText);
 
         if (isHovered && !isSearchingInputting)
         {

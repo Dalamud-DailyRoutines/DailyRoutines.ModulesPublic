@@ -5,7 +5,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -13,7 +12,7 @@ public unsafe partial class BetterTeleport
 {
     private BetterTeleportFullWindow? fullWindow;
 
-    private readonly Dictionary<(uint RowID, byte SubIndex), float> hoverProgress = [];
+    private readonly Dictionary<(uint RowID, byte SubIndex, byte Group), float> hoverProgress = [];
 
     private bool isNeedToLoseFocusSearchBar;
 
@@ -194,20 +193,21 @@ public unsafe partial class BetterTeleport
             else
             {
                 if (recordMatcher != null)
-                    fullSearchResult = SortSearchMatches(fullSearchWord, recordMatcher.Search(fullSearchWord, limit: int.MaxValue).ToList());
+                    fullSearchResult = SortSearchMatches(fullSearchWord, [.. recordMatcher.Search(fullSearchWord, limit: int.MaxValue)]);
                 else
                 {
                     fullSearchResult = SortSearchMatches
                     (
                         fullSearchWord,
-                        AetheryteRecordManager.Instance()
-                                              .AllRecords
-                                              .Where
-                                              (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                    (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
-                                                     remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
-                                              )
-                                              .ToList()
+                        [
+                            .. AetheryteRecordManager.Instance()
+                                                     .AllRecords
+                                                     .Where
+                                                     (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
+                                                           (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
+                                                            remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
+                                                     )
+                        ]
                     );
                 }
             }
@@ -356,10 +356,12 @@ public unsafe partial class BetterTeleport
 
                         DrawAetheryteTabIcon(firstRecord);
 
-                        if (firstRecord != null)
-                            ImGuiOm.TooltipHover(GetAetheryteTabLabel(firstRecord, name));
-                        else
-                            ImGuiOm.TooltipHover(name);
+                        ImGuiOm.TooltipHover
+                        (
+                            firstRecord != null ?
+                                GetAetheryteTabLabel(firstRecord, name) :
+                                name
+                        );
 
                         if (!tabItem) continue;
 
@@ -380,12 +382,14 @@ public unsafe partial class BetterTeleport
 
                             var isNewGroup = false;
 
-                            if (aetheryte.Group == 0)
+                            if (aetheryte.Group is 0 or 252)
                             {
-                                if (lastName != aetheryte.RegionName)
+                                if (lastGroupID != aetheryte.Group ||
+                                    lastName    != aetheryte.RegionName)
                                 {
-                                    isNewGroup = true;
-                                    lastName   = aetheryte.RegionName;
+                                    isNewGroup  = true;
+                                    lastName    = aetheryte.RegionName;
+                                    lastGroupID = aetheryte.Group;
                                 }
                             }
                             else
