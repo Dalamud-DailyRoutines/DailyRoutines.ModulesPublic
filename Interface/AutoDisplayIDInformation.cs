@@ -18,7 +18,7 @@ using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
+using AgentHUD = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentHUD;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -31,17 +31,8 @@ public unsafe class AutoDisplayIDInformation : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Middo"]
     };
-
-    private static readonly CompSig GetStatusTooltipTextSig = 
-        new("40 55 41 54 41 55 41 56 41 57 48 8D 6C 24 90 48 81 EC 70 01 00 00");
-    private delegate CStringPointer GetStatusTooltipTextDelegate
-    (
-        AgentHUD*   agent,
-        Utf8String* output,
-        uint        statusID,
-        uint        param
-    );
-    private Hook<GetStatusTooltipTextDelegate>? GetStatusTooltipTextHook;
+    
+    private Hook<AgentHUD.Delegates.GetStatusTooltipText>? GetStatusTooltipTextHook;
 
     private Config        config = null!;
     private IDtrBarEntry? zoneInfoEntry;
@@ -64,7 +55,12 @@ public unsafe class AutoDisplayIDInformation : ModuleBase
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "_NaviMap", OnAddonNaviMap);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "_NaviMap", OnAddonNaviMap);
 
-        GetStatusTooltipTextHook ??= GetStatusTooltipTextSig.GetHook<GetStatusTooltipTextDelegate>(GetStatusTooltipTextDetour);
+        GetStatusTooltipTextHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentHUD.MemberFunctionPointers),
+            nameof(AgentHUD.GetStatusTooltipText),
+            (AgentHUD.Delegates.GetStatusTooltipText)GetStatusTooltipTextDetour
+        );
         GetStatusTooltipTextHook.Enable();
 
         IClientState.Instance().MapIdChanged     += OnMapChanged;
