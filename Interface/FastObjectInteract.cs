@@ -478,8 +478,8 @@ public unsafe partial class FastObjectInteract : ModuleBase
             UpdateObjectsList((GameObject*)localPlayer);
         }
 
-        if (currentAethernetShards.Count   == 0 &&
-            GameState.TerritoryIntendedUse == TerritoryIntendedUse.Town)
+        if (currentAethernetShards.Count == 0 &&
+            AetheryteRecordManager.IsInAethernetTerritory())
             TryPopulateAethernetShards();
 
         var shouldShowWindow = currentObjects.Count > 0 && IsWindowShouldBeOpen();
