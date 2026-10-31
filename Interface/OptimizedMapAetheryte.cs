@@ -1,16 +1,17 @@
 using System.Numerics;
-using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game;
-using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
@@ -32,12 +33,15 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
     private Hook<AgentMap.Delegates.BuildMapMarkers> BuildMapMarkersHook;
 
     private Hook<AgentReceiveEventDelegate> AgentMapReceiveEventHook;
 
-    private MemoryPatch       aetheryteTopPatch = null!;
+    private Hook<AgentMap.Delegates.CreateTooltip> AgentMapCreateTooltipHook;
+
+    private MemoryPatch aetheryteTopPatch = null!;
+
     private SelectYesnoAddon? teleportConfirmation;
 
     protected override void Init()
@@ -63,6 +67,14 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
             (AgentReceiveEventDelegate)AgentMapReceiveEventDetour
         );
         AgentMapReceiveEventHook.Enable();
+
+        AgentMapCreateTooltipHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentMap.MemberFunctionPointers),
+            nameof(AgentMap.CreateTooltip),
+            (AgentMap.Delegates.CreateTooltip)AgentMapCreateTooltipDetour
+        );
+        AgentMapCreateTooltipHook.Enable();
     }
 
     protected override void Uninit()
@@ -123,19 +135,7 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
             if (index < mapAgent->MapMarkerCount)
             {
                 var marker = mapAgent->MapMarkers[index];
-                var record = marker.DataType switch
-                {
-                    3 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
-                    (x => x is { Group: < 252, IsHouse: false, IsAetheryte: true } &&
-                          x.RowID == marker.DataKey
-                    ),
-                    4 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
-                    (x => x is { Group: < 252, IsHouse: false, IsAetheryte: false } &&
-                          LuminaGetter.TryGetRow<Aetheryte>(x.RowID, out var data) &&
-                          data.AethernetName.RowId == marker.DataKey
-                    ),
-                    _ => null
-                };
+                var record = FindRecord(marker);
 
                 if (record != null)
                 {
@@ -154,35 +154,103 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         return AgentMapReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
     }
 
-    private void OpenTeleportConfirmation(AetheryteRecord record, AtkUnitBase* addon)
+    private bool AgentMapCreateTooltipDetour(AgentMap* agent, Utf8String* tooltipString, uint tooltipContext)
+    {
+        var result = AgentMapCreateTooltipHook.Original(agent, tooltipString, tooltipContext);
+        if (!result ||
+            tooltipContext >> 24 != 2)
+            return result;
+
+        var index = (int)(tooltipContext & 0xFFFFFF);
+        if (index >= agent->MapMarkerCount)
+            return result;
+
+        var record = FindRecord(agent->MapMarkers[index]);
+        if (record == null ||
+            !record.IsUnlocked())
+            return result;
+
+        tooltipString->SetString(GetTeleportText(record, 3216));
+        return result;
+    }
+
+    private static AetheryteRecord? FindRecord(MapMarkerInfo marker) => marker.DataType switch
+    {
+        3 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+        (x => x is { Group: < 252, IsHouse: false, IsAetheryte: true } &&
+              x.RowID == marker.DataKey
+        ),
+        4 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+        (x => x is { Group: < 252, IsHouse: false, IsAetheryte: false } &&
+              LuminaGetter.TryGetRow<Aetheryte>(x.RowID, out var data)  &&
+              data.AethernetName.RowId == marker.DataKey
+        ),
+        _ => null
+    };
+
+    private static uint GetTeleportCost(AetheryteRecord record)
     {
         record.Update();
         var isSameGroup = AetheryteRecordManager.Instance().GetNearestAetheryte(GameState.TerritoryType, Vector3.Zero)
                               is { } currentRecord &&
                           currentRecord.Group == record.Group;
-        var cost = isSameGroup ?
-                       0 :
-                       record.Cost;
+        return isSameGroup ?
+                   0 :
+                   record.Cost;
+    }
 
-        var macroString = LuminaGetter.GetRowOrDefault<Addon>(3217).Text.ToMacroString()
+    private static uint GetTeleportIconIndex(AetheryteRecord record)
+    {
+        if (!record.IsAetheryte)
+            return 0;
+
+        var playerState = PlayerState.Instance();
+        if (playerState == null)
+            return 0;
+
+        if (playerState->FreeAetheryteIds[1] == record.RowID ||
+            playerState->FreeAetheryteIds[2] == record.RowID)
+            return 7;
+
+        if (playerState->FreeAetheryteIds[0] == record.RowID)
+            return playerState->IsPlayerStateFlagSet(PlayerStateFlag.IsLoginSecurityToken) ?
+                       2u :
+                       3u;
+
+        return playerState->FavouriteAetherytes.Contains((ushort)record.RowID) ?
+                   1u :
+                   0u;
+    }
+
+    private static ReadOnlySeString GetTeleportText(AetheryteRecord record, uint addonID)
+    {
+        var cost = GetTeleportCost(record);
+
+        var macroString = LuminaGetter.GetRowOrDefault<Addon>(addonID).Text.ToMacroString()
                                       .Replace(@"<kilo(lnum2,\,)>", "<string(lstr2)>");
+        var iconIndex = GetTeleportIconIndex(record);
         if (!record.IsAetheryte)
             macroString = macroString.Replace("Aetheryte,lnum1,8", "Aetheryte,lnum1,9");
 
+        return ISeStringEvaluator.Instance().EvaluateMacroString
+        (
+            macroString,
+            [record.RowID, cost.ToChineseString(), iconIndex]
+        );
+    }
+
+    private void OpenTeleportConfirmation(AetheryteRecord record, AtkUnitBase* addon)
+    {
         teleportConfirmation?.Dispose();
         teleportConfirmation = SelectYesnoAddon.Open
         (
             new()
             {
-                Prompt = ISeStringEvaluator.Instance().EvaluateMacroString
-                (
-                    macroString,
-                    [record.RowID, cost.ToChineseString()]
-                ),
+                Prompt = GetTeleportText(record, 3217),
                 Callback = (_, result) =>
                 {
                     teleportConfirmation = null;
-                    
+
                     if (result != SelectYesnoAddonResult.Yes)
                         return;
 
