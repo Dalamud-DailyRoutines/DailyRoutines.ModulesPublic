@@ -3,6 +3,8 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.String;
@@ -17,6 +19,9 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
 using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentReceiveEventDelegate;
 using AgentMap = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentMap;
+using AddonAreaMap = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Addon.AddonAreaMap;
+using AtkCursor = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkCursor;
+using CursorType = FFXIVClientStructs.FFXIV.Component.GUI.AtkCursor.CursorType;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -43,6 +48,8 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     private MemoryPatch aetheryteTopPatch = null!;
 
     private SelectYesnoAddon? teleportConfirmation;
+
+    private bool isHoveringAetheryte;
 
     protected override void Init()
     {
@@ -75,12 +82,103 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
             (AgentMap.Delegates.CreateTooltip)AgentMapCreateTooltipDetour
         );
         AgentMapCreateTooltipHook.Enable();
+
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreReceiveEvent,  "AreaMap", OnAreaMap);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostReceiveEvent, "AreaMap", OnAreaMap);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRefresh,       "AreaMap", OnAreaMap);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreHide,          "AreaMap", OnAreaMap);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreClose,         "AreaMap", OnAreaMap);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,      "AreaMap", OnAreaMap);
     }
 
     protected override void Uninit()
     {
+        IAddonLifecycle.Instance().UnregisterListener(OnAreaMap);
+        ResetAetheryteCursor();
+
         teleportConfirmation?.Dispose();
         teleportConfirmation = null;
+    }
+
+    private void OnAreaMap(AddonEvent type, AddonArgs args)
+    {
+        if (args is not AddonReceiveEventArgs receiveEventArgs                    ||
+            (AtkEventType)receiveEventArgs.AtkEventType != AtkEventType.MouseMove ||
+            (ushort)receiveEventArgs.EventParam         != 20)
+        {
+            ResetAetheryteCursor();
+            return;
+        }
+
+        if (type != AddonEvent.PostReceiveEvent)
+            return;
+
+        var addon = (AddonAreaMap*)args.Addon.Address;
+        var stage = AtkStage.Instance();
+
+        if (!((AtkUnitBase*)addon)->IsAddonAndNodesReady() ||
+            addon->NumBlockingAddons != 0                  ||
+            addon->IsUsingController                       ||
+            addon->IsDraggingMap                           ||
+            addon->IsResizingMap                           ||
+            stage->AtkCollisionManager->IntersectingAddon != (AtkUnitBase*)addon)
+        {
+            ResetAetheryteCursor();
+            return;
+        }
+
+        var marker = (AddonAreaMap.MapMarker*)addon->AreaMap.GetMarker((uint)addon->HoveredMarkerIndex);
+
+        if (marker                       == null ||
+            marker->InteractionFlags     == 0    ||
+            marker->TooltipContext >> 24 != 2)
+        {
+            ResetAetheryteCursor();
+            return;
+        }
+
+        var agent = AgentMap.Instance();
+        var index = (int)(marker->TooltipContext & 0xFFFFFF);
+
+        if (index >= agent->MapMarkerCount)
+        {
+            ResetAetheryteCursor();
+            return;
+        }
+
+        var record = FindRecord(agent->MapMarkers[index]);
+
+        if (record == null ||
+            !record.IsUnlocked())
+        {
+            ResetAetheryteCursor();
+            return;
+        }
+
+        var cursor = (AtkCursor*)&stage->AtkCursor;
+
+        if (cursor->Type != CursorType.Clickable)
+        {
+            cursor->IsTypeLocked = false;
+            cursor->SetCursorType(CursorType.Clickable, true);
+        }
+
+        cursor->IsTypeLocked = true;
+        isHoveringAetheryte  = true;
+    }
+
+    private void ResetAetheryteCursor()
+    {
+        if (!isHoveringAetheryte)
+            return;
+
+        isHoveringAetheryte = false;
+
+        var stage  = AtkStage.Instance();
+        var cursor = (AtkCursor*)&stage->AtkCursor;
+        cursor->IsTypeLocked = false;
+        cursor->SetCursorType(CursorType.Arrow, true);
+        stage->RaptureAtkUnitManager->UpdateCursor();
     }
 
     private uint BuildMapMarkersDetour
