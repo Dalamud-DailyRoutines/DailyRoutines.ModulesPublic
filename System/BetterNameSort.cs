@@ -30,7 +30,7 @@ public class BetterNameSort : ModuleBase
     (
         CStringPointer strA,
         CStringPointer strB,
-        bool           useAsciiCaseMap,
+        bool           useASCIICaseMap,
         bool           foldKana
     );
     private Hook<CompareStringByCodePointDelegate> CompareStringByCodePointHook;
@@ -46,11 +46,11 @@ public class BetterNameSort : ModuleBase
     (
         CStringPointer strA,
         CStringPointer strB,
-        bool           useAsciiCaseMap,
+        bool           useASCIICaseMap,
         bool           foldKana
     )
     {
-        var orig = CompareStringByCodePointHook.Original(strA, strB, useAsciiCaseMap, foldKana);
+        var orig = CompareStringByCodePointHook.Original(strA, strB, useASCIICaseMap, foldKana);
         if (orig == 0)
             return orig;
 
