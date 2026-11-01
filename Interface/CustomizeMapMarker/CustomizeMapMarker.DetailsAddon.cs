@@ -219,7 +219,6 @@ public unsafe partial class CustomizeMapMarker
             actionRow.RecalculateLayout();
 
             containerNode.AddNode(actionRow);
-            actionRow.X = ContentSize.X / 2;
 
             containerNode.AttachNode(this);
 
