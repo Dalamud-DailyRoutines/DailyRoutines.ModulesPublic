@@ -300,4 +300,10 @@ public partial class AutoMarksFinder
         public AetheryteRecord? Aetheryte      { get; set; }
         public float            EstimatedTime  { get; set; }
     }
+
+    private sealed class AliveTrack
+    {
+        public bool AutoKilled;
+        public bool ManualAlive;
+    }
 }

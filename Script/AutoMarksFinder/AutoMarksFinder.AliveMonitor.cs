@@ -1,6 +1,5 @@
 using System.Numerics;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
@@ -13,8 +12,6 @@ namespace DailyRoutines.Modules.AutoMarksFinder;
 public partial class AutoMarksFinder
 {
     private readonly Dictionary<NotoriousMonsterList, Dictionary<NotoriousMonsterFound, AliveTrack>> aliveTracks = new(ReferenceEqualityComparer.Instance);
-    private (uint ZoneID, uint Instance) lastAliveStay;
-    private NotoriousMonsterList? lastActiveTrain;
 
     private void OnAliveMonitorUpdate
     (
@@ -27,130 +24,61 @@ public partial class AutoMarksFinder
 
     private void UpdateTrainAliveStates()
     {
-        if (config.Trains.Count == 0) return;
-        if (LocalPlayerState.Object is not { } localPlayer ||
+        if (config.Trains.Count == 0)
+            return;
+
+        if (LocalPlayerState.Object is null ||
             !UIModule.IsScreenReady() ||
             ICondition.Instance().IsBetweenAreas)
-        {
-            // 加载期间的对象消失不应参与死亡推断。
-            foreach (var tracks in aliveTracks.Values)
-            {
-                foreach (var track in tracks.Values)
-                {
-                    track.SeenThisStay   = false;
-                    track.HasBeenDamaged = false;
-                    track.MissingSince   = 0;
-                }
-            }
-
             return;
-        }
+
+        if (SelectedTrain is not { MonstersFound.Count: > 0 } activeTrain)
+            return;
 
         var currentZone     = GameState.TerritoryType;
         var currentInstance = InstancesManager.CurrentInstance;
-        var stayChanged     = lastAliveStay != (currentZone, currentInstance);
+        var observable      = activeTrain.MonstersFound
+                                         .Where(monster => IsMonsterObservable(monster, currentZone, currentInstance))
+                                         .ToList();
 
-        if (stayChanged)
-        {
-            foreach (var trainTracks in aliveTracks.Values)
-            {
-                foreach (var track in trainTracks.Values)
-                {
-                    track.SeenThisStay   = false;
-                    track.HasBeenDamaged = false;
-                    track.MissingSince   = 0;
-                }
-            }
+        if (observable.Count == 0)
+            return;
 
-            lastAliveStay = (currentZone, currentInstance);
-        }
-
-        var activeTrain = selectedTrainIndex >= 0 && selectedTrainIndex < config.Trains.Count ?
-                              config.Trains[selectedTrainIndex] :
-                              null;
-
-        if (!ReferenceEquals(activeTrain, lastActiveTrain))
-        {
-            foreach (var trainTracks in aliveTracks.Values)
-            {
-                foreach (var track in trainTracks.Values)
-                {
-                    track.SeenThisStay   = false;
-                    track.HasBeenDamaged = false;
-                    track.MissingSince   = 0;
-                }
-            }
-
-            lastActiveTrain = activeTrain;
-        }
-
-        if (activeTrain is not { MonstersFound.Count: > 0 }) return;
-
+        var trainTracks = GetTrainTracks(activeTrain);
+        var battleNPCs  = BuildBattleNPCIndex(observable.Select(monster => monster.DataID));
         var changed     = false;
-        var battleNPCs  = BuildBattleNPCIndex(IObjectTable.Instance());
 
-        foreach (var train in config.Trains)
+        foreach (var group in observable.GroupBy(monster => monster))
         {
-            if (!ReferenceEquals(train, activeTrain)) continue;
-            if (train.MonstersFound.Count == 0) continue;
-
-            var trainTracks = GetTrainTracks(train);
-            var observableMonsters = train.MonstersFound
-                                           .Where(monster => IsMonsterObservable(monster, currentZone, currentInstance))
-                                           .GroupBy(monster => monster);
-
-            foreach (var group in observableMonsters)
+            if (!trainTracks.TryGetValue(group.Key, out var track))
             {
-                var monster = group.First();
-                var key     = group.Key;
-                if (!trainTracks.TryGetValue(key, out var track))
+                track                  = new AliveTrack();
+                trainTracks[group.Key] = track;
+            }
+
+            if (!FindNearestState(group.Key, battleNPCs, out var isDead))
+                continue;
+
+            if (isDead)
+            {
+                if (track.ManualAlive)
+                    continue;
+
+                if (SetGroupState(group, false))
                 {
-                    track            = new AliveTrack();
-                    trainTracks[key] = track;
+                    track.AutoKilled = true;
+                    changed          = true;
                 }
 
-                if (FindNearestState(monster, battleNPCs, out var hpPercent, out var isDead))
-                {
-                    track.SeenThisStay = true;
-                    track.MissingSince = 0;
-                    if (hpPercent < DAMAGED_HP_PERCENT)
-                        track.HasBeenDamaged = true;
+                continue;
+            }
 
-                    if (!isDead)
-                        track.ManualAlive = false;
+            track.ManualAlive = false;
 
-                    if (isDead)
-                    {
-                        if (!track.ManualAlive && SetGroupState(group, false))
-                        {
-                            track.AutoKilled = true;
-                            changed          = true;
-                        }
-                    }
-                    else if (track.AutoKilled && SetGroupState(group, true))
-                    {
-                        track.AutoKilled = false;
-                        changed          = true;
-                    }
-                }
-                else if (track.SeenThisStay &&
-                         track.HasBeenDamaged &&
-                         !track.ManualAlive &&
-                         Vector3.DistanceSquared(localPlayer.Position, monster.Position) <= MISSING_INFERENCE_RADIUS * MISSING_INFERENCE_RADIUS)
-                {
-                    if (track.MissingSince == 0)
-                    {
-                        track.MissingSince = Environment.TickCount64;
-                    }
-                    else if (Environment.TickCount64 - track.MissingSince >= MISSING_DEATH_GRACE_MS &&
-                             SetGroupState(group, false))
-                    {
-                        track.AutoKilled = true;
-                        changed          = true;
-                    }
-                }
-                else
-                    track.MissingSince = 0;
+            if (track.AutoKilled && SetGroupState(group, true))
+            {
+                track.AutoKilled = false;
+                changed          = true;
             }
         }
 
@@ -165,7 +93,7 @@ public partial class AutoMarksFinder
     {
         if (!aliveTracks.TryGetValue(train, out var tracks))
         {
-            tracks            = [];
+            tracks             = [];
             aliveTracks[train] = tracks;
         }
 
@@ -179,7 +107,8 @@ public partial class AutoMarksFinder
         uint                  instance
     )
     {
-        if (monster.ZoneID != zoneID) return false;
+        if (monster.ZoneID != zoneID)
+            return false;
 
         if (InstancesManager.IsInstancedArea &&
             monster.Instance != 0            &&
@@ -191,20 +120,24 @@ public partial class AutoMarksFinder
 
     private static Dictionary<uint, List<IBattleChara>> BuildBattleNPCIndex
     (
-        IEnumerable<IGameObject> objects
+        IEnumerable<uint> dataIDs
     )
     {
+        var wanted = new HashSet<uint>(dataIDs);
         var result = new Dictionary<uint, List<IBattleChara>>();
 
-        foreach (var obj in objects)
+        foreach (var obj in IObjectTable.Instance())
         {
             if (obj is not IBattleChara { ObjectKind: ObjectKind.BattleNpc } chara)
                 continue;
 
+            if (!wanted.Contains(obj.DataID))
+                continue;
+
             if (!result.TryGetValue(obj.DataID, out var entries))
             {
-                entries           = [];
-                result[obj.DataID] = entries;
+                entries             = [];
+                result[obj.DataID]  = entries;
             }
 
             entries.Add(chara);
@@ -217,12 +150,10 @@ public partial class AutoMarksFinder
     (
         NotoriousMonsterFound                         monster,
         IReadOnlyDictionary<uint, List<IBattleChara>> battleNPCs,
-        out float                                     hpPercent,
         out bool                                      isDead
     )
     {
-        hpPercent = 0f;
-        isDead    = false;
+        isDead = false;
 
         if (!battleNPCs.TryGetValue(monster.DataID, out var candidates))
             return false;
@@ -233,11 +164,10 @@ public partial class AutoMarksFinder
         foreach (var chara in candidates)
         {
             var distSquared = Vector3.DistanceSquared(chara.Position, monster.Position);
-            if (distSquared >= bestDistSquared) continue;
+            if (distSquared >= bestDistSquared)
+                continue;
 
-            isDead    = chara.IsDead || chara.CurrentHp == 0;
-            hpPercent = chara.MaxHp > 0 ? chara.CurrentHp / (float)chara.MaxHp * 100f : 100f;
-
+            isDead          = chara.IsDead || chara.CurrentHp == 0;
             bestDistSquared = distSquared;
             found           = true;
         }
@@ -255,7 +185,8 @@ public partial class AutoMarksFinder
 
         foreach (var monster in monsters)
         {
-            if (monster.IsAlive == isAlive) continue;
+            if (monster.IsAlive == isAlive)
+                continue;
 
             monster.SetState(isAlive);
             changed = true;
@@ -264,22 +195,10 @@ public partial class AutoMarksFinder
         return changed;
     }
 
-    private sealed class AliveTrack
-    {
-        public bool HasBeenDamaged;
-        public bool SeenThisStay;
-        public bool AutoKilled;
-        public bool ManualAlive;
-        public long MissingSince;
-    }
-
     #region 常量
 
-    private const float DAMAGED_HP_PERCENT       = 80f;
-    private const float MONSTER_MATCH_RADIUS     = 200f;
-    private const float MISSING_INFERENCE_RADIUS = 80f;
-    private const long  MISSING_DEATH_GRACE_MS   = 2_000;
-    private const uint  ALIVE_MONITOR_INTERVAL   = 500;
+    private const float MONSTER_MATCH_RADIUS   = 200f;
+    private const uint  ALIVE_MONITOR_INTERVAL = 500;
 
     #endregion
 }

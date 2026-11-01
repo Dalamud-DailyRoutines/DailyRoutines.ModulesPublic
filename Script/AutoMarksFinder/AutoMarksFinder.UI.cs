@@ -75,7 +75,7 @@ public partial class AutoMarksFinder
         if (DrawTrainsSelectCombo(200f * GlobalUIScale, ref selectedTrainIndex))
         {
             smallCardMobIndex = 0;
-            ResetAutoBroadcast();
+            StopAutoBroadcast();
             selected = SelectedTrain;
         }
 
@@ -108,7 +108,7 @@ public partial class AutoMarksFinder
 
                 var importedTracks = GetTrainTracks(imported);
                 foreach (var key in imported.MonstersFound.Distinct())
-                    importedTracks[key] = new AliveTrack { ManualAlive = true };
+                    importedTracks[key] = new AliveTrack();
 
                 config.Save(this);
             }
@@ -275,7 +275,7 @@ public partial class AutoMarksFinder
         if (DrawTrainsSelectCombo(200f * GlobalUIScale, ref selectedTrainIndex))
         {
             smallCardMobIndex = 0;
-            ResetAutoBroadcast();
+            StopAutoBroadcast();
             selected = SelectedTrain;
         }
 
@@ -321,7 +321,7 @@ public partial class AutoMarksFinder
                     if (ImGui.Button(Lang.Get("AutoMarksFinder-SortAccordingToStartingPoint")))
                     {
                         selected.Reorder();
-                        ResetAutoBroadcast();
+                        StopAutoBroadcast();
                         config.Save(this);
                     }
                 }
@@ -353,7 +353,7 @@ public partial class AutoMarksFinder
 
                 var importedTracks = GetTrainTracks(imported);
                 foreach (var key in imported.MonstersFound.Distinct())
-                    importedTracks[key] = new AliveTrack { ManualAlive = true };
+                    importedTracks[key] = new AliveTrack();
 
                 config.Save(this);
             }
@@ -388,7 +388,7 @@ public partial class AutoMarksFinder
             if (ImGuiOm.ButtonIcon($"删除{info}", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
                 selected.MonstersFound.Remove(info);
-                ResetAutoBroadcast();
+                StopAutoBroadcast();
                 config.Save(this);
             }
 
@@ -406,7 +406,7 @@ public partial class AutoMarksFinder
                         {
                             selected.MonstersFound.Swap(selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
                                                         selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i - 1])));
-                            ResetAutoBroadcast();
+                            StopAutoBroadcast();
                             config.Save(this);
                         }
                     }
@@ -419,7 +419,7 @@ public partial class AutoMarksFinder
                         {
                             selected.MonstersFound.Swap(selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
                                                         selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i + 1])));
-                            ResetAutoBroadcast();
+                            StopAutoBroadcast();
                             config.Save(this);
                         }
                     }
@@ -588,11 +588,8 @@ public partial class AutoMarksFinder
                         trainTracks[key] = track;
                     }
 
-                    track.SeenThisStay   = false;
-                    track.HasBeenDamaged = false;
-                    track.AutoKilled     = false;
-                    track.ManualAlive    = isAlive;
-                    track.MissingSince   = 0;
+                    track.AutoKilled  = false;
+                    track.ManualAlive = isAlive;
                 }
 
                 config.Save(this);
@@ -826,7 +823,7 @@ public partial class AutoMarksFinder
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoBroadcastStart")}:");
 
         ImGui.SameLine();
-        ImGui.InputText("###RelayAutoBroadcastStartMacro", ref config.AutoBroadcastStartMacroPattern, 255);
+        ImGui.InputText("###RelayAutoBroadcastStartMacro", ref config.AutoBroadcastStartMacro, 255);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
 
@@ -834,15 +831,14 @@ public partial class AutoMarksFinder
 
         if (ImGuiOm.ButtonIcon("PreviewAutoBroadcastStart", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
         {
-            if (!string.IsNullOrWhiteSpace(config.AutoBroadcastStartMacroPattern))
-                ChatManager.Instance().SendMessage($"/e {config.AutoBroadcastStartMacroPattern}");
+            ExecuteBroadcastMacro(config.AutoBroadcastStartMacro);
         }
 
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoBroadcastEnd")}:");
 
         ImGui.SameLine();
-        ImGui.InputText("###RelayAutoBroadcastEndMacro", ref config.AutoBroadcastEndMacroPattern, 255);
+        ImGui.InputText("###RelayAutoBroadcastEndMacro", ref config.AutoBroadcastEndMacro, 255);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
 
@@ -850,8 +846,7 @@ public partial class AutoMarksFinder
 
         if (ImGuiOm.ButtonIcon("PreviewAutoBroadcastEnd", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
         {
-            if (!string.IsNullOrWhiteSpace(config.AutoBroadcastEndMacroPattern))
-                ChatManager.Instance().SendMessage($"/e {config.AutoBroadcastEndMacroPattern}");
+            ExecuteBroadcastMacro(config.AutoBroadcastEndMacro);
         }
 
         ImGui.AlignTextToFramePadding();
@@ -1244,7 +1239,7 @@ public partial class AutoMarksFinder
                     if (newOnes.Count > 0)
                     {
                         target.MonstersFound.AddRange(newOnes);
-                        ResetAutoBroadcast();
+                        StopAutoBroadcast();
                         config.Save(this);
                     }
 

@@ -64,8 +64,6 @@ public partial class AutoMarksFinder : ModuleBase
 
         FrameworkManager.Instance().Unreg(OnAliveMonitorUpdate);
         aliveTracks.Clear();
-        lastActiveTrain = null;
-        lastAliveStay   = default;
 
         if (config != null)
             config.Save(this);
@@ -183,7 +181,7 @@ public partial class AutoMarksFinder : ModuleBase
                     else if (ReferenceEquals(selected, train))
                     {
                         selectedIndex = Math.Min(i, config.Trains.Count - 1);
-                        ResetAutoBroadcast();
+                        StopAutoBroadcast();
                     }
 
                     config.Save(this);
@@ -345,10 +343,10 @@ public partial class AutoMarksFinder : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public string          AutoBroadcastEndMacroPattern   = string.Empty;
-        public string          AutoBroadcastStartMacroPattern = string.Empty;
-        public int             DelayMS                        = 5000;
-        public HashSet<string> RelayCommands                  = [];
+        public string          AutoBroadcastEndMacro   = string.Empty;
+        public string          AutoBroadcastStartMacro = string.Empty;
+        public int             DelayMS                 = 5000;
+        public HashSet<string> RelayCommands           = [];
 
         public string RelayMacroPattern = "检测到恶名精英 {1} 于 {0} {2}";
 
