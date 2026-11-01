@@ -77,7 +77,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
 
         using (ImRaii.Disabled(currentPage <= 0))
         {
-            if (ImGuiOm.ButtonIcon("MemberPagePrev", FontAwesomeIcon.AngleLeft, string.Empty, true))
+            if (ImGuiOm.ButtonIcon("MemberPagePrev", FontAwesomeIcon.AngleLeft, string.Empty))
                 SwitchPage(currentPage - 1);
         }
 
@@ -89,7 +89,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
 
         using (ImRaii.Disabled(currentPage >= pageCount - 1))
         {
-            if (ImGuiOm.ButtonIcon("MemberPageNext", FontAwesomeIcon.AngleRight, string.Empty, true))
+            if (ImGuiOm.ButtonIcon("MemberPageNext", FontAwesomeIcon.AngleRight, string.Empty))
                 SwitchPage(currentPage + 1);
         }
 
@@ -188,7 +188,7 @@ public unsafe class FCMemberManagePanel : ModuleBase
         DrawLastOnlineFilterPopup();
 
         ImGui.TableNextColumn();
-        if (ImGuiOm.ButtonIcon("OpenMultiPopup", FontAwesomeIcon.EllipsisH, string.Empty, true))
+        if (ImGuiOm.ButtonIcon("OpenMultiPopup", FontAwesomeIcon.EllipsisH, string.Empty))
             ImGui.OpenPopup("Multi_Popup");
 
         DrawMultiContextMenu();

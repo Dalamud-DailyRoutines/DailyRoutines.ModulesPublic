@@ -76,7 +76,7 @@ public partial class CrossDCPartyFinder
             using (ImRaii.PushColor(ImGuiCol.ButtonHovered, KnownColor.SlateGray.ToVector4()))
             using (ImRaii.PushColor(ImGuiCol.ButtonActive, KnownColor.DimGray.ToVector4()))
             {
-                if (ImGuiOm.ButtonIcon("PageFirst", FontAwesomeIcon.AngleDoubleLeft, string.Empty, true))
+                if (ImGuiOm.ButtonIcon("PageFirst", FontAwesomeIcon.AngleDoubleLeft, string.Empty))
                 {
                     isNeedToResetY = true;
                     currentPage    = 0;
@@ -84,7 +84,7 @@ public partial class CrossDCPartyFinder
 
                 ImGui.SameLine();
 
-                if (ImGuiOm.ButtonIcon("PagePrev", FontAwesomeIcon.AngleLeft, string.Empty, true))
+                if (ImGuiOm.ButtonIcon("PagePrev", FontAwesomeIcon.AngleLeft, string.Empty))
                 {
                     isNeedToResetY = true;
                     currentPage    = Math.Max(0, currentPage - 1);
@@ -126,7 +126,7 @@ public partial class CrossDCPartyFinder
 
                 ImGui.SameLine();
 
-                if (ImGuiOm.ButtonIcon("PageNext", FontAwesomeIcon.AngleRight, string.Empty, true))
+                if (ImGuiOm.ButtonIcon("PageNext", FontAwesomeIcon.AngleRight, string.Empty))
                 {
                     isNeedToResetY = true;
                     currentPage    = Math.Min(totalPages - 1, currentPage + 1);
@@ -134,7 +134,7 @@ public partial class CrossDCPartyFinder
 
                 ImGui.SameLine();
 
-                if (ImGuiOm.ButtonIcon("PageLast", FontAwesomeIcon.AngleDoubleRight, string.Empty, true))
+                if (ImGuiOm.ButtonIcon("PageLast", FontAwesomeIcon.AngleDoubleRight, string.Empty))
                 {
                     isNeedToResetY = true;
                     currentPage    = Math.Max(0, totalPages - 1);
@@ -147,7 +147,7 @@ public partial class CrossDCPartyFinder
             using (ImRaii.PushColor(ImGuiCol.ButtonHovered, KnownColor.Firebrick.ToVector4()))
             using (ImRaii.PushColor(ImGuiCol.ButtonActive, KnownColor.Maroon.ToVector4()))
             {
-                if (ImGuiOm.ButtonIcon("Close", FontAwesomeIcon.Times, "关闭", true))
+                if (ImGuiOm.ButtonIcon("Close", FontAwesomeIcon.Times, "关闭"))
                 {
                     selectedDataCenter = LocatedDataCenter;
 
