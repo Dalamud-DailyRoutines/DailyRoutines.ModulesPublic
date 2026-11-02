@@ -1,5 +1,3 @@
-using System.Numerics;
-using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -26,7 +24,11 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
     {
         Title       = Lang.Get("OptimizedMJIGatheringHouseTitle"),
         Description = Lang.Get("OptimizedMJIGatheringHouseDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedMJIGatheringHouse/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()
