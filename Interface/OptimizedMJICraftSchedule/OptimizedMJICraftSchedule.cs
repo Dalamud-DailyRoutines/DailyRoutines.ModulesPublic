@@ -19,7 +19,11 @@ public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
     {
         Title       = Lang.Get("OptimizedMJICraftScheduleTitle"),
         Description = Lang.Get("OptimizedMJICraftScheduleDescription"),
-        Category    = ModuleCategory.Interface
+        Category    = ModuleCategory.Interface,
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedMJICraftSchedule/preview-1.webp"
+        ]
     };
 
     public override ModulePermission Permission { get; } = new()
