@@ -27,14 +27,6 @@ public partial class AutoMarksFinder
     private Hook<PacketDispatcher.Delegates.HandleSpawnNpcPacket>?     onSpawnNPCHook;
     private Hook<PacketDispatcher.Delegates.HandleActorControlPacket>? onActorControlHook;
 
-    /// <summary>
-    ///     自动播报的状态机按固定间隔推进；怪物的存活状态由生成与死亡通知维护，不再轮询对象表。
-    /// </summary>
-    private void OnAutoBroadcastTick
-    (
-        IFramework _
-    ) => UpdateAutoBroadcast();
-
     private unsafe void InitAliveMonitor()
     {
         onSpawnNPCHook = IGameInteropProvider.Instance().HookFromMemberFunction
@@ -166,7 +158,8 @@ public partial class AutoMarksFinder
         if (!TryResolveMonster(targetID, out var monster, out var track))
             return;
 
-        if (ApplyObservedState(monster, track, mode == CharacterModes.Dead || health == 0))
+        var isDead = mode == CharacterModes.Dead || health == 0;
+        if (ApplyObservedState(monster, track, isDead))
             config.Save(this);
     }
 
@@ -234,6 +227,7 @@ public partial class AutoMarksFinder
 
     /// <summary>
     ///     把生成通知里的实体与当前队列的点位建立对应关系；匹配依赖 DataID 与记录坐标。
+    ///     生成通知绝大多数与恶名精英无关，先按区域身份表排除，区域未登记身份时交由点位匹配判定。
     /// </summary>
     private bool TrackSpawnedMonster
     (
@@ -245,8 +239,11 @@ public partial class AutoMarksFinder
         if (SelectedTrain is not { MonstersFound.Count: > 0 } activeTrain)
             return false;
 
-        var zoneID = GameState.TerritoryType;
-        if (!IsTerritoryIdentity(zoneID, baseID))
+        var zoneID     = GameState.TerritoryType;
+        var identities = GetTerritoryIdentities(zoneID);
+
+        if (identities.Count > 0 &&
+            !identities.Contains(baseID))
             return false;
 
         var monster = MatchMonster(activeTrain, baseID, position, zoneID, InstancesManager.CurrentInstance);
@@ -298,8 +295,6 @@ public partial class AutoMarksFinder
             if (track.ManualAlive)
                 return false;
 
-            track.AutoKilled = true;
-
             if (!monster.IsAlive)
                 return false;
 
@@ -308,7 +303,6 @@ public partial class AutoMarksFinder
         }
 
         track.ManualAlive = false;
-        track.AutoKilled = false;
 
         if (monster.IsAlive)
             return false;
@@ -368,18 +362,7 @@ public partial class AutoMarksFinder
 
     /// <summary>
     ///     区域身份表：TerritoryType.NotoriousMonsterTerritory → NotoriousMonsterTerritory.NotoriousMonsters → NotoriousMonster.BNpcBase。
-    ///     生成通知绝大多数与恶名精英无关，先用身份表排除；区域未登记身份时交由点位匹配判定。
     /// </summary>
-    private bool IsTerritoryIdentity
-    (
-        uint zoneID,
-        uint baseID
-    )
-    {
-        var identities = GetTerritoryIdentities(zoneID);
-        return identities.Count == 0 || identities.Contains(baseID);
-    }
-
     private FrozenSet<uint> GetTerritoryIdentities
     (
         uint zoneID
@@ -394,7 +377,8 @@ public partial class AutoMarksFinder
         {
             var territoryRowID = territory.NotoriousMonsterTerritory.RowId;
 
-            if (territoryRowID != 0 && LuminaGetter.GetRow<NotoriousMonsterTerritory>(territoryRowID) is { } link)
+            if (territoryRowID != 0 &&
+                LuminaGetter.GetRow<NotoriousMonsterTerritory>(territoryRowID) is { } link)
             {
                 identities = link.NotoriousMonsters
                                  .Select(monster => LuminaGetter.GetRow<NotoriousMonster>(monster.RowId))
@@ -459,7 +443,6 @@ public partial class AutoMarksFinder
     private const uint  ACTOR_CONTROL_SET_MODE = 2;
     private const uint  ACTOR_CONTROL_DEATH    = 14;
     private const float MONSTER_MATCH_RADIUS   = 200f;
-    private const uint  AUTO_BROADCAST_TICK_MS = 500;
 
     #endregion
 }

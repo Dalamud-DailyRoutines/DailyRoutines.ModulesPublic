@@ -56,14 +56,14 @@ public partial class AutoMarksFinder : ModuleBase
         WindowManager.Instance().PostDraw += DrawScanRoutePreview;
 
         InitAliveMonitor();
-        FrameworkManager.Instance().Reg(OnAutoBroadcastTick, AUTO_BROADCAST_TICK_MS);
+        FrameworkManager.Instance().Reg(UpdateAutoBroadcast, AUTO_BROADCAST_TICK_MS);
     }
 
     protected override void Uninit()
     {
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
 
-        FrameworkManager.Instance().Unreg(OnAutoBroadcastTick);
+        FrameworkManager.Instance().Unreg(UpdateAutoBroadcast);
         UninitAliveMonitor();
         aliveTracks.Clear();
 

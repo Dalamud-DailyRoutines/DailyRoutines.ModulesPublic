@@ -44,11 +44,13 @@ public partial class AutoMarksFinder
         }
 
         var train = SelectedTrain;
-        if (train == null || train.MonstersFound.Count == 0)
+        if (train == null ||
+            train.MonstersFound.Count == 0)
             return;
 
         var hasDepartTime = !string.IsNullOrWhiteSpace(departTimeInput);
-        if (hasDepartTime && !TryParseDepartTime(out departAt))
+        if (hasDepartTime &&
+            !TryParseDepartTime(out departAt))
         {
             NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-AutoBroadcastInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoBroadcast"));
             return;
@@ -115,12 +117,15 @@ public partial class AutoMarksFinder
         return true;
     }
 
-    private void UpdateAutoBroadcast()
+    private void UpdateAutoBroadcast
+    (
+        IFramework _
+    )
     {
         if (!autoBroadcastOn)
             return;
 
-        if (IObjectTable.Instance().LocalPlayer == null ||
+        if (LocalPlayerState.Object == null ||
             !UIModule.IsScreenReady() ||
             ICondition.Instance().IsBetweenAreas)
             return;
@@ -201,7 +206,8 @@ public partial class AutoMarksFinder
             return;
         }
 
-        if (autoBroadcastIndex < 0 || autoBroadcastIndex >= train.MonstersFound.Count)
+        if (autoBroadcastIndex < 0 ||
+            autoBroadcastIndex >= train.MonstersFound.Count)
         {
             StopAutoBroadcast();
             return;
@@ -235,7 +241,8 @@ public partial class AutoMarksFinder
             return;
 
         var lines = macro.Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length == 0 || lines.Length > BROADCAST_MACRO_MAX_LINES)
+        if (lines.Length == 0 ||
+            lines.Length > BROADCAST_MACRO_MAX_LINES)
             return;
 
         ChatManager.Instance().ExecuteMacro(lines);
@@ -271,6 +278,8 @@ public partial class AutoMarksFinder
     }
 
     #region 常量
+
+    private const uint AUTO_BROADCAST_TICK_MS = 500;
 
     private const long AUTO_BROADCAST_FIRST_POINT_DELAY_MS = 3_000;
     private const long AUTO_BROADCAST_NEXT_DELAY_MS        = 1_000;

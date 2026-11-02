@@ -511,7 +511,8 @@ public partial class AutoMarksFinder
             ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTimeUncalibrated"));
         }
 
-        if (autoBroadcastOn && !autoBroadcastDeparted)
+        if (autoBroadcastOn &&
+            !autoBroadcastDeparted)
         {
             var remain = departAt - CalibratedNow;
             if (remain > TimeSpan.Zero)
@@ -520,7 +521,8 @@ public partial class AutoMarksFinder
             else
                 ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastDepartNow"));
         }
-        else if (autoBroadcastOn && autoBroadcastDeparted)
+        else if (autoBroadcastOn &&
+                 autoBroadcastDeparted)
         {
             ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastProgress",
                 new Dictionary<string, object> { ["pointIndex"] = autoBroadcastIndex + 1 }));
@@ -536,7 +538,9 @@ public partial class AutoMarksFinder
             timeCalibOffsetSec = (DateTime.Now - serverNow).TotalSeconds;
             timeCalibrated     = true;
 
-            if (autoBroadcastOn && !autoBroadcastDeparted && TryParseDepartTime(out var parsed))
+            if (autoBroadcastOn &&
+                !autoBroadcastDeparted &&
+                TryParseDepartTime(out var parsed))
                 departAt = parsed;
         }
 
@@ -582,7 +586,6 @@ public partial class AutoMarksFinder
                     var trainTracks = GetTrainTracks(train);
                     var track       = GetTrack(trainTracks, key);
 
-                    track.AutoKilled  = false;
                     track.ManualAlive = isAlive;
                     key.SetState(isAlive);
                 }

@@ -303,7 +303,6 @@ public partial class AutoMarksFinder
 
     private sealed class AliveTrack
     {
-        public bool AutoKilled;
-        public bool ManualAlive;
+        public bool ManualAlive { get; set; }
     }
 }
