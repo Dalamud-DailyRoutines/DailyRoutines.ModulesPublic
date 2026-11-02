@@ -1,3 +1,4 @@
+using Framework = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework;
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
@@ -19,12 +20,23 @@ public partial class OptimizedMJICraftSchedule
         public CalculationResult? Result { get; private set; }
         public bool               IsBusy => operation != Operation.Idle;
 
+        public bool HasTimeChanged
+        {
+            get
+            {
+                var serverTime = Framework.GetServerTime();
+                return serverTime >= Input.CycleEndsAt ||
+                       (Input.FirstCycle == Input.CurrentCycle && serverTime >= Input.HourEndsAt);
+            }
+        }
+
         private readonly Queue<byte>           pendingCycles    = [];
         private readonly List<ScheduledCraft>  expectedSchedule = [];
         private readonly Queue<ScheduledCraft> pendingCrafts    = [];
         private          Operation             operation;
         private          byte                  requestedCycle;
         private          byte                  originalCycle;
+        private          bool                  awaitingCycle;
         private          int                   generation;
 
         public void Reset()
@@ -99,20 +111,29 @@ public partial class OptimizedMJICraftSchedule
             var data              = agent->Data;
             var currentPopularity = LuminaGetter.GetRow<MJICraftworksPopularity>(manager->CurrentPopularity);
             var nextPopularity    = LuminaGetter.GetRow<MJICraftworksPopularity>(manager->NextPopularity);
+            var cycleTime         = LuminaGetter.GetRow<CycleTime>(2);
 
             if (currentPopularity == null ||
-                nextPopularity    == null)
+                nextPopularity    == null ||
+                cycleTime         == null)
             {
                 StopOperation();
                 module.panel.SetStatus("OptimizedMJICraftSchedule-NotReady");
                 return;
             }
 
+            var serverTime  = Framework.GetServerTime();
+            var elapsed     = (serverTime - cycleTime.Value.FirstCycle) % cycleTime.Value.Cycle;
+            var currentHour = (byte)(elapsed / 3600 % 24);
+
             Input = new()
             {
+                CycleEndsAt  = serverTime - (elapsed % 86400) + 86400,
+                HourEndsAt   = serverTime - (elapsed % 3600)  + 3600,
                 CurrentCycle = data->CycleInProgress,
-                FirstCycle   = (byte)Math.Max(data->CycleInProgress + 1, week * 7),
-                EndCycle     = (byte)((week                         + 1) * 7),
+                CurrentHour  = currentHour,
+                FirstCycle   = (byte)Math.Max(data->CycleInProgress, week * 7),
+                EndCycle     = (byte)((week + 1) * 7),
                 RestCycles   = data->RestCycles,
                 Groove       = (int)data->Groove
             };
@@ -153,9 +174,7 @@ public partial class OptimizedMJICraftSchedule
                     material.Item.RowId == 0)
                     continue;
 
-                Input.Reserved[material.RowId] = data->MaterialUse.Entries[2].UsedAmounts[(int)material.RowId];
-                Input.Stock[material.RowId] = (int)CurrencyManager.Instance()->GetItemCount(material.Item.RowId) -
-                                              Input.Reserved[material.RowId];
+                Input.Stock[material.RowId] = (int)CurrencyManager.Instance()->GetItemCount(material.Item.RowId);
             }
 
             foreach (var craft in data->Crafts)
@@ -205,19 +224,33 @@ public partial class OptimizedMJICraftSchedule
                 }
             }
 
+            var workingDays = 0;
+
             for (var cycle = Input.FirstCycle; cycle < Input.EndCycle; cycle++)
             {
-                if ((data->RestCycles & (1u << cycle)) == 0)
-                    pendingCycles.Enqueue(cycle);
+                if ((data->RestCycles & (1u << cycle)) != 0)
+                    continue;
+
+                pendingCycles.Enqueue(cycle);
+                workingDays++;
             }
 
-            if (pendingCycles.Count   == 0 ||
+            if (workingDays           == 0 ||
                 Input.Recipes.Count   == 0 ||
                 Input.Workshops.Count == 0)
             {
                 StopOperation();
                 module.panel.SetStatus("OptimizedMJICraftSchedule-NoWork");
                 return;
+            }
+
+            for (var cycle = Input.CurrentCycle; cycle < 14; cycle++)
+            {
+                if ((cycle >= Input.FirstCycle && cycle < Input.EndCycle) ||
+                    (data->RestCycles & (1u << cycle)) != 0)
+                    continue;
+
+                pendingCycles.Enqueue(cycle);
             }
 
             operation = Operation.Reading;
@@ -289,7 +322,8 @@ public partial class OptimizedMJICraftSchedule
             if (agent                        == null               ||
                 agent->Data                  == null               ||
                 agent->Data->CycleInProgress != Input.CurrentCycle ||
-                agent->Data->RestCycles      != Input.RestCycles)
+                agent->Data->RestCycles      != Input.RestCycles   ||
+                HasTimeChanged)
             {
                 module.panel.SetStatus("OptimizedMJICraftSchedule-Stale");
                 return;
@@ -323,7 +357,8 @@ public partial class OptimizedMJICraftSchedule
             pendingCycles.Clear();
             pendingCrafts.Clear();
             expectedSchedule.Clear();
-            operation = Operation.Idle;
+            awaitingCycle = false;
+            operation     = Operation.Idle;
         }
 
         private enum Operation
@@ -339,8 +374,21 @@ public partial class OptimizedMJICraftSchedule
 
         private void RequestCycle(byte cycle)
         {
-            requestedCycle = cycle;
+            awaitingCycle = false;
             var token = ++generation;
+            module.TaskHelper.Enqueue
+            (() =>
+                {
+                    if (token != generation)
+                        return;
+
+                    var agent = ScheduleAgent.Instance();
+                    requestedCycle      =  cycle;
+                    awaitingCycle       =  true;
+                    agent->Data->Flags2 |= NativeScheduleAgent.DataFlags2.DerivedDataDirty;
+                    agent->SetDisplayedCycle(cycle);
+                }
+            );
             module.TaskHelper.Enqueue
             (
                 () => token != generation,
@@ -359,7 +407,6 @@ public partial class OptimizedMJICraftSchedule
                     );
                 }
             );
-            ScheduleAgent.Instance()->SetDisplayedCycle(cycle);
         }
 
         private void AdvanceApplication()
@@ -416,7 +463,8 @@ public partial class OptimizedMJICraftSchedule
 
         public void UpdateScheduleData(ScheduleAgent* agent)
         {
-            if (operation is Operation.Idle or Operation.Preparing or Operation.Calculating ||
+            if (!awaitingCycle                                                              ||
+                operation is Operation.Idle or Operation.Preparing or Operation.Calculating ||
                 agent->Data                 == null                                         ||
                 agent->Data->CycleDisplayed != requestedCycle)
                 return;
@@ -424,7 +472,8 @@ public partial class OptimizedMJICraftSchedule
             var data = agent->Data;
 
             if (data->CycleInProgress != Input.CurrentCycle ||
-                data->RestCycles      != Input.RestCycles)
+                data->RestCycles      != Input.RestCycles   ||
+                HasTimeChanged)
             {
                 StopOperation();
                 module.panel.SetStatus("OptimizedMJICraftSchedule-Stale");
@@ -449,22 +498,44 @@ public partial class OptimizedMJICraftSchedule
                 !SchedulesMatch(existing, expectedSchedule))
                 return;
 
+            awaitingCycle = false;
             generation++;
 
             switch (operation)
             {
                 case Operation.Reading:
-                    Input.Existing.Add(requestedCycle, existing);
+                    var selected = requestedCycle >= Input.FirstCycle && requestedCycle < Input.EndCycle;
+
+                    if (selected)
+                    {
+                        Input.Existing.Add(requestedCycle, existing);
+                        Input.Fixed.Add(requestedCycle, []);
+                    }
 
                     foreach (var entry in existing)
                     {
+                        var started = requestedCycle == Input.CurrentCycle && entry.Hour <= Input.CurrentHour;
+
+                        if (started)
+                        {
+                            if (selected)
+                                Input.Fixed[requestedCycle].Add(entry);
+
+                            continue;
+                        }
+
                         if (!Input.Recipes.TryGetValue(entry.ID, out var recipe))
                             continue;
 
-                        for (var index = 0; index < recipe.Materials.Length; index++)
+                        if (!selected)
                         {
-                            Input.Stock[recipe.Materials[index]]    += recipe.Costs[index];
-                            Input.Reserved[recipe.Materials[index]] -= recipe.Costs[index];
+                            for (var index = 0; index < recipe.Materials.Length; index++)
+                            {
+                                Input.Stock[recipe.Materials[index]]    -= recipe.Costs[index];
+                                Input.Reserved[recipe.Materials[index]] += recipe.Costs[index];
+                            }
+
+                            continue;
                         }
 
                         var key = (requestedCycle / 7, (int)entry.ID);
@@ -490,7 +561,7 @@ public partial class OptimizedMJICraftSchedule
 
                     data->Flags1 |= NativeScheduleAgent.DataFlags1.MaterialsUpdated;
                     expectedSchedule.AddRange(existing);
-                    foreach (var entry in existing.OrderBy(entry => entry.Workshop).ThenByDescending(entry => entry.Hour))
+                    foreach (var entry in existing.Except(Input.Fixed[requestedCycle]).OrderBy(entry => entry.Workshop).ThenByDescending(entry => entry.Hour))
                         pendingCrafts.Enqueue(entry);
                     operation = Operation.Clearing;
                     AdvanceApplication();
@@ -542,15 +613,49 @@ public partial class OptimizedMJICraftSchedule
                     previousWeek = week;
                 }
 
+                foreach (var state in beam)
+                {
+                    state.Produced = (int[])state.Produced.Clone();
+
+                    foreach (var entry in source.Fixed[cycle])
+                    {
+                        var recipe = source.Recipes[entry.ID];
+                        if (entry.Hour + recipe.Duration <= source.CurrentHour)
+                            continue;
+
+                        state.Produced[entry.ID] += entry.Efficient ?
+                                                        2 :
+                                                        1;
+                        if (entry.Efficient)
+                            state.Groove = Math.Min(source.MaxGroove, state.Groove + 1);
+                    }
+                }
+
                 foreach (var workshop in source.Workshops)
                 {
-                    foreach (var state in beam)
+                    var fixedEntries = source.Fixed[cycle].Where(entry => entry.Workshop == workshop.Index).OrderBy(entry => entry.Hour).ToArray();
+                    var firstHour = cycle == source.CurrentCycle ?
+                                        source.CurrentHour + 1 :
+                                        0;
+                    ushort lastID = 0;
+
+                    foreach (var entry in fixedEntries)
                     {
-                        state.Hour   = 0;
-                        state.LastID = 0;
+                        var endHour = entry.Hour + source.Recipes[entry.ID].Duration;
+                        if (endHour < firstHour)
+                            continue;
+
+                        firstHour = endHour;
+                        lastID    = entry.ID;
                     }
 
-                    for (var slot = 0; slot < 6; slot++)
+                    foreach (var state in beam)
+                    {
+                        state.Hour   = firstHour;
+                        state.LastID = lastID;
+                    }
+
+                    for (var slot = fixedEntries.Length; slot < 6; slot++)
                     {
                         token.ThrowIfCancellationRequested();
                         var candidates = new PriorityQueue<SearchState, SearchPriority>();
@@ -764,12 +869,17 @@ public partial class OptimizedMJICraftSchedule
                     previousWeek = cycle / 7;
                 }
 
-                foreach (var group in entries.GroupBy(entry => entry.Hour + source.Recipes[entry.ID].Duration).OrderBy(group => group.Key))
+                var fixedEntries = source.Fixed[cycle].Where(entry => entry.Hour + source.Recipes[entry.ID].Duration > source.CurrentHour).ToArray();
+
+                foreach (var group in entries.Concat(fixedEntries).GroupBy(entry => entry.Hour + source.Recipes[entry.ID].Duration).OrderBy(group => group.Key))
                 {
                     var nextGroove = Math.Min(source.MaxGroove, groove + group.Count(entry => entry.Efficient));
 
                     foreach (var entry in group)
                     {
+                        if (fixedEntries.Contains(entry))
+                            continue;
+
                         var recipe    = source.Recipes[entry.ID];
                         var workshop  = source.Workshops.First(item => item.Index == entry.Workshop);
                         var demand    = EstimateDemand(recipe, cycle, source.CurrentCycle, produced[entry.ID]);
@@ -794,7 +904,10 @@ public partial class OptimizedMJICraftSchedule
 
         public sealed class CalculationInput
         {
+            public long                                   CycleEndsAt;
+            public long                                   HourEndsAt;
             public byte                                   CurrentCycle;
+            public byte                                   CurrentHour;
             public byte                                   FirstCycle;
             public byte                                   EndCycle;
             public uint                                   RestCycles;
@@ -806,6 +919,7 @@ public partial class OptimizedMJICraftSchedule
             public Dictionary<ushort, Recipe>             Recipes   { get; } = [];
             public Dictionary<(int Week, int ID), int>    Favors    { get; } = [];
             public Dictionary<byte, List<ScheduledCraft>> Existing  { get; } = [];
+            public Dictionary<byte, List<ScheduledCraft>> Fixed     { get; } = [];
         }
 
         public sealed class CalculationResult

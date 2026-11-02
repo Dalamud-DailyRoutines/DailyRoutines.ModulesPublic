@@ -65,7 +65,8 @@ public partial class OptimizedMJICraftSchedule
             return;
 
         if (agent->Data->CycleInProgress != calculator.Input.CurrentCycle ||
-            agent->Data->RestCycles      != calculator.Input.RestCycles)
+            agent->Data->RestCycles      != calculator.Input.RestCycles   ||
+            calculator.HasTimeChanged)
         {
             panel.SetStatus("OptimizedMJICraftSchedule-Stale");
             return;
@@ -107,7 +108,7 @@ public partial class OptimizedMJICraftSchedule
         private          TextButtonNode?      previewButton;
         private          TextButtonNode?      applyButton;
         private          TextNode?            status;
-        
+
         protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
         {
             root = new()
@@ -139,13 +140,13 @@ public partial class OptimizedMJICraftSchedule
             previewButton.Size    = new(root.Width, 32);
             previewButton.OnClick = module.TogglePreview;
             root.AddNode(previewButton);
-            
+
             applyButton         = module.uiStyle.CreateButton();
             applyButton.Size    = new(root.Width, 32);
             applyButton.String  = Lang.Get("OptimizedMJICraftSchedule-Apply");
             applyButton.OnClick = module.calculator.Apply;
             root.AddNode(applyButton);
-            
+
             Refresh();
         }
 
@@ -224,7 +225,7 @@ public partial class OptimizedMJICraftSchedule
                     "OptimizedMJICraftSchedule-CancelPreview" :
                     "Preview"
             );
-            
+
             applyButton.IsVisible = module.calculator.Result != null;
             applyButton.IsEnabled = !busy && module.calculator.Result is { Complete: true };
 
@@ -253,7 +254,7 @@ public partial class OptimizedMJICraftSchedule
         protected override unsafe void OnFinalize(AtkUnitBase* addon)
         {
             base.OnFinalize(addon);
-            
+
             solveButtons.Clear();
             root          = null;
             previewButton = null;

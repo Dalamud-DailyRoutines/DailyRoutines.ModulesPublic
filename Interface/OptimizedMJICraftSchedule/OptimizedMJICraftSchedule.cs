@@ -52,8 +52,8 @@ public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
             nameof(ScheduleAgent.UpdateScheduleData),
             (ScheduleAgent.Delegates.UpdateScheduleData)UpdateScheduleDataDetour
         );
-        UpdateConfirmButtonHook.Enable();
-        
+        UpdateScheduleDataHook.Enable();
+
         HandleEventSetRestConfirmHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(ScheduleAgent.MemberFunctionPointers),
@@ -61,15 +61,15 @@ public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
             (ScheduleAgent.Delegates.HandleEventSetRestConfirm)HandleEventSetRestConfirmDetour
         );
         HandleEventSetRestConfirmHook.Enable();
-        
+
         UpdateConfirmButtonHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(RestAddon.MemberFunctionPointers),
             nameof(RestAddon.UpdateConfirmButton),
             (RestAddon.Delegates.UpdateConfirmButton)UpdateConfirmButtonDetour
         );
-        UpdateScheduleDataHook.Enable();
-        
+        UpdateConfirmButtonHook.Enable();
+
         AskSetRestConfirmHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(ScheduleAgent.MemberFunctionPointers),
@@ -77,7 +77,7 @@ public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
             (ScheduleAgent.Delegates.AskSetRestConfirm)AskSetRestConfirmDetour
         );
         AskSetRestConfirmHook.Enable();
-        
+
         UpdateMainAddonHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(ScheduleAgent.MemberFunctionPointers),
@@ -128,7 +128,8 @@ public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
         var data = agent->Data;
 
         if (data->CycleInProgress != calculator.Input.CurrentCycle ||
-            data->RestCycles      != calculator.Input.RestCycles)
+            data->RestCycles      != calculator.Input.RestCycles   ||
+            calculator.HasTimeChanged)
         {
             isPreviewing = false;
             calculator.Reset();
@@ -147,6 +148,23 @@ public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
         try
         {
             data->WorkshopSchedules.Clear();
+
+            foreach (var entry in calculator.Input.Fixed[data->CycleDisplayed])
+            {
+                ref var workshop = ref data->WorkshopSchedules[entry.Workshop];
+                var     original = schedules[entry.Workshop];
+
+                for (var index = 0; index < original.NumScheduleEntries; index++)
+                {
+                    if (original.EntryData[index].StartingSlot != entry.Hour)
+                        continue;
+
+                    workshop.EntryData[workshop.NumScheduleEntries++] = original.EntryData[index];
+                    if (entry.Efficient)
+                        workshop.NumEfficientCrafts++;
+                    break;
+                }
+            }
 
             foreach (var entry in entries)
             {
