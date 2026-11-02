@@ -1,3 +1,4 @@
+using System.Numerics;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
@@ -5,25 +6,29 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Styles;
+using ScheduleAgent = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentMJICraftSchedule;
+using NativeScheduleAgent = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMJICraftSchedule;
 
 namespace DailyRoutines.ModulesPublic.OptimizedMJICraftSchedule;
 
 public partial class OptimizedMJICraftSchedule
 {
     private UIStyle uiStyle = null!;
-    
+
     private SchedulePanel? panel;
     private TextNode?      previewIndicator;
+
+    private bool isPreviewing;
 
     private unsafe void OnSchedule(AddonEvent type, AddonArgs args)
     {
         isPreviewing = false;
+
         previewIndicator?.Dispose();
         previewIndicator = null;
-        StopOperation();
-        input  = null;
-        result = null;
-        
+
+        calculator.Reset();
+
         if (type != AddonEvent.PostSetup)
             return;
 
@@ -33,26 +38,76 @@ public partial class OptimizedMJICraftSchedule
         previewIndicator.Position      = new(442, 114);
         previewIndicator.Size          = new(270, 20);
         previewIndicator.IsVisible     = false;
-        previewIndicator.String        = Lang.Get("OptimizedMJICraftSchedule-PreviewMode");
+        previewIndicator.String        = $"（{Lang.Get("OptimizedMJICraftSchedule-PreviewMode")}）";
         previewIndicator.AttachNode(MJICraftSchedule->RootNode);
 
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestMJIWorkshopDemand);
         MJIManager.Instance()->RequestFavorData();
         panel?.Refresh();
     }
-    
+
+    private unsafe void TogglePreview()
+    {
+        if (calculator.IsBusy ||
+            calculator.Result == null)
+            return;
+
+        if (isPreviewing)
+        {
+            CancelPreview();
+            panel.Refresh();
+            return;
+        }
+
+        var agent = ScheduleAgent.Instance();
+        if (agent       == null ||
+            agent->Data == null)
+            return;
+
+        if (agent->Data->CycleInProgress != calculator.Input.CurrentCycle ||
+            agent->Data->RestCycles      != calculator.Input.RestCycles)
+        {
+            panel.SetStatus("OptimizedMJICraftSchedule-Stale");
+            return;
+        }
+
+        isPreviewing = true;
+        if (calculator.Result.Days.ContainsKey(agent->Data->CycleDisplayed))
+            agent->UpdateMainAddon();
+        else
+            agent->SetDisplayedCycle(calculator.Result.Days.Keys.Min());
+        panel.Refresh();
+    }
+
+    private unsafe void CancelPreview()
+    {
+        if (!isPreviewing)
+            return;
+
+        isPreviewing                = false;
+        previewIndicator?.IsVisible = false;
+        var agent = ScheduleAgent.Instance();
+        if (agent       != null                      &&
+            agent->Data != null                      &&
+            MJICraftSchedule->IsAddonAndNodesReady() &&
+            (agent->Data->Flags2 & NativeScheduleAgent.DataFlags2.ScheduleDataAvailable) != 0)
+            agent->UpdateMainAddon();
+    }
+
     private sealed class SchedulePanel
     (
         OptimizedMJICraftSchedule module
     ) : AttachedAddon("MJICraftSchedule")
     {
-        private readonly   List<TextButtonNode>  solveButtons = [];
-        private            VerticalListNode      root;
-        private            TextButtonNode        previewButton;
-        private            TextButtonNode        applyButton;
-        private            TextNode              status;
         protected override AttachedAddonPosition AttachPosition => AttachedAddonPosition.RightTop;
+        protected override Vector2               PositionOffset => new(12, 0);
 
+        private readonly List<TextButtonNode> solveButtons = [];
+        private          VerticalListNode?    root;
+        private          TextButtonNode?      previewButton;
+        private          TextButtonNode?      applyButton;
+        private          TextNode?            status;
+        
         protected override unsafe void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
         {
             root = new()
@@ -84,11 +139,13 @@ public partial class OptimizedMJICraftSchedule
             previewButton.Size    = new(root.Width, 32);
             previewButton.OnClick = module.TogglePreview;
             root.AddNode(previewButton);
+            
             applyButton         = module.uiStyle.CreateButton();
             applyButton.Size    = new(root.Width, 32);
             applyButton.String  = Lang.Get("OptimizedMJICraftSchedule-Apply");
-            applyButton.OnClick = module.Apply;
+            applyButton.OnClick = module.calculator.Apply;
             root.AddNode(applyButton);
+            
             Refresh();
         }
 
@@ -107,7 +164,7 @@ public partial class OptimizedMJICraftSchedule
                 FitWidth    = true,
                 ItemSpacing = 4
             };
-            
+
             var heading = module.uiStyle.CreateText(UITextRole.Heading);
             heading.FontSize      = 16;
             heading.Size          = new(group.Width, 24);
@@ -119,27 +176,27 @@ public partial class OptimizedMJICraftSchedule
                     "OptimizedMJICraftSchedule-NextWeek"
             );
             group.AddNode(heading);
-            
+
             var row = new HorizontalListNode
             {
                 Size             = new(group.Width, 32),
                 FirstItemSpacing = 20,
                 ItemSpacing      = 8
             };
-            
+
             var solveButton = module.uiStyle.CreateButton();
             solveButton.Size    = new(104, 32);
             solveButton.String  = Lang.Get("OptimizedMJICraftSchedule-Solve");
-            solveButton.OnClick = () => module.StartCalculation(week, false);
-            
+            solveButton.OnClick = () => module.calculator.Start(week, false);
+
             var favorButton = module.uiStyle.CreateButton();
             favorButton.Size    = new(group.Width - 132, 32);
             favorButton.String  = Lang.Get("OptimizedMJICraftSchedule-SolveFavors");
-            favorButton.OnClick = () => module.StartCalculation(week, true);
-            
+            favorButton.OnClick = () => module.calculator.Start(week, true);
+
             solveButtons.Add(solveButton, favorButton);
             row.AddNode([solveButton, favorButton]);
-            
+
             group.AddNode(row);
             return group;
         }
@@ -155,11 +212,11 @@ public partial class OptimizedMJICraftSchedule
             if (status == null)
                 return;
 
-            var busy = module.operation != Operation.Idle;
+            var busy = module.calculator.IsBusy;
             foreach (var button in solveButtons)
                 button.IsEnabled = !busy;
 
-            previewButton.IsVisible = module.result != null;
+            previewButton.IsVisible = module.calculator.Result != null;
             previewButton.IsEnabled = !busy;
             previewButton.String = Lang.Get
             (
@@ -167,18 +224,19 @@ public partial class OptimizedMJICraftSchedule
                     "OptimizedMJICraftSchedule-CancelPreview" :
                     "Preview"
             );
-            applyButton.IsVisible = module.result != null;
-            applyButton.IsEnabled = !busy && module.result is { Complete: true };
+            
+            applyButton.IsVisible = module.calculator.Result != null;
+            applyButton.IsEnabled = !busy && module.calculator.Result is { Complete: true };
 
             if (!busy &&
-                module.result != null)
+                module.calculator.Result != null)
             {
                 status.String = Lang.Get
                 (
                     "OptimizedMJICraftSchedule-Summary",
                     new Dictionary<string, object>
                     {
-                        ["value"] = module.result.Value
+                        ["value"] = module.calculator.Result.Value
                     }
                 );
                 return;
@@ -195,6 +253,7 @@ public partial class OptimizedMJICraftSchedule
         protected override unsafe void OnFinalize(AtkUnitBase* addon)
         {
             base.OnFinalize(addon);
+            
             solveButtons.Clear();
             root          = null;
             previewButton = null;
