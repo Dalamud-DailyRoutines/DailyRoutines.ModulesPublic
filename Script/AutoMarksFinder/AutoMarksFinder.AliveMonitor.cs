@@ -22,6 +22,10 @@ public partial class AutoMarksFinder
         UpdateAutoBroadcast();
     }
 
+    /// <summary>
+    ///     依据客户端的明确观测更新队列中怪物的存活状态。
+    ///     死亡只认客户端已写入的状态（死亡标记或血量归零），未观测到对象时保留原有状态，不做任何推断。
+    /// </summary>
     private void UpdateTrainAliveStates()
     {
         if (config.Trains.Count == 0)
@@ -146,6 +150,11 @@ public partial class AutoMarksFinder
         return result;
     }
 
+    /// <summary>
+    ///     在匹配半径内取距离最近的同 DataID 战斗对象，读取其当前血量与死亡标记。
+    ///     客户端的死亡处理会同时写入血量归零与角色模式为死亡，二者任一命中即为明确死亡观测。
+    ///     返回 false 表示本次未观测到任何匹配对象，调用方应保留原状态。
+    /// </summary>
     private static bool FindNearestState
     (
         NotoriousMonsterFound                         monster,
