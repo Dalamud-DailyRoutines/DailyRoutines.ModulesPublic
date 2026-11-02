@@ -482,7 +482,8 @@ public partial class AutoMarksFinder
             ImGui.OpenPopup("AutoBroadcastPopup");
 
         using var popup = ImRaii.Popup("AutoBroadcastPopup");
-        if (!popup) return;
+        if (!popup)
+            return;
 
         ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastSettings"));
 
@@ -578,18 +579,12 @@ public partial class AutoMarksFinder
 
                 if (train != null)
                 {
-                    SetGroupState(train.MonstersFound
-                                       .Where(x => x.Equals(key)), isAlive);
-
                     var trainTracks = GetTrainTracks(train);
-                    if (!trainTracks.TryGetValue(key, out var track))
-                    {
-                        track             = new AliveTrack();
-                        trainTracks[key] = track;
-                    }
+                    var track       = GetTrack(trainTracks, key);
 
                     track.AutoKilled  = false;
                     track.ManualAlive = isAlive;
+                    key.SetState(isAlive);
                 }
 
                 config.Save(this);

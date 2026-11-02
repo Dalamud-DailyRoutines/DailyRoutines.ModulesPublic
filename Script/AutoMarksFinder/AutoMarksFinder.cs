@@ -55,25 +55,29 @@ public partial class AutoMarksFinder : ModuleBase
 
         WindowManager.Instance().PostDraw += DrawScanRoutePreview;
 
-        FrameworkManager.Instance().Reg(OnAliveMonitorUpdate, ALIVE_MONITOR_INTERVAL);
+        InitAliveMonitor();
+        FrameworkManager.Instance().Reg(OnAutoBroadcastTick, AUTO_BROADCAST_TICK_MS);
     }
 
     protected override void Uninit()
     {
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
 
-        FrameworkManager.Instance().Unreg(OnAliveMonitorUpdate);
+        FrameworkManager.Instance().Unreg(OnAutoBroadcastTick);
+        UninitAliveMonitor();
         aliveTracks.Clear();
 
-        if (config != null)
-            config.Save(this);
+        config.Save(this);
 
         ClearScanner();
 
-        overlaySmallCard?.Dispose();
-        overlaySmallCard = null;
+        if (overlaySmallCard != null)
+        {
+            WindowManager.Instance().RemoveWindow(overlaySmallCard);
+            overlaySmallCard.Dispose();
+            overlaySmallCard = null;
+        }
 
-        WindowManager.Instance().RemoveWindow(overlaySmallCard);
         CommandManager.Instance().RemoveCommand(COMMAND);
 
         selectedTrainIndex  = 0;
@@ -185,10 +189,14 @@ public partial class AutoMarksFinder : ModuleBase
                     }
 
                     config.Save(this);
+                    RefreshMonsterTracking();
                     return true;
                 }
             }
         }
+
+        if (changed)
+            RefreshMonsterTracking();
 
         return changed;
     }
