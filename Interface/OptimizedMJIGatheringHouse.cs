@@ -4,6 +4,7 @@ using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
@@ -12,9 +13,12 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.KamiToolKit.Nodes;
 using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
 using MJIGranaryState = FFXIVClientStructs.Expansion.FFXIV.Client.Game.MJI.MJIGranaryState;
+using GranariesState = FFXIVClientStructs.Expansion.FFXIV.Client.Game.MJI.MJIGranariesState;
+using GatheringHouseAgent = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentMJIGatheringHouse;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -40,18 +44,23 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
 
     private NativeListController listController = null!;
 
+    private Hook<GatheringHouseAgent.Delegates.RefreshExpeditions> RefreshExpeditionsHook;
+
     private readonly Dictionary<uint, DestinationNodes> itemNodes = [];
 
-    private readonly byte[] dispatchedDestinations = new byte[2];
-
-    private byte claimedGranaries;
-    private byte dispatchedGranaries;
-    private bool stopped;
-    private bool processing;
+    private readonly AutomationState automation = new();
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
+
+        RefreshExpeditionsHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(GatheringHouseAgent.MemberFunctionPointers),
+            nameof(GatheringHouseAgent.RefreshExpeditions),
+            (GatheringHouseAgent.Delegates.RefreshExpeditions)RefreshExpeditionsDetour
+        );
+        RefreshExpeditionsHook.Enable();
         listController = new()
         {
             AddonName           = "MJISearchArea",
@@ -111,115 +120,123 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
 
     private void OnGatheringHouse(AddonEvent type, AddonArgs args)
     {
-        if (type is AddonEvent.PostSetup or AddonEvent.PreFinalize)
+        switch (type)
         {
-            claimedGranaries    = 0;
-            dispatchedGranaries = 0;
-            stopped             = type == AddonEvent.PreFinalize;
-        }
+            case AddonEvent.PreFinalize:
+                automation.Reset(true);
+                return;
 
-        if (stopped ||
-            processing)
-            return;
+            case AddonEvent.PostSetup:
+                automation.Reset(false);
+                return;
 
-        processing = true;
-
-        try
-        {
-            ProcessAutomation();
-        }
-        finally
-        {
-            processing = false;
+            case AddonEvent.PostRefresh:
+                if (!automation.Stopped)
+                    ProcessAutomation();
+                return;
         }
     }
 
     private void OnSearchAreaFinalize(AddonEvent type, AddonArgs args) => itemNodes.Clear();
 
+    private void RefreshExpeditionsDetour(GatheringHouseAgent* agent)
+    {
+        if (automation.PendingGranary == byte.MaxValue ||
+            automation.Stopped)
+        {
+            RefreshExpeditionsHook.Original(agent);
+            return;
+        }
+
+        automation.PendingGranary    = byte.MaxValue;
+        automation.DispatchEvaluated = true;
+
+        if (!config.AutoDispatch          ||
+            agent                 == null ||
+            agent->Data           == null ||
+            agent->Manager        == null ||
+            agent->GranariesState == null)
+            return;
+
+        foreach (var (index, destination) in GetRecommendations((AgentMJIGatheringHouse*)agent))
+        {
+            var granary = (MJIGranaryState*)agent->GranariesState + index;
+            if (granary->RemainingDays      == 7 &&
+                granary->ActiveExpeditionId == destination)
+                continue;
+
+            agent->CurGranaryIndex         = index;
+            agent->CurSelectedExpeditionId = destination;
+            agent->CurSelectedDays         = 7;
+            MJICommand.AssignGranary(index, destination, 7);
+        }
+
+        if (!automation.Stopped)
+            ProcessAutomation();
+    }
+
     private void ProcessAutomation()
     {
         var agent = AgentMJIGatheringHouse.Instance();
-        if (agent == null                              ||
-            !agent->IsAgentActive()                    ||
-            agent->Data == null                        ||
-            !agent->Data->Initialized                  ||
-            agent->Manager                     == null ||
-            agent->GranariesState              == null ||
-            agent->ConfirmAddonHandle          != 0    ||
-            agent->SelectExpeditionAddonHandle != 0)
+        if (agent == null                 ||
+            !agent->IsAgentActive()       ||
+            agent->Data == null           ||
+            !agent->Data->Initialized     ||
+            agent->Manager        == null ||
+            agent->GranariesState == null)
             return;
 
-        if (config.AutoClaim)
+        for (byte index = 0; index < 2; index++)
         {
-            for (byte index = 0; index < 2; index++)
-            {
-                if (!IsGranaryAvailable(agent, index))
-                    continue;
-
-                var granary = (MJIGranaryState*)agent->GranariesState + index;
-                if (!HasResources(granary))
-                    continue;
-
-                if ((claimedGranaries & (1 << index)) != 0)
-                    return;
-
-                if (!CanClaim(agent, granary))
-                {
-                    stopped = true;
-                    return;
-                }
-
-                claimedGranaries       |= (byte)(1 << index);
-                agent->CurGranaryIndex =  index;
-                AgentId.MJIGatheringHouse.SendEvent(4, 0);
-                return;
-            }
-        }
-
-        if (!config.AutoDispatch)
-            return;
-
-        for (var index = 0; index < dispatchedDestinations.Length; index++)
-        {
-            if ((dispatchedGranaries & (1 << index)) == 0)
+            if (!IsGranaryAvailable(agent, index))
                 continue;
 
             var granary = (MJIGranaryState*)agent->GranariesState + index;
-            if (granary->RemainingDays      != 7 ||
-                granary->ActiveExpeditionId != dispatchedDestinations[index])
-                return;
+
+            if ((automation.PendingClaims & (1 << index)) != 0 &&
+                !HasResources(granary))
+                automation.PendingClaims &= (byte)~(1 << index);
+
+            if (!config.AutoClaim      ||
+                !HasResources(granary) ||
+                (automation.ClaimedGranaries & (1 << index)) != 0)
+                continue;
+
+            automation.ClaimedGranaries |= (byte)(1 << index);
+            if (!CanClaim(agent, granary))
+                continue;
+
+            automation.PendingClaims |= (byte)(1 << index);
+            agent->CurGranaryIndex   =  index;
+            agent->GranariesState->CollectResources(index);
         }
 
-        foreach (var (index, destination) in GetRecommendations(agent))
+        if (!config.AutoDispatch                       ||
+            automation.PendingGranary != byte.MaxValue ||
+            automation.PendingClaims  != 0             ||
+            automation.DispatchEvaluated)
+            return;
+
+        for (byte index = 0; index < 2; index++)
         {
-            if ((dispatchedGranaries & (1 << index)) != 0)
+            if (!IsGranaryAvailable(agent, index))
                 continue;
 
             var granary = (MJIGranaryState*)agent->GranariesState + index;
             if (HasResources(granary))
                 continue;
 
-            if (granary->RemainingDays      == 7 &&
-                granary->ActiveExpeditionId == destination)
-                continue;
-
-            dispatchedGranaries            |= (byte)(1 << index);
-            agent->CurGranaryIndex         =  index;
-            agent->CurSelectedExpeditionId =  destination;
-            agent->CurSelectedDays         =  7;
-            dispatchedDestinations[index]  =  destination;
-            AgentId.MJIGatheringHouse.SendEvent(5, 0);
+            automation.PendingGranary = index;
+            agent->CurGranaryIndex    = index;
+            MJICommand.ViewGranaryDestinations(index);
             return;
         }
+
+        automation.DispatchEvaluated = true;
     }
 
-    private static bool IsGranaryAvailable(AgentMJIGatheringHouse* agent, int index)
-    {
-        var granaries = &agent->Manager->IslandState.Granaries;
-        return granaries->PlaceId[index] != 0 &&
-               (granaries->UnderConstruction[index] == 0 ||
-                granaries->BuildingLevel[index]     != 0);
-    }
+    private static bool IsGranaryAvailable(AgentMJIGatheringHouse* agent, int index) =>
+        ((GranariesState*)agent->GranariesState)->IsGranaryAvailable((byte)index);
 
     private static bool HasResources(MJIGranaryState* granary)
     {
@@ -315,12 +332,15 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
 
         for (byte index = 0; index < 2; index++)
         {
-            if (!IsGranaryAvailable(agent, index) ||
-                rank >= destinations.Count)
+            if (!IsGranaryAvailable(agent, index))
                 continue;
 
             var granary = (MJIGranaryState*)agent->GranariesState + index;
-            var cost    = (uint)(DAILY_EXPEDITION_COST * (7 - Math.Min((int)granary->RemainingDays, 7)));
+            if (HasResources(granary) ||
+                rank >= destinations.Count)
+                continue;
+
+            var cost = (uint)(DAILY_EXPEDITION_COST * (7 - Math.Min((int)granary->RemainingDays, 7)));
             if (balance < cost)
                 continue;
 
@@ -329,6 +349,24 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
         }
 
         return recommendations;
+    }
+
+    private sealed class AutomationState
+    {
+        public byte ClaimedGranaries;
+        public byte PendingClaims;
+        public byte PendingGranary = byte.MaxValue;
+        public bool DispatchEvaluated;
+        public bool Stopped;
+
+        public void Reset(bool stopped)
+        {
+            ClaimedGranaries  = 0;
+            PendingClaims     = 0;
+            PendingGranary    = byte.MaxValue;
+            DispatchEvaluated = false;
+            Stopped           = stopped;
+        }
     }
 
     private void UpdateDestination(AtkUnitBase* addon, ListItemData item)
@@ -352,11 +390,11 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
                 continue;
 
             var renderer = item.TryGetListItemRenderer();
-            
+
             if (!itemNodes.TryGetValue(item.NodeId, out var nodes))
             {
                 const float HEIGHT = 18f;
-                
+
                 nodes = new()
                 {
                     Layout = new()
@@ -378,21 +416,21 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
                         TextFlags          = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
                         TextColorID        = 50,
                         TextOutlineColorID = 51,
-                        FontSize           = 12,
+                        FontSize           = 12
                     }
                 };
-                
+
                 nodes.Layout.AddNode(nodes.Icon);
                 nodes.Layout.AddNode(nodes.Text);
                 nodes.Layout.AttachNode(renderer->OwnerNode);
-                
+
                 listController.AddNode(item, nodes.Icon);
                 listController.AddNode(item, nodes.Text);
                 listController.AddNode(item, nodes.Layout);
 
                 itemNodes.Add(item.NodeId, nodes);
             }
-            
+
             nodes.Icon.ItemID    = expedition.RareItemId;
             nodes.Icon.IsVisible = true;
             nodes.Text.IsVisible = true;
@@ -421,10 +459,10 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public bool AutoClaim;
+        public bool AutoClaim = true;
         public bool StopOnNormalExceed;
         public bool StopOnRareExceed = true;
-        public bool AutoDispatch;
+        public bool AutoDispatch     = true;
     }
 
     #region 常量
