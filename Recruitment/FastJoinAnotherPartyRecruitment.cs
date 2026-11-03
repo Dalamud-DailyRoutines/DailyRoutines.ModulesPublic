@@ -120,7 +120,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
             Size      = new(140, 28),
             Position  = new(100, 0),
             IsVisible = false,
-            IsEnabled = LocalPlayerState.IsInAnyParty,
+            IsEnabled = LocalPlayerState.IsInParty,
             String    = Lang.Get("FastJoinAnotherPartyRecruitment-LeaveAndJoin"),
             OnClick = () =>
             {
@@ -203,7 +203,7 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
 
         if (button != null)
         {
-            button.IsEnabled = LocalPlayerState.IsInAnyParty;
+            button.IsEnabled = LocalPlayerState.IsInParty;
             button.IsVisible = button2->OwnerNode->IsVisible();
         }
     }
@@ -240,19 +240,19 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         var currentCID = AgentLookingForGroup.Instance()->ListingContentId;
         if (currentCID == 0) return;
 
-        if (LocalPlayerState.IsInAnyParty)
+        if (LocalPlayerState.IsInParty)
         {
             taskHelper.Enqueue
             (() =>
                 {
                     if (!Throttler.Shared.Throttle("FastJoinAnotherPartyRecruitment-Task", 100)) return false;
-                    if (!LocalPlayerState.IsInAnyParty) return true;
+                    if (!LocalPlayerState.IsInParty) return true;
 
                     ChatManager.Instance().SendMessage("/leave");
                     ChatManager.Instance().SendMessage("/pcmd breakup");
                     AgentId.PartyMember.SendEvent(0, 2, 3);
 
-                    return !LocalPlayerState.IsInAnyParty;
+                    return !LocalPlayerState.IsInParty;
                 }
             );
         }

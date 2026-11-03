@@ -1026,7 +1026,7 @@ public partial class AutoReplyChatBot
             }
 
             sb.AppendLine($"Commendations: {LocalPlayerState.Commendations}");
-            sb.AppendLine($"IsInAnyParty: {LocalPlayerState.IsInAnyParty}");
+            sb.AppendLine($"IsInParty: {LocalPlayerState.IsInParty}");
             sb.AppendLine($"IsMoving: {LocalPlayerState.Instance().IsMoving}");
             sb.AppendLine($"IsWalking: {LocalPlayerState.IsWalking}");
 
