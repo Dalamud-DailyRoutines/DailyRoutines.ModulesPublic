@@ -1,11 +1,10 @@
+using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.Expansion.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.Game.Network;
-using OmenTools.Info.Game.Enums;
-using OmenTools.OmenService;
 using WarpType = FFXIVClientStructs.FFXIV.Client.Game.UI.WarpType;
 
 namespace DailyRoutines.ModulesPublic;
@@ -90,9 +89,11 @@ public unsafe class FasterTerritoryTransport : ModuleBase
 
     #region 常量
 
-    private static readonly WarpType[] InvalidWarpTypes =
+    private static readonly FrozenSet<WarpType> InvalidWarpTypes =
     [
         WarpType.None,
+        WarpType.Return,
+        WarpType.TownTranslate,
         WarpType.Resurrection,
         WarpType.Revive,
         WarpType.EnterInstanceContent,
