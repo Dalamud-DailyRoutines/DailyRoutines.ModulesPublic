@@ -47,12 +47,16 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
 
     private MemoryPatch aetheryteTopPatch = null!;
 
+    private Config config = null!;
+
     private SelectYesnoAddon? teleportConfirmation;
 
     private bool isHoveringAetheryte;
 
     protected override void Init()
     {
+        config = LoadConfig<Config>() ?? new();
+        
         aetheryteTopPatch = new
         (
             "80 BB 10 5B 00 00 00 74 1B 83 F9 03 75 16 48 83 FD 14",
@@ -100,8 +104,22 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         teleportConfirmation = null;
     }
 
+    protected override void ConfigUI()
+    {
+        if (ImGui.Checkbox
+            (
+                Lang.Get("OptimizedMapAetheryte-NotDisplayInParty"),
+                ref config.NoDisplayWhenInParty
+            ))
+            config.Save(this);
+        ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedMapAetheryte-NotDisplayInParty-Help"));
+    }
+
     private void OnAreaMap(AddonEvent type, AddonArgs args)
     {
+        if (ShouldSkip())
+            return;
+        
         if (args is not AddonReceiveEventArgs receiveEventArgs                    ||
             (AtkEventType)receiveEventArgs.AtkEventType != AtkEventType.MouseMove ||
             (ushort)receiveEventArgs.EventParam         != 20)
@@ -189,6 +207,9 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         bool             onlyAetherytes
     )
     {
+        if (ShouldSkip())
+            return BuildMapMarkersHook.Original(agent, array, omitAetherytes, onlyAetherytes);
+        
         Span<int> aethernetIndices = stackalloc int[agent->MapMarkerCount];
         var       count            = 0;
 
@@ -222,7 +243,8 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         ulong           eventKind
     )
     {
-        if (eventKind            == 0 &&
+        if (!ShouldSkip()             &&
+            eventKind            == 0 &&
             valueCount           >= 2 &&
             values[0].GetInt()   == 7 &&
             values[1].UInt >> 24 == 2)
@@ -255,6 +277,10 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     private bool AgentMapCreateTooltipDetour(AgentMap* agent, Utf8String* tooltipString, uint tooltipContext)
     {
         var result = AgentMapCreateTooltipHook.Original(agent, tooltipString, tooltipContext);
+        
+        if (ShouldSkip())
+            return result;
+        
         if (!result ||
             tooltipContext >> 24 != 2)
             return result;
@@ -367,5 +393,14 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
                 ParentID        = addon->Id
             }
         );
+    }
+
+    private bool ShouldSkip() =>
+        config.NoDisplayWhenInParty && 
+        LocalPlayerState.IsInLocalParty;
+
+    private class Config : ModuleConfig
+    {
+        public bool NoDisplayWhenInParty = true;
     }
 }
