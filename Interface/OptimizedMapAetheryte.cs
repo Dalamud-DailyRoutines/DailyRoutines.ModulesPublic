@@ -22,6 +22,7 @@ using AgentMap = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentMap;
 using AddonAreaMap = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Addon.AddonAreaMap;
 using AtkCursor = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkCursor;
 using CursorType = FFXIVClientStructs.FFXIV.Component.GUI.AtkCursor.CursorType;
+using MapMarkerBase = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.MapMarkerBase;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -56,7 +57,7 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     protected override void Init()
     {
         config = LoadConfig<Config>() ?? new();
-        
+
         aetheryteTopPatch = new
         (
             "80 BB 10 5B 00 00 00 74 1B 83 F9 03 75 16 48 83 FD 14",
@@ -99,6 +100,7 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAreaMap);
         ResetAetheryteCursor();
+        UpdateExtraMapMarkers(AgentMap.Instance(), false);
 
         teleportConfirmation?.Dispose();
         teleportConfirmation = null;
@@ -119,7 +121,7 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     {
         if (ShouldSkip())
             return;
-        
+
         if (args is not AddonReceiveEventArgs receiveEventArgs                    ||
             (AtkEventType)receiveEventArgs.AtkEventType != AtkEventType.MouseMove ||
             (ushort)receiveEventArgs.EventParam         != 20)
@@ -207,20 +209,20 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         bool             onlyAetherytes
     )
     {
+        UpdateExtraMapMarkers(agent, !ShouldSkip());
+
         if (ShouldSkip())
             return BuildMapMarkersHook.Original(agent, array, omitAetherytes, onlyAetherytes);
-        
-        Span<int> aethernetIndices = stackalloc int[agent->MapMarkerCount];
-        var       count            = 0;
+
+        Span<ushort> markerTypes = stackalloc ushort[agent->MapMarkerCount];
 
         for (var index = 0; index < agent->MapMarkerCount; index++)
         {
             ref var marker = ref agent->MapMarkers[index];
-            if (marker.DataType != 4)
-                continue;
+            markerTypes[index] = marker.DataType;
 
-            aethernetIndices[count++] = index;
-            marker.DataType           = 3;
+            if (marker.DataType is 4 or EXTRA_MARKER_TYPE)
+                marker.DataType = 3;
         }
 
         try
@@ -229,8 +231,61 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         }
         finally
         {
-            for (var index = 0; index < count; index++)
-                agent->MapMarkers[aethernetIndices[index]].DataType = 4;
+            for (var index = 0; index < markerTypes.Length; index++)
+                agent->MapMarkers[index].DataType = markerTypes[index];
+        }
+    }
+
+    private static void UpdateExtraMapMarkers(AgentMap* agent, bool addExtraMarkers)
+    {
+        var count = 0;
+
+        for (var index = 0; index < agent->MapMarkerCount; index++)
+        {
+            var marker = agent->MapMarkers[index];
+            if (marker.DataType == EXTRA_MARKER_TYPE)
+                continue;
+
+            var markerBase = (MapMarkerBase*)&marker.MapMarker;
+            markerBase->TooltipContext = (markerBase->TooltipContext & 0xFF000000) | (uint)count;
+            agent->MapMarkers[count++] = marker;
+        }
+
+        agent->MapMarkerCount = (byte)count;
+
+        if (!addExtraMarkers)
+            return;
+
+        foreach (var record in AetheryteRecordManager.Instance().AllRecords)
+        {
+            if (record.EventTransport is not { } transport ||
+                !record.IsUnlocked())
+                continue;
+
+            var position = Vector3.Zero;
+
+            if (transport.SourceZone == agent->SelectedTerritoryId)
+            {
+                if (!LuminaGetter.TryGetRow<TerritoryType>(transport.SourceZone, out var territory) ||
+                    territory.Map.RowId != agent->SelectedMapId)
+                    continue;
+
+                position   =  transport.EventPosition;
+                position.X += agent->SelectedOffsetX;
+                position.Z += agent->SelectedOffsetY;
+            }
+            else if (record.ZoneID != agent->SelectedTerritoryId)
+                continue;
+
+            if (!agent->AddMapMarker(position, AETHERNET_ICON_ID))
+                return;
+
+            var marker = agent->MapMarkers[agent->MapMarkerCount - 1];
+            ((MapMarkerBase*)&marker.MapMarker)->TooltipContext = MAP_MARKER_CONTEXT | (uint)(agent->MapMarkerCount - 1);
+            marker.MapMarker.IconFlags                          = EXTRA_MARKER_ICON_FLAGS;
+            marker.DataType                                     = EXTRA_MARKER_TYPE;
+            marker.DataKey                                      = (ushort)record.ZoneID;
+            agent->MapMarkers[agent->MapMarkerCount - 1]        = marker;
         }
     }
 
@@ -276,16 +331,19 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
 
     private bool AgentMapCreateTooltipDetour(AgentMap* agent, Utf8String* tooltipString, uint tooltipContext)
     {
-        var result = AgentMapCreateTooltipHook.Original(agent, tooltipString, tooltipContext);
-        
+        var index = (int)(tooltipContext & 0xFFFFFF);
+        var isExtraMarker = tooltipContext >> 24              == 2                    &&
+                            index                             < agent->MapMarkerCount &&
+                            agent->MapMarkers[index].DataType == EXTRA_MARKER_TYPE;
+        var result = isExtraMarker || AgentMapCreateTooltipHook.Original(agent, tooltipString, tooltipContext);
+
         if (ShouldSkip())
-            return result;
-        
+            return !isExtraMarker && result;
+
         if (!result ||
             tooltipContext >> 24 != 2)
             return result;
 
-        var index = (int)(tooltipContext & 0xFFFFFF);
         if (index >= agent->MapMarkerCount)
             return result;
 
@@ -300,6 +358,10 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
 
     private static AetheryteRecord? FindRecord(MapMarkerInfo marker) => marker.DataType switch
     {
+        EXTRA_MARKER_TYPE => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+        (x => x.Group  == EXTRA_RECORD_GROUP &&
+              x.ZoneID == marker.DataKey
+        ),
         3 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
         (x => x is { Group: < 252, IsHouse: false, IsAetheryte: true } &&
               x.RowID == marker.DataKey
@@ -353,13 +415,15 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         var macroString = LuminaGetter.GetRowOrDefault<Addon>(addonID).Text.ToMacroString()
                                       .Replace(@"<kilo(lnum2,\,)>", "<string(lstr2)>");
         var iconIndex = GetTeleportIconIndex(record);
-        if (!record.IsAetheryte)
+        if (record.Group == EXTRA_RECORD_GROUP)
+            macroString = macroString.Replace("<sheet(PlaceName,<sheet(Aetheryte,lnum1,8)>,0)>", "<string(lstr4)>");
+        else if (!record.IsAetheryte)
             macroString = macroString.Replace("Aetheryte,lnum1,8", "Aetheryte,lnum1,9");
 
         return ISeStringEvaluator.Instance().EvaluateMacroString
         (
             macroString,
-            [record.RowID, cost.ToChineseString(), iconIndex]
+            [record.RowID, cost.ToChineseString(), iconIndex, record.Name]
         );
     }
 
@@ -396,11 +460,21 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     }
 
     private bool ShouldSkip() =>
-        config.NoDisplayWhenInParty && 
+        config.NoDisplayWhenInParty &&
         LocalPlayerState.IsInLocalParty;
 
     private class Config : ModuleConfig
     {
         public bool NoDisplayWhenInParty = true;
     }
+
+    #region 常量
+
+    private const ushort EXTRA_MARKER_TYPE       = ushort.MaxValue;
+    private const byte   EXTRA_RECORD_GROUP      = 252;
+    private const uint   AETHERNET_ICON_ID       = 60430;
+    private const uint   MAP_MARKER_CONTEXT      = 2U << 24;
+    private const ushort EXTRA_MARKER_ICON_FLAGS = 0x4002;
+
+    #endregion
 }
