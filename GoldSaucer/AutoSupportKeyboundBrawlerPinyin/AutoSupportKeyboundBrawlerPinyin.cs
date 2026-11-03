@@ -4,6 +4,7 @@ using System.Text;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
@@ -15,14 +16,14 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using TinyPinyin;
 
-namespace DailyRoutines.ModulesPublic;
+namespace DailyRoutines.ModulesPublic.AutoSupportKeyboundBrawlerPinyin;
 
-public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
+public unsafe partial class AutoSupportKeyboundBrawlerPinyin : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = "自动支持魔光键影拼音输入",
-        Description = "在副本“魔光键影”中，使输入判定支持拼音，且自动在词条上方显示对应的拼音。",
+        Title       = "自动支持魔光键影中文输入",
+        Description = "在副本“魔光键影”中，使输入判定支持拼音、注音与三代仓颉，且自动在词条上方显示对应的输入码。",
         Category    = ModuleCategory.GoldSaucer,
         PreviewImageURL =
         [
@@ -39,31 +40,16 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
     private Hook<AgentKTGInput.Delegates.SubmitWord>    SubmitWordHook;
     private Hook<AddonKTGEWord.Delegates.ApplyWordData> ApplyWordDataHook;
 
+    private Config config = null!;
+
     private readonly Dictionary<string, string> readings           = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> normalizedReadings = new(StringComparer.Ordinal);
 
     protected override void Init()
     {
-        foreach (var row in LuminaGetter.Get<KTGTypeWordTextData>())
-        {
-            var word    = row.Unknown0.ExtractText();
-            var reading = row.Unknown1.ExtractText();
-            if (string.IsNullOrWhiteSpace(word))
-                continue;
+        config = LoadConfig<Config>() ?? new();
 
-            if (ReadingOverrides.TryGetValue(word, out var overriddenReading))
-                reading = overriddenReading;
-            else if (string.IsNullOrWhiteSpace(reading) ||
-                     !reading.All
-                     (x => char.IsAsciiLetter(x) ||
-                           char.IsWhiteSpace(x)  ||
-                           x == '\''
-                     ))
-                reading = string.Concat(word.Select(x => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(PinyinHelper.GetPinyin(x).ToLowerInvariant())));
-
-            readings[word]           = reading;
-            normalizedReadings[word] = NormalizeReading(reading);
-        }
+        RebuildReadings();
 
         SubmitWordHook = IGameInteropProvider.Instance().HookFromMemberFunction
         (
@@ -86,6 +72,96 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
     {
         readings.Clear();
         normalizedReadings.Clear();
+        cangjieReadings.Clear();
+    }
+
+    protected override void ConfigUI()
+    {
+        using var combo = ImRaii.Combo
+        (
+            "输入模式",
+            INPUT_MODE_NAMES[(int)config.Mode]
+        );
+        if (!combo)
+            return;
+
+        foreach (var mode in Enum.GetValues<InputMode>())
+        {
+            if (!ImGui.Selectable(INPUT_MODE_NAMES[(int)mode], config.Mode == mode))
+                continue;
+
+            config.Mode = mode;
+            config.Save(this);
+            RebuildReadings();
+        }
+    }
+
+    private void RebuildReadings()
+    {
+        readings.Clear();
+        normalizedReadings.Clear();
+        cangjieReadings.Clear();
+
+        foreach (var row in LuminaGetter.Get<KTGTypeWordTextData>())
+        {
+            var word    = row.Unknown0.ExtractText();
+            var reading = row.Unknown1.ExtractText();
+            if (string.IsNullOrWhiteSpace(word)                                                ||
+                word.Any(x => x is >= '\u3040' and <= '\u30FF' or >= '\uFF66' and <= '\uFF9F') ||
+                reading.Any(x => x is >= '\u3040' and <= '\u30FF' or >= '\uFF66' and <= '\uFF9F'))
+                continue;
+
+            var text = new string
+            (
+                word.Where
+                (x => !char.IsPunctuation(x) &&
+                      !char.IsSymbol(x)      &&
+                      !char.IsWhiteSpace(x)
+                ).ToArray()
+            );
+            if (text.Length == 0)
+                continue;
+
+            if (config.Mode == InputMode.Cangjie)
+            {
+                var codes = text.Select
+                (x => CANGJIE_READINGS.TryGetValue(x, out var values) ?
+                          values :
+                          [x.ToString().ToLowerInvariant()]
+                ).ToArray();
+                readings[word]        = string.Join(' ', codes.Select(x => x[0]));
+                cangjieReadings[word] = codes;
+                continue;
+            }
+
+            if (READING_OVERRIDES.TryGetValue(word, out var overriddenReading))
+                reading = overriddenReading;
+            else if (string.IsNullOrWhiteSpace(reading) ||
+                     !reading.All
+                     (x => char.IsAsciiLetter(x) ||
+                           char.IsWhiteSpace(x)  ||
+                           x == '\''
+                     ))
+                reading = string.Concat(text.Select(x => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(PinyinHelper.GetPinyin(x).ToLowerInvariant())));
+
+            reading = new string
+            (
+                reading.Where
+                (x => !char.IsPunctuation(x) &&
+                      !char.IsSymbol(x)
+                ).ToArray()
+            );
+
+            if (config.Mode is InputMode.Zhuyin or InputMode.ZhuyinKeyboard)
+            {
+                reading = ConvertToZhuyin(reading, config.Mode == InputMode.ZhuyinKeyboard);
+                if (reading.Length == 0)
+                    continue;
+            }
+
+            readings[word]           = reading;
+            normalizedReadings[word] = NormalizeReading(reading);
+        }
     }
 
     private bool SubmitWordDetour
@@ -118,8 +194,14 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
                 continue;
 
             var word = entry.Name.ToString();
-            if (!normalizedReadings.TryGetValue(word, out var reading) ||
-                !string.Equals(input, reading, StringComparison.Ordinal))
+
+            if (config.Mode == InputMode.Cangjie)
+            {
+                if (!MatchesCangjieReading(word, input))
+                    continue;
+            }
+            else if (!normalizedReadings.TryGetValue(word, out var reading) ||
+                     !string.Equals(input, reading, StringComparison.Ordinal))
                 continue;
 
             using var rented = new RentedAtkValues(1);
@@ -151,15 +233,66 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
         ApplyWordDataHook.Original(addon, index, entityID, name, str.StringPtr, state, timelineState);
     }
 
-    private static string NormalizeReading
+    private string NormalizeReading
     (
         string value
-    ) =>
-        new string(value.Where(x => !char.IsWhiteSpace(x) && x != '\'').ToArray()).ToLowerInvariant();
+    )
+    {
+        var normalized = new StringBuilder(value.Length);
+
+        foreach (var character in value)
+        {
+            if (char.IsWhiteSpace(character) ||
+                character == '\'')
+                continue;
+
+            if ((char.IsPunctuation(character) ||
+                 char.IsSymbol(character)) &&
+                (config.Mode != InputMode.ZhuyinKeyboard ||
+                 !ZHUYIN_KEYS.Contains(character)))
+                continue;
+
+            var isTone = config.Mode switch
+            {
+                InputMode.Zhuyin         => character is 'ˉ' or 'ˊ' or 'ˇ' or 'ˋ' or '˙',
+                InputMode.ZhuyinKeyboard => character is '3' or '4' or '6' or '7',
+                _                        => false
+            };
+            if (isTone)
+                continue;
+
+            var radicalIndex = config.Mode == InputMode.Cangjie ?
+                                   CANGJIE_RADICALS.IndexOf(character) :
+                                   -1;
+            normalized.Append
+            (
+                radicalIndex >= 0 ?
+                    (char)('a' + radicalIndex) :
+                    char.ToLowerInvariant(character)
+            );
+        }
+
+        return normalized.ToString();
+    }
+
+    private enum InputMode
+    {
+        Pinyin,
+        Zhuyin,
+        ZhuyinKeyboard,
+        Cangjie
+    }
+
+    private class Config : ModuleConfig
+    {
+        public InputMode Mode = InputMode.Pinyin;
+    }
 
     #region 常量
 
-    private static readonly FrozenDictionary<string, string> ReadingOverrides = new Dictionary<string, string>
+    private static readonly string[] INPUT_MODE_NAMES = ["汉语拼音", "注音符号", "注音键位", "三代仓颉"];
+
+    private static readonly FrozenDictionary<string, string> READING_OVERRIDES = new Dictionary<string, string>
     {
         ["第陆区"]           = "DiLiuQu",
         ["梣木"]            = "ChenMu",
