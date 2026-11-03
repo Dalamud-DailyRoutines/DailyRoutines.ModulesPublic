@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Text;
 using DailyRoutines.Common.Module.Abstractions;
@@ -6,7 +7,9 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using FFXIVClientStructs.Interop;
 using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
@@ -36,7 +39,7 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
     private Hook<AgentKTGInput.Delegates.SubmitWord>    SubmitWordHook;
     private Hook<AddonKTGEWord.Delegates.ApplyWordData> ApplyWordDataHook;
 
-    private readonly Dictionary<string, byte[]> readings           = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> readings           = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> normalizedReadings = new(StringComparer.Ordinal);
 
     protected override void Init()
@@ -48,14 +51,17 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
             if (string.IsNullOrWhiteSpace(word))
                 continue;
 
-            if (string.IsNullOrWhiteSpace(reading) ||
-                !reading.All(x => char.IsAsciiLetter(x) || char.IsWhiteSpace(x) || x == '\''))
-            {
-                reading = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(PinyinHelper.GetPinyin(word).ToLowerInvariant())
-                                     .Replace(" ", string.Empty);
-            }
+            if (ReadingOverrides.TryGetValue(word, out var overriddenReading))
+                reading = overriddenReading;
+            else if (string.IsNullOrWhiteSpace(reading) ||
+                     !reading.All
+                     (x => char.IsAsciiLetter(x) ||
+                           char.IsWhiteSpace(x)  ||
+                           x == '\''
+                     ))
+                reading = string.Concat(word.Select(x => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(PinyinHelper.GetPinyin(x).ToLowerInvariant())));
 
-            readings[word]           = Encoding.UTF8.GetBytes(reading + '\0');
+            readings[word]           = reading;
             normalizedReadings[word] = NormalizeReading(reading);
         }
 
@@ -116,17 +122,9 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
                 !string.Equals(input, reading, StringComparison.Ordinal))
                 continue;
 
-            var translatedValue = new AtkValue();
-            translatedValue.SetManagedString(word);
-
-            try
-            {
-                return SubmitWordHook.Original(agent, &translatedValue);
-            }
-            finally
-            {
-                translatedValue.Dtor();
-            }
+            using var rented = new RentedAtkValues(1);
+            rented[0].SetManagedString(word);
+            return SubmitWordHook.Original(agent, rented);
         }
 
         return SubmitWordHook.Original(agent, inputValue);
@@ -143,18 +141,14 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
         uint           timelineState
     )
     {
-        var        bytes = name.AsSpan();
-        Span<char> word  = stackalloc char[Encoding.UTF8.GetCharCount(bytes)];
-        Encoding.UTF8.GetChars(bytes, word);
-
-        if (!readings.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(word, out var reading))
+        if (!readings.TryGetValue(name.ToString(), out var reading))
         {
             ApplyWordDataHook.Original(addon, index, entityID, name, title, state, timelineState);
             return;
         }
 
-        fixed (byte* text = reading)
-            ApplyWordDataHook.Original(addon, index, entityID, name, text, state, timelineState);
+        using var str = new Utf8String(reading);
+        ApplyWordDataHook.Original(addon, index, entityID, name, str.StringPtr, state, timelineState);
     }
 
     private static string NormalizeReading
@@ -162,4 +156,38 @@ public unsafe class AutoSupportKeyboundBrawlerPinyin : ModuleBase
         string value
     ) =>
         new string(value.Where(x => !char.IsWhiteSpace(x) && x != '\'').ToArray()).ToLowerInvariant();
+
+    #region 常量
+
+    private static readonly FrozenDictionary<string, string> ReadingOverrides = new Dictionary<string, string>
+    {
+        ["第陆区"]           = "DiLiuQu",
+        ["梣木"]            = "ChenMu",
+        ["掷弹兵"]           = "ZhiDanBing",
+        ["高级掷弹兵"]         = "GaoJiZhiDanBing",
+        ["重装甲战斗员"]        = "ZhongZhuangJiaZhanDouYuan",
+        ["燃烧弹"]           = "RanShaoDan",
+        ["加农弹"]           = "JiaNongDan",
+        ["辟邪护符"]          = "BiXieHuFu",
+        ["强力辟邪护符"]        = "QiangLiBiXieHuFu",
+        ["兀鹰杉木"]          = "WuYingShaMu",
+        ["吉尔伽美什"]         = "JiErGaMeiShi",
+        ["吉尔伽美什光束"]       = "JiErGaMeiShiGuangShu",
+        ["天堂弹珠台"]         = "TianTangDanZhuTai",
+        ["阳露出了笑容"]        = "YangLuChuLeXiaoRong",
+        ["三重灾祸"]          = "SanChongZaiHuo",
+        ["劲歌热舞吧"]         = "JingGeReWuBa",
+        ["下次就推心置腹地聊聊吧"]   = "XiaCiJiuTuiXinZhiFuDeLiaoLiaoBa",
+        ["得活着才能是塔克斯"]     = "DeiHuoZheCaiNengShiTaKeSi",
+        ["玛琳·华勒斯"]        = "MaLinHuaLeiSi",
+        ["巴雷特·华勒斯"]       = "BaLeiTeHuaLeiSi",
+        ["爱丽丝·盖恩斯伯勒"]     = "AiLiSiGaiEnSiBoLei",
+        ["华勒斯"]           = "HuaLeiSi",
+        ["盖恩斯伯勒"]         = "GaiEnSiBoLei",
+        ["忘却之都"]          = "WangQueZhiDu",
+        ["我得狠狠揍你这家伙一下才行"] = "WoDeiHenHenZouNiZheJiaHuoYiXiaCaiXing",
+        ["我想重拾我的人生"]      = "WoXiangChongShiWoDeRenSheng"
+    }.ToFrozenDictionary(StringComparer.Ordinal);
+
+    #endregion
 }
