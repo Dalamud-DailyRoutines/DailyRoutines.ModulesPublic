@@ -1,3 +1,4 @@
+using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -15,6 +16,9 @@ using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Styles;
+using OmenTools.KamiToolKit.Styles.Island;
 using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
 using MJIGranaryState = FFXIVClientStructs.Expansion.FFXIV.Client.Game.MJI.MJIGranaryState;
 using GranariesState = FFXIVClientStructs.Expansion.FFXIV.Client.Game.MJI.MJIGranariesState;
@@ -31,6 +35,7 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedMJIGatheringHouse/preview-2.webp",
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedMJIGatheringHouse/preview-1.webp"
         ]
     };
@@ -48,11 +53,21 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
 
     private readonly Dictionary<uint, DestinationNodes> itemNodes = [];
 
-    private readonly AutomationState automation = new();
+    private GatheringHousePanel panel = null!;
+
+    private bool dispatchPending;
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
+
+        panel = new(this)
+        {
+            InternalName = "DROptimizedMJIGatheringHouse",
+            Title        = Info.Title,
+            Size         = new(400, 300),
+            Style        = new IslandUIStyle()
+        };
 
         RefreshExpeditionsHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
         (
@@ -71,18 +86,14 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
         };
         listController.Enable();
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "MJIGatheringHouse", OnGatheringHouse);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "MJIGatheringHouse", OnGatheringHouse);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "MJIGatheringHouse", OnGatheringHouse);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "MJISearchArea",     OnSearchAreaFinalize);
-
-        if (MJIGatheringHouse->IsAddonAndNodesReady())
-            OnGatheringHouse(AddonEvent.PostSetup, null);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "MJISearchArea", OnSearchAreaFinalize);
     }
 
     protected override void Uninit()
     {
-        IAddonLifecycle.Instance().UnregisterListener(OnGatheringHouse, OnSearchAreaFinalize);
+        IAddonLifecycle.Instance().UnregisterListener(OnSearchAreaFinalize);
+        panel.Dispose();
+        dispatchPending = false;
 
         if (MJISearchArea != null)
         {
@@ -99,60 +110,19 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
         itemNodes.Clear();
     }
 
-    protected override void ConfigUI()
-    {
-        if (ImGui.Checkbox(Lang.Get("OptimizedMJIGatheringHouse-AutoClaim"), ref config.AutoClaim))
-            config.Save(this);
-
-        if (config.AutoClaim)
-        {
-            using var indent = ImRaii.PushIndent();
-            if (ImGui.Checkbox(Lang.Get("OptimizedMJIGatheringHouse-StopOnNormalExceed"), ref config.StopOnNormalExceed))
-                config.Save(this);
-
-            if (ImGui.Checkbox(Lang.Get("OptimizedMJIGatheringHouse-StopOnRareExceed"), ref config.StopOnRareExceed))
-                config.Save(this);
-        }
-
-        if (ImGui.Checkbox(Lang.Get("OptimizedMJIGatheringHouse-AutoDispatch"), ref config.AutoDispatch))
-            config.Save(this);
-    }
-
-    private void OnGatheringHouse(AddonEvent type, AddonArgs args)
-    {
-        switch (type)
-        {
-            case AddonEvent.PreFinalize:
-                automation.Reset(true);
-                return;
-
-            case AddonEvent.PostSetup:
-                automation.Reset(false);
-                return;
-
-            case AddonEvent.PostRefresh:
-                if (!automation.Stopped)
-                    ProcessAutomation();
-                return;
-        }
-    }
-
     private void OnSearchAreaFinalize(AddonEvent type, AddonArgs args) => itemNodes.Clear();
 
     private void RefreshExpeditionsDetour(GatheringHouseAgent* agent)
     {
-        if (automation.PendingGranary == byte.MaxValue ||
-            automation.Stopped)
+        if (!dispatchPending)
         {
             RefreshExpeditionsHook.Original(agent);
             return;
         }
 
-        automation.PendingGranary    = byte.MaxValue;
-        automation.DispatchEvaluated = true;
+        dispatchPending = false;
 
-        if (!config.AutoDispatch          ||
-            agent                 == null ||
+        if (agent                 == null ||
             agent->Data           == null ||
             agent->Manager        == null ||
             agent->GranariesState == null)
@@ -171,11 +141,9 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
             MJICommand.AssignGranary(index, destination, 7);
         }
 
-        if (!automation.Stopped)
-            ProcessAutomation();
     }
 
-    private void ProcessAutomation()
+    private void ClaimResources()
     {
         var agent = AgentMJIGatheringHouse.Instance();
         if (agent == null                 ||
@@ -193,28 +161,26 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
 
             var granary = (MJIGranaryState*)agent->GranariesState + index;
 
-            if ((automation.PendingClaims & (1 << index)) != 0 &&
-                !HasResources(granary))
-                automation.PendingClaims &= (byte)~(1 << index);
-
-            if (!config.AutoClaim      ||
-                !HasResources(granary) ||
-                (automation.ClaimedGranaries & (1 << index)) != 0)
+            if (!HasResources(granary) ||
+                !CanClaim(agent, granary))
                 continue;
 
-            automation.ClaimedGranaries |= (byte)(1 << index);
-            if (!CanClaim(agent, granary))
-                continue;
-
-            automation.PendingClaims |= (byte)(1 << index);
-            agent->CurGranaryIndex   =  index;
+            agent->CurGranaryIndex = index;
             agent->GranariesState->CollectResources(index);
         }
 
-        if (!config.AutoDispatch                       ||
-            automation.PendingGranary != byte.MaxValue ||
-            automation.PendingClaims  != 0             ||
-            automation.DispatchEvaluated)
+    }
+
+    private void DispatchExpeditions()
+    {
+        var agent = AgentMJIGatheringHouse.Instance();
+        if (dispatchPending               ||
+            agent == null                 ||
+            !agent->IsAgentActive()       ||
+            agent->Data == null           ||
+            !agent->Data->Initialized     ||
+            agent->Manager        == null ||
+            agent->GranariesState == null)
             return;
 
         for (byte index = 0; index < 2; index++)
@@ -226,13 +192,12 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
             if (HasResources(granary))
                 continue;
 
-            automation.PendingGranary = index;
-            agent->CurGranaryIndex    = index;
+            dispatchPending        = true;
+            agent->CurGranaryIndex = index;
             MJICommand.ViewGranaryDestinations(index);
             return;
         }
 
-        automation.DispatchEvaluated = true;
     }
 
     private static bool IsGranaryAvailable(AgentMJIGatheringHouse* agent, int index) =>
@@ -351,24 +316,6 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
         return recommendations;
     }
 
-    private sealed class AutomationState
-    {
-        public byte ClaimedGranaries;
-        public byte PendingClaims;
-        public byte PendingGranary = byte.MaxValue;
-        public bool DispatchEvaluated;
-        public bool Stopped;
-
-        public void Reset(bool stopped)
-        {
-            ClaimedGranaries  = 0;
-            PendingClaims     = 0;
-            PendingGranary    = byte.MaxValue;
-            DispatchEvaluated = false;
-            Stopped           = stopped;
-        }
-    }
-
     private void UpdateDestination(AtkUnitBase* addon, ListItemData item)
     {
         var agent = AgentMJIGatheringHouse.Instance();
@@ -450,6 +397,100 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
         nodes.Text.IsVisible = false;
     }
 
+    private sealed class GatheringHousePanel
+    (
+        OptimizedMJIGatheringHouse module
+    ) : AttachedAddon("MJIGatheringHouse")
+    {
+        protected override Vector2 PositionOffset => new(-12, 0);
+
+        protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValues)
+        {
+            var layout = new VerticalListNode
+            {
+                Position    = ContentStartPosition,
+                Width       = ContentSize.X,
+                FitContents = true,
+                FitWidth    = true,
+                ItemSpacing = 4
+            };
+            layout.AttachNode(this);
+
+            var claim = Style.CreateButton();
+            claim.Size    = new(layout.Width, 36);
+            claim.String  = Lang.Get("OptimizedMJIGatheringHouse-Claim");
+            claim.OnClick = module.ClaimResources;
+            layout.AddNode(claim);
+
+            var dispatch = Style.CreateButton();
+            dispatch.Size    = new(layout.Width, 36);
+            dispatch.String  = Lang.Get("OptimizedMJIGatheringHouse-Dispatch");
+            dispatch.OnClick = module.DispatchExpeditions;
+            layout.AddNode(dispatch);
+            
+            layout.AddDummy();
+
+            layout.AddNode(Style.CreateSeparator());
+            
+            layout.AddDummy();
+
+            var heading = Style.CreateText();
+            heading.Width     = layout.Width;
+            heading.FontSize  = 16;
+            heading.String    = Lang.Get("OptimizedMJIGatheringHouse-StopOnExceed");
+            heading.TextFlags = TextFlags.WordWrap | TextFlags.MultiLine;
+            heading.Height    = 28;
+            layout.AddNode(heading);
+
+            for (var index = 0; index < 2; index++)
+            {
+                var rare = index == 1;
+                var row = new HorizontalListNode
+                {
+                    Size             = new(layout.Width, 32),
+                    Alignment        = HorizontalListAnchor.Left,
+                    FirstItemSpacing = 20
+                };
+                var checkbox = new CheckboxNode
+                {
+                    IsChecked = rare ?
+                                    module.config.StopOnRareExceed :
+                                    module.config.StopOnNormalExceed
+                };
+                Style.ApplyTextStyle(checkbox.Label, UITextRole.Body);
+                checkbox.String = LuminaWrapper.GetAddonTextSeString
+                (
+                    rare ?
+                        RARE_RESOURCE_TEXT_ID :
+                        NORMAL_RESOURCE_TEXT_ID
+                );
+                checkbox.Size            = new(row.Width - 20, 32);
+                checkbox.Label.Width     = checkbox.Width - checkbox.Height;
+                checkbox.Label.TextFlags = TextFlags.WordWrap | TextFlags.MultiLine;
+                checkbox.Label.Height    = 32;
+                checkbox.OnClick = value =>
+                {
+                    if (rare)
+                        module.config.StopOnRareExceed = value;
+                    else
+                        module.config.StopOnNormalExceed = value;
+
+                    module.config.Save(module);
+                };
+                row.AddNode(checkbox);
+                layout.AddNode(row);
+            }
+
+            SetWindowSize(Size.X, Math.Max(Style.MinimumSize.Y, layout.Height + Size.Y - ContentSize.Y));
+        }
+
+        protected override void OnHostAddon(AddonEvent type, AddonArgs? args)
+        {
+            if (type == AddonEvent.PreFinalize)
+                module.dispatchPending = false;
+        }
+    }
+
     private sealed class DestinationNodes
     {
         public HorizontalListNode Layout;
@@ -459,16 +500,16 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public bool AutoClaim = true;
         public bool StopOnNormalExceed;
         public bool StopOnRareExceed = true;
-        public bool AutoDispatch     = true;
     }
 
     #region 常量
 
-    private const uint COWRIE_ITEM_ID        = 37549;
-    private const int  DAILY_EXPEDITION_COST = 50;
+    private const uint COWRIE_ITEM_ID          = 37549;
+    private const int  DAILY_EXPEDITION_COST   = 50;
+    private const uint NORMAL_RESOURCE_TEXT_ID = 14334;
+    private const uint RARE_RESOURCE_TEXT_ID   = 14335;
 
     #endregion
 }
