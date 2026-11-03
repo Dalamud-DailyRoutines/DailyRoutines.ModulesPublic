@@ -93,6 +93,7 @@ public unsafe class FasterTerritoryTransport : ModuleBase
     [
         WarpType.None,
         WarpType.Return,
+        WarpType.Teleport,
         WarpType.TownTranslate,
         WarpType.Resurrection,
         WarpType.Revive,
