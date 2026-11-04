@@ -388,6 +388,7 @@ public partial class AutoMarksFinder
             if (ImGuiOm.ButtonIcon($"删除{info}", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
                 selected.MonstersFound.Remove(info);
+                GetTrainTracks(selected).Remove(info);
                 StopAutoBroadcast();
                 config.Save(this);
             }

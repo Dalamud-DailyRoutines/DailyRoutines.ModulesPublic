@@ -159,7 +159,7 @@ public partial class AutoMarksFinder
             return;
 
         var isDead = mode == CharacterModes.Dead || health == 0;
-        if (ApplyObservedState(monster, track, isDead))
+        if (ApplyNotifiedState(monster, track, isDead))
             config.Save(this);
     }
 
@@ -193,7 +193,7 @@ public partial class AutoMarksFinder
     }
 
     /// <summary>
-    ///     死亡通知：类别 14 在客户端侧就是死亡处理，直接按死亡写入；这一通知同时终止手动覆盖。
+    ///     死亡通知：类别 14 在客户端侧就是死亡处理，直接按死亡写入。
     /// </summary>
     private void OnConfirmedDeath
     (
@@ -203,9 +203,7 @@ public partial class AutoMarksFinder
         if (!TryResolveMonster(entityID, out var monster, out var track))
             return;
 
-        track.ManualAlive = false;
-
-        if (ApplyObservedState(monster, track, true))
+        if (ApplyNotifiedState(monster, track, true))
             config.Save(this);
     }
 
@@ -223,7 +221,7 @@ public partial class AutoMarksFinder
         if (!TryReadObservedState(entityID, out var isDead))
             return;
 
-        if (ApplyObservedState(monster, track, isDead))
+        if (ApplyNotifiedState(monster, track, isDead))
             config.Save(this);
     }
 
@@ -282,8 +280,22 @@ public partial class AutoMarksFinder
     }
 
     /// <summary>
+    ///     通知来源的观测：先解除手动覆盖再写入状态，明确的死亡不会因为覆盖而丢失。
+    /// </summary>
+    private static bool ApplyNotifiedState
+    (
+        NotoriousMonsterFound monster,
+        AliveTrack            track,
+        bool                  isDead
+    )
+    {
+        track.ManualAlive = false;
+        return ApplyObservedState(monster, track, isDead);
+    }
+
+    /// <summary>
     ///     以明确观测更新点位状态：死亡只认死亡标记或血量归零。
-    ///     手动覆盖存续期间不接受其它来源的死亡观测；存活观测与明确的死亡通知都会先解除覆盖。
+    ///     手动覆盖只压制对象表补采，通知来源经 ApplyNotifiedState 会先解除覆盖。
     ///     返回点位状态是否发生变化，由调用方决定是否落盘。
     /// </summary>
     private static bool ApplyObservedState
