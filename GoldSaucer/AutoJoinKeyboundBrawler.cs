@@ -154,11 +154,10 @@ public class AutoJoinKeyboundBrawler : ModuleBase
             condition[ConditionFlag.BetweenAreas51])
             return false;
 
-        var group = GroupManager.Instance()->GetGroup();
+        var group = GroupManager.Instance()->GetGroupWithCheck();
 
-        if (config.StopOnInvalidParty &&
-            (group->IsAlliance ||
-             group->MemberCount is not (0 or 1 or 4)))
+        if (config.StopOnInvalidParty && 
+            group->MemberCount is not (1 or 4))
         {
             isRunning = false;
             TaskHelper.Abort();
@@ -177,9 +176,13 @@ public class AutoJoinKeyboundBrawler : ModuleBase
             condition[ConditionFlag.WaitingForDutyFinder])
             return true;
 
-        foreach (ref var member in group->PartyMembers[..group->MemberCount])
+        for (var index = 0; index < group->MemberCount; index++)
         {
-            if (!LuminaGetter.TryGetRow<TerritoryType>(member.TerritoryType, out var zoneRow) ||
+            var member = group->GetPartyMemberByIndex(index);
+            if (member == null)
+                continue;
+            
+            if (!LuminaGetter.TryGetRow<TerritoryType>(member->TerritoryType, out var zoneRow) ||
                 zoneRow.ContentFinderCondition.RowId > 0)
                 return false;
         }
