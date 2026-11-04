@@ -115,6 +115,14 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
             ))
             config.Save(this);
         ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedMapAetheryte-NotDisplayInParty-Help"));
+
+        if (ImGui.Checkbox
+            (
+                Lang.Get("OptimizedMapAetheryte-SkipConfirmation"),
+                ref config.SkipConfirmation
+            ))
+            config.Save(this);
+        ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedMapAetheryte-SkipConfirmation-Help"));
     }
 
     private void OnAreaMap(AddonEvent type, AddonArgs args)
@@ -317,7 +325,16 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
                     if (AreaMap->IsAddonAndNodesReady() &&
                         AreaMap->NumBlockingAddons == 0)
                     {
-                        OpenTeleportConfirmation(record, AreaMap);
+                        if (!config.SkipConfirmation)
+                            OpenTeleportConfirmation(record, AreaMap);
+                        else
+                        {
+                            if (record.TeleportTo())
+                            {
+                                AgentMap.Instance()->Hide();
+                                IAddonEventManager.Instance().ResetCursor();
+                            }
+                        }
 
                         returnValues->SetBool(false);
                         return returnValues;
@@ -467,6 +484,7 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     private class Config : ModuleConfig
     {
         public bool NoDisplayWhenInParty = true;
+        public bool SkipConfirmation;
     }
 
     #region 常量
