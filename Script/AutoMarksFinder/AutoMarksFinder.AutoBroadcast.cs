@@ -232,7 +232,11 @@ public partial class AutoMarksFinder
         autoBroadcastNextAt      = Environment.TickCount64 + AUTO_BROADCAST_NEXT_DELAY_MS;
     }
 
-    private static void ExecuteBroadcastMacro
+    /// <summary>
+    ///     开始/结束播报：宏内只要有一行以 / 开头，就整体交给客户端宏执行，由用户自己接管频道；
+    ///     否则按纯文本处理，逐行以「播报频道 + 文本」的形式发送，与点位播报走同一组频道。
+    /// </summary>
+    private void ExecuteBroadcastMacro
     (
         string macro
     )
@@ -241,11 +245,38 @@ public partial class AutoMarksFinder
             return;
 
         var lines = macro.Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length == 0 ||
-            lines.Length > BROADCAST_MACRO_MAX_LINES)
+        if (lines.Length == 0)
             return;
 
-        ChatManager.Instance().ExecuteMacro(lines);
+        var hasCommandLine = false;
+        foreach (var line in lines)
+        {
+            if (!line.TrimStart().StartsWith('/'))
+                continue;
+
+            hasCommandLine = true;
+            break;
+        }
+
+        if (hasCommandLine ||
+            config.RelayCommands.Count == 0)
+        {
+            if (lines.Length > BROADCAST_MACRO_MAX_LINES)
+                return;
+
+            ChatManager.Instance().ExecuteMacro(lines);
+            return;
+        }
+
+        foreach (var line in lines)
+        {
+            var text = line.Trim();
+            if (text.Length == 0)
+                continue;
+
+            foreach (var command in config.RelayCommands)
+                ChatManager.Instance().SendMessage($"{command} {text}");
+        }
     }
 
     private unsafe bool AnnouncePosition
