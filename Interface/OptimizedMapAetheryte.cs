@@ -460,8 +460,9 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
     }
 
     private bool ShouldSkip() =>
-        config.NoDisplayWhenInParty &&
-        LocalPlayerState.IsInLocalParty;
+        GameState.ContentFinderCondition > 0 ||
+        (config.NoDisplayWhenInParty &&
+         LocalPlayerState.IsInLocalParty);
 
     private class Config : ModuleConfig
     {
