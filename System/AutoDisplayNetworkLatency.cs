@@ -27,7 +27,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
     {
         Title       = Lang.Get("AutoDisplayNetworkLatencyTitle"),
         Description = Lang.Get("AutoDisplayNetworkLatencyDescription"),
-        Category    = ModuleCategory.Interface,
+        Category    = ModuleCategory.System,
         PreviewImageURL =
         [
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayNetworkLatency/preview-1.webp"
