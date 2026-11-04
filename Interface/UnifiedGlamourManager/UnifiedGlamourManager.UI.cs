@@ -174,7 +174,7 @@ public unsafe partial class UnifiedGlamourManager
         using var child = ImRaii.Child
         (
             "##TopBar",
-            new Vector2(0f, ImGui.GetTextLineHeightWithSpacing() + ImGui.GetFrameHeightWithSpacing() + (ImGui.GetStyle().WindowPadding.Y * 2f)),
+            new Vector2(0f, ImGui.GetFrameHeight()),
             true,
             ImGuiWindowFlags.NoScrollbar
         );
