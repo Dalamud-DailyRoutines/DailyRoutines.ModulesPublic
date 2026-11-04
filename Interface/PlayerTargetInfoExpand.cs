@@ -24,7 +24,7 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
         ModulesConflict = ["LiveAnonymousMode"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         NeedAuth = true
     };

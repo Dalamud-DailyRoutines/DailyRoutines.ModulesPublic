@@ -23,7 +23,7 @@ public unsafe class AutoNumericInputMax : ModuleBase
         ModulesPair = ["AutoIncreaseBuyAmountLimit"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

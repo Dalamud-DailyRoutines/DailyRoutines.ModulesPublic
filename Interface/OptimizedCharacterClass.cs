@@ -27,7 +27,7 @@ public unsafe class OptimizedCharacterClass : ModuleBase
         Author      = ["Middo"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

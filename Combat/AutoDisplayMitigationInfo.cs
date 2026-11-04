@@ -33,7 +33,7 @@ public class AutoDisplayMitigationInfo : ModuleBase
         Author      = ["HaKu"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

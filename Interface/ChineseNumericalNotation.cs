@@ -25,7 +25,7 @@ public unsafe class ChineseNumericalNotation : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         CNDefaultEnabled = true,
         TCDefaultEnabled = true

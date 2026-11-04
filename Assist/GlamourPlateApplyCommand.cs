@@ -17,7 +17,7 @@ public unsafe class GlamourPlateApplyCommand : ModuleBase
         Category    = ModuleCategory.Assist
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

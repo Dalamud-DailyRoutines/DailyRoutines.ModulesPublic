@@ -25,7 +25,7 @@ public unsafe class AutoSellCards : ModuleBase
         ModulesPrerequisite = ["InstantLeaveDuty", "ContentFinderCommand"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

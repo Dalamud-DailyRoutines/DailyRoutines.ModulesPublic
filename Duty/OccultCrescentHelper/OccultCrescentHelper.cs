@@ -21,7 +21,7 @@ public partial class OccultCrescentHelper : ModuleBase
         ModulesConflict = ["AutoFaceCameraDirection"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

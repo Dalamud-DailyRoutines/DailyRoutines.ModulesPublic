@@ -35,7 +35,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
         ModulesPrerequisite = ["FastWorldTravel", "FastInstanceZoneChange"]
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
 
     private Config config = null!;
 

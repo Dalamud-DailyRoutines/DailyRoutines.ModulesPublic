@@ -16,7 +16,7 @@ public class DisregardFollowQuest : ModuleBase
         Author      = ["Errer"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         NeedAuth = true
     };

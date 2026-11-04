@@ -22,7 +22,7 @@ public unsafe class OptimizedChatBubble : ModuleBase
         Author      = ["Middo", "Xww"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

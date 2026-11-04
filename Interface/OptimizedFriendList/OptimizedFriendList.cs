@@ -29,7 +29,7 @@ public unsafe partial class OptimizedFriendList : ModuleBase
         ModulesPrerequisite = ["FastWorldTravel"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

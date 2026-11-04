@@ -15,7 +15,7 @@ public unsafe class IgnoreWindowMinSizeLimit : ModuleBase
         Author      = ["Siren"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

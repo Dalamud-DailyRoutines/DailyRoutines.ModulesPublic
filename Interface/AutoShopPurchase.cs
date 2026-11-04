@@ -24,7 +24,7 @@ public class AutoShopPurchase : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
 
     private Config config = null!;
 

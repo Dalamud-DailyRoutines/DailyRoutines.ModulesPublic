@@ -14,7 +14,7 @@ public class AutoDisplayHiddenCast : ModuleBase
         Category    = ModuleCategory.Combat
     };
 
-    public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModuleBehaviour Permission { get; } = new() { AllDefaultEnabled = true };
 
     private MemoryPatch nameplateCastBarCastingPatch = null!;
     private MemoryPatch nameplateCastBarCastedPatch  = null!;

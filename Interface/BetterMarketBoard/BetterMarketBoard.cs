@@ -40,7 +40,7 @@ public unsafe partial class BetterMarketBoard : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         NeedAuth          = true,
         AllDefaultEnabled = true

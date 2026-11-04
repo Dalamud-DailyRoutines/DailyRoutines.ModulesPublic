@@ -52,7 +52,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
 
     private static readonly CompSig CurrentSubmarineIndexSig = new("48 8D 0D ?? ?? ?? ?? 80 A3");
 

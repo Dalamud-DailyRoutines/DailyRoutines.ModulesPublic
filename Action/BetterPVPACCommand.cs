@@ -18,7 +18,7 @@ public unsafe class BetterPVPACCommand : ModuleBase
         ModulesPair = ["OptimizedPVPProfileAction"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

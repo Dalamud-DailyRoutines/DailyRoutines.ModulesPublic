@@ -20,7 +20,7 @@ public unsafe class AutoDumpCensoredWords : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { CNOnly = true };
+    public override ModuleBehaviour Permission { get; } = new() { CNOnly = true };
 
     private static readonly CompSig VulgarInstanceOffsetBaseSig = new(VULGAR_INSTANCE_OFFSET_BASE_PATTERN);
     

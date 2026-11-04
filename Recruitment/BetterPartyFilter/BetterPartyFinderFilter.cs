@@ -27,7 +27,7 @@ public partial class BetterPartyFinderFilter : ModuleBase
         ]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

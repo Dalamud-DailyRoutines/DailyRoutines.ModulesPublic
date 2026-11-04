@@ -16,7 +16,7 @@ public unsafe class AutoAllowMultipleGames : ModuleBase
         Author      = ["Fragile"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

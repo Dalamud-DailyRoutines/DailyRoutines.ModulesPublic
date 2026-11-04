@@ -15,7 +15,7 @@ public class AutoNotifyDutyName : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

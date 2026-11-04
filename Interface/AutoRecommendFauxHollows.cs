@@ -21,7 +21,7 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
         Author      = ["Veever"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

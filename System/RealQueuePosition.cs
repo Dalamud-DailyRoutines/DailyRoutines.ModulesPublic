@@ -22,7 +22,7 @@ public unsafe class RealQueuePosition : ModuleBase
         Author      = ["逆光", "Nukoooo"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

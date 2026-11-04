@@ -22,7 +22,7 @@ public unsafe class AutoNoviceNetwork : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModulePermission Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
 
     private Config config = null!;
 

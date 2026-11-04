@@ -17,7 +17,7 @@ public class AutoBlockAgelessWordsAndSolidReason : ModuleBase
         Category    = ModuleCategory.CraftGather
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };

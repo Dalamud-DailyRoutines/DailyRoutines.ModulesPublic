@@ -15,7 +15,7 @@ public class OptimizedPVPProfileAction : ModuleBase
         ModulesPair = ["BetterPVPACCommand"]
     };
 
-    public override ModulePermission Permission { get; } = new()
+    public override ModuleBehaviour Permission { get; } = new()
     {
         AllDefaultEnabled = true
     };
