@@ -160,13 +160,16 @@ public unsafe partial class BetterTeleport : ModuleBase
         RememberSearchSelection(aetheryte, searchTerms);
         AddToRecentTeleports(aetheryte);
 
-        NotifyHelper.ToastQuest
+        NotifyHelper.Instance().Chat
         (
-            Lang.Get("BetterTeleport-Notification", aetheryte.Name),
-            new()
-            {
-                IconId = 111
-            }
+            Lang.Get
+            (
+                "BetterTeleport-Notification",
+                new Dictionary<string, object>
+                {
+                    ["destination"] = aetheryte.Name,
+                }
+            )
         );
 
         if (aetheryte.Group == 252 &&

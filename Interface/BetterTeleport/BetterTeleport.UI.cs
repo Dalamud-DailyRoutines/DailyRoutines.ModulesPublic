@@ -553,6 +553,8 @@ public unsafe partial class BetterTeleport
             }
 
             ImGui.CloseCurrentPopup();
+            Overlay?.IsOpen    = false;
+            fullWindow?.IsOpen = false;
         }
     }
 
@@ -656,7 +658,7 @@ public unsafe partial class BetterTeleport
         float           animOffset
     )
     {
-        var iconID = (uint)(LuminaGetter.GetRow<GeneralAction>(7)?.Icon ?? 60752);
+        uint iconID;
         if (aetheryte.IsHouse)
             iconID = 60752;
         else if (aetheryte.IsAetheryte)
