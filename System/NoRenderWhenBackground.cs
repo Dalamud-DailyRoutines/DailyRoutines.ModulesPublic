@@ -21,10 +21,10 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         Author      = ["Siren"]
     };
 
-    private static readonly CompSig WindowProcSig = 
+    private static readonly CompSig WindowProcSig =
         new("40 55 53 56 57 41 54 41 56 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E0");
-    private delegate        nint WindowProcDelegate(nint window, uint message, nuint wParam, nint lParam);
-    private                 Hook<WindowProcDelegate>? WindowProcHook;
+    private delegate nint                      WindowProcDelegate(nint window, uint message, nuint wParam, nint lParam);
+    private          Hook<WindowProcDelegate>? WindowProcHook;
 
     private Config config = null!;
 
@@ -71,25 +71,44 @@ public unsafe class NoRenderWhenBackground : ModuleBase
     {
         var result = WindowProcHook.Original(window, message, wParam, lParam);
 
-        if (window == Framework.Instance()->GameWindow->WindowHandle &&
-            message is WM_ACTIVATE or WM_ACTIVATE_APP or WM_SIZE)
-            UpdateRendering();
+        if (window != Framework.Instance()->GameWindow->WindowHandle)
+            return result;
+
+        switch (message)
+        {
+            case WM_ACTIVATE when !config.OnlyProhibitedInIconic:
+                UpdateRendering((ushort)wParam == 0);
+                break;
+            case WM_ACTIVATE_APP when !config.OnlyProhibitedInIconic:
+            case WM_NCACTIVATE when !config.OnlyProhibitedInIconic:
+                UpdateRendering(wParam == 0);
+                break;
+            case WM_SETFOCUS when !config.OnlyProhibitedInIconic:
+                UpdateRendering(false);
+                break;
+            case WM_SIZE when config.OnlyProhibitedInIconic:
+                UpdateRendering(wParam == SIZE_MINIMIZED);
+                break;
+        }
 
         return result;
     }
 
-    private void UpdateRendering()
+    private void UpdateRendering(bool? shouldDisableRendering = null)
     {
         var manager = RenderManager.Instance();
         if (manager == null)
             return;
 
-        var window = Framework.Instance()->GameWindow->WindowHandle;
-        var shouldDisableRendering = config.OnlyProhibitedInIconic ?
+        if (!shouldDisableRendering.HasValue)
+        {
+            var window = Framework.Instance()->GameWindow->WindowHandle;
+            shouldDisableRendering = config.OnlyProhibitedInIconic ?
                                          WindowNative.IsIconic(window) :
                                          !WindowNative.IsForeground(window);
+        }
 
-        manager->Is3DRenderingDisabled = shouldDisableRendering;
+        manager->Is3DRenderingDisabled = shouldDisableRendering.Value;
     }
 
     private class Config : ModuleConfig
@@ -101,7 +120,10 @@ public unsafe class NoRenderWhenBackground : ModuleBase
 
     private const uint WM_ACTIVATE     = 0x0006;
     private const uint WM_ACTIVATE_APP = 0x001C;
+    private const uint WM_NCACTIVATE   = 0x0086;
     private const uint WM_SIZE         = 0x0005;
+    private const uint WM_SETFOCUS     = 0x0007;
+    private const uint SIZE_MINIMIZED  = 1;
 
     #endregion
 }
