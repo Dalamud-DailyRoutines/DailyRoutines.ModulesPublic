@@ -1239,6 +1239,7 @@ public partial class AutoMarksFinder
                         target.MonstersFound.AddRange(newOnes);
                         StopAutoBroadcast();
                         config.Save(this);
+                        RefreshMonsterTracking();
                     }
 
                     NotifyHelper.Instance().NotificationInfo(Lang.Get("SavedSuccessfully"));

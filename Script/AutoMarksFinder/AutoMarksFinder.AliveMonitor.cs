@@ -193,7 +193,7 @@ public partial class AutoMarksFinder
     }
 
     /// <summary>
-    ///     死亡通知：类别 14 在客户端侧就是死亡处理，直接按死亡写入。
+    ///     死亡通知：类别 14 在客户端侧就是死亡处理，直接按死亡写入；这一通知同时终止手动覆盖。
     /// </summary>
     private void OnConfirmedDeath
     (
@@ -202,6 +202,8 @@ public partial class AutoMarksFinder
     {
         if (!TryResolveMonster(entityID, out var monster, out var track))
             return;
+
+        track.ManualAlive = false;
 
         if (ApplyObservedState(monster, track, true))
             config.Save(this);
@@ -280,7 +282,8 @@ public partial class AutoMarksFinder
     }
 
     /// <summary>
-    ///     以明确观测更新点位状态：死亡只认死亡标记或血量归零，存活观测解除手动覆盖。
+    ///     以明确观测更新点位状态：死亡只认死亡标记或血量归零。
+    ///     手动覆盖存续期间不接受其它来源的死亡观测；存活观测与明确的死亡通知都会先解除覆盖。
     ///     返回点位状态是否发生变化，由调用方决定是否落盘。
     /// </summary>
     private static bool ApplyObservedState
