@@ -47,6 +47,7 @@ public unsafe partial class BetterTeleport
         int            region,
         int            territoryTypeID
     );
+
     private AgentTeleportGetTimelineIDDelegate AgentTeleportGetTimelineID = null!;
 
     private FuzzyMatcher<AetheryteRecord>? recordMatcher;
@@ -109,17 +110,26 @@ public unsafe partial class BetterTeleport
             AetheryteRecordManager.Instance().AllRecords,
             x =>
             {
-                var keys = new List<(IEnumerable<string?>, FuzzySearchWeight)>();
+                var fields = new List<FuzzySearchField>();
 
-                if (config.Remarks.TryGetValue(x.ToString(), out var remark) && !string.IsNullOrWhiteSpace(remark))
-                    keys.Add(([remark], FuzzySearchWeight.Title));
+                if (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
+                    !string.IsNullOrWhiteSpace(remark))
+                    fields.Add(new(remark, SEARCH_REMARK_WEIGHT, SEARCH_PINYIN_WEIGHT));
 
-                keys.Add(([x.Name], FuzzySearchWeight.Name));
+                fields.Add(new(x.Name, SEARCH_NAME_WEIGHT, SEARCH_PINYIN_WEIGHT));
 
                 var zoneName = x.GetZone().ExtractPlaceName();
-                keys.Add(([x.RegionName, zoneName], FuzzySearchWeight.Default));
+                fields.Add(new(x.RegionName, SEARCH_REGION_WEIGHT, SEARCH_PINYIN_WEIGHT));
+                fields.Add(new(zoneName, SEARCH_REGION_WEIGHT, SEARCH_PINYIN_WEIGHT));
 
-                return keys;
+                return fields;
+            },
+            static (left, right) =>
+            {
+                var byAetheryte = right.IsAetheryte.CompareTo(left.IsAetheryte);
+                return byAetheryte != 0 ?
+                           byAetheryte :
+                           left.Name.Length.CompareTo(right.Name.Length);
             }
         );
 
@@ -1117,6 +1127,11 @@ public unsafe partial class BetterTeleport
     }
 
     #region 常量
+
+    private const int SEARCH_REMARK_WEIGHT = 1000;
+    private const int SEARCH_NAME_WEIGHT   = 800;
+    private const int SEARCH_REGION_WEIGHT = 600;
+    private const int SEARCH_PINYIN_WEIGHT = 700;
 
     private const string TELEPORT_ULD_PATH                  = "ui/uld/Teleport.uld";
     private const uint   TELEPORT_REGION_ICON_PART_LIST_ID  = 16;

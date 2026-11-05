@@ -7,7 +7,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Game.AetheryteRecord.Enums;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -97,19 +96,20 @@ public unsafe partial class BetterTeleport
             List<AetheryteRecord> matches;
 
             if (recordMatcher != null)
-                matches = SortSearchMatches(searchWord, recordMatcher.Search(searchWord, limit: int.MaxValue).ToList());
+                matches = SortSearchMatches(searchWord, [.. recordMatcher.Search(searchWord)]);
             else
             {
                 matches = SortSearchMatches
                 (
                     searchWord,
-                    AetheryteRecordManager.Instance().AllRecords
-                                          .Where
-                                          (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
-                                                 remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
-                                          )
-                                          .ToList()
+                    [
+                        .. AetheryteRecordManager.Instance().AllRecords
+                                                 .Where
+                                                 (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
+                                                       (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
+                                                        remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
+                                                 )
+                    ]
                 );
             }
 
@@ -122,7 +122,6 @@ public unsafe partial class BetterTeleport
             }
 
             visibleItems.Add(new OverlayListItem { IsShowMore = true, Name = Lang.Get("BetterTeleport-ShowMore") });
-
             if (matches.Count == 1) hoveredAetheryte = matches[0];
         }
 
@@ -130,7 +129,6 @@ public unsafe partial class BetterTeleport
             selectedIndex = 0;
         if (visibleItems.Count > 0 && selectedIndex >= visibleItems.Count)
             selectedIndex = visibleItems.Count - 1;
-
         ImGui.SetNextItemWidth(-1f);
 
         if (shouldFocusSearchBar)
@@ -138,9 +136,7 @@ public unsafe partial class BetterTeleport
             ImGui.SetWindowFocus();
             ImGui.SetKeyboardFocusHere();
             AtkStage.Instance()->ClearFocus();
-
             shouldFocusSearchBar = false;
-
             if (LocalPlayerState.Instance().IsMoving)
                 ChatManager.Instance().SendCommand("/automove on");
         }
@@ -154,12 +150,9 @@ public unsafe partial class BetterTeleport
         }
 
         var isSearchBarFocused = ImGui.IsItemFocused();
-
         ImGui.Spacing();
-
         for (var i = 0; i < visibleItems.Count; i++)
             DrawSearchItem(i, visibleItems[i], selectedIndex == i);
-
         var conflictKey = PluginConfig.Instance().ConflictKeyBinding.Keyboard;
         if ((GetAsyncKeyState((int)conflictKey) & 0x8000) != 0 && hoveredAetheryte != null)
             pinnedAetheryte = hoveredAetheryte;
@@ -216,7 +209,6 @@ public unsafe partial class BetterTeleport
         ImGui.Separator();
         ImGui.Spacing();
         DrawBottomToolbar();
-
         DrawHoveredTooltip();
     }
 
@@ -281,10 +273,9 @@ public unsafe partial class BetterTeleport
         var titleY        = startPos.Y + ((itemHeight - ImGui.GetTextLineHeight()) / 2f);
         drawList.AddText(new Vector2(contentStartX, titleY), ImGui.GetColorU32(ImGuiCol.Text), nameText);
 
-        var rightEndX   = startPos.X + width - padding - 6f;
-        var hotkeyLabel = "Ctrl+9";
+        var rightEndX = startPos.X + width - padding - 6f;
 
-        var badgeSize   = ImGui.CalcTextSize(hotkeyLabel);
+        var badgeSize   = ImGui.CalcTextSize(SHOW_MORE_HOTKEY_LABEL);
         var badgeWidth  = badgeSize.X + 8f;
         var badgeHeight = badgeSize.Y + 4f;
         var badgePos    = new Vector2(rightEndX - badgeWidth, startPos.Y + ((itemHeight - badgeHeight) / 2));
@@ -293,7 +284,7 @@ public unsafe partial class BetterTeleport
         drawList.AddRectFilled(badgePos, badgePos + new Vector2(badgeWidth, badgeHeight), badgeBgCol, 4f);
         drawList.AddRect(badgePos, badgePos       + new Vector2(badgeWidth, badgeHeight), ImGui.GetColorU32(ImGuiCol.Border), 4f);
 
-        drawList.AddText(badgePos + new Vector2(4f, 2f), ImGui.GetColorU32(ImGuiCol.TextDisabled), hotkeyLabel);
+        drawList.AddText(badgePos + new Vector2(4f, 2f), ImGui.GetColorU32(ImGuiCol.TextDisabled), SHOW_MORE_HOTKEY_LABEL);
 
         ImGui.SetCursorScreenPos(startPos + new Vector2(0, itemHeight + 2f));
     }
@@ -305,8 +296,8 @@ public unsafe partial class BetterTeleport
     {
         if (item.IsShowMore)
         {
-            if (fullWindow != null) fullWindow.IsOpen = true;
-            Overlay.IsOpen = false;
+            fullWindow?.IsOpen = true;
+            Overlay.IsOpen     = false;
         }
         else if (item.Record != null)
             HandleTeleport(item.Record, searchWord);
@@ -395,8 +386,7 @@ public unsafe partial class BetterTeleport
                              .Select((record, index) => new { record, index })
                              .ToDictionary(x => (x.record.RowID, x.record.SubIndex, x.record.Group), x => x.index);
 
-        return specialItems.OrderBy(x => historyIndices.GetValueOrDefault((x.RowID, x.SubIndex, x.Group), int.MaxValue))
-                           .ToList();
+        return [.. specialItems.OrderBy(x => historyIndices.GetValueOrDefault((x.RowID, x.SubIndex, x.Group), int.MaxValue))];
     }
 
     public void RefreshDefaultOverlayItems()
@@ -418,11 +408,10 @@ public unsafe partial class BetterTeleport
             if (usedSeen.Add((r.RowID, r.SubIndex))) recentList.Add(r);
         }
 
-        var specialLimit = 6;
 
         foreach (var r in sortedSpecialRecords)
         {
-            if (specialList.Count >= specialLimit) break;
+            if (specialList.Count >= SPECIAL_LIMIT) break;
             if (usedSeen.Add((r.RowID, r.SubIndex))) specialList.Add(r);
         }
 
@@ -474,9 +463,16 @@ public unsafe partial class BetterTeleport
         public string           Name;
     }
 
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState
+    [LibraryImport("user32.dll")]
+    private static partial short GetAsyncKeyState
     (
         int vKey
     );
+
+    #region 常量
+
+    private const string SHOW_MORE_HOTKEY_LABEL = "Ctrl+9";
+    private const int    SPECIAL_LIMIT          = 6;
+
+    #endregion
 }

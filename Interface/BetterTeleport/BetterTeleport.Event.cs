@@ -3,7 +3,6 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.Info.Game.AetheryteRecord;
-using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
@@ -27,7 +26,7 @@ public unsafe partial class BetterTeleport
         isPrevented = true;
 
         if (GameMain.Instance()->CurrentContentFinderConditionId != 0 ||
-            ICondition.Instance().IsBetweenAreas              ||
+            ICondition.Instance().IsBetweenAreas                      ||
             Control.GetLocalPlayer() == null                          ||
             !UIModule.IsScreenReady())
             return;
@@ -54,21 +53,22 @@ public unsafe partial class BetterTeleport
         AetheryteRecord? result;
 
         if (recordMatcher != null)
-            result = SortSearchMatches(args, recordMatcher.Search(args, CompareCommandResult, int.MaxValue).ToList()).FirstOrDefault();
+            result = SortSearchMatches(args, [.. recordMatcher.Search(args)]).FirstOrDefault();
         else
         {
             result = SortSearchMatches
             (
                 args,
-                AetheryteRecordManager.Instance().AllRecords
-                                      .Where
-                                      (x => x.Name.Contains(args, StringComparison.OrdinalIgnoreCase) ||
-                                            (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
-                                             remark.Contains(args, StringComparison.OrdinalIgnoreCase))
-                                      )
-                                      .OrderByDescending(x => x.IsAetheryte)
-                                      .ThenBy(x => x.Name.Length)
-                                      .ToList()
+                [
+                    .. AetheryteRecordManager.Instance().AllRecords
+                                             .Where
+                                             (x => x.Name.Contains(args, StringComparison.OrdinalIgnoreCase) ||
+                                                   (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
+                                                    remark.Contains(args, StringComparison.OrdinalIgnoreCase))
+                                             )
+                                             .OrderByDescending(x => x.IsAetheryte)
+                                             .ThenBy(x => x.Name.Length)
+                ]
             ).FirstOrDefault();
         }
 
@@ -76,19 +76,7 @@ public unsafe partial class BetterTeleport
 
         HandleTeleport(result, args);
 
-        return;
 
-        static int CompareCommandResult
-        (
-            AetheryteRecord a,
-            AetheryteRecord b
-        )
-        {
-            var byAetheryte = b.IsAetheryte.CompareTo(a.IsAetheryte);
-            if (byAetheryte != 0) return byAetheryte;
-
-            return a.Name.Length.CompareTo(b.Name.Length);
-        }
     }
 
     private void OnPreInputIDPressed

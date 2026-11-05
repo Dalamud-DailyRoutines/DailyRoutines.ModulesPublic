@@ -193,7 +193,7 @@ public unsafe partial class BetterTeleport
             else
             {
                 if (recordMatcher != null)
-                    fullSearchResult = SortSearchMatches(fullSearchWord, [.. recordMatcher.Search(fullSearchWord, limit: int.MaxValue)]);
+                    fullSearchResult = SortSearchMatches(fullSearchWord, [.. recordMatcher.Search(fullSearchWord)]);
                 else
                 {
                     fullSearchResult = SortSearchMatches
