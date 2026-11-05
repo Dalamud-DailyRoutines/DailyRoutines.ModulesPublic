@@ -21,8 +21,14 @@ public partial class BetterFPSLimitation
     {
         if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
         {
-            Overlay.IsOpen = false;
-            return;
+            var (dtrMin, dtrMax) = entry.ScreenBounds;
+            var viewportPos = ImGui.GetMainViewport().Pos;
+
+            if (!ImGui.IsMouseHoveringRect(dtrMin + viewportPos, dtrMax + viewportPos, false))
+            {
+                Overlay.IsOpen = false;
+                return;
+            }
         }
 
         var color = GetFPSColor(currentFPS);
