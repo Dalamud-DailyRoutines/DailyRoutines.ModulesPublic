@@ -5,7 +5,6 @@ using DailyRoutines.Extensions;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -117,7 +116,8 @@ public unsafe class AutoConstantlyClick : ModuleBase
     {
         if (!isHandlingHotbarClick || key == InputId.HOT_PAD_RD_R) return;
         if (key is not (>= InputId.HOTBAR_UP and <= InputId.HOTBAR_CONTENTS_ACT_R) and
-            not (>= InputId.HOT_PAD_CONTENT and <= InputId.HOT_PAD_TOPAGE8)) return;
+            not (>= InputId.HOT_PAD_LL_L and <= InputId.HOT_PAD_TOPAGE8))
+            return;
 
         var info = inputIDInfos[(int)key];
 
