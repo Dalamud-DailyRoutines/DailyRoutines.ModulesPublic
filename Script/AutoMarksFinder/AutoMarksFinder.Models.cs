@@ -305,4 +305,22 @@ public partial class AutoMarksFinder
     {
         public bool ManualAlive { get; set; }
     }
+
+    private sealed class AutoBroadcastSession
+    {
+        public bool                  On;
+        public bool                  Departed;
+        public int                   Index;
+        public NotoriousMonsterList? Train;
+        public bool                  FirstPointPending;
+        public long                  FirstPointAt;
+        public bool                  NextPending;
+        public long                  NextAt;
+        public bool                  EndPending;
+        public long                  EndAt;
+        public string                DepartTimeInput = string.Empty;
+        public DateTime              DepartAt;
+        public double                TimeCalibOffsetSec;
+        public bool                  TimeCalibrated;
+    }
 }

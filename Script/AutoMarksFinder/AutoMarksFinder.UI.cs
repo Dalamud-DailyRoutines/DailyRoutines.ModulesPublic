@@ -106,9 +106,7 @@ public partial class AutoMarksFinder
 
                 config.Trains.Add(imported);
 
-                var importedTracks = GetTrainTracks(imported);
-                foreach (var key in imported.MonstersFound.Distinct())
-                    importedTracks[key] = new AliveTrack();
+                aliveMonitor?.InitializeTracks(imported);
 
                 config.Save(this);
             }
@@ -351,9 +349,7 @@ public partial class AutoMarksFinder
 
                 config.Trains.Add(imported);
 
-                var importedTracks = GetTrainTracks(imported);
-                foreach (var key in imported.MonstersFound.Distinct())
-                    importedTracks[key] = new AliveTrack();
+                aliveMonitor?.InitializeTracks(imported);
 
                 config.Save(this);
             }
@@ -388,7 +384,7 @@ public partial class AutoMarksFinder
             if (ImGuiOm.ButtonIcon($"删除{info}", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
             {
                 selected.MonstersFound.Remove(info);
-                GetTrainTracks(selected).Remove(info);
+                aliveMonitor?.RemoveTrack(selected, info);
                 StopAutoBroadcast();
                 config.Save(this);
             }
@@ -459,11 +455,11 @@ public partial class AutoMarksFinder
 
     private void DrawAutoBroadcastButton()
     {
-        var label     = autoBroadcastOn ? Lang.Get("AutoMarksFinder-AutoBroadcastOn") : Lang.Get("AutoMarksFinder-AutoBroadcast");
-        var tooltip   = autoBroadcastOn ? Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStop") : Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStart");
+        var label     = autoBroadcast.On ? Lang.Get("AutoMarksFinder-AutoBroadcastOn") : Lang.Get("AutoMarksFinder-AutoBroadcast");
+        var tooltip   = autoBroadcast.On ? Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStop") : Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStart");
         var clicked   = false;
 
-        if (autoBroadcastOn)
+        if (autoBroadcast.On)
         {
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.18f, 0.55f, 0.30f, 1f));
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.22f, 0.65f, 0.35f, 1f));
@@ -491,20 +487,20 @@ public partial class AutoMarksFinder
         ImGui.Spacing();
         ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastDepartTime"));
         ImGui.SetNextItemWidth(160f * GlobalUIScale);
-        ImGui.InputText("###AutoBroadcastDepartTime", ref departTimeInput, 16);
+        ImGui.InputText("###AutoBroadcastDepartTime", ref autoBroadcast.DepartTimeInput, 16);
 
         ImGui.Spacing();
         ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastLocalTime",
             new Dictionary<string, object> { ["timeText"] = DateTime.Now.ToString("HH:mm:ss") }));
 
-        if (timeCalibrated)
+        if (autoBroadcast.TimeCalibrated)
         {
             ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTime",
                 new Dictionary<string, object> { ["timeText"] = CalibratedNow.ToString("HH:mm:ss") }));
             ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastCalibOffset",
                 new Dictionary<string, object>
                 {
-                    ["offsetText"] = timeCalibOffsetSec.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)
+                    ["offsetText"] = autoBroadcast.TimeCalibOffsetSec.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)
                 }));
         }
         else
@@ -512,21 +508,21 @@ public partial class AutoMarksFinder
             ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTimeUncalibrated"));
         }
 
-        if (autoBroadcastOn &&
-            !autoBroadcastDeparted)
+        if (autoBroadcast.On &&
+            !autoBroadcast.Departed)
         {
-            var remain = departAt - CalibratedNow;
+            var remain = autoBroadcast.DepartAt - CalibratedNow;
             if (remain > TimeSpan.Zero)
                 ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastRemain",
                     new Dictionary<string, object> { ["remainingTimeText"] = remain.ToString("hh\\:mm\\:ss") }));
             else
                 ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastDepartNow"));
         }
-        else if (autoBroadcastOn &&
-                 autoBroadcastDeparted)
+        else if (autoBroadcast.On &&
+                 autoBroadcast.Departed)
         {
             ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastProgress",
-                new Dictionary<string, object> { ["pointIndex"] = autoBroadcastIndex + 1 }));
+                new Dictionary<string, object> { ["pointIndex"] = autoBroadcast.Index + 1 }));
         }
 
         ImGui.Spacing();
@@ -536,13 +532,13 @@ public partial class AutoMarksFinder
             var serverNow = Framework.GetServerTime()
                                     .ToUTCDateTimeFromUnixSeconds()
                                     .ToLocalTime();
-            timeCalibOffsetSec = (DateTime.Now - serverNow).TotalSeconds;
-            timeCalibrated     = true;
+            autoBroadcast.TimeCalibOffsetSec = (DateTime.Now - serverNow).TotalSeconds;
+            autoBroadcast.TimeCalibrated     = true;
 
-            if (autoBroadcastOn &&
-                !autoBroadcastDeparted &&
+            if (autoBroadcast.On &&
+                !autoBroadcast.Departed &&
                 TryParseDepartTime(out var parsed))
-                departAt = parsed;
+                autoBroadcast.DepartAt = parsed;
         }
 
         ImGui.SameLine();
@@ -555,11 +551,11 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            departAt = parsed;
+            autoBroadcast.DepartAt = parsed;
             NotifyHelper.Instance().NotificationInfo
             (
                 Lang.Get("AutoMarksFinder-AutoBroadcastDepartTimeSet",
-                    new Dictionary<string, object> { ["timeText"] = departAt.ToString("HH:mm:ss") }),
+                    new Dictionary<string, object> { ["timeText"] = autoBroadcast.DepartAt.ToString("HH:mm:ss") }),
                 Lang.Get("AutoMarksFinder-AutoBroadcast")
             );
             ImGui.CloseCurrentPopup();
@@ -584,10 +580,7 @@ public partial class AutoMarksFinder
 
                 if (train != null)
                 {
-                    var trainTracks = GetTrainTracks(train);
-                    var track       = GetTrack(trainTracks, key);
-
-                    track.ManualAlive = isAlive;
+                    aliveMonitor?.SetManualAlive(train, key, isAlive);
                     key.SetState(isAlive);
                 }
 
@@ -1032,7 +1025,6 @@ public partial class AutoMarksFinder
                         }
                         catch
                         {
-                            // ignored
                         }
                     }
                 ).ContinueWith(_ => spawnPointUpdateTask = null);
@@ -1240,7 +1232,7 @@ public partial class AutoMarksFinder
                         target.MonstersFound.AddRange(newOnes);
                         StopAutoBroadcast();
                         config.Save(this);
-                        RefreshMonsterTracking();
+                        aliveMonitor?.RefreshTracking();
                     }
 
                     NotifyHelper.Instance().NotificationInfo(Lang.Get("SavedSuccessfully"));

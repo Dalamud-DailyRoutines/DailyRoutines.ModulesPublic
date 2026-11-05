@@ -4,6 +4,7 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Dalamud;
+using OmenTools.Extensions;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.Modules.AutoMarksFinder;
@@ -16,28 +17,15 @@ public partial class AutoMarksFinder
             : null;
 
     private DateTime CalibratedNow =>
-        timeCalibrated ?
-            DateTime.Now.AddSeconds(-timeCalibOffsetSec) :
+        autoBroadcast.TimeCalibrated ?
+            DateTime.Now.AddSeconds(-autoBroadcast.TimeCalibOffsetSec) :
             DateTime.Now;
 
-    private bool                  autoBroadcastOn;
-    private bool                  autoBroadcastDeparted;
-    private int                   autoBroadcastIndex;
-    private string                departTimeInput = string.Empty;
-    private DateTime              departAt;
-    private double                timeCalibOffsetSec;
-    private bool                  timeCalibrated;
-    private NotoriousMonsterList? autoBroadcastTrain;
-    private bool                  autoBroadcastFirstPointPending;
-    private long                  autoBroadcastFirstPointAt;
-    private bool                  autoBroadcastNextPending;
-    private long                  autoBroadcastNextAt;
-    private bool                  autoBroadcastEndPending;
-    private long                  autoBroadcastEndAt;
+    private readonly AutoBroadcastSession autoBroadcast = new();
 
     private void ToggleAutoBroadcast()
     {
-        if (autoBroadcastOn)
+        if (autoBroadcast.On)
         {
             StopAutoBroadcast();
             return;
@@ -48,33 +36,35 @@ public partial class AutoMarksFinder
             train.MonstersFound.Count == 0)
             return;
 
-        var hasDepartTime = !string.IsNullOrWhiteSpace(departTimeInput);
+        var      hasDepartTime = !string.IsNullOrWhiteSpace(autoBroadcast.DepartTimeInput);
+        DateTime parsed        = default;
         if (hasDepartTime &&
-            !TryParseDepartTime(out departAt))
+            !TryParseDepartTime(out parsed))
         {
             NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-AutoBroadcastInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoBroadcast"));
             return;
         }
 
-        autoBroadcastOn                 = true;
-        autoBroadcastIndex              = 0;
-        autoBroadcastTrain              = train;
-        autoBroadcastNextPending        = false;
-        autoBroadcastNextAt             = default;
-        autoBroadcastEndPending         = false;
-        autoBroadcastEndAt              = default;
+        autoBroadcast.On          = true;
+        autoBroadcast.Index       = 0;
+        autoBroadcast.Train       = train;
+        autoBroadcast.NextPending = false;
+        autoBroadcast.NextAt      = default;
+        autoBroadcast.EndPending  = false;
+        autoBroadcast.EndAt       = default;
 
         if (hasDepartTime)
         {
-            autoBroadcastDeparted          = false;
-            autoBroadcastFirstPointPending = false;
-            autoBroadcastFirstPointAt      = default;
+            autoBroadcast.Departed          = false;
+            autoBroadcast.FirstPointPending = false;
+            autoBroadcast.FirstPointAt      = default;
+            autoBroadcast.DepartAt          = parsed;
         }
         else
         {
-            autoBroadcastDeparted          = true;
-            autoBroadcastFirstPointPending = true;
-            autoBroadcastFirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
+            autoBroadcast.Departed          = true;
+            autoBroadcast.FirstPointPending = true;
+            autoBroadcast.FirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
             ExecuteBroadcastMacro(config.AutoBroadcastStartMacro);
         }
 
@@ -87,32 +77,35 @@ public partial class AutoMarksFinder
 
     private void StopAutoBroadcast()
     {
-        autoBroadcastOn                  = false;
-        autoBroadcastDeparted            = false;
-        autoBroadcastIndex               = 0;
-        autoBroadcastTrain               = null;
-        autoBroadcastFirstPointPending   = false;
-        autoBroadcastFirstPointAt        = default;
-        autoBroadcastNextPending         = false;
-        autoBroadcastNextAt              = default;
-        autoBroadcastEndPending          = false;
-        autoBroadcastEndAt               = default;
+        autoBroadcast.On                = false;
+        autoBroadcast.Departed          = false;
+        autoBroadcast.Index             = 0;
+        autoBroadcast.Train             = null;
+        autoBroadcast.FirstPointPending = false;
+        autoBroadcast.FirstPointAt      = default;
+        autoBroadcast.NextPending       = false;
+        autoBroadcast.NextAt            = default;
+        autoBroadcast.EndPending        = false;
+        autoBroadcast.EndAt             = default;
     }
 
-    private bool TryParseDepartTime(out DateTime departAt)
+    private bool TryParseDepartTime
+    (
+        out DateTime parsed
+    )
     {
-        departAt = default;
+        parsed = default;
 
-        if (!TimeSpan.TryParseExact(departTimeInput.Trim(), @"hh\:mm\:ss", CultureInfo.InvariantCulture, out var timeOfDay) ||
+        if (!TimeSpan.TryParseExact(autoBroadcast.DepartTimeInput.Trim(), @"hh\:mm\:ss", CultureInfo.InvariantCulture, out var timeOfDay) ||
             timeOfDay < TimeSpan.Zero ||
             timeOfDay >= TimeSpan.FromDays(1))
             return false;
 
         var now = CalibratedNow;
-        departAt = now.Date + timeOfDay;
+        parsed = now.Date + timeOfDay;
 
-        if (departAt <= now)
-            departAt = departAt.AddDays(1);
+        if (parsed <= now)
+            parsed = parsed.AddDays(1);
 
         return true;
     }
@@ -122,7 +115,7 @@ public partial class AutoMarksFinder
         IFramework _
     )
     {
-        if (!autoBroadcastOn)
+        if (!autoBroadcast.On)
             return;
 
         if (LocalPlayerState.Object == null ||
@@ -130,7 +123,7 @@ public partial class AutoMarksFinder
             ICondition.Instance().IsBetweenAreas)
             return;
 
-        if (autoBroadcastTrain is not { MonstersFound.Count: > 0 } train ||
+        if (autoBroadcast.Train is not { MonstersFound.Count: > 0 } train ||
             !config.Trains.Any(x => ReferenceEquals(x, train)) ||
             !ReferenceEquals(SelectedTrain, train))
         {
@@ -138,104 +131,100 @@ public partial class AutoMarksFinder
             return;
         }
 
-        if (!autoBroadcastDeparted)
+        if (!autoBroadcast.Departed)
         {
-            if (CalibratedNow < departAt)
+            if (CalibratedNow < autoBroadcast.DepartAt)
                 return;
 
-            autoBroadcastDeparted          = true;
-            autoBroadcastIndex             = 0;
-            autoBroadcastFirstPointPending = true;
-            autoBroadcastFirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
+            autoBroadcast.Departed          = true;
+            autoBroadcast.Index             = 0;
+            autoBroadcast.FirstPointPending = true;
+            autoBroadcast.FirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
             ExecuteBroadcastMacro(config.AutoBroadcastStartMacro);
             return;
         }
 
-        if (autoBroadcastFirstPointPending)
+        if (autoBroadcast.FirstPointPending)
         {
-            if (Environment.TickCount64 < autoBroadcastFirstPointAt)
+            if (Environment.TickCount64 < autoBroadcast.FirstPointAt)
                 return;
 
-            while (autoBroadcastIndex < train.MonstersFound.Count &&
-                   !train.MonstersFound[autoBroadcastIndex].IsAlive)
-                autoBroadcastIndex++;
+            while (autoBroadcast.Index < train.MonstersFound.Count &&
+                   !train.MonstersFound[autoBroadcast.Index].IsAlive)
+                autoBroadcast.Index++;
 
-            if (autoBroadcastIndex >= train.MonstersFound.Count)
+            if (autoBroadcast.Index >= train.MonstersFound.Count)
             {
-                autoBroadcastFirstPointPending = false;
-                autoBroadcastEndPending        = true;
-                autoBroadcastEndAt             = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
+                autoBroadcast.FirstPointPending = false;
+                autoBroadcast.EndPending        = true;
+                autoBroadcast.EndAt             = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
                 return;
             }
 
-            if (AnnouncePosition(train.MonstersFound[autoBroadcastIndex]))
-                autoBroadcastFirstPointPending = false;
+            if (AnnouncePosition(train.MonstersFound[autoBroadcast.Index]))
+                autoBroadcast.FirstPointPending = false;
             return;
         }
 
-        if (autoBroadcastNextPending)
+        if (autoBroadcast.NextPending)
         {
-            if (Environment.TickCount64 < autoBroadcastNextAt)
+            if (Environment.TickCount64 < autoBroadcast.NextAt)
                 return;
 
-            while (autoBroadcastIndex < train.MonstersFound.Count &&
-                   !train.MonstersFound[autoBroadcastIndex].IsAlive)
-                autoBroadcastIndex++;
+            while (autoBroadcast.Index < train.MonstersFound.Count &&
+                   !train.MonstersFound[autoBroadcast.Index].IsAlive)
+                autoBroadcast.Index++;
 
-            if (autoBroadcastIndex >= train.MonstersFound.Count)
+            if (autoBroadcast.Index >= train.MonstersFound.Count)
             {
-                autoBroadcastNextPending = false;
-                autoBroadcastEndPending  = true;
-                autoBroadcastEndAt       = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
+                autoBroadcast.NextPending = false;
+                autoBroadcast.EndPending  = true;
+                autoBroadcast.EndAt       = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
                 return;
             }
 
-            if (AnnouncePosition(train.MonstersFound[autoBroadcastIndex]))
-                autoBroadcastNextPending = false;
+            if (AnnouncePosition(train.MonstersFound[autoBroadcast.Index]))
+                autoBroadcast.NextPending = false;
             return;
         }
 
-        if (autoBroadcastEndPending)
+        if (autoBroadcast.EndPending)
         {
-            if (Environment.TickCount64 < autoBroadcastEndAt)
+            if (Environment.TickCount64 < autoBroadcast.EndAt)
                 return;
 
-            autoBroadcastEndPending = false;
+            autoBroadcast.EndPending = false;
             ExecuteBroadcastMacro(config.AutoBroadcastEndMacro);
             StopAutoBroadcast();
             return;
         }
 
-        if (autoBroadcastIndex < 0 ||
-            autoBroadcastIndex >= train.MonstersFound.Count)
+        if (autoBroadcast.Index < 0 ||
+            autoBroadcast.Index >= train.MonstersFound.Count)
         {
             StopAutoBroadcast();
             return;
         }
 
-        if (train.MonstersFound[autoBroadcastIndex].IsAlive)
+        if (train.MonstersFound[autoBroadcast.Index].IsAlive)
             return;
 
-        autoBroadcastIndex++;
-        while (autoBroadcastIndex < train.MonstersFound.Count &&
-               !train.MonstersFound[autoBroadcastIndex].IsAlive)
-            autoBroadcastIndex++;
+        autoBroadcast.Index++;
+        while (autoBroadcast.Index < train.MonstersFound.Count &&
+               !train.MonstersFound[autoBroadcast.Index].IsAlive)
+            autoBroadcast.Index++;
 
-        if (autoBroadcastIndex >= train.MonstersFound.Count)
+        if (autoBroadcast.Index >= train.MonstersFound.Count)
         {
-            autoBroadcastEndPending = true;
-            autoBroadcastEndAt      = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
+            autoBroadcast.EndPending = true;
+            autoBroadcast.EndAt      = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
             return;
         }
 
-        autoBroadcastNextPending = true;
-        autoBroadcastNextAt      = Environment.TickCount64 + AUTO_BROADCAST_NEXT_DELAY_MS;
+        autoBroadcast.NextPending = true;
+        autoBroadcast.NextAt      = Environment.TickCount64 + AUTO_BROADCAST_NEXT_DELAY_MS;
     }
 
-    /// <summary>
-    ///     开始/结束播报：宏内只要有一行以 / 开头，就整体交给客户端宏执行，由用户自己接管频道；
-    ///     否则按纯文本处理，逐行以「播报频道 + 文本」的形式发送，与点位播报走同一组频道。
-    /// </summary>
     private void ExecuteBroadcastMacro
     (
         string macro
@@ -288,8 +277,7 @@ public partial class AutoMarksFinder
         if (agentMap == null)
             return false;
 
-        agentMap->SetFlagMapMarker(info.ZoneID, info.GetMapID(), info.Position);
-        agentMap->OpenMap(info.GetMapID(), info.ZoneID, info.GetBNPCName());
+        agentMap->SetMapFlagByZoneAndOpen(info.ZoneID, info.Position, info.GetBNPCName());
 
         foreach (var command in config.RelayCommands)
         {

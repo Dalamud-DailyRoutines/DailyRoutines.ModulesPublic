@@ -35,6 +35,7 @@ public partial class AutoMarksFinder : ModuleBase
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private Config                   config = null!;
+    private MonsterAliveMonitor?     aliveMonitor;
     private CustomOverlay?           overlaySmallCard;
     private NotoriousMonsterScanner? scanner;
     private int                      smallCardMobIndex;
@@ -55,7 +56,7 @@ public partial class AutoMarksFinder : ModuleBase
 
         WindowManager.Instance().PostDraw += DrawScanRoutePreview;
 
-        InitAliveMonitor();
+        aliveMonitor = new(this);
         FrameworkManager.Instance().Reg(UpdateAutoBroadcast, AUTO_BROADCAST_TICK_MS);
     }
 
@@ -64,8 +65,8 @@ public partial class AutoMarksFinder : ModuleBase
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
 
         FrameworkManager.Instance().Unreg(UpdateAutoBroadcast);
-        UninitAliveMonitor();
-        aliveTracks.Clear();
+        aliveMonitor?.Dispose();
+        aliveMonitor = null;
 
         config.Save(this);
 
@@ -80,11 +81,11 @@ public partial class AutoMarksFinder : ModuleBase
 
         CommandManager.Instance().RemoveCommand(COMMAND);
 
-        selectedTrainIndex  = 0;
-        smallCardMobIndex   = 0;
-        newListNameInput    = string.Empty;
-        startAetheryteInput = string.Empty;
-        departTimeInput     = string.Empty;
+        selectedTrainIndex            = 0;
+        smallCardMobIndex             = 0;
+        newListNameInput              = string.Empty;
+        startAetheryteInput           = string.Empty;
+        autoBroadcast.DepartTimeInput = string.Empty;
         StopAutoBroadcast();
     }
 
@@ -177,7 +178,7 @@ public partial class AutoMarksFinder : ModuleBase
                 if (ImGui.MenuItem(Lang.Get("Delete")))
                 {
                     config.Trains.RemoveAt(i);
-                    aliveTracks.Remove(train);
+                    aliveMonitor?.RemoveTrain(train);
                     if (config.Trains.Count == 0)
                         selectedIndex = -1;
                     else if (selectedIndex > i)
@@ -189,14 +190,14 @@ public partial class AutoMarksFinder : ModuleBase
                     }
 
                     config.Save(this);
-                    RefreshMonsterTracking();
+                    aliveMonitor?.RefreshTracking();
                     return true;
                 }
             }
         }
 
         if (changed)
-            RefreshMonsterTracking();
+            aliveMonitor?.RefreshTracking();
 
         return changed;
     }
